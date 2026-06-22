@@ -2,7 +2,7 @@
 //
 // Maps GLB mesh names -> HA entity metadata.
 //
-// IMPORTANT: In TheLysHouse model the interactive objects were named in
+// IMPORTANT: In the reference model the interactive objects were named in
 // SweetHome 3D *with their full HA entity_id* (e.g. "camera.livingroom_cam",
 // "climate.living_room_air_conditioner"). So the primary key here is the
 // entity_id itself, and `resolveMeshToMapping()` (see below) matches a tapped

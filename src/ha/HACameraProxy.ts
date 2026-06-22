@@ -3,14 +3,20 @@
 //
 // HA's /api/camera_proxy_stream serves MJPEG and accepts the long-lived token as
 // a query param, which is what we need for an <img> tag (can't set headers).
+// Under Ingress we instead hit the add-on's Supervisor proxy, which injects the
+// token server-side — so the URL carries no token at all.
+
+import { isIngress, ingressApiBase } from "./ingress";
 
 export function cameraStreamUrl(haUrl: string, token: string, entityId: string): string {
+  if (isIngress()) return `${ingressApiBase()}/camera_proxy_stream/${entityId}`;
   const base = haUrl.replace(/\/+$/, "");
   return `${base}/api/camera_proxy_stream/${entityId}?token=${encodeURIComponent(token)}`;
 }
 
 /** Single still frame — handy as a low-cost poster / fallback. */
 export function cameraSnapshotUrl(haUrl: string, token: string, entityId: string): string {
+  if (isIngress()) return `${ingressApiBase()}/camera_proxy/${entityId}?_=${Date.now()}`;
   const base = haUrl.replace(/\/+$/, "");
   return `${base}/api/camera_proxy/${entityId}?token=${encodeURIComponent(token)}&_=${Date.now()}`;
 }

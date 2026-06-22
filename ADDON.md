@@ -6,8 +6,7 @@ auto-starts/restarts with HA.
 
 Installation is by **image pull** — you add this GitHub repo as a custom add-on
 repository and install; HA pulls a prebuilt image from GHCR, **no on-device
-build**. Recommended for your test instance (`https://192.168.40.203:8123`) and
-any HA OS / Supervised box.
+build**. Works on any HA OS / Supervised box.
 
 > Requires **Home Assistant OS** or **Supervised** (add-ons need the Supervisor).
 > On a *Core*/*Container* install use the `/config/www` method in
@@ -41,7 +40,8 @@ That's it — every later push to `main` republishes the current `version`.
    (a quick image pull — no compiling).
 4. Enable **Start on boot** + **Watchdog**, then **Start**.
 5. Click **Villa Kiosk** in the sidebar (or *Open Web UI*) and complete the
-   one-time onboarding (HA URL + token, upload `.glb`, confirm location).
+   one-time onboarding (upload `.glb`, confirm location). **No URL or token** —
+   the add-on connects to HA automatically through the Supervisor proxy.
 
 ---
 
@@ -57,7 +57,9 @@ updates.
 ## How it works
 
 ```
-HA sidebar ──Ingress──► nginx :8099 (172.30.32.2 only) ──► /var/www (the built SPA)
+HA sidebar ─Ingress─► nginx :8099 (172.30.32.2 only) ─┬─► /var/www (the built SPA)
+                                                       └─► /core/* ─► supervisor-proxy.py
+                                                                       ─► http://supervisor/core
 ```
 
 - `image:` in `config.yaml` makes the Supervisor pull the prebuilt image instead
@@ -66,8 +68,10 @@ HA sidebar ──Ingress──► nginx :8099 (172.30.32.2 only) ──► /var/
   accepts the Ingress gateway (`172.30.32.2`) — direct access is denied.
 - The app uses `HashRouter` + a relative asset base, so it runs unmodified under
   the dynamic Ingress path (`/api/hassio_ingress/<token>/`).
-- The app still connects to HA with the **URL + long-lived token** entered in
-  onboarding — Ingress fronts the *UI*, not the HA API.
+- **No long-lived token.** With `homeassistant_api: true`, a small bundled proxy
+  (`supervisor-proxy.py`) injects the add-on's `SUPERVISOR_TOKEN` server-side for
+  the HA WebSocket + REST, so the browser talks to Core token-lessly. nginx
+  forwards the `/core/*` paths to it.
 
 ### Repository layout
 
@@ -77,8 +81,9 @@ HA sidebar ──Ingress──► nginx :8099 (172.30.32.2 only) ──► /var/
 | `villa-kiosk/config.yaml` | Add-on manifest — `image:` (pull), Ingress, port 8099 |
 | `villa-kiosk/DOCS.md`, `icon.png`, `logo.png` | Store docs + artwork |
 | `Dockerfile` | Two-stage build (Node → nginx on HA base); used by CI, context = repo root |
-| `rootfs/etc/nginx/nginx.conf` | Serves `/var/www`, **Ingress-only** allow-list |
-| `rootfs/etc/s6-overlay/...` | s6-overlay v3 service supervising nginx |
+| `rootfs/etc/nginx/nginx.conf` | Serves `/var/www`, **Ingress-only** allow-list, proxies `/core/*` |
+| `rootfs/usr/bin/supervisor-proxy.py` | Token-injecting HA Core proxy (WebSocket + REST) |
+| `rootfs/etc/s6-overlay/...` | s6-overlay v3 services supervising nginx + the proxy |
 | `.github/workflows/build.yaml` | Builds & pushes per-arch images to GHCR |
 
 The build stage is pinned to `--platform=$BUILDPLATFORM`, so the heavy
@@ -108,6 +113,6 @@ This is only for testing; the image-pull store install above is the normal path.
 | Add-on not in store after adding repo | **⋮ → Check for updates**; confirm the repo URL was accepted. |
 | Install fails pulling the image | The GHCR packages must be **Public** (see *One-time publish*), and the Actions run must have finished. |
 | Wrong architecture | Only `amd64` + `aarch64` are published; add more arches in `config.yaml` + the workflow matrix. |
-| Blank sidebar panel | Check the add-on **Log** tab; confirm nginx started on 8099. |
+| Blank sidebar panel | Check the add-on **Log** tab; confirm nginx + the proxy started. |
 | 403 if you hit the port directly | Expected — nginx only allows the Ingress gateway `172.30.32.2`. |
-| "Connection failed" in onboarding | URL must include `http://…:8123`; token valid; device on the same LAN. |
+| Connects but no entities | Confirm `homeassistant_api: true` is set and the `supervisor-proxy` service is running (add-on **Log**). |

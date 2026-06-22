@@ -270,7 +270,7 @@ export class SceneManager {
    */
   private calibrateRooms(meshes: AbstractMesh[]): void {
     // Prefer plan data parsed from an uploaded .sh3d (works for ANY villa);
-    // otherwise fall back to TheLysHouse's built-in reference data.
+    // otherwise fall back to the built-in reference data.
     const entityCalib: Record<string, { x: number; y: number }> = this.config.sh3dEntities?.length
       ? Object.fromEntries(this.config.sh3dEntities.map((e) => [e.entityId, { x: e.x, y: e.y }]))
       : ENTITY_CALIBRATION_CM;

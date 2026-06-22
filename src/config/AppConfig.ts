@@ -21,6 +21,12 @@ export interface AppConfig {
   haUrl: string;
   haToken: string;
   haPort: number;
+  /**
+   * Dashboard title shown in the HUD, onboarding and document title. Left empty
+   * by default so it auto-resolves to the Home Assistant instance name
+   * (`location_name` from HA's config); falls back to "Villa Kiosk".
+   */
+  siteTitle: string;
   latitude: number;
   longitude: number;
   theme: "dark" | "light";
@@ -69,6 +75,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   haUrl: env.VITE_HA_URL ?? "",
   haToken: env.VITE_HA_TOKEN ?? "",
   haPort: env.VITE_HA_PORT ? Number(env.VITE_HA_PORT) : 8123,
+  siteTitle: "",
   latitude: env.VITE_LAT ? Number(env.VITE_LAT) : -8.3405,
   longitude: env.VITE_LNG ? Number(env.VITE_LNG) : 115.092,
   theme: "dark",
@@ -128,4 +135,16 @@ export function normaliseHaUrl(url: string): string {
   let u = url.trim().replace(/\/+$/, "");
   if (u && !/^https?:\/\//i.test(u)) u = "http://" + u;
   return u;
+}
+
+/** Fallback title when neither a configured title nor the HA instance name exist. */
+export const DEFAULT_SITE_TITLE = "Villa Kiosk";
+
+/**
+ * Resolve the title to display: an explicit override wins, otherwise the Home
+ * Assistant instance name (auto-derived on connect), otherwise the generic
+ * default. Keeps the app brand-free and instance-aware.
+ */
+export function resolveSiteTitle(config: Pick<AppConfig, "siteTitle">, haName?: string): string {
+  return config.siteTitle.trim() || haName?.trim() || DEFAULT_SITE_TITLE;
 }

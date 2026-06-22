@@ -31,13 +31,13 @@ cp .env.example .env
 Edit `.env`:
 
 ```ini
-VITE_HA_URL=http://192.168.1.50:8123     # your HA IP (find it in HA → Settings → System → Network)
+VITE_HA_URL=http://homeassistant.local:8123     # your HA IP (find it in HA → Settings → System → Network)
 VITE_HA_PORT=8123
-VITE_LAT=-8.3405                          # Bali (TheLysHouse)
+VITE_LAT=-8.3405                          # your villa's latitude
 VITE_LNG=115.0920
 
 # Used by `npm run deploy`:
-VITE_DEPLOY_HOST=192.168.1.50
+VITE_DEPLOY_HOST=homeassistant.local
 VITE_DEPLOY_USER=root
 VITE_DEPLOY_PATH=/config/www/villa-kiosk
 ```
@@ -88,13 +88,13 @@ This reads `VITE_DEPLOY_*` from `.env` and `scp`s `dist/` to the HA folder. For
 a password-free deploy, copy your SSH key first:
 
 ```bash
-ssh-copy-id root@192.168.1.50
+ssh-copy-id root@homeassistant.local
 ```
 
 ### Option B — manual scp
 
 ```bash
-scp -r dist/. root@192.168.1.50:/config/www/villa-kiosk/
+scp -r dist/. root@homeassistant.local:/config/www/villa-kiosk/
 ```
 
 ### Option C — Samba / file copy
@@ -109,7 +109,7 @@ Mount the HA Samba share and copy the **contents** of `dist/` into
 On the tablet browser, open:
 
 ```
-http://192.168.1.50:8123/local/villa-kiosk/
+http://homeassistant.local:8123/local/villa-kiosk/
 ```
 
 The onboarding wizard runs once:
@@ -117,7 +117,7 @@ The onboarding wizard runs once:
 1. **Connect HA** — paste URL + long-lived token → **Test connection** (must succeed).
    - Token: HA → your profile → **Security** → **Long-lived access tokens** → **Create**.
 2. **Upload model** — pick your `.glb`. It is stored in the browser's IndexedDB.
-3. **Location** — confirm Bali coordinates (for sun position).
+3. **Location** — confirm your coordinates (for sun position).
 4. **Done** — open the dashboard.
 
 > ⚠️ **Mixed content:** if you load the kiosk over **https** but HA is **http**,
@@ -155,7 +155,7 @@ Install *Fully Kiosk Browser* and set:
 
 | Setting | Value |
 |---|---|
-| Start URL | `http://192.168.1.50:8123/local/villa-kiosk/` |
+| Start URL | `http://homeassistant.local:8123/local/villa-kiosk/` |
 | Prevent sleep / keep screen on | ON |
 | Auto-reload on error | ON (30 s) |
 | Hide navigation/status bar | ON |
@@ -216,4 +216,4 @@ To force a clean reload after a big change, bump `CACHE` in `public/sw.js`.
 
 ---
 
-*Smart Resilient Property OS · TheLysHouse · Confidential*
+*Villa Kiosk — a generic Home Assistant villa dashboard.*

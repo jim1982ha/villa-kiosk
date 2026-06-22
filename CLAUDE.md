@@ -1,7 +1,7 @@
 # Villa Kiosk — Project Overview for Claude
 
 ## What this is
-A browser-based first-person 3D villa walkthrough kiosk, wired live to Home Assistant over WebSocket. Built for TheLysHouse, Bali (lat -8.3405, lng 115.092), to be run on a touch tablet.
+A browser-based first-person 3D villa walkthrough kiosk, wired live to Home Assistant over WebSocket, to be run on a touch tablet. It is **generic** — bring your own `.glb` model; the title and location auto-derive from the connected HA instance. The bundled reference data defaults to lat -8.3405, lng 115.092.
 
 **Tech stack:** React 18 + TypeScript strict, Babylon.js 7.x, Vite 5.
 
@@ -21,7 +21,7 @@ npm run deploy       # scp dist/ to HA (needs .env with VITE_DEPLOY_HOST etc.)
 - `src/babylon/EntityVisuals.ts` — HA entity state → 3D mesh changes (lights, covers, fans, locks, sensors)
 - `src/ha/HAWebSocket.ts` — WebSocket to HA, auto-reconnect, 10s timeout, dedup
 - `src/config/AppConfig.ts` — all runtime config (localStorage-persisted)
-- `src/config/Sh3dCalibration.ts` — hardcoded TheLysHouse room polygons + entity positions (fallback when no .sh3d uploaded)
+- `src/config/Sh3dCalibration.ts` — hardcoded reference room polygons + entity positions (fallback when no .sh3d uploaded)
 - `src/utils/sh3dParser.ts` — parses .sh3d (ZIP+Home.xml) in browser → room polygons + entity positions
 - `src/utils/affineFit.ts` — least-squares affine fit for plan→world transform
 - `src/utils/geometry.ts` — pointInPolygon (ray-casting)
@@ -52,7 +52,7 @@ Three ways to wire entities to 3D objects:
 ## Room calibration
 **Best:** entity-named meshes → full affine fit (handles any rotation/mirror)
 **Fallback:** sh3d room polygon bounding box → centroid+scale transform (works even when GLB has no entity meshes, e.g. direct SweetHome export)
-**No .sh3d:** uses hardcoded TheLysHouse data in `Sh3dCalibration.ts`
+**No .sh3d:** uses hardcoded reference data in `Sh3dCalibration.ts`
 
 ## SweetHome 3D → GLB pipeline
 See `MODEL_PIPELINE.md`. Key point: do NOT join objects in Blender (destroys mesh names). Do NOT use SweetHome's direct GLB export (names meshes with internal IDs not furniture names). Export to OBJ, import to Blender, keep objects separate, export to GLB.
@@ -75,7 +75,7 @@ See `MODEL_PIPELINE.md`. Key point: do NOT join objects in Blender (destroys mes
 ## Deployment
 ```ini
 # .env
-VITE_DEPLOY_HOST=192.168.18.xxx   # HA IP
+VITE_DEPLOY_HOST=homeassistant.local   # HA host/IP
 VITE_DEPLOY_USER=root
 VITE_DEPLOY_PATH=/config/www/villa-kiosk
 ```

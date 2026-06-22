@@ -1,6 +1,6 @@
 # Model source
 
-`TheLysHouse_1F.sh3d` — the canonical SweetHome 3D source for Floor 1.
+`villa_1F.sh3d` — the SweetHome 3D source for Floor 1 (replace with your own plan).
 
 Interactive objects are already named with their full Home Assistant entity IDs
 (e.g. `camera.livingroom_cam`, `climate.living_room_air_conditioner`), so a clean

@@ -12,10 +12,19 @@ import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 
 type EntityCallback = (entity: HassEntity) => void;
 
+/** Subset of HA's `get_config` we use to auto-fill onboarding (location + name). */
+export interface HAConfig {
+  latitude: number;
+  longitude: number;
+  location_name: string;
+}
+
 interface HAStateContextType {
   entities: Record<string, HassEntity>;
   connection: ConnectionState;
   connected: boolean;
+  /** HA instance config (location + name), fetched on connect. Null until then. */
+  haConfig: HAConfig | null;
   ws: HAWebSocket;
   /** Imperative subscribe used by Babylon EntityVisuals; returns unsubscribe. */
   subscribe: (entityId: string, cb: EntityCallback) => () => void;
@@ -40,6 +49,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
 
   const [entities, setEntities] = useState<Record<string, HassEntity>>({});
   const [connection, setConnection] = useState<ConnectionState>("disconnected");
+  const [haConfig, setHaConfig] = useState<HAConfig | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
 
   // Imperative subscriber registries (don't trigger React renders).
@@ -80,6 +90,11 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
           notify(ns);
         });
         await hydrate();
+        // Pull the instance's location + name so onboarding can auto-fill the
+        // map coordinates and the dashboard title without manual entry.
+        ws.sendMessage<HAConfig>("get_config")
+          .then((cfg) => setHaConfig(cfg))
+          .catch(() => {});
       } catch (err) {
         const msg = (err as Error).message;
         setLastError(msg);
@@ -120,6 +135,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       entities,
       connection,
       connected: connection === "connected",
+      haConfig,
       ws,
       subscribe,
       subscribeAll,
@@ -127,7 +143,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       connect,
       lastError,
     }),
-    [entities, connection, ws, subscribe, subscribeAll, callService, connect, lastError],
+    [entities, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError],
   );
 
   return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;

@@ -1,6 +1,6 @@
 # 🏠 3D Model Pipeline — SweetHome 3D → GLB
 
-How to turn `TheLysHouse_1F.sh3d` into the optimised `.glb` the kiosk loads.
+How to turn `villa_1F.sh3d` into the optimised `.glb` the kiosk loads.
 
 ---
 
@@ -53,7 +53,7 @@ correctly-named GLB so that:
 
 ## ✅ Already done for you in this model
 
-In `TheLysHouse_1F.sh3d`, the interactive objects are **already named with their
+In `villa_1F.sh3d`, the interactive objects are **already named with their
 full Home Assistant entity IDs**, for example:
 
 ```
@@ -83,7 +83,7 @@ coordinates derived from the room geometry, so anchors are optional).
 ## 💡 Lights & activatable devices — visual feedback
 
 **Yes, lights are fully handled and configurable** — they just weren't called out
-before because the *current* `TheLysHouse_1F.sh3d` contains no `light.*` entity
+before because the *current* `villa_1F.sh3d` contains no `light.*` entity
 yet. The moment you bind a light, it works. Here's exactly what each device type
 does in the 3D scene, all driven by the binding's **type** (editable in the
 Config Editor, so you choose what each object does):
@@ -118,7 +118,7 @@ Config Editor, so you choose what each object does):
 
 If you'd rather not bind by tapping, name the fixture meshes after the light's
 `entity_id` (or the `light_<room>_<id>` alias) and they auto-map on import — same
-as the other devices already named in TheLysHouse:
+as the other devices already named in your plan:
 
 ```
 light.living_room_ceiling          (or alias: light_living_room_ceiling)
@@ -136,7 +136,7 @@ light.pool_area
 3D View → Export to OBJ format
 ```
 
-Output: `TheLysHouse_1F.obj` + `.mtl` + a `textures/` folder. Keep them together.
+Output: `villa_1F.obj` + `.mtl` + a `textures/` folder. Keep them together.
 
 ---
 
@@ -163,7 +163,7 @@ icon = *Modifiers*. The orange **square** icon = *Object*.
 ## Step 2 — Import into Blender
 
 ```
-File → Import → Wavefront (.obj)   →  pick TheLysHouse_1F.obj
+File → Import → Wavefront (.obj)   →  pick villa_1F.obj
 ```
 
 (If you already have a `.glb` instead, use **File → Import → glTF 2.0** — but if
@@ -287,7 +287,7 @@ Skip straight to export.
 | **Data → Compression (Draco)** | see note below |
 | **Transform → +Y Up** | on (default) |
 
-3. Name it `TheLysHouse_1F.glb` and click **Export glTF 2.0**. Aim for **< 40 MB**.
+3. Name it `villa_1F.glb` and click **Export glTF 2.0**. Aim for **< 40 MB**.
 
 > **Draco note:** Draco shrinks the file a lot, but to *decode* it the kiosk needs
 > a small helper that Babylon fetches from the internet by default. If your tablet
@@ -332,4 +332,4 @@ If your export uses a different scale/axis, adjust `DEFAULT_MODEL_TRANSFORM` in
 
 ---
 
-*Smart Resilient Property OS · TheLysHouse · Confidential*
+*Villa Kiosk — bring your own SweetHome 3D plan.*

@@ -14,22 +14,29 @@ right in the HA sidebar through Ingress.
 
 ## First run
 
-Onboarding runs once in the browser:
+Onboarding runs once in the browser. **No URL and no token to enter** — as an
+add-on the kiosk connects to Home Assistant automatically (see *How it connects*):
 
-1. **Connect HA** — paste your HA URL (`http://<ip>:8123`) and a long-lived
-   access token (Profile → Security → Long-lived access tokens → Create).
-2. **Upload model** — pick your villa `.glb`. Stored in the browser (IndexedDB).
-3. **Room names** *(optional)* — Settings → upload the SweetHome `.sh3d` to label
+1. **Upload model** — pick your villa `.glb`. Stored in the browser (IndexedDB).
+2. **Room names** *(optional)* — Settings → upload the SweetHome `.sh3d` to label
    rooms automatically.
-4. **Location** — confirm coordinates for the day/night sun.
+3. **Location** — pre-filled from your Home Assistant instance; adjust if needed.
 
 > Config and the uploaded model live in the **browser**, per device. To copy a
 > set-up device to another, use **Settings → Export backup** then **Import
 > backup** on the other device.
 
+## How it connects
+
+The add-on reaches Home Assistant through the **Supervisor API proxy** using its
+own `SUPERVISOR_TOKEN` — so you never create or paste a long-lived token, and the
+token never reaches the browser. A small bundled proxy injects it server-side for
+both the WebSocket and REST calls. The dashboard title also auto-fills from your
+HA instance name (override it in **Settings → Dashboard title**).
+
 ## Notes
 
 - Requires **Home Assistant OS** or **Supervised** (add-ons need the Supervisor).
-- Ingress fronts the *UI*; the app talks to HA with the URL + token you enter.
+- Ingress fronts the *UI*; Core access uses the Supervisor proxy (`homeassistant_api`).
 - nginx only accepts the Ingress gateway (`172.30.32.2`); direct port access is
   denied by design.

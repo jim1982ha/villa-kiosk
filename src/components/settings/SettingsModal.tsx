@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { Plug, Download, Upload, Bug, Sliders, Link2, MapPin, FileText } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { normaliseHaUrl } from "@/config/AppConfig";
+import { normaliseHaUrl, DEFAULT_SITE_TITLE } from "@/config/AppConfig";
 import { testConnection, type TestResult } from "@/ha/testConnection";
 import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
 import { parseSh3d } from "@/utils/sh3dParser";
@@ -24,7 +24,7 @@ interface Props {
 
 export default function SettingsModal({ manager, onClose, onModelChanged, onEnterBindMode, onEnterPlaceMode }: Props) {
   const { config, update, replace, reset } = useConfig();
-  const { connect } = useHA();
+  const { connect, haConfig } = useHA();
   const navigate = useNavigate();
   const importRef = useRef<HTMLInputElement>(null);
   const sh3dRef = useRef<HTMLInputElement>(null);
@@ -48,6 +48,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onEnte
     }
   };
 
+  const [siteTitle, setSiteTitle] = useState(config.siteTitle);
   const [url, setUrl] = useState(config.haUrl);
   const [token, setToken] = useState(config.haToken);
   const [lat, setLat] = useState(String(config.latitude));
@@ -69,7 +70,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onEnte
 
   const save = () => {
     const cleanUrl = normaliseHaUrl(url);
-    update({ haUrl: cleanUrl, haToken: token, latitude: Number(lat), longitude: Number(lng), eyeHeight, walkSpeed });
+    update({ siteTitle: siteTitle.trim(), haUrl: cleanUrl, haToken: token, latitude: Number(lat), longitude: Number(lng), eyeHeight, walkSpeed });
     // Close immediately and connect in the background — the HUD WiFi indicator
     // reflects progress, and a failure won't trap the user in the modal.
     connect(cleanUrl, token).catch(() => {
@@ -103,6 +104,13 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onEnte
           <h2>Settings</h2>
         </div>
         <div className="settings-body">
+
+        <label>Dashboard title</label>
+        <input
+          value={siteTitle}
+          onChange={(e) => setSiteTitle(e.target.value)}
+          placeholder={haConfig?.location_name || DEFAULT_SITE_TITLE}
+        />
 
         <label>Home Assistant URL</label>
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://homeassistant.local:8123" />

@@ -1,6 +1,6 @@
-# 🏝️ Villa 3D Kiosk — TheLysHouse
+# 🏝️ Villa Kiosk
 
-> **Smart Resilient Property OS** · Browser-based first-person 3D walkthrough of a Bali villa, wired live to Home Assistant.
+> Browser-based first-person 3D walkthrough of your villa, wired live to Home Assistant.
 
 Walk through your villa in 3D on a wall-mounted tablet, teleport between rooms, and control every Home Assistant entity — lights, AC, locks, cameras, curtains, fans, sensors, media — by tapping the object in the scene or using a control panel.
 
@@ -18,7 +18,7 @@ Built from scratch with **React + TypeScript + Babylon.js**, informed by the arc
 | **Live HA sync** | WebSocket connection with auto-reconnect; mesh visuals update within ~300 ms of a state change. |
 | **Tap-to-bind** | Wire any imported model to HA by tapping objects and picking the entity — no entity-named meshes required. |
 | **Live cameras** | Full-screen MJPEG stream popups via the HA camera proxy. |
-| **Day / night** | Scene lighting follows the real Bali sun position (or HA's `sun.sun`). |
+| **Day / night** | Scene lighting follows the real sun position for your location (or HA's `sun.sun`). |
 | **Floor switching** | Walk up the staircase or tap the floor switch (Floor 2 ready for when it's modelled). |
 | **On-demand rendering** | The GPU idles when nothing moves — essential for a 24/7 tablet. |
 | **Runtime config** | Map meshes → entities, calibrate teleport points, set thresholds — all in-app, no code edits. |
@@ -51,9 +51,11 @@ npm run dev                 # http://localhost:5173
 ```
 
 On first run the **Onboarding wizard** asks for:
-1. Your Home Assistant URL + a long-lived access token
+1. Your Home Assistant URL + a long-lived access token *(dev only — when run as a
+   Home Assistant **add-on**, this step is skipped and the connection is automatic
+   via the Supervisor proxy; see [ADDON.md](./ADDON.md))*
 2. The villa **`.glb`** model (see [Model pipeline](#-3d-model-pipeline))
-3. Your location (pre-filled for Bali)
+3. Your location (pre-filled from your HA instance when connected)
 
 Everything is stored locally in the browser. No server-side config files.
 
@@ -71,7 +73,7 @@ Everything is stored locally in the browser. No server-side config files.
 
 ## 🗝️ Works with any villa (turnkey)
 
-The app is **not** tied to TheLysHouse. The only required input is a **`.glb`
+The app is **not** tied to any specific villa. The only required input is a **`.glb`
 model** (the `.sh3d` is just one possible *source* you export from — the app
 never loads `.sh3d`). To wire up a brand-new villa:
 
@@ -103,7 +105,7 @@ wiring, so you only re-import a model when the *building geometry* changes.
 
 ## 🏠 3D model pipeline (.sh3d → .glb)
 
-The source model is `TheLysHouse_1F.sh3d` (SweetHome 3D). It must be exported to an optimised **GLB**. Full step-by-step in **[MODEL_PIPELINE.md](./MODEL_PIPELINE.md)**, summary:
+Start from your villa's SweetHome 3D plan (`.sh3d`). It must be exported to an optimised **GLB**. Full step-by-step in **[MODEL_PIPELINE.md](./MODEL_PIPELINE.md)**, summary:
 
 ```
 SweetHome 3D → Export to OBJ
@@ -113,9 +115,9 @@ SweetHome 3D → Export to OBJ
    → Export glTF 2.0 (Binary .glb, Draco ON)  →  target < 40 MB
 ```
 
-> 💡 **Good news:** in TheLysHouse the interactive objects are already named with
-> their full HA entity IDs (e.g. `camera.livingroom_cam`,
-> `climate.living_room_air_conditioner`). The app matches meshes to entities
+> 💡 **Good news:** if your interactive objects are named with their full HA
+> entity IDs (e.g. `camera.livingroom_cam`,
+> `climate.living_room_air_conditioner`), the app matches meshes to entities
 > automatically — so a clean export already "just works".
 
 Upload the resulting `.glb` in the onboarding wizard or **Settings → 3D model**.
@@ -200,4 +202,4 @@ is in **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
 
 ## 📄 License & status
 
-Internal pilot — *Smart Resilient Property OS · TheLysHouse · Confidential*.
+A generic, self-hostable Home Assistant villa dashboard. Bring your own `.glb`.

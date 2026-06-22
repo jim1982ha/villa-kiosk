@@ -1,0 +1,4 @@
+#!/command/with-contenv sh
+# Token-injecting Home Assistant Core proxy. `with-contenv` exposes
+# SUPERVISOR_TOKEN to the process; s6 supervises and restarts it.
+exec python3 /usr/bin/supervisor-proxy.py

@@ -1,5 +1,5 @@
 // src/babylon/SunController.ts
-// Drives scene lighting from either the real sun position (Bali lat/lng) or the
+// Drives scene lighting from either the real sun position (configured lat/lng) or the
 // HA sun.sun entity state. Day -> bright blue sky; night -> warm indoor glow.
 
 import { Vector3, Color3, Color4, type Scene } from "@babylonjs/core";

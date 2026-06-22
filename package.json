@@ -1,8 +1,8 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.0.0",
-  "description": "Villa 3D Kiosk — Smart Resilient Property OS (TheLysHouse, Bali)",
+  "version": "2.1.0",
+  "description": "Villa Kiosk — a 3D interactive villa dashboard for Home Assistant",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -15,6 +15,7 @@ import { Link2, MapPin, X } from "lucide-react";
 import type { Vec3 } from "@/types/scene.types";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
+import { isIngress, ingressHaUrl } from "@/ha/ingress";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
@@ -38,11 +39,13 @@ export default function Dashboard() {
   const [placeMode, setPlaceMode] = useState(false);
   const [pointToPlace, setPointToPlace] = useState<Vec3 | null>(null);
 
-  // Auto-connect on load / refresh whenever we have saved credentials. These are
-  // persisted in localStorage, so the HA URL + token survive a page refresh and
-  // reconnect automatically — no need to re-enter them.
+  // Auto-connect on load / refresh. As an add-on we reach HA through the
+  // same-origin Supervisor proxy (token injected server-side), so no credentials
+  // are needed. Otherwise reconnect from the URL + token saved in localStorage.
   useEffect(() => {
-    if (config.haUrl && config.haToken) {
+    if (isIngress()) {
+      connect(ingressHaUrl(), "").catch(() => {});
+    } else if (config.haUrl && config.haToken) {
       connect(config.haUrl, config.haToken).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -23,12 +23,15 @@ RUN npm run build
 # ---- serve it behind Home Assistant Ingress -------------------------------
 FROM ${BUILD_FROM}
 
-# nginx serves the static build; /run/nginx holds the pid/temp files.
-RUN apk add --no-cache nginx && mkdir -p /run/nginx
+# nginx serves the static build; python3 + aiohttp run the token-injecting
+# Supervisor proxy (supervisor-proxy.py). /run/nginx holds the pid/temp files.
+RUN apk add --no-cache nginx python3 py3-aiohttp && mkdir -p /run/nginx
 
-# Our nginx config + the s6 service that runs it.
+# Our nginx config, the Supervisor proxy, and the s6 services that run them.
 COPY rootfs /
-RUN chmod a+x /etc/s6-overlay/s6-rc.d/nginx/run
+RUN chmod a+x /etc/s6-overlay/s6-rc.d/nginx/run \
+              /etc/s6-overlay/s6-rc.d/supervisor-proxy/run \
+              /usr/bin/supervisor-proxy.py
 
 # The compiled SPA from the build stage.
 COPY --from=build /app/dist /var/www
@@ -37,7 +40,7 @@ LABEL \
   io.hass.name="Villa Kiosk" \
   io.hass.description="3D Home Assistant villa dashboard served via Ingress" \
   io.hass.type="addon" \
-  io.hass.version="2.0.0"
+  io.hass.version="2.1.0"
 
 # No CMD/ENTRYPOINT: the base image's /init (s6-overlay) starts the nginx
 # longrun service registered under rootfs/etc/s6-overlay/s6-rc.d/.

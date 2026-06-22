@@ -5,6 +5,8 @@
 import { useEffect, useState } from "react";
 import { Home, Grid3x3, Settings, Wifi, WifiOff } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
+import { useConfig } from "@/config/ConfigContext";
+import { resolveSiteTitle } from "@/config/AppConfig";
 import VirtualJoystick from "./VirtualJoystick";
 import AlertBadge from "./AlertBadge";
 
@@ -29,9 +31,16 @@ function useClock(): string {
 export default function HUD({
   currentFloor, floorsAvailable, onSwitchFloor, onOpenTeleport, onOpenSettings, onMove,
 }: Props) {
-  const { connection } = useHA();
+  const { connection, haConfig } = useHA();
+  const { config } = useConfig();
   const clock = useClock();
+  const title = resolveSiteTitle(config, haConfig?.location_name);
   const floors = [1, 2];
+
+  // Keep the browser/tab title in sync with the resolved dashboard title.
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
 
   const connClass =
     connection === "connected" ? "online" : connection === "disconnected" ? "" : "connecting";
@@ -40,7 +49,7 @@ export default function HUD({
     <>
       <div className="hud-topbar">
         <div className="hud-brand">
-          <Home size={22} /> TheLysHouse
+          <Home size={22} /> {title}
         </div>
 
         <div className="floor-switch">

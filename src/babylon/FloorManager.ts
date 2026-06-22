@@ -3,7 +3,7 @@
 //
 // Floors are inferred from mesh elevation (centre Y): everything below
 // FLOOR_SPLIT_Y is floor 1, above is floor 2. When the GLB only contains floor
-// 1 (current state of TheLysHouse), floor 2 is simply empty and the UI shows
+// 1, floor 2 is simply empty and the UI shows
 // "Coming soon". Invisible `trigger_stair_up/down` meshes (if present) switch
 // floors when the camera walks into them.
 

@@ -5,9 +5,9 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: Villa Kiosk
-version: "2.0.0"
+version: "2.1.0"
 slug: villa_kiosk
-description: 3D Home Assistant villa dashboard (TheLysHouse) served through Ingress
+description: 3D Home Assistant villa dashboard served through Ingress
 url: https://github.com/jim1982ha/villa-kiosk
 image: ghcr.io/jim1982ha/villa-kiosk-{arch}
 arch:
@@ -18,6 +18,10 @@ init: false
 # Serve in the sidebar through Ingress (no exposed port, HA does the auth).
 ingress: true
 ingress_port: 8099
+# Grants the add-on the Supervisor Core API proxy + SUPERVISOR_TOKEN, so the UI
+# talks to Home Assistant token-lessly (no long-lived token needed). See
+# rootfs/usr/bin/supervisor-proxy.py.
+homeassistant_api: true
 panel_icon: mdi:home-city
 panel_title: Villa Kiosk
 boot: auto

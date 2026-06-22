@@ -1,6 +1,6 @@
 // src/config/TeleportPoints.ts
 //
-// Teleport anchors derived from the real room geometry in TheLysHouse_1F.sh3d.
+// Teleport anchors derived from the reference floor-1 room geometry (SweetHome 3D).
 //
 // Derivation: SweetHome 3D plan coordinates are centimetres with Y pointing
 // "down" the plan. We recentre on the model centre (1206, 614 cm) and scale to

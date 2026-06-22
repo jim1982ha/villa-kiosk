@@ -2,6 +2,7 @@
 // Fetch recent sensor history via the REST API for SensorPanel sparklines.
 
 import type { HistoryPoint } from "@/types/ha.types";
+import { isIngress, ingressApiBase } from "./ingress";
 
 interface RawHistoryState {
   state: string;
@@ -16,13 +17,15 @@ export async function fetchHistory(
   entityId: string,
   hours = 24,
 ): Promise<HistoryPoint[]> {
-  const base = haUrl.replace(/\/+$/, "");
+  // Under Ingress the add-on's Supervisor proxy injects the token server-side,
+  // so we hit it token-less; otherwise call HA directly with a Bearer header.
+  const apiBase = isIngress() ? ingressApiBase() : `${haUrl.replace(/\/+$/, "")}/api`;
   const start = new Date(Date.now() - hours * 3600 * 1000).toISOString();
   const url =
-    `${base}/api/history/period/${encodeURIComponent(start)}` +
+    `${apiBase}/history/period/${encodeURIComponent(start)}` +
     `?filter_entity_id=${encodeURIComponent(entityId)}&minimal_response&no_attributes`;
 
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(url, isIngress() ? {} : { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`History request failed: ${res.status}`);
 
   const data = (await res.json()) as RawHistoryState[][];

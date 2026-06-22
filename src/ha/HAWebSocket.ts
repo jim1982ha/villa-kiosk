@@ -3,6 +3,7 @@
 // exponential-backoff reconnect with re-subscription. (3Dash-informed patterns.)
 
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
+import { isIngress, ingressWsUrl } from "./ingress";
 
 type Resolver = (result: unknown) => void;
 type Rejecter = (err: Error) => void;
@@ -42,6 +43,9 @@ export class HAWebSocket {
 
   /** Build a ws(s):// URL from an http(s):// base. */
   private wsUrl(httpUrl: string): string {
+    // As an add-on, route through the same-origin Supervisor proxy, which adds
+    // the SUPERVISOR_TOKEN server-side — so the URL/token args are irrelevant.
+    if (isIngress()) return ingressWsUrl();
     const u = httpUrl.replace(/^http/i, "ws").replace(/\/+$/, "");
     return `${u}/api/websocket`;
   }

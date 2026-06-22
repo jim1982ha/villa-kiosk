@@ -1,5 +1,5 @@
 // src/config/Sh3dCalibration.ts
-// Known SweetHome-3D plan positions (centimetres) for TheLysHouse.
+// Known SweetHome-3D plan positions (centimetres) for the reference villa.
 //
 // Because the interactive meshes are named with their entity IDs and sit at these
 // known plan positions, the app can fit the exact transform from plan-space to
