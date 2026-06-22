@@ -1,6 +1,6 @@
-# 🏠 3D Model Pipeline — SweetHome 3D → GLB
+# 3D Model Pipeline — SweetHome 3D → GLB
 
-How to turn `villa_1F.sh3d` into the optimised `.glb` the kiosk loads.
+How to turn your SweetHome 3D plan into the optimised `.glb` the kiosk loads.
 
 ---
 
@@ -48,35 +48,6 @@ correctly-named GLB so that:
 - tapping an object resolves to the right Home Assistant entity.
 
 **Target: a single `.glb` under 40 MB.**
-
----
-
-## ✅ Already done for you in this model
-
-In `villa_1F.sh3d`, the interactive objects are **already named with their
-full Home Assistant entity IDs**, for example:
-
-```
-camera.livingroom_cam
-camera.kitchen_cam
-climate.living_room_air_conditioner
-lock.living_room_aqara_smart_door_lock_0aa9_lock_mechanism
-cover.curtain_living_room_big        (×2 panels)
-cover.curtain_master_bedroom         (×2 panels)
-fan.guest_bathroom_guest_bathroom_fan
-binary_sensor.water_leak_water_heater_1f_water_leak
-sensor.sensor_t1_temperature
-media_player.tv
-assist_satellite.macbook_satellite
-```
-
-The kiosk's `resolveMeshToMapping()` matches these automatically (it also
-tolerates `dots → underscores` if the exporter renames them, and the spec's
-`[type]_[room]` aliases). **So you mostly just need to export cleanly.**
-
-What you still add manually (invisible helpers): collision boxes, staircase
-triggers, and optional teleport anchors (the app already ships sensible teleport
-coordinates derived from the room geometry, so anchors are optional).
 
 ---
 
@@ -136,7 +107,7 @@ light.pool_area
 3D View → Export to OBJ format
 ```
 
-Output: `villa_1F.obj` + `.mtl` + a `textures/` folder. Keep them together.
+Output: `your_villa.obj` + `.mtl` + a `textures/` folder. Keep them together.
 
 ---
 
@@ -163,7 +134,7 @@ icon = *Modifiers*. The orange **square** icon = *Object*.
 ## Step 2 — Import into Blender
 
 ```
-File → Import → Wavefront (.obj)   →  pick villa_1F.obj
+File → Import → Wavefront (.obj)   →  pick your_villa.obj
 ```
 
 (If you already have a `.glb` instead, use **File → Import → glTF 2.0** — but if
@@ -303,33 +274,6 @@ Skip straight to export.
 - **Settings → 3D model → Upload .glb**.
 
 It's stored in the browser (IndexedDB), so it survives refreshes — you upload once.
-Then wire it up by tapping: **Settings → Bind 3D objects** and/or **Drop control
-markers**.
+Then wire it up by tapping: **Settings → Bind 3D objects** and/or **Drop control markers**.
 
----
-
-## Coordinate reference (already baked into the app)
-
-Derived from the `.sh3d` (SweetHome cm → metres, recentred on the model centre
-`(1206, 614) cm`, scale `0.01`). These are the default teleport anchors:
-
-| Room | Babylon (x, y, z) |
-|---|---|
-| Living Room | (−1.56, 1.70, 1.36) |
-| Kitchen | (−9.06, 1.70, −1.94) |
-| Dining Area | (−5.46, 1.70, 2.06) |
-| Entrance | (−2.94, 1.70, −2.30) |
-| Guest Bathroom | (3.77, 1.70, −1.82) |
-| Bedroom 1 | (2.73, 1.70, 2.26) |
-| Master Bedroom | (6.53, 1.70, 1.13) |
-| Master Bathroom | (10.20, 1.70, 2.26) |
-| WIC / Dressing | (7.40, 1.70, −1.17) |
-| Storage / Laundry | (10.20, 1.70, −1.17) |
-| Pool / Garden | (−10.56, 1.70, −4.64) |
-
-If your export uses a different scale/axis, adjust `DEFAULT_MODEL_TRANSFORM` in
-`src/config/AppConfig.ts`, or just recalibrate live (no rebuild).
-
----
-
-*Villa Kiosk — bring your own SweetHome 3D plan.*
+> If the teleport anchors land in the wrong spot after import, walk to the correct position in each room and **long-press the room card** (Rooms panel) to recalibrate live. No rebuild needed.

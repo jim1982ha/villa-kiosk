@@ -1,130 +1,177 @@
-# 🏝️ Villa Kiosk
+# Villa Kiosk
 
 > Browser-based first-person 3D walkthrough of your villa, wired live to Home Assistant.
 
 Walk through your villa in 3D on a wall-mounted tablet, teleport between rooms, and control every Home Assistant entity — lights, AC, locks, cameras, curtains, fans, sensors, media — by tapping the object in the scene or using a control panel.
 
-Built from scratch with **React + TypeScript + Babylon.js**, informed by the architecture of the open-source [3Dash](https://github.com/Kdcius/3Dash_webapp) project.
+Built with **React + TypeScript + Babylon.js**.
 
 ---
 
-## ✨ Features
+## Features
 
 | Area | What it does |
 |---|---|
 | **First-person navigation** | Walk with a touch virtual joystick, look around by dragging, teleport to any room from a grid. |
 | **Tap-to-control** | Tap a 3D object → the right control panel slides up (light/AC/lock/camera/sensor/curtain/fan/switch/media). |
-| **Live visual feedback** | Lights **glow and illuminate the room**; curtains show **open/half/closed**; fans **spin**; locks go green/red; leak sensors pulse red. |
+| **Live visual feedback** | Lights glow and illuminate the room; curtains show open/half/closed; fans spin; locks go green/red; leak sensors pulse red. |
 | **Live HA sync** | WebSocket connection with auto-reconnect; mesh visuals update within ~300 ms of a state change. |
 | **Tap-to-bind** | Wire any imported model to HA by tapping objects and picking the entity — no entity-named meshes required. |
 | **Live cameras** | Full-screen MJPEG stream popups via the HA camera proxy. |
 | **Day / night** | Scene lighting follows the real sun position for your location (or HA's `sun.sun`). |
-| **Floor switching** | Walk up the staircase or tap the floor switch (Floor 2 ready for when it's modelled). |
 | **On-demand rendering** | The GPU idles when nothing moves — essential for a 24/7 tablet. |
 | **Runtime config** | Map meshes → entities, calibrate teleport points, set thresholds — all in-app, no code edits. |
 | **PWA + backup** | Installable, works briefly offline, export/import full config (+ model) as a ZIP. |
 
 ---
 
-## 🧱 Tech stack
+## Tech stack
 
 - **React 18** + **TypeScript** (strict, functional components + hooks only)
 - **Babylon.js 7** (`@babylonjs/core`, `loaders`, `materials`, `inspector`)
 - **Vite 5** build
 - **lucide-react** icons · **jszip** backups
 - **IndexedDB** for the GLB model · **localStorage** for all config
-- Plain CSS with custom properties (warm tropical theme) — no CSS framework
+- Plain CSS with custom properties — no CSS framework
 
 ---
 
-## 🚀 Quick start (development)
+## Run as a Home Assistant add-on (recommended)
+
+On **HA OS or Supervised**, the cleanest path is the **Ingress add-on**: sidebar entry, HA-managed auth, no exposed port, no token, auto-restart. Full install instructions: **[ADDON.md](./ADDON.md)**.
+
+> Requires HA OS or Supervised. On Core/Container installs, use the standalone deploy below.
+
+---
+
+## Standalone deployment (Core / Container / dev)
+
+### 1. Prerequisites
+
+| You need | Notes |
+|---|---|
+| Node.js 18+ | `node -v` |
+| A Home Assistant instance | Any install type |
+| SSH or Samba access to HA `/config` | via the Advanced SSH or Samba add-on |
+| The villa `.glb` model | exported per [MODEL_PIPELINE.md](./MODEL_PIPELINE.md) |
+| A tablet | Samsung Tab S8+ or better for smooth rendering |
+
+### 2. Build
 
 ```bash
-# 1. Install
 npm install
-
-# 2. (Optional) set defaults — copy and edit
-cp .env.example .env        # HA URL, location, deploy target
-
-# 3. Run the dev server
-npm run dev                 # http://localhost:5173
+npm run build       # type-check + Vite → dist/
 ```
 
-On first run the **Onboarding wizard** asks for:
-1. Your Home Assistant URL + a long-lived access token *(dev only — when run as a
-   Home Assistant **add-on**, this step is skipped and the connection is automatic
-   via the Supervisor proxy; see [ADDON.md](./ADDON.md))*
-2. The villa **`.glb`** model (see [Model pipeline](#-3d-model-pipeline))
-3. Your location (pre-filled from your HA instance when connected)
+### 3. Deploy to Home Assistant
 
-Everything is stored locally in the browser. No server-side config files.
+**Automated:**
+```bash
+# Copy .env.example → .env and fill in VITE_DEPLOY_HOST, VITE_DEPLOY_USER, VITE_DEPLOY_PATH
+npm run deploy      # scp dist/ to /config/www/villa-kiosk/ on HA
+```
+
+**Manual scp:**
+```bash
+scp -r dist/. root@homeassistant.local:/config/www/villa-kiosk/
+```
+
+**Samba:** mount the share and copy the contents of `dist/` into `config/www/villa-kiosk/`.
+
+Then open `http://<HA_HOST>:8123/local/villa-kiosk/` on the tablet.
+
+> If `/config/www` didn't exist before, restart HA once so it starts serving `/local/`.
+
+### 4. Get a Home Assistant token (standalone only)
+
+1. HA → your profile → **Security** tab → **Long-lived access tokens** → **Create token**.
+2. Paste it into the kiosk's onboarding / Settings.
+
+> The token is stored in `localStorage` on the tablet — acceptable for a local-only LAN kiosk.
+
+### 5. Tablet kiosk mode
+
+**iOS — Guided Access**
+
+1. Settings → Accessibility → Guided Access → enable, set a passcode.
+2. Settings → Display & Brightness → Auto-Lock → Never.
+3. Safari → navigate to the kiosk URL → Share → **Add to Home Screen** (installs the PWA full-screen).
+4. Open the installed app → triple-click the side button → **Start Guided Access**.
+
+**Android — Fully Kiosk Browser** (recommended, ~€7)
+
+| Setting | Value |
+|---|---|
+| Start URL | `http://homeassistant.local:8123/local/villa-kiosk/` |
+| Prevent sleep / keep screen on | ON |
+| Auto-reload on error | ON (30 s) |
+| Hide navigation/status bar | ON |
+| Allow camera | ON (for MJPEG streams) |
+| Motion detection wake | ON |
+| Brightness | ~70% |
+| Launch on boot | ON |
+
+**Android — free alternative:** Chrome → ⋮ → Add to Home screen, then enable the longest screen timeout and pin the app (Settings → Security → App pinning).
+
+### 6. Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Blank page / 404 at `/local/...` | Ensure files are in `/config/www/villa-kiosk/` and you restarted HA after first creating `www`. |
+| "Connection failed" in onboarding | Check URL (include `http://` and `:8123`), token validity, and that the tablet is on the same LAN. |
+| Camera panel black | Browser must allow the http camera proxy; verify `camera.*` entity works in HA; check token. |
+| Walks through walls | The GLB needs solid wall meshes or `collision_*` boxes — see MODEL_PIPELINE.md. |
+| Teleport lands wrong | Recalibrate: Rooms → walk to the correct spot → long-press the room card. |
+| Inspector won't open | It's a large lazy chunk; first open needs network. Re-deploy after `npm run build`. |
+| Mixed content error | Keep the kiosk and HA both on `http` on the LAN, or put HA behind a proper TLS proxy and use `https` for both. |
 
 ---
 
-## 🔑 Getting a Home Assistant token
+## Development
 
-1. In Home Assistant, click your **profile** (bottom-left).
-2. **Security** tab → scroll to **Long-lived access tokens** → **Create token**.
-3. Copy it and paste it into the kiosk's onboarding / settings.
+```bash
+npm install
+npm run dev         # http://localhost:5173
+npm run build       # production build
+npm run typecheck   # type-check without building
+```
 
-> The token is stored in `localStorage` on the tablet. This is acceptable for a local-only kiosk on your LAN. Don't bake it into a build that leaves the property.
+On first run, the onboarding wizard asks for your HA URL + token (dev mode) or auto-connects (add-on). Then upload your `.glb` and confirm your location.
 
 ---
 
-## 🗝️ Works with any villa (turnkey)
+## Works with any villa
 
-The app is **not** tied to any specific villa. The only required input is a **`.glb`
-model** (the `.sh3d` is just one possible *source* you export from — the app
-never loads `.sh3d`). To wire up a brand-new villa:
+The app is not tied to any specific villa. The only required input is a `.glb` model. To wire up a new villa:
 
 1. **Import the GLB** (onboarding or Settings → 3D model).
-2. Wire it up — **two ways**, mix freely:
-   - **Bind real objects** (Settings → *Bind 3D objects*): tap a lamp/curtain that
-     exists as its own mesh, pick the live HA entity. The real object then reacts.
-   - **Drop control markers** (Settings → *Drop control markers*): for devices that
-     are **not** separate objects (a fused model), or **entities that don't exist
-     yet** — tap any spot, a floating control is placed and linked to an entity_id
-     (which can be added to HA later; it activates automatically when it appears).
+2. Wire it up — two ways, mix freely:
+   - **Bind real objects** (Settings → *Bind 3D objects*): tap a lamp/curtain mesh, pick the live HA entity.
+   - **Drop control markers** (Settings → *Drop control markers*): for fused models or entities not yet in HA — tap any spot, a floating control is placed and linked to an entity_id (activates automatically when the entity appears).
 3. Done — controls, panels and visual feedback work immediately.
 
-**Entity names change over time?** No problem, and **no reload/rebuild needed**:
+Entity names change? Re-point the binding in the app or Config Editor. No rebuild needed.
 
-| Situation | What you do |
-|---|---|
-| Entity renamed in HA | Re-point the binding (tap object → pick new entity, or edit in the bindings table). |
-| New device added | Bind any object to the new entity. |
-| Device moved to another spot | Bind a different object; unbind the old one. |
-| Panel/behaviour wrong | Change the entity **type** in the Config Editor (e.g. force `switch`). |
+> **Prerequisite:** a `.glb` of the villa. If you have a SweetHome 3D `.sh3d`, see [MODEL_PIPELINE.md](./MODEL_PIPELINE.md). If you already have a GLB, skip straight to import + bind.
 
-Everything persists in `localStorage`. The 3D model is independent of the entity
-wiring, so you only re-import a model when the *building geometry* changes.
+---
 
-> 🔑 **Prerequisite:** a `.glb` of the villa. If you have a SweetHome 3D `.sh3d`,
-> see the pipeline below to export one. If you already have a GLB from any tool,
-> skip straight to import + bind.
+## 3D model pipeline
 
-## 🏠 3D model pipeline (.sh3d → .glb)
-
-Start from your villa's SweetHome 3D plan (`.sh3d`). It must be exported to an optimised **GLB**. Full step-by-step in **[MODEL_PIPELINE.md](./MODEL_PIPELINE.md)**, summary:
+Start from your villa's SweetHome 3D plan (`.sh3d`). Export to an optimised `.glb`. Full step-by-step: **[MODEL_PIPELINE.md](./MODEL_PIPELINE.md)**. Summary:
 
 ```
 SweetHome 3D → Export to OBJ
    → Blender → Decimate (≈0.3) → Recalculate normals → remove ceiling
    → name interactive meshes with their HA entity_id
-   → add collision_* boxes + trigger_stair_up/down + teleport_* anchors
    → Export glTF 2.0 (Binary .glb, Draco ON)  →  target < 40 MB
 ```
 
-> 💡 **Good news:** if your interactive objects are named with their full HA
-> entity IDs (e.g. `camera.livingroom_cam`,
-> `climate.living_room_air_conditioner`), the app matches meshes to entities
-> automatically — so a clean export already "just works".
-
-Upload the resulting `.glb` in the onboarding wizard or **Settings → 3D model**.
+> If your interactive objects are named with their full HA entity IDs (e.g. `camera.livingroom_cam`, `climate.living_room_air_conditioner`), the app matches meshes to entities automatically.
 
 ---
 
-## 📁 Project structure
+## Project structure
 
 ```
 src/
@@ -138,47 +185,19 @@ src/
 └── utils/        # colour, sun, storage, backup, transforms
 ```
 
-The 3D scene **never re-renders from React** — HA state changes are pushed
-imperatively into Babylon via `HAStateStore.subscribeAll`, keeping the canvas
-and the React UI fully decoupled.
+The 3D scene never re-renders from React — HA state changes are pushed imperatively into Babylon via `HAStateStore.subscribeAll`, keeping the canvas and the React UI fully decoupled.
 
 ---
 
-## 🎛️ Runtime configuration
+## Runtime configuration
 
-- **Settings** (gear icon): HA URL/token, location, model upload, backup/restore, Inspector.
-- **Config editor** (`/config`): map any `entity_id` to a panel type + label + room, mark entities as "requires confirmation", and edit alert thresholds.
-- **Teleport calibration**: open **Rooms**, then **right-click / long-press** any room card to save your current spot as that room's anchor.
-
----
-
-## 📐 Calibrating teleport coordinates
-
-Teleport anchors are derived from the real room geometry in the `.sh3d` (room
-centroids, cm → m, recentred). If your GLB export uses different axes/scale:
-
-1. Open **Settings → Inspector** (Babylon Inspector) to read world coordinates, **or**
-2. Just walk to a room and **long-press its card** in the Rooms menu to set the anchor live.
-
-Both paths update `localStorage` immediately — no rebuild.
+- **Settings** (gear icon): title, location, model upload, backup/restore, Inspector. HA URL/token shown only in standalone mode.
+- **Config editor** (`/config`): map any `entity_id` to a panel type + label + room, mark entities requiring confirmation, edit alert thresholds.
+- **Teleport calibration**: open **Rooms**, then right-click / long-press any room card to save your current spot as that room's anchor.
 
 ---
 
-## 📦 Building & deploying
-
-```bash
-npm run build      # type-checks then builds to dist/
-npm run deploy     # scp dist/ to Home Assistant (reads VITE_DEPLOY_* from .env)
-```
-
-Then open: `http://<HA_HOST>:8123/local/villa-kiosk/`
-
-Full production + kiosk setup (iOS Guided Access, Android Fully Kiosk, burn-in)
-is in **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
-
----
-
-## ⚡ Performance targets
+## Performance targets
 
 | Metric | Target |
 |---|---|
@@ -190,16 +209,6 @@ is in **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
 
 ---
 
-## 🧭 Development phases (from the spec)
-
-1. **Foundation** — scene loads, first-person camera, on-demand render ✅
-2. **HA connection** — WebSocket, state store, mesh visuals ✅
-3. **Tap + panels** — pick handler + all entity panels ✅
-4. **Navigation polish** — teleport, room labels, alerts, day/night ✅
-5. **Polish + kiosk** — theme, PWA, onboarding, config editor, backup, deploy ✅
-
----
-
-## 📄 License & status
+## License
 
 A generic, self-hostable Home Assistant villa dashboard. Bring your own `.glb`.

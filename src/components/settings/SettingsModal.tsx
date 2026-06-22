@@ -11,6 +11,7 @@ import { normaliseHaUrl, DEFAULT_SITE_TITLE } from "@/config/AppConfig";
 import { testConnection, type TestResult } from "@/ha/testConnection";
 import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
 import { parseSh3d } from "@/utils/sh3dParser";
+import { isIngress } from "@/ha/ingress";
 import ModelUploader from "./ModelUploader";
 import type { SceneManager } from "@/babylon/SceneManager";
 
@@ -26,6 +27,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onEnte
   const { config, update, replace, reset } = useConfig();
   const { connect, haConfig } = useHA();
   const navigate = useNavigate();
+  const ingress = isIngress();
   const importRef = useRef<HTMLInputElement>(null);
   const sh3dRef = useRef<HTMLInputElement>(null);
   const [sh3dMsg, setSh3dMsg] = useState<string | null>(null);
@@ -71,11 +73,9 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onEnte
   const save = () => {
     const cleanUrl = normaliseHaUrl(url);
     update({ siteTitle: siteTitle.trim(), haUrl: cleanUrl, haToken: token, latitude: Number(lat), longitude: Number(lng), eyeHeight, walkSpeed });
-    // Close immediately and connect in the background — the HUD WiFi indicator
-    // reflects progress, and a failure won't trap the user in the modal.
-    connect(cleanUrl, token).catch(() => {
-      /* surfaced by the connection indicator + onboarding test */
-    });
+    if (!ingress) {
+      connect(cleanUrl, token).catch(() => {});
+    }
     onClose();
   };
 
@@ -112,11 +112,15 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onEnte
           placeholder={haConfig?.location_name || DEFAULT_SITE_TITLE}
         />
 
-        <label>Home Assistant URL</label>
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://homeassistant.local:8123" />
+        {!ingress && (
+          <>
+            <label>Home Assistant URL</label>
+            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://homeassistant.local:8123" />
 
-        <label>Long-lived access token</label>
-        <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="eyJhbGciOi…" />
+            <label>Long-lived access token</label>
+            <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="eyJhbGciOi…" />
+          </>
+        )}
 
         <div className="row" style={{ gap: 12 }}>
           <div style={{ flex: 1 }}>
@@ -129,24 +133,28 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onEnte
           </div>
         </div>
 
-        <button className="btn ghost mt" style={{ width: "100%" }} onClick={runTest} disabled={testing}>
-          <Plug size={18} /> {testing ? "Testing…" : "Test connection"}
-        </button>
-        {result && (
-          <div className={`test-result ${result.ok ? "ok" : "fail"}`} style={{ whiteSpace: "pre-line" }}>
-            {result.message}
-            {!result.ok && result.trustUrl && (
-              <a
-                href={result.trustUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="btn ghost mt"
-                style={{ width: "100%", display: "inline-flex", justifyContent: "center" }}
-              >
-                Open {result.trustUrl} to trust its certificate
-              </a>
+        {!ingress && (
+          <>
+            <button className="btn ghost mt" style={{ width: "100%" }} onClick={runTest} disabled={testing}>
+              <Plug size={18} /> {testing ? "Testing…" : "Test connection"}
+            </button>
+            {result && (
+              <div className={`test-result ${result.ok ? "ok" : "fail"}`} style={{ whiteSpace: "pre-line" }}>
+                {result.message}
+                {!result.ok && result.trustUrl && (
+                  <a
+                    href={result.trustUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn ghost mt"
+                    style={{ width: "100%", display: "inline-flex", justifyContent: "center" }}
+                  >
+                    Open {result.trustUrl} to trust its certificate
+                  </a>
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
 
         <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
