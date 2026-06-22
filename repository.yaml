@@ -1,0 +1,6 @@
+# Marks this GitHub repo as a Home Assistant add-on repository. Add its URL in
+# Home Assistant → Settings → Add-ons → Store → ⋮ → Repositories, then install
+# the "Villa Kiosk" add-on from the list (it pulls a prebuilt image — no build).
+name: Villa Kiosk Add-ons
+url: https://github.com/jim1982ha/villa-kiosk
+maintainer: Jim Goupil <jim.goupil@gmail.com>

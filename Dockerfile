@@ -1,13 +1,15 @@
 # Two stages: build the Vite SPA with Node, then serve the static output with
 # nginx on the HA base image (s6-overlay v3 supervises nginx; Ingress fronts it).
-# Supervisor substitutes the per-arch base from build.yaml; the default keeps a
-# plain `docker build` working for local testing.
+# CI passes the per-arch base via BUILD_FROM; the default keeps a plain
+# `docker build` working for local testing.
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest
 
 # ---- build the static SPA -------------------------------------------------
-# node:24 ships npm 11 — matches the npm that generated package-lock.json so the
-# strict `npm ci` resolves identically on every device.
-FROM node:24-alpine AS build
+# Pin this stage to the BUILD platform (the CI runner / your machine), not the
+# target arch: the output is arch-neutral static JS/HTML, so even when we build
+# an arm64 image the heavy Babylon/tsc compile runs natively instead of under
+# slow QEMU emulation. node:24 ships npm 11 (matches package-lock.json).
+FROM --platform=${BUILDPLATFORM:-$TARGETPLATFORM} node:24-alpine AS build
 WORKDIR /app
 # Install deps first so this layer caches across code edits. We use `npm install`
 # (not the stricter `npm ci`) because the project pins mixed @babylonjs/* minor

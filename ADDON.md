@@ -1,15 +1,56 @@
 # 🧩 Run Villa Kiosk as a Home Assistant Add-on (Ingress)
 
-This turns the kiosk into a **one-click add-on** that shows up in your Home
-Assistant sidebar. HA handles the authentication and TLS, there is no exposed
-port and no token-in-URL, and it auto-starts/restarts with HA.
+This turns the kiosk into a **one-click add-on** in your Home Assistant sidebar.
+HA handles auth and TLS, there is no exposed port and no token-in-URL, and it
+auto-starts/restarts with HA.
 
-It is the recommended way to run on your **test instance**
-(`https://192.168.40.203:8123`) and on any HA OS / Supervised box.
+Installation is by **image pull** — you add this GitHub repo as a custom add-on
+repository and install; HA pulls a prebuilt image from GHCR, **no on-device
+build**. Recommended for your test instance (`https://192.168.40.203:8123`) and
+any HA OS / Supervised box.
 
 > Requires **Home Assistant OS** or **Supervised** (add-ons need the Supervisor).
-> A *Core*/*Container* install has no add-ons — use the `/config/www` method in
-> [DEPLOYMENT.md](./DEPLOYMENT.md) instead.
+> On a *Core*/*Container* install use the `/config/www` method in
+> [DEPLOYMENT.md](./DEPLOYMENT.md).
+
+---
+
+## One-time publish (maintainer)
+
+The images are published by GitHub Actions (`.github/workflows/build.yaml`). The
+**first time only**, after the workflow has run once:
+
+1. Push to `main` (or run the workflow manually: **Actions → Build & publish
+   add-on images → Run workflow**). It builds and pushes:
+   - `ghcr.io/jim1982ha/villa-kiosk-amd64:<version>`
+   - `ghcr.io/jim1982ha/villa-kiosk-aarch64:<version>`
+2. **Make the packages public** so HA can pull them without a login:
+   GitHub → your profile → **Packages** → `villa-kiosk-amd64` →
+   **Package settings → Change visibility → Public**. Repeat for `-aarch64`.
+   (They're already linked to this repo via the image `source` label.)
+
+That's it — every later push to `main` republishes the current `version`.
+
+---
+
+## Install in Home Assistant
+
+1. **Settings → Add-ons → Add-on Store → ⋮ (top-right) → Repositories.**
+2. Paste `https://github.com/jim1982ha/villa-kiosk` and **Add**.
+3. The **Villa Kiosk** add-on now appears in the store. Open it → **Install**
+   (a quick image pull — no compiling).
+4. Enable **Start on boot** + **Watchdog**, then **Start**.
+5. Click **Villa Kiosk** in the sidebar (or *Open Web UI*) and complete the
+   one-time onboarding (HA URL + token, upload `.glb`, confirm location).
+
+---
+
+## Updating
+
+Bump `version` in `villa-kiosk/config.yaml`, commit, and push. Actions
+republishes that tag; Home Assistant then shows an **Update** button on the
+add-on. Your config and uploaded model live in the browser, so they survive
+updates.
 
 ---
 
@@ -19,88 +60,44 @@ It is the recommended way to run on your **test instance**
 HA sidebar ──Ingress──► nginx :8099 (172.30.32.2 only) ──► /var/www (the built SPA)
 ```
 
-- A two-stage Docker build (`Dockerfile`) compiles the Vite app with Node, then
-  serves the static `dist/` with nginx on port **8099** behind **Ingress**.
-- `ingress: true` in `config.yaml` puts it in the sidebar; nginx only accepts the
-  Ingress gateway (`172.30.32.2`) and denies everything else.
-- The app uses `HashRouter` + a relative asset base, so it works unmodified under
+- `image:` in `config.yaml` makes the Supervisor pull the prebuilt image instead
+  of building.
+- nginx serves the static build on port **8099** behind **Ingress**, and only
+  accepts the Ingress gateway (`172.30.32.2`) — direct access is denied.
+- The app uses `HashRouter` + a relative asset base, so it runs unmodified under
   the dynamic Ingress path (`/api/hassio_ingress/<token>/`).
-- The app still connects to Home Assistant with the **URL + long-lived token** you
-  enter in onboarding (same as before) — Ingress fronts the *UI*, not the HA API.
+- The app still connects to HA with the **URL + long-lived token** entered in
+  onboarding — Ingress fronts the *UI*, not the HA API.
+
+### Repository layout
+
+| Path | Purpose |
+|---|---|
+| `repository.yaml` | Marks the repo as an HA add-on repository |
+| `villa-kiosk/config.yaml` | Add-on manifest — `image:` (pull), Ingress, port 8099 |
+| `villa-kiosk/DOCS.md`, `icon.png`, `logo.png` | Store docs + artwork |
+| `Dockerfile` | Two-stage build (Node → nginx on HA base); used by CI, context = repo root |
+| `rootfs/etc/nginx/nginx.conf` | Serves `/var/www`, **Ingress-only** allow-list |
+| `rootfs/etc/s6-overlay/...` | s6-overlay v3 service supervising nginx |
+| `.github/workflows/build.yaml` | Builds & pushes per-arch images to GHCR |
+
+The build stage is pinned to `--platform=$BUILDPLATFORM`, so the heavy
+Babylon/Vite compile runs natively on the CI runner even for the arm64 image;
+only the light nginx layer is emulated.
 
 ---
 
-## Install (local add-on — builds on the device, no registry/CI)
+## Local build fallback (no GHCR)
 
-1. **Get the files onto HA.** SSH or Samba into HA (the *Advanced SSH & Web
-   Terminal* or *Samba share* add-on), then clone the repo into `/addons/`:
-
-   ```bash
-   cd /addons
-   git clone https://github.com/jim1982ha/villa-kiosk.git villa-kiosk
-   ```
-
-   (Or copy this folder to `/addons/villa-kiosk/` over Samba.)
-
-2. **Find it in the store.** Home Assistant → **Settings → Add-ons → Add-on
-   Store** → top-right **⋮ → Check for updates**. *Villa Kiosk* appears under
-   **Local add-ons**.
-
-3. **Install.** Open it → **Install**. The first build compiles the app on the
-   device (a few minutes — Babylon is large). Then enable **Start on boot** and
-   **Watchdog**, and click **Start**.
-
-4. **Open it.** Click **Villa Kiosk** in the sidebar (or *Open Web UI*). Run the
-   onboarding once: paste your HA URL + long-lived token, upload the `.glb`,
-   confirm Bali coordinates.
-
-> First boot only: if you used `/config/www` before, that copy still works
-> independently — the add-on is a separate, cleaner path.
-
----
-
-## Update later
+To run without published images — e.g. a quick local test — build the image
+yourself and skip the store:
 
 ```bash
-cd /addons/villa-kiosk
-git pull
+docker build --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest \
+  -t villa-kiosk-addon .
 ```
 
-Then in the add-on page: **⋮ → Rebuild**. Your config and uploaded model live in
-the browser (localStorage/IndexedDB), so they survive rebuilds.
-
----
-
-## Files that make up the add-on
-
-| File | Purpose |
-|---|---|
-| `config.yaml` | Add-on manifest (slug, arch, `ingress: true`, port 8099, sidebar icon/title) |
-| `build.yaml` | Per-arch HA base image for the runtime stage |
-| `Dockerfile` | Stage 1: `npm ci && npm run build`. Stage 2: nginx on the HA base image |
-| `.dockerignore` | Keeps `node_modules`/`dist`/`.git` out of the build context |
-| `rootfs/etc/nginx/nginx.conf` | Serves `/var/www` on :8099, **Ingress-only** allow-list |
-| `rootfs/etc/s6-overlay/s6-rc.d/nginx/*` | s6-overlay v3 service that supervises nginx |
-| `icon.png` / `logo.png` | Store artwork |
-
----
-
-## Going further — publish for true one-click installs (optional)
-
-The local add-on above builds on each device. To let anyone install from a URL
-without an on-device build, publish prebuilt images and convert this into an
-**add-on repository**:
-
-1. Add a GitHub Actions workflow that builds the `Dockerfile` per-arch with
-   `docker buildx` and pushes to `ghcr.io/jim1982ha/villa-kiosk-{arch}`.
-2. Move `config.yaml`/`icon.png` into a `villa-kiosk/` subfolder, add a root
-   `repository.yaml`, and set `image: ghcr.io/jim1982ha/villa-kiosk-{arch}` +
-   matching `version` in `config.yaml` (HA then *pulls* instead of building).
-3. Users add the repo in **Add-on Store → ⋮ → Repositories** by pasting the
-   GitHub URL.
-
-This is a productionization step; the local add-on is all you need for the test
-instance today.
+This is only for testing; the image-pull store install above is the normal path.
 
 ---
 
@@ -108,8 +105,9 @@ instance today.
 
 | Symptom | Fix |
 |---|---|
-| Add-on not in the store | It must be in `/addons/villa-kiosk/`; then **⋮ → Check for updates**. |
-| Build fails on `npm ci` | Ensure the full repo was cloned (not just a few files); check device disk space. |
-| Blank sidebar panel | Watch the add-on **Log** tab; confirm nginx started and is listening on 8099. |
-| "Connection failed" in onboarding | URL must include `http://…:8123`; token valid; tablet on the same LAN. |
+| Add-on not in store after adding repo | **⋮ → Check for updates**; confirm the repo URL was accepted. |
+| Install fails pulling the image | The GHCR packages must be **Public** (see *One-time publish*), and the Actions run must have finished. |
+| Wrong architecture | Only `amd64` + `aarch64` are published; add more arches in `config.yaml` + the workflow matrix. |
+| Blank sidebar panel | Check the add-on **Log** tab; confirm nginx started on 8099. |
 | 403 if you hit the port directly | Expected — nginx only allows the Ingress gateway `172.30.32.2`. |
+| "Connection failed" in onboarding | URL must include `http://…:8123`; token valid; device on the same LAN. |

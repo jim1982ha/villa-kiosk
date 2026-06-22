@@ -1,10 +1,15 @@
-# Keep the build context lean: deps are reinstalled with `npm ci`, and the
-# build output is regenerated inside the image. rootfs/ IS needed (it's COPYied).
+# Keep the build context lean: deps are reinstalled, and the build output is
+# regenerated inside the image. rootfs/ IS needed (it's COPYied in the runtime stage).
 node_modules
 dist
 .git
+.github
 .env
 *.log
 .vite
 tsconfig.tsbuildinfo
 model-source
+villa-kiosk
+ADDON.md
+DEPLOYMENT.md
+MODEL_PIPELINE.md

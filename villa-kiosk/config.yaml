@@ -1,17 +1,18 @@
-# Home Assistant add-on manifest for the Villa Kiosk.
-# Drop this repo into HA's /addons/villa-kiosk/ (local add-on) and it appears in
-# the Add-on Store, builds from source on the device, and serves the 3D kiosk in
-# the HA sidebar via Ingress — no port forwarding, auth handled by Home Assistant.
+# Villa Kiosk — Home Assistant add-on manifest (image-pull variant).
+#
+# `image` makes the Supervisor PULL a prebuilt image from GHCR instead of
+# building on the device, so installing from the repository URL is a one-click,
+# no-compile operation. The {arch} placeholder + version resolve to e.g.
+# ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: Villa Kiosk
 version: "2.0.0"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard (TheLysHouse) served through Ingress
 url: https://github.com/jim1982ha/villa-kiosk
-# Build stage uses multi-arch node:20-alpine, runtime is the HA base image.
+image: ghcr.io/jim1982ha/villa-kiosk-{arch}
 arch:
   - amd64
   - aarch64
-  - armv7
 # The HA base image ships s6-overlay v3 as its own init — disable Docker's.
 init: false
 # Serve in the sidebar through Ingress (no exposed port, HA does the auth).
