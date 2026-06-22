@@ -6,6 +6,7 @@ dist-ssr
 .DS_Store
 *.log
 .vite
+tsconfig.tsbuildinfo
 
 # Local model & asset working files — these are user data, never committed.
 *.sh3d
