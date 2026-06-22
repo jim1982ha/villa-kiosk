@@ -11,6 +11,7 @@ import { normaliseHaUrl, DEFAULT_SITE_TITLE } from "@/config/AppConfig";
 import { testConnection, type TestResult } from "@/ha/testConnection";
 import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
 import { parseSh3d } from "@/utils/sh3dParser";
+import { clearStoredModel, getModelMeta } from "@/utils/storage";
 import { isIngress } from "@/ha/ingress";
 import ModelUploader from "./ModelUploader";
 import type { SceneManager } from "@/babylon/SceneManager";
@@ -50,6 +51,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onEnte
     }
   };
 
+  const [modelMeta, setModelMeta] = useState(() => getModelMeta());
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);
   const [url, setUrl] = useState(config.haUrl);
   const [token, setToken] = useState(config.haToken);
@@ -220,7 +222,21 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onEnte
         <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
 
         <label>3D model</label>
-        <ModelUploader onUploaded={onModelChanged} />
+        <ModelUploader onUploaded={() => { setModelMeta(getModelMeta()); onModelChanged(); }} />
+        {modelMeta && (
+          <button
+            className="btn ghost mt"
+            style={{ width: "100%", color: "var(--danger, #c0392b)" }}
+            onClick={async () => {
+              if (!confirm("Remove the stored 3D model?\n\nThe model is saved in this browser only — it is not part of the add-on data and must be re-uploaded after clearing.")) return;
+              await clearStoredModel();
+              setModelMeta(null);
+              onModelChanged();
+            }}
+          >
+            Clear stored model ({modelMeta.name})
+          </button>
+        )}
 
         <label style={{ marginTop: 16 }}>Room names (.sh3d) — optional</label>
         <button className="btn ghost" style={{ width: "100%" }} onClick={() => sh3dRef.current?.click()}>

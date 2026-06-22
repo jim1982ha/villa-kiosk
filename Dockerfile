@@ -40,7 +40,7 @@ LABEL \
   io.hass.name="Villa Kiosk" \
   io.hass.description="3D Home Assistant villa dashboard served via Ingress" \
   io.hass.type="addon" \
-  io.hass.version="2.1.0"
+  io.hass.version="2.2.0"
 
 # No CMD/ENTRYPOINT: the base image's /init (s6-overlay) starts the nginx
 # longrun service registered under rootfs/etc/s6-overlay/s6-rc.d/.
