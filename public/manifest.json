@@ -1,0 +1,25 @@
+{
+  "name": "TheLysHouse — Villa Kiosk",
+  "short_name": "Villa Kiosk",
+  "description": "3D interactive villa dashboard for Home Assistant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#120c06",
+  "theme_color": "#1c140c",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

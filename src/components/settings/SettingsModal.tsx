@@ -1,0 +1,298 @@
+// src/components/settings/SettingsModal.tsx
+// HA connection + token + location + model + backup/restore. Plus a link to the
+// full Config Editor and a button to toggle the Babylon Inspector for calibration.
+
+import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Plug, Download, Upload, Bug, Sliders, Link2, MapPin, FileText } from "lucide-react";
+import { useConfig } from "@/config/ConfigContext";
+import { useHA } from "@/ha/HAStateStore";
+import { normaliseHaUrl } from "@/config/AppConfig";
+import { testConnection, type TestResult } from "@/ha/testConnection";
+import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
+import { parseSh3d } from "@/utils/sh3dParser";
+import ModelUploader from "./ModelUploader";
+import type { SceneManager } from "@/babylon/SceneManager";
+
+interface Props {
+  manager: SceneManager | null;
+  onClose: () => void;
+  onModelChanged: () => void;
+  onEnterBindMode: () => void;
+  onEnterPlaceMode: () => void;
+}
+
+export default function SettingsModal({ manager, onClose, onModelChanged, onEnterBindMode, onEnterPlaceMode }: Props) {
+  const { config, update, replace, reset } = useConfig();
+  const { connect } = useHA();
+  const navigate = useNavigate();
+  const importRef = useRef<HTMLInputElement>(null);
+  const sh3dRef = useRef<HTMLInputElement>(null);
+  const [sh3dMsg, setSh3dMsg] = useState<string | null>(null);
+
+  const loadSh3d = async (file: File) => {
+    try {
+      const { rooms, entities } = await parseSh3d(file);
+      if (rooms.length === 0) {
+        setSh3dMsg("No named rooms found in that .sh3d.");
+        return;
+      }
+      update({
+        sh3dRooms: rooms,
+        sh3dEntities: entities,
+      });
+      setSh3dMsg(`Loaded ${rooms.length} rooms${entities.length ? ` + ${entities.length} calibration points` : ""}. Reloading…`);
+      setTimeout(() => onModelChanged(), 600); // remount to re-fit room labels
+    } catch (err) {
+      setSh3dMsg((err as Error).message);
+    }
+  };
+
+  const [url, setUrl] = useState(config.haUrl);
+  const [token, setToken] = useState(config.haToken);
+  const [lat, setLat] = useState(String(config.latitude));
+  const [lng, setLng] = useState(String(config.longitude));
+  const [eyeHeight, setEyeHeight] = useState(config.eyeHeight ?? 1.7);
+  const [walkSpeed, setWalkSpeed] = useState(config.walkSpeed ?? 1);
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<TestResult | null>(null);
+
+  // Live-apply so you can feel/see the change while dragging the sliders.
+  const applyEyeHeight = (h: number) => {
+    setEyeHeight(h);
+    manager?.camera.setEyeHeight(h);
+  };
+  const applyWalkSpeed = (v: number) => {
+    setWalkSpeed(v);
+    manager?.camera.setWalkSpeed(v);
+  };
+
+  const save = () => {
+    const cleanUrl = normaliseHaUrl(url);
+    update({ haUrl: cleanUrl, haToken: token, latitude: Number(lat), longitude: Number(lng), eyeHeight, walkSpeed });
+    // Close immediately and connect in the background — the HUD WiFi indicator
+    // reflects progress, and a failure won't trap the user in the modal.
+    connect(cleanUrl, token).catch(() => {
+      /* surfaced by the connection indicator + onboarding test */
+    });
+    onClose();
+  };
+
+  const runTest = async () => {
+    setTesting(true);
+    setResult(null);
+    setResult(await testConnection(normaliseHaUrl(url), token));
+    setTesting(false);
+  };
+
+  const doExport = async () => {
+    const blob = await exportBackup(config, true);
+    downloadBlob(blob, `villa-kiosk-backup-${Date.now()}.zip`);
+  };
+
+  const doImport = async (file: File) => {
+    const { config: imported, modelImported } = await importBackup(file);
+    if (imported) replace({ ...config, ...imported, haToken: config.haToken });
+    if (modelImported) onModelChanged();
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="settings-header">
+          <h2>Settings</h2>
+        </div>
+        <div className="settings-body">
+
+        <label>Home Assistant URL</label>
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://homeassistant.local:8123" />
+
+        <label>Long-lived access token</label>
+        <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="eyJhbGciOi…" />
+
+        <div className="row" style={{ gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label>Latitude</label>
+            <input value={lat} onChange={(e) => setLat(e.target.value)} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label>Longitude</label>
+            <input value={lng} onChange={(e) => setLng(e.target.value)} />
+          </div>
+        </div>
+
+        <button className="btn ghost mt" style={{ width: "100%" }} onClick={runTest} disabled={testing}>
+          <Plug size={18} /> {testing ? "Testing…" : "Test connection"}
+        </button>
+        {result && (
+          <div className={`test-result ${result.ok ? "ok" : "fail"}`} style={{ whiteSpace: "pre-line" }}>
+            {result.message}
+            {!result.ok && result.trustUrl && (
+              <a
+                href={result.trustUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn ghost mt"
+                style={{ width: "100%", display: "inline-flex", justifyContent: "center" }}
+              >
+                Open {result.trustUrl} to trust its certificate
+              </a>
+            )}
+          </div>
+        )}
+
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
+
+        <label>Eye height (walking) · {eyeHeight.toFixed(2)} m</label>
+        <input
+          type="range" min={0.8} max={2.2} step={0.05} value={eyeHeight}
+          onChange={(e) => applyEyeHeight(Number(e.target.value))}
+        />
+        <p className="muted body-text" style={{ marginTop: 6 }}>
+          Adjust until the view sits at natural standing height. Updates live.
+        </p>
+
+        <label style={{ marginTop: 16 }}>Walk speed · {walkSpeed.toFixed(1)}×</label>
+        <input
+          type="range" min={0.3} max={3} step={0.1} value={walkSpeed}
+          onChange={(e) => applyWalkSpeed(Number(e.target.value))}
+        />
+        <p className="muted body-text" style={{ marginTop: 6 }}>
+          Speed of the joystick and two-finger-swipe walking. Updates live.
+        </p>
+
+        <label className="toggle">
+          <input
+            type="checkbox" checked={config.wallCollisions}
+            onChange={(e) => update({ wallCollisions: e.target.checked })}
+          />
+          <span>Wall collisions (can't walk through walls)</span>
+        </label>
+        <label className="toggle">
+          <input
+            type="checkbox" checked={config.weatherEffects}
+            onChange={(e) => update({ weatherEffects: e.target.checked })}
+          />
+          <span>Live weather effects</span>
+        </label>
+        <p className="muted body-text" style={{ marginTop: 6 }}>
+          Mirrors your Home Assistant weather entity in the scene. When it's
+          raining you'll see rain; in clear, sunny or cloudy weather nothing is
+          drawn — so good weather simply shows the villa as-is.
+        </p>
+
+        <label className="toggle">
+          <input
+            type="checkbox" checked={config.calibrationFlipX}
+            onChange={(e) => update({ calibrationFlipX: e.target.checked })}
+          />
+          <span>Mirror room detection left ↔ right</span>
+        </label>
+        <label className="toggle">
+          <input
+            type="checkbox" checked={config.calibrationFlipZ}
+            onChange={(e) => update({ calibrationFlipZ: e.target.checked })}
+          />
+          <span>Mirror room detection front ↔ back</span>
+        </label>
+        <p className="muted body-text" style={{ marginTop: 6 }}>
+          The app auto-aligns rooms to the model. If the detected room is reversed
+          versus the real villa (e.g. the laundry shows on the wrong side), toggle
+          these to flip it. Updates live.
+        </p>
+
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
+
+        <label>3D model</label>
+        <ModelUploader onUploaded={onModelChanged} />
+
+        <label style={{ marginTop: 16 }}>Room names (.sh3d) — optional</label>
+        <button className="btn ghost" style={{ width: "100%" }} onClick={() => sh3dRef.current?.click()}>
+          <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload SweetHome .sh3d"}
+        </button>
+        <input
+          ref={sh3dRef} type="file" accept=".sh3d" style={{ display: "none" }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) loadSh3d(f);
+          }}
+        />
+        <p className="muted body-text" style={{ marginTop: 6 }}>
+          Reads room names + shapes straight from the SweetHome file so rooms are
+          labelled automatically — works for any villa, no rebuild.
+        </p>
+        {sh3dMsg && <div className="test-result ok">{sh3dMsg}</div>}
+
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
+
+        <label>Wire up this villa</label>
+        <button className="btn primary" style={{ width: "100%" }} onClick={onEnterBindMode}>
+          <Link2 size={18} /> Bind 3D objects to entities (tap mode)
+        </button>
+        <p className="muted body-text" style={{ marginTop: 8 }}>
+          Tap an existing object in the scene, then pick the entity it controls.
+        </p>
+
+        <button className="btn primary mt" style={{ width: "100%" }} onClick={onEnterPlaceMode}>
+          <MapPin size={18} /> Drop control markers (tap mode)
+        </button>
+        <p className="muted body-text" style={{ marginTop: 8 }}>
+          For devices that aren't separate objects (or entities you'll add later):
+          tap a spot to drop a floating control and link it to any entity_id.
+        </p>
+
+        <div className="row-buttons mt">
+          <button className="btn ghost" onClick={() => navigate("/config")}>
+            <Sliders size={18} /> Config editor
+          </button>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              onClose(); // close so the Inspector panel is visible
+              manager?.toggleInspector();
+            }}
+          >
+            <Bug size={18} /> Inspector
+          </button>
+        </div>
+
+        <div className="row-buttons mt">
+          <button className="btn ghost" onClick={doExport}>
+            <Download size={18} /> Export backup
+          </button>
+          <button className="btn ghost" onClick={() => importRef.current?.click()}>
+            <Upload size={18} /> Import backup
+          </button>
+          <input
+            ref={importRef} type="file" accept=".zip" style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) doImport(f);
+            }}
+          />
+        </div>
+
+        </div>{/* end settings-body */}
+
+        <div className="settings-footer">
+          <button
+            className="btn danger"
+            title="Erase all saved settings (HA URL, token, bindings, markers, teleports) and restore defaults"
+            onClick={() => {
+              if (confirm("Reset EVERYTHING to defaults?\n\nThis erases your HA URL, token, entity bindings, markers and teleport points. Your uploaded 3D model is kept.")) {
+                reset();
+                onClose();
+              }
+            }}
+          >
+            Reset
+          </button>
+          <div className="row" style={{ gap: 12 }}>
+            <button className="btn ghost" onClick={onClose}>Cancel</button>
+            <button className="btn primary" onClick={save}>Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

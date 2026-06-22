@@ -1,0 +1,17 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.DS_Store
+*.log
+.vite
+
+# Local model & asset working files
+*.sh3d
+*.obj
+*.mtl
+public/models/*.glb
+
+# …but keep the canonical source model that ships with the project
+!model-source/TheLysHouse_1F.sh3d

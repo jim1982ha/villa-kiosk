@@ -1,0 +1,3 @@
+#!/command/with-contenv sh
+# Run nginx in the foreground so s6 supervises (and restarts) it.
+exec nginx -g "daemon off;"

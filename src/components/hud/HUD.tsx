@@ -1,0 +1,83 @@
+// src/components/hud/HUD.tsx
+// Top bar (brand, floor switch, clock, connection) + bottom bar (joystick,
+// teleport button, alert badge, settings).
+
+import { useEffect, useState } from "react";
+import { Home, Grid3x3, Settings, Wifi, WifiOff } from "lucide-react";
+import { useHA } from "@/ha/HAStateStore";
+import VirtualJoystick from "./VirtualJoystick";
+import AlertBadge from "./AlertBadge";
+
+interface Props {
+  currentFloor: number;
+  floorsAvailable: number[];
+  onSwitchFloor: (floor: number) => void;
+  onOpenTeleport: () => void;
+  onOpenSettings: () => void;
+  onMove: (x: number, y: number) => void;
+}
+
+function useClock(): string {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000 * 20);
+    return () => clearInterval(t);
+  }, []);
+  return now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+export default function HUD({
+  currentFloor, floorsAvailable, onSwitchFloor, onOpenTeleport, onOpenSettings, onMove,
+}: Props) {
+  const { connection } = useHA();
+  const clock = useClock();
+  const floors = [1, 2];
+
+  const connClass =
+    connection === "connected" ? "online" : connection === "disconnected" ? "" : "connecting";
+
+  return (
+    <>
+      <div className="hud-topbar">
+        <div className="hud-brand">
+          <Home size={22} /> TheLysHouse
+        </div>
+
+        <div className="floor-switch">
+          {floors.map((f) => (
+            <button
+              key={f}
+              className={f === currentFloor ? "active" : ""}
+              disabled={!floorsAvailable.includes(f)}
+              title={floorsAvailable.includes(f) ? `Floor ${f}` : "Coming soon"}
+              onClick={() => onSwitchFloor(f)}
+            >
+              Floor {f}
+            </button>
+          ))}
+        </div>
+
+        <div className="hud-right">
+          <span className="hud-clock">{clock}</span>
+          <span className={`conn-dot ${connClass}`}>
+            <span className="dot" />
+            {connection === "connected" ? <Wifi size={15} /> : <WifiOff size={15} />}
+          </span>
+          <button className="icon-btn" onClick={onOpenSettings} title="Settings">
+            <Settings size={20} />
+          </button>
+        </div>
+      </div>
+
+      <div className="bottom-bar">
+        <VirtualJoystick onMove={onMove} />
+        <div className="bottom-right">
+          <button className="icon-btn" onClick={onOpenTeleport} title="Rooms">
+            <Grid3x3 size={22} />
+          </button>
+          <AlertBadge />
+        </div>
+      </div>
+    </>
+  );
+}

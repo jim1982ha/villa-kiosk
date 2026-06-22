@@ -1,0 +1,35 @@
+{
+  "name": "villa-kiosk",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Villa 3D Kiosk — Smart Resilient Property OS (TheLysHouse, Bali)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc -b --noEmit",
+    "deploy": "node scripts/deploy.mjs"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^7.37.2",
+    "@babylonjs/gui": "^7.54.3",
+    "@babylonjs/gui-editor": "^7.54.3",
+    "@babylonjs/inspector": "^7.54.3",
+    "@babylonjs/loaders": "^7.37.2",
+    "@babylonjs/materials": "^7.54.3",
+    "@babylonjs/serializers": "^7.54.3",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.577.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}
