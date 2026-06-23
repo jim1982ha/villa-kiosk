@@ -31,6 +31,7 @@
 // so the in-app toggle matches user expectation regardless of the OS setting.
 
 import { ArcRotateCamera, Vector3, type Scene } from "@babylonjs/core";
+import { suppressGhostClick } from "@/utils/ghostClick";
 
 interface OverviewCallbacks {
   onActivity: () => void;
@@ -213,6 +214,9 @@ export class OverviewController {
     if (this.tapCandidate &&
         this.pointers.size === 0 &&
         performance.now() - this.tapStartT < OverviewController.TAP_TIME) {
+      // Swallow the synthesized touch/pen click so it can't dismiss the panel
+      // the tap opens (see suppressGhostClick + CameraController for the why).
+      if (e.pointerType !== "mouse") suppressGhostClick(e.clientX, e.clientY);
       this.cb.onTap?.(e.clientX, e.clientY);
     }
     this.tapCandidate = false;

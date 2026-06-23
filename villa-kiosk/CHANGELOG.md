@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.4.9
+
+### Fix — tapping entities did nothing on phones
+- On touch screens, tapping an entity (its label, its 3D mesh, or a control
+  marker) opened the control panel and then *immediately* closed it, so it
+  looked like nothing happened (worked fine with a mouse on desktop).
+- Cause: a tap opens the panel via an async React update, so its full-screen
+  backdrop mounts a beat later — right in time for the browser's synthesized
+  "ghost" `click` (which touch emits after a tap, but a mouse does not) to land
+  on that backdrop and dismiss the panel. We now swallow that one ghost click.
+
+### Fix — stale UI after add-on update
+- The kiosk shell (`index.html`) was served with no `Cache-Control`, so
+  browsers and the Nabu Casa / DuckDNS edge applied heuristic caching and kept
+  serving an OLD shell after an update. The shell pointed at old (immutable-
+  cached) `/assets/index-*.js|css`, so the page loaded the previous build even
+  though the new files were already on disk — the symptom was a device (e.g. a
+  HA Yellow) still showing the old UI while reporting the new version.
+- nginx now sends `Cache-Control: no-cache` on the shell so it is revalidated
+  on every load; the content-hashed assets it references stay immutable-cached.
+
 ## 2.4.8
 
 ### Top / bottom bar layout overhaul (desktop + mobile)

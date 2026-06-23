@@ -11,6 +11,7 @@ import {
 import type { AppConfig } from "@/config/AppConfig";
 import type { TeleportPoint } from "@/types/scene.types";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
+import { suppressGhostClick } from "@/utils/ghostClick";
 
 interface CameraCallbacks {
   onRoomChange: (room: string | null) => void;
@@ -265,6 +266,14 @@ export class CameraController {
     if (this.tapCandidate &&
         this.pointers.size === 0 &&
         performance.now() - this.tapStartT < CameraController.TAP_TIME) {
+      // On touch (and pen) the browser emits a *synthesized* `click` a moment
+      // after pointerup — AFTER React has (asynchronously) mounted whatever the
+      // tap opened, e.g. an entity control panel + its full-screen backdrop.
+      // That ghost click then lands on the just-mounted backdrop and instantly
+      // dismisses it, so on phones tapping a mesh/label/marker looked like
+      // "nothing happens". Swallow that one ghost click. (Mouse clicks fire
+      // synchronously before the async React flush, so desktop never hit this.)
+      if (e.pointerType !== "mouse") suppressGhostClick(e.clientX, e.clientY);
       this.cb.onTap?.(e.clientX, e.clientY);
     }
     this.tapCandidate = false;
