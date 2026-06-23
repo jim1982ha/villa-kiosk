@@ -31,6 +31,9 @@ export default function BabylonCanvas({
   useEffect(() => { configRef.current = config; }, [config]);
   const [status, setStatus] = useState<"loading" | "ready" | "no-model" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
+  // True when the error came from a failed addon-config model fetch — the user
+  // should fix their add-on settings, not upload a file.
+  const [addonError, setAddonError] = useState(false);
 
   // Create the scene once.
   useEffect(() => {
@@ -47,24 +50,28 @@ export default function BabylonCanvas({
 
     (async () => {
       try {
-        // Priority 1: central model configured in the add-on options (all clients
-        // share the same model — no per-browser upload). Priority 2: per-client
-        // IndexedDB upload (dev mode / non-add-on / local override).
         const addonCfg = await fetchAddonConfig();
         let data: ArrayBuffer | null = null;
         let fromAddon = false;
 
         if (addonCfg.model_path) {
-          try {
-            const resp = await fetch(`/model/${addonCfg.model_path}`);
-            if (resp.ok) { data = await resp.arrayBuffer(); fromAddon = true; }
-            else console.warn(`[BabylonCanvas] /model/${addonCfg.model_path} → ${resp.status}`);
-          } catch (err) {
-            console.warn("[BabylonCanvas] central model fetch failed, trying IndexedDB", err);
+          // ── Add-on mode: ONLY use the centrally configured model. ──────────
+          // No IndexedDB fallback — if the admin set model_path, that is the
+          // authoritative source and per-browser uploads are irrelevant.
+          const resp = await fetch(`/model/${addonCfg.model_path}`);
+          if (!resp.ok) {
+            setAddonError(true);
+            throw new Error(
+              `Central model not found at /model/${addonCfg.model_path} (HTTP ${resp.status}).\n` +
+              `Check the add-on configuration: Settings → Add-ons → Villa Kiosk → Configuration.`,
+            );
           }
+          data = await resp.arrayBuffer();
+          fromAddon = true;
+        } else {
+          // ── Standalone / dev mode: per-browser IndexedDB upload. ──────────
+          data = await loadModelFromIndexedDB();
         }
-
-        if (!data) data = await loadModelFromIndexedDB();
 
         if (cancelled) return; // StrictMode unmounted us mid-load
         if (!data) {
@@ -164,8 +171,10 @@ export default function BabylonCanvas({
       {status === "error" && (
         <div className="center-overlay">
           <div className="danger-text">Failed to load the 3D model.</div>
-          <div className="muted body-text">{errorMsg}</div>
-          <button className="btn primary" onClick={onNeedModel}>Upload model</button>
+          <div className="muted body-text" style={{ whiteSpace: "pre-line" }}>{errorMsg}</div>
+          {!addonError && (
+            <button className="btn primary" onClick={onNeedModel}>Upload model</button>
+          )}
         </div>
       )}
     </>

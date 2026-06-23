@@ -1,36 +1,45 @@
 // src/babylon/OverviewController.ts
-// Bird's-eye "overview" camera: float above the plan and look down at the whole
-// house. A second way to use the UI alongside first-person walking — pan across
-// the plan, zoom, tilt the inclination, and tap entities to control them.
+// Bird's-eye overview camera with Google Earth-style gesture controls.
 //
-// Like CameraController, ALL input is driven manually from our own canvas
-// pointer listeners (no Babylon attachControl), and the listeners are attached
-// only while this mode is active. That keeps a single owner of the pointer
-// pipeline at any time, so there's no setPointerCapture race and tap-to-pick
-// stays reliable on touch.
+// ── Gesture map ──────────────────────────────────────────────────────────────
 //
-//   • one finger drag / left-mouse drag  = pan across the plan
-//   • two-finger pinch                   = zoom in / out
-//   • two-finger vertical drag           = change inclination (tilt)
-//   • two-finger twist                   = rotate heading
-//   • mouse wheel                        = zoom; Shift+wheel = rotate/tilt
-//   • clean tap / click                  = pick the entity under it
+//  TRACKPAD (WheelEvent — the browser converts trackpad gestures):
+//    2-finger slide          → pan   (deltaX/Y, no modifier key)
+//    pinch / spread          → zoom  (deltaY, ctrlKey=true — browser does this)
+//    Shift + 2-finger slide  → tilt (Y) + rotate heading (X)
+//
+//  TOUCHSCREEN / MOUSE (PointerEvent):
+//    1 pointer drag          → pan
+//    2 pointer pinch/spread  → zoom
+//    2 pointer twist         → rotate heading (bearing)
+//    2 pointer vertical slide (stable distance) → tilt (pitch)
+//
+//  TAP (touch or left-click, brief, no movement) → pick entity
+//
+// Natural scrolling flag: when true the map follows the finger/scroll direction;
+// when false the view moves opposite (traditional). Applied uniformly to both
+// pointer drag and wheel events so the in-app toggle matches user expectation
+// regardless of the OS-level natural scrolling setting.
 
-import {
-  ArcRotateCamera, Vector3, type Scene,
-} from "@babylonjs/core";
+import { ArcRotateCamera, Vector3, type Scene } from "@babylonjs/core";
 
 interface OverviewCallbacks {
   onActivity: () => void;
-  /** A clean single-finger / single-click tap at the given client coords. */
   onTap?: (clientX: number, clientY: number) => void;
 }
 
 interface Bounds {
   minX: number; maxX: number;
   minZ: number; maxZ: number;
-  floorY: number;
 }
+
+// Sensitivity constants
+const DRAG_SENS       = 0.0016; // world-units per pixel × radius (pointer pan)
+const WHEEL_PAN_SENS  = 0.0006; // lower: trackpad wheel deltas are larger in magnitude
+const WHEEL_ZOOM_SENS = 0.006;  // per normalised wheel pixel
+const TILT_SENS_TOUCH = 0.005;  // radians per pixel (two-finger centroid drag)
+const TILT_SENS_WHEEL = 0.003;  // radians per normalised wheel pixel
+const ROT_SENS_WHEEL  = 0.003;  // radians per normalised wheel pixel
 
 export class OverviewController {
   readonly camera: ArcRotateCamera;
@@ -38,27 +47,17 @@ export class OverviewController {
   private cb: OverviewCallbacks;
   private attached = false;
   private naturalScrolling = true;
+  private bounds: Bounds = { minX: -20, maxX: 20, minZ: -20, maxZ: 20 };
 
-  setNaturalScrolling(v: boolean): void { this.naturalScrolling = v; }
-
-  /** Pan limits (house footprint + margin), set by fitTo(). */
-  private bounds: Bounds = { minX: -20, maxX: 20, minZ: -20, maxZ: 20, floorY: 0 };
-
-  // Tilt range: ~3° off straight-down up to ~80° (near the horizon).
-  private static readonly BETA_MIN = 0.05;
-  private static readonly BETA_MAX = 1.4;
+  private static readonly BETA_MIN = 0.05; // ~3° from straight down
+  private static readonly BETA_MAX = 1.4;  // ~80° (near horizon)
 
   constructor(scene: Scene, canvas: HTMLCanvasElement, cb: OverviewCallbacks) {
     this.canvas = canvas;
     this.cb = cb;
 
     this.camera = new ArcRotateCamera(
-      "overviewCamera",
-      -Math.PI / 2,   // alpha (heading)
-      0.5,            // beta (inclination from straight-down)
-      30,             // radius (zoom)
-      Vector3.Zero(),
-      scene,
+      "overviewCamera", -Math.PI / 2, 0.5, 30, Vector3.Zero(), scene,
     );
     this.camera.minZ = 0.1;
     this.camera.fov = 0.8;
@@ -66,23 +65,20 @@ export class OverviewController {
     this.camera.upperBetaLimit = OverviewController.BETA_MAX;
     this.camera.lowerRadiusLimit = 3;
     this.camera.upperRadiusLimit = 200;
-    // We never call attachControl — input is fully manual (see handlers below).
+    // Input is fully manual — we never call attachControl.
   }
 
-  /** Frame the whole house: centre the target, pick a radius that fits it. */
+  setNaturalScrolling(v: boolean): void { this.naturalScrolling = v; }
+
   fitTo(ext: { min: Vector3; max: Vector3 }): void {
     const cx = (ext.min.x + ext.max.x) / 2;
     const cz = (ext.min.z + ext.max.z) / 2;
-    const width = ext.max.x - ext.min.x;
-    const depth = ext.max.z - ext.min.z;
-    const span = Math.max(width, depth, 4);
+    const span = Math.max(ext.max.x - ext.min.x, ext.max.z - ext.min.z, 4);
 
     this.bounds = {
       minX: ext.min.x - span * 0.25, maxX: ext.max.x + span * 0.25,
       minZ: ext.min.z - span * 0.25, maxZ: ext.max.z + span * 0.25,
-      floorY: ext.min.y,
     };
-
     this.camera.lowerRadiusLimit = Math.max(2, span * 0.08);
     this.camera.upperRadiusLimit = span * 2.2;
     this.camera.setTarget(new Vector3(cx, ext.min.y + 1, cz));
@@ -92,7 +88,6 @@ export class OverviewController {
     this.cb.onActivity();
   }
 
-  /** Pan the overview target to a world-space point (used by room-grid teleport). */
   panTo(x: number, z: number): void {
     const tgt = this.camera.target.clone();
     tgt.x = clamp(x, this.bounds.minX, this.bounds.maxX);
@@ -103,65 +98,65 @@ export class OverviewController {
 
   enable(): void {
     if (this.attached) return;
-    this.canvas.addEventListener("pointerdown", this.onPointerDown);
-    this.canvas.addEventListener("pointermove", this.onPointerMove);
-    this.canvas.addEventListener("pointerup", this.onPointerUp);
-    this.canvas.addEventListener("pointercancel", this.onPointerUp);
+    this.canvas.addEventListener("pointerdown",  this.onPointerDown);
+    this.canvas.addEventListener("pointermove",  this.onPointerMove);
+    this.canvas.addEventListener("pointerup",    this.onPointerUp);
+    this.canvas.addEventListener("pointercancel",this.onPointerUp);
     this.canvas.addEventListener("pointerleave", this.onPointerUp);
-    this.canvas.addEventListener("wheel", this.onWheel, { passive: false });
+    this.canvas.addEventListener("wheel",        this.onWheel, { passive: false });
     this.attached = true;
   }
 
   disable(): void {
     if (!this.attached) return;
-    this.canvas.removeEventListener("pointerdown", this.onPointerDown);
-    this.canvas.removeEventListener("pointermove", this.onPointerMove);
-    this.canvas.removeEventListener("pointerup", this.onPointerUp);
-    this.canvas.removeEventListener("pointercancel", this.onPointerUp);
+    this.canvas.removeEventListener("pointerdown",  this.onPointerDown);
+    this.canvas.removeEventListener("pointermove",  this.onPointerMove);
+    this.canvas.removeEventListener("pointerup",    this.onPointerUp);
+    this.canvas.removeEventListener("pointercancel",this.onPointerUp);
     this.canvas.removeEventListener("pointerleave", this.onPointerUp);
-    this.canvas.removeEventListener("wheel", this.onWheel);
+    this.canvas.removeEventListener("wheel",        this.onWheel);
     this.pointers.clear();
+    this.touchBase = null;
     this.attached = false;
   }
 
-  dispose(): void {
-    this.disable();
-  }
+  dispose(): void { this.disable(); }
 
-  // ── Manual pointer input ──────────────────────────────────────────────────
+  // ── Pointer state ──────────────────────────────────────────────────────────
   private pointers = new Map<number, { x: number; y: number; type: string }>();
-  private pinchDist = 0;
-  private twoFingerCentroidY = 0;
-  private twoFingerAngle = 0;
 
-  // Single-tap detection (drives tap-to-pick).
+  // Two-finger gesture snapshot (updated incrementally on every pointermove).
+  private touchBase: { dist: number; angle: number; centX: number; centY: number } | null = null;
+
+  // Tap detection (single brief press with minimal movement → entity pick).
   private tapCandidate = false;
   private tapStartX = 0;
   private tapStartY = 0;
   private tapStartT = 0;
-  private static readonly TAP_MOVE_TOL = 14;
-  private static readonly TAP_TIME = 400;
+  private static readonly TAP_MOVE_TOL = 14; // px
+  private static readonly TAP_TIME     = 400; // ms
 
   private onPointerDown = (e: PointerEvent): void => {
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
-    try { this.canvas.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+    try { this.canvas.setPointerCapture(e.pointerId); } catch { /**/ }
 
     if (this.pointers.size === 1) {
       this.tapCandidate = true;
       this.tapStartX = e.clientX;
       this.tapStartY = e.clientY;
       this.tapStartT = performance.now();
+      this.touchBase = null;
     } else {
+      // Second (or more) finger cancels tap and seeds the two-finger baseline.
       this.tapCandidate = false;
-      // (Re)seed the two-finger gesture baselines.
-      this.seedTwoFinger();
+      this.seedTouchBase();
     }
     this.cb.onActivity();
   };
 
   private onPointerMove = (e: PointerEvent): void => {
     const prev = this.pointers.get(e.pointerId);
-    if (!prev) return; // mouse moving with no button held → ignore
+    if (!prev) return;
     const dx = e.clientX - prev.x;
     const dy = e.clientY - prev.y;
     prev.x = e.clientX;
@@ -173,23 +168,27 @@ export class OverviewController {
       this.tapCandidate = false;
     }
 
-    const touchCount = this.touchCount();
-    if (touchCount >= 2 || this.pointers.size >= 2) {
-      this.handleTwoFinger();
+    const s = this.naturalScrolling ? 1 : -1;
+
+    if (this.pointers.size >= 2) {
+      // Two (or more) touch/pen pointers: zoom + rotate + tilt simultaneously.
+      this.handleTwoFingerTouch();
     } else {
-      // One finger / left-mouse drag = pan across the plan.
-      this.pan(dx, dy);
+      // Single pointer (1-finger touch or left mouse drag): pan the map.
+      this.applyPan(dx * s, dy * s, DRAG_SENS);
     }
     this.cb.onActivity();
   };
 
   private onPointerUp = (e: PointerEvent): void => {
     this.pointers.delete(e.pointerId);
-    try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    try { this.canvas.releasePointerCapture(e.pointerId); } catch { /**/ }
+
     if (this.pointers.size < 2) {
-      this.pinchDist = 0;
+      // Fewer than 2 fingers left — reset the two-finger baseline.
+      this.touchBase = null;
     } else {
-      this.seedTwoFinger();
+      this.seedTouchBase();
     }
 
     if (this.tapCandidate &&
@@ -200,88 +199,143 @@ export class OverviewController {
     this.tapCandidate = false;
   };
 
-  private touchCount(): number {
-    let n = 0;
-    for (const p of this.pointers.values()) if (p.type === "touch") n++;
-    return n;
-  }
-
-  /** Snapshot the current two-pointer separation / centroid / angle. */
-  private seedTwoFinger(): void {
+  // ── Two-finger touch: pinch→zoom, twist→rotate, centroid-Y→tilt ───────────
+  private seedTouchBase(): void {
     const pts = [...this.pointers.values()];
     if (pts.length < 2) return;
     const [a, b] = pts;
-    this.pinchDist = Math.hypot(b.x - a.x, b.y - a.y);
-    this.twoFingerCentroidY = (a.y + b.y) / 2;
-    this.twoFingerAngle = Math.atan2(b.y - a.y, b.x - a.x);
+    this.touchBase = {
+      dist:   Math.hypot(b.x - a.x, b.y - a.y),
+      angle:  Math.atan2(b.y - a.y, b.x - a.x),
+      centX:  (a.x + b.x) / 2,
+      centY:  (a.y + b.y) / 2,
+    };
   }
 
-  /** Two fingers: pinch → zoom, vertical centroid → tilt, twist → heading. */
-  private handleTwoFinger(): void {
+  private handleTwoFingerTouch(): void {
     const pts = [...this.pointers.values()];
     if (pts.length < 2) return;
     const [a, b] = pts;
 
-    // Pinch → zoom (spread fingers = zoom in = smaller radius).
-    const dist = Math.hypot(b.x - a.x, b.y - a.y);
-    if (this.pinchDist > 0) {
-      const delta = dist - this.pinchDist;
-      this.zoom(delta * 0.01 * this.camera.radius * 0.12);
+    const dist   = Math.hypot(b.x - a.x, b.y - a.y);
+    const angle  = Math.atan2(b.y - a.y, b.x - a.x);
+    const centX  = (a.x + b.x) / 2;
+    const centY  = (a.y + b.y) / 2;
+
+    if (!this.touchBase) {
+      this.touchBase = { dist, angle, centX, centY };
+      return;
     }
-    this.pinchDist = dist;
 
-    // Vertical centroid movement → inclination (tilt).
-    const centroidY = (a.y + b.y) / 2;
-    const dCentroidY = centroidY - this.twoFingerCentroidY;
-    this.twoFingerCentroidY = centroidY;
-    this.tilt(dCentroidY * 0.004); // drag down → toward horizon
+    const base = this.touchBase;
+    const s = this.naturalScrolling ? 1 : -1;
 
-    // Twist → heading (rotate around the target).
-    const angle = Math.atan2(b.y - a.y, b.x - a.x);
-    let dAngle = angle - this.twoFingerAngle;
-    if (dAngle > Math.PI) dAngle -= 2 * Math.PI;
+    // ── Zoom: ratio of distances (spread fingers = zoom in = smaller radius) ──
+    if (base.dist > 1 && dist > 1) {
+      // base.dist / dist > 1 when pinching (fingers closer) = zoom out
+      this.camera.radius = clamp(
+        this.camera.radius * (base.dist / dist),
+        this.camera.lowerRadiusLimit ?? 2,
+        this.camera.upperRadiusLimit ?? 200,
+      );
+    }
+
+    // ── Rotation: incremental twist angle ─────────────────────────────────────
+    let dAngle = angle - base.angle;
+    if (dAngle >  Math.PI) dAngle -= 2 * Math.PI;
     if (dAngle < -Math.PI) dAngle += 2 * Math.PI;
-    this.twoFingerAngle = angle;
     this.camera.alpha += dAngle;
+
+    // ── Tilt: centroid Y movement ─────────────────────────────────────────────
+    // Guard: only apply tilt when the pinch distance is relatively stable
+    // (< 4% change) so a pure pinch doesn't spuriously tilt the camera.
+    const distChangeFrac = Math.abs(dist - base.dist) / Math.max(base.dist, 1);
+    if (distChangeFrac < 0.04) {
+      const dCentY = centY - base.centY;
+      this.applyTilt(dCentY * TILT_SENS_TOUCH * s);
+    }
+
+    // Update the baseline incrementally (correct result because both fingers
+    // fire separate pointermove events — each step applies a partial delta,
+    // together they sum to the full gesture change).
+    base.dist  = dist;
+    base.angle = angle;
+    base.centX = centX;
+    base.centY = centY;
   }
+
+  // ── Wheel events (trackpad + mouse) ───────────────────────────────────────
+  //
+  // The browser maps trackpad gestures to WheelEvent as follows:
+  //
+  //   PINCH (spread/squeeze)          → ctrlKey=true,  deltaY = zoom amount
+  //   2-FINGER SLIDE (pan)            → ctrlKey=false, deltaX/deltaY = pan amount
+  //
+  // A regular mouse wheel only produces deltaY (deltaX stays 0).
+  //
+  // Additionally we reserve Shift+scroll as a keyboard-accessible tilt+rotate
+  // for users who can't do a two-finger touch tilt on a trackpad.
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
-    const sign = this.naturalScrolling ? 1 : -1;
-    if (e.shiftKey) {
-      // Shift+wheel = rotate heading + tilt.
-      this.camera.alpha += e.deltaX * 0.0025 * sign;
-      this.tilt(e.deltaY * 0.0015 * sign);
+    const s = this.naturalScrolling ? 1 : -1;
+
+    // Normalise deltaMode: LINE (Firefox, mouse) and PAGE modes → pixels
+    const mul = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16
+              : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? 300 : 1;
+    const dy = e.deltaY * mul;
+    const dx = e.deltaX * mul;
+
+    if (e.ctrlKey) {
+      // ── ZOOM: trackpad pinch or Ctrl+wheel ────────────────────────────────
+      // ctrlKey is set by the browser for trackpad pinch gestures on all major
+      // OSes (macOS, Windows, ChromeOS) — this is the reliable zoom signal.
+      this.applyZoom(dy * WHEEL_ZOOM_SENS * this.camera.radius * s);
       this.cb.onActivity();
       return;
     }
-    this.zoom(-e.deltaY * 0.0015 * this.camera.radius * sign);
+
+    if (e.shiftKey) {
+      // ── TILT + ROTATE: Shift + scroll ─────────────────────────────────────
+      // Keyboard-accessible tilt for users on trackpad or mouse.
+      // Vertical scroll (deltaY) → pitch. Horizontal (deltaX) → heading.
+      this.applyTilt(dy * TILT_SENS_WHEEL * s);
+      this.camera.alpha -= dx * ROT_SENS_WHEEL * s;
+      this.cb.onActivity();
+      return;
+    }
+
+    // ── PAN: plain trackpad 2-finger slide or mouse wheel ────────────────────
+    // No modifier = drag gesture on trackpad (deltaX/Y) or mouse wheel (deltaY).
+    // Mouse wheel only has deltaY → forward/back pan. Trackpad has both axes.
+    this.applyPan(dx * s, dy * s, WHEEL_PAN_SENS);
     this.cb.onActivity();
   };
 
-  /** Pan the look-at target across the ground plane, clamped to the footprint. */
-  private pan(rawDx: number, rawDy: number): void {
-    const sign = this.naturalScrolling ? 1 : -1;
-    const dx = rawDx * sign;
-    const dy = rawDy * sign;
+  // ── Movement primitives ────────────────────────────────────────────────────
+
+  /**
+   * Pan by projecting screen-space dx/dy onto the ground plane in world space.
+   * Works for both pointer drag (DRAG_SENS) and wheel pan (WHEEL_PAN_SENS).
+   */
+  private applyPan(dx: number, dy: number, sens: number): void {
     const pos = this.camera.position;
-    const tgt = this.camera.target;
-    // Ground-projected forward (camera → target) and right vectors.
+    const tgt = this.camera.target.clone();
+
+    // Ground-projected forward vector (camera → target, Y component removed).
     let fwd = new Vector3(tgt.x - pos.x, 0, tgt.z - pos.z);
     if (fwd.lengthSquared() < 1e-6) fwd = new Vector3(0, 0, 1);
     fwd.normalize();
+    // Right vector (perpendicular to forward in the ground plane).
     const right = new Vector3(-fwd.z, 0, fwd.x);
 
-    // Pan speed scales with zoom so it feels consistent at any radius.
-    const k = this.camera.radius * 0.0016;
-    const nx = tgt.x + (-right.x * dx + fwd.x * dy) * k;
-    const nz = tgt.z + (-right.z * dx + fwd.z * dy) * k;
-    tgt.x = clamp(nx, this.bounds.minX, this.bounds.maxX);
-    tgt.z = clamp(nz, this.bounds.minZ, this.bounds.maxZ);
+    const k = this.camera.radius * sens;
+    tgt.x = clamp(tgt.x + (-right.x * dx + fwd.x * dy) * k, this.bounds.minX, this.bounds.maxX);
+    tgt.z = clamp(tgt.z + (-right.z * dx + fwd.z * dy) * k, this.bounds.minZ, this.bounds.maxZ);
     this.camera.setTarget(tgt);
   }
 
-  private zoom(delta: number): void {
+  private applyZoom(delta: number): void {
     this.camera.radius = clamp(
       this.camera.radius - delta,
       this.camera.lowerRadiusLimit ?? 2,
@@ -289,7 +343,7 @@ export class OverviewController {
     );
   }
 
-  private tilt(delta: number): void {
+  private applyTilt(delta: number): void {
     this.camera.beta = clamp(
       this.camera.beta + delta,
       OverviewController.BETA_MIN,

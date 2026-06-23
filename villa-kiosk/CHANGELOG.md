@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.4.2
+
+### Changes
+- Overview camera gestures rewritten — Google Earth style (trackpad + touchscreen):
+  - Trackpad 2-finger slide → pan (was incorrectly zooming before)
+  - Trackpad pinch (ctrlKey) → zoom
+  - Shift + scroll → tilt (Y) + rotate heading (X)
+  - Touch 1-finger → pan; 2-finger pinch → zoom; 2-finger twist → rotate; 2-finger vertical → tilt
+- Add-on model is now exclusive: when model_path is set in the add-on config, the app
+  ONLY loads from there (no IndexedDB fallback). Avoids confusion with stale per-browser uploads.
+- Clear error message when the add-on model path is unreachable (instead of silent fallback)
+
 ## 2.4.1
 
 ### Changes
