@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.3
+
+### Changes
+- Settings model section now gates on Ingress (add-on) mode, not on whether a path
+  happens to be set:
+  - In add-on mode the upload / replace / clear buttons are gone entirely — the
+    panel shows which files are in use (GLB + SH3D paths read from the add-on config)
+  - If model_path is not set in add-on mode, a warning explains how to configure it
+  - Standalone / dev deployments keep the full upload UI (unchanged)
+
 ## 2.4.2
 
 ### Changes

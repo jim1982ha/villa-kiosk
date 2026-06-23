@@ -256,25 +256,50 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
 
         <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
 
-        {/* ── Central model (add-on config) ── */}
-        {addonCfg?.model_path ? (
-          <div style={{ background: "rgba(107,170,117,0.1)", border: "1px solid rgba(107,170,117,0.3)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: "var(--status-on, #6baa75)", marginBottom: 6 }}>
-              ✓ Central model active — all clients share the same view
-            </div>
-            <div className="muted body-text" style={{ fontSize: 12 }}>
-              <strong>GLB:</strong> {addonCfg.model_path}
-            </div>
-            {addonCfg.sh3d_path && (
-              <div className="muted body-text" style={{ fontSize: 12 }}>
-                <strong>SH3D:</strong> {addonCfg.sh3d_path}
+        {/* ── 3D model source ──────────────────────────────────────────────
+            Add-on (Ingress) mode: the model is managed centrally via the add-on
+            configuration page — NO per-browser upload UI. We only display which
+            files are in use (read from the add-on options). Standalone / dev
+            mode keeps the upload UI. */}
+        {ingress ? (
+          addonCfg === null ? (
+            <p className="muted body-text">Reading add-on configuration…</p>
+          ) : addonCfg.model_path ? (
+            <div style={{ background: "rgba(107,170,117,0.1)", border: "1px solid rgba(107,170,117,0.3)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "var(--status-on, #6baa75)", marginBottom: 6 }}>
+                ✓ Central model active — all clients share the same view
               </div>
-            )}
-            <p className="muted body-text" style={{ marginTop: 8, fontSize: 11 }}>
-              Model files are served from the add-on's configured paths (relative to the HA <code>www/</code> folder).
-              To change them, go to <strong>Settings → Add-ons → Villa Kiosk → Configuration</strong> in Home Assistant.
-            </p>
-          </div>
+              <div className="muted body-text" style={{ fontSize: 12 }}>
+                <strong>GLB:</strong> <code>www/{addonCfg.model_path}</code>
+              </div>
+              {addonCfg.sh3d_path ? (
+                <div className="muted body-text" style={{ fontSize: 12 }}>
+                  <strong>SH3D:</strong> <code>www/{addonCfg.sh3d_path}</code>
+                </div>
+              ) : (
+                <div className="muted body-text" style={{ fontSize: 12 }}>
+                  <strong>SH3D:</strong> not configured (room names optional)
+                </div>
+              )}
+              <p className="muted body-text" style={{ marginTop: 8, fontSize: 11 }}>
+                These files are served from the add-on's configured paths (relative to the HA <code>www/</code> folder).
+                To change them, open <strong>Settings → Add-ons → Villa Kiosk → Configuration</strong> in Home Assistant
+                and edit <code>model_path</code> / <code>sh3d_path</code>.
+              </p>
+            </div>
+          ) : (
+            <div style={{ background: "rgba(224,170,80,0.1)", border: "1px solid rgba(224,170,80,0.35)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "var(--warning, #e0aa50)", marginBottom: 6 }}>
+                ⚠ No central model configured
+              </div>
+              <p className="muted body-text" style={{ fontSize: 12, margin: 0 }}>
+                Copy your <code>.glb</code> (and optional <code>.sh3d</code>) into the Home Assistant
+                <code> /config/www/</code> folder, then set <code>model_path</code> (e.g.
+                <code> villa-kiosk/TheLysHouse_1F.glb</code>) under
+                <strong> Settings → Add-ons → Villa Kiosk → Configuration</strong> and restart the add-on.
+              </p>
+            </div>
+          )
         ) : (
           <>
             <label>3D model</label>
@@ -294,15 +319,11 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
               </button>
             )}
             <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-              Tip: configure <strong>model_path</strong> in the add-on options to serve one shared
-              model to all clients — no per-device upload needed.
+              Tip: when deployed as a Home Assistant add-on, configure <strong>model_path</strong> in the
+              add-on options to serve one shared model to all clients — no per-device upload needed.
             </p>
-          </>
-        )}
 
-        {/* SH3D upload — only shown when NOT centrally managed */}
-        {!addonCfg?.sh3d_path && (
-          <>
+            {/* SH3D upload — standalone mode only */}
             <label style={{ marginTop: 16 }}>Room names (.sh3d) — optional</label>
             <button className="btn ghost" style={{ width: "100%" }} onClick={() => sh3dRef.current?.click()}>
               <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload SweetHome .sh3d"}
