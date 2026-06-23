@@ -70,6 +70,12 @@ export interface AppConfig {
   showEntityLabels: boolean;
   /** Draw a blue highlight outline around all interactive (bound) objects. */
   highlightInteractive: boolean;
+  /**
+   * Natural scrolling: drag up → content moves up (map follows your finger).
+   * When false (Traditional): drag up → content moves down, wheel zoom is
+   * inverted. Matches the macOS/iOS "Natural Scrolling" system setting.
+   */
+  naturalScrolling: boolean;
   onboarded: boolean;
 }
 
@@ -99,6 +105,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   renderOnDemand: true,
   showEntityLabels: false,
   highlightInteractive: false,
+  naturalScrolling: true,
   onboarded: false,
 };
 

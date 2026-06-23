@@ -37,6 +37,9 @@ export class OverviewController {
   private canvas: HTMLCanvasElement;
   private cb: OverviewCallbacks;
   private attached = false;
+  private naturalScrolling = true;
+
+  setNaturalScrolling(v: boolean): void { this.naturalScrolling = v; }
 
   /** Pan limits (house footprint + margin), set by fitTo(). */
   private bounds: Bounds = { minX: -20, maxX: 20, minZ: -20, maxZ: 20, floorY: 0 };
@@ -86,6 +89,15 @@ export class OverviewController {
     this.camera.alpha = -Math.PI / 2;
     this.camera.beta = 0.5;
     this.camera.radius = span * 1.05;
+    this.cb.onActivity();
+  }
+
+  /** Pan the overview target to a world-space point (used by room-grid teleport). */
+  panTo(x: number, z: number): void {
+    const tgt = this.camera.target.clone();
+    tgt.x = clamp(x, this.bounds.minX, this.bounds.maxX);
+    tgt.z = clamp(z, this.bounds.minZ, this.bounds.maxZ);
+    this.camera.setTarget(tgt);
     this.cb.onActivity();
   }
 
@@ -235,19 +247,23 @@ export class OverviewController {
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
+    const sign = this.naturalScrolling ? 1 : -1;
     if (e.shiftKey) {
       // Shift+wheel = rotate heading + tilt.
-      this.camera.alpha += e.deltaX * 0.0025;
-      this.tilt(e.deltaY * 0.0015);
+      this.camera.alpha += e.deltaX * 0.0025 * sign;
+      this.tilt(e.deltaY * 0.0015 * sign);
       this.cb.onActivity();
       return;
     }
-    this.zoom(-e.deltaY * 0.0015 * this.camera.radius);
+    this.zoom(-e.deltaY * 0.0015 * this.camera.radius * sign);
     this.cb.onActivity();
   };
 
   /** Pan the look-at target across the ground plane, clamped to the footprint. */
-  private pan(dx: number, dy: number): void {
+  private pan(rawDx: number, rawDy: number): void {
+    const sign = this.naturalScrolling ? 1 : -1;
+    const dx = rawDx * sign;
+    const dy = rawDy * sign;
     const pos = this.camera.position;
     const tgt = this.camera.target;
     // Ground-projected forward (camera → target) and right vectors.

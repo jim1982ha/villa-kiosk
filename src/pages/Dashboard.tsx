@@ -115,11 +115,15 @@ export default function Dashboard() {
   const handleTeleport = useCallback(
     (point: TeleportPoint) => {
       if (!manager) return;
-      if (point.floor !== currentFloor) onFloorChange(point.floor);
-      manager.camera.teleport(point);
+      // In overview mode: pan the bird's-eye camera to the room — don't switch
+      // floors or move the FP camera (that camera isn't active).
+      if (viewMode === "first-person" && point.floor !== currentFloor) {
+        onFloorChange(point.floor);
+      }
+      manager.navigateTo(point);
       setTeleportOpen(false);
     },
-    [manager, currentFloor, onFloorChange],
+    [manager, viewMode, currentFloor, onFloorChange],
   );
 
   const pinContinuous = useCallback(() => manager?.pinContinuous() ?? (() => {}), [manager]);

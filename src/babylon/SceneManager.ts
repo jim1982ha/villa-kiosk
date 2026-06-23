@@ -123,6 +123,7 @@ export class SceneManager {
       onActivity: () => this.requestRender(),
       onTap: (x, y) => this.pick.pickAtScreen(x, y),
     });
+    this.overview.setNaturalScrolling(opts.config.naturalScrolling ?? true);
 
     // Any pointer activity on the canvas (look-around drag, wheel, tap) wakes the
     // on-demand render loop so the view stays smooth.
@@ -196,6 +197,19 @@ export class SceneManager {
     const next = this.viewMode === "overview" ? "first-person" : "overview";
     this.setViewMode(next);
     return next;
+  }
+
+  /**
+   * Navigate to a teleport point correctly for whichever mode is active:
+   * first-person → animated camera teleport; overview → pan the bird's-eye
+   * target to the room centre (stays in overview mode).
+   */
+  navigateTo(point: TeleportPoint): void {
+    if (this.viewMode === "overview") {
+      this.overview.panTo(point.position.x, point.position.z);
+    } else {
+      this.camera.teleport(point);
+    }
   }
 
   private worldExtends(meshes: AbstractMesh[]) {
@@ -696,6 +710,7 @@ export class SceneManager {
     this.config = config;
     this.sun.updateConfig(config);
     this.camera.updateConfig(config);
+    this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
     this.pick.setMaps(config.entityMap, config.meshBindings);
     this.visuals.updateConfig(config);
     if (this.loadedMeshes.length) {

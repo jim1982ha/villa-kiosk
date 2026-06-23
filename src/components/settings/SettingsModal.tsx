@@ -177,6 +177,18 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
 
         <label className="toggle">
           <input
+            type="checkbox" checked={config.naturalScrolling ?? true}
+            onChange={(e) => update({ naturalScrolling: e.target.checked })}
+          />
+          <span>Natural scrolling (overview mode)</span>
+        </label>
+        <p className="muted body-text" style={{ marginTop: 6 }}>
+          On: drag up = content moves up (map follows your finger). Off (Traditional):
+          drag up = content scrolls down — like a web page. Affects overview camera pan and zoom.
+        </p>
+
+        <label className="toggle">
+          <input
             type="checkbox" checked={config.wallCollisions}
             onChange={(e) => update({ wallCollisions: e.target.checked })}
           />

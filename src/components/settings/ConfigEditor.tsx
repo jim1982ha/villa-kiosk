@@ -5,7 +5,7 @@
 // appear (with inline settings) in the Bound 3D objects section below.
 
 import { useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
@@ -22,6 +22,9 @@ export default function ConfigEditor() {
   const { config, update } = useConfig();
   const { entities } = useHA();
   const [newId, setNewId] = useState<string | undefined>(undefined);
+  // Remap: which row's entity ID is currently being edited, and what new ID was picked.
+  const [remapKey, setRemapKey] = useState<string | null>(null);
+  const [remapNewId, setRemapNewId] = useState<string | undefined>(undefined);
 
   // Only show entities that are NOT already handled by a mesh binding.
   const boundEntityIds = useMemo(
@@ -40,6 +43,25 @@ export default function ConfigEditor() {
     const next = { ...config.entityMap };
     delete next[key];
     update({ entityMap: next });
+  };
+
+  /**
+   * Redirect a GLB mesh (named oldKey) to a different HA entity (newId) without
+   * rebuilding the model. Works by:
+   *  1. Adding a mesh binding: meshBindings[oldKey] = newId
+   *  2. Renaming the entityMap entry to newId
+   *  3. Removing the old entityMap entry
+   * The 3D mesh stays in the scene — only the entity it controls changes.
+   */
+  const remapEntity = (oldKey: string, newId: string) => {
+    if (!newId || newId === oldKey) return;
+    const oldEntry = config.entityMap[oldKey];
+    if (!oldEntry) return;
+    const { [oldKey]: _removed, ...restMap } = config.entityMap;
+    update({
+      entityMap: { ...restMap, [newId]: { ...oldEntry, entityId: newId } },
+      meshBindings: { ...config.meshBindings, [oldKey]: newId },
+    });
   };
 
   const add = (id: string) => {
@@ -91,7 +113,59 @@ export default function ConfigEditor() {
           <tbody>
             {entries.map(([key, m]) => (
               <tr key={key}>
-                <td data-label="Entity ID" style={{ fontSize: 12, color: "var(--text-secondary)", wordBreak: "break-all" }}>{m.entityId}</td>
+                <td data-label="Entity ID" style={{ fontSize: 12, wordBreak: "break-all" }}>
+                  {remapKey === key ? (
+                    /* ── inline remap picker ── */
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 200 }}>
+                      <EntityPicker
+                        value={remapNewId}
+                        onChange={setRemapNewId}
+                        allowCustom
+                        hideCurrentLabel
+                        placeholder="New entity ID…"
+                      />
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          className="btn primary"
+                          style={{ flex: 1, padding: "5px 8px", fontSize: 12 }}
+                          disabled={!remapNewId || remapNewId === key}
+                          onClick={() => {
+                            if (remapNewId) remapEntity(key, remapNewId);
+                            setRemapKey(null);
+                            setRemapNewId(undefined);
+                          }}
+                        >
+                          <Check size={13} /> Apply
+                        </button>
+                        <button
+                          className="btn ghost"
+                          style={{ flex: 1, padding: "5px 8px", fontSize: 12 }}
+                          onClick={() => { setRemapKey(null); setRemapNewId(undefined); }}
+                        >
+                          <X size={13} /> Cancel
+                        </button>
+                      </div>
+                      <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>
+                        Mesh stays, entity ID changes — no model rebuild needed.
+                      </span>
+                    </div>
+                  ) : (
+                    <span
+                      style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
+                      title="Click the pencil to redirect this mesh to a different entity ID"
+                    >
+                      {m.entityId}
+                      <button
+                        className="icon-btn"
+                        style={{ width: 24, height: 24, flexShrink: 0 }}
+                        title="Redirect this 3D mesh to a different entity ID"
+                        onClick={() => { setRemapKey(key); setRemapNewId(undefined); }}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                    </span>
+                  )}
+                </td>
                 <td data-label="Type">
                   <select
                     value={m.type}

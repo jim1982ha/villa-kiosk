@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.0
+
+### Changes
+- Bird's-eye overview camera mode: toggle between first-person walk and top-down plan view
+- Overview: pan (1 finger/drag), zoom (pinch/wheel), tilt & rotate (2-finger), tap entities to control
+- Room grid teleport works in overview mode (pans the bird's-eye camera to the room)
+- Entity ID remap in Config Editor: redirect a 3D mesh to a new HA entity without rebuilding the GLB
+- Natural scrolling toggle in Settings (overview pan/zoom direction)
+
 ## 2.3.4
 
 ### Changes
