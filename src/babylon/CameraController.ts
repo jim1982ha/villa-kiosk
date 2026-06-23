@@ -11,7 +11,7 @@ import {
 import type { AppConfig } from "@/config/AppConfig";
 import type { TeleportPoint } from "@/types/scene.types";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
-import { suppressGhostClick } from "@/utils/ghostClick";
+import { TapRecognizer } from "./TapRecognizer";
 
 interface CameraCallbacks {
   onRoomChange: (room: string | null) => void;
@@ -169,12 +169,7 @@ export class CameraController {
 
   // ── Single-tap detection (drives tap-to-pick) ──
   // A gesture is a tap if it stayed one pointer, barely moved, and was brief.
-  private tapCandidate = false;
-  private tapStartX = 0;
-  private tapStartY = 0;
-  private tapStartT = 0;
-  private static readonly TAP_MOVE_TOL = 14; // px — generous for fat-finger touch
-  private static readonly TAP_TIME = 400; // ms
+  private readonly tap = new TapRecognizer();
 
   private onPointerDown = (e: PointerEvent): void => {
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
@@ -182,14 +177,8 @@ export class CameraController {
 
     // Begin a tap candidate on the first pointer; a second pointer (multi-touch
     // gesture) cancels it so a pinch/two-finger walk never fires a pick.
-    if (this.pointers.size === 1) {
-      this.tapCandidate = true;
-      this.tapStartX = e.clientX;
-      this.tapStartY = e.clientY;
-      this.tapStartT = performance.now();
-    } else {
-      this.tapCandidate = false;
-    }
+    if (this.pointers.size === 1) this.tap.begin(e.clientX, e.clientY);
+    else this.tap.cancel();
 
     // Double-tap / double-click → walk to the tapped spot. Only on a fresh touch
     // (first finger) or a mouse press, so a two-finger walk doesn't trigger it.
@@ -219,10 +208,7 @@ export class CameraController {
     e.preventDefault();
 
     // Moving past the tolerance turns the gesture into a look/drag, not a tap.
-    if (this.tapCandidate &&
-        Math.hypot(e.clientX - this.tapStartX, e.clientY - this.tapStartY) > CameraController.TAP_MOVE_TOL) {
-      this.tapCandidate = false;
-    }
+    this.tap.moved(e.clientX, e.clientY);
 
     if (this.touchCount() >= 2) {
       // ── Pinch-to-zoom: change in finger separation = forward / back movement.
@@ -259,24 +245,14 @@ export class CameraController {
     // Reset pinch baseline when we're back to 0 or 1 touch fingers.
     if (this.touchCount() < 2) this.pinchDist = 0;
 
-    // Fire a tap (→ entity pick) only if this was the last pointer up, the
-    // gesture stayed a tap throughout, and it was brief. pointercancel/leave
-    // also route here, so a candelled gesture won't mis-fire (tapCandidate
-    // would have been reset or the move tolerance exceeded).
-    if (this.tapCandidate &&
-        this.pointers.size === 0 &&
-        performance.now() - this.tapStartT < CameraController.TAP_TIME) {
-      // On touch (and pen) the browser emits a *synthesized* `click` a moment
-      // after pointerup — AFTER React has (asynchronously) mounted whatever the
-      // tap opened, e.g. an entity control panel + its full-screen backdrop.
-      // That ghost click then lands on the just-mounted backdrop and instantly
-      // dismisses it, so on phones tapping a mesh/label/marker looked like
-      // "nothing happens". Swallow that one ghost click. (Mouse clicks fire
-      // synchronously before the async React flush, so desktop never hit this.)
-      if (e.pointerType !== "mouse") suppressGhostClick(e.clientX, e.clientY);
+    // Fire a tap (→ entity pick) only if this was the last pointer up and the
+    // gesture stayed a brief, stationary tap. pointercancel/leave also route
+    // here, so a cancelled gesture won't mis-fire. TapRecognizer swallows the
+    // synthesized touch/pen ghost click that would otherwise dismiss whatever
+    // the tap opens the instant React mounts it.
+    if (this.pointers.size === 0 && this.tap.complete(e)) {
       this.cb.onTap?.(e.clientX, e.clientY);
     }
-    this.tapCandidate = false;
   };
 
   private touchCount(): number {

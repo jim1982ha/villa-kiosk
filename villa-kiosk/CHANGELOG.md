@@ -21,6 +21,18 @@
 - nginx now sends `Cache-Control: no-cache` on the shell so it is revalidated
   on every load; the content-hashed assets it references stay immutable-cached.
 
+### Internal — codebase audit (no behaviour change)
+- Single source of truth for default entity metadata: tap-to-bind, marker drop,
+  the Config Editor and the mesh resolver now all funnel through one
+  `createDefaultMapping()` factory (was duplicated in four places).
+- Extracted the tap-vs-drag gesture detection shared by both camera controllers
+  into one `TapRecognizer` (was a copy-pasted state machine in each).
+- Verbose 3D diagnostic logs are compiled out of production via a `devLog`
+  helper; render-error stack traces are now dev-only.
+- Removed dead code (unused camera-snapshot, GLB-string and cache-clear
+  helpers) and a stale Docker version label; bumped dependency floors to their
+  patched releases.
+
 ## 2.4.8
 
 ### Top / bottom bar layout overhaul (desktop + mobile)

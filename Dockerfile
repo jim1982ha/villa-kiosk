@@ -39,8 +39,9 @@ COPY --from=build /app/dist /var/www
 LABEL \
   io.hass.name="Villa Kiosk" \
   io.hass.description="3D Home Assistant villa dashboard served via Ingress" \
-  io.hass.type="addon" \
-  io.hass.version="2.2.0"
+  io.hass.type="addon"
+# Note: the add-on version is the single source of truth in config.yaml; the
+# Supervisor reads it from there, so it is intentionally NOT duplicated here.
 
 # No CMD/ENTRYPOINT: the base image's /init (s6-overlay) starts the nginx
 # longrun service registered under rootfs/etc/s6-overlay/s6-rc.d/.

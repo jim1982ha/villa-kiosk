@@ -10,7 +10,7 @@ build**. Works on any HA OS / Supervised box.
 
 > Requires **Home Assistant OS** or **Supervised** (add-ons need the Supervisor).
 > On a *Core*/*Container* install use the `/config/www` method in
-> [DEPLOYMENT.md](./DEPLOYMENT.md).
+> [README.md](./README.md).
 
 ---
 

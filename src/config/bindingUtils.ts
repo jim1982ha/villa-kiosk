@@ -3,8 +3,7 @@
 // sync. Used by the tap-to-bind dialog and the Config page bindings table.
 
 import type { AppConfig } from "./AppConfig";
-import { inferTypeFromEntityId } from "./EntityMap";
-import type { EntityMapping } from "@/types/scene.types";
+import { createDefaultMapping } from "./EntityMap";
 import type { HassEntity } from "@/types/ha.types";
 
 /** Add/replace a binding meshName -> entityId, ensuring metadata exists. */
@@ -18,14 +17,9 @@ export function upsertBinding(
 
   const entityMap = { ...config.entityMap };
   if (!entityMap[entityId]) {
-    const type = inferTypeFromEntityId(entityId) ?? "sensor";
-    entityMap[entityId] = {
-      entityId,
-      type,
-      label: entity?.attributes.friendly_name ?? entityId.split(".")[1]?.replace(/_/g, " ") ?? entityId,
-      room: "",
-      ...(type === "lock" ? { requiresConfirmation: true } : {}),
-    } as EntityMapping;
+    entityMap[entityId] = createDefaultMapping(entityId, {
+      friendlyName: entity?.attributes.friendly_name,
+    });
   }
   return { meshBindings, entityMap };
 }

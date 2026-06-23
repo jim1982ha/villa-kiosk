@@ -8,7 +8,7 @@
 // for frames the loop idles at ~0% GPU. (Core 3Dash idea, generalised.)
 
 import {
-  Engine, Scene, Color3, Color4, Vector3, HemisphericLight, SceneLoader, Material, PBRMaterial, Ray,
+  Engine, Scene, Color3, Color4, Vector3, HemisphericLight, Material, PBRMaterial, Ray,
   HighlightLayer, Mesh,
   type AbstractMesh,
 } from "@babylonjs/core";
@@ -29,6 +29,7 @@ import { resolveMeshToMapping } from "@/config/EntityMap";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { fitAffine, affineResidual, spanArea, type PlanWorldPair } from "@/utils/affineFit";
 import type { Pt2 } from "@/utils/geometry";
+import { devLog } from "@/utils/devLog";
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
@@ -268,7 +269,7 @@ export class SceneManager {
       ratios.sort((a, b) => a - b);
       const unitsPerMetre = ratios[Math.floor(ratios.length / 2)];
       if (unitsPerMetre > 0) scale = 1 / unitsPerMetre;
-      console.log(`[Villa] scale from .sh3d reference: ${scale.toPrecision(4)} (from ${pts.length} entities)`);
+      devLog(`[Villa] scale from .sh3d reference: ${scale.toPrecision(4)} (from ${pts.length} entities)`);
     } else {
       // Heuristic fallback: target a single-storey height of ~2-6 m.
       const h = this.worldExtends(meshes).max.y - this.worldExtends(meshes).min.y;
@@ -276,7 +277,7 @@ export class SceneManager {
         while (h * scale > 6) scale /= 10;
         while (h * scale < 2) scale *= 10;
       }
-      console.log(`[Villa] scale from height heuristic: ${scale} (no calibration meshes)`);
+      devLog(`[Villa] scale from height heuristic: ${scale} (no calibration meshes)`);
     }
 
     if (scale !== 1 && Number.isFinite(scale)) {
@@ -284,7 +285,7 @@ export class SceneManager {
       meshes.forEach((m) => m.computeWorldMatrix(true));
     }
     const after = this.worldExtends(meshes);
-    console.log(`[Villa] model size ${(after.max.x - after.min.x).toFixed(1)} x ${(after.max.y - after.min.y).toFixed(1)} x ${(after.max.z - after.min.z).toFixed(1)} m`);
+    devLog(`[Villa] model size ${(after.max.x - after.min.x).toFixed(1)} x ${(after.max.y - after.min.y).toFixed(1)} x ${(after.max.z - after.min.z).toFixed(1)} m`);
     return scale;
   }
 
@@ -401,7 +402,7 @@ export class SceneManager {
     const M = pairs.length >= 3 && spanArea(pairs) > 1e4 ? fitAffine(pairs) : null;
     if (M && affineResidual(pairs, M) <= residualLimit) {
       planToWorld = (px, py) => M(px, py);
-      console.log(
+      devLog(
         `[Villa] calibration: affine fit from ${pairs.length} entity meshes ` +
         `(residual ${affineResidual(pairs, M).toFixed(2)} m)`,
       );
@@ -427,7 +428,7 @@ export class SceneManager {
         x: wCx + (px - pCx) * planScale * xSign,
         z: wCz + (py - pCy) * planScale * zSign,
       });
-      console.log(
+      devLog(
         `[Villa] calibration: ${pairs.length}-entity sign fit ` +
         `(flipX=${xSign < 0} flipZ=${zSign < 0}, scale=${planScale.toPrecision(4)})`,
       );
@@ -467,7 +468,7 @@ export class SceneManager {
         x: (px - planCx) * planScale * xSign,
         z: (py - planCy) * planScale * zSign,
       });
-      console.log(
+      devLog(
         `[Villa] calibration: raycast-vote fallback (no entity meshes) ` +
         `flipX=${xSign < 0} flipZ=${zSign < 0}, ${best.hits}/${testRooms.length} hits`,
       );
@@ -486,7 +487,7 @@ export class SceneManager {
       const sx = this.config.calibrationFlipX ? -1 : 1;
       const sz = this.config.calibrationFlipZ ? -1 : 1;
       planToWorld = (px, py) => { const w = base(px, py); return { x: w.x * sx, z: w.z * sz }; };
-      console.log(`[Villa] manual calibration override: flipX=${sx < 0} flipZ=${sz < 0}`);
+      devLog(`[Villa] manual calibration override: flipX=${sx < 0} flipZ=${sz < 0}`);
     }
 
     // Transform each room polygon to model space; centroid → teleport point.
@@ -508,7 +509,7 @@ export class SceneManager {
     this.calibratedPoints = points;
     this.camera.setTeleportPoints(points);
     this.camera.setRoomPolygons(worldPolys);
-    console.log(`[Villa] ${worldPolys.length} room polygons registered`);
+    devLog(`[Villa] ${worldPolys.length} room polygons registered`);
     // Notify listeners (Dashboard) so the teleport grid + room labels re-adopt
     // these freshly-fitted points — e.g. right after a manual mirror toggle.
     this.calibrateCallbacks.forEach((cb) => cb());
@@ -776,11 +777,6 @@ export class SceneManager {
       console.error("[Inspector] failed to open:", err);
       alert("Inspector failed to load — see the browser console for details.");
     }
-  }
-
-  /** Used by ModelLoader fallback when no GLB exists yet. */
-  static async tryLoadGLBString(scene: Scene, url: string): Promise<void> {
-    await SceneLoader.AppendAsync("", url, scene);
   }
 
   dispose(): void {

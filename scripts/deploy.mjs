@@ -6,7 +6,7 @@
  *   npm run build && npm run deploy
  *
  * Requires `ssh`/`scp` on PATH and key-based access to HA (or you'll be prompted
- * for a password per file). See DEPLOYMENT.md for the full walkthrough.
+ * for a password per file). See README.md for the full walkthrough.
  */
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";

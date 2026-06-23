@@ -33,9 +33,12 @@ export default class ErrorBoundary extends Component<Props, State> {
           Something went wrong
         </h2>
         <p className="body-text">{this.state.error.message}</p>
-        <pre style={{ fontSize: 11, color: "var(--text-secondary)", whiteSpace: "pre-wrap", maxWidth: "100%" }}>
-          {this.state.error.stack}
-        </pre>
+        {/* Stack traces can leak internal paths/structure — show only in dev. */}
+        {import.meta.env.DEV && (
+          <pre style={{ fontSize: 11, color: "var(--text-secondary)", whiteSpace: "pre-wrap", maxWidth: "100%" }}>
+            {this.state.error.stack}
+          </pre>
+        )}
         <button className="btn primary" onClick={() => location.reload()}>Reload</button>
       </div>
     );

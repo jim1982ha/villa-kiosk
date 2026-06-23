@@ -96,8 +96,3 @@ export async function fetchAddonConfig(): Promise<AddonConfig> {
   }
   return _addonConfigCache;
 }
-
-/** Invalidate the cache — call after the add-on options may have changed. */
-export function clearAddonConfigCache(): void {
-  _addonConfigCache = null;
-}

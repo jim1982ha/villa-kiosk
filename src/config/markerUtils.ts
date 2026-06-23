@@ -2,7 +2,7 @@
 // Helpers to add/remove floating markers and keep entityMap metadata in sync.
 
 import type { AppConfig } from "./AppConfig";
-import { inferTypeFromEntityId } from "./EntityMap";
+import { createDefaultMapping, inferTypeFromEntityId, labelFromEntityId } from "./EntityMap";
 import type { EntityType, SceneMarker, Vec3 } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 
@@ -25,20 +25,18 @@ export function addMarker(
     id: uuid(),
     entityId,
     type,
-    label: entity?.attributes.friendly_name ?? entityId.split(".")[1]?.replace(/_/g, " "),
+    label: labelFromEntityId(entityId, entity?.attributes.friendly_name),
     position,
     floor,
   };
 
   const entityMap = { ...config.entityMap };
   if (!entityMap[entityId]) {
-    entityMap[entityId] = {
-      entityId,
+    entityMap[entityId] = createDefaultMapping(entityId, {
       type,
-      label: marker.label ?? entityId,
       room: "Unmapped",
-      ...(type === "lock" ? { requiresConfirmation: true } : {}),
-    };
+      friendlyName: entity?.attributes.friendly_name,
+    });
   }
 
   return { markers: [...config.markers, marker], entityMap };

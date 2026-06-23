@@ -31,7 +31,7 @@
 // so the in-app toggle matches user expectation regardless of the OS setting.
 
 import { ArcRotateCamera, Vector3, type Scene } from "@babylonjs/core";
-import { suppressGhostClick } from "@/utils/ghostClick";
+import { TapRecognizer } from "./TapRecognizer";
 
 interface OverviewCallbacks {
   onActivity: () => void;
@@ -141,26 +141,18 @@ export class OverviewController {
   private touchBase: { dist: number; angle: number; centX: number; centY: number } | null = null;
 
   // Tap detection (single brief press with minimal movement → entity pick).
-  private tapCandidate = false;
-  private tapStartX = 0;
-  private tapStartY = 0;
-  private tapStartT = 0;
-  private static readonly TAP_MOVE_TOL = 14; // px
-  private static readonly TAP_TIME     = 400; // ms
+  private readonly tap = new TapRecognizer();
 
   private onPointerDown = (e: PointerEvent): void => {
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
     try { this.canvas.setPointerCapture(e.pointerId); } catch { /**/ }
 
     if (this.pointers.size === 1) {
-      this.tapCandidate = true;
-      this.tapStartX = e.clientX;
-      this.tapStartY = e.clientY;
-      this.tapStartT = performance.now();
+      this.tap.begin(e.clientX, e.clientY);
       this.touchBase = null;
     } else {
       // Second (or more) finger cancels tap and seeds the two-finger baseline.
-      this.tapCandidate = false;
+      this.tap.cancel();
       this.seedTouchBase();
     }
     this.cb.onActivity();
@@ -175,11 +167,9 @@ export class OverviewController {
     prev.y = e.clientY;
     e.preventDefault();
 
-    if (this.tapCandidate &&
-        (e.shiftKey || e.ctrlKey ||
-         Math.hypot(e.clientX - this.tapStartX, e.clientY - this.tapStartY) > OverviewController.TAP_MOVE_TOL)) {
-      this.tapCandidate = false;
-    }
+    // A modifier-drag (rotate/zoom) is never a tap; otherwise drift cancels it.
+    if (e.shiftKey || e.ctrlKey) this.tap.cancel();
+    this.tap.moved(e.clientX, e.clientY);
 
     const s = this.naturalScrolling ? 1 : -1;
 
@@ -211,15 +201,12 @@ export class OverviewController {
       this.seedTouchBase();
     }
 
-    if (this.tapCandidate &&
-        this.pointers.size === 0 &&
-        performance.now() - this.tapStartT < OverviewController.TAP_TIME) {
-      // Swallow the synthesized touch/pen click so it can't dismiss the panel
-      // the tap opens (see suppressGhostClick + CameraController for the why).
-      if (e.pointerType !== "mouse") suppressGhostClick(e.clientX, e.clientY);
+    // Last finger up and still a brief, stationary tap → entity pick.
+    // TapRecognizer swallows the trailing touch/pen ghost click so it can't
+    // dismiss the panel the tap opens (see TapRecognizer for the why).
+    if (this.pointers.size === 0 && this.tap.complete(e)) {
       this.cb.onTap?.(e.clientX, e.clientY);
     }
-    this.tapCandidate = false;
   };
 
   // ── Two-finger touch: pinch→zoom, twist→rotate, centroid-Y→tilt ───────────

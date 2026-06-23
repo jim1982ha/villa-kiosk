@@ -166,6 +166,35 @@ export function inferTypeFromEntityId(entityId: string): EntityType | null {
   return (known as string[]).includes(domain) ? (domain as EntityType) : null;
 }
 
+/**
+ * Human label from an entity_id: the friendly name if supplied, else the
+ * prettified local part ("light.living_room" → "living room"). One place so the
+ * same derivation isn't re-implemented in every binding/marker/config site.
+ */
+export function labelFromEntityId(entityId: string, friendlyName?: string): string {
+  return friendlyName?.trim() || entityId.split(".")[1]?.replace(/_/g, " ") || entityId;
+}
+
+/**
+ * THE authoritative factory for a default EntityMapping when we have no stored
+ * metadata yet. Tap-to-bind, marker-drop, the Config Editor and the mesh
+ * resolver all funnel through here, so the default rules — inferred type,
+ * derived label, "locks need confirmation" — live in exactly one place (DDD).
+ */
+export function createDefaultMapping(
+  entityId: string,
+  opts: { friendlyName?: string; room?: string; type?: EntityType } = {},
+): EntityMapping {
+  const type = opts.type ?? inferTypeFromEntityId(entityId) ?? "sensor";
+  return {
+    entityId,
+    type,
+    label: labelFromEntityId(entityId, opts.friendlyName),
+    room: opts.room ?? "",
+    ...(type === "lock" ? { requiresConfirmation: true } : {}),
+  };
+}
+
 /** Build a usable EntityMapping for an entity_id, falling back to inference. */
 export function mappingForEntityId(
   entityId: string,
@@ -187,12 +216,7 @@ export function mappingForEntityId(
   }
   const inferred = inferTypeFromEntityId(entityId);
   if (!inferred) return null;
-  return {
-    entityId,
-    type: inferred,
-    label: entityId.split(".")[1]?.replace(/_/g, " ") ?? entityId,
-    room: "",
-  };
+  return createDefaultMapping(entityId, { type: inferred });
 }
 
 /** Normalise a Babylon/glTF mesh name (strip ".001", "_primitive0", "(clone)"). */
@@ -243,14 +267,7 @@ export function resolveMeshToMapping(
   // 4) Looks like an entity_id we simply don't have metadata for yet — build a
   //    minimal mapping so it is still tappable (graceful unknown-entity handling).
   const inferred = inferTypeFromEntityId(base);
-  if (inferred) {
-    return {
-      entityId: base,
-      type: inferred,
-      label: base.split(".")[1]?.replace(/_/g, " ") ?? base,
-      room: "Unmapped",
-    };
-  }
+  if (inferred) return createDefaultMapping(base, { type: inferred, room: "Unmapped" });
 
   return null;
 }

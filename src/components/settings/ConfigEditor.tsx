@@ -8,7 +8,7 @@ import { useMemo, useState } from "react";
 import { Plus, Trash2, Pencil, Check, X } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { inferTypeFromEntityId } from "@/config/EntityMap";
+import { createDefaultMapping } from "@/config/EntityMap";
 import EntityPicker from "./EntityPicker";
 import type { EntityMapping, EntityType } from "@/types/scene.types";
 
@@ -66,17 +66,10 @@ export default function ConfigEditor() {
 
   const add = (id: string) => {
     if (!id || config.entityMap[id]) return;
-    const type = inferTypeFromEntityId(id) ?? "sensor";
-    const entity = entities[id];
     update({
       entityMap: {
         ...config.entityMap,
-        [id]: {
-          entityId: id,
-          type,
-          label: entity?.attributes.friendly_name ?? id.split(".")[1]?.replace(/_/g, " ") ?? id,
-          room: "",
-        },
+        [id]: createDefaultMapping(id, { friendlyName: entities[id]?.attributes.friendly_name }),
       },
     });
     setNewId(undefined);
