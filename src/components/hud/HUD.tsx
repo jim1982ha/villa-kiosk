@@ -104,7 +104,7 @@ export default function HUD({
       <div className="bottom-bar">
         {viewMode === "first-person"
           ? <VirtualJoystick onMove={onMove} />
-          : <span className="overview-hint">Bird's-eye · drag to pan · pinch to zoom · two-finger drag to tilt · tap an object</span>}
+          : <span className="overview-hint">Bird's-eye · drag to pan · Shift+drag to rotate/tilt · Ctrl+drag or wheel to zoom · two fingers to pinch &amp; twist · tap an object</span>}
         <div className="bottom-right">
           <button className="icon-btn" onClick={onOpenTeleport} title="Rooms">
             <Grid3x3 size={22} />

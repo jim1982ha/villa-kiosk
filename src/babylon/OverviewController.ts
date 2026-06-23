@@ -1,25 +1,28 @@
 // src/babylon/OverviewController.ts
-// Bird's-eye overview camera with Google Earth-style gesture controls.
+// Bird's-eye overview camera with explicit, modifier-gated gesture controls.
 //
 // ── Gesture map ──────────────────────────────────────────────────────────────
 //
-//  TRACKPAD (WheelEvent — the browser converts trackpad gestures):
-//    2-finger slide          → pan   (deltaX/Y, no modifier key)
-//    pinch / spread          → zoom  (deltaY, ctrlKey=true — browser does this)
-//    Shift + 2-finger slide  → tilt (Y) + rotate heading (X)
+//  DESKTOP — mouse or single-finger trackpad drag (PointerEvent, primary button):
+//    plain drag          → PAN   (move the view on the X/Y plane)
+//    Shift + drag        → ROTATE (dx → heading/bearing) + TILT (dy → pitch)
+//    Ctrl  + drag        → ZOOM  (dy → in/out)
+//    mouse wheel / pinch → ZOOM  (kept because it is the universal map idiom)
 //
-//  TOUCHSCREEN / MOUSE (PointerEvent):
-//    1 pointer drag          → pan
-//    2 pointer pinch/spread  → zoom
-//    2 pointer twist         → rotate heading (bearing)
-//    2 pointer vertical slide (stable distance) → tilt (pitch)
+//  TOUCHSCREEN (PointerEvent):
+//    1 finger drag       → PAN
+//    2 finger pinch      → ZOOM
+//    2 finger twist      → ROTATE (heading/bearing)
+//    2 finger vertical   → TILT (pitch)   [applied when pinch distance is stable]
 //
-//  TAP (touch or left-click, brief, no movement) → pick entity
+//  TAP (touch or left-click, brief, no movement, no modifier) → pick entity
+//
+// The modifier (Shift/Ctrl) is read per pointermove, so it can be pressed or
+// released mid-drag and the gesture switches live.
 //
 // Natural scrolling flag: when true the map follows the finger/scroll direction;
-// when false the view moves opposite (traditional). Applied uniformly to both
-// pointer drag and wheel events so the in-app toggle matches user expectation
-// regardless of the OS-level natural scrolling setting.
+// when false the view moves opposite (traditional). Applied to pan, tilt and zoom
+// so the in-app toggle matches user expectation regardless of the OS setting.
 
 import { ArcRotateCamera, Vector3, type Scene } from "@babylonjs/core";
 
@@ -35,11 +38,11 @@ interface Bounds {
 
 // Sensitivity constants
 const DRAG_SENS       = 0.0016; // world-units per pixel × radius (pointer pan)
-const WHEEL_PAN_SENS  = 0.0006; // lower: trackpad wheel deltas are larger in magnitude
-const WHEEL_ZOOM_SENS = 0.006;  // per normalised wheel pixel
+const ROT_SENS_DRAG   = 0.005;  // radians per pixel (Shift+drag horizontal → heading)
+const TILT_SENS_DRAG  = 0.005;  // radians per pixel (Shift+drag vertical → pitch)
+const ZOOM_SENS_DRAG  = 0.004;  // per pixel × radius (Ctrl+drag vertical → zoom)
+const WHEEL_ZOOM_SENS = 0.006;  // per normalised wheel pixel (wheel / pinch → zoom)
 const TILT_SENS_TOUCH = 0.005;  // radians per pixel (two-finger centroid drag)
-const TILT_SENS_WHEEL = 0.003;  // radians per normalised wheel pixel
-const ROT_SENS_WHEEL  = 0.003;  // radians per normalised wheel pixel
 
 export class OverviewController {
   readonly camera: ArcRotateCamera;
@@ -164,7 +167,8 @@ export class OverviewController {
     e.preventDefault();
 
     if (this.tapCandidate &&
-        Math.hypot(e.clientX - this.tapStartX, e.clientY - this.tapStartY) > OverviewController.TAP_MOVE_TOL) {
+        (e.shiftKey || e.ctrlKey ||
+         Math.hypot(e.clientX - this.tapStartX, e.clientY - this.tapStartY) > OverviewController.TAP_MOVE_TOL)) {
       this.tapCandidate = false;
     }
 
@@ -173,8 +177,15 @@ export class OverviewController {
     if (this.pointers.size >= 2) {
       // Two (or more) touch/pen pointers: zoom + rotate + tilt simultaneously.
       this.handleTwoFingerTouch();
+    } else if (e.shiftKey) {
+      // Shift + drag → ROTATE (horizontal) + TILT (vertical).
+      this.camera.alpha -= dx * ROT_SENS_DRAG;
+      this.applyTilt(dy * TILT_SENS_DRAG * s);
+    } else if (e.ctrlKey) {
+      // Ctrl + drag → ZOOM (vertical). Drag up = zoom in.
+      this.applyZoom(-dy * ZOOM_SENS_DRAG * this.camera.radius * s);
     } else {
-      // Single pointer (1-finger touch or left mouse drag): pan the map.
+      // Plain single-pointer drag (1-finger touch or left mouse) → PAN.
       this.applyPan(dx * s, dy * s, DRAG_SENS);
     }
     this.cb.onActivity();
@@ -264,17 +275,15 @@ export class OverviewController {
     base.centY = centY;
   }
 
-  // ── Wheel events (trackpad + mouse) ───────────────────────────────────────
+  // ── Wheel events → ZOOM ───────────────────────────────────────────────────
   //
-  // The browser maps trackpad gestures to WheelEvent as follows:
+  // The mouse wheel (and the trackpad pinch, which the browser reports as a
+  // wheel with ctrlKey=true) maps to zoom. This is the universal map idiom and
+  // is kept alongside the explicit Ctrl+drag zoom — they don't conflict because
+  // the wheel is a separate input channel from pointer drags.
   //
-  //   PINCH (spread/squeeze)          → ctrlKey=true,  deltaY = zoom amount
-  //   2-FINGER SLIDE (pan)            → ctrlKey=false, deltaX/deltaY = pan amount
-  //
-  // A regular mouse wheel only produces deltaY (deltaX stays 0).
-  //
-  // Additionally we reserve Shift+scroll as a keyboard-accessible tilt+rotate
-  // for users who can't do a two-finger touch tilt on a trackpad.
+  // Scroll up (deltaY < 0) zooms in; scroll down zooms out. Honors the natural
+  // scrolling toggle so the direction matches the pan/tilt convention.
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
@@ -284,31 +293,8 @@ export class OverviewController {
     const mul = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16
               : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? 300 : 1;
     const dy = e.deltaY * mul;
-    const dx = e.deltaX * mul;
 
-    if (e.ctrlKey) {
-      // ── ZOOM: trackpad pinch or Ctrl+wheel ────────────────────────────────
-      // ctrlKey is set by the browser for trackpad pinch gestures on all major
-      // OSes (macOS, Windows, ChromeOS) — this is the reliable zoom signal.
-      this.applyZoom(dy * WHEEL_ZOOM_SENS * this.camera.radius * s);
-      this.cb.onActivity();
-      return;
-    }
-
-    if (e.shiftKey) {
-      // ── TILT + ROTATE: Shift + scroll ─────────────────────────────────────
-      // Keyboard-accessible tilt for users on trackpad or mouse.
-      // Vertical scroll (deltaY) → pitch. Horizontal (deltaX) → heading.
-      this.applyTilt(dy * TILT_SENS_WHEEL * s);
-      this.camera.alpha -= dx * ROT_SENS_WHEEL * s;
-      this.cb.onActivity();
-      return;
-    }
-
-    // ── PAN: plain trackpad 2-finger slide or mouse wheel ────────────────────
-    // No modifier = drag gesture on trackpad (deltaX/Y) or mouse wheel (deltaY).
-    // Mouse wheel only has deltaY → forward/back pan. Trackpad has both axes.
-    this.applyPan(dx * s, dy * s, WHEEL_PAN_SENS);
+    this.applyZoom(-dy * WHEEL_ZOOM_SENS * this.camera.radius * s);
     this.cb.onActivity();
   };
 

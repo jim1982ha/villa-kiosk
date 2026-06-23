@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.4
+
+### Changes
+- Overview gestures simplified to an explicit, modifier-gated model:
+  - Desktop: plain drag = pan · Shift+drag = rotate + tilt · Ctrl+drag = zoom
+  - Mouse wheel / trackpad pinch still zooms (universal map idiom, kept)
+  - Touch: 1-finger = pan · 2-finger pinch = zoom · twist = rotate · vertical = tilt
+  - Modifier is read per move event, so it can be pressed/released mid-drag
+- Overview HUD hint updated to describe the new controls
+
 ## 2.4.3
 
 ### Changes
