@@ -1,5 +1,45 @@
 # Changelog
 
+## 2.4.8
+
+### Top / bottom bar layout overhaul (desktop + mobile)
+- Top bar is now a clean three-zone layout: brand (left) · action icons
+  (centred) · alerts + clock (right)
+- Connection status is a single coloured dot (green / red) right beside the
+  villa name — the redundant wifi icon is gone
+- Floor switch moved out of the bar: it's now a **vertical** 1F / 2F toggle
+  floating just below the brand icon (same on desktop and mobile)
+- Clock pinned to the far right; the **All Clear** badge sits just to its left
+  (its alert list now drops down from the top bar). On phones All Clear becomes
+  an icon-only badge and the clock is hidden (the phone shows the time)
+- **Rooms** (grid) moved up from the bottom-right into the centred icon row,
+  restyled to match the other buttons (paired with the view toggle)
+- Bottom-right cluster removed — the bottom bar now only holds the joystick
+  (first-person) or the navigation-tips control (overview)
+
+### Bird's-eye navigation tips no longer clutter the view
+- The tips card is hidden by default; an **(i)** button at the bottom-left
+  reveals / dismisses it (desktop + mobile)
+
+## 2.4.7
+
+### Top bar reorganised into clear icon-only sections
+- Action buttons are now grouped into labelled-by-context pills: View ·
+  Display · Build · Config — so each category reads at a glance, no text needed
+- `Highlight clickable objects` and `Show device state labels` are now direct
+  toggles in the top bar (lit gold when on) instead of buried in Settings — and
+  removed from the Settings modal
+- On phones the Display / Build / Config sections collapse into three single
+  dropdown buttons to save width:
+  - Display → highlight clickable · show device state labels
+  - Build → bind 3D object · drop control marker
+  - Config → Config Editor · Settings
+  (dropdowns close on outside tap / Escape; toggle items keep the menu open)
+
+### Fix
+- Config Editor Confirm checkbox now lines up exactly with the input fields
+  above it on mobile cards (the default checkbox margin was nudging it right)
+
 ## 2.4.6
 
 ### UI / mobile fixes
@@ -13,7 +53,6 @@
   - edit (pencil) + delete (trash) icons grouped and right-aligned in the
     Entity ID row, identical on every card
   - removed the stray bottom delete row and its large vertical gap
-  - Confirm checkbox aligns with the input fields above it
 
 ## 2.4.5
 

@@ -209,30 +209,8 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           drawn — so good weather simply shows the villa as-is.
         </p>
 
-        <label className="toggle">
-          <input
-            type="checkbox" checked={config.highlightInteractive}
-            onChange={(e) => update({ highlightInteractive: e.target.checked })}
-          />
-          <span>Highlight clickable objects</span>
-        </label>
-        <p className="muted body-text" style={{ marginTop: 6 }}>
-          Shows a blue glow around every object linked to an entity — so you
-          know what you can tap while navigating the villa.
-        </p>
-
-        <label className="toggle">
-          <input
-            type="checkbox" checked={config.showEntityLabels}
-            onChange={(e) => update({ showEntityLabels: e.target.checked })}
-          />
-          <span>Show device state labels</span>
-        </label>
-        <p className="muted body-text" style={{ marginTop: 6 }}>
-          Displays a floating label above each linked device showing its current
-          state (on/off, temperature, locked…). Toggle on for the full overlay,
-          off to keep the view clean.
-        </p>
+        {/* "Highlight clickable objects" and "Show device state labels" now live
+            as direct toggles in the top bar (desktop) / a dropdown (mobile). */}
 
         <label className="toggle">
           <input

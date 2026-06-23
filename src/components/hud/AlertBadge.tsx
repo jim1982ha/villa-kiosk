@@ -44,16 +44,16 @@ export default function AlertBadge() {
 
   if (alerts.length === 0) {
     return (
-      <button className="alert-badge ok" onClick={() => setOpen(false)}>
-        <ShieldCheck size={18} /> All clear
+      <button className="alert-badge ok" onClick={() => setOpen(false)} title="All clear">
+        <ShieldCheck size={18} /> <span className="alert-badge-text">All clear</span>
       </button>
     );
   }
 
   return (
     <>
-      <button className="alert-badge" onClick={() => setOpen((o) => !o)}>
-        <AlertTriangle size={18} /> {alerts.length} alert{alerts.length > 1 ? "s" : ""}
+      <button className="alert-badge" onClick={() => setOpen((o) => !o)} title={`${alerts.length} alert${alerts.length > 1 ? "s" : ""}`}>
+        <AlertTriangle size={18} /> <span className="alert-badge-text">{alerts.length} alert{alerts.length > 1 ? "s" : ""}</span>
       </button>
       {open && (
         <div className="alert-list">
