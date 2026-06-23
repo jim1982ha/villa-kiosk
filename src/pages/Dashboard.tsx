@@ -38,6 +38,7 @@ export default function Dashboard() {
   const [meshToBind, setMeshToBind] = useState<string | null>(null);
   const [placeMode, setPlaceMode] = useState(false);
   const [pointToPlace, setPointToPlace] = useState<Vec3 | null>(null);
+  const [viewMode, setViewMode] = useState<"first-person" | "overview">("first-person");
 
   // Auto-connect on load / refresh. As an add-on we reach HA through the
   // same-origin Supervisor proxy (token injected server-side), so no credentials
@@ -153,6 +154,12 @@ export default function Dashboard() {
     manager?.setPlaceMode(false);
   }, [manager]);
 
+  // Swap between first-person walking and the bird's-eye overview camera.
+  const toggleViewMode = useCallback(() => {
+    if (!manager) return;
+    setViewMode(manager.toggleViewMode());
+  }, [manager]);
+
   return (
     <>
       <BabylonCanvas
@@ -175,6 +182,8 @@ export default function Dashboard() {
         onEnterBindMode={enterBindMode}
         onEnterPlaceMode={enterPlaceMode}
         onMove={(x, y) => manager?.camera.setMovement(x, y)}
+        viewMode={viewMode}
+        onToggleViewMode={toggleViewMode}
       />
 
       {teleportOpen && (

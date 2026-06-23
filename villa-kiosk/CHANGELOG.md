@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.4
+
+### Changes
+- v4.0: Introducing God mode
+
+---
+
+
 ## 2.3.3
 
 ### Changes

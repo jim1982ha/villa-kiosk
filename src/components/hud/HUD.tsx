@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Home, Grid3x3, Settings, Wifi, WifiOff, Link2, MapPin, Sliders } from "lucide-react";
+import { Home, Grid3x3, Settings, Wifi, WifiOff, Link2, MapPin, Sliders, Map, PersonStanding } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
@@ -20,6 +20,8 @@ interface Props {
   onEnterBindMode: () => void;
   onEnterPlaceMode: () => void;
   onMove: (x: number, y: number) => void;
+  viewMode: "first-person" | "overview";
+  onToggleViewMode: () => void;
 }
 
 function useClock(): string {
@@ -34,6 +36,7 @@ function useClock(): string {
 export default function HUD({
   currentFloor, floorsAvailable, onSwitchFloor, onOpenTeleport,
   onOpenSettings, onEnterBindMode, onEnterPlaceMode, onMove,
+  viewMode, onToggleViewMode,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config } = useConfig();
@@ -74,6 +77,14 @@ export default function HUD({
             <span className="dot" />
             {connection === "connected" ? <Wifi size={15} /> : <WifiOff size={15} />}
           </span>
+          {/* View-mode toggle: first-person walk ⇄ bird's-eye overview */}
+          <button
+            className={`icon-btn${viewMode === "overview" ? " active" : ""}`}
+            onClick={onToggleViewMode}
+            title={viewMode === "overview" ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
+          >
+            {viewMode === "overview" ? <PersonStanding size={19} /> : <Map size={18} />}
+          </button>
           {/* Quick-access toolbar — bind, place marker, config editor */}
           <button className="icon-btn" onClick={onEnterBindMode} title="Bind 3D object to entity">
             <Link2 size={18} />
@@ -91,7 +102,9 @@ export default function HUD({
       </div>
 
       <div className="bottom-bar">
-        <VirtualJoystick onMove={onMove} />
+        {viewMode === "first-person"
+          ? <VirtualJoystick onMove={onMove} />
+          : <span className="overview-hint">Bird's-eye · drag to pan · pinch to zoom · two-finger drag to tilt · tap an object</span>}
         <div className="bottom-right">
           <button className="icon-btn" onClick={onOpenTeleport} title="Rooms">
             <Grid3x3 size={22} />

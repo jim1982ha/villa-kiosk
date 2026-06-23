@@ -89,23 +89,54 @@ export class CameraController {
     this.camera.keysLeft = [];
     this.camera.keysRight = [];
 
-    // Unified pointer input (works for mouse, pen and touch):
+    // Unified pointer input (works for mouse, pen and touch). Attached here and
+    // toggleable via detachInput()/attachInput() so the overview camera can take
+    // sole ownership of the pointer pipeline when that mode is active.
     //   • mouse drag / one finger drag  = look around
     //   • two fingers drag              = walk (up=forward, sideways=strafe)
     //   • double-tap / double-click     = walk to that spot
-    canvas.addEventListener("pointerdown", this.onPointerDown);
-    canvas.addEventListener("pointermove", this.onPointerMove);
-    canvas.addEventListener("pointerup", this.onPointerUp);
-    canvas.addEventListener("pointercancel", this.onPointerUp);
-    canvas.addEventListener("pointerleave", this.onPointerUp);
+    this.attachInput();
+
+    scene.registerBeforeRender(() => this.step());
+  }
+
+  // ── Input ownership ────────────────────────────────────────────────────────
+  // Only one controller (first-person OR overview) listens to canvas pointers at
+  // a time, so there's never a setPointerCapture race between them.
+  private inputAttached = false;
+
+  attachInput(): void {
+    if (this.inputAttached) return;
+    this.canvas.addEventListener("pointerdown", this.onPointerDown);
+    this.canvas.addEventListener("pointermove", this.onPointerMove);
+    this.canvas.addEventListener("pointerup", this.onPointerUp);
+    this.canvas.addEventListener("pointercancel", this.onPointerUp);
+    this.canvas.addEventListener("pointerleave", this.onPointerUp);
     // Two-finger trackpad swipe (and mouse wheel) = walk. A swipe emits a stream
     // of wheel events: up = forward, down = back, sideways = strafe.
-    canvas.addEventListener("wheel", this.onWheel, { passive: false });
+    this.canvas.addEventListener("wheel", this.onWheel, { passive: false });
     // Arrow keys + WASD = walk.
     window.addEventListener("keydown", this.onKey);
     window.addEventListener("keyup", this.onKey);
+    this.inputAttached = true;
+  }
 
-    scene.registerBeforeRender(() => this.step());
+  detachInput(): void {
+    if (!this.inputAttached) return;
+    this.canvas.removeEventListener("pointerdown", this.onPointerDown);
+    this.canvas.removeEventListener("pointermove", this.onPointerMove);
+    this.canvas.removeEventListener("pointerup", this.onPointerUp);
+    this.canvas.removeEventListener("pointercancel", this.onPointerUp);
+    this.canvas.removeEventListener("pointerleave", this.onPointerUp);
+    this.canvas.removeEventListener("wheel", this.onWheel);
+    window.removeEventListener("keydown", this.onKey);
+    window.removeEventListener("keyup", this.onKey);
+    // Drop any in-flight gesture/movement so we don't resume mid-walk on return.
+    this.pointers.clear();
+    this.keys.clear();
+    this.moveX = 0;
+    this.moveY = 0;
+    this.inputAttached = false;
   }
 
   // ── Collision capsule sizing ──────────────────────────────────────────────
@@ -322,14 +353,7 @@ export class CameraController {
   }
 
   dispose(): void {
-    this.canvas.removeEventListener("pointerdown", this.onPointerDown);
-    this.canvas.removeEventListener("pointermove", this.onPointerMove);
-    this.canvas.removeEventListener("pointerup", this.onPointerUp);
-    this.canvas.removeEventListener("pointercancel", this.onPointerUp);
-    this.canvas.removeEventListener("pointerleave", this.onPointerUp);
-    this.canvas.removeEventListener("wheel", this.onWheel);
-    window.removeEventListener("keydown", this.onKey);
-    window.removeEventListener("keyup", this.onKey);
+    this.detachInput();
   }
 
   /**

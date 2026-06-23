@@ -16,6 +16,7 @@ import "@babylonjs/core/Debug/debugLayer";
 import "@babylonjs/loaders/glTF";
 
 import { CameraController } from "./CameraController";
+import { OverviewController } from "./OverviewController";
 import { LightingSystem } from "./LightingSystem";
 import { SunController } from "./SunController";
 import { FloorManager } from "./FloorManager";
@@ -46,6 +47,7 @@ export class SceneManager {
   readonly engine: Engine;
   readonly scene: Scene;
   readonly camera: CameraController;
+  readonly overview: OverviewController;
   readonly lighting: LightingSystem;
   readonly sun: SunController;
   readonly floors: FloorManager;
@@ -63,6 +65,7 @@ export class SceneManager {
   private loadedMeshes: AbstractMesh[] = [];
   private calibratedPoints: TeleportPoint[] | null = null;
   private highlightLayer: HighlightLayer | null = null;
+  private viewMode: "first-person" | "overview" = "first-person";
 
   constructor(canvas: HTMLCanvasElement, opts: SceneManagerOptions) {
     this.config = opts.config;
@@ -112,6 +115,15 @@ export class SceneManager {
       this.scene, opts.onEntityPicked, opts.config.entityMap, opts.config.meshBindings,
     );
 
+    // Bird's-eye overview camera (a second control mode). Created up front but
+    // dormant: its input is attached and it becomes the active camera only when
+    // setViewMode("overview") is called. Tap-to-pick routes through the same
+    // picker as first-person.
+    this.overview = new OverviewController(this.scene, canvas, {
+      onActivity: () => this.requestRender(),
+      onTap: (x, y) => this.pick.pickAtScreen(x, y),
+    });
+
     // Any pointer activity on the canvas (look-around drag, wheel, tap) wakes the
     // on-demand render loop so the view stays smooth.
     this.scene.onPointerObservable.add(() => this.requestRender());
@@ -149,6 +161,42 @@ export class SceneManager {
     this.engine.resize();
     this.requestRender();
   };
+
+  /**
+   * Swap between first-person walking and the bird's-eye overview camera. Only
+   * one controller owns canvas pointer input at a time (no capture race), and
+   * picking always follows scene.activeCamera so tapping entities works in both.
+   */
+  setViewMode(mode: "first-person" | "overview"): void {
+    if (mode === this.viewMode) return;
+    this.viewMode = mode;
+    if (mode === "overview") {
+      this.camera.setMovement(0, 0); // stop any in-flight walk
+      this.camera.detachInput();
+      if (this.loadedMeshes.length) {
+        const ext = this.worldExtends(this.loadedMeshes);
+        this.overview.fitTo({ min: ext.min, max: ext.max });
+      }
+      this.overview.enable();
+      this.scene.activeCamera = this.overview.camera;
+    } else {
+      this.overview.disable();
+      this.scene.activeCamera = this.camera.camera;
+      this.camera.attachInput();
+    }
+    this.requestRender(600);
+  }
+
+  getViewMode(): "first-person" | "overview" {
+    return this.viewMode;
+  }
+
+  /** Flip to the other view mode; returns the mode now active. */
+  toggleViewMode(): "first-person" | "overview" {
+    const next = this.viewMode === "overview" ? "first-person" : "overview";
+    this.setViewMode(next);
+    return next;
+  }
 
   private worldExtends(meshes: AbstractMesh[]) {
     meshes.forEach((m) => m.computeWorldMatrix(true));
@@ -723,6 +771,7 @@ export class SceneManager {
   dispose(): void {
     window.removeEventListener("resize", this.handleResize);
     this.camera.dispose();
+    this.overview.dispose();
     this.engine.stopRenderLoop();
     this.scene.dispose();
     this.engine.dispose();
