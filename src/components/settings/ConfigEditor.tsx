@@ -107,7 +107,6 @@ export default function ConfigEditor() {
               <th>Label</th>
               <th>Room</th>
               <th>Confirm</th>
-              <th />
             </tr>
           </thead>
           <tbody>
@@ -150,19 +149,24 @@ export default function ConfigEditor() {
                       </span>
                     </div>
                   ) : (
-                    <span
-                      style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
-                      title="Click the pencil to redirect this mesh to a different entity ID"
-                    >
-                      {m.entityId}
-                      <button
-                        className="icon-btn"
-                        style={{ width: 24, height: 24, flexShrink: 0 }}
-                        title="Redirect this 3D mesh to a different entity ID"
-                        onClick={() => { setRemapKey(key); setRemapNewId(undefined); }}
-                      >
-                        <Pencil size={12} />
-                      </button>
+                    <span className="entity-id-display" title="Use the pencil to redirect this mesh to a different entity ID">
+                      <span className="entity-id-text">{m.entityId}</span>
+                      <span className="entity-id-actions">
+                        <button
+                          className="icon-btn"
+                          title="Redirect this 3D mesh to a different entity ID"
+                          onClick={() => { setRemapKey(key); setRemapNewId(undefined); }}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          className="icon-btn icon-btn-danger"
+                          title="Remove this entity"
+                          onClick={() => remove(key)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </span>
                     </span>
                   )}
                 </td>
@@ -182,11 +186,6 @@ export default function ConfigEditor() {
                     checked={!!m.requiresConfirmation}
                     onChange={(e) => patch(key, { requiresConfirmation: e.target.checked })}
                   />
-                </td>
-                <td data-label="">
-                  <button className="icon-btn" style={{ width: 34, height: 34 }} onClick={() => remove(key)}>
-                    <Trash2 size={16} />
-                  </button>
                 </td>
               </tr>
             ))}

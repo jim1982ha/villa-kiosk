@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.4.6
+
+### UI / mobile fixes
+- Settings checkboxes render as proper squares (box-sizing + aspect-ratio,
+  so a flex parent can no longer distort them)
+- Room name badge (shown when entering a room) is now centred, width-capped,
+  and uses smaller display type on phones so longer names stay on one line
+- Config Editor full-page header no longer wraps on mobile — Back button +
+  title sit on one tidy line
+- Config Editor entity cards reworked on mobile:
+  - edit (pencil) + delete (trash) icons grouped and right-aligned in the
+    Entity ID row, identical on every card
+  - removed the stray bottom delete row and its large vertical gap
+  - Confirm checkbox aligns with the input fields above it
+
 ## 2.4.5
 
 ### Bug fixes

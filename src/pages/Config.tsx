@@ -24,12 +24,11 @@ export default function Config() {
           padding: "16px 24px",
         }}
       >
-        <div className="row spread" style={{ maxWidth: 1000, margin: "0 auto" }}>
+        <div className="config-topbar">
           <button className="btn ghost" onClick={() => navigate("/")}>
             <ArrowLeft size={18} /> Back to villa
           </button>
-          <h2 style={{ margin: 0 }}>Config Editor</h2>
-          <span style={{ width: 130 }} />
+          <h2>Config Editor</h2>
         </div>
       </div>
 

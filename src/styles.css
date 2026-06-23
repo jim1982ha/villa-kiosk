@@ -131,6 +131,7 @@ button {
   background: var(--bg-panel); backdrop-filter: blur(8px);
   padding: 8px 22px; border-radius: 999px; z-index: 15;
   animation: fadeSlide 0.4s ease-out;
+  text-align: center; max-width: 86vw;
 }
 
 .bottom-bar {
@@ -325,8 +326,11 @@ label.toggle input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   flex: 0 0 auto;
+  box-sizing: border-box;
   width: 22px;
   height: 22px;
+  min-width: 22px;
+  aspect-ratio: 1 / 1;
   border-radius: 6px;
   background: var(--bg-input);
   border: 1.5px solid rgba(201, 168, 76, 0.35);
@@ -358,12 +362,28 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .config-table td { padding: 6px 8px; border-top: 1px solid rgba(255,255,255,0.05); }
 .config-table input:not([type="checkbox"]), .config-table select { width: 100%; padding: 8px; border-radius: 8px; background: var(--bg-input); color: var(--text-primary); border: none; }
 
+/* Entity ID cell: id text on the left, action icons (edit + delete) pinned right
+   so every card lines up identically. */
+.entity-id-display { display: flex; align-items: center; gap: 8px; width: 100%; color: var(--text-secondary); }
+.entity-id-text { flex: 1 1 auto; min-width: 0; word-break: break-all; }
+.entity-id-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; margin-left: auto; }
+.entity-id-actions .icon-btn { width: 30px; height: 30px; }
+.icon-btn-danger:hover { color: var(--status-danger, #c0504d); }
+
+/* Config Editor full-page header (Back + title on one line, no wrap on mobile). */
+.config-topbar { display: flex; align-items: center; gap: 16px; max-width: 1000px; margin: 0 auto; }
+.config-topbar h2 { margin: 0; }
+.config-topbar .btn.ghost { flex: 0 0 auto; white-space: nowrap; }
+
 /* Confirm checkboxes in the entity table — match the toggle style */
 .config-table input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
+  box-sizing: border-box;
   width: 20px;
   height: 20px;
+  min-width: 20px;
+  aspect-ratio: 1 / 1;
   border-radius: 5px;
   background: var(--bg-input);
   border: 1.5px solid rgba(201, 168, 76, 0.35);
@@ -523,4 +543,21 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .config-table td[data-label=""]::before { content: none; }
   .config-table td[data-label=""] { justify-content: flex-end; }
   .config-table td.center { justify-content: flex-start; }
+
+  /* Entity ID is the card header: drop the inline "ENTITY ID" gutter and let the
+     id text + action icons (edit/delete) span the full width, icons pinned right. */
+  .config-table td[data-label="Entity ID"] { padding-top: 4px; }
+  .config-table td[data-label="Entity ID"]::before {
+    flex-basis: auto;
+    align-self: center;
+  }
+
+  /* Config Editor full-page header: keep Back + title on one tidy line. */
+  .config-topbar { gap: 10px; }
+  .config-topbar .btn.ghost { padding: 8px 12px; font-size: 13px; }
+  .config-topbar h2 { font-size: 18px; white-space: nowrap; }
+
+  /* Room badge: smaller display type so longer names stay on one centred line. */
+  .room-label { top: 58px; padding: 7px 18px; }
+  .room-title { font-size: 20px; }
 }
