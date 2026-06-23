@@ -9,14 +9,14 @@
 //                    brightness, off = dark.
 //   cover         -> curtain mesh shows OPEN / HALF / CLOSED (by position % or
 //                    open/closed state).
-//   fan           -> blades spin while on.
+//   fan           -> emissive teal tint while on.
 //   lock          -> green (locked) / red (unlocked).
 //   switch/media  -> emissive "active" tint when on/playing.
 //   binary_sensor -> pulsing red when triggered (e.g. leak).
 
 import {
-  Color3, StandardMaterial, PBRMaterial, PointLight,
-  type AbstractMesh, type Scene, type Material,
+  Color3, StandardMaterial, PBRMaterial, PointLight, MeshBuilder,
+  type AbstractMesh, type Mesh, type Scene, type Material,
 } from "@babylonjs/core";
 import {
   AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel,
@@ -50,12 +50,15 @@ export class EntityVisuals {
 
   /** Real light sources we create for `light` entities (entity_id -> light). */
   private lights = new Map<string, PointLight>();
-  /** Meshes currently spinning because their fan is on. */
-  private spinning = new Set<AbstractMesh>();
-
   /** Fullscreen GUI layer for state labels. */
   private labelLayer: AdvancedDynamicTexture | null = null;
   private labels = new Map<string, LabelControls>();
+  /** Tiny invisible anchor meshes that labels are linked to. Separate from
+   * entity meshes so labels stay fixed even when the entity mesh animates
+   * (OBJ-pipeline meshes have their pivot at the world origin, so rotation.y
+   * would orbit the geometry—and the bounding-sphere-based label—around the
+   * scene centre rather than around the entity's own axis). */
+  private labelPins = new Map<string, Mesh>();
 
   constructor(
     scene: Scene,
@@ -69,7 +72,6 @@ export class EntityVisuals {
     this.onEntityPicked = onEntityPicked ?? null;
     scene.registerBeforeRender(() => {
       this.animatePulse();
-      this.animateSpin();
     });
   }
 
@@ -91,7 +93,6 @@ export class EntityVisuals {
     this.lights.forEach((l) => l.dispose());
     this.lights.clear();
     this.pulsing.clear();
-    this.spinning.clear();
     this.byEntity.clear();
     this.mapping.clear();
 
@@ -152,6 +153,9 @@ export class EntityVisuals {
       this.labelLayer.rootContainer.clearControls();
     }
     this.labels.clear();
+    // Dispose old anchor pins before creating new ones.
+    this.labelPins.forEach(m => m.dispose());
+    this.labelPins.clear();
     this.labelLayer.rootContainer.isVisible = true;
 
     for (const [entityId, meshes] of this.byEntity) {
@@ -159,8 +163,21 @@ export class EntityVisuals {
       const map = this.mapping.get(entityId);
       if (!map) continue;
 
-      // Anchor to the first mesh (one label per entity, even if multiple meshes).
-      const anchor = meshes[0];
+      // Compute the entity's fixed world-space centre once (before any
+      // animation runs) and create a tiny invisible anchor mesh there.
+      // Linking labels to this pin instead of the entity mesh keeps labels
+      // stationary — otherwise the bounding-sphere centre of an OBJ-pipeline
+      // mesh orbits the world Y axis when rotation.y is changed, because all
+      // such meshes have their GLTF node at (0,0,0) with geometry stored in
+      // local space at world coordinates.
+      const firstMesh = meshes[0];
+      firstMesh.computeWorldMatrix(true);
+      const pinPos = firstMesh.getBoundingInfo().boundingSphere.center.clone();
+      const pin = MeshBuilder.CreateBox(`lbl_pin_${entityId}`, { size: 0.001 }, this.scene) as Mesh;
+      pin.position.copyFrom(pinPos);
+      pin.isVisible = false;
+      pin.isPickable = false;
+      this.labelPins.set(entityId, pin);
 
       const rect = new Rectangle(`lbl_rect_${entityId}`);
       rect.width = "170px";
@@ -186,7 +203,7 @@ export class EntityVisuals {
         });
       }
       this.labelLayer.addControl(rect);
-      rect.linkWithMesh(anchor);
+      rect.linkWithMesh(pin);
       rect.linkOffsetYInPixels = -64;
 
       const stack = new StackPanel(`lbl_stack_${entityId}`);
@@ -347,8 +364,6 @@ export class EntityVisuals {
 
       case "fan": {
         const on = state.state === "on";
-        if (on) this.spinning.add(mesh);
-        else this.spinning.delete(mesh);
         setEmissive?.(on ? new Color3(0.1, 0.35, 0.4) : Color3.Black());
         break;
       }
@@ -404,12 +419,6 @@ export class EntityVisuals {
     const intensity = (Math.sin(this.pulseT) + 1) / 2; // 0..1
     const col = new Color3(intensity, 0, 0);
     for (const mesh of this.pulsing) this.emissiveOf(mesh)?.(col);
-    this.requestRender();
-  }
-
-  private animateSpin(): void {
-    if (this.spinning.size === 0) return;
-    for (const mesh of this.spinning) mesh.rotation.y += 0.25;
     this.requestRender();
   }
 }

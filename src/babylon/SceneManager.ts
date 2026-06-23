@@ -593,6 +593,10 @@ export class SceneManager {
       if (!m.isEnabled() || !m.isVisible) continue;
       const mapping = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
       if (!mapping) continue;
+      // Lights use PointLight + emissive colour for feedback; a blue outline
+      // glow on placeholder sphere meshes would make them visible as blue
+      // balls floating at ceiling height.
+      if (mapping.type === "light") continue;
       if (!(m instanceof Mesh)) continue;
       try {
         hl.addMesh(m, blue);
@@ -646,12 +650,29 @@ export class SceneManager {
     if (this.loadedMeshes.length) {
       this.visuals.indexMeshes(this.loadedMeshes);
       this.applyStructure(this.loadedMeshes);
-      if (
+
+      const prevEntityCount = Object.keys(prev.entityMap).length;
+      const newEntityCount  = Object.keys(config.entityMap).length;
+      const entityDelta = newEntityCount - prevEntityCount;
+
+      const needsRecalibration =
         prev.calibrationFlipX !== config.calibrationFlipX ||
-        prev.calibrationFlipZ !== config.calibrationFlipZ
-      ) {
+        prev.calibrationFlipZ !== config.calibrationFlipZ ||
+        entityDelta > 0;  // new entities improve the plan→world fit
+
+      if (needsRecalibration) {
         this.calibrateRooms(this.loadedMeshes);
+        // On bulk auto-detection (many entities added at once) the initial
+        // spawn was computed from the old, sparse entityMap and is likely
+        // wrong.  Re-teleport to the corrected living-room position now.
+        if (entityDelta >= 5) {
+          const spawn =
+            this.calibratedPoints?.find((p) => /main|living/i.test(p.name)) ??
+            this.calibratedPoints?.[0];
+          if (spawn) this.camera.teleport(spawn, true);
+        }
       }
+
       if (prev.highlightInteractive !== config.highlightInteractive) {
         this.applyHighlight(this.loadedMeshes);
       }
