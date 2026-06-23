@@ -92,6 +92,17 @@ export class PickHandler {
       this.downT = performance.now();
       return;
     }
+    if (info.type === PointerEventTypes.POINTERMOVE) {
+      if (!this.bindMode && !this.placeMode) {
+        const canvas = this.scene.getEngine().getRenderingCanvas();
+        if (canvas) {
+          const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY);
+          const interactive = !!pick?.hit && !!pick.pickedMesh && !!this.resolveMesh(pick.pickedMesh);
+          canvas.style.cursor = interactive ? "pointer" : "";
+        }
+      }
+      return;
+    }
     if (info.type !== PointerEventTypes.POINTERUP) return;
 
     const movedFar =

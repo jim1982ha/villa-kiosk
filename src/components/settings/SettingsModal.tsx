@@ -3,8 +3,7 @@
 // full Config Editor and a button to toggle the Babylon Inspector for calibration.
 
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plug, Download, Upload, Bug, Sliders, Link2, MapPin, FileText } from "lucide-react";
+import { Plug, Download, Upload, Bug, FileText } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { normaliseHaUrl, DEFAULT_SITE_TITLE } from "@/config/AppConfig";
@@ -20,14 +19,11 @@ interface Props {
   manager: SceneManager | null;
   onClose: () => void;
   onModelChanged: () => void;
-  onEnterBindMode: () => void;
-  onEnterPlaceMode: () => void;
 }
 
-export default function SettingsModal({ manager, onClose, onModelChanged, onEnterBindMode, onEnterPlaceMode }: Props) {
+export default function SettingsModal({ manager, onClose, onModelChanged }: Props) {
   const { config, update, replace, reset } = useConfig();
   const { connect, haConfig } = useHA();
-  const navigate = useNavigate();
   const ingress = isIngress();
   const importRef = useRef<HTMLInputElement>(null);
   const sh3dRef = useRef<HTMLInputElement>(null);
@@ -201,6 +197,31 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onEnte
 
         <label className="toggle">
           <input
+            type="checkbox" checked={config.highlightInteractive}
+            onChange={(e) => update({ highlightInteractive: e.target.checked })}
+          />
+          <span>Highlight clickable objects</span>
+        </label>
+        <p className="muted body-text" style={{ marginTop: 6 }}>
+          Shows a blue glow around every object linked to an entity — so you
+          know what you can tap while navigating the villa.
+        </p>
+
+        <label className="toggle">
+          <input
+            type="checkbox" checked={config.showEntityLabels}
+            onChange={(e) => update({ showEntityLabels: e.target.checked })}
+          />
+          <span>Show device state labels</span>
+        </label>
+        <p className="muted body-text" style={{ marginTop: 6 }}>
+          Displays a floating label above each linked device showing its current
+          state (on/off, temperature, locked…). Toggle on for the full overlay,
+          off to keep the view clean.
+        </p>
+
+        <label className="toggle">
+          <input
             type="checkbox" checked={config.calibrationFlipX}
             onChange={(e) => update({ calibrationFlipX: e.target.checked })}
           />
@@ -257,30 +278,11 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onEnte
 
         <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
 
-        <label>Wire up this villa</label>
-        <button className="btn primary" style={{ width: "100%" }} onClick={onEnterBindMode}>
-          <Link2 size={18} /> Bind 3D objects to entities (tap mode)
-        </button>
-        <p className="muted body-text" style={{ marginTop: 8 }}>
-          Tap an existing object in the scene, then pick the entity it controls.
-        </p>
-
-        <button className="btn primary mt" style={{ width: "100%" }} onClick={onEnterPlaceMode}>
-          <MapPin size={18} /> Drop control markers (tap mode)
-        </button>
-        <p className="muted body-text" style={{ marginTop: 8 }}>
-          For devices that aren't separate objects (or entities you'll add later):
-          tap a spot to drop a floating control and link it to any entity_id.
-        </p>
-
         <div className="row-buttons mt">
-          <button className="btn ghost" onClick={() => navigate("/config")}>
-            <Sliders size={18} /> Config editor
-          </button>
           <button
             className="btn ghost"
             onClick={() => {
-              onClose(); // close so the Inspector panel is visible
+              onClose();
               manager?.toggleInspector();
             }}
           >

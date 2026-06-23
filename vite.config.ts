@@ -21,7 +21,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           // Babylon is large — split it so the React shell can paint first.
-          babylon: ["@babylonjs/core", "@babylonjs/loaders", "@babylonjs/materials"],
+          babylon: ["@babylonjs/core", "@babylonjs/loaders", "@babylonjs/materials", "@babylonjs/gui"],
         },
       },
     },

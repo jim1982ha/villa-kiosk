@@ -1,9 +1,10 @@
 // src/components/hud/HUD.tsx
-// Top bar (brand, floor switch, clock, connection) + bottom bar (joystick,
-// teleport button, alert badge, settings).
+// Top bar (brand, floor switch, clock, connection, action buttons) +
+// bottom bar (joystick, teleport, alerts, settings).
 
 import { useEffect, useState } from "react";
-import { Home, Grid3x3, Settings, Wifi, WifiOff } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Home, Grid3x3, Settings, Wifi, WifiOff, Link2, MapPin, Sliders } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
@@ -16,6 +17,8 @@ interface Props {
   onSwitchFloor: (floor: number) => void;
   onOpenTeleport: () => void;
   onOpenSettings: () => void;
+  onEnterBindMode: () => void;
+  onEnterPlaceMode: () => void;
   onMove: (x: number, y: number) => void;
 }
 
@@ -29,18 +32,17 @@ function useClock(): string {
 }
 
 export default function HUD({
-  currentFloor, floorsAvailable, onSwitchFloor, onOpenTeleport, onOpenSettings, onMove,
+  currentFloor, floorsAvailable, onSwitchFloor, onOpenTeleport,
+  onOpenSettings, onEnterBindMode, onEnterPlaceMode, onMove,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config } = useConfig();
+  const navigate = useNavigate();
   const clock = useClock();
   const title = resolveSiteTitle(config, haConfig?.location_name);
   const floors = [1, 2];
 
-  // Keep the browser/tab title in sync with the resolved dashboard title.
-  useEffect(() => {
-    document.title = title;
-  }, [title]);
+  useEffect(() => { document.title = title; }, [title]);
 
   const connClass =
     connection === "connected" ? "online" : connection === "disconnected" ? "" : "connecting";
@@ -72,6 +74,16 @@ export default function HUD({
             <span className="dot" />
             {connection === "connected" ? <Wifi size={15} /> : <WifiOff size={15} />}
           </span>
+          {/* Quick-access toolbar — bind, place marker, config editor */}
+          <button className="icon-btn" onClick={onEnterBindMode} title="Bind 3D object to entity">
+            <Link2 size={18} />
+          </button>
+          <button className="icon-btn" onClick={onEnterPlaceMode} title="Drop control marker">
+            <MapPin size={18} />
+          </button>
+          <button className="icon-btn" onClick={() => navigate("/config")} title="Config Editor">
+            <Sliders size={18} />
+          </button>
           <button className="icon-btn" onClick={onOpenSettings} title="Settings">
             <Settings size={20} />
           </button>

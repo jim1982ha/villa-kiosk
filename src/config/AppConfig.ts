@@ -66,6 +66,10 @@ export interface AppConfig {
   calibrationFlipX: boolean;
   calibrationFlipZ: boolean;
   renderOnDemand: boolean;
+  /** Show floating state labels above each bound device in the 3D scene. */
+  showEntityLabels: boolean;
+  /** Draw a blue highlight outline around all interactive (bound) objects. */
+  highlightInteractive: boolean;
   onboarded: boolean;
 }
 
@@ -93,6 +97,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   calibrationFlipX: false,
   calibrationFlipZ: false,
   renderOnDemand: true,
+  showEntityLabels: false,
+  highlightInteractive: false,
   onboarded: false,
 };
 

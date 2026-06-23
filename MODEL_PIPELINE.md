@@ -101,6 +101,112 @@ light.pool_area
 
 ---
 
+## Two pipeline strategies — choose one
+
+| | **Strategy A — Fused mesh** | **Strategy B — Entity-preserving** ✅ recommended |
+|---|---|---|
+| **Meshes in GLB** | 1 single mesh | 1 structure mesh + individual entity meshes |
+| **Click to control** | ❌ must bind/place markers | ✅ automatic, no binding needed |
+| **Visual state on mesh** | ❌ (no separate mesh per entity) | ✅ lock goes green/red, fan spins, etc. |
+| **Textures** | ✅ works | ✅ works (structural geo is still joined) |
+| **How** | Blender: Split by Group OFF (old) | Run the Python script below (new) |
+
+If you just want a navigable 3D model and will bind/place markers, Strategy A is fine. For full
+auto-wiring where clicking on the lock panel opens the lock control, use Strategy B.
+
+---
+
+## Strategy B — Automated script (entity-preserving pipeline)
+
+A single Python script handles the entire conversion. **No Blender GUI needed.**
+
+### Prerequisites
+- Blender 3.6+ or 4.x installed ([blender.org](https://www.blender.org/download/))
+- Your SweetHome 3D OBJ export (step below)
+
+### Step B-1 — Export from SweetHome 3D
+
+```
+3D View → Export to OBJ format
+```
+
+Keep the `.obj`, `.mtl` and `textures/` folder together in the same directory.
+
+### Step B-2 — Run the script
+
+The script is in `ha_navigate/sources/blender_pipeline.py` and takes **three arguments**: the `.sh3d` file, the `.obj` file, and the output `.glb`.
+
+```bash
+# Linux / macOS (adjust blender path if needed):
+blender --background --python blender_pipeline.py -- \
+    TheLysHouse_1F.sh3d \
+    OBJ/TheLysHouse_1F.obj \
+    output/villa_1F.glb
+
+# macOS (if Blender isn't on your PATH):
+/Applications/Blender.app/Contents/MacOS/Blender --background \
+    --python blender_pipeline.py -- \
+    TheLysHouse_1F.sh3d \
+    OBJ/TheLysHouse_1F.obj \
+    output/villa_1F.glb
+
+# Windows:
+"C:\Program Files\Blender Foundation\Blender 4.x\blender.exe" --background ^
+    --python blender_pipeline.py -- ^
+    TheLysHouse_1F.sh3d OBJ\TheLysHouse_1F.obj output\villa_1F.glb
+```
+
+**Tip — dry-run (preview the mapping without Blender):**
+```bash
+python3 blender_pipeline.py TheLysHouse_1F.sh3d OBJ/TheLysHouse_1F.obj
+```
+This prints exactly which OBJ groups will be assigned to each entity, so you can
+verify the mapping before running Blender.
+
+The script prints a summary when done, e.g.:
+
+```
+Done!  14 mesh(es) in the GLB:
+  • Structure                                                      212,847 tris
+  • camera.livingroom_cam                                            1,204 tris  ← entity (clickable)
+  • climate.living_room_air_conditioner                                892 tris  ← entity (clickable)
+  • lock.living_room_aqara_smart_door_lock_0aa9_lock_mechanism         340 tris  ← entity (clickable)
+  • cover.curtain_living_room_big                                      180 tris  ← entity (clickable)
+  ...
+```
+
+### Step B-3 — Upload to the kiosk
+
+Settings → 3D model → Upload `.glb` → pick the output file.
+
+That's it. The kiosk resolves entity IDs directly from mesh names:
+- Tapping the door lock panel → lock control panel (unlock/lock)
+- Tapping the AC unit → temperature control
+- Tapping a camera → live stream
+- Visual state updates live (lock = green/red, fan spins, light glows)
+
+### How does the script find the right meshes?
+
+SweetHome 3D OBJ exports use internal model-part names (like `Sphere_1_1017`),
+**not** the furniture Name you set in the UI. The script reads position data from
+the `.sh3d`'s `Home.xml` and matches each entity-named furniture piece to OBJ
+groups by their 3D bounding box — no name-based guessing required.
+
+### What if my furniture isn't named with entity IDs?
+
+The dry-run will show no entities. Fix it in SweetHome 3D:
+1. Click the furniture piece (AC, lock, camera…)
+2. Properties panel → **Name** field → type the exact HA entity_id
+   (e.g. `climate.living_room_air_conditioner`)
+3. Re-export OBJ and re-run the script
+
+---
+
+## Strategy A — Manual Blender (fused mesh, legacy)
+
+Use this only if you're not interested in direct entity clicking and prefer a
+single-mesh result. Also useful if the script has issues with a particular model.
+
 ## Step 1 — Export from SweetHome 3D
 
 ```
@@ -137,9 +243,19 @@ icon = *Modifiers*. The orange **square** icon = *Object*.
 File → Import → Wavefront (.obj)   →  pick your_villa.obj
 ```
 
-(If you already have a `.glb` instead, use **File → Import → glTF 2.0** — but if
-that GLB already shows the full villa, you can skip Blender entirely and just
-upload it to the kiosk.)
+In the import options panel (right side of the file dialog):
+
+| Setting | Strategy A (fused) | Strategy B (entity-preserving) |
+|---|---|---|
+| **Split by Group** | OFF | **ON** ← key setting |
+| **Split by Object** | OFF | OFF |
+
+With **Split by Group ON** each SweetHome 3D furniture group becomes a separate
+Blender object named with the furniture's Name field. For TheLysHouse these are
+already set to HA entity IDs (`lock.living_room_…`, `climate.living_room_…`, …).
+
+If you use the **automated script** (Strategy B above) this setting is handled
+for you — you do not need to open Blender manually.
 
 After importing, press **Home** to frame everything. **You should see the rooms
 and walls.** If you only see a small grey cube, the import brought in nothing —
@@ -157,21 +273,27 @@ A fresh Blender file ships with a **Cube, Camera and Light** you don't want.
 
 ---
 
-## Step 3 — ⚠️ Do NOT join the objects
+## Step 3 — Joining (do it selectively, not everything)
 
-**Keep the objects separate.** Earlier this guide suggested joining everything —
-that was wrong: **joining merges all meshes and deletes their names**, including
-the entity-named meshes (`camera.kitchen_cam`, `climate.*`, …). The app relies on
-those names to:
+**Do NOT join all objects together.** Joining merges all meshes and deletes
+their names, including entity-named meshes. Lose those names and:
+- the kiosk can't auto-detect scale or place rooms,
+- clicking on the AC or lock mesh does nothing.
 
-- **auto-detect scale + place rooms** (it reads their known plan positions),
-- **label rooms** correctly,
-- **tap objects to control them**.
+**What to do instead** (manual version of what the script does automatically):
 
-If you joined them, the app will log `room calibration skipped (0 reference
-meshes)` and rooms won't be detected. So: **skip joining entirely** — just import
-and export. (Decimate in the next step can still be applied per-object or to a
-multi-selection without joining.)
+1. In the Outliner (top-right), select all **structural** objects — walls,
+   floors, ceilings, generic furniture that isn't a HA entity — by clicking the
+   first one, then Shift-clicking the last.
+2. Leave the entity-named objects (anything like `climate.*`, `lock.*`,
+   `camera.*`, `cover.*`, `fan.*`) **unselected**.
+3. Press **A** in the viewport to deselect all, then manually re-select only
+   the structural objects, make one the active object, and press **Ctrl+J** to join.
+4. Rename the joined object `Structure`.
+
+The result: one `Structure` mesh + individual named entity meshes. The
+**automated script** (Strategy B) does exactly this, but in seconds without
+any manual clicking.
 
 ---
 

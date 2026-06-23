@@ -7,6 +7,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { loadModelFromIndexedDB } from "@/utils/storage";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
+import type { EntityMapping } from "@/types/scene.types";
 
 interface Props {
   onManager: (m: SceneManager | null) => void;
@@ -21,8 +22,12 @@ export default function BabylonCanvas({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const managerRef = useRef<SceneManager | null>(null);
-  const { config } = useConfig();
+  const { config, update } = useConfig();
   const { subscribeAll, entities } = useHA();
+  // Keep a live ref so the one-shot loadModel callback can read the latest config
+  // without being recreated (BabylonCanvas mounts once with empty deps).
+  const configRef = useRef(config);
+  useEffect(() => { configRef.current = config; }, [config]);
   const [status, setStatus] = useState<"loading" | "ready" | "no-model" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -52,6 +57,19 @@ export default function BabylonCanvas({
         if (cancelled) return;
         // Expose mesh names for the binding UI.
         saveMeshCatalog(manager.getBindableMeshNames());
+        // Auto-populate entityMap from meshes whose names are HA entity IDs
+        // (cameras, fans, lights, etc.) so they appear in the Config Editor.
+        const detected = manager.getAutoDetectedMappings();
+        if (detected.length > 0) {
+          const current = configRef.current;
+          const additions: Record<string, EntityMapping> = {};
+          for (const m of detected) {
+            if (!current.entityMap[m.entityId]) additions[m.entityId] = m;
+          }
+          if (Object.keys(additions).length > 0) {
+            update({ entityMap: { ...current.entityMap, ...additions } });
+          }
+        }
         // Paint the current entity states immediately (meshes + markers).
         Object.values(entities).forEach((e) => manager.applyEntityState(e));
         setStatus("ready");

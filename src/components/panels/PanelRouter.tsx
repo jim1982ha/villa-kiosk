@@ -41,6 +41,7 @@ export default function PanelRouter({ active, onClose, pinContinuous }: Props) {
     case "fan":
       return <FanPanel {...props} />;
     case "switch":
+    case "input_boolean":
       return <SwitchPanel {...props} />;
     case "media_player":
       return <MediaPanel {...props} />;

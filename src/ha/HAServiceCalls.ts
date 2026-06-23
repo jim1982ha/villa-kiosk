@@ -43,6 +43,9 @@ export const HAServices = {
   // --- Switches ---
   toggleSwitch: (ws: WS, id: string) => ws.callService("switch", "toggle", {}, t(id)),
 
+  // --- Generic toggle (works for switch, input_boolean, light, fan, …) ---
+  toggleEntity: (ws: WS, id: string) => ws.callService("homeassistant", "toggle", {}, t(id)),
+
   // --- Media ---
   toggleMedia: (ws: WS, id: string) => ws.callService("media_player", "toggle", {}, t(id)),
   mediaPlayPause: (ws: WS, id: string) => ws.callService("media_player", "media_play_pause", {}, t(id)),

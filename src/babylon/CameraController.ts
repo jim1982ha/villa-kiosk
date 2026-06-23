@@ -122,11 +122,12 @@ export class CameraController {
     this.camera.ellipsoidOffset = new Vector3(0, offsetY, 0);
   }
 
-  // ── Unified pointer look / two-finger walk / double-tap ───────────────────
+  // ── Unified pointer look / two-finger walk + pinch-zoom / double-tap ────────
   private pointers = new Map<number, { x: number; y: number; type: string }>();
   private lastTapTime = 0;
   private lastTapX = 0;
   private lastTapY = 0;
+  private pinchDist = 0; // current separation between two touch pointers (px)
   private static readonly LOOK_SENS = 0.004; // rad per px
 
   private onPointerDown = (e: PointerEvent): void => {
@@ -161,12 +162,28 @@ export class CameraController {
     e.preventDefault();
 
     if (this.touchCount() >= 2) {
-      // Two fingers = walk. Up = forward, sideways = strafe. Both fingers emit
-      // moves, so halve the per-event gain to keep the speed natural.
+      // ── Pinch-to-zoom: change in finger separation = forward / back movement.
+      // Detect AFTER updating prev (so pointers map holds current positions).
+      const touches = [...this.pointers.values()].filter((p) => p.type === "touch");
+      if (touches.length === 2) {
+        const dist = Math.hypot(touches[1].x - touches[0].x, touches[1].y - touches[0].y);
+        if (this.pinchDist > 0) {
+          const pinchDelta = dist - this.pinchDist; // +ve = spread = walk forward
+          // Each finger fires its own event so the observed delta per event is ≈ half
+          // the total gesture change — similar to the 0.5 factor in the walk code.
+          const PINCH_FACTOR = 0.005;
+          this.nudge(pinchDelta * PINCH_FACTOR * this.walkSpeed, 0);
+        }
+        this.pinchDist = dist;
+      }
+
+      // ── Two-finger swipe: both fingers moving together = walk / strafe.
+      // Up = forward, sideways = strafe. Both fingers emit moves, so halve gain.
       const factor = 0.0016 * WALK_SPEED * this.walkSpeed * 60 * 0.5;
       this.nudge(-dy * factor, dx * factor);
     } else {
       // Mouse drag or one finger = look around.
+      this.pinchDist = 0; // reset if one finger lifts mid-gesture
       this.camera.rotation.y += dx * CameraController.LOOK_SENS;
       this.camera.rotation.x = clamp(this.camera.rotation.x + dy * CameraController.LOOK_SENS, -1.4, 1.4);
       this.cb.onActivity();
@@ -176,6 +193,8 @@ export class CameraController {
   private onPointerUp = (e: PointerEvent): void => {
     this.pointers.delete(e.pointerId);
     try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    // Reset pinch baseline when we're back to 0 or 1 touch fingers.
+    if (this.touchCount() < 2) this.pinchDist = 0;
   };
 
   private touchCount(): number {

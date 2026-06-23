@@ -18,6 +18,9 @@ import {
   Color3, StandardMaterial, PBRMaterial, PointLight,
   type AbstractMesh, type Scene, type Material,
 } from "@babylonjs/core";
+import {
+  AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel,
+} from "@babylonjs/gui";
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
@@ -27,10 +30,17 @@ import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 0.85;
 
+interface LabelControls {
+  rect: Rectangle;
+  nameText: TextBlock;
+  stateText: TextBlock;
+}
+
 export class EntityVisuals {
   private scene: Scene;
   private config: AppConfig;
   private requestRender: () => void;
+  private onEntityPicked: ((entityId: string) => void) | null = null;
 
   /** entity_id -> meshes (one entity can drive several meshes, e.g. curtains). */
   private byEntity = new Map<string, AbstractMesh[]>();
@@ -43,10 +53,20 @@ export class EntityVisuals {
   /** Meshes currently spinning because their fan is on. */
   private spinning = new Set<AbstractMesh>();
 
-  constructor(scene: Scene, config: AppConfig, requestRender: () => void) {
+  /** Fullscreen GUI layer for state labels. */
+  private labelLayer: AdvancedDynamicTexture | null = null;
+  private labels = new Map<string, LabelControls>();
+
+  constructor(
+    scene: Scene,
+    config: AppConfig,
+    requestRender: () => void,
+    onEntityPicked?: (entityId: string) => void,
+  ) {
     this.scene = scene;
     this.config = config;
     this.requestRender = requestRender;
+    this.onEntityPicked = onEntityPicked ?? null;
     scene.registerBeforeRender(() => {
       this.animatePulse();
       this.animateSpin();
@@ -54,7 +74,15 @@ export class EntityVisuals {
   }
 
   updateConfig(config: AppConfig): void {
+    const prevLabels = this.config.showEntityLabels;
     this.config = config;
+    if (config.showEntityLabels !== prevLabels) {
+      if (config.showEntityLabels) {
+        this.rebuildLabels();
+      } else if (this.labelLayer) {
+        this.labelLayer.rootContainer.isVisible = false;
+      }
+    }
   }
 
   /** Build the reverse index entity_id -> meshes from the loaded GLB. */
@@ -77,7 +105,11 @@ export class EntityVisuals {
 
       // For lights, create a real (initially off) PointLight at the fixture.
       if (map.type === "light" && !this.lights.has(map.entityId)) {
-        const pos = m.getAbsolutePosition().clone();
+        // Use bounding-box centre: when the model came from an OBJ (Blender
+        // pipeline), the node position is (0,0,0) for every entity mesh and the
+        // actual 3D location is encoded only in vertex data.
+        m.computeWorldMatrix(true);
+        const pos = m.getBoundingInfo().boundingBox.centerWorld.clone();
         const light = new PointLight(`elight_${map.entityId}`, pos, this.scene);
         light.intensity = 0;
         light.range = 8;
@@ -85,10 +117,17 @@ export class EntityVisuals {
         this.lights.set(map.entityId, light);
       }
     }
+
+    if (this.config.showEntityLabels) this.rebuildLabels();
   }
 
   hasEntity(entityId: string): boolean {
     return this.byEntity.has(entityId);
+  }
+
+  /** All entity mappings resolved during the last indexMeshes call. */
+  getDetectedMappings(): EntityMapping[] {
+    return Array.from(this.mapping.values());
   }
 
   /** Called for every state change. No-op if the entity has no mesh. */
@@ -97,8 +136,145 @@ export class EntityVisuals {
     const map = this.mapping.get(entity.entity_id);
     if (!meshes || !map) return;
     for (const mesh of meshes) this.applyToMesh(mesh, map, entity);
+    this.updateLabel(entity.entity_id, map, entity);
     this.requestRender();
   }
+
+  // ---------------------------------------------------------------------------
+  // State labels (BJS GUI fullscreen overlay)
+  // ---------------------------------------------------------------------------
+
+  private rebuildLabels(): void {
+    // Ensure the GUI layer exists.
+    if (!this.labelLayer) {
+      this.labelLayer = AdvancedDynamicTexture.CreateFullscreenUI("entityLabels", true, this.scene);
+    } else {
+      this.labelLayer.rootContainer.clearControls();
+    }
+    this.labels.clear();
+    this.labelLayer.rootContainer.isVisible = true;
+
+    for (const [entityId, meshes] of this.byEntity) {
+      if (!meshes.length) continue;
+      const map = this.mapping.get(entityId);
+      if (!map) continue;
+
+      // Anchor to the first mesh (one label per entity, even if multiple meshes).
+      const anchor = meshes[0];
+
+      const rect = new Rectangle(`lbl_rect_${entityId}`);
+      rect.width = "170px";
+      rect.height = "40px";
+      rect.cornerRadius = 8;
+      rect.background = "rgba(18,12,6,0.88)";
+      rect.thickness = 1;
+      rect.color = "rgba(201,168,76,0.45)";
+      // Make the label tappable: clicking/touching it opens the control panel.
+      if (this.onEntityPicked) {
+        const cb = this.onEntityPicked;
+        const eid = entityId;
+        rect.isPointerBlocker = true;
+        rect.hoverCursor = "pointer";
+        rect.onPointerClickObservable.add(() => cb(eid));
+        rect.onPointerEnterObservable.add(() => {
+          rect.color = "rgba(201,168,76,0.85)";
+          this.requestRender();
+        });
+        rect.onPointerOutObservable.add(() => {
+          rect.color = "rgba(201,168,76,0.45)";
+          this.requestRender();
+        });
+      }
+      this.labelLayer.addControl(rect);
+      rect.linkWithMesh(anchor);
+      rect.linkOffsetYInPixels = -64;
+
+      const stack = new StackPanel(`lbl_stack_${entityId}`);
+      stack.isVertical = true;
+      rect.addControl(stack);
+
+      const nameText = new TextBlock(`lbl_name_${entityId}`);
+      nameText.text = map.label;
+      nameText.color = "#a89880";
+      nameText.fontSize = 10;
+      nameText.height = "18px";
+      nameText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
+      stack.addControl(nameText);
+
+      const stateText = new TextBlock(`lbl_state_${entityId}`);
+      stateText.text = "—";
+      stateText.color = "#f5edd8";
+      stateText.fontSize = 13;
+      stateText.fontStyle = "bold";
+      stateText.height = "20px";
+      stateText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
+      stack.addControl(stateText);
+
+      this.labels.set(entityId, { rect, nameText, stateText });
+    }
+  }
+
+  private updateLabel(entityId: string, map: EntityMapping, entity: HassEntity): void {
+    const lbl = this.labels.get(entityId);
+    if (!lbl) return;
+    lbl.stateText.text = this.stateString(map, entity);
+    // Colour-code the state text
+    const colour = this.stateLabelColour(map, entity);
+    if (colour) lbl.stateText.color = colour;
+  }
+
+  private stateString(map: EntityMapping, state: HassEntity): string {
+    switch (map.type) {
+      case "light":
+        if (state.state !== "on") return "OFF";
+        return state.attributes.brightness
+          ? `ON · ${Math.round((state.attributes.brightness as number) / 255 * 100)}%`
+          : "ON";
+      case "lock":
+        return state.state === "locked" ? "LOCKED" : "UNLOCKED";
+      case "climate": {
+        const cur = state.attributes.current_temperature as number | undefined;
+        const tgt = state.attributes.temperature as number | undefined;
+        if (cur != null) return `${cur}° → ${tgt ?? "—"}°`;
+        return state.state;
+      }
+      case "cover": {
+        const pos = state.attributes.current_position as number | undefined;
+        if (pos != null) return `${Math.round(pos)}% open`;
+        return state.state.toUpperCase();
+      }
+      case "fan":
+        return state.state === "on" ? `ON${state.attributes.percentage ? ` · ${state.attributes.percentage}%` : ""}` : "OFF";
+      case "switch":
+        return state.state === "on" ? "ON" : "OFF";
+      case "media_player":
+        return state.state === "playing"
+          ? (state.attributes.media_title as string | undefined) ?? "PLAYING"
+          : state.state.toUpperCase();
+      case "binary_sensor":
+        return state.state === "on" ? "ALERT" : "OK";
+      case "sensor": {
+        const unit = (state.attributes.unit_of_measurement as string | undefined) ?? "";
+        return `${state.state}${unit}`;
+      }
+      default:
+        return state.state.toUpperCase();
+    }
+  }
+
+  private stateLabelColour(map: EntityMapping, state: HassEntity): string | null {
+    switch (map.type) {
+      case "light":    return state.state === "on" ? "#c9a84c" : "#6b5a48";
+      case "lock":     return state.state === "locked" ? "#6baa75" : "#c0504d";
+      case "binary_sensor": return state.state === "on" ? "#c0504d" : "#6baa75";
+      case "switch":   return state.state === "on" ? "#c9a84c" : "#6b5a48";
+      default:         return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mesh visuals
+  // ---------------------------------------------------------------------------
 
   private emissiveOf(mesh: AbstractMesh): ((c: Color3) => void) | null {
     const mat = mesh.material as Material | null;

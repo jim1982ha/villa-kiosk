@@ -16,7 +16,7 @@ export default function SwitchPanel({ entity, mapping, onClose }: PanelProps) {
   const runtime = entity ? formatRuntime(entity.last_changed) : "";
 
   const toggle = () => {
-    HAServices.toggleSwitch(ws, mapping.entityId);
+    HAServices.toggleEntity(ws, mapping.entityId);
     setConfirming(false);
   };
 

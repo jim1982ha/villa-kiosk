@@ -23,7 +23,7 @@ export function upsertBinding(
       entityId,
       type,
       label: entity?.attributes.friendly_name ?? entityId.split(".")[1]?.replace(/_/g, " ") ?? entityId,
-      room: "Unmapped",
+      room: "",
       ...(type === "lock" ? { requiresConfirmation: true } : {}),
     } as EntityMapping;
   }

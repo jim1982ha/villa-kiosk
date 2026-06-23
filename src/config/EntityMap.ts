@@ -160,7 +160,8 @@ export function inferTypeFromEntityId(entityId: string): EntityType | null {
   const domain = entityId.split(".")[0];
   const known: EntityType[] = [
     "light", "climate", "lock", "camera", "cover", "fan",
-    "binary_sensor", "sensor", "media_player", "switch", "assist_satellite",
+    "binary_sensor", "sensor", "media_player", "switch", "input_boolean",
+    "assist_satellite",
   ];
   return (known as string[]).includes(domain) ? (domain as EntityType) : null;
 }
@@ -170,14 +171,27 @@ export function mappingForEntityId(
   entityId: string,
   map: Record<string, EntityMapping>,
 ): EntityMapping | null {
-  if (map[entityId]) return map[entityId];
+  if (map[entityId]) {
+    const m = map[entityId];
+    // Transparently upgrade entries that were stored with the old "sensor"
+    // fallback before a domain (e.g. input_boolean) was added to the known list.
+    if (
+      m.type === "sensor" &&
+      !entityId.startsWith("sensor.") &&
+      !entityId.startsWith("binary_sensor.")
+    ) {
+      const upgraded = inferTypeFromEntityId(entityId);
+      if (upgraded) return { ...m, type: upgraded };
+    }
+    return m;
+  }
   const inferred = inferTypeFromEntityId(entityId);
   if (!inferred) return null;
   return {
     entityId,
     type: inferred,
     label: entityId.split(".")[1]?.replace(/_/g, " ") ?? entityId,
-    room: "Unmapped",
+    room: "",
   };
 }
 
@@ -208,6 +222,7 @@ export function resolveMeshToMapping(
   const base = normaliseMeshName(meshName);
 
   // 0) Explicit binding wins (raw name or normalised name).
+  // mappingForEntityId already handles type-upgrade for old "sensor" fallbacks.
   const boundId = bindings[meshName] ?? bindings[base];
   if (boundId) return mappingForEntityId(boundId, map);
 

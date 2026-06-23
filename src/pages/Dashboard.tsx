@@ -16,7 +16,7 @@ import type { Vec3 } from "@/types/scene.types";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { isIngress, ingressHaUrl } from "@/ha/ingress";
-import { resolveMeshToMapping } from "@/config/EntityMap";
+import { mappingForEntityId } from "@/config/EntityMap";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
@@ -66,8 +66,9 @@ export default function Dashboard() {
 
   const onEntityPicked = useCallback(
     (entityId: string) => {
-      const mapping =
-        config.entityMap[entityId] ?? resolveMeshToMapping(entityId, config.entityMap);
+      // mappingForEntityId handles type-upgrade for stored "sensor" fallbacks
+      // (e.g. input_boolean entities bound before that domain was recognized).
+      const mapping = mappingForEntityId(entityId, config.entityMap);
       if (!mapping) return;
       setActivePanel({ entityId, mapping });
     },
@@ -171,6 +172,8 @@ export default function Dashboard() {
         onSwitchFloor={onFloorChange}
         onOpenTeleport={() => setTeleportOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onEnterBindMode={enterBindMode}
+        onEnterPlaceMode={enterPlaceMode}
         onMove={(x, y) => manager?.camera.setMovement(x, y)}
       />
 
@@ -191,11 +194,9 @@ export default function Dashboard() {
         <SettingsModal
           manager={manager}
           onClose={() => setSettingsOpen(false)}
-          onEnterBindMode={enterBindMode}
-          onEnterPlaceMode={enterPlaceMode}
           onModelChanged={() => {
             setSettingsOpen(false);
-            setModelKey((k) => k + 1); // remount canvas to load the new model
+            setModelKey((k) => k + 1);
           }}
         />
       )}

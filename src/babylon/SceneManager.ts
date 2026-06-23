@@ -9,6 +9,7 @@
 
 import {
   Engine, Scene, Color3, Color4, Vector3, HemisphericLight, SceneLoader, Material, PBRMaterial, Ray,
+  HighlightLayer, Mesh,
   type AbstractMesh,
 } from "@babylonjs/core";
 import "@babylonjs/core/Debug/debugLayer";
@@ -61,6 +62,7 @@ export class SceneManager {
   private forceContinuous = 0; // ref count for animations/streams
   private loadedMeshes: AbstractMesh[] = [];
   private calibratedPoints: TeleportPoint[] | null = null;
+  private highlightLayer: HighlightLayer | null = null;
 
   constructor(canvas: HTMLCanvasElement, opts: SceneManagerOptions) {
     this.config = opts.config;
@@ -90,7 +92,7 @@ export class SceneManager {
     this.lighting = new LightingSystem(this.scene);
     this.sun = new SunController(this.scene, this.lighting, opts.config);
     this.sun.setRenderHook(() => this.requestRender());
-    this.visuals = new EntityVisuals(this.scene, opts.config, () => this.requestRender());
+    this.visuals = new EntityVisuals(this.scene, opts.config, () => this.requestRender(), opts.onEntityPicked);
     this.markers = new MarkerManager(this.scene, () => this.requestRender());
     this.weather = new WeatherEffects(this.scene, () => this.requestRender());
 
@@ -171,9 +173,15 @@ export class SceneManager {
     for (const m of meshes) {
       const map = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
       if (!map || !(map.entityId in calib)) continue;
-      const p = m.getAbsolutePosition();
+      // Use bounding-box centre rather than getAbsolutePosition(): when the model
+      // was created from an OBJ (e.g. via the Blender pipeline), Blender sets every
+      // object's node transform to (0,0,0) and encodes world positions entirely in
+      // vertex data.  getAbsolutePosition() returns (0,0,0) for all such meshes;
+      // the bounding-box centerWorld correctly reflects the actual vertex positions.
+      m.computeWorldMatrix(true);
+      const c = m.getBoundingInfo().boundingBox.centerWorld;
       const acc = seen.get(map.entityId) ?? { x: 0, z: 0, n: 0 };
-      acc.x += p.x; acc.z += p.z; acc.n += 1;
+      acc.x += c.x; acc.z += c.z; acc.n += 1;
       seen.set(map.entityId, acc);
     }
     for (const [id, acc] of seen) {
@@ -241,6 +249,7 @@ export class SceneManager {
     this.pick.indexInteractiveMeshes(result.meshes);
     this.visuals.indexMeshes(result.meshes);
     this.applyStructure(result.meshes); // solid walls + collisions
+    this.applyHighlight(result.meshes); // blue glow on bound meshes (if enabled)
 
     // Fit the plan->world transform from entity-named meshes and lay out room
     // anchors / teleport points correctly for THIS model.
@@ -280,10 +289,12 @@ export class SceneManager {
     for (const m of meshes) {
       const map = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
       if (!map || !(map.entityId in entityCalib)) continue;
-      const p = m.getAbsolutePosition();
+      // Use bounding-box centre (same reason as in normalizeScale above).
+      m.computeWorldMatrix(true);
+      const c = m.getBoundingInfo().boundingBox.centerWorld;
       const acc = world.get(map.entityId) ?? { x: 0, z: 0, n: 0 };
-      acc.x += p.x;
-      acc.z += p.z;
+      acc.x += c.x;
+      acc.z += c.z;
       acc.n += 1;
       world.set(map.entityId, acc);
     }
@@ -561,6 +572,38 @@ export class SceneManager {
     this.requestRender();
   }
 
+  /**
+   * Build (or rebuild) a HighlightLayer that draws a blue outline around every
+   * mesh that is bound to an entity. Toggled by config.highlightInteractive.
+   */
+  private applyHighlight(meshes: AbstractMesh[]): void {
+    if (this.highlightLayer) {
+      this.highlightLayer.dispose();
+      this.highlightLayer = null;
+    }
+    if (!this.config.highlightInteractive) return;
+
+    const hl = new HighlightLayer("interactiveHL", this.scene);
+    hl.outerGlow = true;
+    hl.blurHorizontalSize = 0.4;
+    hl.blurVerticalSize = 0.4;
+    const blue = new Color3(0.25, 0.55, 1.0);
+
+    for (const m of meshes) {
+      if (!m.isEnabled() || !m.isVisible) continue;
+      const mapping = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
+      if (!mapping) continue;
+      if (!(m instanceof Mesh)) continue;
+      try {
+        hl.addMesh(m, blue);
+      } catch {
+        // Some meshes (no material, instanced, etc.) can't be highlighted.
+      }
+    }
+    this.highlightLayer = hl;
+    this.requestRender();
+  }
+
   /** Re-sync floating markers from config (after add/remove/edit). */
   syncMarkers(): void {
     this.markers.sync(this.config.markers);
@@ -603,16 +646,23 @@ export class SceneManager {
     if (this.loadedMeshes.length) {
       this.visuals.indexMeshes(this.loadedMeshes);
       this.applyStructure(this.loadedMeshes);
-      // Re-fit room detection when the manual mirror override changes.
       if (
         prev.calibrationFlipX !== config.calibrationFlipX ||
         prev.calibrationFlipZ !== config.calibrationFlipZ
       ) {
         this.calibrateRooms(this.loadedMeshes);
       }
+      if (prev.highlightInteractive !== config.highlightInteractive) {
+        this.applyHighlight(this.loadedMeshes);
+      }
     }
     this.markers.sync(config.markers);
     this.requestRender();
+  }
+
+  /** All entity mappings resolved from the last model load (for Config Editor auto-population). */
+  getAutoDetectedMappings() {
+    return this.visuals.getDetectedMappings();
   }
 
   /** Toggle the Babylon Inspector — used to calibrate teleport coordinates. */

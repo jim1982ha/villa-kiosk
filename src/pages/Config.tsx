@@ -1,5 +1,5 @@
 // src/pages/Config.tsx
-// Full-page Config Editor (mesh/entity mapping + thresholds).
+// Full-page Config Editor: entity metadata, mesh bindings, markers, thresholds.
 
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
@@ -13,70 +13,96 @@ export default function Config() {
   const { config, update } = useConfig();
 
   return (
-    <div className="teleport-grid" style={{ padding: "24px" }}>
-      <div className="row spread" style={{ maxWidth: 1000, margin: "0 auto 20px" }}>
-        <button className="btn ghost" onClick={() => navigate("/")}>
-          <ArrowLeft size={18} /> Back to villa
-        </button>
-        <h2 style={{ margin: 0 }}>Config Editor</h2>
-        <span style={{ width: 120 }} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: "var(--bg-base)", color: "var(--text-primary)" }}>
+
+      {/* ── Sticky header ── */}
+      <div
+        style={{
+          position: "sticky", top: 0, zIndex: 10,
+          background: "var(--bg-base)",
+          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          padding: "16px 24px",
+        }}
+      >
+        <div className="row spread" style={{ maxWidth: 1000, margin: "0 auto" }}>
+          <button className="btn ghost" onClick={() => navigate("/")}>
+            <ArrowLeft size={18} /> Back to villa
+          </button>
+          <h2 style={{ margin: 0 }}>Config Editor</h2>
+          <span style={{ width: 130 }} />
+        </div>
       </div>
 
-      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-        <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 400, marginTop: 0 }}>
-          3D object → entity bindings
-        </h3>
-        <BindingsTable />
+      {/* ── Scrollable body ── */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto" }}>
 
-        <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 400, marginTop: 32 }}>
-          Floating control markers
-        </h3>
-        <MarkersTable />
+          {/* 1 — Auto-detected entities (GLB-named meshes + pre-configure) */}
+          <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 400, marginTop: 0 }}>
+            Auto-detected entity settings
+          </h3>
+          <ConfigEditor />
 
-        <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 400, marginTop: 32 }}>
-          Entity metadata
-        </h3>
-        <ConfigEditor />
+          {/* 2 — Manually bound 3D objects */}
+          <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 400, marginTop: 40 }}>
+            Bound 3D objects
+          </h3>
+          <BindingsTable />
 
-        <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 400, marginTop: 32 }}>Alert thresholds</h3>
-        <table className="config-table">
-          <thead>
-            <tr><th>Entity</th><th>Min</th><th>Max</th></tr>
-          </thead>
-          <tbody>
-            {Object.entries(config.alertThresholds).map(([id, t]) => (
-              <tr key={id}>
-                <td style={{ fontSize: 12 }}>{id}</td>
-                <td>
-                  <input
-                    type="number" value={t.min ?? ""}
-                    onChange={(e) =>
-                      update({
-                        alertThresholds: {
-                          ...config.alertThresholds,
-                          [id]: { ...t, min: e.target.value === "" ? undefined : Number(e.target.value) },
-                        },
-                      })
-                    }
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number" value={t.max ?? ""}
-                    onChange={(e) =>
-                      update({
-                        alertThresholds: {
-                          ...config.alertThresholds,
-                          [id]: { ...t, max: e.target.value === "" ? undefined : Number(e.target.value) },
-                        },
-                      })
-                    }
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          {/* 3 — Floating control markers */}
+          <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 400, marginTop: 40 }}>
+            Floating control markers
+          </h3>
+          <MarkersTable />
+
+          {/* 4 — Alert thresholds */}
+          <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 400, marginTop: 40 }}>
+            Alert thresholds
+          </h3>
+          <p className="muted body-text">
+            Min / max values for numeric sensors. Exceeding the range turns the
+            sensor label red in the scene.
+          </p>
+          <table className="config-table">
+            <thead>
+              <tr><th>Entity</th><th>Min</th><th>Max</th></tr>
+            </thead>
+            <tbody>
+              {Object.entries(config.alertThresholds).map(([id, t]) => (
+                <tr key={id}>
+                  <td style={{ fontSize: 12 }}>{id}</td>
+                  <td>
+                    <input
+                      type="number" value={t.min ?? ""}
+                      onChange={(e) =>
+                        update({
+                          alertThresholds: {
+                            ...config.alertThresholds,
+                            [id]: { ...t, min: e.target.value === "" ? undefined : Number(e.target.value) },
+                          },
+                        })
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number" value={t.max ?? ""}
+                      onChange={(e) =>
+                        update({
+                          alertThresholds: {
+                            ...config.alertThresholds,
+                            [id]: { ...t, max: e.target.value === "" ? undefined : Number(e.target.value) },
+                          },
+                        })
+                      }
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+        </div>
       </div>
     </div>
   );

@@ -72,6 +72,7 @@ export type EntityDomain =
   | "sensor"
   | "media_player"
   | "switch"
+  | "input_boolean"
   | "assist_satellite";
 
 /** A single point of a sensor history series (for sparklines). */
