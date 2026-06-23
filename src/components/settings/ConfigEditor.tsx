@@ -91,8 +91,8 @@ export default function ConfigEditor() {
           <tbody>
             {entries.map(([key, m]) => (
               <tr key={key}>
-                <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{m.entityId}</td>
-                <td>
+                <td data-label="Entity ID" style={{ fontSize: 12, color: "var(--text-secondary)", wordBreak: "break-all" }}>{m.entityId}</td>
+                <td data-label="Type">
                   <select
                     value={m.type}
                     onChange={(e) => patch(key, { type: e.target.value as EntityType })}
@@ -100,16 +100,16 @@ export default function ConfigEditor() {
                     {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </td>
-                <td><input value={m.label} onChange={(e) => patch(key, { label: e.target.value })} /></td>
-                <td><input value={m.room} onChange={(e) => patch(key, { room: e.target.value })} /></td>
-                <td className="center">
+                <td data-label="Label"><input value={m.label} onChange={(e) => patch(key, { label: e.target.value })} /></td>
+                <td data-label="Room"><input value={m.room} onChange={(e) => patch(key, { room: e.target.value })} /></td>
+                <td data-label="Confirm" className="center">
                   <input
                     type="checkbox"
                     checked={!!m.requiresConfirmation}
                     onChange={(e) => patch(key, { requiresConfirmation: e.target.checked })}
                   />
                 </td>
-                <td>
+                <td data-label="">
                   <button className="icon-btn" style={{ width: 34, height: 34 }} onClick={() => remove(key)}>
                     <Trash2 size={16} />
                   </button>

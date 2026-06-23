@@ -15,6 +15,11 @@ import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 interface CameraCallbacks {
   onRoomChange: (room: string | null) => void;
   onActivity: () => void;
+  /** A clean single-finger / single-click tap at the given client coords.
+   * The camera owns the only reliable pointer pipeline (it holds the pointer
+   * capture), so tap-to-pick is detected here rather than via a second
+   * scene.onPointerObservable listener that touch events race against. */
+  onTap?: (clientX: number, clientY: number) => void;
 }
 
 const WALK_SPEED = 0.018; // world-space impulse per frame at full joystick deflection
@@ -130,9 +135,29 @@ export class CameraController {
   private pinchDist = 0; // current separation between two touch pointers (px)
   private static readonly LOOK_SENS = 0.004; // rad per px
 
+  // ── Single-tap detection (drives tap-to-pick) ──
+  // A gesture is a tap if it stayed one pointer, barely moved, and was brief.
+  private tapCandidate = false;
+  private tapStartX = 0;
+  private tapStartY = 0;
+  private tapStartT = 0;
+  private static readonly TAP_MOVE_TOL = 14; // px — generous for fat-finger touch
+  private static readonly TAP_TIME = 400; // ms
+
   private onPointerDown = (e: PointerEvent): void => {
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
     try { this.canvas.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+
+    // Begin a tap candidate on the first pointer; a second pointer (multi-touch
+    // gesture) cancels it so a pinch/two-finger walk never fires a pick.
+    if (this.pointers.size === 1) {
+      this.tapCandidate = true;
+      this.tapStartX = e.clientX;
+      this.tapStartY = e.clientY;
+      this.tapStartT = performance.now();
+    } else {
+      this.tapCandidate = false;
+    }
 
     // Double-tap / double-click → walk to the tapped spot. Only on a fresh touch
     // (first finger) or a mouse press, so a two-finger walk doesn't trigger it.
@@ -160,6 +185,12 @@ export class CameraController {
     prev.x = e.clientX;
     prev.y = e.clientY;
     e.preventDefault();
+
+    // Moving past the tolerance turns the gesture into a look/drag, not a tap.
+    if (this.tapCandidate &&
+        Math.hypot(e.clientX - this.tapStartX, e.clientY - this.tapStartY) > CameraController.TAP_MOVE_TOL) {
+      this.tapCandidate = false;
+    }
 
     if (this.touchCount() >= 2) {
       // ── Pinch-to-zoom: change in finger separation = forward / back movement.
@@ -195,6 +226,17 @@ export class CameraController {
     try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     // Reset pinch baseline when we're back to 0 or 1 touch fingers.
     if (this.touchCount() < 2) this.pinchDist = 0;
+
+    // Fire a tap (→ entity pick) only if this was the last pointer up, the
+    // gesture stayed a tap throughout, and it was brief. pointercancel/leave
+    // also route here, so a candelled gesture won't mis-fire (tapCandidate
+    // would have been reset or the move tolerance exceeded).
+    if (this.tapCandidate &&
+        this.pointers.size === 0 &&
+        performance.now() - this.tapStartT < CameraController.TAP_TIME) {
+      this.cb.onTap?.(e.clientX, e.clientY);
+    }
+    this.tapCandidate = false;
   };
 
   private touchCount(): number {

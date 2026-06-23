@@ -1,16 +1,17 @@
 // src/babylon/PickHandler.ts
-// Turn a tap on the canvas into an entity selection. Distinguishes a genuine tap
-// from a look-around drag (movement / time threshold), raycasts, then resolves
-// the picked mesh (or its parents) to an entity via the EntityMap.
+// Turn a tap on the canvas into an entity selection. Tap *detection* lives in
+// CameraController (the single owner of the canvas pointer pipeline + capture);
+// it calls pickAtScreen() here, which raycasts and resolves the picked mesh (or
+// its parents) to an entity / bind target / surface point. This avoids a second
+// scene.onPointerObservable tap listener that touch POINTERUP events race
+// against (Babylon and the camera both grab/release pointer capture). We keep a
+// lightweight POINTERMOVE listener only to drive the mouse hover cursor.
 
 import {
   PointerEventTypes, type PointerInfo, type AbstractMesh, type Scene, type Node,
 } from "@babylonjs/core";
 import { resolveMeshToMapping, mappingForEntityId } from "@/config/EntityMap";
 import type { EntityMapping, Vec3 } from "@/types/scene.types";
-
-const TAP_MOVE_TOLERANCE = 10; // px
-const TAP_TIME_MS = 350;
 
 export class PickHandler {
   private scene: Scene;
@@ -25,10 +26,6 @@ export class PickHandler {
   /** Place mode: report the tapped 3D point so a marker can be dropped there. */
   private placeMode = false;
   private onPointPicked: ((point: Vec3) => void) | null = null;
-
-  private downX = 0;
-  private downY = 0;
-  private downT = 0;
 
   constructor(
     scene: Scene,
@@ -84,34 +81,28 @@ export class PickHandler {
     return null;
   }
 
+  /** Mouse-only hover cursor: show a pointer over interactive objects. Touch has
+   *  no hover, so this is a no-op there and never interferes with tapping. */
   private handlePointer(info: PointerInfo): void {
+    if (info.type !== PointerEventTypes.POINTERMOVE) return;
+    if (this.bindMode || this.placeMode) return;
     const evt = info.event as PointerEvent;
-    if (info.type === PointerEventTypes.POINTERDOWN) {
-      this.downX = evt.clientX;
-      this.downY = evt.clientY;
-      this.downT = performance.now();
-      return;
-    }
-    if (info.type === PointerEventTypes.POINTERMOVE) {
-      if (!this.bindMode && !this.placeMode) {
-        const canvas = this.scene.getEngine().getRenderingCanvas();
-        if (canvas) {
-          const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY);
-          const interactive = !!pick?.hit && !!pick.pickedMesh && !!this.resolveMesh(pick.pickedMesh);
-          canvas.style.cursor = interactive ? "pointer" : "";
-        }
-      }
-      return;
-    }
-    if (info.type !== PointerEventTypes.POINTERUP) return;
-
-    const movedFar =
-      Math.abs(evt.clientX - this.downX) > TAP_MOVE_TOLERANCE ||
-      Math.abs(evt.clientY - this.downY) > TAP_MOVE_TOLERANCE;
-    const tooSlow = performance.now() - this.downT > TAP_TIME_MS;
-    if (movedFar || tooSlow) return; // it was a look-around drag, not a tap
-
+    if (evt.pointerType === "touch") return;
+    const canvas = this.scene.getEngine().getRenderingCanvas();
+    if (!canvas) return;
     const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY);
+    const interactive = !!pick?.hit && !!pick.pickedMesh && !!this.resolveMesh(pick.pickedMesh);
+    canvas.style.cursor = interactive ? "pointer" : "";
+  }
+
+  /**
+   * Resolve a confirmed tap at client coordinates into the right action for the
+   * current mode. Called by CameraController on a clean tap (mouse or touch).
+   */
+  pickAtScreen(clientX: number, clientY: number): void {
+    const canvas = this.scene.getEngine().getRenderingCanvas();
+    const rect = canvas?.getBoundingClientRect();
+    const pick = this.scene.pick(clientX - (rect?.left ?? 0), clientY - (rect?.top ?? 0));
     if (!pick?.hit || !pick.pickedMesh) return;
 
     if (this.placeMode) {

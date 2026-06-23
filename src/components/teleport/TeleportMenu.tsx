@@ -61,7 +61,15 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
 
   return (
     <div className="teleport-grid">
-      <button className="icon-btn" style={{ position: "absolute", top: 16, right: 20 }} onClick={onClose}>
+      <button
+        className="icon-btn"
+        style={{
+          position: "absolute",
+          top: "calc(16px + env(safe-area-inset-top, 0px))",
+          right: "calc(20px + env(safe-area-inset-right, 0px))",
+        }}
+        onClick={onClose}
+      >
         <X size={22} />
       </button>
       <h2>Rooms</h2>

@@ -99,6 +99,9 @@ export class SceneManager {
     this.camera = new CameraController(this.scene, canvas, opts.config, {
       onRoomChange: opts.onRoomChange,
       onActivity: () => this.requestRender(),
+      // Tap-to-pick is detected in the camera (sole owner of the pointer
+      // pipeline) and dispatched to the picker — reliable on touch & mouse.
+      onTap: (x, y) => this.pick.pickAtScreen(x, y),
     });
 
     // FloorManager watches the camera for staircase transitions.

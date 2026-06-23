@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.3
+
+### Changes
+- mobile: responsive config table + reliable tap-to-open panel on touch + safe-area insets
+
+---
+
+
 ## 2.3.2
 
 ### Changes
