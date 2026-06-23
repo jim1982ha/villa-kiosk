@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: Villa Kiosk
-version: "2.4.0"
+version: "2.4.1"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard served through Ingress
 url: https://github.com/jim1982ha/villa-kiosk
@@ -26,3 +26,16 @@ panel_icon: mdi:home-city
 panel_title: Villa Kiosk
 boot: auto
 startup: application
+# Central 3D model configuration — set these paths once in the add-on settings
+# so ALL clients load the same model automatically (no per-browser upload needed).
+# Paths are relative to the HA www folder, e.g. "villa-kiosk/villa.glb".
+options:
+  model_path: ""
+  sh3d_path: ""
+schema:
+  model_path: str?
+  sh3d_path: str?
+# Mount the HA config directory read-only so the add-on can serve model files
+# from /config/www/ directly via nginx (clients fetch /model/{path}).
+map:
+  - homeassistant_config:ro

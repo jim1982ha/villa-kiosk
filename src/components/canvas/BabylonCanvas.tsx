@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { loadModelFromIndexedDB } from "@/utils/storage";
+import { loadModelFromIndexedDB, fetchAddonConfig } from "@/utils/storage";
+import { parseSh3d } from "@/utils/sh3dParser";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
 import type { EntityMapping } from "@/types/scene.types";
 
@@ -46,7 +47,25 @@ export default function BabylonCanvas({
 
     (async () => {
       try {
-        const data = await loadModelFromIndexedDB();
+        // Priority 1: central model configured in the add-on options (all clients
+        // share the same model — no per-browser upload). Priority 2: per-client
+        // IndexedDB upload (dev mode / non-add-on / local override).
+        const addonCfg = await fetchAddonConfig();
+        let data: ArrayBuffer | null = null;
+        let fromAddon = false;
+
+        if (addonCfg.model_path) {
+          try {
+            const resp = await fetch(`/model/${addonCfg.model_path}`);
+            if (resp.ok) { data = await resp.arrayBuffer(); fromAddon = true; }
+            else console.warn(`[BabylonCanvas] /model/${addonCfg.model_path} → ${resp.status}`);
+          } catch (err) {
+            console.warn("[BabylonCanvas] central model fetch failed, trying IndexedDB", err);
+          }
+        }
+
+        if (!data) data = await loadModelFromIndexedDB();
+
         if (cancelled) return; // StrictMode unmounted us mid-load
         if (!data) {
           setStatus("no-model");
@@ -54,6 +73,23 @@ export default function BabylonCanvas({
           return;
         }
         await manager.loadModel(data);
+
+        // If a central SH3D is configured, load room names + calibration from
+        // the server every time (keeps all clients in sync when the file changes).
+        if (fromAddon && addonCfg.sh3d_path) {
+          try {
+            const sh3dResp = await fetch(`/model/${addonCfg.sh3d_path}`);
+            if (sh3dResp.ok) {
+              const sh3dBuf = await sh3dResp.arrayBuffer();
+              const { rooms, entities } = await parseSh3d(sh3dBuf);
+              if (rooms.length > 0) {
+                update({ sh3dRooms: rooms, sh3dEntities: entities });
+              }
+            }
+          } catch (err) {
+            console.warn("[BabylonCanvas] central SH3D fetch failed", err);
+          }
+        }
         if (cancelled) return;
         // Expose mesh names for the binding UI.
         saveMeshCatalog(manager.getBindableMeshNames());

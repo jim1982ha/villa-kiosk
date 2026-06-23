@@ -98,6 +98,21 @@ async def rest_handler(request: web.Request) -> web.StreamResponse:
         return resp
 
 
+async def addon_config_handler(request: web.Request) -> web.Response:
+    """Expose the non-sensitive add-on options (model paths) to the frontend.
+
+    The full /data/options.json is never forwarded — only the two model-path
+    fields are returned, so future options with credentials stay server-side.
+    """
+    try:
+        with open("/data/options.json") as f:
+            opts = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        opts = {}
+    safe = {k: opts.get(k) or "" for k in ("model_path", "sh3d_path")}
+    return web.json_response(safe)
+
+
 def main() -> None:
     app = web.Application()
 
@@ -109,6 +124,7 @@ def main() -> None:
 
     app.on_startup.append(on_start)
     app.on_cleanup.append(on_cleanup)
+    app.router.add_get("/addon-config", addon_config_handler)
     app.router.add_get("/core/websocket", ws_handler)
     app.router.add_route("*", "/core/api/{path:.*}", rest_handler)
     web.run_app(app, host="127.0.0.1", port=8100, print=None)

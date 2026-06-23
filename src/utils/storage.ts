@@ -65,3 +65,39 @@ export function getModelMeta(): ModelMeta | null {
   const raw = localStorage.getItem(META_KEY);
   return raw ? (JSON.parse(raw) as ModelMeta) : null;
 }
+
+// ── Add-on central configuration ────────────────────────────────────────────
+// When model_path is set in the HA add-on options page, all clients load the
+// 3D model from the add-on's /model/ endpoint (backed by HA's www folder)
+// instead of each client uploading their own copy to IndexedDB.
+
+export interface AddonConfig {
+  /** Path relative to /config/www/, e.g. "villa-kiosk/villa.glb". Empty = not configured. */
+  model_path: string;
+  /** Optional SH3D path for central room-name loading. */
+  sh3d_path: string;
+}
+
+let _addonConfigCache: AddonConfig | null = null;
+
+/** Fetch the add-on options from the supervisor-proxy. Cached after first call. */
+export async function fetchAddonConfig(): Promise<AddonConfig> {
+  if (_addonConfigCache) return _addonConfigCache;
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 3000);
+    const resp = await fetch("/addon-config", { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!resp.ok) throw new Error(`${resp.status}`);
+    _addonConfigCache = await resp.json() as AddonConfig;
+  } catch {
+    // Not in an add-on context (dev mode) or add-on not yet configured.
+    _addonConfigCache = { model_path: "", sh3d_path: "" };
+  }
+  return _addonConfigCache;
+}
+
+/** Invalidate the cache — call after the add-on options may have changed. */
+export function clearAddonConfigCache(): void {
+  _addonConfigCache = null;
+}

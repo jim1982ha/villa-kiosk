@@ -2,7 +2,7 @@
 // HA connection + token + location + model + backup/restore. Plus a link to the
 // full Config Editor and a button to toggle the Babylon Inspector for calibration.
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Plug, Download, Upload, Bug, FileText } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -10,7 +10,7 @@ import { normaliseHaUrl, DEFAULT_SITE_TITLE } from "@/config/AppConfig";
 import { testConnection, type TestResult } from "@/ha/testConnection";
 import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
 import { parseSh3d } from "@/utils/sh3dParser";
-import { clearStoredModel, getModelMeta } from "@/utils/storage";
+import { clearStoredModel, getModelMeta, fetchAddonConfig, type AddonConfig } from "@/utils/storage";
 import { isIngress } from "@/ha/ingress";
 import ModelUploader from "./ModelUploader";
 import type { SceneManager } from "@/babylon/SceneManager";
@@ -48,6 +48,8 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
   };
 
   const [modelMeta, setModelMeta] = useState(() => getModelMeta());
+  const [addonCfg, setAddonCfg] = useState<AddonConfig | null>(null);
+  useEffect(() => { fetchAddonConfig().then(setAddonCfg); }, []);
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);
   const [url, setUrl] = useState(config.haUrl);
   const [token, setToken] = useState(config.haToken);
@@ -254,39 +256,71 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
 
         <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
 
-        <label>3D model</label>
-        <ModelUploader onUploaded={() => { setModelMeta(getModelMeta()); onModelChanged(); }} />
-        {modelMeta && (
-          <button
-            className="btn ghost mt"
-            style={{ width: "100%", color: "var(--danger, #c0392b)" }}
-            onClick={async () => {
-              if (!confirm("Remove the stored 3D model?\n\nThe model is saved in this browser only — it is not part of the add-on data and must be re-uploaded after clearing.")) return;
-              await clearStoredModel();
-              setModelMeta(null);
-              onModelChanged();
-            }}
-          >
-            Clear stored model ({modelMeta.name})
-          </button>
+        {/* ── Central model (add-on config) ── */}
+        {addonCfg?.model_path ? (
+          <div style={{ background: "rgba(107,170,117,0.1)", border: "1px solid rgba(107,170,117,0.3)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: "var(--status-on, #6baa75)", marginBottom: 6 }}>
+              ✓ Central model active — all clients share the same view
+            </div>
+            <div className="muted body-text" style={{ fontSize: 12 }}>
+              <strong>GLB:</strong> {addonCfg.model_path}
+            </div>
+            {addonCfg.sh3d_path && (
+              <div className="muted body-text" style={{ fontSize: 12 }}>
+                <strong>SH3D:</strong> {addonCfg.sh3d_path}
+              </div>
+            )}
+            <p className="muted body-text" style={{ marginTop: 8, fontSize: 11 }}>
+              Model files are served from the add-on's configured paths (relative to the HA <code>www/</code> folder).
+              To change them, go to <strong>Settings → Add-ons → Villa Kiosk → Configuration</strong> in Home Assistant.
+            </p>
+          </div>
+        ) : (
+          <>
+            <label>3D model</label>
+            <ModelUploader onUploaded={() => { setModelMeta(getModelMeta()); onModelChanged(); }} />
+            {modelMeta && (
+              <button
+                className="btn ghost mt"
+                style={{ width: "100%", color: "var(--danger, #c0392b)" }}
+                onClick={async () => {
+                  if (!confirm("Remove the stored 3D model?\n\nThe model is saved in this browser only — it is not part of the add-on data and must be re-uploaded after clearing.")) return;
+                  await clearStoredModel();
+                  setModelMeta(null);
+                  onModelChanged();
+                }}
+              >
+                Clear stored model ({modelMeta.name})
+              </button>
+            )}
+            <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+              Tip: configure <strong>model_path</strong> in the add-on options to serve one shared
+              model to all clients — no per-device upload needed.
+            </p>
+          </>
         )}
 
-        <label style={{ marginTop: 16 }}>Room names (.sh3d) — optional</label>
-        <button className="btn ghost" style={{ width: "100%" }} onClick={() => sh3dRef.current?.click()}>
-          <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload SweetHome .sh3d"}
-        </button>
-        <input
-          ref={sh3dRef} type="file" accept=".sh3d" style={{ display: "none" }}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) loadSh3d(f);
-          }}
-        />
-        <p className="muted body-text" style={{ marginTop: 6 }}>
-          Reads room names + shapes straight from the SweetHome file so rooms are
-          labelled automatically — works for any villa, no rebuild.
-        </p>
-        {sh3dMsg && <div className="test-result ok">{sh3dMsg}</div>}
+        {/* SH3D upload — only shown when NOT centrally managed */}
+        {!addonCfg?.sh3d_path && (
+          <>
+            <label style={{ marginTop: 16 }}>Room names (.sh3d) — optional</label>
+            <button className="btn ghost" style={{ width: "100%" }} onClick={() => sh3dRef.current?.click()}>
+              <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload SweetHome .sh3d"}
+            </button>
+            <input
+              ref={sh3dRef} type="file" accept=".sh3d" style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) loadSh3d(f);
+              }}
+            />
+            <p className="muted body-text" style={{ marginTop: 6 }}>
+              Reads room names + shapes straight from the SweetHome file so rooms are
+              labelled automatically — works for any villa, no rebuild.
+            </p>
+            {sh3dMsg && <div className="test-result ok">{sh3dMsg}</div>}
+          </>
+        )}
 
         <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
 

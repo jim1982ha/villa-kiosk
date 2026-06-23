@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.1
+
+### Changes
+- Central model hosting: set model_path / sh3d_path in the add-on configuration
+  page; all clients load the same GLB+SH3D automatically (no per-browser upload)
+- nginx serves /model/ from HA www folder; supervisor-proxy exposes /addon-config
+- Settings modal shows central model status with a green confirmation banner
+- Per-client IndexedDB upload still works as fallback for dev / non-add-on use
+
 ## 2.4.0
 
 ### Changes
