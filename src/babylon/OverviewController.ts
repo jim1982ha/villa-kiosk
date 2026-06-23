@@ -3,11 +3,17 @@
 //
 // ── Gesture map ──────────────────────────────────────────────────────────────
 //
-//  DESKTOP — mouse or single-finger trackpad drag (PointerEvent, primary button):
-//    plain drag          → PAN   (move the view on the X/Y plane)
+//  DESKTOP — single-pointer drag with the primary button held (PointerEvent):
+//    plain drag          → PAN   (slide the view on the X/Y plane)
 //    Shift + drag        → ROTATE (dx → heading/bearing) + TILT (dy → pitch)
-//    Ctrl  + drag        → ZOOM  (dy → in/out)
-//    mouse wheel / pinch → ZOOM  (kept because it is the universal map idiom)
+//    Ctrl/⌘ + drag       → ZOOM  (dy → in/out)
+//
+//  TRACKPAD — no click required, gestures arrive as WheelEvents:
+//    two-finger slide    → PAN
+//    pinch (ctrlKey)     → ZOOM
+//    (two-finger twist has no cross-browser event — rotate via Shift+drag)
+//
+//  MOUSE WHEEL → ZOOM (the universal map idiom)
 //
 //  TOUCHSCREEN (PointerEvent):
 //    1 finger drag       → PAN
@@ -38,6 +44,7 @@ interface Bounds {
 
 // Sensitivity constants
 const DRAG_SENS       = 0.0016; // world-units per pixel × radius (pointer pan)
+const WHEEL_PAN_SENS  = 0.0009; // per normalised wheel pixel (two-finger slide pan)
 const ROT_SENS_DRAG   = 0.005;  // radians per pixel (Shift+drag horizontal → heading)
 const TILT_SENS_DRAG  = 0.005;  // radians per pixel (Shift+drag vertical → pitch)
 const ZOOM_SENS_DRAG  = 0.004;  // per pixel × radius (Ctrl+drag vertical → zoom)
@@ -92,10 +99,11 @@ export class OverviewController {
   }
 
   panTo(x: number, z: number): void {
-    const tgt = this.camera.target.clone();
-    tgt.x = clamp(x, this.bounds.minX, this.bounds.maxX);
-    tgt.z = clamp(z, this.bounds.minZ, this.bounds.maxZ);
-    this.camera.setTarget(tgt);
+    // Mutate the orbit target IN PLACE — calling setTarget() would recompute
+    // alpha/beta/radius from the current position and spin the view.
+    const t = this.camera.target;
+    t.x = clamp(x, this.bounds.minX, this.bounds.maxX);
+    t.z = clamp(z, this.bounds.minZ, this.bounds.maxZ);
     this.cb.onActivity();
   }
 
@@ -181,8 +189,8 @@ export class OverviewController {
       // Shift + drag → ROTATE (horizontal) + TILT (vertical).
       this.camera.alpha -= dx * ROT_SENS_DRAG;
       this.applyTilt(dy * TILT_SENS_DRAG * s);
-    } else if (e.ctrlKey) {
-      // Ctrl + drag → ZOOM (vertical). Drag up = zoom in.
+    } else if (e.ctrlKey || e.metaKey) {
+      // Ctrl (or ⌘ on macOS) + drag → ZOOM (vertical). Drag up = zoom in.
       this.applyZoom(-dy * ZOOM_SENS_DRAG * this.camera.radius * s);
     } else {
       // Plain single-pointer drag (1-finger touch or left mouse) → PAN.
@@ -275,15 +283,16 @@ export class OverviewController {
     base.centY = centY;
   }
 
-  // ── Wheel events → ZOOM ───────────────────────────────────────────────────
+  // ── Wheel events (trackpad gestures + mouse wheel, no click needed) ────────
   //
-  // The mouse wheel (and the trackpad pinch, which the browser reports as a
-  // wheel with ctrlKey=true) maps to zoom. This is the universal map idiom and
-  // is kept alongside the explicit Ctrl+drag zoom — they don't conflict because
-  // the wheel is a separate input channel from pointer drags.
+  //   pinch (ctrlKey=true, set by the browser)  → ZOOM
+  //   classic mouse wheel (discrete, vertical)  → ZOOM
+  //   trackpad two-finger slide                 → PAN
   //
-  // Scroll up (deltaY < 0) zooms in; scroll down zooms out. Honors the natural
-  // scrolling toggle so the direction matches the pan/tilt convention.
+  // Distinguishing a mouse wheel from a trackpad slide: a real wheel reports
+  // line-mode deltas (Firefox) or large pixel notches (~100, Chrome) with no
+  // horizontal component, whereas a trackpad slide streams small pixel deltas
+  // and often a non-zero deltaX.
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
@@ -293,8 +302,22 @@ export class OverviewController {
     const mul = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16
               : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? 300 : 1;
     const dy = e.deltaY * mul;
+    const dx = e.deltaX * mul;
 
-    this.applyZoom(-dy * WHEEL_ZOOM_SENS * this.camera.radius * s);
+    const isMouseWheel =
+      e.deltaX === 0 &&
+      (e.deltaMode !== WheelEvent.DOM_DELTA_PIXEL || Math.abs(e.deltaY) >= 100);
+
+    if (e.ctrlKey) {
+      // Trackpad pinch (browser sets ctrlKey) → zoom.
+      this.applyZoom(-dy * WHEEL_ZOOM_SENS * this.camera.radius * s);
+    } else if (isMouseWheel) {
+      // Classic mouse wheel notch → zoom.
+      this.applyZoom(-dy * WHEEL_ZOOM_SENS * this.camera.radius * s);
+    } else {
+      // Trackpad two-finger slide → pan (no click required).
+      this.applyPan(dx * s, dy * s, WHEEL_PAN_SENS);
+    }
     this.cb.onActivity();
   };
 
@@ -306,19 +329,22 @@ export class OverviewController {
    */
   private applyPan(dx: number, dy: number, sens: number): void {
     const pos = this.camera.position;
-    const tgt = this.camera.target.clone();
+    const t = this.camera.target; // live reference to the orbit centre
 
     // Ground-projected forward vector (camera → target, Y component removed).
-    let fwd = new Vector3(tgt.x - pos.x, 0, tgt.z - pos.z);
+    let fwd = new Vector3(t.x - pos.x, 0, t.z - pos.z);
     if (fwd.lengthSquared() < 1e-6) fwd = new Vector3(0, 0, 1);
     fwd.normalize();
     // Right vector (perpendicular to forward in the ground plane).
     const right = new Vector3(-fwd.z, 0, fwd.x);
 
     const k = this.camera.radius * sens;
-    tgt.x = clamp(tgt.x + (-right.x * dx + fwd.x * dy) * k, this.bounds.minX, this.bounds.maxX);
-    tgt.z = clamp(tgt.z + (-right.z * dx + fwd.z * dy) * k, this.bounds.minZ, this.bounds.maxZ);
-    this.camera.setTarget(tgt);
+    // Mutate the target IN PLACE. setTarget() would recompute alpha/beta/radius
+    // from the stale position and rotate the view — moving only the target
+    // translates the whole rig (position is re-derived from target + angles),
+    // which is a pure pan with no rotation.
+    t.x = clamp(t.x + (-right.x * dx + fwd.x * dy) * k, this.bounds.minX, this.bounds.maxX);
+    t.z = clamp(t.z + (-right.z * dx + fwd.z * dy) * k, this.bounds.minZ, this.bounds.maxZ);
   }
 
   private applyZoom(delta: number): void {

@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.4.5
+
+### Bug fixes
+- Plain drag in overview mode now PANS instead of rotating. Root cause: panning
+  via camera.setTarget() made Babylon recompute alpha/beta/radius from the stale
+  position, spinning the view. The orbit target is now mutated in place (true pan).
+  Same fix applied to room-grid teleport (panTo).
+
+### Changes
+- Trackpad gestures now work without clicking (like a touchscreen):
+  - two-finger slide → pan · pinch → zoom (both via wheel events, no click)
+  - mouse wheel still zooms (distinguished from trackpad slide by delta shape)
+- Ctrl OR ⌘ (Command) + drag zooms, for macOS parity
+- Overview HUD hint updated
+
 ## 2.4.4
 
 ### Changes
