@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.2
+
+### Changes
+- fix floating labels + curtain retraction direction
+
+---
+
+
 ## 2.3.1
 
 ### Bug fixes

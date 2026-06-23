@@ -15,8 +15,8 @@
 //   binary_sensor -> pulsing red when triggered (e.g. leak).
 
 import {
-  Color3, StandardMaterial, PBRMaterial, PointLight, MeshBuilder,
-  type AbstractMesh, type Mesh, type Scene, type Material,
+  Color3, StandardMaterial, PBRMaterial, PointLight,
+  type AbstractMesh, type Scene, type Material,
 } from "@babylonjs/core";
 import {
   AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel,
@@ -53,12 +53,6 @@ export class EntityVisuals {
   /** Fullscreen GUI layer for state labels. */
   private labelLayer: AdvancedDynamicTexture | null = null;
   private labels = new Map<string, LabelControls>();
-  /** Tiny invisible anchor meshes that labels are linked to. Separate from
-   * entity meshes so labels stay fixed even when the entity mesh animates
-   * (OBJ-pipeline meshes have their pivot at the world origin, so rotation.y
-   * would orbit the geometry—and the bounding-sphere-based label—around the
-   * scene centre rather than around the entity's own axis). */
-  private labelPins = new Map<string, Mesh>();
 
   constructor(
     scene: Scene,
@@ -153,9 +147,6 @@ export class EntityVisuals {
       this.labelLayer.rootContainer.clearControls();
     }
     this.labels.clear();
-    // Dispose old anchor pins before creating new ones.
-    this.labelPins.forEach(m => m.dispose());
-    this.labelPins.clear();
     this.labelLayer.rootContainer.isVisible = true;
 
     for (const [entityId, meshes] of this.byEntity) {
@@ -163,21 +154,7 @@ export class EntityVisuals {
       const map = this.mapping.get(entityId);
       if (!map) continue;
 
-      // Compute the entity's fixed world-space centre once (before any
-      // animation runs) and create a tiny invisible anchor mesh there.
-      // Linking labels to this pin instead of the entity mesh keeps labels
-      // stationary — otherwise the bounding-sphere centre of an OBJ-pipeline
-      // mesh orbits the world Y axis when rotation.y is changed, because all
-      // such meshes have their GLTF node at (0,0,0) with geometry stored in
-      // local space at world coordinates.
-      const firstMesh = meshes[0];
-      firstMesh.computeWorldMatrix(true);
-      const pinPos = firstMesh.getBoundingInfo().boundingSphere.center.clone();
-      const pin = MeshBuilder.CreateBox(`lbl_pin_${entityId}`, { size: 0.001 }, this.scene) as Mesh;
-      pin.position.copyFrom(pinPos);
-      pin.isVisible = false;
-      pin.isPickable = false;
-      this.labelPins.set(entityId, pin);
+      const anchor = meshes[0];
 
       const rect = new Rectangle(`lbl_rect_${entityId}`);
       rect.width = "170px";
@@ -203,7 +180,7 @@ export class EntityVisuals {
         });
       }
       this.labelLayer.addControl(rect);
-      rect.linkWithMesh(pin);
+      rect.linkWithMesh(anchor);
       rect.linkOffsetYInPixels = -64;
 
       const stack = new StackPanel(`lbl_stack_${entityId}`);
@@ -401,15 +378,29 @@ export class EntityVisuals {
       switch (state.state) {
         case "open": openFrac = 1; break;
         case "closed": openFrac = 0; break;
-        default: openFrac = 0.5; break; // opening / closing / partial
+        default: openFrac = 0.5; break;
       }
     }
+    // Snapshot base values on first call.
     if (mesh.metadata?.baseScaleY === undefined) {
-      mesh.metadata = { ...(mesh.metadata ?? {}), baseScaleY: mesh.scaling.y };
+      mesh.computeWorldMatrix(true);
+      mesh.metadata = {
+        ...(mesh.metadata ?? {}),
+        baseScaleY: mesh.scaling.y,
+        // bb.maximum.y is the raw pre-scaling geometry max in local units.
+        // Stored so we can offset the mesh to keep the top edge fixed as
+        // scaling.y shrinks (otherwise the curtain collapses toward Y=0).
+        geoTopY: mesh.getBoundingInfo().boundingBox.maximum.y,
+      };
     }
-    const base = mesh.metadata.baseScaleY as number;
-    // Closed = full height; open = retracted to 10%.
-    mesh.scaling.y = base * (1 - openFrac * 0.9);
+    const base     = mesh.metadata.baseScaleY as number;
+    const geoTopY  = mesh.metadata.geoTopY    as number;
+    const newScale = base * (1 - openFrac * 0.9);
+
+    // Keep the top edge at its original world position while retracting.
+    // Without this offset the curtain collapses toward the floor (Y=0 pivot).
+    mesh.scaling.y  = newScale;
+    mesh.position.y = geoTopY * (base - newScale);
     mesh.visibility = 1 - openFrac * 0.85;
   }
 
