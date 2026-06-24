@@ -93,7 +93,10 @@ export class SceneManager {
     const hemi = new HemisphericLight("hemi", new Vector3(0, 1, 0), this.scene);
     hemi.intensity = 0.95; // overwritten by renderFx.apply() below (config.render.hemiIntensity)
     hemi.diffuse = new Color3(1, 1, 1);
-    hemi.groundColor = new Color3(0.55, 0.55, 0.6);
+    // Warm-neutral ground bounce (was slightly blue 0.55,0.55,0.6). The blue cast
+    // tinted undersides cyan once the night sun went warm, so keep the fill neutral
+    // so white reads white at night.
+    hemi.groundColor = new Color3(0.55, 0.54, 0.52);
     hemi.specular = new Color3(0.1, 0.1, 0.1);
     this.hemi = hemi;
 

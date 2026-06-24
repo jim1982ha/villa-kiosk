@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.4.19
+
+### Fix — residual cool tint at night
+- Following the 2.4.18 warm night key, the always-on hemisphere fill still used a
+  slightly blue ground bounce (`0.55, 0.55, 0.6`), which tinted undersides cyan
+  now that the rest of the night light is warm. Neutralised it (`0.55, 0.54,
+  0.52`) so white reads white at night. (Note: the optional "Environment lighting
+  / IBL" toggle in Settings → Render quality is off by default; if you enabled it,
+  its procedural sky is blue and will add a cool cast — turn it off or lower its
+  intensity there.)
+
 ## 2.4.18
 
 ### Fix — interiors went blue at night ("blue kitchen")
