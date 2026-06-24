@@ -31,13 +31,14 @@ const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 0.85;
 // Room-scale reach for a fixture's PointLight. The old value (8 m) lit straight
 // through walls into the next room because point lights have no occlusion on
-// their own; a tighter range with quadratic falloff keeps most of the light
-// where the lamp is. True wall-blocking is the optional shadow path below.
-const LIGHT_RANGE = 4.0;
-// Cube shadow maps for point lights are 6 faces each, so keep them small — this
-// is an opt-in (gated behind the Shadows quality toggle) and only active while a
-// light is actually on.
-const LIGHT_SHADOW_SIZE = 512;
+// their own; the un-shadowed markers of a multi-marker strip rely on this tight
+// range to stay out of the adjacent room, while the entity's representative light
+// is wall-blocked by the per-entity shadow below.
+const LIGHT_RANGE = 2.8;
+// Cube shadow maps for point lights are 6 faces each, so keep them small. We cast
+// ONE per light ENTITY (the markers of a strip are clustered, so a single occluder
+// covers them) and only while the light is on, so an idle/off light costs nothing.
+const LIGHT_SHADOW_SIZE = 256;
 
 interface LabelControls {
   rect: Rectangle;
@@ -62,8 +63,10 @@ export class EntityVisuals {
   // bedside lamps that share one HA entity, or multiple curtain-rail downlights —
   // gets a real light at EACH lamp instead of one merged light at their midpoint.
   private meshLights = new Map<number, PointLight>();
-  /** Optional per-light cube shadow map (created lazily while a light is on). */
-  private lightShadows = new Map<number, ShadowGenerator>();
+  /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
+   *  attached to that entity's representative light. Created lazily while the
+   *  light is on; a 12-marker strip therefore costs a single shadow map, not 12. */
+  private lightShadows = new Map<string, ShadowGenerator>();
   /** Structural meshes (walls/floors/shell) that occlude entity-light shadows. */
   private shadowCasters: AbstractMesh[] = [];
   /** Fullscreen GUI layer for state labels. */
@@ -87,18 +90,11 @@ export class EntityVisuals {
 
   updateConfig(config: AppConfig): void {
     const prevLabels = this.config.showEntityLabels;
-    const prevShadows = this.config.render?.shadows ?? false;
     this.config = config;
-    // Shadows just turned off: free every active light's cube shadow map now,
-    // rather than waiting for each light to be re-applied.
-    if (prevShadows && !(config.render?.shadows ?? false)) {
-      this.lightShadows.forEach((gen, key) => {
-        gen.dispose();
-        const light = this.meshLights.get(key);
-        if (light) light.shadowEnabled = false;
-      });
-      this.lightShadows.clear();
-    }
+    // Entity-light wall occlusion is always-on (independent of the global Shadows
+    // quality toggle, which drives the expensive sun shadows): walls block lamp
+    // light out of the box, so there is nothing to tear down here when the toggle
+    // changes.
     if (config.showEntityLabels !== prevLabels) {
       if (config.showEntityLabels) {
         this.rebuildLabels();
@@ -175,6 +171,9 @@ export class EntityVisuals {
     const map = this.mapping.get(entity.entity_id);
     if (!meshes || !map) return;
     for (const mesh of meshes) this.applyToMesh(mesh, map, entity);
+    if (map.type === "light") {
+      this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
+    }
     this.updateLabel(entity.entity_id, map, entity);
     this.requestRender();
   }
@@ -345,25 +344,33 @@ export class EntityVisuals {
   }
 
   /**
-   * Make walls actually block this lamp's light — but only when the user opts in
-   * via the Shadows quality toggle, since point-light shadows are a cube map (6
-   * faces) per active light. Created lazily when the light first turns on and
-   * disposed when it turns off (or shadows are disabled) so an idle/off light
-   * costs nothing.
+   * Make walls actually block a lamp's light. Always-on (no quality toggle): a
+   * single cube shadow map per light ENTITY, attached to its representative
+   * (first) fixture light, since the markers of a strip are clustered and one
+   * occluder covers them — so a 12-marker strip costs one shadow map, not 12. The
+   * un-shadowed sibling markers stay out of the next room via the tight LIGHT_RANGE.
+   * Created lazily when the entity turns on and disposed when it turns off, so an
+   * idle/off light costs nothing. Called once per entity from apply().
    */
-  private syncLightShadow(key: number, light: PointLight, on: boolean): void {
-    const want = on && (this.config.render?.shadows ?? false);
-    const existing = this.lightShadows.get(key);
+  private syncEntityShadow(entityId: string, meshes: AbstractMesh[], on: boolean): void {
+    const existing = this.lightShadows.get(entityId);
 
-    if (!want) {
+    if (!on) {
       if (existing) {
         existing.dispose();
-        this.lightShadows.delete(key);
-        light.shadowEnabled = false;
+        this.lightShadows.delete(entityId);
       }
       return;
     }
     if (existing) return; // already casting
+
+    // Representative light = the first fixture mesh that owns a PointLight.
+    let light: PointLight | undefined;
+    for (const m of meshes) {
+      light = this.meshLights.get(m.uniqueId);
+      if (light) break;
+    }
+    if (!light) return;
 
     const gen = new ShadowGenerator(LIGHT_SHADOW_SIZE, light);
     gen.usePoissonSampling = true; // cheap soft edge; blur-ESM isn't supported for cube maps
@@ -372,7 +379,7 @@ export class EntityVisuals {
       shadowMap.renderList = this.shadowCasters.slice();
       for (const caster of this.shadowCasters) caster.receiveShadows = true;
     }
-    this.lightShadows.set(key, gen);
+    this.lightShadows.set(entityId, gen);
   }
 
   private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity): void {
@@ -389,12 +396,20 @@ export class EntityVisuals {
         setEmissive?.(on ? colour.scale(brightnessFrac) : Color3.Black());
 
         // 2) This fixture mesh's own light source illuminates the room.
+        //    A single HA light is frequently modelled in SweetHome 3D as MANY
+        //    co-located virtual markers (e.g. a LED strip drawn as 8–12 point
+        //    lights for a soft, diffuse spread). Each marker becomes its own
+        //    PointLight, and point lights are ADDITIVE — 12 markers at full
+        //    intensity would blow out to solid white. Normalise by the number of
+        //    fixture meshes sharing this entity so the whole group reads as one
+        //    fixture's worth of light, regardless of how many markers model it.
         const light = this.meshLights.get(mesh.uniqueId);
         if (light) {
+          const fixtureCount = this.byEntity.get(map.entityId)?.length ?? 1;
           light.diffuse = colour;
-          light.intensity = on ? MAX_LIGHT_INTENSITY * brightnessFrac : 0;
-          this.syncLightShadow(mesh.uniqueId, light, on);
+          light.intensity = on ? (MAX_LIGHT_INTENSITY * brightnessFrac) / fixtureCount : 0;
         }
+        // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;
       }
 

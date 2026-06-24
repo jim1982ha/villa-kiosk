@@ -11,6 +11,7 @@ import { testConnection, type TestResult } from "@/ha/testConnection";
 import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
 import { parseSh3d } from "@/utils/sh3dParser";
 import { clearStoredModel, getModelMeta, fetchAddonConfig, type AddonConfig } from "@/utils/storage";
+import { getLoadedModelInfo } from "@/utils/modelInfo";
 import { isIngress } from "@/ha/ingress";
 import ModelUploader from "./ModelUploader";
 import type { SceneManager } from "@/babylon/SceneManager";
@@ -60,6 +61,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
   const [modelMeta, setModelMeta] = useState(() => getModelMeta());
   const [addonCfg, setAddonCfg] = useState<AddonConfig | null>(null);
   useEffect(() => { fetchAddonConfig().then(setAddonCfg); }, []);
+  const loadedModel = getLoadedModelInfo();
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);
   const [url, setUrl] = useState(config.haUrl);
   const [token, setToken] = useState(config.haToken);
@@ -400,6 +402,22 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
               <div className="muted body-text" style={{ fontSize: 12 }}>
                 <strong>GLB:</strong> <code>www/{addonCfg.model_path}</code>
               </div>
+              {loadedModel && (
+                <div className="muted body-text" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
+                  <div><strong>Loaded now:</strong> {(loadedModel.bytes / 1_000_000).toFixed(2)} MB · {loadedModel.meshCount} meshes</div>
+                  {loadedModel.sha256 && (
+                    <div style={{ wordBreak: "break-all" }}>
+                      <strong>SHA-256:</strong> <code>{loadedModel.sha256}</code>
+                    </div>
+                  )}
+                  <div style={{ wordBreak: "break-all", opacity: 0.7 }}>
+                    <strong>from:</strong> <code>{loadedModel.url}</code>
+                  </div>
+                  <div style={{ opacity: 0.7, marginTop: 2 }}>
+                    Verify on disk: <code>shasum -a 256 {addonCfg.model_path.split("/").pop()}</code>
+                  </div>
+                </div>
+              )}
               {addonCfg.sh3d_path ? (
                 <div className="muted body-text" style={{ fontSize: 12 }}>
                   <strong>SH3D:</strong> <code>www/{addonCfg.sh3d_path}</code>

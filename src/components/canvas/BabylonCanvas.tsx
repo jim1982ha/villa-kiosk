@@ -6,6 +6,7 @@ import { SceneManager } from "@/babylon/SceneManager";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel, versionedModelUrl } from "@/utils/storage";
+import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { isIngress } from "@/ha/ingress";
 import { parseSh3d } from "@/utils/sh3dParser";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
@@ -86,6 +87,7 @@ export default function BabylonCanvas({
         const addonCfg = await fetchAddonConfig();
         let data: ArrayBuffer | null = null;
         let fromAddon = false;
+        let loadedSource = "(per-browser IndexedDB upload)";
 
         if (addonCfg.model_path) {
           // ── Add-on mode: ONLY use the centrally configured model. ──────────
@@ -94,6 +96,7 @@ export default function BabylonCanvas({
           // Version-stamped URL → the service worker serves it from cache on
           // repeat opens (cache-first), so only the first load hits the network.
           const modelUrl = await versionedModelUrl(addonCfg.model_path);
+          loadedSource = modelUrl;
           const resp = await fetch(modelUrl);
           if (!resp.ok) {
             setAddonError(true);
@@ -125,8 +128,19 @@ export default function BabylonCanvas({
         await manager.loadModel(data);
         if (cancelled) return;
 
+        // Fingerprint the GLB that actually loaded, so Settings can prove which
+        // file is in use without needing to toggle an entity. Compare against
+        // `shasum -a 256 <file>.glb` and `ls -l` on disk.
+        const meshNames = manager.getBindableMeshNames();
+        setLoadedModelInfo({
+          url: loadedSource,
+          bytes: data.byteLength,
+          sha256: await sha256Hex(data),
+          meshCount: meshNames.length,
+        });
+
         // Expose mesh names for the binding UI.
-        saveMeshCatalog(manager.getBindableMeshNames());
+        saveMeshCatalog(meshNames);
         // Auto-populate entityMap from meshes whose names are HA entity IDs
         // (cameras, fans, lights, etc.) so they appear in the Config Editor.
         const detected = manager.getAutoDetectedMappings();

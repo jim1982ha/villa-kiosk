@@ -4,18 +4,21 @@
 
 import { Vector3, Color3, Color4, type Scene } from "@babylonjs/core";
 import type { LightingSystem } from "./LightingSystem";
+import type { SkyDome } from "./SkyDome";
 import { type AppConfig, DEFAULT_RENDER } from "@/config/AppConfig";
 import { getSunPosition } from "@/utils/sunCalc";
 
 export class SunController {
   private scene: Scene;
   private lighting: LightingSystem;
+  private sky: SkyDome | null;
   private config: AppConfig;
   private requestRender: () => void = () => {};
 
-  constructor(scene: Scene, lighting: LightingSystem, config: AppConfig) {
+  constructor(scene: Scene, lighting: LightingSystem, config: AppConfig, sky: SkyDome | null = null) {
     this.scene = scene;
     this.lighting = lighting;
+    this.sky = sky;
     this.config = config;
     this.applyRealSun();
   }
@@ -70,6 +73,9 @@ export class SunController {
     this.lighting.setAmbient(
       (isDay ? new Color3(0.4, 0.35, 0.3) : new Color3(0.22, 0.2, 0.17)).scale(r.ambientIntensity),
     );
+    // Drive the procedural sky from the same sun direction (it shows through the
+    // windows). clearColor is kept as a fallback for when the sky dome is absent.
+    this.sky?.update(dir, isDay);
     this.scene.clearColor = isDay
       ? new Color4(0.7, 0.85, 1.0, 1)
       : new Color4(0.03, 0.03, 0.05, 1);

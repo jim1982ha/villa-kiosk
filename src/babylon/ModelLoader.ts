@@ -2,12 +2,41 @@
 // Load a GLB into the scene from an ArrayBuffer (IndexedDB) or an uploaded File,
 // and persist uploads to IndexedDB so a refresh doesn't re-upload.
 
-import { SceneLoader, type AbstractMesh, type Scene } from "@babylonjs/core";
+import { SceneLoader, Material, type AbstractMesh, type Scene } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { saveModelToIndexedDB } from "@/utils/storage";
 
 export interface LoadResult {
   meshes: AbstractMesh[];
+}
+
+// Babylon caps the lights a material's shader handles at once (default 4). A LED
+// strip is modelled as many co-located point lights, so a wall/floor near one can
+// be within range of more than 4 — beyond the cap Babylon keeps only the nearest
+// few, and the chosen set changes as the camera moves, causing light "popping".
+// Raise the cap modestly so dense strips light smoothly without the full per-pixel
+// cost of an unbounded count on kiosk-tablet GPUs.
+const MAX_SIMULTANEOUS_LIGHTS = 6;
+
+// Window/door glass exports from SweetHome 3D as an opaque grey material, so you
+// can't see the sky/outside through it — the panes read as flat grey panels.
+// Detect glass by material OR mesh name (English + French, since the catalog mixes
+// both) and make it properly see-through. Substring match, lower-cased, so e.g.
+// "Vitre_2", "window_glass", "baie vitrée" all hit. Frames/handles use separate
+// materials, so they keep their solidity.
+const GLASS_NAME_HINTS = [
+  "glass", "vitre", "vitrage", "vitree", "vitré", "verre",
+  "window", "fenetre", "fenêtre", "baie", "mirror", "miroir",
+];
+const GLASS_ALPHA = 0.22; // mostly transparent, a faint tint so the pane still reads
+
+function looksLikeGlass(...names: (string | undefined)[]): boolean {
+  for (const n of names) {
+    if (!n) continue;
+    const low = n.toLowerCase();
+    if (GLASS_NAME_HINTS.some((h) => low.includes(h))) return true;
+  }
+  return false;
 }
 
 /** Append a GLB (given as ArrayBuffer) into an existing scene. */
@@ -16,6 +45,31 @@ export async function loadModelInto(scene: Scene, data: ArrayBuffer): Promise<Lo
   const url = URL.createObjectURL(blob);
   try {
     const result = await SceneLoader.ImportMeshAsync("", "", url, scene, undefined, ".glb");
+    const glassMats = new Set<string>();
+    const allMats = new Set<string>();
+    for (const m of result.meshes) {
+      const mat = m.material as
+        | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean }
+        | null;
+      if (!mat) continue;
+      if (mat.name) allMats.add(mat.name);
+      if ("maxSimultaneousLights" in mat) mat.maxSimultaneousLights = MAX_SIMULTANEOUS_LIGHTS;
+
+      if (looksLikeGlass(mat.name, m.name)) {
+        mat.alpha = GLASS_ALPHA;
+        mat.transparencyMode = Material.MATERIAL_ALPHABLEND;
+        mat.backFaceCulling = false; // see both faces of a thin pane
+        if (mat.name) glassMats.add(mat.name);
+      }
+    }
+    // Surfaced so the glass heuristic can be tuned from the browser console if a
+    // pane isn't caught (or a non-glass material is): paste the material list here.
+    console.info(
+      `[ModelLoader] glass-transparency: matched ${glassMats.size} material(s):`,
+      [...glassMats],
+      "| all materials:",
+      [...allMats].sort(),
+    );
     return { meshes: result.meshes };
   } finally {
     URL.revokeObjectURL(url);

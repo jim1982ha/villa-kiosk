@@ -1,5 +1,51 @@
 # Changelog
 
+## 2.4.22
+
+### See-through window/door glass
+- Window and sliding-door glass exported from SweetHome 3D as an **opaque grey
+  material**, so the panes read as flat grey panels and the new sky/outside never
+  showed through them. Glass is now detected by material/mesh name (English **and**
+  French naming — `glass`, `vitre`, `vitrage`, `fenetre`, `baie`, `verre`,
+  `miroir`, …) and made properly transparent at load. Frames and handles use
+  separate materials, so they stay solid. The full material list + which were
+  treated as glass is logged to the browser console, so the heuristic can be tuned
+  if a specific pane isn't caught.
+
+### Confirm which GLB is actually loaded (no need to toggle a light)
+- Settings → 3D model now shows a **fingerprint of the GLB currently in the scene**:
+  size in MB, mesh count, full **SHA-256**, and the resolved fetch URL (including
+  the `?v=` cache-busting tag). Compare it against the file on disk with
+  `shasum -a 256 <file>.glb` / `ls -l` to prove the right model loaded — useful
+  when replacing a same-named GLB where HTTP caching could otherwise mislead.
+
+### Sun-driven sky through the windows
+- The outside view is no longer a flat colour (grey-blue by day, near-black at
+  night). A procedural atmospheric sky (`SkyDome` + Babylon `SkyMaterial`) is now
+  driven by the *same* sun direction that lights the scene — so it tracks the
+  villa's latitude/longitude and the time of day: real blue daytime sky, warm dusk,
+  deep blue at night. Pinned to the camera (`infiniteDistance`) and never clipped
+  by the far plane, so it shows correctly through every window. No texture assets
+  needed (SweetHome's sky setting never exports to the GLB).
+
+### Fix — lamp light still bled into the next room
+- **Wall occlusion is now always on**, not hidden behind the Shadows quality
+  toggle (which also drives the heavy sun shadows and was off by default). Each lit
+  `light` entity casts **one** small (256px) cube shadow map so walls block it out
+  of the box.
+- **One shadow map per entity, not per marker.** Because a LED strip is modelled as
+  ~12 co-located markers, shadowing every one would mean 12 cube maps for a single
+  strip. We attach the shadow to the entity's representative fixture instead, so a
+  whole strip costs a single shadow map.
+- **Tighter light range (4 m → 2.8 m).** The un-shadowed sibling markers of a strip
+  now stay inside their own room by range alone, so the room no longer leaks light
+  through the wall into the bathroom/adjacent space.
+
+> Note: showing **two** distinct bedside-lamp lights (and any other multi-instance
+> fixture) requires the GLB to be rebuilt with `blender_pipeline.py` **v1.5.0** —
+> the per-instance mesh split happens at model-build time. A single light at the
+> midpoint of two lamps means the loaded GLB predates that fix.
+
 ## 2.4.21
 
 ### Fix — lamp light bled through walls + merged multi-lamp fixtures
@@ -16,6 +62,16 @@
   a real light at *each* lamp instead of one merged light at their midpoint. Takes
   full effect once the model is regenerated with separate meshes (see the Blender
   pipeline change); harmless with the current merged model.
+- **LED-strip lights no longer blow out.** A single HA light is often modelled in
+  SweetHome 3D as many co-located virtual markers (e.g. a LED strip drawn as 8–12
+  point lights for a soft, diffuse spread). Since each marker is now its own
+  `PointLight` and point lights are additive, an entity's per-fixture intensity is
+  divided by the number of fixture meshes it owns, so the whole group reads as one
+  fixture's worth of light instead of a solid white smear — regardless of how many
+  markers model it. Single-mesh lights are unaffected.
+- **Smoother lighting near dense strips.** GLB material light caps are raised from
+  Babylon's default of 4 to 6 simultaneous lights, so a wall/floor within range of
+  a multi-marker strip no longer "pops" between light sets as the camera moves.
 
 ## 2.4.20
 

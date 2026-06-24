@@ -19,6 +19,7 @@ import { CameraController } from "./CameraController";
 import { OverviewController } from "./OverviewController";
 import { LightingSystem } from "./LightingSystem";
 import { SunController } from "./SunController";
+import { SkyDome } from "./SkyDome";
 import { FloorManager } from "./FloorManager";
 import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
@@ -52,6 +53,7 @@ export class SceneManager {
   readonly overview: OverviewController;
   readonly lighting: LightingSystem;
   readonly sun: SunController;
+  readonly sky: SkyDome;
   readonly floors: FloorManager;
   readonly pick: PickHandler;
   readonly visuals: EntityVisuals;
@@ -101,7 +103,9 @@ export class SceneManager {
     this.hemi = hemi;
 
     this.lighting = new LightingSystem(this.scene);
-    this.sun = new SunController(this.scene, this.lighting, opts.config);
+    // Procedural sky shown through the windows; driven by the same sun below.
+    this.sky = new SkyDome(this.scene);
+    this.sun = new SunController(this.scene, this.lighting, opts.config, this.sky);
     this.sun.setRenderHook(() => this.requestRender());
     this.visuals = new EntityVisuals(this.scene, opts.config, () => this.requestRender(), opts.onEntityPicked);
     this.markers = new MarkerManager(this.scene, () => this.requestRender());
@@ -838,6 +842,7 @@ export class SceneManager {
     document.removeEventListener("visibilitychange", this.handleVisibility);
     this.engine.stopRenderLoop(); // stop first — no frames render during teardown
     this.renderFx.dispose();
+    this.sky.dispose();
     this.camera.dispose();
     this.overview.dispose();
     this.scene.dispose();
