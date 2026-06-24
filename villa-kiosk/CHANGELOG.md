@@ -1,30 +1,5 @@
 # Changelog
 
-## 2.4.16
-
-### Faster villa load — the 34 MB model is now cached across opens
-- Behind HA Ingress the central GLB is served under a `/api/…/model/…` path, so
-  the service worker's "never cache live data" rule (which matches `/api/`)
-  caught it and the full model was re-downloaded on every open. Added a dedicated
-  cache-first branch for `/model/` files that runs *before* the `/api/` exclusion,
-  backed by a separate `villa-kiosk-model-v1` cache that survives app updates.
-- Model URLs are now version-stamped (`?v=<etag>`): the app HEADs the file for its
-  ETag/Last-Modified and appends it, so a cache hit is always the right bytes and a
-  swapped model is fetched exactly once. Stale versions of the same path are pruned.
-- The loading overlay now shows real download progress (`Loading the villa… NN%`)
-  by streaming the response instead of an indeterminate spinner.
-
-### Fix — checkboxes rendered wider than tall (not square)
-- Modal/Config-editor checkboxes inherited the asymmetric text-input padding
-  (`.modal input { padding: 12px 14px }`); since that padding exceeds the 22px box,
-  mobile browsers grew it to fit, rendering it wider than tall. Zeroed the padding
-  (and margin) on the checkboxes so they stay square.
-
-### Fix — "Confirm" label misaligned in Config Editor mobile cards
-- The Confirm cell uses `.center` (to centre its checkbox), which also centred its
-  `CONFIRM` gutter label within the 84px column while `TYPE`/`LABEL`/`ROOM` sat left.
-  Pinned all mobile gutter labels left so they align.
-
 ## 2.4.15
 
 ### Fix — Bird's-eye pan didn't track the finger (felt "disconnected" sideways)

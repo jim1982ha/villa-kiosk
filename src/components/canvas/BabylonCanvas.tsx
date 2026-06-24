@@ -5,41 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel, versionedModelUrl } from "@/utils/storage";
-import { isIngress } from "@/ha/ingress";
+import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel } from "@/utils/storage";
+import { isIngress, ingressPath } from "@/ha/ingress";
 import { parseSh3d } from "@/utils/sh3dParser";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
 import ModelUploader from "@/components/settings/ModelUploader";
 import type { EntityMapping } from "@/types/scene.types";
-
-/**
- * Read a fetch Response to an ArrayBuffer while reporting download progress
- * (0..1). Used for the large central GLB so the loading overlay shows real
- * progress instead of an indeterminate spinner. Falls back to a plain
- * arrayBuffer() read when the stream or Content-Length isn't available (e.g. a
- * service-worker cache hit with no length header).
- */
-async function readWithProgress(
-  resp: Response,
-  onProgress: (frac: number) => void,
-): Promise<ArrayBuffer> {
-  const total = Number(resp.headers.get("Content-Length")) || 0;
-  if (!resp.body || !total) return resp.arrayBuffer();
-  const reader = resp.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    received += value.length;
-    onProgress(Math.min(1, received / total));
-  }
-  const out = new Uint8Array(received);
-  let off = 0;
-  for (const c of chunks) { out.set(c, off); off += c.length; }
-  return out.buffer;
-}
 
 interface Props {
   onManager: (m: SceneManager | null) => void;
@@ -62,7 +33,6 @@ export default function BabylonCanvas({
   const configRef = useRef(config);
   useEffect(() => { configRef.current = config; }, [config]);
   const [status, setStatus] = useState<"loading" | "ready" | "no-model" | "error">("loading");
-  const [progress, setProgress] = useState(0); // 0..1 GLB download progress
   const [errorMsg, setErrorMsg] = useState("");
   // True when the error came from a failed addon-config model fetch — the user
   // should fix their add-on settings, not upload a file.
@@ -91,10 +61,7 @@ export default function BabylonCanvas({
           // ── Add-on mode: ONLY use the centrally configured model. ──────────
           // No IndexedDB fallback — if the admin set model_path, that is the
           // authoritative source and per-browser uploads are irrelevant.
-          // Version-stamped URL → the service worker serves it from cache on
-          // repeat opens (cache-first), so only the first load hits the network.
-          const modelUrl = await versionedModelUrl(addonCfg.model_path);
-          const resp = await fetch(modelUrl);
+          const resp = await fetch(ingressPath(`model/${addonCfg.model_path}`));
           if (!resp.ok) {
             setAddonError(true);
             throw new Error(
@@ -102,7 +69,7 @@ export default function BabylonCanvas({
               `Check the add-on configuration: Settings → Add-ons → Villa Kiosk → Configuration.`,
             );
           }
-          data = await readWithProgress(resp, (f) => { if (!cancelled) setProgress(f); });
+          data = await resp.arrayBuffer();
           fromAddon = true;
         } else {
           // ── Standalone / dev mode: per-browser IndexedDB upload. ──────────
@@ -156,7 +123,7 @@ export default function BabylonCanvas({
         if (fromAddon && addonCfg.sh3d_path) {
           void (async () => {
             try {
-              const sh3dResp = await fetch(await versionedModelUrl(addonCfg.sh3d_path));
+              const sh3dResp = await fetch(ingressPath(`model/${addonCfg.sh3d_path}`));
               if (!sh3dResp.ok) return;
               const sh3dBuf = await sh3dResp.arrayBuffer();
               const { rooms, entities: sh3dEntities } = await parseSh3d(sh3dBuf);
@@ -217,9 +184,7 @@ export default function BabylonCanvas({
       {status === "loading" && (
         <div className="center-overlay">
           <div className="spinner" />
-          <div className="muted">
-            Loading the villa…{progress > 0 && progress < 1 ? ` ${Math.round(progress * 100)}%` : ""}
-          </div>
+          <div className="muted">Loading the villa…</div>
         </div>
       )}
       {status === "no-model" && (
