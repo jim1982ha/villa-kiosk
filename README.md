@@ -19,6 +19,7 @@ Built with **React + TypeScript + Babylon.js**.
 | **Tap-to-bind** | Wire any imported model to HA by tapping objects and picking the entity — no entity-named meshes required. |
 | **Live cameras** | Full-screen MJPEG stream popups via the HA camera proxy. |
 | **Day / night** | Scene lighting follows the real sun position for your location (or HA's `sun.sun`). |
+| **Render quality** | Live, per-effect look controls (Settings → *Render quality*): tone mapping, exposure/contrast, light balance, ambient occlusion, sun shadows, environment lighting — tune for quality or tablet performance with no rebuild. |
 | **On-demand rendering** | The GPU idles when nothing moves — essential for a 24/7 tablet. |
 | **Runtime config** | Map meshes → entities, calibrate teleport points, set thresholds — all in-app, no code edits. |
 | **PWA + backup** | Installable, works briefly offline, export/import full config (+ model) as a ZIP. |
@@ -192,6 +193,7 @@ The 3D scene never re-renders from React — HA state changes are pushed imperat
 ## Runtime configuration
 
 - **Settings** (gear icon): title, location, model upload, backup/restore, Inspector. HA URL/token shown only in standalone mode.
+- **Render quality** (Settings → *Render quality &amp; look*): independently toggle/tune tone mapping (Khronos Neutral / ACES / Standard), exposure, contrast, fill + key + ambient light balance, ambient occlusion (SSAO), sun shadows and environment lighting (IBL). All apply live and persist with your config; start with tone mapping + lower **Fill light** to cure a washed-out render. The same knobs can be baked into the GLB via the [Blender pipeline](MODEL_PIPELINE.md) flags.
 - **Config editor** (`/config`): map any `entity_id` to a panel type + label + room, mark entities requiring confirmation, edit alert thresholds.
 - **Teleport calibration**: open **Rooms**, then right-click / long-press any room card to save your current spot as that room's anchor.
 

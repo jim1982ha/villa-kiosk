@@ -356,6 +356,11 @@ input[type="range"]::-moz-range-thumb {
 .modal input:focus { border-color: var(--accent-gold); outline: none; }
 .modal-actions { display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end; }
 
+/* Plain (non-settings) modals — onboarding, bind, marker — pad their own
+   content. The settings modal instead pads its header/body/footer sections, so
+   it's excluded here. (Mobile overrides this in the media query below.) */
+.modal:not(.settings-modal) { padding: 24px 28px; }
+
 /* Settings modal — scrollable body, sticky footer */
 .settings-modal { }
 .settings-header { padding: 24px 28px 16px; border-bottom: 1px solid rgba(201,168,76,0.12); flex: 0 0 auto; }

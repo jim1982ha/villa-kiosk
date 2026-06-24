@@ -11,7 +11,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { normaliseHaUrl, resolveSiteTitle } from "@/config/AppConfig";
 import { isIngress, ingressHaUrl } from "@/ha/ingress";
 import { testConnection, type TestResult } from "@/ha/testConnection";
-import { getModelMeta } from "@/utils/storage";
+import { getModelMeta, fetchAddonConfig } from "@/utils/storage";
 import ModelUploader from "@/components/settings/ModelUploader";
 
 interface Props {
@@ -31,8 +31,21 @@ export default function OnboardingWizard({ onComplete }: Props) {
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
   const [hasModel, setHasModel] = useState(() => !!getModelMeta());
+  // When the add-on has a central model_path configured, the kiosk loads that
+  // GLB from /model/ for every client — no per-browser upload is needed, so the
+  // upload step must not block onboarding. (Empty in standalone/dev mode.)
+  const [centralModel, setCentralModel] = useState<string | null>(null);
+  const modelReady = hasModel || !!centralModel;
 
   const title = resolveSiteTitle(config, haConfig?.location_name);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAddonConfig().then((cfg) => {
+      if (!cancelled && cfg.model_path) setCentralModel(cfg.model_path);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // As an add-on the kiosk reaches HA through the same-origin Supervisor proxy,
   // which injects the token server-side — so we connect token-less and skip the
@@ -160,16 +173,27 @@ export default function OnboardingWizard({ onComplete }: Props) {
 
         {step === 2 && (
           <>
-            <h2>Upload the 3D model</h2>
-            <p className="sub">
-              The kiosk needs a <strong>.glb</strong> file (glTF Binary). Export it from
-              SweetHome 3D → Blender, or use any GLB of your villa. After loading,
-              you'll bind objects to Home Assistant entities by tapping them.
-            </p>
-            <ModelUploader onUploaded={() => setHasModel(true)} />
+            <h2>3D model</h2>
+            {centralModel ? (
+              <p className="sub">
+                This kiosk loads the model configured in the add-on:{" "}
+                <strong>{centralModel}</strong>. Every client uses the same file —
+                no upload needed. You'll bind objects to Home Assistant entities
+                by tapping them.
+              </p>
+            ) : (
+              <>
+                <p className="sub">
+                  The kiosk needs a <strong>.glb</strong> file (glTF Binary). Export it from
+                  SweetHome 3D → Blender, or use any GLB of your villa. After loading,
+                  you'll bind objects to Home Assistant entities by tapping them.
+                </p>
+                <ModelUploader onUploaded={() => setHasModel(true)} />
+              </>
+            )}
             <div className="modal-actions">
               <button className="btn ghost" onClick={() => setStep(connected ? 0 : 1)}>Back</button>
-              <button className="btn primary" onClick={() => setStep(3)} disabled={!hasModel}>Next <ArrowRight size={18} /></button>
+              <button className="btn primary" onClick={() => setStep(3)} disabled={!modelReady}>Next <ArrowRight size={18} /></button>
             </div>
           </>
         )}

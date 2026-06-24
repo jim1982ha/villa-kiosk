@@ -12,7 +12,7 @@
  *  - Everything else (HA WebSocket is not HTTP; camera proxy, REST history):
  *    network-only — we never want to serve a stale camera frame or sensor value.
  */
-const CACHE = "villa-kiosk-v3";
+const CACHE = "villa-kiosk-v4";
 const SHELL = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", (event) => {

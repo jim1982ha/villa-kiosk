@@ -6,7 +6,7 @@ import { useRef, useState, useEffect } from "react";
 import { Plug, Download, Upload, Bug, FileText } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { normaliseHaUrl, DEFAULT_SITE_TITLE } from "@/config/AppConfig";
+import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, type RenderConfig, type ToneMappingMode } from "@/config/AppConfig";
 import { testConnection, type TestResult } from "@/ha/testConnection";
 import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
 import { parseSh3d } from "@/utils/sh3dParser";
@@ -22,8 +22,18 @@ interface Props {
 }
 
 export default function SettingsModal({ manager, onClose, onModelChanged }: Props) {
-  const { config, update, replace, reset } = useConfig();
+  const { config, update, replace } = useConfig();
   const { connect, haConfig } = useHA();
+
+  // Snapshot the config at mount so Cancel can undo every live-applied tweak
+  // (render preview, eye height, walk speed, and the toggles that update()
+  // immediately) — restoring both the persisted config and the live scene.
+  const initialConfigRef = useRef(config);
+  const handleCancel = () => {
+    replace(initialConfigRef.current);
+    manager?.updateConfig(initialConfigRef.current);
+    onClose();
+  };
   const ingress = isIngress();
   const importRef = useRef<HTMLInputElement>(null);
   const sh3dRef = useRef<HTMLInputElement>(null);
@@ -57,8 +67,17 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
   const [lng, setLng] = useState(String(config.longitude));
   const [eyeHeight, setEyeHeight] = useState(config.eyeHeight ?? 1.7);
   const [walkSpeed, setWalkSpeed] = useState(config.walkSpeed ?? 1);
+  const [render, setRender] = useState<RenderConfig>(config.render ?? DEFAULT_RENDER);
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
+
+  // Live-apply render tuning straight to the scene while dragging, so the user
+  // can iterate on look/perf without saving + reloading.
+  const applyRender = (patch: Partial<RenderConfig>) => {
+    const next = { ...render, ...patch };
+    setRender(next);
+    manager?.setRenderConfig(next);
+  };
 
   // Live-apply so you can feel/see the change while dragging the sliders.
   const applyEyeHeight = (h: number) => {
@@ -72,7 +91,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
 
   const save = () => {
     const cleanUrl = normaliseHaUrl(url);
-    update({ siteTitle: siteTitle.trim(), haUrl: cleanUrl, haToken: token, latitude: Number(lat), longitude: Number(lng), eyeHeight, walkSpeed });
+    update({ siteTitle: siteTitle.trim(), haUrl: cleanUrl, haToken: token, latitude: Number(lat), longitude: Number(lng), eyeHeight, walkSpeed, render });
     if (!ingress) {
       connect(cleanUrl, token).catch(() => {});
     }
@@ -98,7 +117,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={handleCancel}>
       <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <h2>Settings</h2>
@@ -211,6 +230,137 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
 
         {/* "Highlight clickable objects" and "Show device state labels" now live
             as direct toggles in the top bar (desktop) / a dropdown (mobile). */}
+
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
+
+        {/* ── Render quality ───────────────────────────────────────────────
+            Every effect below is independent + live. They counter the
+            "too bright / no contrast" flat look. Defaults are a safe win;
+            heavier effects (shadows, IBL) are opt-in for slower devices. */}
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <h3 style={{ margin: 0, fontSize: 15 }}>Render quality &amp; look</h3>
+          <button
+            className="btn ghost"
+            style={{ padding: "4px 10px", fontSize: 12 }}
+            onClick={() => applyRender(DEFAULT_RENDER)}
+            title="Restore the recommended render defaults"
+          >
+            Reset look
+          </button>
+        </div>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          Tune the scene live to fix a washed-out / flat render. Start with tone
+          mapping + the light balance; add ambient occlusion and shadows for depth.
+          All settings save with the rest of your config.
+        </p>
+
+        <label style={{ marginTop: 12 }}>Tone mapping</label>
+        <select
+          value={render.toneMapping}
+          onChange={(e) => applyRender({ toneMapping: e.target.value as ToneMappingMode })}
+          style={{ width: "100%" }}
+        >
+          <option value="khr_neutral">Khronos PBR Neutral (recommended)</option>
+          <option value="aces">ACES (filmic, higher contrast)</option>
+          <option value="standard">Standard</option>
+          <option value="none">None (raw — original look)</option>
+        </select>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          Rolls off blown-out white highlights. <strong>Neutral</strong> keeps colours
+          true; <strong>ACES</strong> adds contrast but can desaturate.
+        </p>
+
+        <label style={{ marginTop: 12 }}>Exposure · {render.exposure.toFixed(2)}</label>
+        <input type="range" min={0.2} max={2} step={0.05} value={render.exposure}
+          onChange={(e) => applyRender({ exposure: Number(e.target.value) })} />
+
+        <label style={{ marginTop: 8 }}>Contrast · {render.contrast.toFixed(2)}</label>
+        <input type="range" min={0.5} max={2.5} step={0.05} value={render.contrast}
+          onChange={(e) => applyRender({ contrast: Number(e.target.value) })} />
+
+        <label style={{ marginTop: 12 }}>Fill light (hemispheric) · {render.hemiIntensity.toFixed(2)}</label>
+        <input type="range" min={0} max={1.5} step={0.05} value={render.hemiIntensity}
+          onChange={(e) => applyRender({ hemiIntensity: Number(e.target.value) })} />
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          The flat ambient fill. <strong>Lower = more contrast</strong> (the single
+          biggest fix for the washed-out look).
+        </p>
+
+        <label style={{ marginTop: 8 }}>Sun (key light) · {render.sunIntensity.toFixed(2)}×</label>
+        <input type="range" min={0} max={2} step={0.05} value={render.sunIntensity}
+          onChange={(e) => applyRender({ sunIntensity: Number(e.target.value) })} />
+
+        <label style={{ marginTop: 8 }}>Ambient fill · {render.ambientIntensity.toFixed(2)}×</label>
+        <input type="range" min={0} max={1.5} step={0.05} value={render.ambientIntensity}
+          onChange={(e) => applyRender({ ambientIntensity: Number(e.target.value) })} />
+
+        <label className="toggle" style={{ marginTop: 12 }}>
+          <input type="checkbox" checked={render.ssao}
+            onChange={(e) => applyRender({ ssao: e.target.checked })} />
+          <span>Ambient occlusion (corner / contact shadows)</span>
+        </label>
+        {render.ssao && (
+          <div style={{ paddingLeft: 8, borderLeft: "2px solid rgba(255,255,255,0.08)" }}>
+            <label style={{ marginTop: 6 }}>AO radius · {render.ssaoRadius.toFixed(2)}</label>
+            <input type="range" min={0.3} max={6} step={0.1} value={render.ssaoRadius}
+              onChange={(e) => applyRender({ ssaoRadius: Number(e.target.value) })} />
+            <label style={{ marginTop: 6 }}>AO strength · {render.ssaoStrength.toFixed(2)}</label>
+            <input type="range" min={0.2} max={3} step={0.1} value={render.ssaoStrength}
+              onChange={(e) => applyRender({ ssaoStrength: Number(e.target.value) })} />
+            <label style={{ marginTop: 6 }}>AO quality (samples)</label>
+            <select value={render.ssaoSamples}
+              onChange={(e) => applyRender({ ssaoSamples: Number(e.target.value) })}
+              style={{ width: "100%" }}>
+              <option value={4}>4 — fastest</option>
+              <option value={8}>8 — balanced</option>
+              <option value={16}>16 — high</option>
+              <option value={32}>32 — best (slow)</option>
+            </select>
+          </div>
+        )}
+
+        <label className="toggle" style={{ marginTop: 12 }}>
+          <input type="checkbox" checked={render.shadows}
+            onChange={(e) => applyRender({ shadows: e.target.checked })} />
+          <span>Cast shadows from the sun (heaviest)</span>
+        </label>
+        {render.shadows && (
+          <div style={{ paddingLeft: 8, borderLeft: "2px solid rgba(255,255,255,0.08)" }}>
+            <label style={{ marginTop: 6 }}>Shadow resolution</label>
+            <select value={render.shadowMapSize}
+              onChange={(e) => applyRender({ shadowMapSize: Number(e.target.value) })}
+              style={{ width: "100%" }}>
+              <option value={512}>512 — fastest</option>
+              <option value={1024}>1024 — balanced</option>
+              <option value={2048}>2048 — sharp (slow)</option>
+            </select>
+            <label style={{ marginTop: 6 }}>Shadow darkness · {render.shadowDarkness.toFixed(2)}</label>
+            <input type="range" min={0} max={1} step={0.05} value={render.shadowDarkness}
+              onChange={(e) => applyRender({ shadowDarkness: Number(e.target.value) })} />
+            <label style={{ marginTop: 6 }}>Shadow softness · {render.shadowBlur}</label>
+            <input type="range" min={1} max={64} step={1} value={render.shadowBlur}
+              onChange={(e) => applyRender({ shadowBlur: Number(e.target.value) })} />
+          </div>
+        )}
+
+        <label className="toggle" style={{ marginTop: 12 }}>
+          <input type="checkbox" checked={render.ibl}
+            onChange={(e) => applyRender({ ibl: e.target.checked })} />
+          <span>Environment lighting (IBL — sky/ground ambient)</span>
+        </label>
+        {render.ibl && (
+          <div style={{ paddingLeft: 8, borderLeft: "2px solid rgba(255,255,255,0.08)" }}>
+            <label style={{ marginTop: 6 }}>Environment intensity · {render.environmentIntensity.toFixed(2)}</label>
+            <input type="range" min={0} max={2} step={0.05} value={render.environmentIntensity}
+              onChange={(e) => applyRender({ environmentIntensity: Number(e.target.value) })} />
+            <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+              Adds soft sky/ground ambient. Most visible on <strong>PBR</strong>
+              materials (the Blender export) — try it with tone mapping on.
+            </p>
+          </div>
+        )}
+
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
 
         <label className="toggle">
           <input
@@ -353,21 +503,9 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
 
         </div>{/* end settings-body */}
 
-        <div className="settings-footer">
-          <button
-            className="btn danger"
-            title="Erase all saved settings (HA URL, token, bindings, markers, teleports) and restore defaults"
-            onClick={() => {
-              if (confirm("Reset EVERYTHING to defaults?\n\nThis erases your HA URL, token, entity bindings, markers and teleport points. Your uploaded 3D model is kept.")) {
-                reset();
-                onClose();
-              }
-            }}
-          >
-            Reset
-          </button>
+        <div className="settings-footer" style={{ justifyContent: "flex-end" }}>
           <div className="row" style={{ gap: 12 }}>
-            <button className="btn ghost" onClick={onClose}>Cancel</button>
+            <button className="btn ghost" onClick={handleCancel}>Cancel</button>
             <button className="btn primary" onClick={save}>Save</button>
           </div>
         </div>

@@ -163,6 +163,31 @@ python3 blender_pipeline.py TheLysHouse_1F.sh3d OBJ/TheLysHouse_1F.obj
 This prints exactly which OBJ groups will be assigned to each entity, so you can
 verify the mapping before running Blender.
 
+#### Optional render-quality flags
+
+The render look can be tuned **either here (baked into the GLB) or live in the app**
+(Settings → *Render quality* — see [README](README.md)). The same dials exist in
+both places so you can iterate at runtime, then bake the winners into the GLB.
+All flags are optional and default to the original behaviour:
+
+| Flag | Effect | Example |
+|---|---|---|
+| `--max-base-color F` | Clamp the peak of **flat (untextured)** albedo so SweetHome's pure-white default walls/cabinets don't blow out. Textured surfaces are unaffected. | `--max-base-color 0.85` |
+| `--min-roughness F` | Raise low roughness to at least `F`, so nothing renders mirror-flat. | `--min-roughness 0.6` |
+| `--metallic F` | Force metallic on every material (SweetHome sometimes exports stray metallic). | `--metallic 0.0` |
+| `--bake-ao` | Bake **ambient occlusion into vertex colours** (Cycles) so corners/contacts stay dark even with the app's runtime SSAO off. Experimental, slow, best-effort — skipped with a warning if your Blender build can't bake. | `--bake-ao --ao-samples 64` |
+
+```bash
+# Example: tame white walls + add baked contact shadows
+blender --background --python blender_pipeline.py -- \
+    TheLysHouse_1F.sh3d OBJ/TheLysHouse_1F.obj output/villa_1F.glb \
+    --max-base-color 0.85 --min-roughness 0.6 --bake-ao
+```
+
+> Human figures / mannequins: remove these **in SweetHome 3D** before exporting
+> (delete the figures from the plan). The pipeline intentionally does not strip
+> furniture — what's in the plan is what ends up in the GLB.
+
 The script prints a summary when done, e.g.:
 
 ```

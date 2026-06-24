@@ -173,6 +173,7 @@ export default function Dashboard() {
         onFloorChange={(f) => setCurrentFloor(f)}
         onRoomChange={setRoom}
         onNeedModel={() => setSettingsOpen(true)}
+        onModelUploaded={() => setModelKey((k) => k + 1)}
       />
 
       <RoomLabel room={room} />

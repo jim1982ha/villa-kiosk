@@ -4,7 +4,7 @@
 
 import { Vector3, Color3, Color4, type Scene } from "@babylonjs/core";
 import type { LightingSystem } from "./LightingSystem";
-import type { AppConfig } from "@/config/AppConfig";
+import { type AppConfig, DEFAULT_RENDER } from "@/config/AppConfig";
 import { getSunPosition } from "@/utils/sunCalc";
 
 export class SunController {
@@ -53,13 +53,16 @@ export class SunController {
   }
 
   private applyDayNight(isDay: boolean, dir: Vector3): void {
+    // Render-quality multipliers let Settings rebalance the key light + fill
+    // without touching the day/night base values here.
+    const r = this.config.render ?? DEFAULT_RENDER;
     this.lighting.setSun(
       dir,
-      isDay ? 1.2 : 0.12,
+      (isDay ? 1.2 : 0.12) * r.sunIntensity,
       isDay ? new Color3(1.0, 0.95, 0.8) : new Color3(0.25, 0.3, 0.5),
     );
     this.lighting.setAmbient(
-      isDay ? new Color3(0.4, 0.35, 0.3) : new Color3(0.06, 0.06, 0.12),
+      (isDay ? new Color3(0.4, 0.35, 0.3) : new Color3(0.06, 0.06, 0.12)).scale(r.ambientIntensity),
     );
     this.scene.clearColor = isDay
       ? new Color4(0.7, 0.85, 1.0, 1)

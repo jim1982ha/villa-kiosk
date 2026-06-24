@@ -8,9 +8,15 @@ import { getModelMeta, clearStoredModel } from "@/utils/storage";
 
 interface Props {
   onUploaded: () => void;
+  /**
+   * Minimal mode: render only the upload button (no stored-model meta, no
+   * "Replace"/"Remove" management controls). Used by the no-model overlay, where
+   * the scene has nothing loaded and only a plain first upload makes sense.
+   */
+  minimal?: boolean;
 }
 
-export default function ModelUploader({ onUploaded }: Props) {
+export default function ModelUploader({ onUploaded, minimal = false }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [meta, setMeta] = useState(() => getModelMeta());
   const [busy, setBusy] = useState(false);
@@ -47,7 +53,7 @@ export default function ModelUploader({ onUploaded }: Props) {
         }}
       />
 
-      {meta && (
+      {!minimal && meta && (
         <div className="row spread body-text" style={{ marginBottom: 12 }}>
           <span><Box size={16} /> {meta.name}</span>
           <span className="muted">{(meta.size / 1024 / 1024).toFixed(1)} MB</span>
@@ -55,10 +61,10 @@ export default function ModelUploader({ onUploaded }: Props) {
       )}
 
       <button className="btn primary" style={{ width: "100%" }} disabled={busy} onClick={() => inputRef.current?.click()}>
-        <Upload size={18} /> {busy ? "Importing…" : meta ? "Replace 3D model" : "Upload .glb model"}
+        <Upload size={18} /> {busy ? "Importing…" : minimal ? "Upload .glb model" : meta ? "Replace 3D model" : "Upload .glb model"}
       </button>
 
-      {meta && (
+      {!minimal && meta && (
         <button
           className="btn ghost mt"
           style={{ width: "100%" }}

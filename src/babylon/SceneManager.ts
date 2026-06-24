@@ -24,13 +24,14 @@ import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
 import { MarkerManager } from "./MarkerManager";
 import { WeatherEffects } from "./WeatherEffects";
+import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { fitAffine, affineResidual, spanArea, type PlanWorldPair } from "@/utils/affineFit";
 import type { Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
-import type { AppConfig } from "@/config/AppConfig";
+import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
 
@@ -56,8 +57,10 @@ export class SceneManager {
   readonly visuals: EntityVisuals;
   readonly markers: MarkerManager;
   readonly weather: WeatherEffects;
+  readonly renderFx: RenderEnhancements;
 
   private config: AppConfig;
+  private hemi: HemisphericLight;
   private ready = false;
   private readyCallbacks = new Set<() => void>();
   private calibrateCallbacks = new Set<() => void>();
@@ -88,10 +91,11 @@ export class SceneManager {
     // walls keep their true colour (white reads white, not grey) even at night
     // or with the sun low. A light groundColor lifts undersides off pure black.
     const hemi = new HemisphericLight("hemi", new Vector3(0, 1, 0), this.scene);
-    hemi.intensity = 0.95;
+    hemi.intensity = 0.95; // overwritten by renderFx.apply() below (config.render.hemiIntensity)
     hemi.diffuse = new Color3(1, 1, 1);
     hemi.groundColor = new Color3(0.55, 0.55, 0.6);
     hemi.specular = new Color3(0.1, 0.1, 0.1);
+    this.hemi = hemi;
 
     this.lighting = new LightingSystem(this.scene);
     this.sun = new SunController(this.scene, this.lighting, opts.config);
@@ -125,6 +129,12 @@ export class SceneManager {
       onTap: (x, y) => this.pick.pickAtScreen(x, y),
     });
     this.overview.setNaturalScrolling(opts.config.naturalScrolling ?? true);
+
+    // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
+    // Created after both cameras exist so SSAO can attach to all of them; the
+    // initial apply() pushes config.render onto the freshly-built scene.
+    this.renderFx = new RenderEnhancements(this.scene, this.lighting.sunLight, this.hemi);
+    this.renderFx.apply(opts.config.render);
 
     // Any pointer activity on the canvas (look-around drag, wheel, tap) wakes the
     // on-demand render loop so the view stays smooth.
@@ -316,6 +326,7 @@ export class SceneManager {
     this.visuals.indexMeshes(result.meshes);
     this.applyStructure(result.meshes); // solid walls + collisions
     this.applyHighlight(result.meshes); // blue glow on bound meshes (if enabled)
+    this.renderFx.registerMeshes(result.meshes); // shadow casters/receivers
 
     // Fit the plan->world transform from entity-named meshes and lay out room
     // anchors / teleport points correctly for THIS model.
@@ -706,10 +717,23 @@ export class SceneManager {
     return () => this.readyCallbacks.delete(cb);
   }
 
+  /**
+   * Live-apply render-quality settings while the Settings sliders are dragged.
+   * Re-runs the sun pass so the hemi/sun/ambient multipliers take effect, and
+   * pushes the rest (tone mapping, SSAO, shadows, IBL) through renderFx.
+   */
+  setRenderConfig(render: RenderConfig): void {
+    this.config = { ...this.config, render };
+    this.renderFx.apply(render);
+    this.sun.updateConfig(this.config);
+    this.requestRender();
+  }
+
   updateConfig(config: AppConfig): void {
     const prev = this.config;
     this.config = config;
     this.sun.updateConfig(config);
+    this.renderFx.apply(config.render);
     this.camera.updateConfig(config);
     this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
     this.pick.setMaps(config.entityMap, config.meshBindings);
@@ -781,9 +805,10 @@ export class SceneManager {
 
   dispose(): void {
     window.removeEventListener("resize", this.handleResize);
+    this.engine.stopRenderLoop(); // stop first — no frames render during teardown
+    this.renderFx.dispose();
     this.camera.dispose();
     this.overview.dispose();
-    this.engine.stopRenderLoop();
     this.scene.dispose();
     this.engine.dispose();
   }

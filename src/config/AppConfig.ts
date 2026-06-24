@@ -17,6 +17,68 @@ export const DEFAULT_MODEL_TRANSFORM: ModelTransform = {
   flipZ: false,
 };
 
+/** Tone-mapping operator applied to the whole scene (see RenderConfig). */
+export type ToneMappingMode = "none" | "standard" | "aces" | "khr_neutral";
+
+/**
+ * Render-quality / look knobs. Every effect is independently toggle-able and
+ * tunable so the look can be iterated at runtime (Settings → Render quality)
+ * without a rebuild. Mirrors the optional flags in the Blender GLB pipeline
+ * (sources/blender_pipeline.py) so the same dials exist offline and online.
+ */
+export interface RenderConfig {
+  /** Filmic tone-mapping operator. "khr_neutral" = Khronos PBR Neutral (best
+   *  default: tames blown highlights without ACES's desaturation). */
+  toneMapping: ToneMappingMode;
+  /** Camera exposure (image processing). 1.0 = neutral. */
+  exposure: number;
+  /** Image-processing contrast. 1.0 = neutral; >1 deepens the mid-tones. */
+  contrast: number;
+  /** Hemispheric (flat fill) light intensity. Lower = more directional contrast. */
+  hemiIntensity: number;
+  /** Multiplier on the day/night directional sun intensity (the key light). */
+  sunIntensity: number;
+  /** Multiplier on the day/night ambient fill colour. */
+  ambientIntensity: number;
+  /** Image-based lighting from a procedural sky/ground gradient cube. */
+  ibl: boolean;
+  /** IBL contribution (scene.environmentIntensity). */
+  environmentIntensity: number;
+  /** Screen-space ambient occlusion (corner/contact darkening). */
+  ssao: boolean;
+  ssaoRadius: number;
+  ssaoStrength: number;
+  /** SSAO sample count — perf/quality trade-off (4/8/16/32). */
+  ssaoSamples: number;
+  /** Cast directional shadows from the sun (heaviest effect). */
+  shadows: boolean;
+  /** Shadow map resolution (512/1024/2048). */
+  shadowMapSize: number;
+  /** Shadow strength 0..1 (0 = invisible, 1 = black). */
+  shadowDarkness: number;
+  /** Soft-shadow blur kernel size. */
+  shadowBlur: number;
+}
+
+export const DEFAULT_RENDER: RenderConfig = {
+  toneMapping: "khr_neutral",
+  exposure: 1.0,
+  contrast: 1.1,
+  hemiIntensity: 0.5,
+  sunIntensity: 1.0,
+  ambientIntensity: 0.6,
+  ibl: false,
+  environmentIntensity: 0.7,
+  ssao: true,
+  ssaoRadius: 6,
+  ssaoStrength: 0.2,
+  ssaoSamples: 8,
+  shadows: false,
+  shadowMapSize: 1024,
+  shadowDarkness: 0.35,
+  shadowBlur: 32,
+};
+
 export interface AppConfig {
   haUrl: string;
   haToken: string;
@@ -76,6 +138,8 @@ export interface AppConfig {
    * inverted. Matches the macOS/iOS "Natural Scrolling" system setting.
    */
   naturalScrolling: boolean;
+  /** Render-quality / look settings (tone mapping, AO, shadows, IBL, lights). */
+  render: RenderConfig;
   onboarded: boolean;
 }
 
@@ -106,6 +170,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   showEntityLabels: false,
   highlightInteractive: false,
   naturalScrolling: true,
+  render: DEFAULT_RENDER,
   onboarded: false,
 };
 
@@ -122,6 +187,7 @@ export function loadConfig(): AppConfig {
       meshBindings: { ...DEFAULT_CONFIG.meshBindings, ...(stored.meshBindings ?? {}) },
       alertThresholds: { ...DEFAULT_CONFIG.alertThresholds, ...(stored.alertThresholds ?? {}) },
       modelTransform: { ...DEFAULT_CONFIG.modelTransform, ...(stored.modelTransform ?? {}) },
+      render: { ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) },
       markers: stored.markers ?? DEFAULT_CONFIG.markers,
       teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
     };

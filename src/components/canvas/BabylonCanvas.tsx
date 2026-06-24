@@ -5,9 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { loadModelFromIndexedDB, fetchAddonConfig } from "@/utils/storage";
+import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel } from "@/utils/storage";
+import { isIngress } from "@/ha/ingress";
 import { parseSh3d } from "@/utils/sh3dParser";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
+import ModelUploader from "@/components/settings/ModelUploader";
 import type { EntityMapping } from "@/types/scene.types";
 
 interface Props {
@@ -16,10 +18,11 @@ interface Props {
   onFloorChange: (floor: number) => void;
   onRoomChange: (room: string | null) => void;
   onNeedModel: () => void;
+  onModelUploaded: () => void;
 }
 
 export default function BabylonCanvas({
-  onManager, onEntityPicked, onFloorChange, onRoomChange, onNeedModel,
+  onManager, onEntityPicked, onFloorChange, onRoomChange, onNeedModel, onModelUploaded,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const managerRef = useRef<SceneManager | null>(null);
@@ -71,12 +74,19 @@ export default function BabylonCanvas({
         } else {
           // ── Standalone / dev mode: per-browser IndexedDB upload. ──────────
           data = await loadModelFromIndexedDB();
+          // Reconcile a stale meta record: the browser can evict the (large) GLB
+          // from IndexedDB while keeping the tiny localStorage meta, leaving the
+          // app claiming a "stored model" that no longer exists. Clear it so the
+          // no-model overlay and Settings agree with what actually loads.
+          if (!data && getModelMeta()) await clearStoredModel();
         }
 
         if (cancelled) return; // StrictMode unmounted us mid-load
         if (!data) {
+          // No GLB available (empty IndexedDB in standalone, or model_path unset
+          // in the add-on). Show an explanatory overlay instead of silently
+          // popping Settings open over a blank blue scene.
           setStatus("no-model");
-          onNeedModel();
           return;
         }
         await manager.loadModel(data);
@@ -166,6 +176,25 @@ export default function BabylonCanvas({
         <div className="center-overlay">
           <div className="spinner" />
           <div className="muted">Loading the villa…</div>
+        </div>
+      )}
+      {status === "no-model" && (
+        <div className="center-overlay">
+          <div className="body-text">No 3D model loaded yet.</div>
+          {isIngress() ? (
+            <div className="muted body-text" style={{ whiteSpace: "pre-line" }}>
+              Set <strong>model_path</strong> in the add-on configuration
+              (Settings → Add-ons → Villa Kiosk → Configuration) to the GLB in
+              your <code>/config/www/</code> folder.
+            </div>
+          ) : (
+            <>
+              <div className="muted body-text">
+                Upload a villa GLB to start exploring.
+              </div>
+              <ModelUploader minimal onUploaded={onModelUploaded} />
+            </>
+          )}
         </div>
       )}
       {status === "error" && (
