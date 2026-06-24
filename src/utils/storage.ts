@@ -80,6 +80,35 @@ export interface AddonConfig {
   sh3d_path: string;
 }
 
+/**
+ * Resolve a central model file (GLB/SH3D) to a version-stamped URL so the
+ * service worker can cache it aggressively (cache-first) yet still pick up a
+ * replaced file automatically. We HEAD the file for its ETag / Last-Modified and
+ * append it as `?v=`; when the admin swaps the model the tag changes, the URL
+ * changes, and the SW downloads the new bytes exactly once. Without this the
+ * 34 MB GLB was re-downloaded on every open (the SW skipped it because, behind
+ * Ingress, its path contains "/api/"). Falls back to the plain URL on any error.
+ */
+export async function versionedModelUrl(relPath: string): Promise<string> {
+  const url = ingressPath(`model/${relPath}`);
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 3000);
+    const resp = await fetch(url, { method: "HEAD", signal: ctrl.signal });
+    clearTimeout(tid);
+    if (resp.ok) {
+      const tag =
+        resp.headers.get("ETag") ||
+        resp.headers.get("Last-Modified") ||
+        resp.headers.get("Content-Length");
+      if (tag) return `${url}?v=${encodeURIComponent(tag.replace(/"/g, ""))}`;
+    }
+  } catch {
+    // Offline, or HEAD unsupported — fall back to the unversioned URL.
+  }
+  return url;
+}
+
 let _addonConfigCache: AddonConfig | null = null;
 
 /** Fetch the add-on options from the supervisor-proxy. Cached after first call. */

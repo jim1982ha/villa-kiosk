@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.4.18
+
+### Fix — interiors went blue at night ("blue kitchen")
+- Night lighting used a cold blue key light (`0.25, 0.3, 0.5`) and blue ambient,
+  which cast a strong cyan tint on white/light surfaces (kitchen cabinets, dining
+  tables, benches) when indoor lights were off. Confirmed via an A/B against the
+  2.4.15 code: identical at night, so it was the lighting, not a regression — the
+  same blue surfaces read white during the day under the warm sun. Night now uses
+  the warm, near-neutral indoor glow the code always intended: a low warm key
+  (`0.85, 0.78, 0.66`) lifted slightly for legibility plus warm-neutral ambient,
+  so white reads white at night. The sky stays dark, so it still reads as night.
+
+### Re-applied 2.4.16 (rolled forward from the 2.4.15 A/B test)
+- Central-GLB service-worker caching + download-progress %, square-checkbox CSS,
+  and the Config Editor "Confirm" label alignment — temporarily backed out in
+  2.4.17 for the night-lighting comparison — are restored.
+
 ## 2.4.17
 
 ### Roll back to 2.4.15 behaviour (forward-versioned re-revert of 2.4.16)
