@@ -1,6 +1,7 @@
 // src/components/panels/MediaPanel.tsx
-import { Tv, Power, Play } from "lucide-react";
+import { Tv, Play } from "lucide-react";
 import BasePanel from "./BasePanel";
+import PowerToggle from "./PowerToggle";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
@@ -12,9 +13,7 @@ export default function MediaPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Tv size={22} />} onClose={onClose}>
-      <button className={`big-toggle ${on ? "on" : ""}`} onClick={() => HAServices.toggleMedia(ws, mapping.entityId)}>
-        <Power size={24} /> {on ? "On" : "Off"}
-      </button>
+      <PowerToggle on={on} onClick={() => HAServices.toggleMedia(ws, mapping.entityId)} />
 
       {title && <p className="body-text center mt">Now playing: {title}</p>}
 

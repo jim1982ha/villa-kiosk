@@ -2,8 +2,9 @@
 // Generic switch + future pump entities (confirmation + runtime warning).
 
 import { useState } from "react";
-import { Power, ToggleLeft } from "lucide-react";
+import { ToggleLeft } from "lucide-react";
 import BasePanel from "./BasePanel";
+import PowerToggle from "./PowerToggle";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
@@ -27,9 +28,7 @@ export default function SwitchPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<ToggleLeft size={22} />} onClose={onClose}>
-      <button className={`big-toggle ${on ? "on" : ""}`} onClick={onClick}>
-        <Power size={24} /> {on ? "On" : "Off"}
-      </button>
+      <PowerToggle on={on} onClick={onClick} />
 
       {confirming && (
         <div className="modal-actions mt">

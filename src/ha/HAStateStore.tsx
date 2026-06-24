@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { HAWebSocket, type ConnectionState } from "./HAWebSocket";
+import { devLog } from "@/utils/devLog";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 
 type EntityCallback = (entity: HassEntity) => void;
@@ -94,7 +95,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
         // map coordinates and the dashboard title without manual entry.
         ws.sendMessage<HAConfig>("get_config")
           .then((cfg) => setHaConfig(cfg))
-          .catch(() => {});
+          .catch((err) => devLog("[HA] get_config failed (onboarding auto-fill skipped)", err));
       } catch (err) {
         const msg = (err as Error).message;
         setLastError(msg);

@@ -98,7 +98,15 @@ export class HAWebSocket {
         // which may have been replaced by a concurrent reconnect → "still in
         // CONNECTING state" errors).
         const socket = ev.target as WebSocket;
-        const msg = JSON.parse(ev.data as string);
+        // JSON.parse returns `any` (the deserialization boundary); a non-JSON
+        // frame should never reach us from HA, so ignore it rather than letting
+        // the exception kill this onmessage handler.
+        let msg: ReturnType<typeof JSON.parse>;
+        try {
+          msg = JSON.parse(ev.data as string);
+        } catch {
+          return;
+        }
         switch (msg.type) {
           case "auth_required":
             this.setState("authenticating");

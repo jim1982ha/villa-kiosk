@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.4.10
+
+### Fix — stale UI on the PWA / standalone deployment
+- The service worker cached the HTML shell *cache-first*, so a non-Ingress
+  install (the `/local/` or installable-PWA path) could keep booting an old
+  shell — and therefore old asset hashes — after an update, the same failure
+  the nginx `no-cache` header fixes for the add-on. The shell is now fetched
+  *network-first* (cache only as an offline fallback); hashed assets stay
+  cache-first. (The add-on itself disables the SW, so it was already safe.)
+
+### Hardening
+- nginx now sends `X-Content-Type-Options: nosniff`, `Referrer-Policy` and
+  `X-Frame-Options` (defense-in-depth behind HA Ingress).
+- WebSocket frame parsing and backup-ZIP config parsing are now guarded, so a
+  malformed message or corrupt backup yields a clean error instead of crashing
+  the handler.
+
+### Internal — audit pass 2 (no behaviour change)
+- Extracted the on/off button duplicated across the light, fan, switch and
+  media panels into one `PowerToggle` component.
+- Documented the supervisor-proxy's request-smuggling posture (aiohttp
+  CVE-2025-53643 applies only to the pure-Python parser, which is not in use).
+
 ## 2.4.9
 
 ### Fix — tapping entities did nothing on phones

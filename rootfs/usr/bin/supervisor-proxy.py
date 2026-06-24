@@ -12,6 +12,17 @@ ever needed and the powerful Supervisor token never reaches the browser.
          the Supervisor token, since the HA websocket authenticates in-band).
 
 Runs on 127.0.0.1:8100; nginx proxies the Ingress `/core/` paths to it.
+
+Security notes:
+  * Request smuggling (aiohttp CVE-2025-53643) affects only aiohttp's *pure
+    Python* HTTP parser; the Alpine `py3-aiohttp` package ships the compiled
+    (llhttp) C extension, so that path is not in use. Keep the HA base image
+    current so aiohttp stays patched.
+  * `rest_handler` strips the client's `Transfer-Encoding`/`Content-Length`
+    (see HOP_BY_HOP) and lets aiohttp re-frame the forwarded body, so a client
+    cannot desync nginx and Core via conflicting framing headers.
+  * nginx only accepts the HA Ingress gateway (172.30.32.2); this service binds
+    to loopback only and is never directly reachable.
 """
 import asyncio
 import json

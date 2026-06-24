@@ -14,3 +14,7 @@ tsconfig.tsbuildinfo
 *.obj
 *.mtl
 *.glb
+
+# Python bytecode (supervisor-proxy.py)
+__pycache__/
+*.pyc

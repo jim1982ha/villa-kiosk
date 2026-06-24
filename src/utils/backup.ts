@@ -34,7 +34,13 @@ export async function importBackup(file: File): Promise<ImportResult> {
   let modelImported = false;
 
   const cfgFile = zip.file(CONFIG_ENTRY);
-  if (cfgFile) config = JSON.parse(await cfgFile.async("string")) as Partial<AppConfig>;
+  if (cfgFile) {
+    try {
+      config = JSON.parse(await cfgFile.async("string")) as Partial<AppConfig>;
+    } catch {
+      throw new Error("Backup is corrupt: config.json is not valid JSON.");
+    }
+  }
 
   const modelFile = zip.file(MODEL_ENTRY);
   if (modelFile) {
