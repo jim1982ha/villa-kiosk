@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.4.24
+
+### Faster load
+- **Off lights no longer slow the load.** A fixture-dense villa builds dozens of
+  point lights (each LED strip is modelled as many co-located lights). They were
+  all left enabled at load even though nearly every light starts OFF — an enabled
+  light, even at zero intensity, stays in every nearby material's shader and
+  inflates the first-frame shader compilation. Off lights are now fully disabled
+  (dropped from shaders) and only re-enabled when the entity turns on. Big win in
+  BOTH add-on and standalone mode, since it's a scene-build cost, not a download.
+- **No more shader-recompile storm.** Creating those lights one-by-one re-flagged
+  every material's shader as dirty on each add. The build is now batched so shaders
+  compile once at the end instead of O(lights × materials) times.
+- **Gzip the central GLB (add-on).** nginx now compresses the GLB transfer
+  (geometry buffers compress well), cutting download time on the remote/DuckDNS
+  path. Embedded textures don't shrink, so a modest compression level keeps the HA
+  host's CPU cost low.
+
+### Glass
+- **Pin down stubborn custom panes.** A pane-like geometry finder now logs any
+  large, thin, flat slab that wasn't detected as glass (walls/floors excluded),
+  with its exact material name — so a custom window like `window_3x1` whose material
+  has no glass keyword can be identified precisely and added to the hint list,
+  instead of guessing.
+
 ## 2.4.23
 
 ### Glass tuning

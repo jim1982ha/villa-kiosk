@@ -82,6 +82,40 @@ export async function loadModelInto(scene: Scene, data: ArrayBuffer): Promise<Lo
       "| all materials:",
       [...allMats].sort(),
     );
+
+    // A custom-imported window (e.g. window_3x1) can carry a material whose name
+    // has no glass keyword, so it slips past the name match above and stays a grey
+    // panel. Rather than guess, find the geometry that LOOKS like a pane — a large,
+    // very thin, flat slab — and print it with its material name. Walls/floors are
+    // also thin slabs, so exclude those by name. The user reads the window-sized
+    // entry off this list and we add that material to GLASS_NAME_HINTS for good.
+    const NON_GLASS_RE = /wall|floor|ceiling|roof|ground|room|stair|door/i;
+    const panes: { mesh: string; material: string; size: string }[] = [];
+    for (const m of result.meshes) {
+      if (m.getTotalVertices() === 0) continue;
+      const mat = m.material as { name?: string } | null;
+      const matName = mat?.name ?? "(none)";
+      if (looksLikeGlass(matName, m.name)) continue;      // already see-through
+      if (NON_GLASS_RE.test(matName) || NON_GLASS_RE.test(m.name)) continue;
+      const ext = m.getBoundingInfo().boundingBox.extendSizeWorld; // half-extents
+      const dims = [ext.x * 2, ext.y * 2, ext.z * 2].sort((a, b) => a - b);
+      const [thin, mid, big] = dims;
+      // Pane = two large dimensions, one much smaller (flat), and not tiny overall.
+      if (big > 40 && mid > 40 && thin < mid * 0.2) {
+        panes.push({
+          mesh: m.name,
+          material: matName,
+          size: `${big.toFixed(0)}×${mid.toFixed(0)}×${thin.toFixed(0)}`,
+        });
+      }
+    }
+    if (panes.length) {
+      console.info(
+        "[ModelLoader] pane-like meshes NOT treated as glass — if one is a window, " +
+        "tell me its material to add to GLASS_NAME_HINTS:",
+        panes,
+      );
+    }
     return { meshes: result.meshes };
   } finally {
     URL.revokeObjectURL(url);

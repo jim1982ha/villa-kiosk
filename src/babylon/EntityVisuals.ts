@@ -113,6 +113,13 @@ export class EntityVisuals {
     this.mapping.clear();
     this.shadowCasters = [];
 
+    // Creating dozens of PointLights one-by-one makes Babylon re-flag every
+    // material's shader as dirty on each add — an O(lights × materials) storm of
+    // shader recompiles that dominates load time on a fixture-dense villa. Batch
+    // it: suspend the dirty mechanism while we build, then flush once at the end.
+    const scene = this.scene;
+    scene.blockMaterialDirtyMechanism = true;
+
     for (const m of meshes) {
       const map = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
       if (!map) {
@@ -141,9 +148,17 @@ export class EntityVisuals {
         light.intensity = 0;
         light.range = LIGHT_RANGE;
         light.diffuse = WARM_GLOW.clone();
+        // Start DISABLED, not just intensity 0. A disabled light is dropped from
+        // every material's shader light-loop entirely, so an off fixture costs
+        // nothing to compile or shade; it's re-enabled in applyToMesh when the
+        // entity turns on. With most lights off at load, this slashes the active
+        // light count the first frame has to compile shaders for.
+        light.setEnabled(false);
         this.meshLights.set(m.uniqueId, light);
       }
     }
+
+    scene.blockMaterialDirtyMechanism = false;
 
     if (this.config.showEntityLabels) this.rebuildLabels();
   }
@@ -408,6 +423,9 @@ export class EntityVisuals {
           const fixtureCount = this.byEntity.get(map.entityId)?.length ?? 1;
           light.diffuse = colour;
           light.intensity = on ? (MAX_LIGHT_INTENSITY * brightnessFrac) / fixtureCount : 0;
+          // Drop the light out of (or back into) shaders entirely with its state,
+          // so only lights that are actually on add per-pixel cost.
+          light.setEnabled(on);
         }
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;
