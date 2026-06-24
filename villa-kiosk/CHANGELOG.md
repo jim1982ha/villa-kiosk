@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.4.17
+
+### Roll back to 2.4.15 behaviour (forward-versioned re-revert of 2.4.16)
+- HA Supervisor only updates forward, so a true downgrade to 2.4.15 can't be
+  offered to an instance already on 2.4.16. This release carries the **exact
+  2.4.15 codebase** under a higher version number so production can move onto it
+  via the normal Update button — to A/B confirm the night-time blue-ish kitchen
+  tint (which is the existing `SunController` night lighting, not a 2.4.16
+  regression).
+- Temporarily backs out the 2.4.16 changes (central-GLB service-worker caching +
+  download-progress %, square-checkbox CSS, Config Editor "Confirm" label
+  alignment). These will be re-applied once the comparison is done.
+
 ## 2.4.15
 
 ### Fix — Bird's-eye pan didn't track the finger (felt "disconnected" sideways)
