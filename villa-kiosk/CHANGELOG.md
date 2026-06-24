@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.4.21
+
+### Fix — lamp light bled through walls + merged multi-lamp fixtures
+- **Light no longer floods the next room.** Each `light` fixture's `PointLight`
+  had an 8 m range and no occlusion, so it lit straight through walls. Range is
+  now room-scale (4 m) with quadratic falloff (near-zero cost), and — when the
+  **Shadows** quality toggle is on — each active lamp casts a cube shadow map
+  against the villa shell so walls actually block the light. The shadow map is
+  created lazily only while a light is on and freed when it turns off, so an off
+  light costs nothing.
+- **One light per lamp.** Light sources are now created per fixture *mesh* instead
+  of per entity, so an entity whose fixture is several distinct meshes (e.g. the
+  two bedside lamps, or multiple stair downlights, that share one HA entity) gets
+  a real light at *each* lamp instead of one merged light at their midpoint. Takes
+  full effect once the model is regenerated with separate meshes (see the Blender
+  pipeline change); harmless with the current merged model.
+
 ## 2.4.20
 
 ### Fix — kiosk view freezes ("can see the villa but can't move/navigate")

@@ -15,7 +15,7 @@
 //   binary_sensor -> pulsing red when triggered (e.g. leak).
 
 import {
-  Color3, StandardMaterial, PBRMaterial, PointLight,
+  Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
   type AbstractMesh, type Scene, type Material,
 } from "@babylonjs/core";
 import {
@@ -29,6 +29,15 @@ import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 0.85;
+// Room-scale reach for a fixture's PointLight. The old value (8 m) lit straight
+// through walls into the next room because point lights have no occlusion on
+// their own; a tighter range with quadratic falloff keeps most of the light
+// where the lamp is. True wall-blocking is the optional shadow path below.
+const LIGHT_RANGE = 4.0;
+// Cube shadow maps for point lights are 6 faces each, so keep them small — this
+// is an opt-in (gated behind the Shadows quality toggle) and only active while a
+// light is actually on.
+const LIGHT_SHADOW_SIZE = 512;
 
 interface LabelControls {
   rect: Rectangle;
@@ -48,8 +57,15 @@ export class EntityVisuals {
   private pulsing = new Set<AbstractMesh>();
   private pulseT = 0;
 
-  /** Real light sources we create for `light` entities (entity_id -> light). */
-  private lights = new Map<string, PointLight>();
+  // Real light sources for `light` entities. Keyed by MESH uniqueId (not entity
+  // id) so an entity whose fixture is several distinct meshes — e.g. the two
+  // bedside lamps that share one HA entity, or multiple curtain-rail downlights —
+  // gets a real light at EACH lamp instead of one merged light at their midpoint.
+  private meshLights = new Map<number, PointLight>();
+  /** Optional per-light cube shadow map (created lazily while a light is on). */
+  private lightShadows = new Map<number, ShadowGenerator>();
+  /** Structural meshes (walls/floors/shell) that occlude entity-light shadows. */
+  private shadowCasters: AbstractMesh[] = [];
   /** Fullscreen GUI layer for state labels. */
   private labelLayer: AdvancedDynamicTexture | null = null;
   private labels = new Map<string, LabelControls>();
@@ -71,7 +87,18 @@ export class EntityVisuals {
 
   updateConfig(config: AppConfig): void {
     const prevLabels = this.config.showEntityLabels;
+    const prevShadows = this.config.render?.shadows ?? false;
     this.config = config;
+    // Shadows just turned off: free every active light's cube shadow map now,
+    // rather than waiting for each light to be re-applied.
+    if (prevShadows && !(config.render?.shadows ?? false)) {
+      this.lightShadows.forEach((gen, key) => {
+        gen.dispose();
+        const light = this.meshLights.get(key);
+        if (light) light.shadowEnabled = false;
+      });
+      this.lightShadows.clear();
+    }
     if (config.showEntityLabels !== prevLabels) {
       if (config.showEntityLabels) {
         this.rebuildLabels();
@@ -83,37 +110,54 @@ export class EntityVisuals {
 
   /** Build the reverse index entity_id -> meshes from the loaded GLB. */
   indexMeshes(meshes: AbstractMesh[]): void {
-    // Dispose previously created light sources before re-indexing.
-    this.lights.forEach((l) => l.dispose());
-    this.lights.clear();
+    // Dispose previously created light sources + shadow maps before re-indexing.
+    this.disposeLights();
     this.pulsing.clear();
     this.byEntity.clear();
     this.mapping.clear();
+    this.shadowCasters = [];
 
     for (const m of meshes) {
       const map = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
-      if (!map) continue;
+      if (!map) {
+        // Everything that isn't a bound entity is villa shell / furniture: it can
+        // block a lamp's light, so keep it as a potential shadow caster. Skip the
+        // helper meshes (markers, halos, labels) that aren't real geometry.
+        if (m.getTotalVertices() > 0 && !/^(halo_|label_|marker)/i.test(m.name)) {
+          this.shadowCasters.push(m);
+        }
+        continue;
+      }
       const list = this.byEntity.get(map.entityId) ?? [];
       list.push(m);
       this.byEntity.set(map.entityId, list);
       this.mapping.set(map.entityId, map);
 
-      // For lights, create a real (initially off) PointLight at the fixture.
-      if (map.type === "light" && !this.lights.has(map.entityId)) {
+      // For lights, create a real (initially off) PointLight at EACH fixture mesh
+      // — one per lamp, so two bedside lamps under one entity both illuminate.
+      if (map.type === "light") {
         // Use bounding-box centre: when the model came from an OBJ (Blender
         // pipeline), the node position is (0,0,0) for every entity mesh and the
         // actual 3D location is encoded only in vertex data.
         m.computeWorldMatrix(true);
         const pos = m.getBoundingInfo().boundingBox.centerWorld.clone();
-        const light = new PointLight(`elight_${map.entityId}`, pos, this.scene);
+        const light = new PointLight(`elight_${m.name}_${m.uniqueId}`, pos, this.scene);
         light.intensity = 0;
-        light.range = 8;
+        light.range = LIGHT_RANGE;
         light.diffuse = WARM_GLOW.clone();
-        this.lights.set(map.entityId, light);
+        this.meshLights.set(m.uniqueId, light);
       }
     }
 
     if (this.config.showEntityLabels) this.rebuildLabels();
+  }
+
+  /** Tear down all entity light sources and their shadow generators. */
+  private disposeLights(): void {
+    this.lightShadows.forEach((g) => g.dispose());
+    this.lightShadows.clear();
+    this.meshLights.forEach((l) => l.dispose());
+    this.meshLights.clear();
   }
 
   hasEntity(entityId: string): boolean {
@@ -300,6 +344,37 @@ export class EntityVisuals {
     return WARM_GLOW.clone();
   }
 
+  /**
+   * Make walls actually block this lamp's light — but only when the user opts in
+   * via the Shadows quality toggle, since point-light shadows are a cube map (6
+   * faces) per active light. Created lazily when the light first turns on and
+   * disposed when it turns off (or shadows are disabled) so an idle/off light
+   * costs nothing.
+   */
+  private syncLightShadow(key: number, light: PointLight, on: boolean): void {
+    const want = on && (this.config.render?.shadows ?? false);
+    const existing = this.lightShadows.get(key);
+
+    if (!want) {
+      if (existing) {
+        existing.dispose();
+        this.lightShadows.delete(key);
+        light.shadowEnabled = false;
+      }
+      return;
+    }
+    if (existing) return; // already casting
+
+    const gen = new ShadowGenerator(LIGHT_SHADOW_SIZE, light);
+    gen.usePoissonSampling = true; // cheap soft edge; blur-ESM isn't supported for cube maps
+    const shadowMap = gen.getShadowMap();
+    if (shadowMap) {
+      shadowMap.renderList = this.shadowCasters.slice();
+      for (const caster of this.shadowCasters) caster.receiveShadows = true;
+    }
+    this.lightShadows.set(key, gen);
+  }
+
   private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity): void {
     const setEmissive = this.emissiveOf(mesh);
     const setDiffuse = this.diffuseOf(mesh);
@@ -313,11 +388,12 @@ export class EntityVisuals {
         // 1) The fixture mesh glows.
         setEmissive?.(on ? colour.scale(brightnessFrac) : Color3.Black());
 
-        // 2) The real light source illuminates the room.
-        const light = this.lights.get(map.entityId);
+        // 2) This fixture mesh's own light source illuminates the room.
+        const light = this.meshLights.get(mesh.uniqueId);
         if (light) {
           light.diffuse = colour;
           light.intensity = on ? MAX_LIGHT_INTENSITY * brightnessFrac : 0;
+          this.syncLightShadow(mesh.uniqueId, light, on);
         }
         break;
       }
