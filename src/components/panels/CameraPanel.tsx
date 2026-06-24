@@ -7,7 +7,7 @@
 // fall back to polling the still-image endpoint, which works for any camera.
 
 import { useEffect, useRef, useState } from "react";
-import { X, VideoOff } from "lucide-react";
+import { X, VideoOff, Maximize2, Minimize2 } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -30,7 +30,7 @@ const SNAPSHOT_MAX_ERRORS = 3;
 // RTSP/ONVIF/HLS cameras) leaves HA's camera_proxy_stream connection open
 // without ever sending a frame — the <img> then fires neither load nor error,
 // so without this watchdog we'd sit on a blank view forever.
-const STREAM_WATCHDOG_MS = 3500;
+const STREAM_WATCHDOG_MS = 1000;
 
 export default function CameraPanel({ entity, mapping, onClose, pinContinuous }: Props) {
   const { connected } = useHA();
@@ -40,6 +40,8 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   const snapErrors = useRef(0);
   // Set once the MJPEG <img> paints a frame — tells the watchdog the stream is live.
   const streamLoaded = useRef(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [isFs, setIsFs] = useState(false);
 
   const fallBackToSnapshot = () => {
     snapErrors.current = 0;
@@ -50,6 +52,28 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     const unpin = pinContinuous?.();
     return () => unpin?.();
   }, [pinContinuous]);
+
+  // Keep the button icon in sync if the user leaves fullscreen via the Esc key
+  // or the OS gesture rather than our button.
+  useEffect(() => {
+    const onFsChange = () => setIsFs(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // The feed is an <img> (MJPEG/snapshot), so there's no native video control
+  // bar; a live camera has no timeline to scrub or pause. Fullscreen is the one
+  // meaningful control, so we expose it via the Fullscreen API (graceful no-op
+  // where unsupported — the panel already covers the screen via CSS).
+  const toggleFullscreen = () => {
+    const el = rootRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.();
+    } else {
+      void el.requestFullscreen?.();
+    }
+  };
 
   // Start over (try the stream again) whenever the target camera changes.
   useEffect(() => {
@@ -125,7 +149,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   };
 
   return (
-    <div className="camera-fullscreen">
+    <div className="camera-fullscreen" ref={rootRef}>
       <div className="label">
         {mapping.label}
         {lastMotion && (
@@ -134,6 +158,14 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           </span>
         )}
       </div>
+      <button
+        className="icon-btn fs-btn"
+        onClick={toggleFullscreen}
+        title={isFs ? "Exit fullscreen" : "Fullscreen"}
+        aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
+      >
+        {isFs ? <Minimize2 size={22} /> : <Maximize2 size={22} />}
+      </button>
       <button className="icon-btn close" onClick={onClose}>
         <X size={24} />
       </button>

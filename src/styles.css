@@ -319,6 +319,7 @@ input[type="range"]::-moz-range-thumb {
 .camera-fullscreen img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .camera-fullscreen .label { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); left: calc(24px + env(safe-area-inset-left, 0px)); font-size: 18px; background: rgba(0,0,0,0.5); padding: 8px 16px; border-radius: 10px; }
 .camera-fullscreen .close { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(24px + env(safe-area-inset-right, 0px)); }
+.camera-fullscreen .fs-btn { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(72px + env(safe-area-inset-right, 0px)); }
 
 /* --- Teleport menu --- */
 .teleport-grid {

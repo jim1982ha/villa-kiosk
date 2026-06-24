@@ -30,7 +30,7 @@
 // when false the view moves opposite (traditional). Applied to pan, tilt and zoom
 // so the in-app toggle matches user expectation regardless of the OS setting.
 
-import { ArcRotateCamera, Vector3, type Scene } from "@babylonjs/core";
+import { ArcRotateCamera, Matrix, Vector3, type Scene } from "@babylonjs/core";
 import { TapRecognizer } from "./TapRecognizer";
 
 interface OverviewCallbacks {
@@ -54,6 +54,7 @@ const TILT_SENS_TOUCH = 0.005;  // radians per pixel (two-finger centroid drag)
 
 export class OverviewController {
   readonly camera: ArcRotateCamera;
+  private scene: Scene;
   private canvas: HTMLCanvasElement;
   private cb: OverviewCallbacks;
   private attached = false;
@@ -64,6 +65,7 @@ export class OverviewController {
   private static readonly BETA_MAX = 1.4;  // ~80° (near horizon)
 
   constructor(scene: Scene, canvas: HTMLCanvasElement, cb: OverviewCallbacks) {
+    this.scene = scene;
     this.canvas = canvas;
     this.cb = cb;
 
@@ -161,8 +163,10 @@ export class OverviewController {
   private onPointerMove = (e: PointerEvent): void => {
     const prev = this.pointers.get(e.pointerId);
     if (!prev) return;
-    const dx = e.clientX - prev.x;
-    const dy = e.clientY - prev.y;
+    const oldX = prev.x;
+    const oldY = prev.y;
+    const dx = e.clientX - oldX;
+    const dy = e.clientY - oldY;
     prev.x = e.clientX;
     prev.y = e.clientY;
     e.preventDefault();
@@ -185,7 +189,10 @@ export class OverviewController {
       this.applyZoom(-dy * ZOOM_SENS_DRAG * this.camera.radius * s);
     } else {
       // Plain single-pointer drag (1-finger touch or left mouse) → PAN.
-      this.applyPan(dx * s, dy * s, DRAG_SENS);
+      // Use exact ground tracking so the spot under the finger stays under the
+      // finger (true 1:1 on BOTH axes regardless of tilt/zoom), instead of a
+      // flat per-pixel constant that mistracks horizontally vs vertically.
+      this.dragPan(oldX, oldY, e.clientX, e.clientY, s, dx, dy);
     }
     this.cb.onActivity();
   };
@@ -313,6 +320,43 @@ export class OverviewController {
   };
 
   // ── Movement primitives ────────────────────────────────────────────────────
+
+  /**
+   * Unproject a screen (client) point onto the horizontal ground plane at the
+   * orbit target's height. Returns null when the ray is parallel to / above the
+   * plane (finger over the sky near the horizon).
+   */
+  private groundAt(clientX: number, clientY: number): Vector3 | null {
+    const rect = this.canvas.getBoundingClientRect();
+    const ray = this.scene.createPickingRay(
+      clientX - rect.left, clientY - rect.top, Matrix.Identity(), this.camera,
+    );
+    if (Math.abs(ray.direction.y) < 1e-6) return null;
+    const dist = (this.camera.target.y - ray.origin.y) / ray.direction.y;
+    if (dist <= 0) return null;
+    return ray.origin.add(ray.direction.scale(dist));
+  }
+
+  /**
+   * Drag-to-pan with exact finger tracking: keep the ground point first grabbed
+   * under the moving finger by translating the orbit target by the world-space
+   * difference between where the finger was and where it now is on the ground.
+   * This is correct on both axes at any tilt/zoom (no per-axis foreshortening
+   * mismatch). Falls back to the analytic pan if either point misses the ground.
+   */
+  private dragPan(
+    oldX: number, oldY: number, newX: number, newY: number,
+    s: number, dx: number, dy: number,
+  ): void {
+    const g0 = this.groundAt(oldX, oldY);
+    const g1 = this.groundAt(newX, newY);
+    if (!g0 || !g1) { this.applyPan(dx * s, dy * s, DRAG_SENS); return; }
+    const t = this.camera.target;
+    // s flips the direction for the natural-scrolling toggle: +1 makes the map
+    // follow the finger (the grabbed point stays pinned to it), -1 inverts it.
+    t.x = clamp(t.x + (g0.x - g1.x) * s, this.bounds.minX, this.bounds.maxX);
+    t.z = clamp(t.z + (g0.z - g1.z) * s, this.bounds.minZ, this.bounds.maxZ);
+  }
 
   /**
    * Pan by projecting screen-space dx/dy onto the ground plane in world space.

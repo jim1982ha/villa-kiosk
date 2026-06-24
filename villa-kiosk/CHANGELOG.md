@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.4.15
+
+### Fix — Bird's-eye pan didn't track the finger (felt "disconnected" sideways)
+- The overview pan converted finger movement to world movement with a single
+  flat per-pixel constant on both axes. Because the overview camera is tilted,
+  the screen-to-ground scale differs horizontally vs vertically, so the ground
+  slid less than the finger on one axis (most noticeably you had to drag wider
+  horizontally than the view moved). Panning now unprojects the finger onto the
+  ground plane and keeps the grabbed point pinned under the finger — true 1:1
+  tracking on both axes at any tilt/zoom. The Natural Scrolling toggle simply
+  flips the direction and applies live on Save.
+
+### Faster camera takeover + a fullscreen control
+- The MJPEG stream watchdog now falls back to the snapshot poll after 1s (was a
+  few seconds), so the feed appears almost immediately for cameras that don't
+  serve MJPEG.
+- Added a fullscreen button to the camera view. Note: the feed is a live image
+  (MJPEG/snapshot), not a `<video>`, so there's no native play/pause/scrub bar —
+  those aren't meaningful for a live camera; fullscreen is the useful control.
+
 ## 2.4.14
 
 ### Fix — Camera feed showed nothing on open
