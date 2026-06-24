@@ -149,7 +149,9 @@ button {
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
   padding: 0 18px; gap: 16px;
   background: linear-gradient(180deg, rgba(18, 12, 6, 0.85), transparent);
-  z-index: 20; pointer-events: none;
+  /* Above the floating floor switch (z-21) so the dropdown menus, which live
+     inside this bar's stacking context, paint OVER the 1F/2F selector when open. */
+  z-index: 22; pointer-events: none;
 }
 .hud-topbar > * { pointer-events: auto; }
 .hud-brand { justify-self: start; display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 22px; font-weight: 400; }
@@ -539,6 +541,23 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .hud-right .icon-btn { width: 32px; height: 32px; }
   /* Smaller floating floor switch on a phone. */
   .floor-switch-v button { width: 36px; height: 32px; font-size: 12px; }
+
+  /* Dropdown menus (Display / Build / Config) are triggered from the centred
+     icon cluster. Anchoring each panel to its trigger's right edge (right: 0 +
+     min-width: 220px) pushes the left menus off the left screen edge, clipping
+     their labels. Pin all of them to a single fixed spot just under the bar on
+     the right instead — never clipped, never overlapping the left floor switch.
+     They inherit the top bar's z-index context (raised to 22), so they paint
+     above the floor selector. */
+  .hud-menu-panel {
+    position: fixed;
+    top: calc(52px + env(safe-area-inset-top, 0px) + 6px);
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    left: auto;
+    min-width: 0;
+    width: min(280px, calc(100vw - 20px));
+    max-width: calc(100vw - 20px);
+  }
 
   /* Dialogs fill the small screen and never crop their header/footer. The body
      scrolls between a pinned header and footer; dvh tracks the real visible

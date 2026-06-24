@@ -90,24 +90,8 @@ export default function BabylonCanvas({
           return;
         }
         await manager.loadModel(data);
-
-        // If a central SH3D is configured, load room names + calibration from
-        // the server every time (keeps all clients in sync when the file changes).
-        if (fromAddon && addonCfg.sh3d_path) {
-          try {
-            const sh3dResp = await fetch(ingressPath(`model/${addonCfg.sh3d_path}`));
-            if (sh3dResp.ok) {
-              const sh3dBuf = await sh3dResp.arrayBuffer();
-              const { rooms, entities } = await parseSh3d(sh3dBuf);
-              if (rooms.length > 0) {
-                update({ sh3dRooms: rooms, sh3dEntities: entities });
-              }
-            }
-          } catch (err) {
-            console.warn("[BabylonCanvas] central SH3D fetch failed", err);
-          }
-        }
         if (cancelled) return;
+
         // Expose mesh names for the binding UI.
         saveMeshCatalog(manager.getBindableMeshNames());
         // Auto-populate entityMap from meshes whose names are HA entity IDs
@@ -125,7 +109,32 @@ export default function BabylonCanvas({
         }
         // Paint the current entity states immediately (meshes + markers).
         Object.values(entities).forEach((e) => manager.applyEntityState(e));
+
+        // The villa is interactive now — clear the loading overlay BEFORE the
+        // heavy, optional SH3D refresh below. Room labels already render from the
+        // persisted config, so we don't make first paint wait on it.
         setStatus("ready");
+
+        // Refresh central room names + calibration in the BACKGROUND. The SH3D
+        // can be tens of MB (it's the full SweetHome project) and we fetch +
+        // unzip + parse it only for room metadata — doing that inline blocked
+        // first paint for seconds on mobile. This keeps all clients in sync when
+        // the file changes without holding up the render.
+        if (fromAddon && addonCfg.sh3d_path) {
+          void (async () => {
+            try {
+              const sh3dResp = await fetch(ingressPath(`model/${addonCfg.sh3d_path}`));
+              if (!sh3dResp.ok) return;
+              const sh3dBuf = await sh3dResp.arrayBuffer();
+              const { rooms, entities: sh3dEntities } = await parseSh3d(sh3dBuf);
+              if (!cancelled && rooms.length > 0) {
+                update({ sh3dRooms: rooms, sh3dEntities });
+              }
+            } catch (err) {
+              console.warn("[BabylonCanvas] central SH3D refresh failed", err);
+            }
+          })();
+        }
       } catch (err) {
         if (cancelled) return;
         console.error("[BabylonCanvas] model load failed", err);

@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.4.13
+
+### Fix — Slow first paint on mobile
+- The "Loading the villa…" overlay stayed up far too long on phones because the
+  optional SH3D refresh (the full SweetHome project, tens of MB — downloaded,
+  unzipped and XML-parsed only for room metadata) ran *inline* before the scene
+  was marked ready. The villa is now interactive the moment the GLB loads; the
+  SH3D room-name/calibration refresh happens in the background and updates the
+  labels when it arrives, so first paint no longer waits on it.
+
+### Fix — Mobile dropdown menu layout
+- Opening the Display / Build / Config dropdowns on a phone produced two glitches:
+  the floating 1F/2F floor selector painted *over* the open menu, and the
+  left-most menus extended off the left screen edge, clipping their labels. The
+  top bar now sits above the floor selector's stacking context so menus paint
+  over it, and on mobile each dropdown is pinned to a fixed on-screen spot under
+  the bar (width-constrained to the viewport) so nothing is clipped or overlapped.
+
 ## 2.4.12
 
 ### Fix — "No 3D model loaded" despite a configured `model_path` (add-on)
