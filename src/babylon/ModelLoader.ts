@@ -38,17 +38,33 @@ const GLASS_NAME_HINTS = [
 // rather than an empty hole in the wall.
 const GLASS_ALPHA = 0.38;
 
-function looksLikeGlass(...names: (string | undefined)[]): boolean {
+function looksLikeGlass(names: (string | undefined)[], hints: string[]): boolean {
   for (const n of names) {
     if (!n) continue;
     const low = n.toLowerCase();
-    if (GLASS_NAME_HINTS.some((h) => low.includes(h))) return true;
+    if (hints.some((h) => low.includes(h))) return true;
   }
   return false;
 }
 
-/** Append a GLB (given as ArrayBuffer) into an existing scene. */
-export async function loadModelInto(scene: Scene, data: ArrayBuffer): Promise<LoadResult> {
+/**
+ * Append a GLB (given as ArrayBuffer) into an existing scene.
+ *
+ * `extraGlassHints` are user-supplied substrings (from config.extraGlassHints)
+ * merged into the built-in glass keyword list — so a custom imported window whose
+ * material name has no glass keyword can be made see-through by naming it in the
+ * config, without a code change. Identify the name from the pane-candidate console
+ * log below.
+ */
+export async function loadModelInto(
+  scene: Scene,
+  data: ArrayBuffer,
+  extraGlassHints: string[] = [],
+): Promise<LoadResult> {
+  const glassHints = [
+    ...GLASS_NAME_HINTS,
+    ...extraGlassHints.map((h) => h.toLowerCase()).filter(Boolean),
+  ];
   const blob = new Blob([data], { type: "model/gltf-binary" });
   const url = URL.createObjectURL(blob);
   try {
@@ -63,7 +79,7 @@ export async function loadModelInto(scene: Scene, data: ArrayBuffer): Promise<Lo
       if (mat.name) allMats.add(mat.name);
       if ("maxSimultaneousLights" in mat) mat.maxSimultaneousLights = MAX_SIMULTANEOUS_LIGHTS;
 
-      if (looksLikeGlass(mat.name, m.name)) {
+      if (looksLikeGlass([mat.name, m.name], glassHints)) {
         mat.alpha = GLASS_ALPHA;
         mat.transparencyMode = Material.MATERIAL_ALPHABLEND;
         mat.backFaceCulling = false; // see both faces of a thin pane
@@ -95,7 +111,7 @@ export async function loadModelInto(scene: Scene, data: ArrayBuffer): Promise<Lo
       if (m.getTotalVertices() === 0) continue;
       const mat = m.material as { name?: string } | null;
       const matName = mat?.name ?? "(none)";
-      if (looksLikeGlass(matName, m.name)) continue;      // already see-through
+      if (looksLikeGlass([matName, m.name], glassHints)) continue; // already see-through
       if (NON_GLASS_RE.test(matName) || NON_GLASS_RE.test(m.name)) continue;
       const ext = m.getBoundingInfo().boundingBox.extendSizeWorld; // half-extents
       const dims = [ext.x * 2, ext.y * 2, ext.z * 2].sort((a, b) => a - b);

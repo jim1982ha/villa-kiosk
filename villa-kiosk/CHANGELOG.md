@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.4.25
+
+### Grass instead of a grey plinth
+- The villa sat on a flat **grey slab** outside the grass. That slab is SweetHome
+  3D's bare terrain (the ground outside the grass room) — not something Blender
+  adds. The big flat base is now detected and painted with a procedurally drawn
+  **grass texture** (canvas-generated, no asset, offline-safe), so the garden
+  reaches the edge of the model. Conservative detection (flat + at the base +
+  spanning most of the model + not already green) leaves indoor floors and the
+  existing grass untouched. Logs `[GroundGrass] painted grass on …`.
+
+### Glass — name a stubborn pane yourself
+- Added **`extraGlassHints`** to the config: a list of substrings merged into the
+  glass-detection keywords. A custom imported window (like `window_3x1`) whose
+  glass material has no obvious keyword can now be made see-through by adding its
+  material name here — no code change. Find the exact name in the
+  `[ModelLoader] pane-like meshes …` console log (match by size), add it, reload.
+
 ## 2.4.24
 
 ### Faster load

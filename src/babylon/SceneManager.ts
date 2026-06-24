@@ -27,6 +27,7 @@ import { MarkerManager } from "./MarkerManager";
 import { WeatherEffects } from "./WeatherEffects";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
+import { applyGrassGround } from "./GroundGrass";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { fitAffine, affineResidual, spanArea, type PlanWorldPair } from "@/utils/affineFit";
@@ -350,7 +351,7 @@ export class SceneManager {
 
   /** Load the GLB (from ArrayBuffer in IndexedDB or an uploaded File). */
   async loadModel(data: ArrayBuffer): Promise<void> {
-    const result = await loadModelInto(this.scene, data);
+    const result = await loadModelInto(this.scene, data, this.config.extraGlassHints ?? []);
     this.loadedMeshes = result.meshes;
     this.normalizeScale(result.meshes); // bring to metres BEFORE recentring
     this.recenterModel(result.meshes); // align to origin BEFORE indexing positions
@@ -359,6 +360,7 @@ export class SceneManager {
     this.pick.indexInteractiveMeshes(result.meshes);
     this.visuals.indexMeshes(result.meshes);
     this.applyStructure(result.meshes); // solid walls + collisions
+    applyGrassGround(this.scene, result.meshes); // grey terrain slab -> grass
     this.applyHighlight(result.meshes); // blue glow on bound meshes (if enabled)
     this.renderFx.registerMeshes(result.meshes); // shadow casters/receivers
 

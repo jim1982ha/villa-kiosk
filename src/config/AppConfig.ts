@@ -140,6 +140,13 @@ export interface AppConfig {
   naturalScrolling: boolean;
   /** Render-quality / look settings (tone mapping, AO, shadows, IBL, lights). */
   render: RenderConfig;
+  /**
+   * Extra substrings that mark a material/mesh as glass, merged into the built-in
+   * keyword list. For custom imported windows whose glass material has no obvious
+   * keyword (find the name in the `[ModelLoader] pane-like meshes` console log).
+   * Case-insensitive substring match; takes effect on the next model load.
+   */
+  extraGlassHints?: string[];
   onboarded: boolean;
 }
 
