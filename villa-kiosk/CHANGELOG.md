@@ -1,5 +1,44 @@
 # Changelog
 
+## 2.4.11
+
+### New — Render quality & look (Settings → *Render quality*)
+- A configurable, live-tunable render stack to fix the washed-out / flat,
+  low-contrast render. Every effect is independent, applies live, and persists
+  with your config: **tone mapping** (Khronos PBR Neutral default / ACES /
+  Standard / None) with exposure & contrast, **fill/key/ambient light balance**,
+  **ambient occlusion** (SSAO), **sun shadows**, and **environment lighting**
+  (procedural sky/ground IBL — no shipped asset). The same knobs are exposed as
+  Blender pipeline flags so the look can be baked into the GLB.
+
+### Fix — disabling Ambient occlusion made the model vanish for good
+- Unchecking ambient occlusion disposed the SSAO pipeline but left it registered
+  in the post-process manager, which then dereferenced null post-processes every
+  frame — throwing inside the render loop and killing it, so the model
+  disappeared and re-enabling couldn't recover. AO now toggles by detaching the
+  cameras (the pipeline stays alive), and teardown stops the render loop first.
+
+### Settings UX
+- AO defaults tuned to minimum strength / maximum radius (subtle by default).
+- Removed the global **Reset** button; **Cancel** (and tapping outside the modal)
+  now reverts every live-applied change — render preview, eye height, walk speed
+  and the immediate toggles — back to how it was when you opened Settings.
+
+### New — installable PWA (standalone / non-Ingress)
+- Maskable Android icons + iOS apple-touch icon, a rewritten web manifest
+  (`standalone` display, proper icon purposes, app screenshots) and the matching
+  `index.html` meta, so the app installs to the home screen on Desktop, Android
+  and iOS. (Requires serving over a secure origin / HTTPS to get the prompt.)
+
+### Fix — onboarding & no-model startup
+- In the add-on, onboarding no longer blocks on a per-browser upload when a
+  central `model_path` is configured — it confirms the central model instead.
+- A missing model now shows a clear overlay (add-on instructions, or a one-tap
+  uploader in standalone) instead of a blank blue page that silently opened
+  Settings. Stale model metadata is reconciled so the app can't claim a model
+  that no longer exists.
+- Plain modals (onboarding, bind, marker) get proper desktop padding.
+
 ## 2.4.10
 
 ### Fix — stale UI on the PWA / standalone deployment
