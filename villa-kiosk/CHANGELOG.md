@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.4.23
+
+### Glass tuning
+- **More glass-like opacity.** Detected panes were nearly invisible (felt like an
+  empty hole). Opacity raised (alpha 0.22 → 0.38) and the pane is now smooth +
+  non-metallic so it catches highlights and reads as real glass, while still
+  clearly see-through.
+- **Catch more custom windows.** Glass detection only saw stock SweetHome pieces
+  (whose internal material is literally named like glass). Custom imported windows
+  (e.g. `window_3x1`) use the model author's own material names, which rarely say
+  "glass". Added more synonyms (`glazing`, `glaze`, `transparent`, `cristal`,
+  `crystal`, `vetro`, `scheibe`, `fenster`, …), kept specific to avoid false hits.
+  If a custom pane still isn't caught, its glass material name is in the
+  `[ModelLoader] glass-transparency … | all materials:` console log — add that name
+  to the hint list.
+
 ## 2.4.22
 
 ### See-through window/door glass

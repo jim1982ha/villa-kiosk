@@ -25,10 +25,18 @@ const MAX_SIMULTANEOUS_LIGHTS = 6;
 // "Vitre_2", "window_glass", "baie vitrée" all hit. Frames/handles use separate
 // materials, so they keep their solidity.
 const GLASS_NAME_HINTS = [
+  // English / French
   "glass", "vitre", "vitrage", "vitree", "vitré", "verre",
   "window", "fenetre", "fenêtre", "baie", "mirror", "miroir",
+  // Common model-author synonyms (custom imported windows rarely say "glass").
+  // Kept specific to avoid false hits (e.g. "pane"→"panel", "glas"→"douglas").
+  "glazing", "glaze", "transparent", "cristal", "crystal",
+  "vetro", "scheibe", "fenster", "glasscheibe",
 ];
-const GLASS_ALPHA = 0.22; // mostly transparent, a faint tint so the pane still reads
+// Opacity of a detected pane. 1 = opaque, 0 = invisible. Low enough to clearly see
+// through, but NOT zero — a faint tint so it still reads as a real glass surface
+// rather than an empty hole in the wall.
+const GLASS_ALPHA = 0.38;
 
 function looksLikeGlass(...names: (string | undefined)[]): boolean {
   for (const n of names) {
@@ -49,7 +57,7 @@ export async function loadModelInto(scene: Scene, data: ArrayBuffer): Promise<Lo
     const allMats = new Set<string>();
     for (const m of result.meshes) {
       const mat = m.material as
-        | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean }
+        | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean; roughness?: number; metallic?: number }
         | null;
       if (!mat) continue;
       if (mat.name) allMats.add(mat.name);
@@ -59,6 +67,10 @@ export async function loadModelInto(scene: Scene, data: ArrayBuffer): Promise<Lo
         mat.alpha = GLASS_ALPHA;
         mat.transparencyMode = Material.MATERIAL_ALPHABLEND;
         mat.backFaceCulling = false; // see both faces of a thin pane
+        // Smooth + slightly metallic so the pane catches highlights and reads as
+        // glass rather than a flat translucent sheet (PBR materials only).
+        if ("roughness" in mat) mat.roughness = 0.1;
+        if ("metallic" in mat) mat.metallic = 0;
         if (mat.name) glassMats.add(mat.name);
       }
     }
