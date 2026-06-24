@@ -6,7 +6,7 @@ import { SceneManager } from "@/babylon/SceneManager";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel } from "@/utils/storage";
-import { isIngress } from "@/ha/ingress";
+import { isIngress, ingressPath } from "@/ha/ingress";
 import { parseSh3d } from "@/utils/sh3dParser";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
 import ModelUploader from "@/components/settings/ModelUploader";
@@ -61,7 +61,7 @@ export default function BabylonCanvas({
           // ── Add-on mode: ONLY use the centrally configured model. ──────────
           // No IndexedDB fallback — if the admin set model_path, that is the
           // authoritative source and per-browser uploads are irrelevant.
-          const resp = await fetch(`/model/${addonCfg.model_path}`);
+          const resp = await fetch(ingressPath(`model/${addonCfg.model_path}`));
           if (!resp.ok) {
             setAddonError(true);
             throw new Error(
@@ -95,7 +95,7 @@ export default function BabylonCanvas({
         // the server every time (keeps all clients in sync when the file changes).
         if (fromAddon && addonCfg.sh3d_path) {
           try {
-            const sh3dResp = await fetch(`/model/${addonCfg.sh3d_path}`);
+            const sh3dResp = await fetch(ingressPath(`model/${addonCfg.sh3d_path}`));
             if (sh3dResp.ok) {
               const sh3dBuf = await sh3dResp.arrayBuffer();
               const { rooms, entities } = await parseSh3d(sh3dBuf);

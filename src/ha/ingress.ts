@@ -36,3 +36,14 @@ export function ingressWsUrl(): string {
 export function ingressApiBase(): string {
   return `${window.location.origin}${ingressBasePath()}core/api`;
 }
+
+/**
+ * Resolve a path served by THIS add-on's nginx (e.g. "addon-config",
+ * "model/foo.glb") against the Ingress base. A leading-slash absolute path would
+ * hit the Home Assistant origin root instead — which, behind an external
+ * DuckDNS / Nabu Casa URL, never reaches the add-on and 404s. In standalone/dev
+ * (`ingressBasePath()` === "/") this is just the original "/<rel>".
+ */
+export function ingressPath(rel: string): string {
+  return `${ingressBasePath()}${rel.replace(/^\/+/, "")}`;
+}

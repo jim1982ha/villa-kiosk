@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.4.12
+
+### Fix — "No 3D model loaded" despite a configured `model_path` (add-on)
+- Behind Ingress the app is served under `/api/hassio_ingress/<token>/`, but the
+  frontend fetched `/addon-config` and `/model/<path>` as **absolute** paths.
+  Those resolved to the Home Assistant origin root instead of the add-on, so
+  (especially via an external DuckDNS / Nabu Casa URL) they never reached the
+  add-on's nginx — the central model + room names silently failed to load and
+  the kiosk showed "No 3D model loaded yet" even with the files present in
+  `/config/www/`. These requests are now resolved relative to the Ingress base.
+
+### Fix — "Camera stream unavailable" for cameras that work in HA
+- The camera takeover only tried HA's MJPEG endpoint (`camera_proxy_stream`),
+  which many cameras (RTSP/ONVIF/HLS) don't implement even though they play fine
+  in Home Assistant — so the view errored out permanently. It now falls back to
+  polling the still-image endpoint (`camera_proxy`), which works for essentially
+  any camera, and only reports "unavailable" if both fail.
+
 ## 2.4.11
 
 ### New — Render quality & look (Settings → *Render quality*)

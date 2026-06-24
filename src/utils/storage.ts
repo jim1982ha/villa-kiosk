@@ -1,6 +1,8 @@
 // src/utils/storage.ts
 // IndexedDB helper for the (large) GLB model, plus tiny localStorage helpers.
 
+import { ingressPath } from "@/ha/ingress";
+
 const DB_NAME = "villa-kiosk-db";
 const STORE = "models";
 const MODEL_KEY = "current-model";
@@ -86,7 +88,7 @@ export async function fetchAddonConfig(): Promise<AddonConfig> {
   try {
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 3000);
-    const resp = await fetch("/addon-config", { signal: ctrl.signal });
+    const resp = await fetch(ingressPath("addon-config"), { signal: ctrl.signal });
     clearTimeout(tid);
     if (!resp.ok) throw new Error(`${resp.status}`);
     _addonConfigCache = await resp.json() as AddonConfig;

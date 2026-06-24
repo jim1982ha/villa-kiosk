@@ -13,3 +13,16 @@ export function cameraStreamUrl(haUrl: string, token: string, entityId: string):
   const base = haUrl.replace(/\/+$/, "");
   return `${base}/api/camera_proxy_stream/${entityId}?token=${encodeURIComponent(token)}`;
 }
+
+/**
+ * Still-image (snapshot) URL for a camera. Used as a fallback when the MJPEG
+ * stream isn't available: `camera_proxy_stream` only works for cameras that
+ * implement an MJPEG stream, but `camera_proxy` returns the latest frame for
+ * essentially every camera (RTSP/ONVIF/HLS included), so polling it gives a
+ * live view that works wherever the camera works in HA.
+ */
+export function cameraSnapshotUrl(haUrl: string, token: string, entityId: string): string {
+  if (isIngress()) return `${ingressApiBase()}/camera_proxy/${entityId}`;
+  const base = haUrl.replace(/\/+$/, "");
+  return `${base}/api/camera_proxy/${entityId}?token=${encodeURIComponent(token)}`;
+}
