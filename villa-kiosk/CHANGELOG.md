@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.4.14
+
+### Fix — Camera feed showed nothing on open
+- The camera takeover started with HA's MJPEG stream (`camera_proxy_stream`) and
+  only fell back to the still-image poll on the `<img>`'s `onError`. But cameras
+  that don't actually serve MJPEG (most RTSP/ONVIF/HLS) leave that request open
+  without ever sending a frame, so the image fired *neither* load nor error — the
+  view sat blank forever and never reached the working snapshot fallback. Added a
+  watchdog: if the stream paints no frame within a few seconds it now drops to
+  snapshot polling (which works for any camera that works in HA), so a frame
+  always appears. Snapshot refresh is also a bit quicker (800 ms) for liveness.
+
 ## 2.4.13
 
 ### Fix — Slow first paint on mobile

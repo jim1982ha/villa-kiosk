@@ -23,8 +23,14 @@ type Mode = "stream" | "snapshot" | "failed";
 
 // How often to refresh the fallback snapshot, and how many consecutive snapshot
 // failures to tolerate before declaring the camera unavailable.
-const SNAPSHOT_INTERVAL_MS = 1000;
+const SNAPSHOT_INTERVAL_MS = 800;
 const SNAPSHOT_MAX_ERRORS = 3;
+// How long to wait for the MJPEG stream to paint its FIRST frame before giving
+// up on it. A camera that doesn't actually serve an MJPEG stream (most
+// RTSP/ONVIF/HLS cameras) leaves HA's camera_proxy_stream connection open
+// without ever sending a frame — the <img> then fires neither load nor error,
+// so without this watchdog we'd sit on a blank view forever.
+const STREAM_WATCHDOG_MS = 3500;
 
 export default function CameraPanel({ entity, mapping, onClose, pinContinuous }: Props) {
   const { connected } = useHA();
@@ -32,6 +38,13 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   const [mode, setMode] = useState<Mode>("stream");
   const [tick, setTick] = useState(0);
   const snapErrors = useRef(0);
+  // Set once the MJPEG <img> paints a frame — tells the watchdog the stream is live.
+  const streamLoaded = useRef(false);
+
+  const fallBackToSnapshot = () => {
+    snapErrors.current = 0;
+    setMode("snapshot");
+  };
 
   useEffect(() => {
     const unpin = pinContinuous?.();
@@ -42,7 +55,21 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   useEffect(() => {
     setMode("stream");
     snapErrors.current = 0;
+    streamLoaded.current = false;
   }, [mapping.entityId]);
+
+  // Stream watchdog: if the MJPEG <img> hasn't painted a frame within the window,
+  // assume the camera doesn't serve MJPEG and drop to snapshot polling. This is
+  // the case the bare onError handler can't catch (the request just hangs open).
+  useEffect(() => {
+    if (mode !== "stream") return;
+    streamLoaded.current = false;
+    const id = setTimeout(() => {
+      if (!streamLoaded.current) fallBackToSnapshot();
+    }, STREAM_WATCHDOG_MS);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, mapping.entityId]);
 
   // Once we've fallen back to snapshots, re-fetch on an interval for liveness.
   useEffect(() => {
@@ -71,15 +98,14 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     if (!haveCreds || mode === "failed") return <Unavailable label="Camera stream unavailable." />;
 
     if (mode === "stream") {
-      // MJPEG attempt — on error, drop to the universally-supported snapshot poll.
+      // MJPEG attempt — on error (or the watchdog timing out on a silent stream),
+      // drop to the universally-supported snapshot poll.
       return (
         <img
           src={streamUrl}
           alt={mapping.label}
-          onError={() => {
-            snapErrors.current = 0;
-            setMode("snapshot");
-          }}
+          onLoad={() => { streamLoaded.current = true; }}
+          onError={fallBackToSnapshot}
         />
       );
     }
