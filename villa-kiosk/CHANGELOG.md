@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.4.20
+
+### Fix — kiosk view freezes ("can see the villa but can't move/navigate")
+- A long-running wall tablet / WebView can lose its WebGL context (GPU reset,
+  memory pressure, or the app being backgrounded). Babylon restores the context,
+  but the render loop is on-demand, so after a restore nothing asked it to repaint
+  — the last frame stayed frozen on screen and every touch looked ignored, in
+  BOTH first-person and overview modes. Now we force a repaint when the context is
+  restored and whenever the page becomes visible again, so the view always thaws
+  and input responds. (Verified no navigation/input code changed between 2.4.16,
+  which navigated fine, and here — only lighting — so this frozen-context path was
+  the remaining explanation for a dead-input kiosk.)
+
 ## 2.4.19
 
 ### Fix — residual cool tint at night

@@ -145,6 +145,22 @@ export class SceneManager {
 
     this.startRenderLoop();
     window.addEventListener("resize", this.handleResize);
+
+    // Long-running-kiosk robustness. A wall tablet / WebView can LOSE the WebGL
+    // context (GPU reset, memory pressure, the app being backgrounded). Babylon
+    // restores it, but our render loop is ON-DEMAND, so after a restore nothing
+    // asks it to repaint — the last frame stays frozen on screen and every touch
+    // looks ignored (you can see the villa but can't move or navigate, in either
+    // camera mode). Force a render window on restore — and whenever the page is
+    // shown again — so the view always thaws and input visibly responds.
+    this.engine.onContextLostObservable.add(() => {
+      console.warn("[SceneManager] WebGL context lost — view frozen until restored");
+    });
+    this.engine.onContextRestoredObservable.add(() => {
+      console.warn("[SceneManager] WebGL context restored — forcing repaint");
+      this.requestRender(2000);
+    });
+    document.addEventListener("visibilitychange", this.handleVisibility);
   }
 
   private startRenderLoop() {
@@ -175,6 +191,17 @@ export class SceneManager {
   private handleResize = () => {
     this.engine.resize();
     this.requestRender();
+  };
+
+  // A backgrounded kiosk/tab can suspend the rAF loop and drop the GL context;
+  // on return, resize (the viewport may have changed) and force a repaint so the
+  // frozen frame refreshes instead of sitting there ignoring touches until some
+  // other event happens to wake the on-demand loop.
+  private handleVisibility = () => {
+    if (document.visibilityState === "visible") {
+      this.engine.resize();
+      this.requestRender(1500);
+    }
   };
 
   /**
@@ -808,6 +835,7 @@ export class SceneManager {
 
   dispose(): void {
     window.removeEventListener("resize", this.handleResize);
+    document.removeEventListener("visibilitychange", this.handleVisibility);
     this.engine.stopRenderLoop(); // stop first — no frames render during teardown
     this.renderFx.dispose();
     this.camera.dispose();
