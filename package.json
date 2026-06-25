@@ -8,8 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host",
-    "typecheck": "tsc -b --noEmit",
-    "deploy": "node scripts/deploy.mjs"
+    "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
     "@babylonjs/core": "^7.37.2",

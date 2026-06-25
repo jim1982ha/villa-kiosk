@@ -53,7 +53,7 @@ On **HA OS or Supervised**, the cleanest path is the **Ingress add-on**: sidebar
 |---|---|
 | Node.js 18+ | `node -v` |
 | A Home Assistant instance | Any install type |
-| SSH or Samba access to HA `/config` | via the Advanced SSH or Samba add-on |
+| A way to copy files into HA `/config/www` | Samba share, Studio Code Server, the File editor add-on, or scp — whatever you already use |
 | The villa `.glb` model | exported per [MODEL_PIPELINE.md](./MODEL_PIPELINE.md) |
 | A tablet | Samsung Tab S8+ or better for smooth rendering |
 
@@ -64,24 +64,50 @@ npm install
 npm run build       # type-check + Vite → dist/
 ```
 
-### 3. Deploy to Home Assistant
+### 3. Copy the build to Home Assistant (manual)
 
-**Automated:**
-```bash
-# Copy .env.example → .env and fill in VITE_DEPLOY_HOST, VITE_DEPLOY_USER, VITE_DEPLOY_PATH
-npm run deploy      # scp dist/ to /config/www/villa-kiosk/ on HA
+`npm run build` produces a self-contained **`dist/`** folder. Copy the **contents
+of `dist/`** into `config/www/villa-kiosk/` on your HA instance, using whatever
+file access you already have — there is no deploy script, do it by hand:
+
+- **Samba share** add-on → open `\\<HA_HOST>\config\www\` and drop the files in a
+  `villa-kiosk` folder.
+- **Studio Code Server** / **File editor** add-on → upload into `/config/www/villa-kiosk/`.
+- **scp** (if you run an SSH add-on):
+  ```bash
+  scp -r dist/. root@<HA_HOST>:/config/www/villa-kiosk/
+  ```
+
+The result must be `config/www/villa-kiosk/index.html` (+ `assets/`, `sw.js`, …).
+HA serves `config/www/` at `/local/`, so the app is then at:
+
+```
+https://<HA_HOST>:8123/local/villa-kiosk/
 ```
 
-**Manual scp:**
-```bash
-scp -r dist/. root@homeassistant.local:/config/www/villa-kiosk/
+> If `config/www` didn't exist before, create it and restart HA once so it starts
+> serving `/local/`. Re-deploying a new version = copy the fresh `dist/` over the
+> old folder (replace all files; the hashed `assets/*` filenames change per build).
+
+#### Installing as a PWA (the "Install" button)
+
+The browser only offers **Install** when the app is served from a **secure origin
+with a _trusted_ certificate** — so the `/local/villa-kiosk/` path reached over HA's
+real HTTPS (e.g. your DuckDNS / Let's Encrypt URL) is what shows the button on both
+laptop and phone:
+
+```
+https://thelyshouse.duckdns.org/local/villa-kiosk/   ← installable
 ```
 
-**Samba:** mount the share and copy the contents of `dist/` into `config/www/villa-kiosk/`.
+Two things that will **hide** the Install button:
 
-Then open `http://<HA_HOST>:8123/local/villa-kiosk/` on the tablet.
-
-> If `/config/www` didn't exist before, restart HA once so it starts serving `/local/`.
+- **Plain `http://`, or HTTPS with a self-signed/untrusted cert** → not a secure
+  origin, no service worker, no install. (`npm run dev` uses a self-signed cert by
+  default; drop a trusted `mkcert` cert in `./certs/` to test install locally.)
+- **The Ingress add-on** (`/api/hassio_ingress/…`) → the service worker is
+  disabled there on purpose (the session path rotates), so there is **no install
+  button via the sidebar**. Use the `/local/` HTTPS URL above for an installable PWA.
 
 ### 4. Get a Home Assistant token (standalone only)
 
@@ -103,7 +129,7 @@ Then open `http://<HA_HOST>:8123/local/villa-kiosk/` on the tablet.
 
 | Setting | Value |
 |---|---|
-| Start URL | `http://homeassistant.local:8123/local/villa-kiosk/` |
+| Start URL | `https://<HA_HOST>:8123/local/villa-kiosk/` |
 | Prevent sleep / keep screen on | ON |
 | Auto-reload on error | ON (30 s) |
 | Hide navigation/status bar | ON |

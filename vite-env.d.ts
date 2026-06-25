@@ -10,11 +10,6 @@ interface ImportMetaEnv {
   /** Villa GPS for sun tracking */
   readonly VITE_LAT?: string;
   readonly VITE_LNG?: string;
-  /** Deploy target used by scripts/deploy.mjs */
-  readonly VITE_DEPLOY_HOST?: string;
-  readonly VITE_DEPLOY_USER?: string;
-  readonly VITE_DEPLOY_PATH?: string;
-  readonly VITE_DEPLOY_PORT?: string;
 }
 
 interface ImportMeta {
