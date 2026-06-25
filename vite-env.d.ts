@@ -14,6 +14,7 @@ interface ImportMetaEnv {
   readonly VITE_DEPLOY_HOST?: string;
   readonly VITE_DEPLOY_USER?: string;
   readonly VITE_DEPLOY_PATH?: string;
+  readonly VITE_DEPLOY_PORT?: string;
 }
 
 interface ImportMeta {
