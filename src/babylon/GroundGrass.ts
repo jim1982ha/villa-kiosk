@@ -1,8 +1,16 @@
 // src/babylon/GroundGrass.ts
-// SweetHome 3D exports the terrain OUTSIDE the grass room as a bare, flat, grey
+// SweetHome 3D exports the terrain OUTSIDE the grass room as a bare, flat, GREY
 // slab (it's in the .sh3d, not added by Blender). It reads as an ugly grey plinth
 // the villa sits on. Detect that slab and paint it with a procedurally generated
 // grass texture so the garden extends visually to the edge of the model.
+//
+// IMPORTANT — only the EXTERIOR grey terrain must change. The indoor floors (tiled,
+// cream) and any furniture must be left exactly as they are. The Blender pipeline
+// fuses non-entity geometry and splits it by MATERIAL, so a single mesh =
+// "all faces using material X" — repaint one and you repaint everything sharing
+// that material. So the discriminator is the material being GREY (low saturation,
+// mid/dark), NOT merely "large and flat": cream indoor tile and coloured furniture
+// are rejected even when they're big flat slabs.
 //
 // The texture is drawn on a canvas (DynamicTexture) — no image asset to bundle and
 // no extra dependency, so it works offline under HA Ingress.
@@ -57,18 +65,42 @@ function baseColour(m: AbstractMesh): Color3 | null {
   return null;
 }
 
-function looksGreen(c: Color3 | null): boolean {
-  return !!c && c.g > c.r + 0.08 && c.g > c.b + 0.08;
+/**
+ * Greyish = nearly equal R/G/B (low saturation) AND mid-to-dark brightness. This is
+ * the bare SweetHome terrain. It deliberately rejects:
+ *   - cream / white indoor floor tile (low saturation but BRIGHT, max > ~0.72),
+ *   - the green grass room and any coloured furniture (saturated),
+ *   - near-black (max < 0.12).
+ */
+function isGreyTerrain(c: Color3 | null): boolean {
+  if (!c) return false;
+  const max = Math.max(c.r, c.g, c.b);
+  const min = Math.min(c.r, c.g, c.b);
+  const sat = max - min;
+  return sat < 0.1 && max >= 0.12 && max <= 0.72;
+}
+
+function matName(m: AbstractMesh): string {
+  return (m.material?.name ?? "").toLowerCase();
 }
 
 /**
- * Find the large flat slab(s) at the base of the model and replace the grey
- * terrain material with grass. Conservative on purpose: a slab only qualifies if
- * it is flat, sits at the bottom, spans a big share of the whole model, and is
- * NOT already green — so the indoor (tiled, cream) floors and the existing grass
- * room are left untouched. Runs after the model is normalised to metres + centred.
+ * Paint the exterior grey terrain slab with grass. Two modes:
+ *
+ *  - If `hints` are given (config.grassGroundHints), grass exactly the meshes whose
+ *    material/mesh name matches one — deterministic, no guessing. Use this when the
+ *    user has tapped the terrain to read its material name.
+ *  - Otherwise auto-detect: a flat slab at the bottom of the model, spanning nearly
+ *    the whole footprint, whose material is GREY. Conservative on purpose so indoor
+ *    floors and furniture are never touched.
+ *
+ * Runs after the model is normalised to metres + centred.
  */
-export function applyGrassGround(scene: Scene, meshes: AbstractMesh[]): void {
+export function applyGrassGround(
+  scene: Scene,
+  meshes: AbstractMesh[],
+  hints: string[] = [],
+): void {
   // Overall extent + floor of the model.
   let spanMax = 0;
   let baseY = Infinity;
@@ -83,26 +115,43 @@ export function applyGrassGround(scene: Scene, meshes: AbstractMesh[]): void {
     return { m, h, footMin: Math.min(fx, fz), footMax: Math.max(fx, fz), minY: bb.minimumWorld.y };
   });
 
-  const targets = infos.filter(({ m, h, footMin, footMax, minY }) =>
-    m.getTotalVertices() > 0 &&
-    h < 1.2 &&                       // flat slab, not a wall/furniture
-    minY < baseY + 0.6 &&            // sits at the very bottom (the terrain)
-    footMin > 3 &&                   // big in BOTH axes → a ground plane
-    footMax > 0.55 * spanMax &&      // spans most of the model → the outer terrain
-    !looksGreen(baseColour(m)),      // don't touch the existing green grass room
-  );
+  const loweredHints = hints.map((s) => s.toLowerCase()).filter(Boolean);
+
+  const targets = infos.filter(({ m, h, footMin, footMax, minY }) => {
+    if (m.getTotalVertices() === 0) return false;
+    if (loweredHints.length) {
+      // Explicit override: match by name only, ignore the heuristics entirely.
+      const mn = matName(m);
+      const meshN = m.name.toLowerCase();
+      return loweredHints.some((hn) => mn.includes(hn) || meshN.includes(hn));
+    }
+    return (
+      h < 1.2 &&                    // flat slab, not a wall/furniture
+      minY < baseY + 0.6 &&         // sits at the very bottom (the terrain)
+      footMin > 3 &&                // big in BOTH axes → a ground plane
+      footMax > 0.8 * spanMax &&    // spans nearly the WHOLE model → the outer terrain
+      isGreyTerrain(baseColour(m))  // grey only — not cream indoor tile, not furniture
+    );
+  });
 
   if (targets.length === 0) {
-    console.info("[GroundGrass] no grey terrain slab detected — nothing to grass.");
+    console.info(
+      loweredHints.length
+        ? `[GroundGrass] no mesh matched grassGroundHints ${JSON.stringify(hints)} — nothing to grass.`
+        : "[GroundGrass] no grey terrain slab detected — nothing to grass. " +
+          "If the grey ground is still grey, tap it to read its material name and add it to config.grassGroundHints.",
+    );
     return;
   }
 
   const grass = makeGrassMaterial(scene);
   for (const { m, footMax, footMin } of targets) {
+    const wasMat = matName(m) || "(none)";
     m.material = grass;
     m.receiveShadows = true;
     console.info(
-      `[GroundGrass] painted grass on "${m.name}" (${footMax.toFixed(1)}×${footMin.toFixed(1)} m).`,
+      `[GroundGrass] painted grass on "${m.name}" / was material "${wasMat}" ` +
+      `(${footMax.toFixed(1)}×${footMin.toFixed(1)} m).`,
     );
   }
 }

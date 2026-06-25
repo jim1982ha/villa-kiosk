@@ -360,7 +360,9 @@ export class SceneManager {
     this.pick.indexInteractiveMeshes(result.meshes);
     this.visuals.indexMeshes(result.meshes);
     this.applyStructure(result.meshes); // solid walls + collisions
-    applyGrassGround(this.scene, result.meshes); // grey terrain slab -> grass
+    if (this.config.grassGround !== false) {
+      applyGrassGround(this.scene, result.meshes, this.config.grassGroundHints ?? []); // grey terrain slab -> grass
+    }
     this.applyHighlight(result.meshes); // blue glow on bound meshes (if enabled)
     this.renderFx.registerMeshes(result.meshes); // shadow casters/receivers
 

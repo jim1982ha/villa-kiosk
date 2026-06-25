@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.4.28
+
+### Fix CI build + grass only the exterior terrain
+- **CI build fixed.** `@vitejs/plugin-basic-ssl` was pinned to `^2.3.0`, which
+  peer-requires Vite 6/7/8; this project is on Vite 5, so the Docker `npm install`
+  hard-failed (`Conflicting peer dependency: vite@8 … peer vite@^6||^7||^8`).
+  Downgraded to `^1.2.0` (supports Vite 3–6) — installs cleanly again.
+- **Grass no longer overreaches.** The terrain auto-detection painted the indoor
+  floors and furniture too (it matched any large flat slab, and the fused-by-
+  material export means repainting one material repaints everything sharing it).
+  It now repaints **only a slab whose material is actually grey** (low-saturation,
+  mid/dark — so cream indoor tile and coloured furniture are rejected) and which
+  spans nearly the whole model footprint. Indoor floors and furniture are untouched.
+- New optional config knobs: `grassGround` (set `false` to disable entirely) and
+  `grassGroundHints` — explicit material/mesh substrings to grass when auto-detect
+  can't isolate the terrain (tap the grey ground to read its material name).
+- Dev HTTPS now prefers a **trusted cert** in `./certs/` (`key.pem` + `cert.pem`,
+  e.g. from mkcert) and only falls back to the self-signed `basic-ssl`. Chrome
+  refuses to register a service worker over a self-signed cert, so a trusted cert
+  is required for the install button / PWA testing in dev.
+
 ## 2.4.27
 
 ### Tap a surface to read its material
