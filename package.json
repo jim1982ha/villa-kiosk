@@ -5,8 +5,12 @@
   "description": "Villa Kiosk — a 3D interactive villa dashboard for Home Assistant",
   "type": "module",
   "scripts": {
+    "clean": "rm -rf dist node_modules/.vite tsconfig.tsbuildinfo",
+    "predev": "npm run clean",
     "dev": "vite",
+    "prebuild": "npm run clean",
     "build": "tsc -b && vite build",
+    "prepreview": "npm run build",
     "preview": "vite preview --host",
     "typecheck": "tsc -b --noEmit"
   },

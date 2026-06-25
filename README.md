@@ -64,6 +64,11 @@ npm install
 npm run build       # type-check + Vite → dist/
 ```
 
+> `dev`, `build` and `preview` auto-run **`npm run clean`** first (removes `dist/`,
+> the Vite dep cache `node_modules/.vite`, and `tsconfig.tsbuildinfo`), so every run
+> starts from a clean slate — no stale artifacts in dev or prod. Run `npm run clean`
+> on its own any time. (Cost: the first dev request re-prebundles deps, ~a few seconds.)
+
 ### 3. Copy the build to Home Assistant (manual)
 
 `npm run build` produces a self-contained **`dist/`** folder. Copy the **contents
