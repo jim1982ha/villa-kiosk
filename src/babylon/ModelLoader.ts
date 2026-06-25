@@ -11,6 +11,7 @@ import dracoWrapperUrl from "@babylonjs/core/assets/Draco/draco_wasm_wrapper_glt
 import dracoWasmUrl from "@babylonjs/core/assets/Draco/draco_decoder_gltf.wasm?url";
 import dracoFallbackUrl from "@babylonjs/core/assets/Draco/draco_decoder_gltf.js?url";
 import { saveModelToIndexedDB } from "@/utils/storage";
+import { devLog } from "@/utils/devLog";
 
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
 // still only instantiated lazily, when a model actually uses Draco — so an
@@ -109,7 +110,7 @@ export async function loadModelInto(
     }
     // Surfaced so the glass heuristic can be tuned from the browser console if a
     // pane isn't caught (or a non-glass material is): paste the material list here.
-    console.info(
+    devLog(
       `[ModelLoader] glass-transparency: matched ${glassMats.size} material(s):`,
       [...glassMats],
       "| all materials:",
@@ -143,7 +144,7 @@ export async function loadModelInto(
       }
     }
     if (panes.length) {
-      console.info(
+      devLog(
         "[ModelLoader] pane-like meshes NOT treated as glass — if one is a window, " +
         "tell me its material to add to GLASS_NAME_HINTS:",
         panes,

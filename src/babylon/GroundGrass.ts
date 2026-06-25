@@ -19,6 +19,7 @@ import {
   Color3, DynamicTexture, StandardMaterial, Texture,
   PBRMaterial, type AbstractMesh, type Scene,
 } from "@babylonjs/core";
+import { devLog } from "@/utils/devLog";
 
 /** Build a tileable grass material from a canvas — green base + speckled blades. */
 function makeGrassMaterial(scene: Scene): StandardMaterial {
@@ -117,7 +118,7 @@ export function applyGrassGround(
 
   const loweredHints = hints.map((s) => s.toLowerCase()).filter(Boolean);
 
-  const targets = infos.filter(({ m, h, footMin, footMax, minY }) => {
+  let candidates = infos.filter(({ m, h, footMin, footMax, minY }) => {
     if (m.getTotalVertices() === 0) return false;
     if (loweredHints.length) {
       // Explicit override: match by name only, ignore the heuristics entirely.
@@ -134,8 +135,20 @@ export function applyGrassGround(
     );
   });
 
+  // The terrain is the BIGGEST grey slab — it underlies the whole model. Other grey
+  // flat things (a window's silver reflector pane, a large grey door) can also be
+  // flat, low and span a big dimension, so keep only the largest-area candidate(s).
+  // This drops e.g. a 21×7 m window reflector while keeping the 26×13 m ground.
+  // (Skipped when explicit hints are given — then the user has named the targets.)
+  if (!loweredHints.length && candidates.length > 1) {
+    const area = (c: (typeof candidates)[number]) => c.footMax * c.footMin;
+    const maxArea = Math.max(...candidates.map(area));
+    candidates = candidates.filter((c) => area(c) >= 0.85 * maxArea);
+  }
+  const targets = candidates;
+
   if (targets.length === 0) {
-    console.info(
+    devLog(
       loweredHints.length
         ? `[GroundGrass] no mesh matched grassGroundHints ${JSON.stringify(hints)} — nothing to grass.`
         : "[GroundGrass] no grey terrain slab detected — nothing to grass. " +
@@ -149,7 +162,7 @@ export function applyGrassGround(
     const wasMat = matName(m) || "(none)";
     m.material = grass;
     m.receiveShadows = true;
-    console.info(
+    devLog(
       `[GroundGrass] painted grass on "${m.name}" / was material "${wasMat}" ` +
       `(${footMax.toFixed(1)}×${footMin.toFixed(1)} m).`,
     );

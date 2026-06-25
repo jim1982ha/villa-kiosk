@@ -16,10 +16,13 @@ export class SkyDome {
     const mat = new SkyMaterial("skyMaterial", scene);
     mat.backFaceCulling = false;     // we view it from the inside
     mat.useSunPosition = true;       // drive the sun from SunController, not inclination
-    mat.turbidity = 8;               // haze: a touch of atmosphere without going milky
-    mat.rayleigh = 2;                // blue scattering strength
-    mat.mieCoefficient = 0.005;
-    mat.mieDirectionalG = 0.8;
+    // High turbidity is what made the horizon read as an ugly grey/white haze band
+    // (thick atmosphere scatters out the blue toward the horizon). Drop it for a
+    // clean blue zenith that fades to a soft, light-blue horizon — no grey murk.
+    mat.turbidity = 2;               // low haze → crisp sky, gentle horizon
+    mat.rayleigh = 1.2;              // blue scattering; lower keeps it from over-saturating
+    mat.mieCoefficient = 0.0035;     // less white sun-haze around the horizon
+    mat.mieDirectionalG = 0.85;
     mat.luminance = 1;
     this.mat = mat;
 
@@ -42,10 +45,13 @@ export class SkyDome {
   update(dirToScene: Vector3, isDay: boolean): void {
     // Sun position points back toward the sun; scale it well outside the box.
     this.mat.sunPosition = dirToScene.scale(-300);
-    // Night: drop the overall luminance so the sky reads as a dark deep-blue rather
-    // than a bright daytime dome. SkyMaterial already darkens once the sun drops
-    // below the horizon; this keeps the horizon from glaring at dusk/indoors.
-    this.mat.luminance = isDay ? 1 : 0.35;
+    // Night: drop the luminance hard so the dome reads as a deep night sky rather
+    // than a glowing daytime dome, and lift turbidity slightly so the little light
+    // that remains pools softly at the horizon instead of leaving a harsh edge.
+    // SkyMaterial already darkens once the sun is below the horizon; this finishes
+    // the look so dusk/indoors don't glare. Day uses the crisp low-haze values.
+    this.mat.luminance = isDay ? 1 : 0.18;
+    this.mat.turbidity = isDay ? 2 : 4;
   }
 
   setEnabled(on: boolean): void {

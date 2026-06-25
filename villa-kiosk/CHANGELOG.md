@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.4.29
+
+### Cleaner sky horizon, quieter console, tighter grass
+- **Sky.** The horizon read as an ugly grey haze band — that was the procedural
+  `SkyMaterial` running at high turbidity (thick, milky atmosphere). Dropped
+  turbidity 8 → 2 (plus gentler Rayleigh/Mie) for a crisp blue zenith that fades to
+  a soft light-blue horizon. Night now drops luminance harder (0.35 → 0.18) with a
+  touch more haze so it reads as a deep night sky instead of a glowing dome.
+- **Console.** Startup diagnostics (glass-material list, pane candidates, grass
+  painting, calibration) are now silent by default — even in `npm run dev`. Opt in
+  per session with `?debug` in the URL or `localStorage.setItem("villa:debug","1")`.
+  The bind-mode tap-to-identify log still prints on demand (it's the feature).
+- **Grass.** The detector also painted a window's silver reflector pane (a large
+  flat grey slab). It now keeps only the largest-area grey slab — the terrain that
+  underlies the whole model — and drops smaller grey panes.
+
 ## 2.4.28
 
 ### Fix CI build + grass only the exterior terrain
