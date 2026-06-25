@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.4.31
+
+### Tap-to-act confirmation, curtain & cover fixes, light-bleed isolation
+- **"Confirm" now gates the action, not just one panel.** Tapping a simple on/off
+  entity (on/off-only light, switch, input_boolean) toggles it instantly in-world
+  with no panel; with the entity's *Confirm* flag set (Config Editor), a small
+  yes/no dialog gates that toggle first. Entities with richer controls (dimmable
+  lights, AC, covers, fans, media, cameras, sensors) still open their panel. Fixes
+  the flag being read by the Switch panel only.
+- **Curtains no longer fly into the sky when open.** The retract re-pin mixed the
+  mesh's *local* geometry height with its *parent-space* position, so panels whose
+  cm→m scale lived on an ancestor node were launched ~200 m up at high open-%. The
+  top edge is now re-pinned entirely in **world space**, immune to where the scale
+  lives or where the local origin sits.
+- **Cover position slider no longer drops the second adjustment.** A live HA state
+  event arriving mid-drag re-synced the slider and sent the stale value; the live
+  sync is now suspended while dragging and resumes on release.
+- **Lights no longer highlight furniture in other rooms.** Each bound entity mesh
+  gets its own material clone, so the shared (de-duplicated) wood material of a
+  wall-switch fixture and the living-room chairs can't be recoloured together.
+
 ## 2.4.30
 
 ### Manual deployment, cleaner dev tooling

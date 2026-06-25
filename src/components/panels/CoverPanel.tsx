@@ -1,5 +1,5 @@
 // src/components/panels/CoverPanel.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Blinds, ChevronUp, ChevronDown, Square } from "lucide-react";
 import BasePanel from "./BasePanel";
 import type { PanelProps } from "@/types/panel.types";
@@ -11,8 +11,13 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   const pos = entity?.attributes.current_position;
   const hasPosition = typeof pos === "number";
   const [position, setPosition] = useState<number>(hasPosition ? pos! : 0);
+  // While the user is dragging the slider, ignore live HA updates: a state event
+  // arriving mid-drag would otherwise snap `position` back to the device's value,
+  // so the release would send the stale number (or nothing changed). Resume
+  // syncing once the drag ends.
+  const dragging = useRef(false);
   useEffect(() => {
-    if (typeof pos === "number") setPosition(pos);
+    if (!dragging.current && typeof pos === "number") setPosition(pos);
   }, [pos]);
 
   const stateLabel =
@@ -48,8 +53,12 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
           <label className="entity-label">Position · {position}%</label>
           <input
             type="range" min={0} max={100} value={position}
+            onPointerDown={() => { dragging.current = true; }}
             onChange={(e) => setPosition(Number(e.target.value))}
-            onPointerUp={() => HAServices.setCoverPosition(ws, mapping.entityId, position)}
+            onPointerUp={() => {
+              dragging.current = false;
+              HAServices.setCoverPosition(ws, mapping.entityId, position);
+            }}
           />
         </div>
       )}

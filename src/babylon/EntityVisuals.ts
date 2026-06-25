@@ -15,7 +15,7 @@
 //   binary_sensor -> pulsing red when triggered (e.g. leak).
 
 import {
-  Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
+  Color3, Vector3, Space, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
   type AbstractMesh, type Scene, type Material,
 } from "@babylonjs/core";
 import {
@@ -135,6 +135,25 @@ export class EntityVisuals {
       list.push(m);
       this.byEntity.set(map.entityId, list);
       this.mapping.set(map.entityId, map);
+
+      // ISOLATE the material so state visuals can't bleed across meshes.
+      // The Blender pipeline fuses non-entity geometry and the glTF exporter
+      // DEDUPLICATES materials, so one Material instance is shared by every mesh
+      // painted with it — e.g. a wooden wall-switch fixture and the living-room
+      // chairs both reference the same wood material. Mutating emissive/diffuse
+      // to show this entity's state (light glow, fan/lock/switch tint, sensor
+      // pulse) would then recolour EVERY mesh sharing that material — which is
+      // exactly why turning the master-bedroom light on also lit the living-room
+      // chairs. Give each bound entity mesh its OWN clone (textures are shared by
+      // reference, so this is cheap) so its visuals stay strictly local. Done
+      // once per mesh (flagged in metadata) so a rebind re-index is idempotent.
+      if (m.material && !m.metadata?.__entityMatCloned) {
+        const clone = m.material.clone(`${m.material.name || "mat"}__e${m.uniqueId}`);
+        if (clone) {
+          m.material = clone;
+          m.metadata = { ...(m.metadata ?? {}), __entityMatCloned: true };
+        }
+      }
 
       // For lights, create a real (initially off) PointLight at EACH fixture mesh
       // — one per lamp, so two bedside lamps under one entity both illuminate.
@@ -490,26 +509,31 @@ export class EntityVisuals {
         default: openFrac = 0.5; break;
       }
     }
-    // Snapshot base values on first call.
+    // Snapshot the rest scale and the curtain's top edge in WORLD space on first
+    // call. Working in world space makes the re-pin below immune to (a) where the
+    // cm->m scale lives — baked into the vertices vs. applied by an ancestor node —
+    // and (b) where the mesh's local origin sits. Mixing the LOCAL bbox height with
+    // the PARENT-space position used to launch some panels hundreds of metres into
+    // the sky when "open"; the world-space delta below can't.
     if (mesh.metadata?.baseScaleY === undefined) {
       mesh.computeWorldMatrix(true);
       mesh.metadata = {
         ...(mesh.metadata ?? {}),
         baseScaleY: mesh.scaling.y,
-        // bb.maximum.y is the raw pre-scaling geometry max in local units.
-        // Stored so we can offset the mesh to keep the top edge fixed as
-        // scaling.y shrinks (otherwise the curtain collapses toward Y=0).
-        geoTopY: mesh.getBoundingInfo().boundingBox.maximum.y,
+        restTopWorldY: mesh.getBoundingInfo().boundingBox.maximumWorld.y,
       };
     }
-    const base     = mesh.metadata.baseScaleY as number;
-    const geoTopY  = mesh.metadata.geoTopY    as number;
-    const newScale = base * (1 - openFrac * 0.9);
+    const base          = mesh.metadata.baseScaleY    as number;
+    const restTopWorldY = mesh.metadata.restTopWorldY as number;
 
-    // Keep the top edge at its original world position while retracting.
-    // Without this offset the curtain collapses toward the floor (Y=0 pivot).
-    mesh.scaling.y  = newScale;
-    mesh.position.y = geoTopY * (base - newScale);
+    // Shrink the panel on its Y axis as it opens (down to 10% height when fully
+    // open), then nudge it in WORLD space so its top edge returns to the rest
+    // height — the curtain bunches up at the rail instead of collapsing to the
+    // floor or flying off. Fades out as it opens.
+    mesh.scaling.y = base * (1 - openFrac * 0.9);
+    mesh.computeWorldMatrix(true);
+    const curTopWorldY = mesh.getBoundingInfo().boundingBox.maximumWorld.y;
+    mesh.translate(Vector3.Up(), restTopWorldY - curTopWorldY, Space.WORLD);
     mesh.visibility = 1 - openFrac * 0.85;
   }
 
