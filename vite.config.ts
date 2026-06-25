@@ -31,6 +31,18 @@ export default defineConfig(({ command }) => {
   const haveTrustedCert =
     serving && fs.existsSync(CERT_KEY) && fs.existsSync(CERT_CRT);
 
+  if (serving) {
+    // Tell the user which cert is in play, so a missing install button / cert
+    // warning is easy to diagnose (basic-ssl is untrusted → no PWA install).
+    console.log(
+      haveTrustedCert
+        ? `\x1b[32m[vite] HTTPS using trusted cert from ${CERT_CRT} — PWA install should work.\x1b[0m`
+        : `\x1b[33m[vite] HTTPS using self-signed basic-ssl (UNTRUSTED). The browser will warn ` +
+          `and Chrome will NOT show the install button. Drop a trusted mkcert cert at ` +
+          `${CERT_KEY} + ${CERT_CRT} for a working PWA.\x1b[0m`,
+    );
+  }
+
   return {
     base: "./",
     plugins: [
