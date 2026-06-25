@@ -1,13 +1,21 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 import { fileURLToPath, URL } from "node:url";
 
 // The app is served by Home Assistant under /local/villa-kiosk/.
 // A relative base ("./") keeps every asset reference working regardless of the
 // exact sub-path it is mounted on, and also lets it run from `vite preview`.
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base: "./",
-  plugins: [react()],
+  // Serve `npm run dev` / `npm run preview` over HTTPS (self-signed). PWA install
+  // and service-worker registration require a SECURE CONTEXT — https:// or
+  // localhost. When you open the dev server from another device by its LAN IP it's
+  // plain http, so the browser hides the install button and skips the SW. The
+  // self-signed cert triggers a one-time "proceed anyway" warning, after which the
+  // origin counts as secure and the PWA install prompt appears. Dev/preview only —
+  // the production build is static files served by HA's own HTTPS.
+  plugins: [react(), ...(command === "serve" ? [basicSsl()] : [])],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
@@ -39,4 +47,4 @@ export default defineConfig({
     // of dev pre-bundling so the dev server starts fast and doesn't choke on it.
     exclude: ["@babylonjs/inspector"],
   },
-});
+}));
