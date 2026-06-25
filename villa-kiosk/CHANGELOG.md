@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.4.33
+
+### Restore PWA manifest screenshots (richer install dialog)
+- **Re-added the `screenshots` block to the manifest.** 2.4.32 dropped it on the
+  belief that `public/screenshots/` was empty, but the branded `wide.png`
+  (1280×720) and `narrow.png` (720×1280) promo images are present and correctly
+  sized. With them referenced, Chrome shows the *richer* install UI on desktop and
+  mobile and the "add at least one screenshot" warnings clear. Screenshots are not
+  required for installability — the actual blocker fixed alongside this was the
+  `icons/` folder being absent from the deployed `/config/www/villa-kiosk/`.
+
 ## 2.4.32
 
 ### PWA install link restored behind an authenticated reverse proxy

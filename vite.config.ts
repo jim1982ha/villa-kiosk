@@ -81,6 +81,25 @@ export default defineConfig(({ command }) => {
         : {}),
     },
     optimizeDeps: {
+      // Pre-bundle the heavy, statically-imported deps up front so the optimizer
+      // does ONE cold pass at startup. Otherwise Vite discovers them lazily on the
+      // first page request and kicks off a SECOND optimize pass ("updating
+      // dependencies"); that pass writes into node_modules/.vite/deps_temp_* and can
+      // race its own commit, failing with `ENOENT ... deps_temp_*/_metadata.json` —
+      // especially on slower/external filesystems where the temp rename lags.
+      // Listed specifiers must match what src actually imports (deep subpaths
+      // included), or Vite warns "Failed to resolve dependency … in optimizeDeps".
+      include: [
+        "react",
+        "react-dom/client",
+        "react-router-dom",
+        "lucide-react",
+        "jszip",
+        "@babylonjs/core",
+        "@babylonjs/gui",
+        "@babylonjs/loaders/glTF",
+        "@babylonjs/materials/sky/skyMaterial",
+      ],
       // The Inspector is large and only loaded on demand (calibration). Keep it out
       // of dev pre-bundling so the dev server starts fast and doesn't choke on it.
       exclude: ["@babylonjs/inspector"],
