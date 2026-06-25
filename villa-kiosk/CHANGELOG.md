@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.4.32
+
+### PWA install link restored behind an authenticated reverse proxy
+- **"Install app" now appears when served behind an HTTP Basic Auth gate.** When
+  the standalone app is published through an NGINX Proxy Manager Access List, the
+  browser fetched the web manifest (and its icons) *without* credentials, got a
+  `401`, and silently treated the app as non-installable — so no install link
+  showed. The manifest `<link>` now carries `crossorigin="use-credentials"`, which
+  sends the cached Basic Auth so the manifest loads and the PWA becomes installable.
+- **Removed broken manifest screenshot references.** The manifest pointed at
+  `screenshots/wide.png` / `narrow.png`, which never shipped (the directory is
+  empty); the dangling references are dropped. Screenshots only enrich the desktop
+  install dialog and are not required for installability.
+
 ## 2.4.31
 
 ### Tap-to-act confirmation, curtain & cover fixes, light-bleed isolation

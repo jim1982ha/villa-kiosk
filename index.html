@@ -10,7 +10,12 @@
     <meta name="apple-mobile-web-app-title" content="Villa Kiosk" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <link rel="manifest" href="./manifest.json" />
+    <!-- use-credentials: when the app is served behind an HTTP Basic Auth gate
+         (e.g. an NGINX Proxy Manager Access List), the browser fetches the
+         manifest and its icons WITHOUT credentials by default, gets a 401, and
+         silently treats the app as non-installable (no "Install app" link).
+         use-credentials sends the cached Basic Auth so the manifest loads. -->
+    <link rel="manifest" href="./manifest.json" crossorigin="use-credentials" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon-180.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

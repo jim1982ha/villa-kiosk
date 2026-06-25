@@ -13,22 +13,6 @@
   "orientation": "any",
   "background_color": "#120c06",
   "theme_color": "#1c140c",
-  "screenshots": [
-    {
-      "src": "./screenshots/wide.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Villa Kiosk — 3D Home Assistant dashboard"
-    },
-    {
-      "src": "./screenshots/narrow.png",
-      "sizes": "720x1280",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Villa Kiosk — 3D Home Assistant dashboard"
-    }
-  ],
   "icons": [
     {
       "src": "./icons/icon-192.png",
