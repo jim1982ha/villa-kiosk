@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.4.27
+
+### Tap a surface to read its material
+- In bind mode (Settings → tap an object to bind), tapping any surface now also
+  logs its **material name** to the console. For a stubborn grey window pane that
+  auto-detection missed, this is the exact name to drop into `extraGlassHints`
+  (2.4.25) — no guessing from the size list.
+
 ## 2.4.26
 
 ### Draco decoder bundled (enables compressed models)

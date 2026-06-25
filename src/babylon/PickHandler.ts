@@ -113,7 +113,15 @@ export class PickHandler {
     }
 
     if (this.bindMode) {
-      // Report the raw mesh name so the UI can bind it to an entity.
+      // Report the raw mesh name so the UI can bind it to an entity. Also log the
+      // tapped mesh's MATERIAL name: for a structural surface that isn't a bindable
+      // entity (e.g. a stubborn grey window pane), this is the exact name to add to
+      // config.extraGlassHints to make it see-through — no guessing from sizes.
+      const mat = pick.pickedMesh.material;
+      console.info(
+        `[PickHandler] tapped mesh "${pick.pickedMesh.name}" — material "${mat?.name ?? "(none)"}". ` +
+        `If this is glass, add that material name to config.extraGlassHints and reload.`,
+      );
       this.onMeshPicked?.(pick.pickedMesh.name);
       return;
     }
