@@ -12,14 +12,30 @@ export class WeatherEffects {
   private scene: Scene;
   private requestRender: () => void;
   private rain: IParticleSystem | null = null;
+  // Master on/off from the Settings toggle. The last weather state is remembered
+  // even while disabled, so re-enabling can immediately reflect current weather
+  // without waiting for the next HA state change.
+  private enabled = false;
+  private lastState: string | null = null;
 
   constructor(scene: Scene, requestRender: () => void) {
     this.scene = scene;
     this.requestRender = requestRender;
   }
 
+  /** Master switch (Settings → Live weather effects). Toggling off clears any
+   *  active particles now; toggling on re-applies the last known weather. */
+  setEnabled(on: boolean): void {
+    if (this.enabled === on) return;
+    this.enabled = on;
+    if (!on) this.stopRain();
+    else if (this.lastState) this.setWeather(this.lastState);
+  }
+
   /** Pass the HA weather entity state (e.g. "rainy", "sunny"). */
   setWeather(state: string): void {
+    this.lastState = state;
+    if (!this.enabled) return;
     if (RAINY.includes(state)) this.startRain();
     else this.stopRain();
   }

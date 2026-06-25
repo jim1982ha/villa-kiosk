@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.4.35
+
+### Turning off "Live weather effects" now clears them immediately
+- **Unchecking the Settings toggle removes active rain at once.** Weather was only
+  (re)evaluated when an HA `weather.*` entity changed state, so flipping the
+  `weatherEffects` setting off fired no event and the particles kept running.
+  `WeatherEffects` now has an explicit master switch (`setEnabled`) driven by a
+  config-keyed effect: off clears particles instantly; on re-applies the last
+  known weather. Also removes a stale-closure read of `config.weatherEffects` in
+  the live-state handler (weather states are now forwarded unconditionally and
+  gated inside `WeatherEffects`).
+
 ## 2.4.34
 
 ### Fix "403: Forbidden" when launching the installed PWA
