@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.4.30
+
+### Manual deployment, cleaner dev tooling
+- **Deployment is now a documented manual copy.** Dropped the SSH/scp deploy
+  automation entirely (HA has no SSH server by default, and the script added
+  little over a plain file copy). `README.md` now documents copying the **contents
+  of `dist/`** into `config/www/villa-kiosk/` via Samba / File editor / Studio Code
+  Server, served by HA at `/local/villa-kiosk/`. Removed the `VITE_DEPLOY_*` env
+  vars and their type declarations.
+- **Always-clean dev/prod.** `dev`, `build` and `preview` now auto-run
+  `npm run clean` first (removes `dist/`, `node_modules/.vite`, `tsconfig.tsbuildinfo`),
+  so every run starts from a clean slate with no stale artifacts.
+- **Dev HTTPS cert mode is logged.** `npm run dev` prints whether it's using a
+  trusted cert from `./certs/` (PWA install works) or the self-signed `basic-ssl`
+  fallback (Chrome blocks the service worker / install button) — making a missing
+  install button easy to diagnose.
+
 ## 2.4.29
 
 ### Cleaner sky horizon, quieter console, tighter grass
