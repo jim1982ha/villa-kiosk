@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.4.34
+
+### Fix "403: Forbidden" when launching the installed PWA
+- **`start_url` now targets `./index.html` instead of the bare directory `./`.**
+  The installed PWA launched at `start_url`, which resolved to the directory
+  `…/local/villa-kiosk/`; Home Assistant's static file server returns plain
+  `403: Forbidden` for a directory request (it does not auto-serve index.html),
+  so the app window opened to a 403. Browser tabs were unaffected because they
+  always loaded `…/index.html` explicitly.
+- **Service worker shell no longer precaches `./`.** The same directory entry in
+  `cache.addAll(SHELL)` hit the 403 and could reject the install; the shell now
+  precaches `./index.html` + `./manifest.json` only. Cache bumped `v4 → v5` to
+  force a clean re-precache on next load.
+
 ## 2.4.33
 
 ### Restore PWA manifest screenshots (richer install dialog)

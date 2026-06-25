@@ -12,12 +12,17 @@
  *  - Everything else (HA WebSocket is not HTTP; camera proxy, REST history):
  *    network-only — we never want to serve a stale camera frame or sensor value.
  */
-const CACHE = "villa-kiosk-v4";
+const CACHE = "villa-kiosk-v5";
 // The big central 3D model (GLB/SH3D, tens of MB) lives in its OWN cache that
 // survives app updates — it rarely changes and re-downloading it on every open
 // is the main load-time cost. Version-stamped URLs (?v=<etag>) invalidate it.
 const MODEL_CACHE = "villa-kiosk-model-v1";
-const SHELL = ["./", "./index.html", "./manifest.json"];
+// Precache index.html by its explicit path, NOT the bare directory "./":
+// Home Assistant's static file server returns "403: Forbidden" for a directory
+// request (it won't auto-serve index.html), which would reject cache.addAll and
+// also 403 the installed PWA at launch. The manifest start_url points at
+// ./index.html for the same reason.
+const SHELL = ["./index.html", "./manifest.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

@@ -6,7 +6,7 @@
   "lang": "en",
   "dir": "ltr",
   "categories": ["utilities", "lifestyle"],
-  "start_url": "./",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
