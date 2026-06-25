@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.4.36
+
+### Fix: light fixtures whose entity_id contains "ceiling" were invisible
+- **Root cause: the dollhouse ceiling-hider matched HA entity meshes by name.**
+  `applyStructure` hides architectural ceiling/roof meshes via
+  `/ceiling|plafond|toiture|toit/i` on the mesh name. The villa's light fixtures
+  are named with their HA entity_id, and several legitimately contain the word
+  "ceiling" — `light.bedroom_1_…_ceiling_b1`,
+  `light.living_room_ceiling_led_…_dining_table_led`/`…_sofa_led`,
+  `light.living_room_main_ceiling_…`. Those meshes were set `isVisible = false`,
+  while a sibling like `light.…_wallswicth_center` (no "ceiling" in its id) stayed
+  visible — which is why one cluster of 12 ceiling spots showed and the others,
+  defined identically in SweetHome, did not. It was never an emissive, binding, or
+  geometry problem; the meshes were simply hidden.
+- **Fix: the structural pass now skips any mesh named by the HA convention.** Any
+  mesh whose name resolves to a known entity domain (`inferTypeFromEntityId`) is
+  an entity fixture owned by `EntityVisuals` and is excluded from structural
+  hide/collision/opacity — so a fixture can carry an architectural word in its
+  entity_id without being mistaken for the building. Non-hardcoded; honors the
+  "only act on objects named by the HA convention" rule.
+- **Also raised the unwired-marker baseline glow** (`EntityVisuals`
+  `LIGHT_BASELINE_GLOW = 0.5`, applied to every light mesh) and the
+  `blender_pipeline` v1.7.1 baked emission (`0.55`) / marker size (≥5 cm), so the
+  now-visible placeholder fixtures read clearly before they're wired to HA.
+
 ## 2.4.35
 
 ### Turning off "Live weather effects" now clears them immediately

@@ -29,6 +29,14 @@ import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 0.85;
+// Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
+// ceiling spots / LED strips export as small placeholder spheres; at the old
+// 0.18 they were almost invisible — especially the clustered ones (Bedroom 1
+// ceiling, the living-room LED strips) where 12 faint 10 cm dots at the ceiling
+// read as "missing". Lifted so every fixture reads as a real object before it's
+// wired; applyToMesh still overrides this from live HA state (on = bright, off
+// = black).
+const LIGHT_BASELINE_GLOW = 0.5;
 // Room-scale reach for a fixture's PointLight. The old value (8 m) lit straight
 // through walls into the next room because point lights have no occlusion on
 // their own; the un-shadowed markers of a multi-marker strip rely on this tight
@@ -158,6 +166,27 @@ export class EntityVisuals {
       // For lights, create a real (initially off) PointLight at EACH fixture mesh
       // — one per lamp, so two bedside lamps under one entity both illuminate.
       if (map.type === "light") {
+        // Geometry-less SweetHome "virtual light" markers (e.g. ceiling spots,
+        // LED strips) are exported by blender_pipeline as small placeholder
+        // spheres. Newer GLBs carry a baked VillaLightMarker material (cloned
+        // above); older ones have NO material. Either way the baked baseline is
+        // too faint to read as a fixture — which is why the Bedroom 1 ceiling and
+        // the living-room LED strips (12 clustered 10 cm dots each) looked
+        // "missing" while lights with real lamp geometry looked fine. Ensure an
+        // emissive-capable material exists, then lift its baseline to a clearly
+        // visible level for EVERY light mesh so it reads as a real object before
+        // it's wired to HA. applyToMesh still overrides emissive from live state
+        // (on = bright colour, off = black). Idempotent across re-index via the
+        // same __entityMatCloned flag as the clone path.
+        if (!m.material) {
+          const lit = new StandardMaterial(`litemarker_${m.uniqueId}`, this.scene);
+          lit.diffuseColor = WARM_GLOW.scale(0.5);
+          lit.specularColor = Color3.Black();
+          m.material = lit;
+          m.metadata = { ...(m.metadata ?? {}), __entityMatCloned: true };
+        }
+        const setBaseline = this.emissiveOf(m);
+        if (setBaseline) setBaseline(WARM_GLOW.scale(LIGHT_BASELINE_GLOW));
         // Use bounding-box centre: when the model came from an OBJ (Blender
         // pipeline), the node position is (0,0,0) for every entity mesh and the
         // actual 3D location is encoded only in vertex data.

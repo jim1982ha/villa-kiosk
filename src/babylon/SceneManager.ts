@@ -28,7 +28,7 @@ import { WeatherEffects } from "./WeatherEffects";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
 import { applyGrassGround } from "./GroundGrass";
-import { resolveMeshToMapping } from "@/config/EntityMap";
+import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { fitAffine, affineResidual, spanArea, type PlanWorldPair } from "@/utils/affineFit";
 import type { Pt2 } from "@/utils/geometry";
@@ -631,6 +631,18 @@ export class SceneManager {
     for (const m of meshes) {
       const name = m.name;
       if (/^(halo_|label_)/i.test(name) || m.metadata?.isMarker) continue;
+
+      // HA entity fixtures (light.*, cover.*, fan.*, …) are owned entirely by
+      // EntityVisuals — the structural pass must never hide or collide them.
+      // The mesh name IS the entity_id (domain prefix before the first dot, even
+      // with a Blender ".001" instance suffix), so a known domain marks it as an
+      // entity. Without this skip, the ceiling-hide regex below matched any light
+      // whose entity_id legitimately contains an architectural word and set it
+      // invisible — e.g. light.bedroom_1_…_ceiling_b1 and
+      // light.living_room_ceiling_led_… vanished while a sibling like
+      // light.…_wallswicth_center (no "ceiling") stayed visible. Honors the
+      // "only objects named by the HA convention" rule without hardcoding names.
+      if (inferTypeFromEntityId(name)) continue;
 
       m.computeWorldMatrix(true);
       const bb = m.getBoundingInfo().boundingBox;
