@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.4.26
+
+### Draco decoder bundled (enables compressed models)
+- The app now **bundles Babylon's Draco decoder** (from `@babylonjs/core`, no new
+  dependency, ~192 KB wasm) and points Babylon at it instead of the default CDN —
+  so a Draco-**compressed** GLB loads fully offline under HA Ingress. The decoder
+  is fetched lazily, only when a model actually uses Draco, so an uncompressed GLB
+  pays nothing.
+- Pair this with the pipeline (`blender_pipeline.py` v1.6.0, in `sources/`), which
+  now exports with Draco enabled at visually-lossless quantization. Result: the GLB
+  geometry shrinks ~5–10×, cutting both download and parse time, with **no visible
+  change** to the model. Rebuild the GLB to benefit.
+
 ## 2.4.25
 
 ### Grass instead of a grey plinth

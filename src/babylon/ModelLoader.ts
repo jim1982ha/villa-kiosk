@@ -2,9 +2,26 @@
 // Load a GLB into the scene from an ArrayBuffer (IndexedDB) or an uploaded File,
 // and persist uploads to IndexedDB so a refresh doesn't re-upload.
 
-import { SceneLoader, Material, type AbstractMesh, type Scene } from "@babylonjs/core";
+import { SceneLoader, Material, DracoCompression, type AbstractMesh, type Scene } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
+// Bundle the Draco decoder from @babylonjs/core so a Draco-compressed GLB loads
+// WITHOUT hitting Babylon's default CDN — required for the offline HA-Ingress
+// kiosk. Vite's `?url` rewrites these to hashed, correctly-based build assets.
+import dracoWrapperUrl from "@babylonjs/core/assets/Draco/draco_wasm_wrapper_gltf.js?url";
+import dracoWasmUrl from "@babylonjs/core/assets/Draco/draco_decoder_gltf.wasm?url";
+import dracoFallbackUrl from "@babylonjs/core/assets/Draco/draco_decoder_gltf.js?url";
 import { saveModelToIndexedDB } from "@/utils/storage";
+
+// Point Babylon at the bundled decoder. Set once at module load; the decoder is
+// still only instantiated lazily, when a model actually uses Draco — so an
+// uncompressed GLB pays nothing for this.
+DracoCompression.Configuration = {
+  decoder: {
+    wasmUrl: dracoWrapperUrl,
+    wasmBinaryUrl: dracoWasmUrl,
+    fallbackUrl: dracoFallbackUrl,
+  },
+};
 
 export interface LoadResult {
   meshes: AbstractMesh[];
