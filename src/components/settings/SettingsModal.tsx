@@ -6,7 +6,8 @@ import { useRef, useState, useEffect } from "react";
 import { Plug, Download, Upload, Bug, FileText } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
+import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, DEFAULT_ENTITY_ICONS, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
+import type { EntityType } from "@/types/scene.types";
 import { testConnection, type TestResult } from "@/ha/testConnection";
 import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
 import { parseSh3d } from "@/utils/sh3dParser";
@@ -21,6 +22,22 @@ interface Props {
   onClose: () => void;
   onModelChanged: () => void;
 }
+
+/** Friendly category names for the per-type device-icon editor. */
+const ICON_CATEGORY_LABEL: Record<EntityType, string> = {
+  light: "Lights",
+  climate: "Climate",
+  lock: "Locks",
+  camera: "Cameras",
+  cover: "Covers / blinds",
+  fan: "Fans",
+  binary_sensor: "Binary sensors",
+  sensor: "Sensors",
+  media_player: "Media players",
+  switch: "Switches",
+  input_boolean: "Input booleans",
+  assist_satellite: "Assist satellites",
+};
 
 export default function SettingsModal({ manager, onClose, onModelChanged }: Props) {
   const { config, update, replace } = useConfig();
@@ -278,6 +295,37 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           Mirrors your Home Assistant weather entity: rain shows when it's raining,
           nothing in clear/sunny/cloudy weather.
         </p>
+
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
+
+        <h3 style={{ margin: 0, fontSize: 15 }}>Device state icons</h3>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          The in-scene badge for each device category. The icon shows the device
+          type; its ring colour shows the live state (gold = on, dim = off,
+          red = alert, faded = unreachable). Edit per category — paste any emoji.
+        </p>
+        <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>
+          {(Object.keys(DEFAULT_ENTITY_ICONS) as EntityType[]).map((type) => (
+            <label key={type} style={{ display: "flex", alignItems: "center", gap: 8, width: "calc(50% - 5px)" }}>
+              <input
+                type="text"
+                value={config.entityIcons?.[type] ?? DEFAULT_ENTITY_ICONS[type]}
+                onChange={(e) => update({ entityIcons: { ...config.entityIcons, [type]: e.target.value } })}
+                style={{ width: 44, textAlign: "center", fontSize: 18, padding: "4px 0" }}
+                maxLength={4}
+                aria-label={`${ICON_CATEGORY_LABEL[type]} icon`}
+              />
+              <span className="body-text" style={{ fontSize: 12 }}>{ICON_CATEGORY_LABEL[type]}</span>
+            </label>
+          ))}
+        </div>
+        <button
+          className="btn ghost mt"
+          style={{ fontSize: 12 }}
+          onClick={() => update({ entityIcons: { ...DEFAULT_ENTITY_ICONS } })}
+        >
+          Reset icons to defaults
+        </button>
 
         <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
 

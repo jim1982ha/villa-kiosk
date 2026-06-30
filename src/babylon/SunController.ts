@@ -15,6 +15,11 @@ export class SunController {
   private sky: SkyDome | null;
   private config: AppConfig;
   private requestRender: () => void = () => {};
+  // When set (overview mode), this fixed backdrop wins over the day/night sky
+  // colour so the bird's-eye view always reads on a calm, eye-friendly dark
+  // ground instead of the bright daytime sky blue. Cleared (null) in
+  // first-person so the real sky shows through the windows again.
+  private bgOverride: Color4 | null = null;
 
   constructor(
     scene: Scene,
@@ -33,6 +38,22 @@ export class SunController {
 
   setRenderHook(fn: () => void): void {
     this.requestRender = fn;
+  }
+
+  /**
+   * Pin the scene background to a fixed colour (overview backdrop), or pass null
+   * to release it and restore the live day/night sky colour. Lighting (sun, fill,
+   * IBL) is unaffected — only the empty-space clearColor changes — so switching
+   * views never relights the model.
+   */
+  setBackgroundOverride(color: Color4 | null): void {
+    this.bgOverride = color;
+    if (color) {
+      this.scene.clearColor = color;
+      this.requestRender();
+    } else {
+      this.applyRealSun(); // recompute the day/night sky colour for right now
+    }
   }
 
   updateConfig(config: AppConfig): void {
@@ -100,9 +121,11 @@ export class SunController {
     // Drive the procedural sky from the same sun direction (it shows through the
     // windows). clearColor is kept as a fallback for when the sky dome is absent.
     this.sky?.update(dir, isDay);
-    this.scene.clearColor = isDay
+    // In overview mode bgOverride pins a calm dark backdrop; otherwise the empty
+    // space tracks the day/night sky colour.
+    this.scene.clearColor = this.bgOverride ?? (isDay
       ? new Color4(0.53, 0.67, 0.84, 1)
-      : new Color4(0.03, 0.03, 0.05, 1);
+      : new Color4(0.03, 0.03, 0.05, 1));
     this.requestRender();
   }
 }

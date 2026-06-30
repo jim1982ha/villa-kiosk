@@ -235,10 +235,18 @@ export class SceneManager {
       }
       this.overview.enable();
       this.scene.activeCamera = this.overview.camera;
+      // Bird's-eye floor plan reads best on a calm, neutral dark ground rather
+      // than the bright daytime sky blue (which "crashes the eyes", day or
+      // night). Hide the sky dome and pin a dark backdrop; lighting is untouched.
+      this.sky.setEnabled(false);
+      this.sun.setBackgroundOverride(new Color4(0.055, 0.062, 0.078, 1));
     } else {
       this.overview.disable();
       this.scene.activeCamera = this.camera.camera;
       this.camera.attachInput();
+      // Restore the real sky for the immersive walk-through view.
+      this.sky.setEnabled(true);
+      this.sun.setBackgroundOverride(null);
     }
     this.requestRender(600);
   }
@@ -791,17 +799,44 @@ export class SceneManager {
   updateConfig(config: AppConfig): void {
     const prev = this.config;
     this.config = config;
+
+    // --- Change-detection gating ---------------------------------------------
+    // updateConfig() fires on EVERY config mutation, including cheap UI toggles
+    // like "show labels" / "highlight clickable". Re-running the lighting pass
+    // (which rewrites scene.clearColor + the sky) and the structural pass (which
+    // re-clones materials and recreates per-light PointLights) on every toggle
+    // is what made the background flicker and the scene visibly hitch. Each heavy
+    // subsystem now only re-runs when an input it actually depends on changed.
+    // Config objects are recreated immutably by ConfigContext.update(), so a
+    // reference change reliably marks "this slice was touched".
+    const renderChanged =
+      prev.render !== config.render ||
+      prev.latitude !== config.latitude ||
+      prev.longitude !== config.longitude;
+
+    // indexMeshes()/applyStructure() only read entity↔mesh bindings and the
+    // calibration flips; everything else (glass hints, grass, model transform)
+    // takes effect on the next model load, not here.
+    const structuralChanged =
+      prev.entityMap !== config.entityMap ||
+      prev.meshBindings !== config.meshBindings ||
+      prev.calibrationFlipX !== config.calibrationFlipX ||
+      prev.calibrationFlipZ !== config.calibrationFlipZ;
+
     // renderFx first (sets base IBL + builds/clears the env texture), THEN the
     // sun pass so SunController has the final word on the fill light + day/night
     // IBL scaling it owns. Same ordering as setRenderConfig() — keeping the two
     // call sites consistent is what stops the night fill from flickering.
-    this.renderFx.apply(config.render);
-    this.sun.updateConfig(config);
+    if (renderChanged) {
+      this.renderFx.apply(config.render);
+      this.sun.updateConfig(config);
+    }
     this.camera.updateConfig(config);
     this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
     this.pick.setMaps(config.entityMap, config.meshBindings);
-    this.visuals.updateConfig(config);
-    if (this.loadedMeshes.length) {
+    this.visuals.updateConfig(config); // internally cheap; rebuilds labels only on its own diff
+
+    if (this.loadedMeshes.length && structuralChanged) {
       this.visuals.indexMeshes(this.loadedMeshes);
       this.applyStructure(this.loadedMeshes);
 
@@ -826,12 +861,14 @@ export class SceneManager {
           if (spawn) this.camera.teleport(spawn, true);
         }
       }
-
-      if (prev.highlightInteractive !== config.highlightInteractive) {
-        this.applyHighlight(this.loadedMeshes);
-      }
     }
-    this.markers.sync(config.markers);
+
+    if (this.loadedMeshes.length && prev.highlightInteractive !== config.highlightInteractive) {
+      this.applyHighlight(this.loadedMeshes);
+    }
+    if (prev.markers !== config.markers) {
+      this.markers.sync(config.markers);
+    }
     this.requestRender();
   }
 

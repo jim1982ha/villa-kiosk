@@ -1,7 +1,7 @@
 // src/config/AppConfig.ts
 // Config schema + defaults + load/save (localStorage). All runtime-editable.
 
-import type { EntityMapping, ModelTransform, SceneMarker, TeleportPoint } from "@/types/scene.types";
+import type { EntityMapping, EntityType, ModelTransform, SceneMarker, TeleportPoint } from "@/types/scene.types";
 import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_THRESHOLDS, type Threshold } from "./ThresholdConfig";
@@ -15,6 +15,28 @@ export const DEFAULT_MODEL_TRANSFORM: ModelTransform = {
   centreZ: 614,
   flipX: false,
   flipZ: false,
+};
+
+/**
+ * Per-category glyph for the in-scene state badges. One icon per entity TYPE
+ * (not per entity) — editable in Settings. The badge's RING/FILL colour encodes
+ * the live state (on / off / alert / unreachable); the glyph stays the device
+ * type so the scene reads at a glance without text clutter. Plain emoji so they
+ * render in the Babylon GUI TextBlock on every platform with no icon font.
+ */
+export const DEFAULT_ENTITY_ICONS: Record<EntityType, string> = {
+  light: "💡",
+  climate: "🌡️",
+  lock: "🔒",
+  camera: "📷",
+  cover: "🪟",
+  fan: "🌀",
+  binary_sensor: "🚨",
+  sensor: "📈",
+  media_player: "🎵",
+  switch: "🔌",
+  input_boolean: "🔘",
+  assist_satellite: "🎙️",
 };
 
 /** Tone-mapping operator applied to the whole scene (see RenderConfig). */
@@ -193,6 +215,8 @@ export interface AppConfig {
    * Case-insensitive substring match; takes effect on the next model load.
    */
   grassGroundHints?: string[];
+  /** Per-category state-badge glyphs (see DEFAULT_ENTITY_ICONS). Editable in Settings. */
+  entityIcons: Record<EntityType, string>;
   onboarded: boolean;
 }
 
@@ -224,6 +248,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   highlightInteractive: false,
   naturalScrolling: true,
   render: DEFAULT_RENDER,
+  entityIcons: { ...DEFAULT_ENTITY_ICONS },
   onboarded: false,
 };
 
@@ -241,6 +266,7 @@ export function loadConfig(): AppConfig {
       alertThresholds: { ...DEFAULT_CONFIG.alertThresholds, ...(stored.alertThresholds ?? {}) },
       modelTransform: { ...DEFAULT_CONFIG.modelTransform, ...(stored.modelTransform ?? {}) },
       render: { ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) },
+      entityIcons: { ...DEFAULT_ENTITY_ICONS, ...(stored.entityIcons ?? {}) },
       markers: stored.markers ?? DEFAULT_CONFIG.markers,
       teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
     };

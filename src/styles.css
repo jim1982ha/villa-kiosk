@@ -158,7 +158,17 @@ button {
 .hud-brand svg { color: var(--accent-gold); flex: 0 0 auto; }
 .hud-center { justify-self: center; display: flex; align-items: center; gap: 12px; }
 .hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
-.hud-clock { font-variant-numeric: tabular-nums; font-size: 16px; color: var(--text-secondary); }
+/* Self-contained legible pill so the time reads clearly on ANY backdrop — the
+   bright daytime sky used to swallow the muted-grey text. Brighter colour, a
+   translucent dark chip, and a thin gold hairline keep it crisp day or night. */
+.hud-clock {
+  font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 600;
+  color: var(--text-primary);
+  padding: 4px 12px; border-radius: 999px;
+  background: rgba(18, 12, 6, 0.55);
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
 
 /* Connection status sits right next to the villa name — just a coloured dot. */
 .conn-dot { display: inline-flex; align-items: center; }

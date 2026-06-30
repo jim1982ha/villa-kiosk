@@ -23,7 +23,8 @@ import {
 } from "@babylonjs/gui";
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
-import type { EntityMapping } from "@/types/scene.types";
+import type { EntityMapping, EntityType } from "@/types/scene.types";
+import { DEFAULT_ENTITY_ICONS } from "@/config/AppConfig";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 
@@ -49,10 +50,24 @@ const LIGHT_RANGE = 2.8;
 const LIGHT_SHADOW_SIZE = 256;
 
 interface LabelControls {
-  rect: Rectangle;
-  nameText: TextBlock;
-  stateText: TextBlock;
+  container: StackPanel;
+  badge: Rectangle;
+  glyph: TextBlock;
+  valueText: TextBlock;
+  type: EntityType;
 }
+
+/** A live state distilled to one of four visual kinds the badge colour-codes. */
+type BadgeKind = "on" | "off" | "alert" | "unavailable";
+
+// Badge palette — ring + soft fill per state kind. Kept calm and on-brand: gold
+// for active, muted brown for idle, red for alert, dim grey for unreachable.
+const BADGE_STYLE: Record<BadgeKind, { ring: string; fill: string; alpha: number }> = {
+  on:          { ring: "rgba(201,168,76,0.95)", fill: "rgba(201,168,76,0.22)", alpha: 1 },
+  off:         { ring: "rgba(120,104,80,0.55)", fill: "rgba(18,12,6,0.78)",    alpha: 0.85 },
+  alert:       { ring: "rgba(192,80,77,0.95)",  fill: "rgba(192,80,77,0.28)",  alpha: 1 },
+  unavailable: { ring: "rgba(110,90,72,0.55)",  fill: "rgba(18,12,6,0.55)",    alpha: 0.4 },
+};
 
 export class EntityVisuals {
   private scene: Scene;
@@ -80,6 +95,9 @@ export class EntityVisuals {
   /** Fullscreen GUI layer for state labels. */
   private labelLayer: AdvancedDynamicTexture | null = null;
   private labels = new Map<string, LabelControls>();
+  /** Last seen HA state per entity, so a label rebuild (toggle on / icon edit)
+   *  can repaint badges immediately instead of waiting for the next push. */
+  private lastState = new Map<string, HassEntity>();
 
   constructor(
     scene: Scene,
@@ -98,17 +116,23 @@ export class EntityVisuals {
 
   updateConfig(config: AppConfig): void {
     const prevLabels = this.config.showEntityLabels;
+    const prevIcons = this.config.entityIcons;
     this.config = config;
     // Entity-light wall occlusion is always-on (independent of the global Shadows
     // quality toggle, which drives the expensive sun shadows): walls block lamp
     // light out of the box, so there is nothing to tear down here when the toggle
     // changes.
+    const iconsChanged = config.entityIcons !== prevIcons;
     if (config.showEntityLabels !== prevLabels) {
       if (config.showEntityLabels) {
         this.rebuildLabels();
       } else if (this.labelLayer) {
         this.labelLayer.rootContainer.isVisible = false;
       }
+    } else if (config.showEntityLabels && iconsChanged) {
+      // Per-category glyph edited in Settings while labels are shown — rebuild so
+      // the new icons take effect, then repaint from the last known states.
+      this.rebuildLabels();
     }
   }
 
@@ -233,6 +257,7 @@ export class EntityVisuals {
     const meshes = this.byEntity.get(entity.entity_id);
     const map = this.mapping.get(entity.entity_id);
     if (!meshes || !map) return;
+    this.lastState.set(entity.entity_id, entity);
     for (const mesh of meshes) this.applyToMesh(mesh, map, entity);
     if (map.type === "light") {
       this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
@@ -244,6 +269,11 @@ export class EntityVisuals {
   // ---------------------------------------------------------------------------
   // State labels (BJS GUI fullscreen overlay)
   // ---------------------------------------------------------------------------
+
+  /** Resolve the per-category glyph (Settings override > built-in default). */
+  private iconFor(type: EntityType): string {
+    return this.config.entityIcons?.[type] ?? DEFAULT_ENTITY_ICONS[type] ?? "●";
+  }
 
   private rebuildLabels(): void {
     // Ensure the GUI layer exists.
@@ -262,113 +292,127 @@ export class EntityVisuals {
 
       const anchor = meshes[0];
 
-      const rect = new Rectangle(`lbl_rect_${entityId}`);
-      rect.width = "170px";
-      rect.height = "40px";
-      rect.cornerRadius = 8;
-      rect.background = "rgba(18,12,6,0.88)";
-      rect.thickness = 1;
-      rect.color = "rgba(201,168,76,0.45)";
-      // Make the label tappable: clicking/touching it opens the control panel.
+      // A compact column: a circular icon badge over a tiny value chip. Far less
+      // cluttering than the old 170px text plate — the device TYPE reads from the
+      // glyph, the STATE from the badge colour, and the optional value chip only
+      // appears for entities with a meaningful reading (%, °, title).
+      const container = new StackPanel(`lbl_${entityId}`);
+      container.isVertical = true;
+      container.width = "92px";
+      container.height = "62px";
+      container.spacing = 2;
+      this.labelLayer.addControl(container);
+      container.linkWithMesh(anchor);
+      container.linkOffsetYInPixels = -54;
+
+      const badge = new Rectangle(`lbl_badge_${entityId}`);
+      badge.width = "38px";
+      badge.height = "38px";
+      badge.cornerRadius = 19; // = half of width/height -> a circle
+      badge.thickness = 2;
+      badge.background = BADGE_STYLE.off.fill;
+      badge.color = BADGE_STYLE.off.ring;
+      badge.shadowColor = "rgba(0,0,0,0.55)";
+      badge.shadowBlur = 4;
+      // Make the badge tappable: clicking/touching it opens the control panel.
       if (this.onEntityPicked) {
         const cb = this.onEntityPicked;
         const eid = entityId;
-        rect.isPointerBlocker = true;
-        rect.hoverCursor = "pointer";
-        rect.onPointerClickObservable.add(() => cb(eid));
-        rect.onPointerEnterObservable.add(() => {
-          rect.color = "rgba(201,168,76,0.85)";
-          this.requestRender();
-        });
-        rect.onPointerOutObservable.add(() => {
-          rect.color = "rgba(201,168,76,0.45)";
-          this.requestRender();
-        });
+        badge.isPointerBlocker = true;
+        badge.hoverCursor = "pointer";
+        badge.onPointerClickObservable.add(() => cb(eid));
+        badge.onPointerEnterObservable.add(() => { badge.scaleX = badge.scaleY = 1.12; this.requestRender(); });
+        badge.onPointerOutObservable.add(() => { badge.scaleX = badge.scaleY = 1; this.requestRender(); });
       }
-      this.labelLayer.addControl(rect);
-      rect.linkWithMesh(anchor);
-      rect.linkOffsetYInPixels = -64;
+      container.addControl(badge);
 
-      const stack = new StackPanel(`lbl_stack_${entityId}`);
-      stack.isVertical = true;
-      rect.addControl(stack);
+      const glyph = new TextBlock(`lbl_glyph_${entityId}`);
+      glyph.text = this.iconFor(map.type);
+      glyph.fontSize = 19;
+      glyph.color = "#f5edd8";
+      badge.addControl(glyph);
 
-      const nameText = new TextBlock(`lbl_name_${entityId}`);
-      nameText.text = map.label;
-      nameText.color = "#a89880";
-      nameText.fontSize = 10;
-      nameText.height = "18px";
-      nameText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
-      stack.addControl(nameText);
+      const valueText = new TextBlock(`lbl_value_${entityId}`);
+      valueText.text = "";
+      valueText.color = "#f5edd8";
+      valueText.fontSize = 11;
+      valueText.fontStyle = "bold";
+      valueText.height = "16px";
+      valueText.shadowColor = "rgba(0,0,0,0.85)";
+      valueText.shadowBlur = 3;
+      valueText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
+      valueText.isVisible = false;
+      container.addControl(valueText);
 
-      const stateText = new TextBlock(`lbl_state_${entityId}`);
-      stateText.text = "—";
-      stateText.color = "#f5edd8";
-      stateText.fontSize = 13;
-      stateText.fontStyle = "bold";
-      stateText.height = "20px";
-      stateText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
-      stack.addControl(stateText);
+      this.labels.set(entityId, { container, badge, glyph, valueText, type: map.type });
 
-      this.labels.set(entityId, { rect, nameText, stateText });
+      // Repaint from the last known state so a rebuild (toggle on / icon edit)
+      // shows live status immediately instead of an idle default.
+      const cached = this.lastState.get(entityId);
+      if (cached) this.updateLabel(entityId, map, cached);
     }
   }
 
   private updateLabel(entityId: string, map: EntityMapping, entity: HassEntity): void {
     const lbl = this.labels.get(entityId);
     if (!lbl) return;
-    lbl.stateText.text = this.stateString(map, entity);
-    // Colour-code the state text
-    const colour = this.stateLabelColour(map, entity);
-    if (colour) lbl.stateText.color = colour;
+    const kind = this.badgeKind(map.type, entity);
+    const style = BADGE_STYLE[kind];
+    lbl.badge.color = style.ring;
+    lbl.badge.background = style.fill;
+    lbl.badge.alpha = style.alpha;
+    lbl.glyph.text = this.iconFor(map.type); // honour live icon edits
+    lbl.glyph.alpha = kind === "unavailable" ? 0.6 : 1;
+
+    const value = this.compactValue(map.type, entity);
+    lbl.valueText.text = value;
+    lbl.valueText.isVisible = value.length > 0;
   }
 
-  private stateString(map: EntityMapping, state: HassEntity): string {
-    switch (map.type) {
-      case "light":
-        if (state.state !== "on") return "OFF";
-        return state.attributes.brightness
-          ? `ON · ${Math.round((state.attributes.brightness as number) / 255 * 100)}%`
-          : "ON";
-      case "lock":
-        return state.state === "locked" ? "LOCKED" : "UNLOCKED";
-      case "climate": {
-        const cur = state.attributes.current_temperature as number | undefined;
-        const tgt = state.attributes.temperature as number | undefined;
-        if (cur != null) return `${cur}° → ${tgt ?? "—"}°`;
-        return state.state;
-      }
+  /** Distil any entity's live state into one of four colour-coded badge kinds. */
+  private badgeKind(type: EntityType, s: HassEntity): BadgeKind {
+    if (s.state === "unavailable" || s.state === "unknown") return "unavailable";
+    switch (type) {
+      case "lock":          return s.state === "locked" ? "on" : "alert";
+      case "binary_sensor": return s.state === "on" ? "alert" : "off";
+      case "climate":       return s.state === "off" ? "off" : "on";
       case "cover": {
-        const pos = state.attributes.current_position as number | undefined;
-        if (pos != null) return `${Math.round(pos)}% open`;
-        return state.state.toUpperCase();
+        const pos = s.attributes.current_position as number | undefined;
+        if (pos != null) return pos > 0 ? "on" : "off";
+        return s.state === "closed" ? "off" : "on";
       }
-      case "fan":
-        return state.state === "on" ? `ON${state.attributes.percentage ? ` · ${state.attributes.percentage}%` : ""}` : "OFF";
-      case "switch":
-        return state.state === "on" ? "ON" : "OFF";
-      case "media_player":
-        return state.state === "playing"
-          ? (state.attributes.media_title as string | undefined) ?? "PLAYING"
-          : state.state.toUpperCase();
-      case "binary_sensor":
-        return state.state === "on" ? "ALERT" : "OK";
-      case "sensor": {
-        const unit = (state.attributes.unit_of_measurement as string | undefined) ?? "";
-        return `${state.state}${unit}`;
-      }
-      default:
-        return state.state.toUpperCase();
+      case "media_player":  return s.state === "playing" ? "on" : "off";
+      case "sensor":        return "on"; // sensors are informational; value carries meaning
+      default:              return s.state === "on" ? "on" : "off"; // light/fan/switch/input_boolean
     }
   }
 
-  private stateLabelColour(map: EntityMapping, state: HassEntity): string | null {
-    switch (map.type) {
-      case "light":    return state.state === "on" ? "#c9a84c" : "#6b5a48";
-      case "lock":     return state.state === "locked" ? "#6baa75" : "#c0504d";
-      case "binary_sensor": return state.state === "on" ? "#c0504d" : "#6baa75";
-      case "switch":   return state.state === "on" ? "#c9a84c" : "#6b5a48";
-      default:         return null;
+  /** Tiny chip text under the badge for entities whose state is a reading, not just on/off. */
+  private compactValue(type: EntityType, s: HassEntity): string {
+    if (s.state === "unavailable" || s.state === "unknown") return "";
+    switch (type) {
+      case "light": {
+        const b = s.attributes.brightness as number | undefined;
+        return s.state === "on" && b ? `${Math.round((b / 255) * 100)}%` : "";
+      }
+      case "fan": {
+        const p = s.attributes.percentage as number | undefined;
+        return s.state === "on" && p != null ? `${p}%` : "";
+      }
+      case "cover": {
+        const pos = s.attributes.current_position as number | undefined;
+        return pos != null ? `${Math.round(pos)}%` : "";
+      }
+      case "climate": {
+        const cur = s.attributes.current_temperature as number | undefined;
+        return cur != null ? `${Math.round(cur)}°` : "";
+      }
+      case "sensor": {
+        const unit = (s.attributes.unit_of_measurement as string | undefined) ?? "";
+        return `${s.state}${unit}`;
+      }
+      default:
+        return "";
     }
   }
 
