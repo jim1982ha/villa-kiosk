@@ -39,8 +39,10 @@ import type { TeleportPoint } from "@/types/scene.types";
 
 export interface SceneManagerOptions {
   config: AppConfig;
-  /** Called when a mesh mapped to an entity is tapped. */
+  /** Called when a mesh mapped to an entity is tapped (fast on/off action). */
   onEntityPicked: (entityId: string) => void;
+  /** Called when a mesh mapped to an entity is long-pressed (open full panel). */
+  onEntityLongPressed: (entityId: string) => void;
   /** Called when the active floor changes (staircase or button). */
   onFloorChange: (floor: number) => void;
   /** Called when the camera enters a new named room. */
@@ -106,7 +108,7 @@ export class SceneManager {
     this.lighting = new LightingSystem(this.scene);
     // Procedural sky shown through the windows; driven by the same sun below.
     this.sky = new SkyDome(this.scene);
-    this.sun = new SunController(this.scene, this.lighting, opts.config, this.sky);
+    this.sun = new SunController(this.scene, this.lighting, this.hemi, opts.config, this.sky);
     this.sun.setRenderHook(() => this.requestRender());
     this.visuals = new EntityVisuals(this.scene, opts.config, () => this.requestRender(), opts.onEntityPicked);
     this.markers = new MarkerManager(this.scene, () => this.requestRender());
@@ -118,6 +120,7 @@ export class SceneManager {
       // Tap-to-pick is detected in the camera (sole owner of the pointer
       // pipeline) and dispatched to the picker — reliable on touch & mouse.
       onTap: (x, y) => this.pick.pickAtScreen(x, y),
+      onLongPress: (x, y) => this.pick.pickAtScreen(x, y, true),
     });
 
     // FloorManager watches the camera for staircase transitions.
@@ -126,6 +129,7 @@ export class SceneManager {
 
     this.pick = new PickHandler(
       this.scene, opts.onEntityPicked, opts.config.entityMap, opts.config.meshBindings,
+      opts.onEntityLongPressed,
     );
 
     // Bird's-eye overview camera (a second control mode). Created up front but
@@ -135,14 +139,19 @@ export class SceneManager {
     this.overview = new OverviewController(this.scene, canvas, {
       onActivity: () => this.requestRender(),
       onTap: (x, y) => this.pick.pickAtScreen(x, y),
+      onLongPress: (x, y) => this.pick.pickAtScreen(x, y, true),
     });
     this.overview.setNaturalScrolling(opts.config.naturalScrolling ?? true);
 
     // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
     // Created after both cameras exist so SSAO can attach to all of them; the
     // initial apply() pushes config.render onto the freshly-built scene.
-    this.renderFx = new RenderEnhancements(this.scene, this.lighting.sunLight, this.hemi);
+    this.renderFx = new RenderEnhancements(this.scene, this.lighting.sunLight);
     this.renderFx.apply(opts.config.render);
+    // renderFx.apply() sets the *base* IBL intensity and builds the env texture.
+    // Re-run the sun pass now so SunController gets the final word on the values
+    // it owns (fill light + day/night-scaled IBL) with the texture in place.
+    this.sun.applyRealSun();
 
     // Any pointer activity on the canvas (look-around drag, wheel, tap) wakes the
     // on-demand render loop so the view stays smooth.
@@ -782,8 +791,12 @@ export class SceneManager {
   updateConfig(config: AppConfig): void {
     const prev = this.config;
     this.config = config;
-    this.sun.updateConfig(config);
+    // renderFx first (sets base IBL + builds/clears the env texture), THEN the
+    // sun pass so SunController has the final word on the fill light + day/night
+    // IBL scaling it owns. Same ordering as setRenderConfig() — keeping the two
+    // call sites consistent is what stops the night fill from flickering.
     this.renderFx.apply(config.render);
+    this.sun.updateConfig(config);
     this.camera.updateConfig(config);
     this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
     this.pick.setMaps(config.entityMap, config.meshBindings);

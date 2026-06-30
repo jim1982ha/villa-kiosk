@@ -21,12 +21,22 @@ export const DEFAULT_MODEL_TRANSFORM: ModelTransform = {
 export type ToneMappingMode = "none" | "standard" | "aces" | "khr_neutral";
 
 /**
+ * Render-quality preset. The Settings UI exposes just this (plus a couple of
+ * heavy opt-in toggles) instead of ~15 individual dials — picking a preset
+ * materialises a full RenderConfig (see RENDER_PRESETS). "high" is the default:
+ * the app assumes the user wants the best look out of the box.
+ */
+export type QualityPreset = "performance" | "balanced" | "high";
+
+/**
  * Render-quality / look knobs. Every effect is independently toggle-able and
  * tunable so the look can be iterated at runtime (Settings → Render quality)
  * without a rebuild. Mirrors the optional flags in the Blender GLB pipeline
  * (sources/blender_pipeline.py) so the same dials exist offline and online.
  */
 export interface RenderConfig {
+  /** Quality preset the config was materialised from (drives the Settings UI). */
+  quality: QualityPreset;
   /** Filmic tone-mapping operator. "khr_neutral" = Khronos PBR Neutral (best
    *  default: tames blown highlights without ACES's desaturation). */
   toneMapping: ToneMappingMode;
@@ -60,24 +70,47 @@ export interface RenderConfig {
   shadowBlur: number;
 }
 
-export const DEFAULT_RENDER: RenderConfig = {
-  toneMapping: "khr_neutral",
-  exposure: 1.0,
-  contrast: 1.1,
-  hemiIntensity: 0.5,
-  sunIntensity: 1.0,
-  ambientIntensity: 0.6,
-  ibl: false,
-  environmentIntensity: 0.7,
-  ssao: true,
-  ssaoRadius: 6,
-  ssaoStrength: 0.2,
-  ssaoSamples: 8,
-  shadows: false,
-  shadowMapSize: 1024,
-  shadowDarkness: 0.35,
-  shadowBlur: 32,
+/**
+ * Concrete RenderConfig for each preset. These are the ONLY render looks the UI
+ * offers now (item: "simplify to a preset + a few toggles"). `shadows` is a
+ * separate user toggle layered on top, so every preset ships shadows off and the
+ * UI preserves the user's shadow choice when they switch presets.
+ *
+ * Day/night warmth of the fill light + IBL is handled live in SunController, so
+ * these values are the *base* look; the night pass dims/warms them automatically.
+ */
+export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
+  // Fastest path for weak wall tablets: no AO, no IBL, gentle tone mapping.
+  performance: {
+    quality: "performance",
+    toneMapping: "khr_neutral", exposure: 1.0, contrast: 1.08,
+    hemiIntensity: 0.55, sunIntensity: 1.0, ambientIntensity: 0.6,
+    ibl: false, environmentIntensity: 0.6,
+    ssao: false, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
+    shadows: false, shadowMapSize: 1024, shadowDarkness: 0.35, shadowBlur: 32,
+  },
+  // The proven "safe win": subtle contact AO, no IBL/shadows.
+  balanced: {
+    quality: "balanced",
+    toneMapping: "khr_neutral", exposure: 1.0, contrast: 1.1,
+    hemiIntensity: 0.5, sunIntensity: 1.0, ambientIntensity: 0.6,
+    ibl: false, environmentIntensity: 0.65,
+    ssao: true, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
+    shadows: false, shadowMapSize: 1024, shadowDarkness: 0.35, shadowBlur: 32,
+  },
+  // Best look out of the box: AO + soft sky/ground IBL + higher-sample AO.
+  high: {
+    quality: "high",
+    toneMapping: "khr_neutral", exposure: 1.0, contrast: 1.12,
+    hemiIntensity: 0.45, sunIntensity: 1.05, ambientIntensity: 0.6,
+    ibl: true, environmentIntensity: 0.6,
+    ssao: true, ssaoRadius: 6, ssaoStrength: 0.25, ssaoSamples: 16,
+    shadows: false, shadowMapSize: 2048, shadowDarkness: 0.4, shadowBlur: 32,
+  },
 };
+
+/** Default look: best quality the app can show without the heaviest extra (shadows). */
+export const DEFAULT_RENDER: RenderConfig = RENDER_PRESETS.high;
 
 export interface AppConfig {
   haUrl: string;

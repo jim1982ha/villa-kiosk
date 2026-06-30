@@ -2,7 +2,7 @@
 // Drives scene lighting from either the real sun position (configured lat/lng) or the
 // HA sun.sun entity state. Day -> bright blue sky; night -> warm indoor glow.
 
-import { Vector3, Color3, Color4, type Scene } from "@babylonjs/core";
+import { Vector3, Color3, Color4, type Scene, type HemisphericLight } from "@babylonjs/core";
 import type { LightingSystem } from "./LightingSystem";
 import type { SkyDome } from "./SkyDome";
 import { type AppConfig, DEFAULT_RENDER } from "@/config/AppConfig";
@@ -11,13 +11,21 @@ import { getSunPosition } from "@/utils/sunCalc";
 export class SunController {
   private scene: Scene;
   private lighting: LightingSystem;
+  private hemi: HemisphericLight;
   private sky: SkyDome | null;
   private config: AppConfig;
   private requestRender: () => void = () => {};
 
-  constructor(scene: Scene, lighting: LightingSystem, config: AppConfig, sky: SkyDome | null = null) {
+  constructor(
+    scene: Scene,
+    lighting: LightingSystem,
+    hemi: HemisphericLight,
+    config: AppConfig,
+    sky: SkyDome | null = null,
+  ) {
     this.scene = scene;
     this.lighting = lighting;
+    this.hemi = hemi;
     this.sky = sky;
     this.config = config;
     this.applyRealSun();
@@ -67,17 +75,33 @@ export class SunController {
     // sky (clearColor) stays dark so it still clearly reads as night.
     this.lighting.setSun(
       dir,
-      (isDay ? 1.2 : 0.28) * r.sunIntensity,
-      isDay ? new Color3(1.0, 0.95, 0.8) : new Color3(0.85, 0.78, 0.66),
+      (isDay ? 1.2 : 0.32) * r.sunIntensity,
+      isDay ? new Color3(1.0, 0.95, 0.8) : new Color3(0.95, 0.85, 0.7),
     );
     this.lighting.setAmbient(
-      (isDay ? new Color3(0.4, 0.35, 0.3) : new Color3(0.22, 0.2, 0.17)).scale(r.ambientIntensity),
+      (isDay ? new Color3(0.4, 0.35, 0.3) : new Color3(0.26, 0.23, 0.19)).scale(r.ambientIntensity),
     );
+
+    // Interior fill (hemispheric) is owned HERE so its day/night warmth stays
+    // consistent. It used to be a flat neutral-white at a constant intensity,
+    // which is exactly what made night walls read as a dead flat grey: a cold
+    // white wash with no warm key to balance it. At night we dim it and tint it
+    // warm so walls read as a warm, cosy interior; by day it stays neutral.
+    this.hemi.intensity = r.hemiIntensity * (isDay ? 1 : 0.7);
+    this.hemi.diffuse = isDay ? new Color3(1, 1, 1) : new Color3(1.0, 0.92, 0.82);
+    this.hemi.groundColor = isDay ? new Color3(0.55, 0.54, 0.52) : new Color3(0.32, 0.30, 0.27);
+
+    // The IBL gradient cube is a fixed *daytime* sky (blue zenith, grey horizon).
+    // Left at full strength it dumps a cold blue-grey ambient onto every wall at
+    // night — another source of the grey look. Scale its contribution down after
+    // dark. (renderFx owns whether the texture exists; we own how much it counts.)
+    if (r.ibl) this.scene.environmentIntensity = r.environmentIntensity * (isDay ? 1 : 0.4);
+
     // Drive the procedural sky from the same sun direction (it shows through the
     // windows). clearColor is kept as a fallback for when the sky dome is absent.
     this.sky?.update(dir, isDay);
     this.scene.clearColor = isDay
-      ? new Color4(0.7, 0.85, 1.0, 1)
+      ? new Color4(0.53, 0.67, 0.84, 1)
       : new Color4(0.03, 0.03, 0.05, 1);
     this.requestRender();
   }

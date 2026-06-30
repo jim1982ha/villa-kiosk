@@ -23,7 +23,10 @@ export class SkyDome {
     mat.rayleigh = 1.2;              // blue scattering; lower keeps it from over-saturating
     mat.mieCoefficient = 0.0035;     // less white sun-haze around the horizon
     mat.mieDirectionalG = 0.85;
-    mat.luminance = 1;
+    // luminance 1.0 + filmic tone mapping pushed the whole dome toward white —
+    // the "white background" report. Holding it lower keeps a believable blue
+    // zenith that tone mapping doesn't blow out, while windows still read bright.
+    mat.luminance = 0.7;
     this.mat = mat;
 
     // Large box, pinned to the camera so the horizon never moves relative to it.
@@ -50,7 +53,7 @@ export class SkyDome {
     // that remains pools softly at the horizon instead of leaving a harsh edge.
     // SkyMaterial already darkens once the sun is below the horizon; this finishes
     // the look so dusk/indoors don't glare. Day uses the crisp low-haze values.
-    this.mat.luminance = isDay ? 1 : 0.18;
+    this.mat.luminance = isDay ? 0.7 : 0.18;
     this.mat.turbidity = isDay ? 2 : 4;
   }
 

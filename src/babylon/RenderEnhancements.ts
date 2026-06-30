@@ -20,7 +20,6 @@ import {
   Mesh,
   type Scene,
   type DirectionalLight,
-  type HemisphericLight,
   type AbstractMesh,
 } from "@babylonjs/core";
 import type { RenderConfig } from "@/config/AppConfig";
@@ -39,7 +38,6 @@ const SKIP_MESH = /^(halo_|label_|teleport_|trigger_|collision_|__root__)/i;
 export class RenderEnhancements {
   private scene: Scene;
   private sun: DirectionalLight;
-  private hemi: HemisphericLight;
 
   private ssao: SSAO2RenderingPipeline | null = null;
   private ssaoAttached = false;
@@ -50,10 +48,9 @@ export class RenderEnhancements {
   private meshes: AbstractMesh[] = [];
   private cfg: RenderConfig | null = null;
 
-  constructor(scene: Scene, sun: DirectionalLight, hemi: HemisphericLight) {
+  constructor(scene: Scene, sun: DirectionalLight) {
     this.scene = scene;
     this.sun = sun;
-    this.hemi = hemi;
   }
 
   /** Register the loaded model meshes (shadow casters/receivers). */
@@ -66,7 +63,9 @@ export class RenderEnhancements {
   apply(cfg: RenderConfig): void {
     this.cfg = cfg;
     this.applyToneMapping(cfg);
-    this.hemi.intensity = cfg.hemiIntensity;
+    // NB: the hemispheric fill light's intensity/warmth is owned by SunController
+    // (it varies with day/night). renderFx must not also write it or the two
+    // fight and the night fill flickers between values depending on call order.
     this.applyIBL(cfg);
     this.applySSAO(cfg);
     this.applyShadows(cfg);

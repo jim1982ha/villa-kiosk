@@ -6,7 +6,7 @@ import { useRef, useState, useEffect } from "react";
 import { Plug, Download, Upload, Bug, FileText } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, type RenderConfig, type ToneMappingMode } from "@/config/AppConfig";
+import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
 import { testConnection, type TestResult } from "@/ha/testConnection";
 import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
 import { parseSh3d } from "@/utils/sh3dParser";
@@ -79,6 +79,12 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
     const next = { ...render, ...patch };
     setRender(next);
     manager?.setRenderConfig(next);
+  };
+
+  // Switching presets materialises a whole RenderConfig, but keeps the user's
+  // independent "shadows" choice (it's an opt-in extra layered on any preset).
+  const applyPreset = (quality: QualityPreset) => {
+    applyRender({ ...RENDER_PRESETS[quality], shadows: render.shadows });
   };
 
   // Live-apply so you can feel/see the change while dragging the sliders.
@@ -217,150 +223,61 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           />
           <span>Wall collisions (can't walk through walls)</span>
         </label>
-        <label className="toggle">
-          <input
-            type="checkbox" checked={config.weatherEffects}
-            onChange={(e) => update({ weatherEffects: e.target.checked })}
-          />
-          <span>Live weather effects</span>
-        </label>
-        <p className="muted body-text" style={{ marginTop: 6 }}>
-          Mirrors your Home Assistant weather entity in the scene. When it's
-          raining you'll see rain; in clear, sunny or cloudy weather nothing is
-          drawn — so good weather simply shows the villa as-is.
-        </p>
+        {/* Live weather effects moved into "Render quality & look" below — it's a
+            visual/scene option, so it belongs with the other look settings. */}
 
         {/* "Highlight clickable objects" and "Show device state labels" now live
             as direct toggles in the top bar (desktop) / a dropdown (mobile). */}
 
         <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
 
-        {/* ── Render quality ───────────────────────────────────────────────
-            Every effect below is independent + live. They counter the
-            "too bright / no contrast" flat look. Defaults are a safe win;
-            heavier effects (shadows, IBL) are opt-in for slower devices. */}
+        {/* ── Render quality & look ────────────────────────────────────────
+            Simplified to a single quality preset plus two heavy opt-in extras
+            (shadows, live weather). The preset materialises a full render config;
+            day/night warmth is handled automatically in the scene. */}
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <h3 style={{ margin: 0, fontSize: 15 }}>Render quality &amp; look</h3>
           <button
             className="btn ghost"
             style={{ padding: "4px 10px", fontSize: 12 }}
-            onClick={() => applyRender(DEFAULT_RENDER)}
-            title="Restore the recommended render defaults"
+            onClick={() => applyPreset(DEFAULT_RENDER.quality)}
+            title="Restore the recommended look"
           >
             Reset look
           </button>
         </div>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          Tune the scene live to fix a washed-out / flat render. Start with tone
-          mapping + the light balance; add ambient occlusion and shadows for depth.
-          All settings save with the rest of your config.
+          Pick a quality preset — higher looks better, lower runs lighter on weak
+          wall tablets. Shadows and live weather are the two heavy extras you can
+          mix in. Everything updates live and saves with your config.
         </p>
 
-        <label style={{ marginTop: 12 }}>Tone mapping</label>
+        <label style={{ marginTop: 12 }}>Quality preset</label>
         <select
-          value={render.toneMapping}
-          onChange={(e) => applyRender({ toneMapping: e.target.value as ToneMappingMode })}
+          value={render.quality ?? DEFAULT_RENDER.quality}
+          onChange={(e) => applyPreset(e.target.value as QualityPreset)}
           style={{ width: "100%" }}
         >
-          <option value="khr_neutral">Khronos PBR Neutral (recommended)</option>
-          <option value="aces">ACES (filmic, higher contrast)</option>
-          <option value="standard">Standard</option>
-          <option value="none">None (raw — original look)</option>
+          <option value="performance">Performance — lightest, flattest</option>
+          <option value="balanced">Balanced — adds contact shadows (AO)</option>
+          <option value="high">High — best look (recommended)</option>
         </select>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          Rolls off blown-out white highlights. <strong>Neutral</strong> keeps colours
-          true; <strong>ACES</strong> adds contrast but can desaturate.
-        </p>
 
-        <label style={{ marginTop: 12 }}>Exposure · {render.exposure.toFixed(2)}</label>
-        <input type="range" min={0.2} max={2} step={0.05} value={render.exposure}
-          onChange={(e) => applyRender({ exposure: Number(e.target.value) })} />
-
-        <label style={{ marginTop: 8 }}>Contrast · {render.contrast.toFixed(2)}</label>
-        <input type="range" min={0.5} max={2.5} step={0.05} value={render.contrast}
-          onChange={(e) => applyRender({ contrast: Number(e.target.value) })} />
-
-        <label style={{ marginTop: 12 }}>Fill light (hemispheric) · {render.hemiIntensity.toFixed(2)}</label>
-        <input type="range" min={0} max={1.5} step={0.05} value={render.hemiIntensity}
-          onChange={(e) => applyRender({ hemiIntensity: Number(e.target.value) })} />
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          The flat ambient fill. <strong>Lower = more contrast</strong> (the single
-          biggest fix for the washed-out look).
-        </p>
-
-        <label style={{ marginTop: 8 }}>Sun (key light) · {render.sunIntensity.toFixed(2)}×</label>
-        <input type="range" min={0} max={2} step={0.05} value={render.sunIntensity}
-          onChange={(e) => applyRender({ sunIntensity: Number(e.target.value) })} />
-
-        <label style={{ marginTop: 8 }}>Ambient fill · {render.ambientIntensity.toFixed(2)}×</label>
-        <input type="range" min={0} max={1.5} step={0.05} value={render.ambientIntensity}
-          onChange={(e) => applyRender({ ambientIntensity: Number(e.target.value) })} />
-
-        <label className="toggle" style={{ marginTop: 12 }}>
-          <input type="checkbox" checked={render.ssao}
-            onChange={(e) => applyRender({ ssao: e.target.checked })} />
-          <span>Ambient occlusion (corner / contact shadows)</span>
-        </label>
-        {render.ssao && (
-          <div style={{ paddingLeft: 8, borderLeft: "2px solid rgba(255,255,255,0.08)" }}>
-            <label style={{ marginTop: 6 }}>AO radius · {render.ssaoRadius.toFixed(2)}</label>
-            <input type="range" min={0.3} max={6} step={0.1} value={render.ssaoRadius}
-              onChange={(e) => applyRender({ ssaoRadius: Number(e.target.value) })} />
-            <label style={{ marginTop: 6 }}>AO strength · {render.ssaoStrength.toFixed(2)}</label>
-            <input type="range" min={0.2} max={3} step={0.1} value={render.ssaoStrength}
-              onChange={(e) => applyRender({ ssaoStrength: Number(e.target.value) })} />
-            <label style={{ marginTop: 6 }}>AO quality (samples)</label>
-            <select value={render.ssaoSamples}
-              onChange={(e) => applyRender({ ssaoSamples: Number(e.target.value) })}
-              style={{ width: "100%" }}>
-              <option value={4}>4 — fastest</option>
-              <option value={8}>8 — balanced</option>
-              <option value={16}>16 — high</option>
-              <option value={32}>32 — best (slow)</option>
-            </select>
-          </div>
-        )}
-
-        <label className="toggle" style={{ marginTop: 12 }}>
+        <label className="toggle" style={{ marginTop: 14 }}>
           <input type="checkbox" checked={render.shadows}
             onChange={(e) => applyRender({ shadows: e.target.checked })} />
-          <span>Cast shadows from the sun (heaviest)</span>
+          <span>Cast sun shadows (more depth — heaviest)</span>
         </label>
-        {render.shadows && (
-          <div style={{ paddingLeft: 8, borderLeft: "2px solid rgba(255,255,255,0.08)" }}>
-            <label style={{ marginTop: 6 }}>Shadow resolution</label>
-            <select value={render.shadowMapSize}
-              onChange={(e) => applyRender({ shadowMapSize: Number(e.target.value) })}
-              style={{ width: "100%" }}>
-              <option value={512}>512 — fastest</option>
-              <option value={1024}>1024 — balanced</option>
-              <option value={2048}>2048 — sharp (slow)</option>
-            </select>
-            <label style={{ marginTop: 6 }}>Shadow darkness · {render.shadowDarkness.toFixed(2)}</label>
-            <input type="range" min={0} max={1} step={0.05} value={render.shadowDarkness}
-              onChange={(e) => applyRender({ shadowDarkness: Number(e.target.value) })} />
-            <label style={{ marginTop: 6 }}>Shadow softness · {render.shadowBlur}</label>
-            <input type="range" min={1} max={64} step={1} value={render.shadowBlur}
-              onChange={(e) => applyRender({ shadowBlur: Number(e.target.value) })} />
-          </div>
-        )}
 
-        <label className="toggle" style={{ marginTop: 12 }}>
-          <input type="checkbox" checked={render.ibl}
-            onChange={(e) => applyRender({ ibl: e.target.checked })} />
-          <span>Environment lighting (IBL — sky/ground ambient)</span>
+        <label className="toggle" style={{ marginTop: 8 }}>
+          <input type="checkbox" checked={config.weatherEffects}
+            onChange={(e) => update({ weatherEffects: e.target.checked })} />
+          <span>Live weather effects (rain when it's raining)</span>
         </label>
-        {render.ibl && (
-          <div style={{ paddingLeft: 8, borderLeft: "2px solid rgba(255,255,255,0.08)" }}>
-            <label style={{ marginTop: 6 }}>Environment intensity · {render.environmentIntensity.toFixed(2)}</label>
-            <input type="range" min={0} max={2} step={0.05} value={render.environmentIntensity}
-              onChange={(e) => applyRender({ environmentIntensity: Number(e.target.value) })} />
-            <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-              Adds soft sky/ground ambient. Most visible on <strong>PBR</strong>
-              materials (the Blender export) — try it with tone mapping on.
-            </p>
-          </div>
-        )}
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          Mirrors your Home Assistant weather entity: rain shows when it's raining,
+          nothing in clear/sunny/cloudy weather.
+        </p>
 
         <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
 

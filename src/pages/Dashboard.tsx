@@ -1,7 +1,7 @@
 // src/pages/Dashboard.tsx
 // Main page: 3D canvas + HUD + panels + teleport + settings + onboarding.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import BabylonCanvas from "@/components/canvas/BabylonCanvas";
 import HUD from "@/components/hud/HUD";
 import RoomLabel from "@/components/hud/RoomLabel";
@@ -94,6 +94,35 @@ export default function Dashboard() {
     },
     [config.entityMap, entities, ws],
   );
+
+  // Long-press always opens the full control panel — even for quick-toggle
+  // entities (lights/switches) — so brightness/colour stay reachable without the
+  // panel popping up on every casual tap.
+  const onEntityLongPressed = useCallback(
+    (entityId: string) => {
+      const mapping = mappingForEntityId(entityId, config.entityMap);
+      if (!mapping) return;
+      setActivePanel({ entityId, mapping });
+    },
+    [config.entityMap],
+  );
+
+  // Open the app in the bird's-eye overview by default — seeing the whole villa
+  // at a glance is the natural landing view. One-shot: fires the first time the
+  // scene becomes ready (model loaded + fitted) and never overrides the user's
+  // later manual camera toggles.
+  const defaultedToOverview = useRef(false);
+  useEffect(() => {
+    if (!manager) return;
+    const goOverview = () => {
+      if (defaultedToOverview.current) return;
+      defaultedToOverview.current = true;
+      manager.setViewMode("overview");
+      setViewMode("overview");
+    };
+    if (manager.isReady()) goOverview();
+    return manager.onReady(goOverview);
+  }, [manager]);
 
   const onFloorChange = useCallback(
     (floor: number) => {
@@ -189,6 +218,7 @@ export default function Dashboard() {
         key={modelKey}
         onManager={setManager}
         onEntityPicked={onEntityPicked}
+        onEntityLongPressed={onEntityLongPressed}
         onFloorChange={(f) => setCurrentFloor(f)}
         onRoomChange={setRoom}
         onNeedModel={() => setSettingsOpen(true)}

@@ -16,6 +16,7 @@ import type { EntityMapping, Vec3 } from "@/types/scene.types";
 export class PickHandler {
   private scene: Scene;
   private onPicked: (entityId: string) => void;
+  private onLongPicked: (entityId: string) => void;
   private entityMap: Record<string, EntityMapping>;
   private bindings: Record<string, string> = {};
 
@@ -32,9 +33,12 @@ export class PickHandler {
     onPicked: (entityId: string) => void,
     entityMap: Record<string, EntityMapping> = {},
     bindings: Record<string, string> = {},
+    onLongPicked?: (entityId: string) => void,
   ) {
     this.scene = scene;
     this.onPicked = onPicked;
+    // A long-press always opens the full panel; default to the same handler.
+    this.onLongPicked = onLongPicked ?? onPicked;
     this.entityMap = entityMap;
     this.bindings = bindings;
 
@@ -96,10 +100,13 @@ export class PickHandler {
   }
 
   /**
-   * Resolve a confirmed tap at client coordinates into the right action for the
-   * current mode. Called by CameraController on a clean tap (mouse or touch).
+   * Resolve a confirmed tap (or long-press) at client coordinates into the right
+   * action for the current mode. Called by the active camera controller on a
+   * clean gesture (mouse or touch). A long-press always routes the resolved
+   * entity to onLongPicked (the full panel); bind/place modes ignore the
+   * distinction.
    */
-  pickAtScreen(clientX: number, clientY: number): void {
+  pickAtScreen(clientX: number, clientY: number, longPress = false): void {
     const canvas = this.scene.getEngine().getRenderingCanvas();
     const rect = canvas?.getBoundingClientRect();
     const pick = this.scene.pick(clientX - (rect?.left ?? 0), clientY - (rect?.top ?? 0));
@@ -127,6 +134,6 @@ export class PickHandler {
     }
 
     const mapping = this.resolveMesh(pick.pickedMesh);
-    if (mapping) this.onPicked(mapping.entityId);
+    if (mapping) (longPress ? this.onLongPicked : this.onPicked)(mapping.entityId);
   }
 }

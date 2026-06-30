@@ -45,6 +45,7 @@ async function readWithProgress(
 interface Props {
   onManager: (m: SceneManager | null) => void;
   onEntityPicked: (entityId: string) => void;
+  onEntityLongPressed: (entityId: string) => void;
   onFloorChange: (floor: number) => void;
   onRoomChange: (room: string | null) => void;
   onNeedModel: () => void;
@@ -52,7 +53,7 @@ interface Props {
 }
 
 export default function BabylonCanvas({
-  onManager, onEntityPicked, onFloorChange, onRoomChange, onNeedModel, onModelUploaded,
+  onManager, onEntityPicked, onEntityLongPressed, onFloorChange, onRoomChange, onNeedModel, onModelUploaded,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const managerRef = useRef<SceneManager | null>(null);
@@ -62,6 +63,15 @@ export default function BabylonCanvas({
   // without being recreated (BabylonCanvas mounts once with empty deps).
   const configRef = useRef(config);
   useEffect(() => { configRef.current = config; }, [config]);
+  // The pick callbacks close over live HA state (entities/ws) and config, so they
+  // are recreated on every relevant change. The SceneManager is created ONCE, so
+  // capturing the callbacks directly would freeze them at their mount-time values
+  // (empty entities, null ws) — every tap would then wrongly open the panel and
+  // toggles would no-op. Route through refs so the scene always calls the latest.
+  const onPickedRef = useRef(onEntityPicked);
+  const onLongPressedRef = useRef(onEntityLongPressed);
+  useEffect(() => { onPickedRef.current = onEntityPicked; }, [onEntityPicked]);
+  useEffect(() => { onLongPressedRef.current = onEntityLongPressed; }, [onEntityLongPressed]);
   const [status, setStatus] = useState<"loading" | "ready" | "no-model" | "error">("loading");
   const [progress, setProgress] = useState(0); // 0..1 GLB download progress
   const [errorMsg, setErrorMsg] = useState("");
@@ -75,7 +85,8 @@ export default function BabylonCanvas({
     let cancelled = false;
     const manager = new SceneManager(canvasRef.current, {
       config,
-      onEntityPicked,
+      onEntityPicked: (id) => onPickedRef.current(id),
+      onEntityLongPressed: (id) => onLongPressedRef.current(id),
       onFloorChange,
       onRoomChange,
     });

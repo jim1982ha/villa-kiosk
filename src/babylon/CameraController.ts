@@ -21,6 +21,8 @@ interface CameraCallbacks {
    * capture), so tap-to-pick is detected here rather than via a second
    * scene.onPointerObservable listener that touch events race against. */
   onTap?: (clientX: number, clientY: number) => void;
+  /** A press-and-hold at the given client coords (opens the full entity panel). */
+  onLongPress?: (clientX: number, clientY: number) => void;
 }
 
 const WALK_SPEED = 0.018; // world-space impulse per frame at full joystick deflection
@@ -250,8 +252,10 @@ export class CameraController {
     // here, so a cancelled gesture won't mis-fire. TapRecognizer swallows the
     // synthesized touch/pen ghost click that would otherwise dismiss whatever
     // the tap opens the instant React mounts it.
-    if (this.pointers.size === 0 && this.tap.complete(e)) {
-      this.cb.onTap?.(e.clientX, e.clientY);
+    if (this.pointers.size === 0) {
+      const kind = this.tap.complete(e);
+      if (kind === "tap") this.cb.onTap?.(e.clientX, e.clientY);
+      else if (kind === "longpress") this.cb.onLongPress?.(e.clientX, e.clientY);
     }
   };
 

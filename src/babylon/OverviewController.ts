@@ -36,6 +36,8 @@ import { TapRecognizer } from "./TapRecognizer";
 interface OverviewCallbacks {
   onActivity: () => void;
   onTap?: (clientX: number, clientY: number) => void;
+  /** A press-and-hold at the given client coords (opens the full entity panel). */
+  onLongPress?: (clientX: number, clientY: number) => void;
 }
 
 interface Bounds {
@@ -211,8 +213,10 @@ export class OverviewController {
     // Last finger up and still a brief, stationary tap → entity pick.
     // TapRecognizer swallows the trailing touch/pen ghost click so it can't
     // dismiss the panel the tap opens (see TapRecognizer for the why).
-    if (this.pointers.size === 0 && this.tap.complete(e)) {
-      this.cb.onTap?.(e.clientX, e.clientY);
+    if (this.pointers.size === 0) {
+      const kind = this.tap.complete(e);
+      if (kind === "tap") this.cb.onTap?.(e.clientX, e.clientY);
+      else if (kind === "longpress") this.cb.onLongPress?.(e.clientX, e.clientY);
     }
   };
 

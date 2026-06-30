@@ -15,7 +15,7 @@
 //   binary_sensor -> pulsing red when triggered (e.g. leak).
 
 import {
-  Color3, Vector3, Space, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
+  Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
   type AbstractMesh, type Scene, type Material,
 } from "@babylonjs/core";
 import {
@@ -509,61 +509,16 @@ export class EntityVisuals {
         break;
       }
 
-      case "cover": {
-        this.applyCover(mesh, state);
+      // Covers (curtains) are intentionally inert: per product decision the
+      // curtain geometry must NEVER move or scale with position/state. We keep
+      // the case so cover entities don't fall through to the default and get
+      // treated as something else, but apply no visual transform.
+      case "cover":
         break;
-      }
 
       default:
         break;
     }
-  }
-
-  /**
-   * Curtain visual with three clear states:
-   *   - position attribute present -> continuous (0 closed … 100 open),
-   *   - otherwise the open/closed/opening/closing state maps to
-   *     CLOSED (full) / HALF / OPEN (retracted).
-   * The mesh scales down on its Y axis and fades as it opens.
-   */
-  private applyCover(mesh: AbstractMesh, state: HassEntity): void {
-    const posAttr = state.attributes.current_position as number | undefined;
-    let openFrac: number;
-    if (typeof posAttr === "number") {
-      openFrac = Math.max(0, Math.min(1, posAttr / 100));
-    } else {
-      switch (state.state) {
-        case "open": openFrac = 1; break;
-        case "closed": openFrac = 0; break;
-        default: openFrac = 0.5; break;
-      }
-    }
-    // Snapshot the rest scale and the curtain's top edge in WORLD space on first
-    // call. Working in world space makes the re-pin below immune to (a) where the
-    // cm->m scale lives — baked into the vertices vs. applied by an ancestor node —
-    // and (b) where the mesh's local origin sits. Mixing the LOCAL bbox height with
-    // the PARENT-space position used to launch some panels hundreds of metres into
-    // the sky when "open"; the world-space delta below can't.
-    if (mesh.metadata?.baseScaleY === undefined) {
-      mesh.computeWorldMatrix(true);
-      mesh.metadata = {
-        ...(mesh.metadata ?? {}),
-        baseScaleY: mesh.scaling.y,
-        restTopWorldY: mesh.getBoundingInfo().boundingBox.maximumWorld.y,
-      };
-    }
-    const base          = mesh.metadata.baseScaleY    as number;
-    const restTopWorldY = mesh.metadata.restTopWorldY as number;
-
-    // Shrink the panel on its Y axis as it opens (down to 10% height when fully
-    // open), then nudge it in WORLD space so its top edge returns to the rest
-    // height — the curtain bunches up at the rail instead of collapsing to the
-    // floor or flying off. Fades out as it opens.
-    mesh.scaling.y = base * (1 - openFrac * 0.9);
-    mesh.computeWorldMatrix(true);
-    const curTopWorldY = mesh.getBoundingInfo().boundingBox.maximumWorld.y;
-    mesh.translate(Vector3.Up(), restTopWorldY - curTopWorldY, Space.WORLD);
-    mesh.visibility = 1 - openFrac * 0.85;
   }
 
   private animatePulse(): void {
