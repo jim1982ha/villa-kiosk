@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.4.51
+
+### Fix: Motion sensor picker didn't show the selected entity
+- Selecting a motion sensor for a camera (Config Editor) silently "didn't
+  register" — the value was actually being saved correctly, but the picker's
+  built-in "show what's selected" display was accidentally disabled by a
+  custom placeholder string I'd set, which always won over it. Removed the
+  override; the picker now shows the linked sensor's name once selected,
+  same as every other entity picker in the app.
+
+### Removed: the "Confirm" column and its confirmation-dialog gate
+- Long-press already opens the full control panel for any device — a
+  deliberate, harder-to-trigger action that made the separate "Confirm
+  before toggling" flag (and its yes/no dialog) redundant. Removed
+  entirely: `EntityMapping.requiresConfirmation`, the Config Editor/Bound
+  3D objects "Confirm" checkbox, the tap-time confirmation dialog on
+  Dashboard, and the switch panel's own confirm step. A tap on a
+  light/switch/fan now always toggles instantly, as it already did for
+  most devices; long-press is the deliberate path for everything else.
+  (Locks are unaffected — their unlock confirmation was always independent
+  of this flag.)
+
 ## 2.4.50
 
 ### New: simulated motion detection — camera beams + room glow

@@ -99,7 +99,6 @@ export const ENTITY_MAP: Record<string, EntityMapping> = {
   "lock.living_room_aqara_smart_door_lock_0aa9_lock_mechanism": {
     entityId: "lock.living_room_aqara_smart_door_lock_0aa9_lock_mechanism",
     type: "lock", label: "Front Door Lock", room: "Entrance",
-    requiresConfirmation: true,
   },
 
   // === BINARY SENSORS ===
@@ -180,8 +179,7 @@ export function labelFromEntityId(entityId: string, friendlyName?: string): stri
  * THE authoritative factory for a default EntityMapping when we have no stored
  * metadata yet. Tap-to-bind, marker-drop, the Config Editor and the mesh
  * resolver all funnel through here, so the default rules — inferred type,
- * derived label, "locks need confirmation", default category — live in
- * exactly one place (DDD).
+ * derived label, default category — live in exactly one place (DDD).
  */
 export function createDefaultMapping(
   entityId: string,
@@ -194,7 +192,6 @@ export function createDefaultMapping(
     label: labelFromEntityId(entityId, opts.friendlyName),
     room: opts.room ?? "",
     category: opts.category ?? categoryForEntity(entityId, type),
-    ...(type === "lock" ? { requiresConfirmation: true } : {}),
   };
 }
 

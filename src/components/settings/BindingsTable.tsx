@@ -153,22 +153,9 @@ export default function BindingsTable() {
                       domains={["binary_sensor"]}
                       allowCustom
                       hideCurrentLabel
-                      placeholder="Motion/occupancy sensor…"
                     />
                   </div>
                 )}
-                <label
-                  className="row"
-                  style={{ gap: 5, fontSize: 12, color: "var(--text-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}
-                  title="Show a confirmation dialog before toggling (useful for locks)"
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!meta.requiresConfirmation}
-                    onChange={(e) => patchMeta(entityId, { requiresConfirmation: e.target.checked })}
-                  />
-                  Confirm
-                </label>
               </div>
             )}
           </div>

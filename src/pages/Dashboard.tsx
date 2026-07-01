@@ -7,13 +7,12 @@ import HUD from "@/components/hud/HUD";
 import RoomLabel from "@/components/hud/RoomLabel";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
 import PanelRouter from "@/components/panels/PanelRouter";
-import ConfirmDialog from "@/components/panels/ConfirmDialog";
 import SettingsModal from "@/components/settings/SettingsModal";
 import BindDialog from "@/components/settings/BindDialog";
 import MarkerDialog from "@/components/settings/MarkerDialog";
 import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 import { Link2, MapPin, X } from "lucide-react";
-import type { Vec3, EntityMapping } from "@/types/scene.types";
+import type { Vec3 } from "@/types/scene.types";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { isIngress, ingressHaUrl } from "@/ha/ingress";
@@ -30,8 +29,6 @@ export default function Dashboard() {
 
   const [manager, setManager] = useState<SceneManager | null>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel | null>(null);
-  // Pending instant on/off action awaiting confirmation (Config Editor → Confirm).
-  const [confirmAction, setConfirmAction] = useState<{ mapping: EntityMapping; on: boolean } | null>(null);
   const [teleportOpen, setTeleportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [room, setRoom] = useState<string | null>(null);
@@ -77,15 +74,13 @@ export default function Dashboard() {
       const mapping = mappingForEntityId(entityId, config.entityMap);
       if (!mapping) return;
 
-      // Simple on/off entities act in-world without the panel. "Confirm" then gates
-      // that instant toggle behind a yes/no dialog; without it, the tap toggles now.
+      // Simple on/off entities act in-world without the panel: a tap toggles
+      // instantly. A long-press always opens the full panel instead (see
+      // onEntityLongPressed below) — that's the deliberate, harder-to-trigger
+      // action a "confirm before acting" gate would otherwise provide.
       const entity = entities[entityId];
       if (isQuickToggle(mapping, entity)) {
-        if (mapping.requiresConfirmation) {
-          setConfirmAction({ mapping, on: entity?.state === "on" });
-        } else {
-          HAServices.toggleEntity(ws, entityId);
-        }
+        HAServices.toggleEntity(ws, entityId);
         return;
       }
 
@@ -255,19 +250,6 @@ export default function Dashboard() {
 
       {activePanel && (
         <PanelRouter active={activePanel} onClose={() => setActivePanel(null)} pinContinuous={pinContinuous} />
-      )}
-
-      {confirmAction && (
-        <ConfirmDialog
-          title={confirmAction.mapping.label}
-          message={`${confirmAction.on ? "Turn off" : "Turn on"} ${confirmAction.mapping.label}?`}
-          confirmLabel={confirmAction.on ? "Turn off" : "Turn on"}
-          onConfirm={() => {
-            HAServices.toggleEntity(ws, confirmAction.mapping.entityId);
-            setConfirmAction(null);
-          }}
-          onCancel={() => setConfirmAction(null)}
-        />
       )}
 
       {settingsOpen && (

@@ -102,7 +102,6 @@ export default function ConfigEditor() {
               <th>Label</th>
               <th>Room</th>
               <th>Motion sensor</th>
-              <th>Confirm</th>
             </tr>
           </thead>
           <tbody>
@@ -193,18 +192,10 @@ export default function ConfigEditor() {
                       domains={["binary_sensor"]}
                       allowCustom
                       hideCurrentLabel
-                      placeholder="Motion/occupancy sensor…"
                     />
                   ) : (
                     <span className="muted" style={{ fontSize: 12 }}>—</span>
                   )}
-                </td>
-                <td data-label="Confirm" className="center">
-                  <input
-                    type="checkbox"
-                    checked={!!m.requiresConfirmation}
-                    onChange={(e) => patch(key, { requiresConfirmation: e.target.checked })}
-                  />
                 </td>
               </tr>
             ))}

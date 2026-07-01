@@ -13,7 +13,6 @@ export interface EntityMapping {
   type: EntityType;
   label: string; // Human-readable name for UI panels
   room: string; // Room for grouping / teleport context
-  requiresConfirmation?: boolean; // Show confirm dialog before action
   category?: Category; // Map filter grouping; falls back to categoryForEntity() when unset
   /** For type "camera": the HA motion/occupancy binary_sensor that goes "on"
    *  when this camera detects motion. Drives the simulated detection beam
