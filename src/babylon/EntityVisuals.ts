@@ -24,9 +24,10 @@ import {
 } from "@babylonjs/gui";
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
-import type { EntityMapping, EntityType } from "@/types/scene.types";
+import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { DEFAULT_ENTITY_ICONS } from "@/config/AppConfig";
 import { resolveMeshToMapping } from "@/config/EntityMap";
+import { categoryForEntity } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
@@ -69,6 +70,7 @@ interface LabelControls {
   valueText: TextBlock;
   anchor: TransformNode;
   type: EntityType;
+  category: Category;
 }
 
 /** A live state distilled to one of four visual kinds the badge colour-codes. */
@@ -398,6 +400,15 @@ export class EntityVisuals {
     return this.config.entityIcons?.[type] ?? DEFAULT_ENTITY_ICONS[type] ?? "●";
   }
 
+  /** An entity's map-filter category: whatever the user set in the Config
+   *  Editor (persisted on its EntityMapping), falling back to the type-based
+   *  default (config/EntityCategories.ts) for entities that don't have one
+   *  yet — covers mesh-bound AND marker-bound entities alike, since both are
+   *  always mirrored into config.entityMap (see markerUtils/bindingUtils). */
+  private categoryOf(entityId: string, type: EntityType): Category {
+    return this.config.entityMap[entityId]?.category ?? categoryForEntity(entityId, type);
+  }
+
   /** Live bird's-eye zoom factor (1 = default fit). Driven per-frame by
    *  SceneManager from the overview camera; ignored (reset to 1) elsewhere. */
   setIconZoomScale(z: number): void {
@@ -445,6 +456,7 @@ export class EntityVisuals {
     }
 
     for (const { entityId, anchor, type } of sources) {
+      const category = this.categoryOf(entityId, type);
       // A compact column: a round "glass" icon badge over an optional value pill.
       // The device TYPE reads from the (pixel-centred) glyph image, the STATE from
       // the ring colour, and the value pill only appears for entities with a
@@ -518,7 +530,7 @@ export class EntityVisuals {
       valueWrap.addControl(valueText);
       container.addControl(valueWrap);
 
-      this.labels.set(entityId, { container, badge, glyph, valueWrap, valueText, anchor, type });
+      this.labels.set(entityId, { container, badge, glyph, valueWrap, valueText, anchor, type, category });
 
       // Repaint from the last known state so a rebuild (toggle on / icon edit)
       // shows live status immediately instead of an idle default.
@@ -580,11 +592,10 @@ export class EntityVisuals {
    *  badges to avoid overlap, but in a villa where several devices sit
    *  within a couple of screen-pixels of each other at any reasonable
    *  zoom, that reliably hid most non-priority tags no matter how the
-   *  camera moved — worse than the overlap it was trying to prevent. The
-   *  only thing this still culls is an anchor that projects BEHIND the
-   *  camera (z outside [0,1]): that's not clutter avoidance, it's a
-   *  genuinely invalid screen position that would otherwise place a badge
-   *  at a nonsensical spot on screen. */
+   *  camera moved — worse than the overlap it was trying to prevent. What
+   *  this still hides: an anchor that projects BEHIND the camera (z outside
+   *  [0,1], a genuinely invalid screen position), and any entity whose
+   *  category is currently off in the HUD's category filter. */
   private cullLabels(): void {
     if (!this.config.showEntityLabels || this.labels.size === 0) return;
     const cam = this.scene.activeCamera;
@@ -594,8 +605,13 @@ export class EntityVisuals {
     const h = eng.getRenderHeight();
     const vp = cam.viewport.toGlobal(w, h);
     const tm = this.scene.getTransformMatrix();
+    const hidden = this.config.hiddenCategories;
 
     for (const lbl of this.labels.values()) {
+      if (hidden.includes(lbl.category)) {
+        lbl.container.isVisible = false;
+        continue;
+      }
       const p = Vector3.Project(lbl.anchor.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
       lbl.container.isVisible = p.z >= 0 && p.z <= 1;
     }

@@ -4,7 +4,8 @@
 //   • Center — display + build action buttons, grouped into icon-only sections
 //   • Right  — All Clear badge + Settings button (pinned far right)
 // A left control column floats below the brand: the vertical floor switch
-// (1F / 2F) then a single stacked block with Overview and Rooms.
+// (1F / 2F), a stacked block with Overview and Rooms, then the category
+// filter (which device categories show their state tag on the map).
 // Bottom bar: first-person joystick, or (in overview) an (i) button that
 // toggles the navigation-tips card (hidden by default to keep the view clean).
 
@@ -12,12 +13,29 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Home, Grid3x3, Settings, Link2, MapPin, Map,
   PersonStanding, Sparkles, Tag, Eye, Wrench, Info,
+  Armchair, Lightbulb, Wifi, Zap, ShieldCheck, MoreHorizontal,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
+import { CATEGORY_ORDER, CATEGORY_LABELS } from "@/config/EntityCategories";
+import type { Category } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
 import AlertBadge from "./AlertBadge";
+
+type IconType = ComponentType<{ size?: number | string }>;
+
+// Icons for the category-filter column — each toggles that category's state
+// tags on/off on the map. Chosen to read distinctly at a glance since there
+// are no text labels, only tooltips (see CATEGORY_LABELS).
+const CATEGORY_ICONS: Record<Category, IconType> = {
+  comfort: Armchair,
+  light: Lightbulb,
+  network: Wifi,
+  energy: Zap,
+  access_control: ShieldCheck,
+  others: MoreHorizontal,
+};
 
 interface Props {
   currentFloor: number;
@@ -31,8 +49,6 @@ interface Props {
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
 }
-
-type IconType = ComponentType<{ size?: number | string }>;
 
 interface MenuItem {
   icon: IconType;
@@ -142,6 +158,12 @@ export default function HUD({
   // Shared item definitions so desktop pills and mobile dropdowns stay in sync.
   const toggleHighlight = () => update({ highlightInteractive: !config.highlightInteractive });
   const toggleLabels = () => update({ showEntityLabels: !config.showEntityLabels });
+  const toggleCategory = (cat: Category) =>
+    update({
+      hiddenCategories: config.hiddenCategories.includes(cat)
+        ? config.hiddenCategories.filter((c) => c !== cat)
+        : [...config.hiddenCategories, cat],
+    });
 
   const displayItems: MenuItem[] = [
     { icon: Sparkles, label: "Highlight clickable objects", onClick: toggleHighlight, active: config.highlightInteractive },
@@ -242,6 +264,26 @@ export default function HUD({
           <button className="icon-btn" onClick={onOpenTeleport} title="Rooms">
             <Grid3x3 size={18} />
           </button>
+        </div>
+
+        {/* Category filter: which device categories show their state tag on
+            the map. Lit = category shown. Icon + tooltip only, no text. */}
+        <div className="hud-stack">
+          {CATEGORY_ORDER.map((cat) => {
+            const hidden = config.hiddenCategories.includes(cat);
+            const Icon = CATEGORY_ICONS[cat];
+            return (
+              <button
+                key={cat}
+                className={`icon-btn${hidden ? "" : " active"}`}
+                onClick={() => toggleCategory(cat)}
+                title={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map`}
+                aria-pressed={!hidden}
+              >
+                <Icon size={18} />
+              </button>
+            );
+          })}
         </div>
       </div>
 

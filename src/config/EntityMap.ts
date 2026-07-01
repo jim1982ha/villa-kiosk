@@ -12,7 +12,8 @@
 // Entity IDs may change as devices are added — the in-app Config Editor edits a
 // copy of this map stored in localStorage, so no code change is required.
 
-import type { EntityMapping, EntityType } from "@/types/scene.types";
+import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
+import { categoryForEntity } from "./EntityCategories";
 
 export type { EntityMapping, EntityType };
 
@@ -179,11 +180,12 @@ export function labelFromEntityId(entityId: string, friendlyName?: string): stri
  * THE authoritative factory for a default EntityMapping when we have no stored
  * metadata yet. Tap-to-bind, marker-drop, the Config Editor and the mesh
  * resolver all funnel through here, so the default rules — inferred type,
- * derived label, "locks need confirmation" — live in exactly one place (DDD).
+ * derived label, "locks need confirmation", default category — live in
+ * exactly one place (DDD).
  */
 export function createDefaultMapping(
   entityId: string,
-  opts: { friendlyName?: string; room?: string; type?: EntityType } = {},
+  opts: { friendlyName?: string; room?: string; type?: EntityType; category?: Category } = {},
 ): EntityMapping {
   const type = opts.type ?? inferTypeFromEntityId(entityId) ?? "sensor";
   return {
@@ -191,8 +193,17 @@ export function createDefaultMapping(
     type,
     label: labelFromEntityId(entityId, opts.friendlyName),
     room: opts.room ?? "",
+    category: opts.category ?? categoryForEntity(entityId, type),
     ...(type === "lock" ? { requiresConfirmation: true } : {}),
   };
+}
+
+/** Fill in a default category (see EntityCategories.ts) for a mapping that
+ *  predates the category feature or was created via a path that skipped
+ *  createDefaultMapping. A user-set category always wins — this is a no-op
+ *  once one exists. */
+function withCategory(m: EntityMapping): EntityMapping {
+  return m.category ? m : { ...m, category: categoryForEntity(m.entityId, m.type) };
 }
 
 /** Build a usable EntityMapping for an entity_id, falling back to inference. */
@@ -210,9 +221,9 @@ export function mappingForEntityId(
       !entityId.startsWith("binary_sensor.")
     ) {
       const upgraded = inferTypeFromEntityId(entityId);
-      if (upgraded) return { ...m, type: upgraded };
+      if (upgraded) return withCategory({ ...m, type: upgraded });
     }
-    return m;
+    return withCategory(m);
   }
   const inferred = inferTypeFromEntityId(entityId);
   if (!inferred) return null;
@@ -251,17 +262,17 @@ export function resolveMeshToMapping(
   if (boundId) return mappingForEntityId(boundId, map);
 
   // 1) Exact entity_id match (mesh named with the entity_id).
-  if (map[base]) return map[base];
+  if (map[base]) return withCategory(map[base]);
 
   // 2) Spec alias "[type]_[room]".
-  if (MESH_ALIASES[base] && map[MESH_ALIASES[base]]) return map[MESH_ALIASES[base]];
+  if (MESH_ALIASES[base] && map[MESH_ALIASES[base]]) return withCategory(map[MESH_ALIASES[base]]);
 
   // 3) Sanitised form: some exporters turn "camera.livingroom_cam" into
   //    "camera_livingroom_cam". Re-insert the first underscore as a dot.
   const firstUnderscore = base.indexOf("_");
   if (firstUnderscore > 0) {
     const candidate = base.slice(0, firstUnderscore) + "." + base.slice(firstUnderscore + 1);
-    if (map[candidate]) return map[candidate];
+    if (map[candidate]) return withCategory(map[candidate]);
   }
 
   // 4) Looks like an entity_id we simply don't have metadata for yet — build a

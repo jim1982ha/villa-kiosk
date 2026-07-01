@@ -9,8 +9,9 @@ import { Plus, Trash2, Pencil, Check, X } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { createDefaultMapping } from "@/config/EntityMap";
+import { CATEGORY_ORDER, CATEGORY_LABELS, categoryForEntity } from "@/config/EntityCategories";
 import EntityPicker from "./EntityPicker";
-import type { EntityMapping, EntityType } from "@/types/scene.types";
+import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 
 const TYPES: EntityType[] = [
   "light", "climate", "lock", "camera", "cover", "fan",
@@ -97,6 +98,7 @@ export default function ConfigEditor() {
             <tr>
               <th>Entity ID</th>
               <th>Type</th>
+              <th>Category</th>
               <th>Label</th>
               <th>Room</th>
               <th>Confirm</th>
@@ -169,6 +171,15 @@ export default function ConfigEditor() {
                     onChange={(e) => patch(key, { type: e.target.value as EntityType })}
                   >
                     {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </td>
+                <td data-label="Category">
+                  <select
+                    value={m.category ?? categoryForEntity(m.entityId, m.type)}
+                    onChange={(e) => patch(key, { category: e.target.value as Category })}
+                    title="Which map filter group this device belongs to"
+                  >
+                    {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
                   </select>
                 </td>
                 <td data-label="Label"><input value={m.label} onChange={(e) => patch(key, { label: e.target.value })} /></td>

@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.4.48
+
+### New: category filter for the map's device tags
+- **Left HUD column has a new icon row below Overview/Rooms**: six toggles —
+  Comfort, Light, Network, Energy, Access Control, Others — each hides or
+  shows that category's state tags on the map. Icon + tooltip only, no text,
+  matching the rest of the HUD.
+- **Config Editor has a new "Category" column** (both the auto-detected
+  entities table and each bound object's settings row) so you can move any
+  device into whichever category makes sense for your villa.
+- **Default category by device type** (light→Light, camera→Network,
+  climate/cover/fan→Comfort, sensor→Energy, everything else→Others) lives in
+  `config/EntityCategories.ts` — a dedicated, plain-data file: edit the
+  type→category table there, or add a specific entity_id under
+  `CATEGORY_EXCEPTIONS` to override just that device, no other code changes
+  needed. Re-applied on every model/entity refresh; once you set a category
+  in the Config Editor for a given device, your choice always wins over the
+  default.
+- Applies to every device however it's registered — auto-detected by mesh
+  name, tap-bound, or dropped as a floating marker — since they all share
+  the same underlying entity metadata.
+
 ## 2.4.47
 
 ### State labels: fix the value pill's font

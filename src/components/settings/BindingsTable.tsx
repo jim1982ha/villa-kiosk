@@ -10,7 +10,8 @@ import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { upsertBinding, removeBinding } from "@/config/bindingUtils";
 import { loadMeshCatalog } from "@/utils/meshCatalog";
-import type { EntityMapping, EntityType } from "@/types/scene.types";
+import { CATEGORY_ORDER, CATEGORY_LABELS, categoryForEntity } from "@/config/EntityCategories";
+import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 
 const TYPES: EntityType[] = [
   "light", "climate", "lock", "camera", "cover", "fan",
@@ -121,6 +122,14 @@ export default function BindingsTable() {
                   title="Panel type"
                 >
                   {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <select
+                  style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
+                  value={meta.category ?? categoryForEntity(entityId, meta.type)}
+                  onChange={(e) => patchMeta(entityId, { category: e.target.value as Category })}
+                  title="Which map filter group this device belongs to"
+                >
+                  {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
                 </select>
                 <input
                   style={{ flex: 1, minWidth: 80, fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}

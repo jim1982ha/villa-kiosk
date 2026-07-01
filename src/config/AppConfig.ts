@@ -1,7 +1,7 @@
 // src/config/AppConfig.ts
 // Config schema + defaults + load/save (localStorage). All runtime-editable.
 
-import type { EntityMapping, EntityType, ModelTransform, SceneMarker, TeleportPoint } from "@/types/scene.types";
+import type { Category, EntityMapping, EntityType, ModelTransform, SceneMarker, TeleportPoint } from "@/types/scene.types";
 import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_THRESHOLDS, type Threshold } from "./ThresholdConfig";
@@ -185,6 +185,10 @@ export interface AppConfig {
   renderOnDemand: boolean;
   /** Show floating state labels above each bound device in the 3D scene. */
   showEntityLabels: boolean;
+  /** Categories currently hidden from the map's state-label overlay (HUD left
+   *  column category filter). Empty = every category shown. See
+   *  config/EntityCategories.ts for the category set + default assignment. */
+  hiddenCategories: Category[];
   /** Draw a blue highlight outline around all interactive (bound) objects. */
   highlightInteractive: boolean;
   /**
@@ -248,6 +252,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   calibrationFlipZ: false,
   renderOnDemand: true,
   showEntityLabels: false,
+  hiddenCategories: [],
   highlightInteractive: false,
   naturalScrolling: true,
   render: DEFAULT_RENDER,

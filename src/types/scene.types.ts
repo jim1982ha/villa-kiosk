@@ -3,12 +3,18 @@ import type { EntityDomain } from "./ha.types";
 /** The kind of control panel a tapped mesh should open. */
 export type EntityType = EntityDomain;
 
+/** Grouping used by the map's category filter (HUD left column) and the
+ *  Config Editor's "Category" column. Default assignment per device type —
+ *  and per-entity exceptions — live in `config/EntityCategories.ts`. */
+export type Category = "comfort" | "light" | "network" | "energy" | "access_control" | "others";
+
 export interface EntityMapping {
   entityId: string;
   type: EntityType;
   label: string; // Human-readable name for UI panels
   room: string; // Room for grouping / teleport context
   requiresConfirmation?: boolean; // Show confirm dialog before action
+  category?: Category; // Map filter grouping; falls back to categoryForEntity() when unset
 }
 
 export interface Vec3 {
