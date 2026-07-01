@@ -227,6 +227,20 @@ export class SceneManager {
   };
 
   /**
+   * Bird's-eye backdrop colour, matched to the active UI theme so the void
+   * around the floor plan never clashes with the surrounding chrome ("light
+   * theme selected but the canvas stays pitch black" report). "auto" resolves
+   * against the OS colour-scheme preference, same as the CSS media query.
+   */
+  private overviewBackdropColor(): Color4 {
+    const theme = this.config.theme;
+    const isLight = theme === "light" || (theme === "auto" && !window.matchMedia("(prefers-color-scheme: dark)").matches);
+    return isLight
+      ? new Color4(0.90, 0.93, 0.97, 1) // matches --bg-base light
+      : new Color4(0.055, 0.062, 0.078, 1); // matches --bg-base dark
+  }
+
+  /**
    * Swap between first-person walking and the bird's-eye overview camera. Only
    * one controller owns canvas pointer input at a time (no capture race), and
    * picking always follows scene.activeCamera so tapping entities works in both.
@@ -243,11 +257,11 @@ export class SceneManager {
       }
       this.overview.enable();
       this.scene.activeCamera = this.overview.camera;
-      // Bird's-eye floor plan reads best on a calm, neutral dark ground rather
+      // Bird's-eye floor plan reads best on a calm, neutral backdrop rather
       // than the bright daytime sky blue (which "crashes the eyes", day or
-      // night). Hide the sky dome and pin a dark backdrop; lighting is untouched.
+      // night). Hide the sky dome and pin a themed backdrop; lighting is untouched.
       this.sky.setEnabled(false);
-      this.sun.setBackgroundOverride(new Color4(0.055, 0.062, 0.078, 1));
+      this.sun.setBackgroundOverride(this.overviewBackdropColor());
       this.visuals.setIconZoomScale(this.overview.getIconZoomScale());
     } else {
       this.overview.disable();
@@ -840,6 +854,10 @@ export class SceneManager {
     if (renderChanged) {
       this.renderFx.apply(config.render);
       this.sun.updateConfig(config);
+    }
+    // Theme flip while already in overview: re-pin the backdrop to match.
+    if (prev.theme !== config.theme && this.viewMode === "overview") {
+      this.sun.setBackgroundOverride(this.overviewBackdropColor());
     }
     this.camera.updateConfig(config);
     this.overview.setNaturalScrolling(config.naturalScrolling ?? true);

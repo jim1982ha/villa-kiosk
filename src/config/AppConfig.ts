@@ -105,7 +105,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
   // Fastest path for weak wall tablets: no AO, no IBL, gentle tone mapping.
   performance: {
     quality: "performance",
-    toneMapping: "khr_neutral", exposure: 1.0, contrast: 1.08,
+    toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.08,
     hemiIntensity: 0.55, sunIntensity: 1.0, ambientIntensity: 0.6,
     ibl: false, environmentIntensity: 0.6,
     ssao: false, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
@@ -114,7 +114,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
   // The proven "safe win": subtle contact AO, no IBL/shadows.
   balanced: {
     quality: "balanced",
-    toneMapping: "khr_neutral", exposure: 1.0, contrast: 1.1,
+    toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.1,
     hemiIntensity: 0.5, sunIntensity: 1.0, ambientIntensity: 0.6,
     ibl: false, environmentIntensity: 0.65,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
@@ -123,7 +123,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
   // Best look out of the box: AO + soft sky/ground IBL + higher-sample AO.
   high: {
     quality: "high",
-    toneMapping: "khr_neutral", exposure: 1.0, contrast: 1.12,
+    toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.12,
     hemiIntensity: 0.45, sunIntensity: 1.05, ambientIntensity: 0.6,
     ibl: true, environmentIntensity: 0.6,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.25, ssaoSamples: 16,

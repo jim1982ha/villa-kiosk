@@ -334,6 +334,15 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           <option value="high">High — best look (recommended)</option>
         </select>
 
+        <label style={{ marginTop: 14 }}>Brightness · {render.exposure.toFixed(2)}×</label>
+        <input
+          type="range" min={0.6} max={2} step={0.05} value={render.exposure}
+          onChange={(e) => applyRender({ exposure: Number(e.target.value) })}
+        />
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          Overall scene exposure. Raise it if the villa looks a little dark; updates live.
+        </p>
+
         <label className="toggle" style={{ marginTop: 14 }}>
           <input type="checkbox" checked={render.shadows}
             onChange={(e) => applyRender({ shadows: e.target.checked })} />
@@ -536,35 +545,35 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           </>
         )}
 
-        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
-
-        <div className="row-buttons mt">
+        <div className="settings-section-title" style={{ marginTop: 22 }}>Advanced</div>
+        <div className="tile-grid">
           <button
-            className="btn ghost"
+            className="tile-btn"
             onClick={() => {
               onClose();
               navigate("/config");
             }}
           >
-            <Sliders size={18} /> Config Editor
+            <Sliders size={20} />
+            <span>Config Editor</span>
           </button>
           <button
-            className="btn ghost"
+            className="tile-btn"
             onClick={() => {
               onClose();
               manager?.toggleInspector();
             }}
           >
-            <Bug size={18} /> Inspector
+            <Bug size={20} />
+            <span>Inspector</span>
           </button>
-        </div>
-
-        <div className="row-buttons mt">
-          <button className="btn ghost" onClick={doExport}>
-            <Download size={18} /> Export backup
+          <button className="tile-btn" onClick={doExport}>
+            <Download size={20} />
+            <span>Export backup</span>
           </button>
-          <button className="btn ghost" onClick={() => importRef.current?.click()}>
-            <Upload size={18} /> Import backup
+          <button className="tile-btn" onClick={() => importRef.current?.click()}>
+            <Upload size={20} />
+            <span>Import backup</span>
           </button>
           <input
             ref={importRef} type="file" accept=".zip" style={{ display: "none" }}

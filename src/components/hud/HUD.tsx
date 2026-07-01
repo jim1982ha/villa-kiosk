@@ -238,11 +238,9 @@ export default function HUD({
             title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
           >
             {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
-            <span className="hud-stack-label">{overviewActive ? "First-person" : "Overview"}</span>
           </button>
           <button className="icon-btn" onClick={onOpenTeleport} title="Rooms">
             <Grid3x3 size={18} />
-            <span className="hud-stack-label">Rooms</span>
           </button>
         </div>
       </div>

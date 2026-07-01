@@ -1,5 +1,35 @@
 # Changelog
 
+## 2.4.43
+
+### State labels: fix missing badges and remaining overlaps
+- **Some devices showed no state label at all, and badges could still overlap
+  at certain camera angles.** The declutter test compared badges using a
+  circular radius derived from screen height, which didn't match the actual
+  (taller-than-wide) badge + value-chip shape — it over-hid some widely
+  spaced badges while under-hiding others. Replaced with a proper
+  axis-aligned bounding-box test sized from the real rendered geometry, so
+  more devices show a label and overlapping badges are reliably prevented.
+
+### Left-side controls: icons only
+- The Overview/Rooms block under the 1F/2F switch no longer shows text
+  labels on desktop — icon-only, matching the rest of the HUD.
+
+### Light theme: fix the black overview backdrop and villa-name legibility
+- Switching to Light theme left the bird's-eye backdrop pitch black — it was
+  hardcoded, not theme-aware. It now matches the active theme (and updates
+  live if you flip the theme while already in overview).
+- The villa name is now its own legible chip (like every other HUD control)
+  instead of relying on a fading gradient, so it reads clearly on any
+  backdrop; the clock moved inside it.
+
+### Settings: cleaner utility layout + brightness control
+- Config Editor / Inspector / Export / Import are now a tidy 2×2 tile grid
+  under "Advanced" instead of two ragged button rows.
+- Added a **Brightness** slider (Settings → Render quality & look) and
+  raised the default exposure across all quality presets — the scene was
+  reading a bit dark.
+
 ## 2.4.42
 
 ### Modern bright theme + Light / Dark / Auto selector

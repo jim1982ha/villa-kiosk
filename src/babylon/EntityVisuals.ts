@@ -482,7 +482,17 @@ export class EntityVisuals {
    *  greedily keeps the highest-priority label in each cluster (alert > on > off >
    *  unreachable), hiding lower-priority badges that would overlap and any anchor
    *  behind the camera. Zooming in (bigger scale, anchors spread apart) naturally
-   *  reveals the hidden ones again, so nothing is permanently lost. */
+   *  reveals the hidden ones again, so nothing is permanently lost.
+   *
+   *  Overlap is tested as an axis-aligned bounding-box (not a circular radius):
+   *  the badge+value-chip footprint is taller than it is wide (a 40px circle
+   *  stacked over a ~19px chip), so a radius-based test either under-hides
+   *  (letting badges clip into each other at steep camera angles where several
+   *  project close together vertically) or over-hides (padding out the radius
+   *  to cover the tall axis, which then wrongly hides badges that are merely
+   *  side-by-side). The box is sized off the actual rendered geometry in
+   *  rebuildLabels (40px badge, 3px spacing, 19px value chip), so it tracks
+   *  reality instead of a screen-height-derived guess. */
   private declutterLabels(): void {
     if (!this.config.showEntityLabels || this.labels.size === 0) return;
     const cam = this.scene.activeCamera;
@@ -502,17 +512,18 @@ export class EntityVisuals {
     items.sort((a, b) => b.lbl.priority - a.lbl.priority);
 
     const s = this.iconUserScale * this.iconZoomScale;
-    // Minimum on-screen separation between kept badges, in render pixels. Scales
-    // with badge size but floored so tiny zoomed-out badges still declutter.
-    const minDist = Math.max(h * 0.045 * s, 40);
-    const min2 = minDist * minDist;
+    // Required centre-to-centre separation to avoid a visual overlap: the sum of
+    // two badges' half-widths/half-heights, i.e. one full badge-footprint span,
+    // plus a small breathing-room margin.
+    const BADGE_DIAM = 40, CHIP_H = 19, SPACING = 3, MARGIN = 1.15;
+    const minDX = BADGE_DIAM * MARGIN * s;
+    const minDY = (BADGE_DIAM + SPACING + CHIP_H) * MARGIN * s;
     const placed: { x: number; y: number }[] = [];
     for (const it of items) {
       if (it.behind) { it.lbl.container.isVisible = false; continue; }
       let clash = false;
       for (const p of placed) {
-        const dx = p.x - it.x, dy = p.y - it.y;
-        if (dx * dx + dy * dy < min2) { clash = true; break; }
+        if (Math.abs(p.x - it.x) < minDX && Math.abs(p.y - it.y) < minDY) { clash = true; break; }
       }
       if (clash) {
         it.lbl.container.isVisible = false;

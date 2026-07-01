@@ -225,12 +225,10 @@ button {
   border: 1px solid var(--hairline);
 }
 .hud-stack .icon-btn {
-  width: auto; height: 38px; border-radius: 10px;
-  padding: 0 12px; gap: 8px; justify-content: flex-start;
+  width: 40px; height: 38px; border-radius: 10px;
   background: transparent; backdrop-filter: none; border: none;
-  font-size: 13px; font-weight: 500; color: var(--text-primary);
+  color: var(--text-primary);
 }
-.hud-stack .icon-btn svg { flex: 0 0 auto; }
 .hud-stack .icon-btn:hover { background: var(--bg-input); }
 .hud-stack .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
 
@@ -268,19 +266,26 @@ button {
   z-index: 22; pointer-events: none;
 }
 .hud-topbar > * { pointer-events: auto; }
-.hud-brand { justify-self: start; display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 22px; font-weight: 400; }
+/* The brand is its own self-contained, legible chip (same treatment as every
+   other HUD control) so the villa name reads clearly on ANY backdrop — the
+   canvas behind it can be a bright sky, a dark night, or an empty void, and
+   the name never washes out. */
+.hud-brand {
+  justify-self: start; display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-display); font-size: 22px; font-weight: 500;
+  background: var(--bg-panel); backdrop-filter: blur(8px);
+  border: 1px solid var(--hairline); border-radius: 999px;
+  padding: 6px 16px 6px 10px;
+}
 .hud-brand svg { color: var(--accent); flex: 0 0 auto; }
 .hud-center { justify-self: center; display: flex; align-items: center; gap: 12px; }
 .hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
-/* Self-contained legible pill so the time reads clearly on ANY backdrop — the
-   bright daytime sky used to swallow muted text. A translucent chip + thin
-   hairline keeps it crisp day or night. Sits right of the villa name. */
+/* Time sits inside the brand chip, right of the villa name — a hairline
+   divider separates it instead of a nested pill-in-pill. */
 .hud-clock {
   font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600;
-  color: var(--text-primary);
-  padding: 4px 12px; border-radius: 999px;
-  background: var(--chip-bg); backdrop-filter: blur(8px);
-  border: 1px solid var(--hairline);
+  color: var(--text-secondary);
+  padding-left: 10px; margin-left: 2px; border-left: 1px solid var(--hairline);
 }
 
 /* Connection status sits right next to the villa name — just a coloured dot. */
@@ -522,6 +527,23 @@ input[type="range"]::-moz-range-thumb {
 .segmented button svg { flex: 0 0 auto; }
 .segmented button.active { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
 
+/* Utility tile grid (Config Editor / Inspector / Export / Import in Settings).
+   Replaces two disjoint ghost-button rows with a single tidy 2×2 grid of equal
+   tiles — clearer grouping and no ragged trailing gaps on wide modals. */
+.tile-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px;
+}
+.tile-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; min-height: 76px; padding: 12px 10px; border-radius: 14px;
+  background: var(--bg-card); border: 1px solid var(--hairline);
+  color: var(--text-primary); font-size: 13px; font-weight: 500;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.tile-btn svg { color: var(--accent); flex: 0 0 auto; }
+.tile-btn:hover { background: var(--bg-input); border-color: var(--hairline-strong); }
+.tile-btn:active { transform: scale(0.97); }
+
 /* Inline (i) info button + hover/focus tooltip (replaces the model info block). */
 .info-tip { position: relative; display: inline-flex; }
 .info-tip > .info-btn {
@@ -734,9 +756,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .hud-right .icon-btn { width: 32px; height: 32px; }
   /* Smaller floating floor switch on a phone. */
   .floor-switch-v button { width: 36px; height: 32px; font-size: 12px; }
-  /* Left control stack: hide the button labels, keep icons only, to save width. */
-  .hud-stack .icon-btn { padding: 0; width: 36px; justify-content: center; }
-  .hud-stack .icon-btn .hud-stack-label { display: none; }
+  /* Left control stack: slightly narrower icon buttons to save width. */
+  .hud-stack .icon-btn { width: 36px; }
 
   /* Dropdown menus (Display / Build / Config) are triggered from the centred
      icon cluster. Anchoring each panel to its trigger's right edge (right: 0 +
