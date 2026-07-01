@@ -10,12 +10,14 @@
 //   3. SSAO2                             — darkens corners/contacts (depth).
 //   4. Directional shadows               — grounds furniture (heaviest).
 //   5. IBL (procedural gradient cube)    — soft sky/ground ambient for PBR.
+//   6. GlowLayer                         — bloom around emissive (lit/alert) meshes.
 
 import {
   ImageProcessingConfiguration,
   SSAO2RenderingPipeline,
   ShadowGenerator,
   RawCubeTexture,
+  GlowLayer,
   Constants,
   Mesh,
   type Scene,
@@ -44,6 +46,7 @@ export class RenderEnhancements {
   private shadowGen: ShadowGenerator | null = null;
   private shadowMapSize = 0; // tracks the size the generator was built with
   private env: RawCubeTexture | null = null;
+  private glow: GlowLayer | null = null;
 
   private meshes: AbstractMesh[] = [];
   private cfg: RenderConfig | null = null;
@@ -69,6 +72,7 @@ export class RenderEnhancements {
     this.applyIBL(cfg);
     this.applySSAO(cfg);
     this.applyShadows(cfg);
+    this.applyGlow(cfg);
   }
 
   // ── 1. Tone mapping + exposure / contrast ────────────────────────────────
@@ -228,6 +232,28 @@ export class RenderEnhancements {
     return tex;
   }
 
+  // ── 6. GlowLayer — bloom around anything emissive ────────────────────────
+  // A lit fixture, an active lock/switch tint or a triggered binary_sensor pulse
+  // all work by setting a mesh's emissive colour — flat and easy to miss on a
+  // small fixture mesh at a distance. GlowLayer adds a soft halo around any
+  // emissive surface for free (it reads material.emissiveColor directly), so
+  // every one of those existing "on" states gets more visible with no change
+  // to EntityVisuals/MarkerManager's own colour logic.
+  private applyGlow(cfg: RenderConfig): void {
+    if (cfg.glow) {
+      if (!this.glow) {
+        this.glow = new GlowLayer("villaGlow", this.scene, {
+          mainTextureRatio: 0.5, // half-res blur target — glow is inherently soft, doesn't need full-res
+          blurKernelSize: 32,
+        });
+      }
+      this.glow.isEnabled = true;
+      this.glow.intensity = cfg.glowIntensity;
+    } else if (this.glow) {
+      this.glow.isEnabled = false;
+    }
+  }
+
   dispose(): void {
     if (this.ssao) {
       if (this.ssaoAttached) {
@@ -239,5 +265,6 @@ export class RenderEnhancements {
     }
     if (this.shadowGen) { this.shadowGen.dispose(); this.shadowGen = null; }
     if (this.env) { this.env.dispose(); this.env = null; }
+    if (this.glow) { this.glow.dispose(); this.glow = null; }
   }
 }

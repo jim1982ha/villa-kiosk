@@ -359,6 +359,38 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           nothing in clear/sunny/cloudy weather.
         </p>
 
+        <label className="toggle" style={{ marginTop: 8 }}>
+          <input type="checkbox" checked={render.glow}
+            onChange={(e) => applyRender({ glow: e.target.checked })} />
+          <span>Glow around lit / active devices</span>
+        </label>
+        {render.glow && (
+          <>
+            <label style={{ marginTop: 10 }}>Glow strength · {render.glowIntensity.toFixed(1)}×</label>
+            <input
+              type="range" min={0.2} max={1.5} step={0.1} value={render.glowIntensity}
+              onChange={(e) => applyRender({ glowIntensity: Number(e.target.value) })}
+            />
+          </>
+        )}
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          A soft bloom around any lit fixture, active lock/switch tint or alert
+          pulse, so an "on" state is clearly visible, not just a flat colour.
+        </p>
+
+        <label style={{ marginTop: 14 }}>
+          Night dimming · {render.nightDimming.toFixed(1)}×
+        </label>
+        <input
+          type="range" min={0} max={1} step={0.1} value={render.nightDimming}
+          onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
+        />
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          How much darker the villa gets after sunset. Higher makes lit rooms
+          stand out more dramatically against the dark; rooms stay dimly
+          visible even at the maximum — it's never pitch black.
+        </p>
+
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         <h3 style={{ margin: 0, fontSize: 15 }}>Device state icons</h3>

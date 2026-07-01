@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.4.49
+
+### New: glow around lit/active devices, and a much darker (but not black) night
+- **Lit fixtures read as glowing, not just brighter.** Added a GlowLayer to the
+  render pipeline — a soft bloom around anything emissive: lit fixtures,
+  active lock/switch tints, triggered sensor pulses. Previously a light turning
+  on only changed a flat colour on its (often small) fixture mesh, easy to
+  miss from a distance. Toggle + strength slider in Settings → Render quality.
+  Note: SweetHome 3D's own furniture "power" field was never read by this
+  app — light brightness has always come entirely from the live HA
+  `brightness` attribute, so this had to be a rendering change, not a model
+  edit.
+- **Night is now noticeably darker, so lit rooms stand out.** The interior
+  fill light barely dimmed after dark before (70% of daytime), which made
+  every room stay almost as bright at night as during the day — a lamp
+  turning on barely registered against that wash. Night now dims
+  significantly further (fill light, ambient and IBL), while keeping the
+  same warm tint that already fixed the old "dead grey walls at night" look
+  — so it reads as a dim, cosy night, not pitch black or washed out. New
+  "Night dimming" slider in Settings → Render quality controls how strong
+  the effect is.
+
 ## 2.4.48
 
 ### New: category filter for the map's device tags

@@ -90,6 +90,17 @@ export interface RenderConfig {
   shadowDarkness: number;
   /** Soft-shadow blur kernel size. */
   shadowBlur: number;
+  /** Soft bloom around anything emissive (lit fixtures, active lock/switch
+   *  tints, alert pulses) — makes an "on" state read as glowing, not just a
+   *  brighter flat colour. Cheap relative to SSAO/shadows. */
+  glow: boolean;
+  /** GlowLayer.intensity — how strongly emissive things bloom. */
+  glowIntensity: number;
+  /** How much EXTRA dimming (beyond the base day/night look) is applied at
+   *  night, 0..1. 0 = the mild dim this app always had; 1 = maximum — dim
+   *  enough that a lit fixture's own light clearly dominates the room, but
+   *  never fully black (SunController floors it so rooms stay legible). */
+  nightDimming: number;
 }
 
 /**
@@ -103,6 +114,8 @@ export interface RenderConfig {
  */
 export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
   // Fastest path for weak wall tablets: no AO, no IBL, gentle tone mapping.
+  // Glow stays on (it's a single small blurred render target, cheap next to
+  // SSAO/shadows) since it's core to how an "on" device reads.
   performance: {
     quality: "performance",
     toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.08,
@@ -110,6 +123,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     ibl: false, environmentIntensity: 0.6,
     ssao: false, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
     shadows: false, shadowMapSize: 1024, shadowDarkness: 0.35, shadowBlur: 32,
+    glow: true, glowIntensity: 0.7, nightDimming: 0.7,
   },
   // The proven "safe win": subtle contact AO, no IBL/shadows.
   balanced: {
@@ -119,6 +133,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     ibl: false, environmentIntensity: 0.65,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
     shadows: false, shadowMapSize: 1024, shadowDarkness: 0.35, shadowBlur: 32,
+    glow: true, glowIntensity: 0.8, nightDimming: 0.7,
   },
   // Best look out of the box: AO + soft sky/ground IBL + higher-sample AO.
   high: {
@@ -128,6 +143,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     ibl: true, environmentIntensity: 0.6,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.25, ssaoSamples: 16,
     shadows: false, shadowMapSize: 2048, shadowDarkness: 0.4, shadowBlur: 32,
+    glow: true, glowIntensity: 0.9, nightDimming: 0.7,
   },
 };
 
