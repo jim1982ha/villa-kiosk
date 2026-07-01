@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.4.52
+
+### Room-floor glow now also works for rooms with no drawn sh3d shape
+- **Diagnosed why the motion-glow didn't work for a room like "Staircase":**
+  the app has two different ideas of "room" — a real drawn shape from the
+  sh3d plan (used for room labels + the floor glow), and a named viewpoint
+  you add via the Rooms menu's "Add room here" (just a camera position, no
+  area). A staircase landing is rarely drawn as an enclosed room, so setting
+  a sensor's Room to "Staircase" had nothing to glow.
+- RoomHighlight now also builds a small synthetic circular patch for any
+  named Rooms-menu viewpoint that doesn't already have a real polygon — a
+  real room always wins if both exist under the same name. Takes effect
+  immediately when you add/rename a room, no model reload needed.
+
+### Fix: adding a custom room could silently vanish on the next reload
+- Found while fixing the above: the app was fully *replacing*
+  `config.teleportPoints` with the freshly-recalibrated sh3d-derived rooms
+  every time the model loaded or recalibrated (e.g. a mirror-flip toggle) —
+  silently discarding any room you'd added yourself (like "Staircase") that
+  has no sh3d counterpart to refresh from. Now merges: sh3d-derived rooms
+  refresh to the new fit as before, anything else you added is preserved.
+
+### Rooms menu: long-press now actually works, and re-anchoring gives feedback
+- The tooltip promised "long-press a room to re-anchor it" but no long-press
+  handler existed anywhere in the code — only the desktop right-click path
+  was ever implemented, so touch/kiosk use couldn't reach this feature at
+  all. Added a proper press-and-hold (480ms, matching the same threshold
+  used for in-scene badge gestures).
+- Re-anchoring (either right-click or long-press) was also completely
+  silent — it saved your new position with zero visual confirmation, so a
+  successful re-anchor was indistinguishable from nothing happening. Now
+  shows a brief checkmark on the card and a one-line confirmation.
+
 ## 2.4.51
 
 ### Fix: Motion sensor picker didn't show the selected entity

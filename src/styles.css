@@ -490,6 +490,15 @@ input[type="range"]::-moz-range-thumb {
 .tp-card .tp-delete:hover { color: var(--status-danger); }
 .tp-card.tp-add { align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--accent); border-style: dashed; background: transparent; }
 .tp-card.tp-add span { font-family: var(--font-ui); font-size: 14px; color: var(--accent); }
+/* Brief confirmation shown over a card right after long-press/right-click
+   sets its anchor — setAnchorHere used to be completely silent. */
+.tp-card .tp-anchored {
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(16, 130, 70, 0.55);
+  color: #fff;
+  animation: fadeIn 0.15s ease;
+}
 
 /* --- Modals / wizard --- */
 .modal-backdrop { position: absolute; inset: 0; z-index: 70; background: var(--scrim-strong); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; }

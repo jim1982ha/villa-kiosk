@@ -6,9 +6,16 @@
 // meaningful facing direction of its own, so "highlight the room it's in" is
 // the natural signal instead of a directional beam.
 //
-// Built from the SAME world-space room polygons SceneManager already fits for
-// the teleport grid / room labels (see SceneManager.calibrateRooms), so no new
-// calibration step is needed — just a mesh per polygon instead of a label.
+// Two sources feed the same glow, because "room" means two different things
+// in this app:
+//   - setRooms(): real sh3d ROOM POLYGONS (SceneManager.calibrateRooms) — an
+//     actual drawn shape, so the glow traces its real outline.
+//   - setPointRooms(): named TeleportMenu "Rooms" (config.teleportPoints) that
+//     a user added by walking somewhere and tapping "Add room here" — e.g. a
+//     staircase landing that was never drawn as an enclosed room polygon in
+//     SweetHome. These are a single point + facing direction, no area, so we
+//     draw a small synthetic circular patch there instead. A name covered by
+//     a real polygon always wins — no redundant circle on top of a real room.
 
 import {
   Mesh, VertexData, StandardMaterial, Color3,
@@ -22,6 +29,10 @@ const PULSE_ALPHA = 0.5;
 // Sits just above the recentred floor (y≈0 after SceneManager.recenterModel)
 // so it doesn't z-fight with the actual floor mesh underneath it.
 const FLOOR_Y_OFFSET = 0.02;
+// Radius of the synthetic patch drawn for a point-only "room" (no real
+// polygon) — a small landing/nook-sized area, not a whole room's worth.
+const POINT_ROOM_RADIUS = 1.1;
+const POINT_ROOM_SEGMENTS = 16;
 
 interface RoomEntry {
   mesh: Mesh;
@@ -31,8 +42,12 @@ interface RoomEntry {
 export class RoomHighlight {
   private scene: Scene;
   private requestRender: () => void;
-  /** Keyed by normalised (trimmed, lowercased) room name. */
-  private rooms = new Map<string, RoomEntry>();
+  /** Keyed by normalised (trimmed, lowercased) room name. Two separate maps
+   *  so a full re-poly (rare: load + mirror toggle) and a point-rooms refresh
+   *  (whenever config.teleportPoints changes — much more frequent) don't
+   *  dispose each other's meshes. */
+  private polyRooms = new Map<string, RoomEntry>();
+  private pointRooms = new Map<string, RoomEntry>();
   private active = new Set<string>();
   private pulseT = 0;
 
@@ -46,65 +61,91 @@ export class RoomHighlight {
     return name.trim().toLowerCase();
   }
 
-  /** (Re)build one floor mesh per room polygon. Called every time
+  private buildMesh(key: string, pts: Pt2[]): RoomEntry | null {
+    if (pts.length < 3) return null;
+    const tris = earClipTriangulate(pts);
+    if (tris.length === 0) return null;
+
+    const positions: number[] = [];
+    for (const p of pts) positions.push(p.x, FLOOR_Y_OFFSET, p.z);
+    const indices: number[] = [];
+    for (const [a, b, c] of tris) indices.push(a, b, c);
+    // Both winding directions so the glow reads from any camera angle
+    // (overview looks straight down, first-person can graze it at an angle).
+    for (const [a, b, c] of tris) indices.push(c, b, a);
+
+    const normals: number[] = [];
+    VertexData.ComputeNormals(positions, indices, normals);
+
+    const mesh = new Mesh(`roomGlow_${key}`, this.scene);
+    const vd = new VertexData();
+    vd.positions = positions;
+    vd.indices = indices;
+    vd.normals = normals;
+    vd.applyToMesh(mesh);
+
+    const material = new StandardMaterial(`roomGlowMat_${key}`, this.scene);
+    material.disableLighting = true;
+    material.emissiveColor = GLOW_COLOR.scale(BASE_ALPHA);
+    material.alpha = 0;
+    material.backFaceCulling = false;
+    mesh.material = material;
+    mesh.isPickable = false;
+    mesh.metadata = { isMarker: true }; // exclude from shadow casters/IBL surfaces, same as markers
+
+    return { mesh, material };
+  }
+
+  /** (Re)build one floor mesh per REAL room polygon. Called every time
    *  SceneManager re-fits the plan→world transform (load + mirror toggles). */
   setRooms(polys: { name: string; pts: Pt2[] }[]): void {
-    this.dispose();
+    this.disposeMap(this.polyRooms);
     for (const room of polys) {
-      if (room.pts.length < 3) continue;
-      const tris = earClipTriangulate(room.pts);
-      if (tris.length === 0) continue;
+      const key = RoomHighlight.normalise(room.name);
+      const entry = this.buildMesh(key, room.pts);
+      if (entry) this.polyRooms.set(key, entry);
+    }
+  }
 
-      const positions: number[] = [];
-      for (const p of room.pts) positions.push(p.x, FLOOR_Y_OFFSET, p.z);
-      const indices: number[] = [];
-      for (const [a, b, c] of tris) indices.push(a, b, c);
-      // Both winding directions so the glow reads from any camera angle
-      // (overview looks straight down, first-person can graze it at an angle).
-      for (const [a, b, c] of tris) indices.push(c, b, a);
-
-      const normals: number[] = [];
-      VertexData.ComputeNormals(positions, indices, normals);
-
-      const mesh = new Mesh(`roomGlow_${room.name}`, this.scene);
-      const vd = new VertexData();
-      vd.positions = positions;
-      vd.indices = indices;
-      vd.normals = normals;
-      vd.applyToMesh(mesh);
-
-      const material = new StandardMaterial(`roomGlowMat_${room.name}`, this.scene);
-      material.disableLighting = true;
-      material.emissiveColor = GLOW_COLOR.scale(BASE_ALPHA);
-      material.alpha = 0;
-      material.backFaceCulling = false;
-      mesh.material = material;
-      mesh.isPickable = false;
-      mesh.metadata = { isMarker: true }; // exclude from shadow casters/IBL surfaces, same as markers
-
-      this.rooms.set(RoomHighlight.normalise(room.name), { mesh, material });
+  /** (Re)build a small synthetic circular patch for each named TeleportMenu
+   *  point that ISN'T already covered by a real room polygon — e.g. a
+   *  staircase landing added via "Add room here" that was never drawn as an
+   *  enclosed room in SweetHome. Called on load/recalibration AND live
+   *  whenever config.teleportPoints changes (adding a room shouldn't need a
+   *  full model reload to start glowing). */
+  setPointRooms(points: { name: string; x: number; z: number }[]): void {
+    this.disposeMap(this.pointRooms);
+    for (const p of points) {
+      const key = RoomHighlight.normalise(p.name);
+      if (this.polyRooms.has(key)) continue; // a real room polygon always wins
+      const circle: Pt2[] = Array.from({ length: POINT_ROOM_SEGMENTS }, (_, i) => {
+        const a = (i / POINT_ROOM_SEGMENTS) * Math.PI * 2;
+        return { x: p.x + Math.cos(a) * POINT_ROOM_RADIUS, z: p.z + Math.sin(a) * POINT_ROOM_RADIUS };
+      });
+      const entry = this.buildMesh(key, circle);
+      if (entry) this.pointRooms.set(key, entry);
     }
   }
 
   /** Turn a room's glow on/off by name (matched against the entity's "Room"
    *  Config Editor field — case/whitespace-insensitive). No-op if the name
-   *  doesn't match any calibrated room (e.g. an outdoor sensor). */
+   *  doesn't match any calibrated room or named viewpoint (e.g. an outdoor
+   *  sensor with no Room set). */
   setActive(roomName: string, on: boolean): void {
     const key = RoomHighlight.normalise(roomName);
-    if (!this.rooms.has(key)) return;
+    const entry = this.polyRooms.get(key) ?? this.pointRooms.get(key);
+    if (!entry) return;
     if (on) this.active.add(key);
     else this.active.delete(key);
-    if (!on) {
-      const entry = this.rooms.get(key);
-      if (entry) entry.material.alpha = 0;
-    }
+    if (!on) entry.material.alpha = 0;
     this.requestRender();
   }
 
-  /** Whether a name matches a calibrated room (lets callers skip work for
-   *  sensors whose room doesn't correspond to any known polygon). */
+  /** Whether a name matches a calibrated room or named viewpoint (lets
+   *  callers skip work for sensors whose room doesn't correspond to either). */
   hasRoom(roomName: string): boolean {
-    return this.rooms.has(RoomHighlight.normalise(roomName));
+    const key = RoomHighlight.normalise(roomName);
+    return this.polyRooms.has(key) || this.pointRooms.has(key);
   }
 
   private animate(): void {
@@ -113,18 +154,24 @@ export class RoomHighlight {
     const t = (Math.sin(this.pulseT) + 1) / 2; // 0..1
     const alpha = BASE_ALPHA + (PULSE_ALPHA - BASE_ALPHA) * t;
     for (const key of this.active) {
-      const entry = this.rooms.get(key);
+      const entry = this.polyRooms.get(key) ?? this.pointRooms.get(key);
       if (entry) entry.material.alpha = alpha;
     }
     this.requestRender();
   }
 
-  dispose(): void {
-    for (const { mesh, material } of this.rooms.values()) {
+  private disposeMap(map: Map<string, RoomEntry>): void {
+    for (const key of [...map.keys()]) {
+      const { mesh, material } = map.get(key)!;
       mesh.dispose();
       material.dispose();
+      map.delete(key);
+      this.active.delete(key);
     }
-    this.rooms.clear();
-    this.active.clear();
+  }
+
+  dispose(): void {
+    this.disposeMap(this.polyRooms);
+    this.disposeMap(this.pointRooms);
   }
 }

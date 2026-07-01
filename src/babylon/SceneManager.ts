@@ -89,6 +89,10 @@ export class SceneManager {
   private calibratedPoints: TeleportPoint[] | null = null;
   private highlightLayer: HighlightLayer | null = null;
   private viewMode: "first-person" | "overview" = "first-person";
+  /** Names of the real (polygon-backed) rooms from the last calibration —
+   *  used to exclude them when deriving RoomHighlight's point-only "rooms"
+   *  from config.teleportPoints (a real room polygon always wins). */
+  private lastRoomPolyNames = new Set<string>();
 
   constructor(canvas: HTMLCanvasElement, opts: SceneManagerOptions) {
     this.config = opts.config;
@@ -616,6 +620,14 @@ export class SceneManager {
     this.visuals.setRoomPolygons(worldPolys);
     devLog(`[Villa] ${worldPolys.length} room polygons registered`);
 
+    // Point-only "rooms" (named TeleportMenu viewpoints with no real polygon,
+    // e.g. a staircase landing) — best-effort now from whatever
+    // config.teleportPoints currently holds; re-synced properly a moment
+    // later once Dashboard's onCalibrated handler adopts the freshly-fitted
+    // points (see updateConfig's teleportPoints diff below).
+    this.lastRoomPolyNames = new Set(worldPolys.map((r) => r.name.trim().toLowerCase()));
+    this.syncRoomPoints();
+
     // Camera motion-beam directions: each camera's sh3d plan `angle` rotated
     // into world space by the SAME planToWorld fit (translation cancels out
     // by transforming two nearby points and taking the difference, so this
@@ -639,6 +651,18 @@ export class SceneManager {
     // Notify listeners (Dashboard) so the teleport grid + room labels re-adopt
     // these freshly-fitted points — e.g. right after a manual mirror toggle.
     this.calibrateCallbacks.forEach((cb) => cb());
+  }
+
+  /** Push RoomHighlight's point-only "rooms": named TeleportMenu viewpoints
+   *  (config.teleportPoints) that aren't covered by a real room polygon.
+   *  Called after every recalibration AND live whenever config.teleportPoints
+   *  changes on its own (e.g. the user just added "Staircase") — adding a
+   *  named room shouldn't need a full model reload to start glowing. */
+  private syncRoomPoints(): void {
+    const extras = this.config.teleportPoints
+      .filter((p) => !this.lastRoomPolyNames.has(p.name.trim().toLowerCase()))
+      .map((p) => ({ name: p.name, x: p.position.x, z: p.position.z }));
+    this.visuals.setRoomPoints(extras);
   }
 
   /** Model-space teleport points fitted on load, or null (use config defaults). */
@@ -908,6 +932,13 @@ export class SceneManager {
     this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
     this.pick.setMaps(config.entityMap, config.meshBindings);
     this.visuals.updateConfig(config); // internally cheap; rebuilds labels only on its own diff
+
+    // A room added/renamed/removed via the Rooms menu ("Add room here") should
+    // start glowing (or stop) immediately — no model reload needed, unlike the
+    // real room polygons which only change on a full recalibration.
+    if (prev.teleportPoints !== config.teleportPoints) {
+      this.syncRoomPoints();
+    }
 
     if (this.loadedMeshes.length && structuralChanged) {
       this.visuals.indexMeshes(this.loadedMeshes);

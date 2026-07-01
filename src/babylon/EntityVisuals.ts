@@ -410,6 +410,15 @@ export class EntityVisuals {
     this.roomHighlight.setRooms(polys);
   }
 
+  /** Replace the named-viewpoint "rooms" (config.teleportPoints) that don't
+   *  have a real room polygon — forwarded to RoomHighlight for a synthetic
+   *  patch. Called on every re-fit AND live whenever config.teleportPoints
+   *  changes (e.g. the user just added "Staircase" via the Rooms menu — that
+   *  shouldn't need a model reload to start glowing). */
+  setRoomPoints(points: { name: string; x: number; z: number }[]): void {
+    this.roomHighlight.setPointRooms(points);
+  }
+
   /** Replace camera facing directions (world-space, horizontal) and rebuild
    *  every beam mesh. Called by SceneManager right after setRoomPolygons, from
    *  the same re-fit — a camera's direction depends on the same plan→world

@@ -26,6 +26,11 @@ import type { TeleportPoint } from "@/types/scene.types";
 export default function Dashboard() {
   const { config, update } = useConfig();
   const { connect, entities, ws } = useHA();
+  // Read inside the onCalibrated/onReady effect below (which intentionally
+  // only depends on [manager], so its closure would otherwise see a stale
+  // config.teleportPoints from whenever that effect last ran).
+  const configRef = useRef(config);
+  configRef.current = config;
 
   const [manager, setManager] = useState<SceneManager | null>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel | null>(null);
@@ -145,7 +150,16 @@ export default function Dashboard() {
     const adopt = () => {
       setFloorsAvailable(manager.floors.getFloorsDetected());
       const pts = manager.getCalibratedTeleportPoints();
-      if (pts) update({ teleportPoints: pts });
+      if (pts) {
+        // Rooms fitted from the sh3d plan always refresh to the new fit
+        // (that's the point of re-adopting after a mirror-flip toggle). Any
+        // OTHER existing room — one the user added via "Add room here" that
+        // has no sh3d counterpart, e.g. a staircase landing — has no fresh
+        // entry to refresh from, so it must be preserved rather than dropped.
+        const freshNames = new Set(pts.map((p) => p.name));
+        const custom = configRef.current.teleportPoints.filter((p) => !freshNames.has(p.name));
+        update({ teleportPoints: [...pts, ...custom] });
+      }
     };
     const offReady = manager.onReady(adopt);
     // Also re-adopt whenever the scene re-fits rooms (e.g. a mirror toggle in
