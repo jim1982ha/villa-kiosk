@@ -16,7 +16,7 @@
 
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
-  Vector3, Matrix,
+  Vector3, Matrix, TransformNode,
   type AbstractMesh, type Scene, type Material,
 } from "@babylonjs/core";
 import {
@@ -49,6 +49,15 @@ const LIGHT_RANGE = 2.8;
 // ONE per light ENTITY (the markers of a strip are clustered, so a single occluder
 // covers them) and only while the light is on, so an idle/off light costs nothing.
 const LIGHT_SHADOW_SIZE = 256;
+// World-space clearance added above a mesh-bound entity's bounding-box top when
+// placing its state-label anchor, so the badge floats just clear of the
+// geometry instead of sitting flush on it.
+const LABEL_ANCHOR_MARGIN = 0.12;
+// Total rendered height of a label's container (badge + spacing + value chip;
+// must match the StackPanel height set in rebuildLabels). Used to derive the
+// link offset so the whole badge sits just above its anchor point instead of
+// straddling it, without a separately hand-tuned pixel constant.
+const LABEL_HEIGHT_PX = 76;
 
 interface LabelControls {
   container: StackPanel;
@@ -56,7 +65,7 @@ interface LabelControls {
   glyph: Image;
   valueWrap: Rectangle;
   valueText: TextBlock;
-  anchor: AbstractMesh;
+  anchor: TransformNode;
   type: EntityType;
 }
 
@@ -128,6 +137,13 @@ export class EntityVisuals {
   /** Fullscreen GUI layer for state labels. */
   private labelLayer: AdvancedDynamicTexture | null = null;
   private labels = new Map<string, LabelControls>();
+  /** Per-entity invisible anchor node for mesh-bound labels, positioned at the
+   *  entity's actual bounding-box top-centre (elevation + height combined),
+   *  computed once from real geometry — see buildLabelAnchors(). Replaces
+   *  linking straight to the mesh + a hand-tuned pixel offset, which put the
+   *  badge at a fixed screen-space height regardless of how tall the asset
+   *  actually was or how high up it sat. */
+  private labelAnchors = new Map<string, TransformNode>();
   /** Floating control-marker anchors (MarkerManager) — devices with no mesh of
    *  their own. Label-only: the marker's orb/halo glow stays owned there, this
    *  just feeds the same badge pipeline mesh-bound entities use. */
@@ -190,6 +206,7 @@ export class EntityVisuals {
   indexMeshes(meshes: AbstractMesh[]): void {
     // Dispose previously created light sources + shadow maps before re-indexing.
     this.disposeLights();
+    this.disposeLabelAnchors();
     this.pulsing.clear();
     this.byEntity.clear();
     this.mapping.clear();
@@ -282,6 +299,7 @@ export class EntityVisuals {
 
     scene.blockMaterialDirtyMechanism = false;
 
+    this.buildLabelAnchors();
     if (this.config.showEntityLabels) this.rebuildLabels();
   }
 
@@ -291,6 +309,36 @@ export class EntityVisuals {
     this.lightShadows.clear();
     this.meshLights.forEach((l) => l.dispose());
     this.meshLights.clear();
+  }
+
+  /** One invisible anchor per mesh-bound entity, positioned at the top-centre
+   *  of that entity's WHOLE bounding box (all its meshes merged — e.g. a
+   *  curtain rail + fabric, or several bedside lamps under one entity — not
+   *  just whichever mesh happened to be first), plus a small clearance
+   *  margin. This is real geometry, computed once from the loaded model, so
+   *  the label naturally sits close to each asset regardless of how tall it
+   *  is or how high up it's mounted — no per-object hand-tuning. */
+  private buildLabelAnchors(): void {
+    for (const [entityId, meshes] of this.byEntity) {
+      if (!meshes.length) continue;
+      let min: Vector3 | null = null;
+      let max: Vector3 | null = null;
+      for (const m of meshes) {
+        m.computeWorldMatrix(true);
+        const bb = m.getBoundingInfo().boundingBox;
+        min = min ? Vector3.Minimize(min, bb.minimumWorld) : bb.minimumWorld.clone();
+        max = max ? Vector3.Maximize(max, bb.maximumWorld) : bb.maximumWorld.clone();
+      }
+      if (!min || !max) continue;
+      const node = new TransformNode(`lblAnchor_${entityId}`, this.scene);
+      node.position.set((min.x + max.x) / 2, max.y + LABEL_ANCHOR_MARGIN, (min.z + max.z) / 2);
+      this.labelAnchors.set(entityId, node);
+    }
+  }
+
+  private disposeLabelAnchors(): void {
+    this.labelAnchors.forEach((n) => n.dispose());
+    this.labelAnchors.clear();
   }
 
   hasEntity(entityId: string): boolean {
@@ -377,15 +425,18 @@ export class EntityVisuals {
     this.labelLayer.rootContainer.isVisible = true;
 
     // Two anchor sources feed the same badge pipeline: real mesh-bound entities
-    // (from the GLB) and floating control markers (devices with no mesh of
-    // their own — see MarkerManager). A mesh binding always takes priority for
-    // a given entity_id (enforced in syncMarkerAnchors).
-    const sources: { entityId: string; anchor: AbstractMesh; type: EntityType }[] = [];
+    // (from the GLB, anchored at their own bounding-box top — see
+    // buildLabelAnchors) and floating control markers (devices with no mesh of
+    // their own — see MarkerManager, anchored at the marker orb itself). A mesh
+    // binding always takes priority for a given entity_id (enforced in
+    // syncMarkerAnchors).
+    const sources: { entityId: string; anchor: TransformNode; type: EntityType }[] = [];
     for (const [entityId, meshes] of this.byEntity) {
       if (!meshes.length) continue;
       const map = this.mapping.get(entityId);
       if (!map) continue;
-      sources.push({ entityId, anchor: meshes[0], type: map.type });
+      const anchor = this.labelAnchors.get(entityId) ?? meshes[0];
+      sources.push({ entityId, anchor, type: map.type });
     }
     for (const [entityId, m] of this.markerAnchors) {
       sources.push({ entityId, anchor: m.anchor, type: m.type });
@@ -400,11 +451,16 @@ export class EntityVisuals {
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
       container.width = "128px";
-      container.height = "76px";
+      container.height = `${LABEL_HEIGHT_PX}px`;
       container.spacing = 3;
       this.labelLayer.addControl(container);
       container.linkWithMesh(anchor);
-      container.linkOffsetYInPixels = -56;
+      // The anchor already sits at (or just above) the asset's own top edge —
+      // see buildLabelAnchors / the marker orb position — so the only pixel
+      // offset needed is to lift the WHOLE container clear of that point
+      // (rather than centering it on the point), not the large hand-tuned
+      // constant this used to be.
+      container.linkOffsetYInPixels = -LABEL_HEIGHT_PX / 2;
 
       const badge = new Rectangle(`lbl_badge_${entityId}`);
       badge.width = "40px";

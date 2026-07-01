@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.4.46
+
+### State labels: anchor each tag to its own asset's real height, not a fixed pixel offset
+- **With every tag now visible (2.4.45), many floated noticeably above the
+  object they belonged to** — worst on tall or elevated assets, where a flat
+  56px screen-space offset from the object's centre either barely cleared it
+  or, at some camera distances, stacked a whole cluster of tags well above
+  the roofline. Each mesh-bound entity now gets an anchor computed from its
+  own real geometry (all its meshes merged into one bounding box, so a
+  multi-part fixture is treated as a whole), sitting right at that asset's
+  actual top edge plus a small clearance margin — so the tag height follows
+  the asset's own elevation and size instead of a single constant that
+  couldn't fit every object in the villa.
+
 ## 2.4.45
 
 ### State labels: removed the overlap declutter entirely — every tag now always shows
