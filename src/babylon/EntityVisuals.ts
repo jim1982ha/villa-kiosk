@@ -58,6 +58,8 @@ const LABEL_ANCHOR_MARGIN = 0.12;
 // link offset so the whole badge sits just above its anchor point instead of
 // straddling it, without a separately hand-tuned pixel constant.
 const LABEL_HEIGHT_PX = 76;
+// Height of the value pill (e.g. "42%", "21°") shown under the badge.
+const VALUE_CHIP_HEIGHT_PX = 18;
 
 interface LabelControls {
   container: StackPanel;
@@ -489,12 +491,12 @@ export class EntityVisuals {
       // Value pill: a snug rounded chip that hugs its text (adaptWidthToChildren).
       const valueWrap = new Rectangle(`lbl_valwrap_${entityId}`);
       valueWrap.adaptWidthToChildren = true;
-      valueWrap.height = "19px";
-      valueWrap.cornerRadius = 9;
+      valueWrap.height = `${VALUE_CHIP_HEIGHT_PX}px`;
+      valueWrap.cornerRadius = VALUE_CHIP_HEIGHT_PX / 2;
       valueWrap.thickness = 0;
       valueWrap.background = "rgba(15,23,42,0.85)";
-      valueWrap.paddingLeft = "7px";
-      valueWrap.paddingRight = "7px";
+      valueWrap.paddingLeft = "6px";
+      valueWrap.paddingRight = "6px";
       valueWrap.shadowColor = "rgba(0,0,0,0.5)";
       valueWrap.shadowBlur = 4;
       valueWrap.isVisible = false;
@@ -502,10 +504,17 @@ export class EntityVisuals {
       const valueText = new TextBlock(`lbl_value_${entityId}`);
       valueText.text = "";
       valueText.color = "#f8fafc";
-      valueText.fontSize = 12;
-      valueText.fontStyle = "bold";
+      // Match the app's own UI typeface (--font-ui: Inter) instead of the GUI
+      // layer's Babylon default (Arial) — that mismatch, plus font-style:"bold"
+      // faking a weight Inter doesn't ship (only 200/400/500/600 are loaded, see
+      // index.html), was rendering the pill in a heavier, uneven fallback font
+      // that visually clashed with every other label in the app.
+      valueText.fontFamily = "Inter, system-ui, sans-serif";
+      valueText.fontWeight = "600";
+      valueText.fontSize = 11;
       valueText.resizeToFit = true;
       valueText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
+      valueText.textVerticalAlignment = TextBlock.VERTICAL_ALIGNMENT_CENTER;
       valueWrap.addControl(valueText);
       container.addControl(valueWrap);
 

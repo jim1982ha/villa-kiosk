@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.4.47
+
+### State labels: fix the value pill's font
+- **The little "42%" / "21°" pill under each badge was rendering in the GUI
+  layer's default font (Arial), not the app's own Inter typeface** — a
+  mismatch that made it look uneven and out of place next to every other
+  label in the UI. It also used `font-style: bold` to fake a weight Inter
+  doesn't actually ship (only 200/400/500/600 are loaded), which browsers
+  render as a synthetic, chunkier bold. Now uses Inter at a real weight
+  (600) and a slightly smaller, tighter size, matching the rest of the app.
+
 ## 2.4.46
 
 ### State labels: anchor each tag to its own asset's real height, not a fixed pixel offset
