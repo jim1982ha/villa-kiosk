@@ -15,6 +15,11 @@ export interface EntityMapping {
   room: string; // Room for grouping / teleport context
   requiresConfirmation?: boolean; // Show confirm dialog before action
   category?: Category; // Map filter grouping; falls back to categoryForEntity() when unset
+  /** For type "camera": the HA motion/occupancy binary_sensor that goes "on"
+   *  when this camera detects motion. Drives the simulated detection beam
+   *  (EntityVisuals). Not inferred from naming (camera integrations name
+   *  these too inconsistently) — set once per camera in the Config Editor. */
+  motionEntityId?: string;
 }
 
 export interface Vec3 {

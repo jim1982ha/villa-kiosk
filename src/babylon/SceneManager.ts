@@ -37,6 +37,20 @@ import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint, SceneMarker } from "@/types/scene.types";
 
+/**
+ * SweetHome 3D plan-space unit direction for an object's `angle` (degrees).
+ * SweetHome's plan is Y-down (X east, Y south) and the angle spinner turns
+ * furniture CLOCKWISE from its modelled "south-facing" (plan +Y) default —
+ * unverified against a real rotated camera yet (every camera in the current
+ * villa is still at the default angle=0, see EntityCategories/CHANGELOG); if
+ * a live test with an actually-rotated camera shows the beam pointing the
+ * wrong way, this is the one place to flip the sign or swap sin/cos.
+ */
+function planAngleToDir(angleDeg: number): { px: number; py: number } {
+  const rad = (angleDeg * Math.PI) / 180;
+  return { px: Math.sin(rad), py: Math.cos(rad) };
+}
+
 export interface SceneManagerOptions {
   config: AppConfig;
   /** Called when a mesh mapped to an entity is tapped (fast on/off action). */
@@ -599,7 +613,29 @@ export class SceneManager {
     this.calibratedPoints = points;
     this.camera.setTeleportPoints(points);
     this.camera.setRoomPolygons(worldPolys);
+    this.visuals.setRoomPolygons(worldPolys);
     devLog(`[Villa] ${worldPolys.length} room polygons registered`);
+
+    // Camera motion-beam directions: each camera's sh3d plan `angle` rotated
+    // into world space by the SAME planToWorld fit (translation cancels out
+    // by transforming two nearby points and taking the difference, so this
+    // works regardless of which of the three calibration strategies above
+    // ran, or whether a manual mirror override is layered on top).
+    const cameraDirections = new Map<string, { x: number; z: number }>();
+    if (this.config.sh3dEntities?.length) {
+      for (const e of this.config.sh3dEntities) {
+        const map = this.config.entityMap[e.entityId];
+        if (!map || map.type !== "camera") continue;
+        const d = planAngleToDir(e.angle);
+        const p0 = planToWorld(e.x, e.y);
+        const p1 = planToWorld(e.x + d.px, e.y + d.py);
+        const wx = p1.x - p0.x, wz = p1.z - p0.z;
+        const len = Math.hypot(wx, wz);
+        if (len > 1e-6) cameraDirections.set(e.entityId, { x: wx / len, z: wz / len });
+      }
+    }
+    this.visuals.setCameraDirections(cameraDirections);
+
     // Notify listeners (Dashboard) so the teleport grid + room labels re-adopt
     // these freshly-fitted points — e.g. right after a manual mirror toggle.
     this.calibrateCallbacks.forEach((cb) => cb());

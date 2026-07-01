@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.4.50
+
+### New: simulated motion detection — camera beams + room glow
+- **Cameras get a simulated red detection beam.** Rotate a camera prop in
+  SweetHome 3D to actually aim it (the `angle` field — previously never read
+  by this app), link it to its HA motion/occupancy `binary_sensor` in the
+  Config Editor's new "Motion sensor" column, and the beam pulses on for as
+  long as that sensor reads "on". It's a translucent, unlit cone (no real
+  light/shadows — an alert indicator, not a physical simulation), clipped to
+  stop at the nearest wall so it doesn't shine through the villa forever.
+- **Physical motion/presence sensors glow their room's floor instead.** A
+  camera has a lens direction; a PIR sensor doesn't, so a directional beam
+  would fabricate precision that isn't there. Any `binary_sensor` whose
+  "Room" field (Config Editor) matches a calibrated room now pulses that
+  room's floor translucent red while it's triggered. A sensor already linked
+  to a camera drives only the beam — not both.
+- Both are driven entirely by entities you already configure — no separate
+  "motion sensor" registry, just one new field (`motionEntityId`) on the
+  camera's existing entity settings.
+- Not visually verified against the real villa (no GLB / live motion sensor
+  in this environment) — the SweetHome `angle` → beam-direction convention
+  (which way is 0°, clockwise vs counter-clockwise) is a best-effort first
+  pass; if a live test shows the beam pointing the wrong way, that's a
+  one-line fix (`planAngleToDir` in SceneManager.ts).
+
 ## 2.4.49
 
 ### New: glow around lit/active devices, and a much darker (but not black) night

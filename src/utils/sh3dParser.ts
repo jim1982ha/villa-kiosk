@@ -17,6 +17,12 @@ export interface ParsedEntity {
   entityId: string;
   x: number;
   y: number;
+  /** SweetHome 3D's plan-rotation for this object, in degrees (0 = default
+   *  unrotated orientation; SweetHome omits the attribute at 0). Lets a
+   *  camera's simulated "detection beam" point the same way the camera prop
+   *  was rotated to face in the plan — rotate the camera in SweetHome 3D to
+   *  aim it, no other config needed. */
+  angle: number;
 }
 export interface ParsedSh3d {
   rooms: ParsedRoom[];
@@ -54,7 +60,8 @@ export async function parseSh3d(data: ArrayBuffer | File): Promise<ParsedSh3d> {
     const y = f.getAttribute("y");
     if (!name || x === null || y === null) return;
     if (!ENTITY_ID_RE.test(name)) return;
-    entities.push({ entityId: name, x: Number(x), y: Number(y) });
+    const angle = f.getAttribute("angle"); // omitted by SweetHome when 0
+    entities.push({ entityId: name, x: Number(x), y: Number(y), angle: angle === null ? 0 : Number(angle) });
   });
 
   return { rooms, entities };

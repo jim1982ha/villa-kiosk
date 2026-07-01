@@ -145,6 +145,18 @@ export default function BindingsTable() {
                   onChange={(e) => patchMeta(entityId, { room: e.target.value })}
                   title="Room name"
                 />
+                {meta.type === "camera" && (
+                  <div style={{ flex: "1 1 220px", minWidth: 180 }}>
+                    <EntityPicker
+                      value={meta.motionEntityId}
+                      onChange={(id) => patchMeta(entityId, { motionEntityId: id })}
+                      domains={["binary_sensor"]}
+                      allowCustom
+                      hideCurrentLabel
+                      placeholder="Motion/occupancy sensor…"
+                    />
+                  </div>
+                )}
                 <label
                   className="row"
                   style={{ gap: 5, fontSize: 12, color: "var(--text-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}

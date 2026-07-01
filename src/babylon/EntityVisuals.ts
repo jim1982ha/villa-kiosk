@@ -16,8 +16,8 @@
 
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
-  Vector3, Matrix, TransformNode,
-  type AbstractMesh, type Scene, type Material,
+  Vector3, Matrix, Quaternion, TransformNode, MeshBuilder, Ray,
+  type AbstractMesh, type Mesh, type Scene, type Material,
 } from "@babylonjs/core";
 import {
   AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel, Image,
@@ -29,6 +29,7 @@ import { DEFAULT_ENTITY_ICONS } from "@/config/AppConfig";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import { categoryForEntity } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
+import { RoomHighlight } from "./RoomHighlight";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 0.85;
@@ -61,6 +62,25 @@ const LABEL_ANCHOR_MARGIN = 0.12;
 const LABEL_HEIGHT_PX = 76;
 // Height of the value pill (e.g. "42%", "21°") shown under the badge.
 const VALUE_CHIP_HEIGHT_PX = 18;
+
+// ── Camera motion-detection beam ─────────────────────────────────────────
+// A simulated "diffused red light beam" pointing the way a camera prop was
+// rotated in SweetHome 3D (see sh3dParser's `angle`), toggled by that
+// camera's linked motion binary_sensor (EntityMapping.motionEntityId). It is
+// a translucent unlit cone, not a real light — no shadow map, no surface
+// interaction — matching how MarkerManager's marker orbs are built. A camera
+// only has a flat plan-rotation (no elevation/tilt data), so the beam is
+// always horizontal; that's an honest simplification, not a bug.
+const BEAM_COLOR = new Color3(0.95, 0.15, 0.12);
+const BEAM_TIP_DIAMETER = 0.08;
+const BEAM_END_DIAMETER = 1.6;
+// How far the beam reaches before being clipped by a single raycast against
+// the villa's structural meshes at build time (walls, furniture — anything
+// that isn't a bound entity; see `shadowCasters`). Cameras aimed at open
+// outdoor space use the full length; ones aimed into a room stop at the wall.
+const BEAM_MAX_LENGTH = 6;
+const BEAM_BASE_ALPHA = 0.16;
+const BEAM_PULSE_ALPHA = 0.4;
 
 interface LabelControls {
   container: StackPanel;
@@ -160,6 +180,20 @@ export class EntityVisuals {
   private iconUserScale = 1;
   private iconZoomScale = 1;
 
+  /** camera entity_id -> horizontal world-space facing direction, computed by
+   *  SceneManager from the sh3d plan `angle` (see setCameraDirections). */
+  private cameraDirections = new Map<string, { x: number; z: number }>();
+  private beams = new Map<string, { mesh: Mesh; material: StandardMaterial }>();
+  /** Camera entity_ids whose beam is currently pulsing (motion detected). */
+  private beamsActive = new Set<string>();
+  /** motion binary_sensor entity_id -> camera entity_ids it drives (see
+   *  EntityMapping.motionEntityId). Rebuilt from config.entityMap on every
+   *  indexMeshes() (structural entityMap edits re-trigger that already). */
+  private motionToCameraIds = new Map<string, string[]>();
+  /** Floor-glow overlay for physical (non-camera) motion/presence sensors —
+   *  a room, not a direction, is the natural signal for those. */
+  private roomHighlight: RoomHighlight;
+
   constructor(
     scene: Scene,
     config: AppConfig,
@@ -173,6 +207,7 @@ export class EntityVisuals {
     this.onEntityPicked = onEntityPicked ?? null;
     // A long-press opens the full detail panel; fall back to the tap handler.
     this.onEntityLongPicked = onEntityLongPicked ?? onEntityPicked ?? null;
+    this.roomHighlight = new RoomHighlight(scene, requestRender);
     scene.registerBeforeRender(() => {
       this.animatePulse();
       this.cullLabels();
@@ -211,6 +246,7 @@ export class EntityVisuals {
     // Dispose previously created light sources + shadow maps before re-indexing.
     this.disposeLights();
     this.disposeLabelAnchors();
+    this.disposeBeams();
     this.pulsing.clear();
     this.byEntity.clear();
     this.mapping.clear();
@@ -304,7 +340,21 @@ export class EntityVisuals {
     scene.blockMaterialDirtyMechanism = false;
 
     this.buildLabelAnchors();
+    this.buildMotionToCameraIndex();
     if (this.config.showEntityLabels) this.rebuildLabels();
+  }
+
+  /** motion binary_sensor -> camera(s) it drives, from the FULL entityMap (not
+   *  just meshes indexed in THIS glb) so the link works regardless of which
+   *  side has a 3D mesh. Cheap lookup rebuild — safe to redo on every index. */
+  private buildMotionToCameraIndex(): void {
+    this.motionToCameraIds.clear();
+    for (const map of Object.values(this.config.entityMap)) {
+      if (map.type !== "camera" || !map.motionEntityId) continue;
+      const list = this.motionToCameraIds.get(map.motionEntityId) ?? [];
+      list.push(map.entityId);
+      this.motionToCameraIds.set(map.motionEntityId, list);
+    }
   }
 
   /** Tear down all entity light sources and their shadow generators. */
@@ -315,25 +365,33 @@ export class EntityVisuals {
     this.meshLights.clear();
   }
 
+  /** World-space bounding box spanning ALL of an entity's meshes merged (e.g.
+   *  a curtain rail + fabric, or several bedside lamps under one entity) —
+   *  shared by the label-anchor and camera-beam placement, both of which need
+   *  "the whole asset's" box, not just whichever mesh happened to be first. */
+  private mergedWorldBounds(meshes: AbstractMesh[]): { min: Vector3; max: Vector3 } | null {
+    let min: Vector3 | null = null;
+    let max: Vector3 | null = null;
+    for (const m of meshes) {
+      m.computeWorldMatrix(true);
+      const bb = m.getBoundingInfo().boundingBox;
+      min = min ? Vector3.Minimize(min, bb.minimumWorld) : bb.minimumWorld.clone();
+      max = max ? Vector3.Maximize(max, bb.maximumWorld) : bb.maximumWorld.clone();
+    }
+    return min && max ? { min, max } : null;
+  }
+
   /** One invisible anchor per mesh-bound entity, positioned at the top-centre
-   *  of that entity's WHOLE bounding box (all its meshes merged — e.g. a
-   *  curtain rail + fabric, or several bedside lamps under one entity — not
-   *  just whichever mesh happened to be first), plus a small clearance
-   *  margin. This is real geometry, computed once from the loaded model, so
-   *  the label naturally sits close to each asset regardless of how tall it
-   *  is or how high up it's mounted — no per-object hand-tuning. */
+   *  of that entity's WHOLE bounding box, plus a small clearance margin. This
+   *  is real geometry, computed once from the loaded model, so the label
+   *  naturally sits close to each asset regardless of how tall it is or how
+   *  high up it's mounted — no per-object hand-tuning. */
   private buildLabelAnchors(): void {
     for (const [entityId, meshes] of this.byEntity) {
       if (!meshes.length) continue;
-      let min: Vector3 | null = null;
-      let max: Vector3 | null = null;
-      for (const m of meshes) {
-        m.computeWorldMatrix(true);
-        const bb = m.getBoundingInfo().boundingBox;
-        min = min ? Vector3.Minimize(min, bb.minimumWorld) : bb.minimumWorld.clone();
-        max = max ? Vector3.Maximize(max, bb.maximumWorld) : bb.maximumWorld.clone();
-      }
-      if (!min || !max) continue;
+      const bounds = this.mergedWorldBounds(meshes);
+      if (!bounds) continue;
+      const { min, max } = bounds;
       const node = new TransformNode(`lblAnchor_${entityId}`, this.scene);
       node.position.set((min.x + max.x) / 2, max.y + LABEL_ANCHOR_MARGIN, (min.z + max.z) / 2);
       this.labelAnchors.set(entityId, node);
@@ -345,6 +403,95 @@ export class EntityVisuals {
     this.labelAnchors.clear();
   }
 
+  /** Replace the calibrated room polygons (world space) — forwarded straight
+   *  to RoomHighlight. Called by SceneManager after every plan→world re-fit
+   *  (load + mirror-flip toggles), same trigger as the teleport grid. */
+  setRoomPolygons(polys: { name: string; pts: { x: number; z: number }[] }[]): void {
+    this.roomHighlight.setRooms(polys);
+  }
+
+  /** Replace camera facing directions (world-space, horizontal) and rebuild
+   *  every beam mesh. Called by SceneManager right after setRoomPolygons, from
+   *  the same re-fit — a camera's direction depends on the same plan→world
+   *  transform the room polygons do. */
+  setCameraDirections(dirs: Map<string, { x: number; z: number }>): void {
+    this.cameraDirections = dirs;
+    this.buildCameraBeams();
+  }
+
+  /** One translucent cone per camera entity that has BOTH a resolved mesh
+   *  position (byEntity, from indexMeshes) and a facing direction (from
+   *  setCameraDirections) — cameras with no sh3d angle data yet simply get no
+   *  beam, rather than guessing a direction. Length is clipped by a single
+   *  raycast against the villa's structural meshes so it stops at the near
+   *  wall instead of poking through it forever. */
+  private buildCameraBeams(): void {
+    this.disposeBeams();
+    if (this.cameraDirections.size === 0) return;
+    const casters = new Set(this.shadowCasters);
+
+    for (const [entityId, meshes] of this.byEntity) {
+      const map = this.mapping.get(entityId);
+      if (!map || map.type !== "camera" || !meshes.length) continue;
+      const dir2 = this.cameraDirections.get(entityId);
+      if (!dir2) continue;
+      const planar = Math.hypot(dir2.x, dir2.z);
+      if (planar < 1e-6) continue; // no meaningful rotation authored yet
+      const direction = new Vector3(dir2.x / planar, 0, dir2.z / planar);
+
+      const bounds = this.mergedWorldBounds(meshes);
+      if (!bounds) continue;
+      const origin = Vector3.Center(bounds.min, bounds.max);
+
+      const ray = new Ray(origin.add(direction.scale(0.15)), direction, BEAM_MAX_LENGTH);
+      const hit = this.scene.pickWithRay(ray, (m) => casters.has(m));
+      const length = hit?.hit && hit.distance > 0.3 ? hit.distance * 0.95 : BEAM_MAX_LENGTH;
+
+      const mesh = MeshBuilder.CreateCylinder(`beam_${entityId}`, {
+        diameterTop: BEAM_END_DIAMETER, diameterBottom: BEAM_TIP_DIAMETER,
+        height: length, tessellation: 14,
+      }, this.scene);
+      // Re-pivot from "centred on Y" (Babylon's default) to "narrow tip at the
+      // origin", so positioning the mesh at the camera puts the TIP there,
+      // not the middle of the cone.
+      mesh.bakeTransformIntoVertices(Matrix.Translation(0, length / 2, 0));
+      const rot = new Quaternion();
+      Quaternion.FromUnitVectorsToRef(Vector3.Up(), direction, rot);
+      mesh.rotationQuaternion = rot;
+      mesh.position = origin.clone();
+
+      const material = new StandardMaterial(`beamMat_${entityId}`, this.scene);
+      material.disableLighting = true;
+      material.emissiveColor = BEAM_COLOR;
+      material.alpha = 0;
+      material.backFaceCulling = false;
+      mesh.material = material;
+      mesh.isPickable = false;
+      mesh.metadata = { isMarker: true }; // exclude from shadow casters/IBL, like markers
+
+      this.beams.set(entityId, { mesh, material });
+    }
+  }
+
+  private disposeBeams(): void {
+    for (const { mesh, material } of this.beams.values()) { mesh.dispose(); material.dispose(); }
+    this.beams.clear();
+    this.beamsActive.clear();
+  }
+
+  /** Turn a camera's beam on/off (driven by its linked motion sensor state). */
+  private setBeamActive(entityId: string, on: boolean): void {
+    if (!this.beams.has(entityId)) return;
+    if (on) {
+      this.beamsActive.add(entityId);
+    } else {
+      this.beamsActive.delete(entityId);
+      const b = this.beams.get(entityId);
+      if (b) b.material.alpha = 0;
+    }
+    this.requestRender();
+  }
+
   hasEntity(entityId: string): boolean {
     return this.byEntity.has(entityId);
   }
@@ -354,8 +501,13 @@ export class EntityVisuals {
     return Array.from(this.mapping.values());
   }
 
-  /** Called for every state change. No-op if the entity has no mesh. */
+  /** Called for every state change. */
   apply(entity: HassEntity): void {
+    // Motion/presence routing (camera beam or room glow) runs regardless of
+    // whether THIS entity has a mesh of its own — a plain HA binary_sensor
+    // driving either effect typically isn't a modelled 3D object at all.
+    this.applyMotionRouting(entity);
+
     const meshes = this.byEntity.get(entity.entity_id);
     const map = this.mapping.get(entity.entity_id);
     if (!meshes || !map) return;
@@ -366,6 +518,25 @@ export class EntityVisuals {
     }
     this.updateLabel(entity.entity_id, map.type, entity);
     this.requestRender();
+  }
+
+  /** Route a state change to whichever motion-driven visual it feeds:
+   *  - linked to a camera's motionEntityId  -> that camera's detection beam
+   *  - otherwise, a binary_sensor with a Room set -> that room's floor glow
+   *  A sensor already driving a camera beam does NOT also glow its room —
+   *  the two are separate treatments for separate device kinds (see the
+   *  camera-vs-physical-sensor design discussion), not a doubled-up alert. */
+  private applyMotionRouting(entity: HassEntity): void {
+    const on = entity.state === "on";
+    const cameraIds = this.motionToCameraIds.get(entity.entity_id);
+    if (cameraIds) {
+      for (const camId of cameraIds) this.setBeamActive(camId, on);
+      return;
+    }
+    const map = this.config.entityMap[entity.entity_id];
+    if (map?.type === "binary_sensor" && map.room) {
+      this.roomHighlight.setActive(map.room, on);
+    }
   }
 
   /** Replace the set of floating marker anchors (called whenever MarkerManager
@@ -814,11 +985,18 @@ export class EntityVisuals {
   }
 
   private animatePulse(): void {
-    if (this.pulsing.size === 0) return;
+    if (this.pulsing.size === 0 && this.beamsActive.size === 0) return;
     this.pulseT += 0.06;
     const intensity = (Math.sin(this.pulseT) + 1) / 2; // 0..1
     const col = new Color3(intensity, 0, 0);
     for (const mesh of this.pulsing) this.emissiveOf(mesh)?.(col);
+    if (this.beamsActive.size > 0) {
+      const alpha = BEAM_BASE_ALPHA + (BEAM_PULSE_ALPHA - BEAM_BASE_ALPHA) * intensity;
+      for (const id of this.beamsActive) {
+        const b = this.beams.get(id);
+        if (b) b.material.alpha = alpha;
+      }
+    }
     this.requestRender();
   }
 }

@@ -101,6 +101,7 @@ export default function ConfigEditor() {
               <th>Category</th>
               <th>Label</th>
               <th>Room</th>
+              <th>Motion sensor</th>
               <th>Confirm</th>
             </tr>
           </thead>
@@ -184,6 +185,20 @@ export default function ConfigEditor() {
                 </td>
                 <td data-label="Label"><input value={m.label} onChange={(e) => patch(key, { label: e.target.value })} /></td>
                 <td data-label="Room"><input value={m.room} onChange={(e) => patch(key, { room: e.target.value })} /></td>
+                <td data-label="Motion sensor" style={{ minWidth: 180 }}>
+                  {m.type === "camera" ? (
+                    <EntityPicker
+                      value={m.motionEntityId}
+                      onChange={(id) => patch(key, { motionEntityId: id })}
+                      domains={["binary_sensor"]}
+                      allowCustom
+                      hideCurrentLabel
+                      placeholder="Motion/occupancy sensor…"
+                    />
+                  ) : (
+                    <span className="muted" style={{ fontSize: 12 }}>—</span>
+                  )}
+                </td>
                 <td data-label="Confirm" className="center">
                   <input
                     type="checkbox"
