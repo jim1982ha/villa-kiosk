@@ -659,9 +659,16 @@ export class SceneManager {
    *  changes on its own (e.g. the user just added "Staircase") — adding a
    *  named room shouldn't need a full model reload to start glowing. */
   private syncRoomPoints(): void {
+    // teleportPoints store the CAMERA's eye position (see setAnchorHere/
+    // addRoomHere), not the floor — same relation CameraController.groundCamera
+    // uses in reverse (floorY = eyeY - eyeHeight). A room like "Staircase" is
+    // anchored well above the recentred floor's y≈0, so the glow patch must
+    // use ITS OWN local floor height, not the flat offset real room polygons
+    // use, or it renders buried inside the stairs/slab below and never shows.
+    const eyeHeight = this.config.eyeHeight ?? 1.7;
     const extras = this.config.teleportPoints
       .filter((p) => !this.lastRoomPolyNames.has(p.name.trim().toLowerCase()))
-      .map((p) => ({ name: p.name, x: p.position.x, z: p.position.z }));
+      .map((p) => ({ name: p.name, x: p.position.x, z: p.position.z, floorY: p.position.y - eyeHeight }));
     this.visuals.setRoomPoints(extras);
   }
 

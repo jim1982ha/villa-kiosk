@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.4.53
+
+### Fix: "Staircase" point-room glow was still invisible after 2.4.52
+- 2.4.52 added a synthetic glow patch for Rooms-menu viewpoints with no real
+  sh3d polygon (e.g. a staircase landing), but drew every such patch at the
+  same flat height used for ground-floor room polygons (y≈0). A staircase
+  anchor is captured well above that — the patch ended up buried inside the
+  stairs/slab below and never became visible, even though the sensor's Room
+  glow was correctly turned on.
+- `RoomHighlight.setPointRooms` now draws each patch at ITS OWN local floor
+  height, derived the same way `CameraController.groundCamera()` does in
+  reverse (floor Y = the anchor's stored camera Y minus eye height).
+
+### Fix: long-press to re-anchor a room did nothing on the kiosk touchscreen
+- The Rooms-menu cards used `touch-action: manipulation`, which still lets
+  the browser treat finger movement on the card as the start of a scroll (the
+  grid scrolls vertically). Ordinary touch jitter during the 480ms hold was
+  enough to fire `pointercancel` and kill the long-press timer before it
+  could complete — right-click on desktop was unaffected, so this only showed
+  up on the touch kiosk. Cards now use `touch-action: none` so a press that
+  starts on a card can't be stolen by a scroll gesture.
+
 ## 2.4.52
 
 ### Room-floor glow now also works for rooms with no drawn sh3d shape

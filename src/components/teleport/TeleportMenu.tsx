@@ -130,7 +130,14 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
             className="tp-card"
             style={{
               ...(p.thumbnail ? { backgroundImage: `url(${p.thumbnail})` } : undefined),
-              touchAction: "manipulation",
+              // "manipulation" still lets the browser start a native pan/scroll
+              // on this element (the grid container is scroll-y), and normal
+              // finger tremor over the 480ms hold is enough for that to win —
+              // firing pointercancel and killing the long-press timer before it
+              // ever completes ("nothing happens" on a touch kiosk). "none"
+              // keeps a touch that starts on a card from being claimed as a
+              // scroll gesture; the gaps between cards are still free to scroll.
+              touchAction: "none",
               WebkitTouchCallout: "none",
             }}
             onClick={() => onCardClick(p)}

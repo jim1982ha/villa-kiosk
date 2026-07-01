@@ -61,13 +61,13 @@ export class RoomHighlight {
     return name.trim().toLowerCase();
   }
 
-  private buildMesh(key: string, pts: Pt2[]): RoomEntry | null {
+  private buildMesh(key: string, pts: Pt2[], y: number): RoomEntry | null {
     if (pts.length < 3) return null;
     const tris = earClipTriangulate(pts);
     if (tris.length === 0) return null;
 
     const positions: number[] = [];
-    for (const p of pts) positions.push(p.x, FLOOR_Y_OFFSET, p.z);
+    for (const p of pts) positions.push(p.x, y, p.z);
     const indices: number[] = [];
     for (const [a, b, c] of tris) indices.push(a, b, c);
     // Both winding directions so the glow reads from any camera angle
@@ -102,7 +102,7 @@ export class RoomHighlight {
     this.disposeMap(this.polyRooms);
     for (const room of polys) {
       const key = RoomHighlight.normalise(room.name);
-      const entry = this.buildMesh(key, room.pts);
+      const entry = this.buildMesh(key, room.pts, FLOOR_Y_OFFSET);
       if (entry) this.polyRooms.set(key, entry);
     }
   }
@@ -112,8 +112,16 @@ export class RoomHighlight {
    *  staircase landing added via "Add room here" that was never drawn as an
    *  enclosed room in SweetHome. Called on load/recalibration AND live
    *  whenever config.teleportPoints changes (adding a room shouldn't need a
-   *  full model reload to start glowing). */
-  setPointRooms(points: { name: string; x: number; z: number }[]): void {
+   *  full model reload to start glowing).
+   *
+   *  `floorY` is the LOCAL floor height under that point (SceneManager derives
+   *  it from the anchor's stored camera Y minus eye height), not the global
+   *  recentred-floor 0. A staircase landing sits well above y≈0, so drawing
+   *  the patch at the flat FLOOR_Y_OFFSET used for ground-floor room polygons
+   *  buried it inside the stairs/slab below — invisible even though `active`
+   *  was correctly set (this is why the sensor's Room said "Staircase" but
+   *  nothing visibly glowed). */
+  setPointRooms(points: { name: string; x: number; z: number; floorY: number }[]): void {
     this.disposeMap(this.pointRooms);
     for (const p of points) {
       const key = RoomHighlight.normalise(p.name);
@@ -122,7 +130,7 @@ export class RoomHighlight {
         const a = (i / POINT_ROOM_SEGMENTS) * Math.PI * 2;
         return { x: p.x + Math.cos(a) * POINT_ROOM_RADIUS, z: p.z + Math.sin(a) * POINT_ROOM_RADIUS };
       });
-      const entry = this.buildMesh(key, circle);
+      const entry = this.buildMesh(key, circle, p.floorY + FLOOR_Y_OFFSET);
       if (entry) this.pointRooms.set(key, entry);
     }
   }

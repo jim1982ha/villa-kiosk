@@ -415,7 +415,7 @@ export class EntityVisuals {
    *  patch. Called on every re-fit AND live whenever config.teleportPoints
    *  changes (e.g. the user just added "Staircase" via the Rooms menu — that
    *  shouldn't need a model reload to start glowing). */
-  setRoomPoints(points: { name: string; x: number; z: number }[]): void {
+  setRoomPoints(points: { name: string; x: number; z: number; floorY: number }[]): void {
     this.roomHighlight.setPointRooms(points);
   }
 
