@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.4.44
+
+### State labels: devices placed as control markers had no tag at all
+- **Most non-light devices never showed a state label, no matter how much
+  space was on screen.** The tag overlay only ever built badges for entities
+  tied to a real mesh in the 3D model; devices placed as floating control
+  markers (the normal path for switches, sensors, thermostats, locks — anything
+  without its own modelled geometry) got their small glowing orb but no tag.
+  Markers now feed the same badge pipeline as mesh-bound entities, so they get
+  a proper icon + state-coloured tag too.
+- **Tags were appearing/disappearing while panning the bird's-eye view.** The
+  default whole-villa overview rendered every badge at full configured size —
+  the single most crowded view — so the overlap-avoiding declutter had to hide
+  most of them down to about one per room. Badges now start smaller on the
+  default overview and grow as you zoom into a room; the base icon size was
+  also turned down a notch (Settings → Icon size still overrides it).
+
 ## 2.4.43
 
 ### State labels: fix missing badges and remaining overlaps
