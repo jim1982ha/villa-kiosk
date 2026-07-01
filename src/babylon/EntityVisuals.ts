@@ -58,14 +58,10 @@ interface LabelControls {
   valueText: TextBlock;
   anchor: AbstractMesh;
   type: EntityType;
-  priority: number;
 }
 
 /** A live state distilled to one of four visual kinds the badge colour-codes. */
 type BadgeKind = "on" | "off" | "alert" | "unavailable";
-
-/** Declutter priority — when badges overlap on screen, higher wins the slot. */
-const KIND_PRIORITY: Record<BadgeKind, number> = { alert: 3, on: 2, off: 1, unavailable: 0 };
 
 // Modern badge palette — a dark "glass" disc with a state-coloured ring. A neutral
 // slate base plus a single bright accent per state reads cleanly on both the light
@@ -159,7 +155,7 @@ export class EntityVisuals {
     this.onEntityLongPicked = onEntityLongPicked ?? onEntityPicked ?? null;
     scene.registerBeforeRender(() => {
       this.animatePulse();
-      this.declutterLabels();
+      this.cullLabels();
     });
   }
 
@@ -457,7 +453,7 @@ export class EntityVisuals {
       valueWrap.addControl(valueText);
       container.addControl(valueWrap);
 
-      this.labels.set(entityId, { container, badge, glyph, valueWrap, valueText, anchor, type, priority: 1 });
+      this.labels.set(entityId, { container, badge, glyph, valueWrap, valueText, anchor, type });
 
       // Repaint from the last known state so a rebuild (toggle on / icon edit)
       // shows live status immediately instead of an idle default.
@@ -476,7 +472,6 @@ export class EntityVisuals {
     lbl.badge.alpha = style.alpha;
     lbl.badge.shadowColor = style.glow;
     lbl.badge.shadowBlur = kind === "on" || kind === "alert" ? 10 : 6;
-    lbl.priority = KIND_PRIORITY[kind];
     lbl.glyph.source = glyphDataUrl(this.iconFor(type)); // honour live icon edits
     lbl.glyph.alpha = kind === "unavailable" ? 0.6 : 1;
 
@@ -514,22 +509,18 @@ export class EntityVisuals {
     });
   }
 
-  /** Screen-space label declutter. Projects every badge anchor to screen space and
-   *  greedily keeps the highest-priority label in each cluster (alert > on > off >
-   *  unreachable), hiding lower-priority badges that would overlap and any anchor
-   *  behind the camera. Zooming in (bigger scale, anchors spread apart) naturally
-   *  reveals the hidden ones again, so nothing is permanently lost.
-   *
-   *  Overlap is tested as an axis-aligned bounding-box (not a circular radius):
-   *  the badge+value-chip footprint is taller than it is wide (a 40px circle
-   *  stacked over a ~19px chip), so a radius-based test either under-hides
-   *  (letting badges clip into each other at steep camera angles where several
-   *  project close together vertically) or over-hides (padding out the radius
-   *  to cover the tall axis, which then wrongly hides badges that are merely
-   *  side-by-side). The box is sized off the actual rendered geometry in
-   *  rebuildLabels (40px badge, 3px spacing, 19px value chip), so it tracks
-   *  reality instead of a screen-height-derived guess. */
-  private declutterLabels(): void {
+  /** Deliberately NOT a "declutter": every registered device's tag stays
+   *  visible all the time — that's the point of the "Show device state
+   *  labels" toggle. An earlier version greedily hid same-screen-cluster
+   *  badges to avoid overlap, but in a villa where several devices sit
+   *  within a couple of screen-pixels of each other at any reasonable
+   *  zoom, that reliably hid most non-priority tags no matter how the
+   *  camera moved — worse than the overlap it was trying to prevent. The
+   *  only thing this still culls is an anchor that projects BEHIND the
+   *  camera (z outside [0,1]): that's not clutter avoidance, it's a
+   *  genuinely invalid screen position that would otherwise place a badge
+   *  at a nonsensical spot on screen. */
+  private cullLabels(): void {
     if (!this.config.showEntityLabels || this.labels.size === 0) return;
     const cam = this.scene.activeCamera;
     if (!cam) return;
@@ -539,34 +530,9 @@ export class EntityVisuals {
     const vp = cam.viewport.toGlobal(w, h);
     const tm = this.scene.getTransformMatrix();
 
-    const items: { lbl: LabelControls; x: number; y: number; behind: boolean }[] = [];
     for (const lbl of this.labels.values()) {
       const p = Vector3.Project(lbl.anchor.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
-      items.push({ lbl, x: p.x, y: p.y, behind: p.z < 0 || p.z > 1 });
-    }
-    // Highest priority first so the most important badge claims a contested slot.
-    items.sort((a, b) => b.lbl.priority - a.lbl.priority);
-
-    const s = this.iconUserScale * this.iconZoomScale;
-    // Required centre-to-centre separation to avoid a visual overlap: the sum of
-    // two badges' half-widths/half-heights, i.e. one full badge-footprint span,
-    // plus a small breathing-room margin.
-    const BADGE_DIAM = 40, CHIP_H = 19, SPACING = 3, MARGIN = 1.15;
-    const minDX = BADGE_DIAM * MARGIN * s;
-    const minDY = (BADGE_DIAM + SPACING + CHIP_H) * MARGIN * s;
-    const placed: { x: number; y: number }[] = [];
-    for (const it of items) {
-      if (it.behind) { it.lbl.container.isVisible = false; continue; }
-      let clash = false;
-      for (const p of placed) {
-        if (Math.abs(p.x - it.x) < minDX && Math.abs(p.y - it.y) < minDY) { clash = true; break; }
-      }
-      if (clash) {
-        it.lbl.container.isVisible = false;
-      } else {
-        it.lbl.container.isVisible = true;
-        placed.push({ x: it.x, y: it.y });
-      }
+      lbl.container.isVisible = p.z >= 0 && p.z <= 1;
     }
   }
 

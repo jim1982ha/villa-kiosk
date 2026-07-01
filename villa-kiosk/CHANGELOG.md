@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.4.45
+
+### State labels: removed the overlap declutter entirely — every tag now always shows
+- **Devices were still missing tags no matter how you zoomed or panned.** The
+  screen-space "declutter" pass hid any badge that clashed on screen with a
+  higher-priority one (alert/on beats off), and in a villa with several
+  devices a few screen-pixels apart, that reliably reduced a room down to
+  about one visible tag regardless of camera angle. Removed it: with "Show
+  device state labels" on, EVERY registered device now gets a tag, all the
+  time — no hiding, no priority contest. The only thing still culled is a
+  badge whose device projects directly behind the camera (a genuinely
+  invalid screen position, not clutter).
+- If a device still shows no tag at all after this, it means that entity
+  isn't bound to anything in the 3D scene yet (no mesh named with its
+  entity_id, no tap-to-bind, no dropped marker) — check Settings → Bindings /
+  Markers for that entity.
+
 ## 2.4.44
 
 ### State labels: devices placed as control markers had no tag at all
