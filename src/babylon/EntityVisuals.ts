@@ -57,6 +57,10 @@ interface LabelControls {
   type: EntityType;
 }
 
+/** Downward optical-centre correction for the emoji glyph (font baseline sits
+ *  its visual mass high in the circle). Tuned against the 19px glyph size. */
+const GLYPH_BASELINE_NUDGE_PX = 2;
+
 /** A live state distilled to one of four visual kinds the badge colour-codes. */
 type BadgeKind = "on" | "off" | "alert" | "unavailable";
 
@@ -357,6 +361,14 @@ export class EntityVisuals {
       glyph.text = this.iconFor(map.type);
       glyph.fontSize = 19;
       glyph.color = "#f5edd8";
+      glyph.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
+      glyph.textVerticalAlignment = TextBlock.VERTICAL_ALIGNMENT_CENTER;
+      glyph.resizeToFit = false;
+      // Emoji render on the text baseline (their visual mass sits above it), so
+      // pure line-box centering leaves them looking high in the circle. Nudge
+      // down ~1px per 10px of font to sit them on the true optical centre. The
+      // offset lives inside the scaled container, so it tracks size/zoom.
+      glyph.top = `${GLYPH_BASELINE_NUDGE_PX}px`;
       badge.addControl(glyph);
 
       const valueText = new TextBlock(`lbl_value_${entityId}`);
