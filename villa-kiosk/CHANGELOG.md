@@ -1,5 +1,51 @@
 # Changelog
 
+## 2.4.42
+
+### Modern bright theme + Light / Dark / Auto selector
+- **Reworked the whole look away from the brown/gold palette to a clean,
+  modern sky-blue theme.** Every surface, hairline, scrim and accent is now a
+  semantic CSS variable, so the entire UI restyles by swapping one block.
+- **New theme selector in Settings → Appearance:** Light, Dark or Auto. Auto
+  follows the device's system light/dark preference (`prefers-color-scheme`).
+  The choice applies instantly and persists.
+
+### Robust, modern state-label badges
+- **Rebuilt the in-scene state labels.** Emoji glyphs are now pre-rendered to a
+  pixel-centered canvas bitmap (`textBaseline="middle"`) and shown via a GUI
+  `Image`, so icons sit dead-centre in their badge on every platform —
+  replacing the fragile per-font baseline nudge.
+- **Cleaner badge design:** a subtle dark disc with a state-coloured ring and
+  glow (sky = on, slate = off, rose = alert, faded = unavailable) plus an
+  adaptive value chip below.
+- **Professional overlap handling:** labels now declutter in screen space —
+  when the camera angle stacks badges, the highest-priority one
+  (alert > on > off > unavailable) stays and the clashing lower-priority ones
+  hide, revealing again as you zoom in. Nothing is permanently lost.
+
+### Long-press a state label to open the full control panel
+- Badges now distinguish a tap (quick toggle / open) from a long-press
+  (480 ms → full detail panel from the bottom), matching the 3D-object gesture.
+
+### HUD layout restructure
+- **Time** now sits directly right of the villa name + connection dot.
+- **Settings** moved to the far right of the top bar, right of the All Clear
+  badge; the top-bar **Config Editor** button was removed and now lives inside
+  **Settings**.
+- **Overview** and **Rooms** are now a single vertically-stacked block on the
+  left, directly under the 1F / 2F floor switch.
+- Tablet/desktop spacing polished; the phone layout keeps icon-only controls.
+
+### Settings: model details as an (i) tooltip
+- Replaced the large green "Central model active" text block with a compact
+  status line plus an **(i)** button that reveals the full model details
+  (path, size, mesh count, SHA-256, source, SH3D) on hover/focus.
+
+### Fixes
+- After uploading a new GLB from the Settings UI, the app again lands in the
+  bird's-eye **overview** — matching a fresh add-on launch — instead of the
+  first-person view.
+
 ## 2.4.41
 
 ### Fix "Failed to load the 3D model — HTTP 403" after uploading from the UI

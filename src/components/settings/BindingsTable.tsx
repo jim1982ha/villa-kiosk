@@ -67,7 +67,7 @@ export default function BindingsTable() {
             key={mesh}
             style={{
               padding: "14px 0",
-              borderTop: "1px solid rgba(255,255,255,0.07)",
+              borderTop: "1px solid var(--hairline)",
             }}
           >
             {/* Row 1 — object ↔ entity */}
@@ -173,7 +173,7 @@ export default function BindingsTable() {
             style={{
               gap: 12,
               padding: "10px 0",
-              borderTop: "1px solid rgba(255,255,255,0.06)",
+              borderTop: "1px solid var(--hairline)",
             }}
           >
             <div

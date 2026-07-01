@@ -187,7 +187,7 @@ export default function ConfigEditor() {
       )}
 
       {/* Pre-configure a new entity */}
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--hairline)" }}>
         <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
           Pre-configure a new entity
         </label>

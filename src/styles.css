@@ -1,27 +1,49 @@
-/* Villa Kiosk — warm tropical theme. Plain CSS + custom properties only. */
+/* Villa Kiosk — modern, bright theme. Plain CSS + custom properties only.
+ *
+ * Theming is fully variable-driven. The default `:root` is the LIGHT palette;
+ * `:root[data-theme="dark"]` overrides for dark; and `data-theme="auto"` follows
+ * the OS preference via a prefers-color-scheme media query. Every colour below is
+ * expressed as a semantic variable so a whole theme swaps by redefining the block. */
 
 :root {
-  /* Backgrounds */
-  --bg-panel: rgba(28, 20, 12, 0.9);
-  --bg-overlay: rgba(18, 12, 6, 0.96);
-  --bg-card: rgba(42, 30, 18, 0.85);
-  --bg-input: rgba(60, 44, 28, 0.7);
+  /* ---- Light theme (default) ---- */
+  /* Surfaces */
+  --bg-base: #eef2f8;
+  --bg-panel: rgba(255, 255, 255, 0.82);
+  --bg-overlay: rgba(255, 255, 255, 0.94);
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --bg-input: rgba(15, 23, 42, 0.06);
 
-  /* Accents */
-  --accent-gold: #c9a84c;
-  --accent-warm: #e8a87c;
-  --accent-teal: #5ba8a0;
+  /* Accents — a clean, modern sky-blue (matches the in-scene state badges). */
+  --accent: #0ea5e9;
+  --accent-strong: #0284c7;
+  --accent-warm: #f59e0b;
+  --accent-teal: #14b8a6;
+  /* Legacy alias so existing rules keep working. */
+  --accent-gold: var(--accent);
 
   /* Text */
-  --text-primary: #f5edd8;
-  --text-secondary: #a89880;
-  --text-dim: #6b5a48;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-dim: #94a3b8;
+  --text-on-accent: #ffffff;
 
   /* Status */
-  --status-on: #6baa75;
-  --status-off: #4a4035;
-  --status-warning: #e8a84c;
-  --status-danger: #c0504d;
+  --status-on: #16a34a;
+  --status-off: #cbd5e1;
+  --status-warning: #d97706;
+  --status-danger: #dc2626;
+
+  /* Hairlines, scrims, chips, shadows — theme-aware neutrals. */
+  --hairline: rgba(15, 23, 42, 0.1);
+  --hairline-strong: rgba(15, 23, 42, 0.16);
+  --scrim: rgba(15, 23, 42, 0.25);
+  --scrim-strong: rgba(15, 23, 42, 0.45);
+  --chip-bg: rgba(255, 255, 255, 0.72);
+  --topbar-fade: rgba(255, 255, 255, 0.72);
+  --card-scrim: rgba(15, 23, 42, 0.55);
+  --shadow: rgba(15, 23, 42, 0.18);
+  --ring: var(--bg-base);
 
   /* Typography */
   --font-display: "Cormorant Garamond", Georgia, serif;
@@ -31,6 +53,78 @@
   --panel-radius: 16px;
   --panel-padding: 24px;
   --touch-min: 44px;
+}
+
+/* ---- Dark theme (explicit) ---- */
+:root[data-theme="dark"] {
+  --bg-base: #0b1220;
+  --bg-panel: rgba(15, 23, 42, 0.82);
+  --bg-overlay: rgba(15, 23, 42, 0.94);
+  --bg-card: rgba(30, 41, 59, 0.85);
+  --bg-input: rgba(148, 163, 184, 0.14);
+
+  --accent: #38bdf8;
+  --accent-strong: #0ea5e9;
+  --accent-warm: #fbbf24;
+  --accent-teal: #2dd4bf;
+  --accent-gold: var(--accent);
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-dim: #64748b;
+  --text-on-accent: #08131f;
+
+  --status-on: #22c55e;
+  --status-off: #334155;
+  --status-warning: #fbbf24;
+  --status-danger: #f87171;
+
+  --hairline: rgba(148, 163, 184, 0.16);
+  --hairline-strong: rgba(148, 163, 184, 0.28);
+  --scrim: rgba(2, 6, 15, 0.5);
+  --scrim-strong: rgba(2, 6, 15, 0.72);
+  --chip-bg: rgba(15, 23, 42, 0.6);
+  --topbar-fade: rgba(2, 6, 15, 0.7);
+  --card-scrim: rgba(2, 6, 15, 0.85);
+  --shadow: rgba(0, 0, 0, 0.5);
+  --ring: var(--bg-base);
+}
+
+/* ---- Auto theme (follows the OS) ---- */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] {
+    --bg-base: #0b1220;
+    --bg-panel: rgba(15, 23, 42, 0.82);
+    --bg-overlay: rgba(15, 23, 42, 0.94);
+    --bg-card: rgba(30, 41, 59, 0.85);
+    --bg-input: rgba(148, 163, 184, 0.14);
+
+    --accent: #38bdf8;
+    --accent-strong: #0ea5e9;
+    --accent-warm: #fbbf24;
+    --accent-teal: #2dd4bf;
+    --accent-gold: var(--accent);
+
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-dim: #64748b;
+    --text-on-accent: #08131f;
+
+    --status-on: #22c55e;
+    --status-off: #334155;
+    --status-warning: #fbbf24;
+    --status-danger: #f87171;
+
+    --hairline: rgba(148, 163, 184, 0.16);
+    --hairline-strong: rgba(148, 163, 184, 0.28);
+    --scrim: rgba(2, 6, 15, 0.5);
+    --scrim-strong: rgba(2, 6, 15, 0.72);
+    --chip-bg: rgba(15, 23, 42, 0.6);
+    --topbar-fade: rgba(2, 6, 15, 0.7);
+    --card-scrim: rgba(2, 6, 15, 0.85);
+    --shadow: rgba(0, 0, 0, 0.5);
+    --ring: var(--bg-base);
+  }
 }
 
 * {
@@ -45,7 +139,7 @@ body,
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: #120c06;
+  background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-ui);
   -webkit-user-select: none;
@@ -90,10 +184,10 @@ button {
   transition: background 0.15s, transform 0.1s;
 }
 .btn:active { transform: scale(0.96); }
-.btn.primary { background: var(--accent-gold); color: #1c140c; font-weight: 600; }
-.btn.danger { background: var(--status-danger); }
-.btn.ghost { background: transparent; border: 1px solid var(--bg-input); }
-.btn.active { background: var(--accent-gold); color: #1c140c; }
+.btn.primary { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+.btn.danger { background: var(--status-danger); color: #fff; }
+.btn.ghost { background: transparent; border: 1px solid var(--hairline-strong); }
+.btn.active { background: var(--accent); color: var(--text-on-accent); }
 .btn:disabled { opacity: 0.4; pointer-events: none; }
 
 .icon-btn {
@@ -101,9 +195,10 @@ button {
   background: var(--bg-panel); backdrop-filter: blur(8px);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-primary);
+  border: 1px solid var(--hairline);
 }
 /* Lit state for toggle / open icon buttons (view mode, display toggles, menus). */
-.icon-btn.active { background: var(--accent-gold); color: #1c140c; }
+.icon-btn.active { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
 
 /* Grouped icon "sections" in the top bar — each set of related buttons sits in
    its own pill, so the categories read clearly without any text labels. */
@@ -111,14 +206,33 @@ button {
   display: flex; align-items: center; gap: 4px;
   background: var(--bg-panel); backdrop-filter: blur(8px);
   border-radius: 14px; padding: 4px;
+  border: 1px solid var(--hairline);
 }
 .hud-group .icon-btn {
   width: 38px; height: 38px; border-radius: 10px;
-  background: transparent; backdrop-filter: none;
+  background: transparent; backdrop-filter: none; border: none;
 }
 .hud-group .icon-btn:hover { background: var(--bg-input); }
-.hud-group .icon-btn.active { background: var(--accent-gold); color: #1c140c; }
-.hud-group .icon-btn.active:hover { background: var(--accent-gold); }
+.hud-group .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
+.hud-group .icon-btn.active:hover { background: var(--accent); }
+
+/* Vertically stacked HUD control block (Room + Switch View under the floor
+   switch, on the left). Full-width rows inside a single rounded pill. */
+.hud-stack {
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--bg-panel); backdrop-filter: blur(8px);
+  border-radius: 14px; padding: 4px;
+  border: 1px solid var(--hairline);
+}
+.hud-stack .icon-btn {
+  width: auto; height: 38px; border-radius: 10px;
+  padding: 0 12px; gap: 8px; justify-content: flex-start;
+  background: transparent; backdrop-filter: none; border: none;
+  font-size: 13px; font-weight: 500; color: var(--text-primary);
+}
+.hud-stack .icon-btn svg { flex: 0 0 auto; }
+.hud-stack .icon-btn:hover { background: var(--bg-input); }
+.hud-stack .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
 
 /* Mobile dropdown menus (Display / Build / Config collapse into these). */
 .hud-menu { position: relative; display: inline-flex; }
@@ -127,8 +241,8 @@ button {
   display: flex; flex-direction: column; gap: 2px;
   min-width: 220px; padding: 6px; z-index: 60;
   background: var(--bg-overlay); backdrop-filter: blur(12px);
-  border: 1px solid rgba(201, 168, 76, 0.25); border-radius: 12px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--hairline-strong); border-radius: 12px;
+  box-shadow: 0 8px 28px var(--shadow);
   animation: fadeIn 0.12s ease;
 }
 .hud-menu-item {
@@ -138,36 +252,35 @@ button {
 }
 .hud-menu-item:hover { background: var(--bg-input); }
 .hud-menu-item > svg { flex: 0 0 auto; color: var(--text-secondary); }
-.hud-menu-item.active > svg { color: var(--accent-gold); }
+.hud-menu-item.active > svg { color: var(--accent); }
 .hud-menu-item span { flex: 1 1 auto; }
-.hud-menu-check { flex: 0 0 auto; width: 16px; text-align: center; color: var(--accent-gold); font-weight: 700; }
+.hud-menu-check { flex: 0 0 auto; width: 16px; text-align: center; color: var(--accent); font-weight: 700; }
 
 /* --- HUD --- */
-/* Three zones: brand (left) · action icons (centre) · alerts + clock (right). */
+/* Three zones: brand + time (left) · action icons (centre) · alerts + settings (right). */
 .hud-topbar {
   position: absolute; top: 0; left: 0; right: 0; height: 52px;
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
   padding: 0 18px; gap: 16px;
-  background: linear-gradient(180deg, rgba(18, 12, 6, 0.85), transparent);
+  background: linear-gradient(180deg, var(--topbar-fade), transparent);
   /* Above the floating floor switch (z-21) so the dropdown menus, which live
      inside this bar's stacking context, paint OVER the 1F/2F selector when open. */
   z-index: 22; pointer-events: none;
 }
 .hud-topbar > * { pointer-events: auto; }
 .hud-brand { justify-self: start; display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 22px; font-weight: 400; }
-.hud-brand svg { color: var(--accent-gold); flex: 0 0 auto; }
+.hud-brand svg { color: var(--accent); flex: 0 0 auto; }
 .hud-center { justify-self: center; display: flex; align-items: center; gap: 12px; }
 .hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
 /* Self-contained legible pill so the time reads clearly on ANY backdrop — the
-   bright daytime sky used to swallow the muted-grey text. Brighter colour, a
-   translucent dark chip, and a thin gold hairline keep it crisp day or night. */
+   bright daytime sky used to swallow muted text. A translucent chip + thin
+   hairline keeps it crisp day or night. Sits right of the villa name. */
 .hud-clock {
-  font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 600;
+  font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600;
   color: var(--text-primary);
   padding: 4px 12px; border-radius: 999px;
-  background: rgba(18, 12, 6, 0.55);
-  border: 1px solid rgba(201, 168, 76, 0.35);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  background: var(--chip-bg); backdrop-filter: blur(8px);
+  border: 1px solid var(--hairline);
 }
 
 /* Connection status sits right next to the villa name — just a coloured dot. */
@@ -185,13 +298,26 @@ button {
   display: flex; flex-direction: column; gap: 4px;
   background: var(--bg-panel); backdrop-filter: blur(8px);
   border-radius: 12px; padding: 4px; pointer-events: auto;
+  border: 1px solid var(--hairline);
 }
 .floor-switch-v button {
   width: 40px; height: 36px; border-radius: 9px;
   font-size: 13px; font-weight: 600; color: var(--text-secondary);
 }
-.floor-switch-v button.active { background: var(--accent-gold); color: #1c140c; }
+.floor-switch-v button.active { background: var(--accent); color: var(--text-on-accent); }
 .floor-switch-v button:disabled { opacity: 0.35; }
+
+/* Left-side control column: floor switch, then the Room + Switch View stack,
+   all aligned under the brand on the left edge. */
+.hud-left-col {
+  position: absolute; z-index: 21;
+  top: calc(52px + env(safe-area-inset-top, 0px) + 8px);
+  left: calc(14px + env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+}
+.hud-left-col > * { pointer-events: auto; }
+/* The floor switch, when inside the column, is statically flowed (not absolute). */
+.hud-left-col .floor-switch-v { position: static; top: auto; left: auto; }
 
 .room-label {
   position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
@@ -199,6 +325,7 @@ button {
   padding: 8px 22px; border-radius: 999px; z-index: 15;
   animation: fadeSlide 0.4s ease-out;
   text-align: center; max-width: 86vw;
+  border: 1px solid var(--hairline);
 }
 
 .bottom-bar {
@@ -215,8 +342,8 @@ button {
   background: var(--bg-overlay); color: var(--text-secondary);
   padding: 10px 14px; border-radius: 14px; font-size: 12px; line-height: 1.4;
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(201, 168, 76, 0.2);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--hairline);
+  box-shadow: 0 6px 24px var(--shadow);
   animation: fadeIn 0.12s ease;
 }
 
@@ -225,37 +352,37 @@ button {
   display: inline-flex; align-items: center; gap: 8px;
   background: var(--status-danger); color: #fff;
   padding: 10px 16px; border-radius: 999px; font-weight: 600; font-size: 14px;
-  box-shadow: 0 4px 16px rgba(192, 80, 77, 0.4);
+  box-shadow: 0 4px 16px var(--shadow);
 }
-.alert-badge.ok { background: var(--bg-panel); color: var(--status-on); }
+.alert-badge.ok { background: var(--bg-panel); color: var(--status-on); border: 1px solid var(--hairline); }
 /* Alert detail list drops down from the badge (now top-right). */
 .alert-list {
   position: absolute; top: calc(56px + env(safe-area-inset-top, 0px)); right: 16px; width: 280px;
   background: var(--bg-overlay); border-radius: var(--panel-radius);
   padding: 14px; z-index: 30; backdrop-filter: blur(12px);
-  border: 1px solid rgba(201, 168, 76, 0.2);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--hairline-strong);
+  box-shadow: 0 8px 28px var(--shadow);
 }
-.alert-list .row { display: flex; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.alert-list .row { display: flex; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid var(--hairline); }
 
 /* --- Virtual joystick --- */
 .joystick-base {
   width: 120px; height: 120px; border-radius: 50%;
   background: var(--bg-panel); backdrop-filter: blur(8px);
   position: relative; touch-action: none;
-  border: 1px solid rgba(245, 237, 216, 0.12);
+  border: 1px solid var(--hairline-strong);
 }
 .joystick-knob {
   width: 52px; height: 52px; border-radius: 50%;
-  background: var(--accent-gold); position: absolute;
+  background: var(--accent); position: absolute;
   top: 50%; left: 50%; transform: translate(-50%, -50%);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 12px var(--shadow);
 }
 
 /* --- Bottom-sheet panels --- */
 .panel-backdrop {
   position: absolute; inset: 0; z-index: 40;
-  background: rgba(10, 7, 3, 0.45); backdrop-filter: blur(3px);
+  background: var(--scrim); backdrop-filter: blur(3px);
   animation: fadeIn 0.2s ease-out;
 }
 .panel {
@@ -268,16 +395,16 @@ button {
   padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
   max-width: 560px; margin: 0 auto;
   max-height: 88dvh; overflow-y: auto; overscroll-behavior: contain;
-  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 -8px 40px var(--shadow);
   animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  border: 1px solid rgba(201, 168, 76, 0.15);
+  border: 1px solid var(--hairline);
 }
 .panel-handle { width: 44px; height: 5px; border-radius: 999px; background: var(--text-dim); margin: 0 auto 16px; }
 .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
 .panel-header .title { display: flex; align-items: center; gap: 12px; }
 .panel-header .title h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; }
 .panel-header .room { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
-.panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent-gold); }
+.panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); }
 
 .row-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 .row-buttons.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
@@ -292,11 +419,11 @@ input[type="range"] {
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
-  background: var(--accent-gold); cursor: pointer; border: 3px solid #1c140c;
+  background: var(--accent); cursor: pointer; border: 3px solid var(--ring);
 }
 input[type="range"]::-moz-range-thumb {
-  width: 28px; height: 28px; border-radius: 50%; background: var(--accent-gold);
-  cursor: pointer; border: 3px solid #1c140c;
+  width: 28px; height: 28px; border-radius: 50%; background: var(--accent);
+  cursor: pointer; border: 3px solid var(--ring);
 }
 
 /* --- Big toggle (lights/fans) --- */
@@ -304,17 +431,17 @@ input[type="range"]::-moz-range-thumb {
   width: 100%; min-height: 84px; border-radius: 18px;
   display: flex; align-items: center; justify-content: center; gap: 14px;
   font-size: 20px; font-weight: 600; transition: all 0.2s;
-  background: var(--status-off); color: var(--text-secondary);
+  background: var(--bg-input); color: var(--text-secondary);
 }
-.big-toggle.on { background: linear-gradient(135deg, var(--accent-gold), var(--accent-warm)); color: #1c140c; }
+.big-toggle.on { background: linear-gradient(135deg, var(--accent), var(--accent-strong)); color: var(--text-on-accent); }
 
 .status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-weight: 600; }
-.status-pill.on { background: rgba(107, 170, 117, 0.2); color: var(--status-on); }
-.status-pill.off { background: rgba(74, 64, 53, 0.4); color: var(--text-secondary); }
-.status-pill.danger { background: rgba(192, 80, 77, 0.25); color: var(--status-danger); }
+.status-pill.on { background: color-mix(in srgb, var(--status-on) 20%, transparent); color: var(--status-on); }
+.status-pill.off { background: var(--bg-input); color: var(--text-secondary); }
+.status-pill.danger { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }
 
 .glow-dot { width: 12px; height: 12px; border-radius: 50%; }
-.glow-dot.on { background: var(--accent-gold); box-shadow: 0 0 12px var(--accent-gold); }
+.glow-dot.on { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
 .glow-dot.off { background: var(--status-off); }
 
 /* --- Temperature control --- */
@@ -327,7 +454,7 @@ input[type="range"]::-moz-range-thumb {
 /* --- Camera fullscreen --- */
 .camera-fullscreen { position: absolute; inset: 0; z-index: 60; background: #000; display: flex; align-items: center; justify-content: center; }
 .camera-fullscreen img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.camera-fullscreen .label { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); left: calc(24px + env(safe-area-inset-left, 0px)); font-size: 18px; background: rgba(0,0,0,0.5); padding: 8px 16px; border-radius: 10px; }
+.camera-fullscreen .label { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); left: calc(24px + env(safe-area-inset-left, 0px)); font-size: 18px; background: rgba(0,0,0,0.5); color: #fff; padding: 8px 16px; border-radius: 10px; }
 .camera-fullscreen .close { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(24px + env(safe-area-inset-right, 0px)); }
 .camera-fullscreen .fs-btn { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(72px + env(safe-area-inset-right, 0px)); }
 
@@ -347,26 +474,26 @@ input[type="range"]::-moz-range-thumb {
 .tp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; max-width: 900px; margin: 0 auto; }
 .tp-card {
   height: 120px; border-radius: 16px; background: var(--bg-card);
-  border: 1px solid rgba(201, 168, 76, 0.15); overflow: hidden; position: relative;
+  border: 1px solid var(--hairline); overflow: hidden; position: relative;
   display: flex; align-items: flex-end; padding: 14px; text-align: left;
   background-size: cover; background-position: center;
 }
-.tp-card .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, transparent, rgba(18,12,6,0.85)); }
-.tp-card span { position: relative; font-family: var(--font-display); font-size: 20px; font-weight: 400; }
-.tp-card .floor-tag { position: absolute; top: 10px; right: 12px; font-size: 11px; color: var(--accent-gold); background: rgba(0,0,0,0.4); padding: 3px 8px; border-radius: 6px; }
-.tp-card .tp-delete { position: absolute; top: 8px; left: 10px; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(0,0,0,0.45); color: var(--text-secondary); }
+.tp-card .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, transparent, var(--card-scrim)); }
+.tp-card span { position: relative; font-family: var(--font-display); font-size: 20px; font-weight: 400; color: #fff; }
+.tp-card .floor-tag { position: absolute; top: 10px; right: 12px; font-size: 11px; color: #fff; background: rgba(0,0,0,0.4); padding: 3px 8px; border-radius: 6px; }
+.tp-card .tp-delete { position: absolute; top: 8px; left: 10px; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(0,0,0,0.45); color: #fff; }
 .tp-card .tp-delete:hover { color: var(--status-danger); }
-.tp-card.tp-add { align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--accent-gold); border-style: dashed; background: transparent; }
-.tp-card.tp-add span { font-family: var(--font-ui); font-size: 14px; }
+.tp-card.tp-add { align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--accent); border-style: dashed; background: transparent; }
+.tp-card.tp-add span { font-family: var(--font-ui); font-size: 14px; color: var(--accent); }
 
 /* --- Modals / wizard --- */
-.modal-backdrop { position: absolute; inset: 0; z-index: 70; background: rgba(8,5,2,0.7); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; }
-.modal { width: 100%; max-width: 520px; max-height: 90vh; background: var(--bg-overlay); border-radius: 20px; border: 1px solid rgba(201,168,76,0.2); display: flex; flex-direction: column; overflow: hidden; }
+.modal-backdrop { position: absolute; inset: 0; z-index: 70; background: var(--scrim-strong); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.modal { width: 100%; max-width: 520px; max-height: 90vh; background: var(--bg-overlay); border-radius: 20px; border: 1px solid var(--hairline-strong); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 64px var(--shadow); }
 .modal h2 { font-family: var(--font-display); font-weight: 400; margin: 0; }
 .modal .sub { color: var(--text-secondary); margin: 0 0 22px; }
 .modal label { display: block; font-size: 13px; color: var(--text-secondary); margin: 14px 0 6px; }
-.modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid transparent; font-size: 15px; }
-.modal input:focus { border-color: var(--accent-gold); outline: none; }
+.modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: 15px; }
+.modal input:focus, .modal select:focus { border-color: var(--accent); outline: none; }
 .modal-actions { display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end; }
 
 /* Plain (non-settings) modals — onboarding, bind, marker — pad their own
@@ -376,19 +503,59 @@ input[type="range"]::-moz-range-thumb {
 
 /* Settings modal — scrollable body, sticky footer */
 .settings-modal { }
-.settings-header { padding: 24px 28px 16px; border-bottom: 1px solid rgba(201,168,76,0.12); flex: 0 0 auto; }
+.settings-header { padding: 24px 28px 16px; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
 .settings-body { flex: 1 1 auto; overflow-y: auto; padding: 8px 28px 12px; }
 .settings-body label { display: block; font-size: 13px; color: var(--text-secondary); margin: 14px 0 6px; }
 .settings-body label.toggle { display: flex; align-items: center; gap: 12px; margin-top: 12px; cursor: pointer; font-size: 15px; color: var(--text-primary); }
-.settings-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; border-top: 1px solid rgba(201,168,76,0.12); background: var(--bg-overlay); }
+.settings-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; border-top: 1px solid var(--hairline); background: var(--bg-overlay); }
+
+/* Section headings inside Settings — quiet, uppercase group labels. */
+.settings-section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin: 22px 0 8px; font-weight: 600; }
+
+/* Segmented control (used for the Light / Dark / Auto theme selector). */
+.segmented { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg-input); }
+.segmented button {
+  flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 40px; border-radius: 9px; font-size: 14px; font-weight: 500;
+  color: var(--text-secondary); transition: background 0.15s, color 0.15s;
+}
+.segmented button svg { flex: 0 0 auto; }
+.segmented button.active { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+
+/* Inline (i) info button + hover/focus tooltip (replaces the model info block). */
+.info-tip { position: relative; display: inline-flex; }
+.info-tip > .info-btn {
+  width: 30px; height: 30px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg-input); color: var(--text-secondary);
+  border: 1px solid var(--hairline);
+}
+.info-tip > .info-btn:hover { color: var(--accent); }
+.info-tip .info-pop {
+  position: absolute; z-index: 80; top: calc(100% + 8px); right: 0;
+  width: min(340px, 78vw); padding: 12px 14px;
+  background: var(--bg-overlay); backdrop-filter: blur(12px);
+  border: 1px solid var(--hairline-strong); border-radius: 12px;
+  box-shadow: 0 10px 32px var(--shadow);
+  font-size: 12.5px; line-height: 1.5; color: var(--text-secondary);
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity 0.14s, transform 0.14s, visibility 0.14s;
+  text-align: left; white-space: normal;
+}
+.info-tip:hover .info-pop,
+.info-tip:focus-within .info-pop { opacity: 1; visibility: visible; transform: translateY(0); }
+.info-pop .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
+.info-pop .row span:first-child { color: var(--text-dim); flex: 0 0 auto; }
+.info-pop .row span:last-child { color: var(--text-primary); word-break: break-all; text-align: right; }
+.info-pop code { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; }
 
 .wizard-steps { display: flex; gap: 6px; margin-bottom: 22px; }
 .wizard-steps .step { flex: 1; height: 4px; border-radius: 999px; background: var(--bg-input); }
-.wizard-steps .step.done { background: var(--accent-gold); }
+.wizard-steps .step.done { background: var(--accent); }
 
 .test-result { margin-top: 12px; padding: 10px 14px; border-radius: 10px; font-size: 14px; }
-.test-result.ok { background: rgba(107,170,117,0.2); color: var(--status-on); }
-.test-result.fail { background: rgba(192,80,77,0.2); color: var(--status-danger); }
+.test-result.ok { background: color-mix(in srgb, var(--status-on) 18%, transparent); color: var(--status-on); }
+.test-result.fail { background: color-mix(in srgb, var(--status-danger) 18%, transparent); color: var(--status-danger); }
 
 /* --- Themed toggle rows (used in Settings) --- */
 label.toggle {
@@ -416,14 +583,14 @@ label.toggle input[type="checkbox"] {
   aspect-ratio: 1 / 1;
   border-radius: 6px;
   background: var(--bg-input);
-  border: 1.5px solid rgba(201, 168, 76, 0.35);
+  border: 1.5px solid var(--hairline-strong);
   position: relative;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
 label.toggle input[type="checkbox"]:checked {
-  background: var(--accent-gold);
-  border-color: var(--accent-gold);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 label.toggle input[type="checkbox"]:checked::after {
   content: "";
@@ -432,7 +599,7 @@ label.toggle input[type="checkbox"]:checked::after {
   top: 2px;
   width: 8px;
   height: 13px;
-  border: 2.5px solid #1c140c;
+  border: 2.5px solid var(--text-on-accent);
   border-top: none;
   border-left: none;
   transform: rotate(42deg);
@@ -442,7 +609,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* --- Config editor table --- */
 .config-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .config-table th { text-align: left; color: var(--text-secondary); font-weight: 500; padding: 8px; font-size: 12px; text-transform: uppercase; }
-.config-table td { padding: 6px 8px; border-top: 1px solid rgba(255,255,255,0.05); }
+.config-table td { padding: 6px 8px; border-top: 1px solid var(--hairline); }
 .config-table input:not([type="checkbox"]), .config-table select { width: 100%; padding: 8px; border-radius: 8px; background: var(--bg-input); color: var(--text-primary); border: none; }
 
 /* Entity ID cell: id text on the left, action icons (edit + delete) pinned right
@@ -451,7 +618,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .entity-id-text { flex: 1 1 auto; min-width: 0; word-break: break-all; }
 .entity-id-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; margin-left: auto; }
 .entity-id-actions .icon-btn { width: 30px; height: 30px; }
-.icon-btn-danger:hover { color: var(--status-danger, #c0504d); }
+.icon-btn-danger:hover { color: var(--status-danger); }
 
 /* Config Editor full-page header (Back + title on one line, no wrap on mobile). */
 .config-topbar { display: flex; align-items: center; gap: 16px; max-width: 1000px; margin: 0 auto; }
@@ -471,7 +638,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   aspect-ratio: 1 / 1;
   border-radius: 5px;
   background: var(--bg-input);
-  border: 1.5px solid rgba(201, 168, 76, 0.35);
+  border: 1.5px solid var(--hairline-strong);
   position: relative;
   cursor: pointer;
   vertical-align: middle;
@@ -479,8 +646,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
   transition: background 0.15s, border-color 0.15s;
 }
 .config-table input[type="checkbox"]:checked {
-  background: var(--accent-gold);
-  border-color: var(--accent-gold);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 .config-table input[type="checkbox"]:checked::after {
   content: "";
@@ -489,7 +656,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   top: 1px;
   width: 7px;
   height: 12px;
-  border: 2.5px solid #1c140c;
+  border: 2.5px solid var(--text-on-accent);
   border-top: none;
   border-left: none;
   transform: rotate(42deg);
@@ -497,7 +664,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 
 /* --- Loading / overlay --- */
 .center-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; z-index: 5; text-align: center; padding: 24px; }
-.spinner { width: 44px; height: 44px; border: 4px solid var(--bg-input); border-top-color: var(--accent-gold); border-radius: 50%; animation: spin 0.9s linear infinite; }
+.spinner { width: 44px; height: 44px; border: 4px solid var(--bg-input); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; }
 
 .sparkline { width: 100%; height: 60px; }
 
@@ -513,9 +680,9 @@ label.toggle span { user-select: none; line-height: 1.4; }
   position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
   z-index: 45; display: flex; align-items: center; gap: 16px;
   background: var(--bg-overlay); backdrop-filter: blur(12px);
-  border: 1px solid var(--accent-gold); border-radius: 14px;
+  border: 1px solid var(--accent); border-radius: 14px;
   padding: 12px 16px; max-width: 92vw;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 6px 24px var(--shadow);
 }
 .bind-banner span { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 
@@ -533,6 +700,15 @@ label.toggle span { user-select: none; line-height: 1.4; }
   padding-top: env(safe-area-inset-top, 0px);
   padding-left: calc(18px + env(safe-area-inset-left, 0px));
   padding-right: calc(18px + env(safe-area-inset-right, 0px));
+}
+
+/* --- Tablet / desktop polish --- */
+/* On roomy screens the modals read better a touch wider and the left control
+   column sits comfortably away from the edge. */
+@media (min-width: 1024px) {
+  .modal { max-width: 560px; }
+  .teleport-grid .tp-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .hud-topbar { padding-left: calc(24px + env(safe-area-inset-left, 0px)); padding-right: calc(24px + env(safe-area-inset-right, 0px)); }
 }
 
 @media (max-width: 640px), (max-height: 560px) {
@@ -558,6 +734,9 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .hud-right .icon-btn { width: 32px; height: 32px; }
   /* Smaller floating floor switch on a phone. */
   .floor-switch-v button { width: 36px; height: 32px; font-size: 12px; }
+  /* Left control stack: hide the button labels, keep icons only, to save width. */
+  .hud-stack .icon-btn { padding: 0; width: 36px; justify-content: center; }
+  .hud-stack .icon-btn .hud-stack-label { display: none; }
 
   /* Dropdown menus (Display / Build / Config) are triggered from the centred
      icon cluster. Anchoring each panel to its trigger's right edge (right: 0 +
@@ -618,7 +797,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
     width: 100%;
   }
   .config-table tr {
-    border: 1px solid rgba(201, 168, 76, 0.15);
+    border: 1px solid var(--hairline-strong);
     border-radius: 12px;
     margin-bottom: 12px;
     padding: 6px 12px;

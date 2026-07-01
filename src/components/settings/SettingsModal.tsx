@@ -3,7 +3,8 @@
 // full Config Editor and a button to toggle the Babylon Inspector for calibration.
 
 import { useRef, useState, useEffect } from "react";
-import { Plug, Download, Upload, Bug, FileText } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plug, Download, Upload, Bug, FileText, Info, Sliders, Sun, Moon, Monitor } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, DEFAULT_ENTITY_ICONS, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
@@ -42,6 +43,7 @@ const ICON_CATEGORY_LABEL: Record<EntityType, string> = {
 export default function SettingsModal({ manager, onClose, onModelChanged }: Props) {
   const { config, update, replace } = useConfig();
   const { connect, haConfig } = useHA();
+  const navigate = useNavigate();
 
   // Snapshot the config at mount so Cancel can undo every live-applied tweak
   // (render preview, eye height, walk speed, and the toggles that update()
@@ -184,6 +186,30 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           placeholder={haConfig?.location_name || DEFAULT_SITE_TITLE}
         />
 
+        {/* ── Appearance ──────────────────────────────────────────────────
+            Light / Dark / Auto. Applied instantly (config.theme drives the
+            data-theme attribute in ConfigContext), and persisted on Save. */}
+        <div className="settings-section-title">Appearance</div>
+        <div className="segmented" role="group" aria-label="Theme">
+          {([
+            { key: "light", label: "Light", icon: Sun },
+            { key: "dark", label: "Dark", icon: Moon },
+            { key: "auto", label: "Auto", icon: Monitor },
+          ] as const).map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              className={config.theme === key ? "active" : ""}
+              onClick={() => update({ theme: key })}
+              aria-pressed={config.theme === key}
+            >
+              <Icon size={16} /> {label}
+            </button>
+          ))}
+        </div>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          Auto follows this device's system light/dark setting.
+        </p>
+
         {!ingress && (
           <>
             <label>Home Assistant URL</label>
@@ -229,7 +255,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           </>
         )}
 
-        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         <label>Eye height (walking) · {eyeHeight.toFixed(2)} m</label>
         <input
@@ -274,7 +300,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
         {/* "Highlight clickable objects" and "Show device state labels" now live
             as direct toggles in the top bar (desktop) / a dropdown (mobile). */}
 
-        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         {/* ── Render quality & look ────────────────────────────────────────
             Simplified to a single quality preset plus two heavy opt-in extras
@@ -324,7 +350,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           nothing in clear/sunny/cloudy weather.
         </p>
 
-        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         <h3 style={{ margin: 0, fontSize: 15 }}>Device state icons</h3>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
@@ -370,7 +396,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           Reset icons to defaults
         </button>
 
-        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         <label className="toggle">
           <input
@@ -392,7 +418,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           these to flip it. Updates live.
         </p>
 
-        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         {/* ── 3D model source ──────────────────────────────────────────────
             Add-on (Ingress) mode: the model is managed centrally via the add-on
@@ -404,47 +430,39 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           {addonCfg === null ? (
             <p className="muted body-text">Reading add-on configuration…</p>
           ) : addonCfg.model_path ? (
-            <div style={{ background: "rgba(107,170,117,0.1)", border: "1px solid rgba(107,170,117,0.3)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
-              <div style={{ fontWeight: 600, fontSize: 13, color: "var(--status-on, #6baa75)", marginBottom: 6 }}>
+            /* Compact status line + (i) tooltip carrying the full model details
+               (path, size, mesh count, SHA-256, source, SH3D) on hover/focus. */
+            <div className="row spread" style={{ marginTop: 4 }}>
+              <span className="body-text" style={{ fontWeight: 600, fontSize: 13, color: "var(--status-on)" }}>
                 ✓ Central model active — all clients share the same view
-              </div>
-              <div className="muted body-text" style={{ fontSize: 12 }}>
-                <strong>GLB:</strong> <code>www/{addonCfg.model_path}</code>
-              </div>
-              {loadedModel && (
-                <div className="muted body-text" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
-                  <div><strong>Loaded now:</strong> {(loadedModel.bytes / 1_000_000).toFixed(2)} MB · {loadedModel.meshCount} meshes</div>
-                  {loadedModel.sha256 && (
-                    <div style={{ wordBreak: "break-all" }}>
-                      <strong>SHA-256:</strong> <code>{loadedModel.sha256}</code>
-                    </div>
+              </span>
+              <span className="info-tip">
+                <button type="button" className="info-btn" aria-label="Model details">
+                  <Info size={16} />
+                </button>
+                <div className="info-pop" role="tooltip">
+                  <div className="row"><span>GLB</span><span><code>www/{addonCfg.model_path}</code></span></div>
+                  {loadedModel && (
+                    <>
+                      <div className="row"><span>Loaded</span><span>{(loadedModel.bytes / 1_000_000).toFixed(2)} MB · {loadedModel.meshCount} meshes</span></div>
+                      {loadedModel.sha256 && (
+                        <div className="row"><span>SHA-256</span><span><code>{loadedModel.sha256}</code></span></div>
+                      )}
+                      <div className="row"><span>From</span><span><code>{loadedModel.url}</code></span></div>
+                    </>
                   )}
-                  <div style={{ wordBreak: "break-all", opacity: 0.7 }}>
-                    <strong>from:</strong> <code>{loadedModel.url}</code>
+                  <div className="row"><span>SH3D</span><span>{addonCfg.sh3d_path ? <code>www/{addonCfg.sh3d_path}</code> : "not configured (optional)"}</span></div>
+                  <div style={{ marginTop: 8, color: "var(--text-dim)" }}>
+                    Served from the add-on's configured paths (relative to <code>www/</code>). Set
+                    <code> model_path</code> / <code>sh3d_path</code> under Settings → Add-ons → Villa Kiosk →
+                    Configuration. Verify on disk: <code>shasum -a 256 {addonCfg.model_path.split("/").pop()}</code>
                   </div>
-                  <div style={{ opacity: 0.7, marginTop: 2 }}>
-                    Verify on disk: <code>shasum -a 256 {addonCfg.model_path.split("/").pop()}</code>
-                  </div>
                 </div>
-              )}
-              {addonCfg.sh3d_path ? (
-                <div className="muted body-text" style={{ fontSize: 12 }}>
-                  <strong>SH3D:</strong> <code>www/{addonCfg.sh3d_path}</code>
-                </div>
-              ) : (
-                <div className="muted body-text" style={{ fontSize: 12 }}>
-                  <strong>SH3D:</strong> not configured (room names optional)
-                </div>
-              )}
-              <p className="muted body-text" style={{ marginTop: 8, fontSize: 11 }}>
-                Served from the add-on's configured paths (relative to the HA <code>www/</code> folder).
-                Upload replacements below, or set <code>model_path</code> / <code>sh3d_path</code> explicitly
-                under <strong>Settings → Add-ons → Villa Kiosk → Configuration</strong>.
-              </p>
+              </span>
             </div>
           ) : (
-            <div style={{ background: "rgba(224,170,80,0.1)", border: "1px solid rgba(224,170,80,0.35)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
-              <div style={{ fontWeight: 600, fontSize: 13, color: "var(--warning, #e0aa50)", marginBottom: 6 }}>
+            <div style={{ background: "color-mix(in srgb, var(--status-warning) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--status-warning) 40%, transparent)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "var(--status-warning)", marginBottom: 6 }}>
                 ⚠ No central model yet
               </div>
               <p className="muted body-text" style={{ fontSize: 12, margin: 0 }}>
@@ -482,7 +500,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
             {modelMeta && (
               <button
                 className="btn ghost mt"
-                style={{ width: "100%", color: "var(--danger, #c0392b)" }}
+                style={{ width: "100%", color: "var(--status-danger)" }}
                 onClick={async () => {
                   if (!confirm("Remove the stored 3D model?\n\nThe model is saved in this browser only — it is not part of the add-on data and must be re-uploaded after clearing.")) return;
                   await clearStoredModel();
@@ -518,9 +536,18 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           </>
         )}
 
-        <hr style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "22px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         <div className="row-buttons mt">
+          <button
+            className="btn ghost"
+            onClick={() => {
+              onClose();
+              navigate("/config");
+            }}
+          >
+            <Sliders size={18} /> Config Editor
+          </button>
           <button
             className="btn ghost"
             onClick={() => {

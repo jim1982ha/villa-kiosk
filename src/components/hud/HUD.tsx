@@ -1,18 +1,17 @@
 // src/components/hud/HUD.tsx
 // Top bar layout (three zones):
-//   • Left   — villa brand (home icon + name + connection dot)
-//   • Center — action buttons, grouped into icon-only sections:
-//              View & rooms · Display toggles · Build · Config
-//   • Right  — All Clear badge + clock (clock pinned far right)
-// A vertical floor switch (1F / 2F) floats below the brand icon.
+//   • Left   — villa brand (home icon + name + connection dot) + clock
+//   • Center — display + build action buttons, grouped into icon-only sections
+//   • Right  — All Clear badge + Settings button (pinned far right)
+// A left control column floats below the brand: the vertical floor switch
+// (1F / 2F) then a single stacked block with Overview and Rooms.
 // Bottom bar: first-person joystick, or (in overview) an (i) button that
 // toggles the navigation-tips card (hidden by default to keep the view clean).
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  Home, Grid3x3, Settings, Link2, MapPin, Sliders, Map,
-  PersonStanding, Sparkles, Tag, Eye, Wrench, MoreVertical, Info,
+  Home, Grid3x3, Settings, Link2, MapPin, Map,
+  PersonStanding, Sparkles, Tag, Eye, Wrench, Info,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -129,7 +128,6 @@ export default function HUD({
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
-  const navigate = useNavigate();
   const clock = useClock();
   const isMobile = useIsMobile();
   const title = resolveSiteTitle(config, haConfig?.location_name);
@@ -153,26 +151,8 @@ export default function HUD({
     { icon: Link2, label: "Bind 3D object to entity", onClick: onEnterBindMode },
     { icon: MapPin, label: "Drop control marker", onClick: onEnterPlaceMode },
   ];
-  const configItems: MenuItem[] = [
-    { icon: Sliders, label: "Config Editor", onClick: () => navigate("/config") },
-    { icon: Settings, label: "Settings", onClick: onOpenSettings },
-  ];
 
-  // Standalone buttons reused across both layouts.
-  const viewToggle = (
-    <button
-      className={`icon-btn${viewMode === "overview" ? " active" : ""}`}
-      onClick={onToggleViewMode}
-      title={viewMode === "overview" ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-    >
-      {viewMode === "overview" ? <PersonStanding size={19} /> : <Map size={18} />}
-    </button>
-  );
-  const roomsButton = (
-    <button className="icon-btn" onClick={onOpenTeleport} title="Rooms">
-      <Grid3x3 size={18} />
-    </button>
-  );
+  const overviewActive = viewMode === "overview";
 
   return (
     <>
@@ -183,26 +163,19 @@ export default function HUD({
           <span className={`conn-dot ${connClass}`} title={`Connection: ${connection}`}>
             <span className="dot" />
           </span>
+          {/* Time sits right next to the villa name + connection dot. */}
+          <span className="hud-clock">{clock}</span>
         </div>
 
         <div className="hud-center">
           {isMobile ? (
             <>
-              {viewToggle}
-              {roomsButton}
               <HudMenu icon={Eye} title="Display" items={displayItems} />
               <HudMenu icon={Wrench} title="Build" items={buildItems} />
-              <HudMenu icon={MoreVertical} title="Config & settings" items={configItems} />
             </>
           ) : (
             <>
-              {/* View & rooms */}
-              <div className="hud-group">
-                {viewToggle}
-                {roomsButton}
-              </div>
-
-              {/* Display toggles (lit gold when on) */}
+              {/* Display toggles (lit when on) */}
               <div className="hud-group">
                 <button
                   className={`icon-btn${config.highlightInteractive ? " active" : ""}`}
@@ -229,39 +202,49 @@ export default function HUD({
                   <MapPin size={18} />
                 </button>
               </div>
-
-              {/* Config */}
-              <div className="hud-group">
-                <button className="icon-btn" onClick={() => navigate("/config")} title="Config Editor">
-                  <Sliders size={18} />
-                </button>
-                <button className="icon-btn" onClick={onOpenSettings} title="Settings">
-                  <Settings size={20} />
-                </button>
-              </div>
             </>
           )}
         </div>
 
+        {/* All Clear badge, then Settings pinned to the far right. */}
         <div className="hud-right">
           <AlertBadge />
-          <span className="hud-clock">{clock}</span>
+          <button className="icon-btn" onClick={onOpenSettings} title="Settings">
+            <Settings size={20} />
+          </button>
         </div>
       </div>
 
-      {/* Vertical floor switch, floating just below the brand icon. */}
-      <div className="floor-switch-v">
-        {floors.map((f) => (
+      {/* Left control column: floor switch, then the Overview + Rooms stack. */}
+      <div className="hud-left-col">
+        <div className="floor-switch-v">
+          {floors.map((f) => (
+            <button
+              key={f}
+              className={f === currentFloor ? "active" : ""}
+              disabled={!floorsAvailable.includes(f)}
+              title={floorsAvailable.includes(f) ? `Floor ${f}` : "Coming soon"}
+              onClick={() => onSwitchFloor(f)}
+            >
+              {f}F
+            </button>
+          ))}
+        </div>
+
+        <div className="hud-stack">
           <button
-            key={f}
-            className={f === currentFloor ? "active" : ""}
-            disabled={!floorsAvailable.includes(f)}
-            title={floorsAvailable.includes(f) ? `Floor ${f}` : "Coming soon"}
-            onClick={() => onSwitchFloor(f)}
+            className={`icon-btn${overviewActive ? " active" : ""}`}
+            onClick={onToggleViewMode}
+            title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
           >
-            {f}F
+            {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
+            <span className="hud-stack-label">{overviewActive ? "First-person" : "Overview"}</span>
           </button>
-        ))}
+          <button className="icon-btn" onClick={onOpenTeleport} title="Rooms">
+            <Grid3x3 size={18} />
+            <span className="hud-stack-label">Rooms</span>
+          </button>
+        </div>
       </div>
 
       <div className="bottom-bar">

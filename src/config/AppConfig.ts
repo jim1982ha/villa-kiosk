@@ -146,7 +146,7 @@ export interface AppConfig {
   siteTitle: string;
   latitude: number;
   longitude: number;
-  theme: "dark" | "light";
+  theme: "dark" | "light" | "auto";
   currentFloor: 1 | 2;
   /** entity_id -> metadata (panel type, label, room). Editable at runtime. */
   entityMap: Record<string, EntityMapping>;
@@ -232,7 +232,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   siteTitle: "",
   latitude: env.VITE_LAT ? Number(env.VITE_LAT) : -8.3405,
   longitude: env.VITE_LNG ? Number(env.VITE_LNG) : 115.092,
-  theme: "dark",
+  theme: "auto",
   currentFloor: 1,
   entityMap: ENTITY_MAP,
   meshBindings: {},

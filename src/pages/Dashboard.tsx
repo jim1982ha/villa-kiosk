@@ -114,6 +114,10 @@ export default function Dashboard() {
   const defaultedToOverview = useRef(false);
   useEffect(() => {
     if (!manager) return;
+    // A new SceneManager means a cold start OR a fresh model (re)load (the canvas
+    // remounts on upload, bumping modelKey). Re-arm the one-shot so the newly
+    // loaded villa lands in the bird's-eye overview just like opening the add-on.
+    defaultedToOverview.current = false;
     const goOverview = () => {
       if (defaultedToOverview.current) return;
       defaultedToOverview.current = true;

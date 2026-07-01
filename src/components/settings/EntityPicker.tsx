@@ -95,13 +95,13 @@ export default function EntityPicker({
           style={{
             position: "absolute", zIndex: 20, left: 0, right: 0, marginTop: 6,
             maxHeight: 260, overflowY: "auto", background: "var(--bg-overlay)",
-            border: "1px solid rgba(201,168,76,0.2)", borderRadius: 10,
+            border: "1px solid var(--hairline-strong)", borderRadius: 10,
           }}
         >
           {allowCustom && ENTITY_ID_RE.test(query.trim()) && !entities[query.trim()] && (
             <button
               className="row"
-              style={{ width: "100%", padding: "10px 12px", justifyContent: "flex-start", gap: 10, borderBottom: "1px solid rgba(201,168,76,0.25)" }}
+              style={{ width: "100%", padding: "10px 12px", justifyContent: "flex-start", gap: 10, borderBottom: "1px solid var(--hairline-strong)" }}
               onClick={() => { onChange(query.trim()); setOpen(false); setQuery(""); }}
             >
               <span style={{ flex: 1, textAlign: "left" }}>
@@ -120,7 +120,7 @@ export default function EntityPicker({
             <button
               key={e.entity_id}
               className="row"
-              style={{ width: "100%", padding: "10px 12px", justifyContent: "flex-start", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+              style={{ width: "100%", padding: "10px 12px", justifyContent: "flex-start", gap: 10, borderBottom: "1px solid var(--hairline)" }}
               onClick={() => { onChange(e.entity_id); setOpen(false); setQuery(""); }}
             >
               <span style={{ flex: 1, textAlign: "left" }}>

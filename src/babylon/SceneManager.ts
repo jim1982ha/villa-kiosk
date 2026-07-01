@@ -110,7 +110,7 @@ export class SceneManager {
     this.sky = new SkyDome(this.scene);
     this.sun = new SunController(this.scene, this.lighting, this.hemi, opts.config, this.sky);
     this.sun.setRenderHook(() => this.requestRender());
-    this.visuals = new EntityVisuals(this.scene, opts.config, () => this.requestRender(), opts.onEntityPicked);
+    this.visuals = new EntityVisuals(this.scene, opts.config, () => this.requestRender(), opts.onEntityPicked, opts.onEntityLongPressed);
     this.markers = new MarkerManager(this.scene, () => this.requestRender());
     this.weather = new WeatherEffects(this.scene, () => this.requestRender());
 

@@ -20,7 +20,7 @@ export default function Config() {
         style={{
           position: "sticky", top: 0, zIndex: 10,
           background: "var(--bg-base)",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          borderBottom: "1px solid var(--hairline)",
           padding: "16px 24px",
         }}
       >

@@ -16,10 +16,11 @@
 
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
+  Vector3, Matrix,
   type AbstractMesh, type Scene, type Material,
 } from "@babylonjs/core";
 import {
-  AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel,
+  AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel, Image,
 } from "@babylonjs/gui";
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
@@ -52,32 +53,64 @@ const LIGHT_SHADOW_SIZE = 256;
 interface LabelControls {
   container: StackPanel;
   badge: Rectangle;
-  glyph: TextBlock;
+  glyph: Image;
+  valueWrap: Rectangle;
   valueText: TextBlock;
+  anchor: AbstractMesh;
   type: EntityType;
+  priority: number;
 }
-
-/** Downward optical-centre correction for the emoji glyph (font baseline sits
- *  its visual mass high in the circle). Tuned against the 19px glyph size. */
-const GLYPH_BASELINE_NUDGE_PX = 2;
 
 /** A live state distilled to one of four visual kinds the badge colour-codes. */
 type BadgeKind = "on" | "off" | "alert" | "unavailable";
 
-// Badge palette — ring + soft fill per state kind. Kept calm and on-brand: gold
-// for active, muted brown for idle, red for alert, dim grey for unreachable.
-const BADGE_STYLE: Record<BadgeKind, { ring: string; fill: string; alpha: number }> = {
-  on:          { ring: "rgba(201,168,76,0.95)", fill: "rgba(201,168,76,0.22)", alpha: 1 },
-  off:         { ring: "rgba(120,104,80,0.55)", fill: "rgba(18,12,6,0.78)",    alpha: 0.85 },
-  alert:       { ring: "rgba(192,80,77,0.95)",  fill: "rgba(192,80,77,0.28)",  alpha: 1 },
-  unavailable: { ring: "rgba(110,90,72,0.55)",  fill: "rgba(18,12,6,0.55)",    alpha: 0.4 },
+/** Declutter priority — when badges overlap on screen, higher wins the slot. */
+const KIND_PRIORITY: Record<BadgeKind, number> = { alert: 3, on: 2, off: 1, unavailable: 0 };
+
+// Modern badge palette — a dark "glass" disc with a state-coloured ring. A neutral
+// slate base plus a single bright accent per state reads cleanly on both the light
+// daytime scene and the dark overview backdrop (no more brown/gold).
+const BADGE_BASE_FILL = "rgba(17,24,39,0.74)";
+const BADGE_STYLE: Record<BadgeKind, { ring: string; alpha: number; glow: string }> = {
+  on:          { ring: "#38bdf8",                 alpha: 1,   glow: "rgba(56,189,248,0.55)" },
+  off:         { ring: "rgba(148,163,184,0.55)",  alpha: 0.9, glow: "rgba(0,0,0,0.5)" },
+  alert:       { ring: "#fb7185",                 alpha: 1,   glow: "rgba(251,113,133,0.6)" },
+  unavailable: { ring: "rgba(148,163,184,0.4)",   alpha: 0.5, glow: "rgba(0,0,0,0.4)" },
 };
+
+/** Render an emoji/glyph to a square canvas, centred on the em box (textBaseline
+ *  "middle"), and cache the data URL. Drawing a pre-centred bitmap and showing it
+ *  through a GUI Image sidesteps Babylon TextBlock's alphabetic-baseline math,
+ *  which renders colour emoji high and inconsistently across platforms — a bitmap
+ *  is pixel-centred everywhere and needs no per-glyph nudging. */
+const glyphCache = new Map<string, string>();
+function glyphDataUrl(glyph: string): string {
+  const cached = glyphCache.get(glyph);
+  if (cached !== undefined) return cached;
+  const px = 72;
+  const canvas = document.createElement("canvas");
+  canvas.width = px;
+  canvas.height = px;
+  const ctx = canvas.getContext("2d");
+  let url = "";
+  if (ctx) {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `${Math.round(px * 0.72)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif`;
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillText(glyph, px / 2, px / 2);
+    url = canvas.toDataURL();
+  }
+  glyphCache.set(glyph, url);
+  return url;
+}
 
 export class EntityVisuals {
   private scene: Scene;
   private config: AppConfig;
   private requestRender: () => void;
   private onEntityPicked: ((entityId: string) => void) | null = null;
+  private onEntityLongPicked: ((entityId: string) => void) | null = null;
 
   /** entity_id -> meshes (one entity can drive several meshes, e.g. curtains). */
   private byEntity = new Map<string, AbstractMesh[]>();
@@ -112,13 +145,17 @@ export class EntityVisuals {
     config: AppConfig,
     requestRender: () => void,
     onEntityPicked?: (entityId: string) => void,
+    onEntityLongPicked?: (entityId: string) => void,
   ) {
     this.scene = scene;
     this.config = config;
     this.requestRender = requestRender;
     this.onEntityPicked = onEntityPicked ?? null;
+    // A long-press opens the full detail panel; fall back to the tap handler.
+    this.onEntityLongPicked = onEntityLongPicked ?? onEntityPicked ?? null;
     scene.registerBeforeRender(() => {
       this.animatePulse();
+      this.declutterLabels();
     });
   }
 
@@ -323,67 +360,68 @@ export class EntityVisuals {
 
       const anchor = meshes[0];
 
-      // A compact column: a circular icon badge over a tiny value chip. Far less
-      // cluttering than the old 170px text plate — the device TYPE reads from the
-      // glyph, the STATE from the badge colour, and the optional value chip only
-      // appears for entities with a meaningful reading (%, °, title).
+      // A compact column: a round "glass" icon badge over an optional value pill.
+      // The device TYPE reads from the (pixel-centred) glyph image, the STATE from
+      // the ring colour, and the value pill only appears for entities with a
+      // meaningful reading (%, °, sensor value). Children are top-aligned in a
+      // fixed-height panel so the badge never shifts when the pill shows/hides.
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
-      container.width = "92px";
-      container.height = "62px";
-      container.spacing = 2;
+      container.width = "128px";
+      container.height = "76px";
+      container.spacing = 3;
       this.labelLayer.addControl(container);
       container.linkWithMesh(anchor);
-      container.linkOffsetYInPixels = -54;
+      container.linkOffsetYInPixels = -56;
 
       const badge = new Rectangle(`lbl_badge_${entityId}`);
-      badge.width = "38px";
-      badge.height = "38px";
-      badge.cornerRadius = 19; // = half of width/height -> a circle
-      badge.thickness = 2;
-      badge.background = BADGE_STYLE.off.fill;
+      badge.width = "40px";
+      badge.height = "40px";
+      badge.cornerRadius = 20; // = half of width/height -> a circle
+      badge.thickness = 2.5;
+      badge.background = BADGE_BASE_FILL;
       badge.color = BADGE_STYLE.off.ring;
       badge.shadowColor = "rgba(0,0,0,0.55)";
-      badge.shadowBlur = 4;
-      // Make the badge tappable: clicking/touching it opens the control panel.
-      if (this.onEntityPicked) {
-        const cb = this.onEntityPicked;
-        const eid = entityId;
+      badge.shadowBlur = 6;
+      badge.shadowOffsetY = 2;
+      // Tap = quick action (toggle / open); long-press = full detail panel.
+      if (this.onEntityPicked || this.onEntityLongPicked) {
         badge.isPointerBlocker = true;
         badge.hoverCursor = "pointer";
-        badge.onPointerClickObservable.add(() => cb(eid));
-        badge.onPointerEnterObservable.add(() => { badge.scaleX = badge.scaleY = 1.12; this.requestRender(); });
-        badge.onPointerOutObservable.add(() => { badge.scaleX = badge.scaleY = 1; this.requestRender(); });
+        this.wireBadgeGestures(badge, entityId);
       }
       container.addControl(badge);
 
-      const glyph = new TextBlock(`lbl_glyph_${entityId}`);
-      glyph.text = this.iconFor(map.type);
-      glyph.fontSize = 19;
-      glyph.color = "#f5edd8";
-      glyph.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
-      glyph.textVerticalAlignment = TextBlock.VERTICAL_ALIGNMENT_CENTER;
-      glyph.resizeToFit = false;
-      // Emoji render on the text baseline (their visual mass sits above it), so
-      // pure line-box centering leaves them looking high in the circle. Nudge
-      // down ~1px per 10px of font to sit them on the true optical centre. The
-      // offset lives inside the scaled container, so it tracks size/zoom.
-      glyph.top = `${GLYPH_BASELINE_NUDGE_PX}px`;
+      const glyph = new Image(`lbl_glyph_${entityId}`, glyphDataUrl(this.iconFor(map.type)));
+      glyph.width = "26px";
+      glyph.height = "26px";
+      glyph.stretch = Image.STRETCH_UNIFORM;
       badge.addControl(glyph);
+
+      // Value pill: a snug rounded chip that hugs its text (adaptWidthToChildren).
+      const valueWrap = new Rectangle(`lbl_valwrap_${entityId}`);
+      valueWrap.adaptWidthToChildren = true;
+      valueWrap.height = "19px";
+      valueWrap.cornerRadius = 9;
+      valueWrap.thickness = 0;
+      valueWrap.background = "rgba(15,23,42,0.85)";
+      valueWrap.paddingLeft = "7px";
+      valueWrap.paddingRight = "7px";
+      valueWrap.shadowColor = "rgba(0,0,0,0.5)";
+      valueWrap.shadowBlur = 4;
+      valueWrap.isVisible = false;
 
       const valueText = new TextBlock(`lbl_value_${entityId}`);
       valueText.text = "";
-      valueText.color = "#f5edd8";
-      valueText.fontSize = 11;
+      valueText.color = "#f8fafc";
+      valueText.fontSize = 12;
       valueText.fontStyle = "bold";
-      valueText.height = "16px";
-      valueText.shadowColor = "rgba(0,0,0,0.85)";
-      valueText.shadowBlur = 3;
+      valueText.resizeToFit = true;
       valueText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
-      valueText.isVisible = false;
-      container.addControl(valueText);
+      valueWrap.addControl(valueText);
+      container.addControl(valueWrap);
 
-      this.labels.set(entityId, { container, badge, glyph, valueText, type: map.type });
+      this.labels.set(entityId, { container, badge, glyph, valueWrap, valueText, anchor, type: map.type, priority: 1 });
 
       // Repaint from the last known state so a rebuild (toggle on / icon edit)
       // shows live status immediately instead of an idle default.
@@ -399,14 +437,90 @@ export class EntityVisuals {
     const kind = this.badgeKind(map.type, entity);
     const style = BADGE_STYLE[kind];
     lbl.badge.color = style.ring;
-    lbl.badge.background = style.fill;
     lbl.badge.alpha = style.alpha;
-    lbl.glyph.text = this.iconFor(map.type); // honour live icon edits
+    lbl.badge.shadowColor = style.glow;
+    lbl.badge.shadowBlur = kind === "on" || kind === "alert" ? 10 : 6;
+    lbl.priority = KIND_PRIORITY[kind];
+    lbl.glyph.source = glyphDataUrl(this.iconFor(map.type)); // honour live icon edits
     lbl.glyph.alpha = kind === "unavailable" ? 0.6 : 1;
 
     const value = this.compactValue(map.type, entity);
     lbl.valueText.text = value;
-    lbl.valueText.isVisible = value.length > 0;
+    lbl.valueWrap.isVisible = value.length > 0;
+  }
+
+  /** Tap vs long-press on a badge. Tap → quick action (toggle/open); a press held
+   *  past the threshold → the full detail panel, matching the 3D-mesh gesture. */
+  private wireBadgeGestures(badge: Rectangle, entityId: string): void {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let longFired = false;
+    const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    badge.onPointerDownObservable.add(() => {
+      longFired = false;
+      badge.scaleX = badge.scaleY = 1.12;
+      this.requestRender();
+      clear();
+      timer = setTimeout(() => {
+        longFired = true;
+        this.onEntityLongPicked?.(entityId);
+      }, 480);
+    });
+    badge.onPointerUpObservable.add(() => {
+      clear();
+      badge.scaleX = badge.scaleY = 1;
+      this.requestRender();
+      if (!longFired) this.onEntityPicked?.(entityId);
+    });
+    badge.onPointerOutObservable.add(() => {
+      clear();
+      badge.scaleX = badge.scaleY = 1;
+      this.requestRender();
+    });
+  }
+
+  /** Screen-space label declutter. Projects every badge anchor to screen space and
+   *  greedily keeps the highest-priority label in each cluster (alert > on > off >
+   *  unreachable), hiding lower-priority badges that would overlap and any anchor
+   *  behind the camera. Zooming in (bigger scale, anchors spread apart) naturally
+   *  reveals the hidden ones again, so nothing is permanently lost. */
+  private declutterLabels(): void {
+    if (!this.config.showEntityLabels || this.labels.size === 0) return;
+    const cam = this.scene.activeCamera;
+    if (!cam) return;
+    const eng = this.scene.getEngine();
+    const w = eng.getRenderWidth();
+    const h = eng.getRenderHeight();
+    const vp = cam.viewport.toGlobal(w, h);
+    const tm = this.scene.getTransformMatrix();
+
+    const items: { lbl: LabelControls; x: number; y: number; behind: boolean }[] = [];
+    for (const lbl of this.labels.values()) {
+      const p = Vector3.Project(lbl.anchor.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
+      items.push({ lbl, x: p.x, y: p.y, behind: p.z < 0 || p.z > 1 });
+    }
+    // Highest priority first so the most important badge claims a contested slot.
+    items.sort((a, b) => b.lbl.priority - a.lbl.priority);
+
+    const s = this.iconUserScale * this.iconZoomScale;
+    // Minimum on-screen separation between kept badges, in render pixels. Scales
+    // with badge size but floored so tiny zoomed-out badges still declutter.
+    const minDist = Math.max(h * 0.045 * s, 40);
+    const min2 = minDist * minDist;
+    const placed: { x: number; y: number }[] = [];
+    for (const it of items) {
+      if (it.behind) { it.lbl.container.isVisible = false; continue; }
+      let clash = false;
+      for (const p of placed) {
+        const dx = p.x - it.x, dy = p.y - it.y;
+        if (dx * dx + dy * dy < min2) { clash = true; break; }
+      }
+      if (clash) {
+        it.lbl.container.isVisible = false;
+      } else {
+        it.lbl.container.isVisible = true;
+        placed.push({ x: it.x, y: it.y });
+      }
+    }
   }
 
   /** Distil any entity's live state into one of four colour-coded badge kinds. */
