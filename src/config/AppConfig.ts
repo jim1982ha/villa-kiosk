@@ -217,6 +217,9 @@ export interface AppConfig {
   grassGroundHints?: string[];
   /** Per-category state-badge glyphs (see DEFAULT_ENTITY_ICONS). Editable in Settings. */
   entityIcons: Record<EntityType, string>;
+  /** Global size multiplier for the in-scene state-icon badges (1 = default).
+   *  In the bird's-eye view this is further scaled by the zoom level. */
+  entityIconScale: number;
   onboarded: boolean;
 }
 
@@ -249,6 +252,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   naturalScrolling: true,
   render: DEFAULT_RENDER,
   entityIcons: { ...DEFAULT_ENTITY_ICONS },
+  entityIconScale: 1.5,
   onboarded: false,
 };
 

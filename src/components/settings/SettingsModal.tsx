@@ -11,7 +11,7 @@ import type { EntityType } from "@/types/scene.types";
 import { testConnection, type TestResult } from "@/ha/testConnection";
 import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
 import { parseSh3d } from "@/utils/sh3dParser";
-import { clearStoredModel, getModelMeta, fetchAddonConfig, type AddonConfig } from "@/utils/storage";
+import { clearStoredModel, getModelMeta, fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type AddonConfig } from "@/utils/storage";
 import { getLoadedModelInfo } from "@/utils/modelInfo";
 import { isIngress } from "@/ha/ingress";
 import ModelUploader from "./ModelUploader";
@@ -78,6 +78,34 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
   const [modelMeta, setModelMeta] = useState(() => getModelMeta());
   const [addonCfg, setAddonCfg] = useState<AddonConfig | null>(null);
   useEffect(() => { fetchAddonConfig().then(setAddonCfg); }, []);
+
+  // Central model upload (Ingress / add-on mode): push a GLB or SH3D straight to
+  // the HA www folder via the supervisor-proxy, no SSH/Samba needed.
+  const glbUploadRef = useRef<HTMLInputElement>(null);
+  const sh3dUploadRef = useRef<HTMLInputElement>(null);
+  const [uploadBusy, setUploadBusy] = useState<null | "glb" | "sh3d">(null);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+
+  const uploadCentral = async (file: File, kind: "glb" | "sh3d") => {
+    const ext = kind === "glb" ? ".glb" : ".sh3d";
+    if (!file.name.toLowerCase().endsWith(ext)) {
+      setUploadMsg(`Please choose a ${ext} file.`);
+      return;
+    }
+    setUploadBusy(kind);
+    setUploadMsg(null);
+    try {
+      const { path, size } = await uploadCentralModel(file, kind);
+      clearAddonConfigCache();
+      setAddonCfg(await fetchAddonConfig());
+      setUploadMsg(`Uploaded ${(size / 1_000_000).toFixed(1)} MB → www/${path}. Reloading…`);
+      setTimeout(() => onModelChanged(), 600); // remount to load the new central model
+    } catch (err) {
+      setUploadMsg((err as Error).message);
+    } finally {
+      setUploadBusy(null);
+    }
+  };
   const loadedModel = getLoadedModelInfo();
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);
   const [url, setUrl] = useState(config.haUrl);
@@ -304,6 +332,21 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           type; its ring colour shows the live state (gold = on, dim = off,
           red = alert, faded = unreachable). Edit per category — paste any emoji.
         </p>
+
+        <label style={{ display: "block", marginTop: 10 }}>
+          Icon size — {(config.entityIconScale ?? 1.5).toFixed(1)}×
+        </label>
+        <input
+          type="range" min={0.6} max={3} step={0.1}
+          value={config.entityIconScale ?? 1.5}
+          onChange={(e) => update({ entityIconScale: Number(e.target.value) })}
+          style={{ width: "100%" }}
+        />
+        <p className="muted body-text" style={{ marginTop: 4, fontSize: 11 }}>
+          Sets the base size of every badge. In the bird's-eye view the icons also
+          grow as you zoom in and shrink as you zoom out.
+        </p>
+
         <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>
           {(Object.keys(DEFAULT_ENTITY_ICONS) as EntityType[]).map((type) => (
             <label key={type} style={{ display: "flex", alignItems: "center", gap: 8, width: "calc(50% - 5px)" }}>
@@ -357,7 +400,8 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
             files are in use (read from the add-on options). Standalone / dev
             mode keeps the upload UI. */}
         {ingress ? (
-          addonCfg === null ? (
+          <>
+          {addonCfg === null ? (
             <p className="muted body-text">Reading add-on configuration…</p>
           ) : addonCfg.model_path ? (
             <div style={{ background: "rgba(107,170,117,0.1)", border: "1px solid rgba(107,170,117,0.3)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
@@ -393,24 +437,44 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
                 </div>
               )}
               <p className="muted body-text" style={{ marginTop: 8, fontSize: 11 }}>
-                These files are served from the add-on's configured paths (relative to the HA <code>www/</code> folder).
-                To change them, open <strong>Settings → Add-ons → Villa Kiosk → Configuration</strong> in Home Assistant
-                and edit <code>model_path</code> / <code>sh3d_path</code>.
+                Served from the add-on's configured paths (relative to the HA <code>www/</code> folder).
+                Upload replacements below, or set <code>model_path</code> / <code>sh3d_path</code> explicitly
+                under <strong>Settings → Add-ons → Villa Kiosk → Configuration</strong>.
               </p>
             </div>
           ) : (
             <div style={{ background: "rgba(224,170,80,0.1)", border: "1px solid rgba(224,170,80,0.35)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
               <div style={{ fontWeight: 600, fontSize: 13, color: "var(--warning, #e0aa50)", marginBottom: 6 }}>
-                ⚠ No central model configured
+                ⚠ No central model yet
               </div>
               <p className="muted body-text" style={{ fontSize: 12, margin: 0 }}>
-                Copy your <code>.glb</code> (and optional <code>.sh3d</code>) into the Home Assistant
-                <code> /config/www/</code> folder, then set <code>model_path</code> (e.g.
-                <code> villa-kiosk/TheLysHouse_1F.glb</code>) under
-                <strong> Settings → Add-ons → Villa Kiosk → Configuration</strong> and restart the add-on.
+                Upload your <code>.glb</code> (and optional <code>.sh3d</code>) below — it's stored centrally
+                so every kiosk loads it automatically. No SSH/Samba needed.
               </p>
             </div>
-          )
+          )}
+
+          {/* Central upload — writes straight into the HA www folder via the
+              add-on, overwriting the current central files. */}
+          <input ref={glbUploadRef} type="file" accept=".glb,model/gltf-binary" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCentral(f, "glb"); e.target.value = ""; }} />
+          <input ref={sh3dUploadRef} type="file" accept=".sh3d" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCentral(f, "sh3d"); e.target.value = ""; }} />
+          <div className="row" style={{ gap: 10, marginTop: 12 }}>
+            <button className="btn ghost" style={{ flex: 1 }} disabled={uploadBusy !== null}
+              onClick={() => glbUploadRef.current?.click()}>
+              <Upload size={15} /> {uploadBusy === "glb" ? "Uploading…" : "Upload central GLB"}
+            </button>
+            <button className="btn ghost" style={{ flex: 1 }} disabled={uploadBusy !== null}
+              onClick={() => sh3dUploadRef.current?.click()}>
+              <Upload size={15} /> {uploadBusy === "sh3d" ? "Uploading…" : "Upload central SH3D"}
+            </button>
+          </div>
+          <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+            Each upload overwrites the current central file and reloads every kiosk on next open.
+          </p>
+          {uploadMsg && <div className="test-result ok" style={{ marginTop: 8 }}>{uploadMsg}</div>}
+          </>
         ) : (
           <>
             <label>3D model</label>

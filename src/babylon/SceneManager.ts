@@ -142,6 +142,14 @@ export class SceneManager {
       onLongPress: (x, y) => this.pick.pickAtScreen(x, y, true),
     });
     this.overview.setNaturalScrolling(opts.config.naturalScrolling ?? true);
+    // Grow/shrink the state-icon badges with the bird's-eye zoom level. The
+    // overview camera fires this on every pan/rotate/zoom; EntityVisuals ignores
+    // sub-threshold changes, so the per-frame cost is negligible.
+    this.overview.camera.onViewMatrixChangedObservable.add(() => {
+      if (this.viewMode === "overview") {
+        this.visuals.setIconZoomScale(this.overview.getIconZoomScale());
+      }
+    });
 
     // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
     // Created after both cameras exist so SSAO can attach to all of them; the
@@ -240,6 +248,7 @@ export class SceneManager {
       // night). Hide the sky dome and pin a dark backdrop; lighting is untouched.
       this.sky.setEnabled(false);
       this.sun.setBackgroundOverride(new Color4(0.055, 0.062, 0.078, 1));
+      this.visuals.setIconZoomScale(this.overview.getIconZoomScale());
     } else {
       this.overview.disable();
       this.scene.activeCamera = this.camera.camera;
@@ -247,6 +256,7 @@ export class SceneManager {
       // Restore the real sky for the immersive walk-through view.
       this.sky.setEnabled(true);
       this.sun.setBackgroundOverride(null);
+      this.visuals.setIconZoomScale(1); // fixed screen size when walking
     }
     this.requestRender(600);
   }

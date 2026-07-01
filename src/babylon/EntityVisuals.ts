@@ -98,6 +98,10 @@ export class EntityVisuals {
   /** Last seen HA state per entity, so a label rebuild (toggle on / icon edit)
    *  can repaint badges immediately instead of waiting for the next push. */
   private lastState = new Map<string, HassEntity>();
+  /** User size multiplier (Settings slider) and live bird's-eye zoom factor;
+   *  the badge container is scaled by their product. */
+  private iconUserScale = 1;
+  private iconZoomScale = 1;
 
   constructor(
     scene: Scene,
@@ -123,6 +127,11 @@ export class EntityVisuals {
     // light out of the box, so there is nothing to tear down here when the toggle
     // changes.
     const iconsChanged = config.entityIcons !== prevIcons;
+    // Apply the user's size multiplier (combined with the live zoom factor).
+    if (typeof config.entityIconScale === "number" && config.entityIconScale !== this.iconUserScale) {
+      this.iconUserScale = config.entityIconScale;
+      this.applyIconScale();
+    }
     if (config.showEntityLabels !== prevLabels) {
       if (config.showEntityLabels) {
         this.rebuildLabels();
@@ -275,6 +284,24 @@ export class EntityVisuals {
     return this.config.entityIcons?.[type] ?? DEFAULT_ENTITY_ICONS[type] ?? "●";
   }
 
+  /** Live bird's-eye zoom factor (1 = default fit). Driven per-frame by
+   *  SceneManager from the overview camera; ignored (reset to 1) elsewhere. */
+  setIconZoomScale(z: number): void {
+    if (Math.abs(z - this.iconZoomScale) < 0.02) return; // skip imperceptible jitter
+    this.iconZoomScale = z;
+    this.applyIconScale();
+  }
+
+  /** Scale every badge container by user-size × zoom, around its anchor point. */
+  private applyIconScale(): void {
+    const s = this.iconUserScale * this.iconZoomScale;
+    for (const lbl of this.labels.values()) {
+      lbl.container.scaleX = s;
+      lbl.container.scaleY = s;
+    }
+    if (this.labels.size) this.requestRender();
+  }
+
   private rebuildLabels(): void {
     // Ensure the GUI layer exists.
     if (!this.labelLayer) {
@@ -351,6 +378,7 @@ export class EntityVisuals {
       const cached = this.lastState.get(entityId);
       if (cached) this.updateLabel(entityId, map, cached);
     }
+    this.applyIconScale(); // honour current size + zoom on freshly built badges
   }
 
   private updateLabel(entityId: string, map: EntityMapping, entity: HassEntity): void {

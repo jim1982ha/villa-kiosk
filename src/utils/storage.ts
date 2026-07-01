@@ -111,6 +111,40 @@ export async function versionedModelUrl(relPath: string): Promise<string> {
 
 let _addonConfigCache: AddonConfig | null = null;
 
+/** Drop the cached add-on config so the next fetchAddonConfig() re-reads it
+ *  (e.g. right after a central upload changes the effective paths). */
+export function clearAddonConfigCache(): void {
+  _addonConfigCache = null;
+}
+
+/**
+ * Upload a central model file (GLB or SH3D) to the add-on, which writes it into
+ * the HA www folder (overwriting the previous one). Only meaningful in add-on
+ * (Ingress) mode; the supervisor-proxy backs the /model-upload endpoint.
+ * Returns the resolved www-relative path. Invalidates the addon-config cache so
+ * a freshly-uploaded managed default is picked up on the next fetch.
+ */
+export async function uploadCentralModel(
+  file: File,
+  kind: "glb" | "sh3d",
+): Promise<{ path: string; size: number }> {
+  const resp = await fetch(ingressPath(`model-upload?kind=${kind}`), {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: file,
+  });
+  if (!resp.ok) {
+    let msg = `Upload failed (HTTP ${resp.status})`;
+    try {
+      const j = await resp.json() as { error?: string };
+      if (j?.error) msg = j.error;
+    } catch { /* non-JSON error body */ }
+    throw new Error(msg);
+  }
+  _addonConfigCache = null;
+  return resp.json() as Promise<{ path: string; size: number }>;
+}
+
 /** Fetch the add-on options from the supervisor-proxy. Cached after first call. */
 export async function fetchAddonConfig(): Promise<AddonConfig> {
   if (_addonConfigCache) return _addonConfigCache;

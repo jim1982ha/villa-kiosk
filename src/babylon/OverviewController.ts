@@ -62,6 +62,9 @@ export class OverviewController {
   private attached = false;
   private naturalScrolling = true;
   private bounds: Bounds = { minX: -20, maxX: 20, minZ: -20, maxZ: 20 };
+  /** Radius of the default whole-villa fit — the "1×" reference for icon zoom
+   *  scaling (icons grow when the user zooms past it, shrink when zoomed out). */
+  private refRadius = 30;
 
   private static readonly BETA_MIN = 0.05; // ~3° from straight down
   private static readonly BETA_MAX = 1.4;  // ~80° (near horizon)
@@ -85,6 +88,13 @@ export class OverviewController {
 
   setNaturalScrolling(v: boolean): void { this.naturalScrolling = v; }
 
+  /** Zoom factor for the state-icon badges: 1× at the default whole-villa fit,
+   *  >1 when zoomed in (closer), <1 when zoomed out. Clamped so icons never
+   *  vanish or swamp the view. */
+  getIconZoomScale(): number {
+    return clamp(this.refRadius / (this.camera.radius || this.refRadius), 0.5, 3);
+  }
+
   fitTo(ext: { min: Vector3; max: Vector3 }): void {
     const cx = (ext.min.x + ext.max.x) / 2;
     const cz = (ext.min.z + ext.max.z) / 2;
@@ -100,6 +110,7 @@ export class OverviewController {
     this.camera.alpha = -Math.PI / 2;
     this.camera.beta = 0.5;
     this.camera.radius = span * 1.05;
+    this.refRadius = this.camera.radius;
     this.cb.onActivity();
   }
 
