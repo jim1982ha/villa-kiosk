@@ -35,7 +35,7 @@ import type { Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
-import type { TeleportPoint } from "@/types/scene.types";
+import type { TeleportPoint, SceneMarker } from "@/types/scene.types";
 
 export interface SceneManagerOptions {
   config: AppConfig;
@@ -412,7 +412,7 @@ export class SceneManager {
     this.calibrateRooms(result.meshes);
 
     // Recreate persisted floating markers for this villa.
-    this.markers.sync(this.config.markers);
+    this.syncMarkersAndAnchors(this.config.markers);
 
     // Spawn INSIDE a real room (the main/living room if we have it). Falls back to
     // the model centre. This matters for models with big outdoor areas, where the
@@ -778,8 +778,16 @@ export class SceneManager {
 
   /** Re-sync floating markers from config (after add/remove/edit). */
   syncMarkers(): void {
-    this.markers.sync(this.config.markers);
+    this.syncMarkersAndAnchors(this.config.markers);
     this.requestRender();
+  }
+
+  /** Rebuild the floating markers AND re-register their anchors with
+   *  EntityVisuals, so markers get the same state-label badge as mesh-bound
+   *  entities (they otherwise only get their own orb/halo glow). */
+  private syncMarkersAndAnchors(defs: SceneMarker[]): void {
+    this.markers.sync(defs);
+    this.visuals.syncMarkerAnchors(this.markers.getAnchors());
   }
 
   /** Current active floor (for tagging a newly placed marker). */
@@ -790,6 +798,7 @@ export class SceneManager {
   /** Fan a state change out to both real-mesh visuals and floating markers. */
   applyEntityState(entity: HassEntity): void {
     this.visuals.apply(entity);
+    this.visuals.applyMarker(entity);
     this.markers.apply(entity);
   }
 
@@ -895,7 +904,7 @@ export class SceneManager {
       this.applyHighlight(this.loadedMeshes);
     }
     if (prev.markers !== config.markers) {
-      this.markers.sync(config.markers);
+      this.syncMarkersAndAnchors(config.markers);
     }
     this.requestRender();
   }

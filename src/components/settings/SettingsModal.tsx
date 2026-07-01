@@ -369,11 +369,11 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
         </p>
 
         <label style={{ display: "block", marginTop: 10 }}>
-          Icon size — {(config.entityIconScale ?? 1.5).toFixed(1)}×
+          Icon size — {(config.entityIconScale ?? 1.0).toFixed(1)}×
         </label>
         <input
           type="range" min={0.6} max={3} step={0.1}
-          value={config.entityIconScale ?? 1.5}
+          value={config.entityIconScale ?? 1.0}
           onChange={(e) => update({ entityIconScale: Number(e.target.value) })}
           style={{ width: "100%" }}
         />

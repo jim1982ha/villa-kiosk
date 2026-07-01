@@ -9,7 +9,7 @@
 
 import {
   MeshBuilder, StandardMaterial, Color3, Vector3, PointLight, TransformNode,
-  type Mesh, type Scene,
+  type AbstractMesh, type Mesh, type Scene,
 } from "@babylonjs/core";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityType, SceneMarker } from "@/types/scene.types";
@@ -59,6 +59,16 @@ export class MarkerManager {
   sync(defs: SceneMarker[]): void {
     this.clear();
     for (const def of defs) this.create(def);
+  }
+
+  /** Anchor meshes for the state-label overlay (EntityVisuals), so a marker —
+   *  a device with no mesh of its own — gets the same badge as a mesh-bound
+   *  entity. Markers own their own orb/halo glow visuals; this only feeds the
+   *  label pipeline. */
+  getAnchors(): { entityId: string; type: EntityType; anchor: AbstractMesh }[] {
+    return [...this.markers.values()].map((m) => ({
+      entityId: m.def.entityId, type: m.def.type, anchor: m.orb,
+    }));
   }
 
   private colorFor(type: EntityType): Color3 {

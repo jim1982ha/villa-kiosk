@@ -53,6 +53,10 @@ const TILT_SENS_DRAG  = 0.005;  // radians per pixel (Shift+drag vertical → pi
 const ZOOM_SENS_DRAG  = 0.004;  // per pixel × radius (Ctrl+drag vertical → zoom)
 const WHEEL_ZOOM_SENS = 0.006;  // per normalised wheel pixel (wheel / pinch → zoom)
 const TILT_SENS_TOUCH = 0.005;  // radians per pixel (two-finger centroid drag)
+// Fraction of the whole-villa fit radius used as the icon-scaling "1×"
+// reference (see fitTo). <1 so the default overview starts with shrunk
+// badges instead of full-size ones.
+const ICON_REF_FRACTION = 0.55;
 
 export class OverviewController {
   readonly camera: ArcRotateCamera;
@@ -110,7 +114,15 @@ export class OverviewController {
     this.camera.alpha = -Math.PI / 2;
     this.camera.beta = 0.5;
     this.camera.radius = span * 1.05;
-    this.refRadius = this.camera.radius;
+    // The icon "1x" reference is deliberately CLOSER than the whole-villa fit
+    // radius, not equal to it: the default overview is the single most crowded
+    // view (every device in the villa on screen at once), so anchoring "1x" to
+    // it renders every badge at full size exactly where there's least room —
+    // guaranteeing overlap and forcing the declutter pass to hide most of
+    // them. Referencing a nearer, room-scale radius means badges start already
+    // shrunk on the default overview and grow toward 1x as the user zooms into
+    // a room, where there's actually space for them.
+    this.refRadius = this.camera.radius * ICON_REF_FRACTION;
     this.cb.onActivity();
   }
 

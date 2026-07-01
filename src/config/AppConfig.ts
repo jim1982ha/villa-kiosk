@@ -252,7 +252,11 @@ export const DEFAULT_CONFIG: AppConfig = {
   naturalScrolling: true,
   render: DEFAULT_RENDER,
   entityIcons: { ...DEFAULT_ENTITY_ICONS },
-  entityIconScale: 1.5,
+  // 1.5x at the default whole-villa overview packed badges too tightly for the
+  // overlap-avoiding declutter to keep more than one per room visible (most
+  // devices in a room fall within the same clash radius). 1.0x is the badge's
+  // native (unscaled) size — still user-adjustable via the Settings slider.
+  entityIconScale: 1.0,
   onboarded: false,
 };
 

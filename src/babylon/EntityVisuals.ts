@@ -132,6 +132,10 @@ export class EntityVisuals {
   /** Fullscreen GUI layer for state labels. */
   private labelLayer: AdvancedDynamicTexture | null = null;
   private labels = new Map<string, LabelControls>();
+  /** Floating control-marker anchors (MarkerManager) — devices with no mesh of
+   *  their own. Label-only: the marker's orb/halo glow stays owned there, this
+   *  just feeds the same badge pipeline mesh-bound entities use. */
+  private markerAnchors = new Map<string, { type: EntityType; anchor: AbstractMesh }>();
   /** Last seen HA state per entity, so a label rebuild (toggle on / icon edit)
    *  can repaint badges immediately instead of waiting for the next push. */
   private lastState = new Map<string, HassEntity>();
@@ -312,7 +316,30 @@ export class EntityVisuals {
     if (map.type === "light") {
       this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
     }
-    this.updateLabel(entity.entity_id, map, entity);
+    this.updateLabel(entity.entity_id, map.type, entity);
+    this.requestRender();
+  }
+
+  /** Replace the set of floating marker anchors (called whenever MarkerManager
+   *  re-syncs). A mesh binding for the same entity_id always wins — a marker
+   *  is only a fallback for devices without real geometry. */
+  syncMarkerAnchors(defs: { entityId: string; type: EntityType; anchor: AbstractMesh }[]): void {
+    this.markerAnchors.clear();
+    for (const d of defs) {
+      if (this.byEntity.has(d.entityId)) continue;
+      this.markerAnchors.set(d.entityId, { type: d.type, anchor: d.anchor });
+    }
+    if (this.config.showEntityLabels) this.rebuildLabels();
+  }
+
+  /** State push for a marker-bound entity. Mesh-bound entities go through
+   *  apply(); this is the marker-only equivalent — label only, since the
+   *  marker's own orb/halo visuals are updated separately by MarkerManager. */
+  applyMarker(entity: HassEntity): void {
+    const m = this.markerAnchors.get(entity.entity_id);
+    if (!m) return;
+    this.lastState.set(entity.entity_id, entity);
+    this.updateLabel(entity.entity_id, m.type, entity);
     this.requestRender();
   }
 
@@ -353,13 +380,22 @@ export class EntityVisuals {
     this.labels.clear();
     this.labelLayer.rootContainer.isVisible = true;
 
+    // Two anchor sources feed the same badge pipeline: real mesh-bound entities
+    // (from the GLB) and floating control markers (devices with no mesh of
+    // their own — see MarkerManager). A mesh binding always takes priority for
+    // a given entity_id (enforced in syncMarkerAnchors).
+    const sources: { entityId: string; anchor: AbstractMesh; type: EntityType }[] = [];
     for (const [entityId, meshes] of this.byEntity) {
       if (!meshes.length) continue;
       const map = this.mapping.get(entityId);
       if (!map) continue;
+      sources.push({ entityId, anchor: meshes[0], type: map.type });
+    }
+    for (const [entityId, m] of this.markerAnchors) {
+      sources.push({ entityId, anchor: m.anchor, type: m.type });
+    }
 
-      const anchor = meshes[0];
-
+    for (const { entityId, anchor, type } of sources) {
       // A compact column: a round "glass" icon badge over an optional value pill.
       // The device TYPE reads from the (pixel-centred) glyph image, the STATE from
       // the ring colour, and the value pill only appears for entities with a
@@ -392,7 +428,7 @@ export class EntityVisuals {
       }
       container.addControl(badge);
 
-      const glyph = new Image(`lbl_glyph_${entityId}`, glyphDataUrl(this.iconFor(map.type)));
+      const glyph = new Image(`lbl_glyph_${entityId}`, glyphDataUrl(this.iconFor(type)));
       glyph.width = "26px";
       glyph.height = "26px";
       glyph.stretch = Image.STRETCH_UNIFORM;
@@ -421,30 +457,30 @@ export class EntityVisuals {
       valueWrap.addControl(valueText);
       container.addControl(valueWrap);
 
-      this.labels.set(entityId, { container, badge, glyph, valueWrap, valueText, anchor, type: map.type, priority: 1 });
+      this.labels.set(entityId, { container, badge, glyph, valueWrap, valueText, anchor, type, priority: 1 });
 
       // Repaint from the last known state so a rebuild (toggle on / icon edit)
       // shows live status immediately instead of an idle default.
       const cached = this.lastState.get(entityId);
-      if (cached) this.updateLabel(entityId, map, cached);
+      if (cached) this.updateLabel(entityId, type, cached);
     }
     this.applyIconScale(); // honour current size + zoom on freshly built badges
   }
 
-  private updateLabel(entityId: string, map: EntityMapping, entity: HassEntity): void {
+  private updateLabel(entityId: string, type: EntityType, entity: HassEntity): void {
     const lbl = this.labels.get(entityId);
     if (!lbl) return;
-    const kind = this.badgeKind(map.type, entity);
+    const kind = this.badgeKind(type, entity);
     const style = BADGE_STYLE[kind];
     lbl.badge.color = style.ring;
     lbl.badge.alpha = style.alpha;
     lbl.badge.shadowColor = style.glow;
     lbl.badge.shadowBlur = kind === "on" || kind === "alert" ? 10 : 6;
     lbl.priority = KIND_PRIORITY[kind];
-    lbl.glyph.source = glyphDataUrl(this.iconFor(map.type)); // honour live icon edits
+    lbl.glyph.source = glyphDataUrl(this.iconFor(type)); // honour live icon edits
     lbl.glyph.alpha = kind === "unavailable" ? 0.6 : 1;
 
-    const value = this.compactValue(map.type, entity);
+    const value = this.compactValue(type, entity);
     lbl.valueText.text = value;
     lbl.valueWrap.isVisible = value.length > 0;
   }
