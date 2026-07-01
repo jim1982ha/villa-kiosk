@@ -1,5 +1,66 @@
 # Changelog
 
+## 2.4.41
+
+### Fix "Failed to load the 3D model — HTTP 403" after uploading from the UI
+- **Root cause: uploaded model files were written 0600 (root-only), so nginx
+  could not read them.** The Settings upload streamed the GLB/SH3D into a
+  `tempfile.mkstemp()` temp file — created mode `0600` and owned by the proxy
+  (root) — then atomically `os.replace()`'d it over the destination. The live
+  model file inherited `0600`; nginx's unprivileged worker got permission-denied
+  opening it and returned **HTTP 403 Forbidden**. Files copied in manually over
+  Samba/SSH land as `0644`, which is why only UI uploads were affected.
+- **Fix:** the upload handler now `chmod`s the temp file to `0644` (world-readable)
+  before the atomic replace, so an uploaded model is served exactly like a
+  hand-copied one.
+
+## 2.4.40
+
+### Center the emoji glyphs inside the state-label badges
+- **Icons sat high in their circular badge.** Emoji render high on the font
+  baseline, so the glyph's visual mass was above the badge centre. The glyph
+  `TextBlock` now forces horizontal + vertical centre alignment, disables
+  `resizeToFit` so its box fills the badge, and applies a small `+2px`
+  optical-centre nudge. The nudge lives inside the scaled container, so it stays
+  correct as the icon-size slider and bird's-eye zoom scale the badges.
+
+## 2.4.39
+
+### Upload central models from the app; sizable, zoom-reactive icon badges
+- **Upload the GLB / SH3D directly from Settings.** New "Upload central GLB" and
+  "Upload central SH3D" buttons stream the file straight into the HA `www` folder
+  (atomic overwrite — each upload cleanly replaces the previous file), removing
+  the need to copy models in over SSH or Samba. The config mount was switched to
+  read-write to allow this.
+- **One control for icon size + zoom-reactive scaling.** A single "Icon size"
+  slider in Settings scales all state-label badges, and the badges now grow and
+  shrink as you zoom the bird's-eye view.
+
+## 2.4.38
+
+### Dark overview backdrop, toggle flicker fix, visible clock, state-label icons
+- **Dark integrated backdrop for the bird's-eye overview.** The bright/white
+  background was harsh at night; the overview now uses a dark, integrated backdrop
+  while first-person keeps the real sky.
+- **No more full-scene refresh when flipping label/highlight toggles.** Toggling
+  "Show device state labels" or "Highlight clickable objects" re-applied render
+  effects and re-indexed meshes on every change, causing a visible flicker/reload.
+  Config changes are now reference-equality gated so only the affected subsystem
+  updates.
+- **Clearer top-right clock** restyled as a legible pill.
+- **State-aware icon badges.** Device state labels are now contextual, per-category
+  icons (bulb for lights, fan, lock, etc.) with distinct looks for
+  unreachable / on / off and state-aware values for non-binary entities.
+
+## 2.4.37
+
+### Default to overview, tap-to-toggle, simpler render, polished night look
+- **Opens in the bird's-eye overview by default.**
+- **Tap toggles on/off entities directly; long-press opens the full panel.** Fixes
+  the per-entity "Confirm" flag being ignored (pick callbacks were captured once at
+  mount and went stale); pick callbacks now route through live refs.
+- **Simplified render pipeline and polished night lighting.**
+
 ## 2.4.36
 
 ### Fix: light fixtures whose entity_id contains "ceiling" were invisible

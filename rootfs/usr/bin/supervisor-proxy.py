@@ -209,6 +209,11 @@ async def model_upload_handler(request: web.Request) -> web.Response:
                 out.write(chunk)
         if total == 0:
             raise web.HTTPBadRequest(text="empty upload")
+        # mkstemp() creates the temp file 0600 (root-only). nginx workers run
+        # unprivileged, so a 0600 model file makes nginx return HTTP 403 when it
+        # tries to serve /model/... . Relax to 0644 (world-readable, matching a
+        # file copied in via Samba/SSH) before the atomic replace.
+        os.chmod(tmp, 0o644)
         os.replace(tmp, dest)
     except BaseException:
         try:
