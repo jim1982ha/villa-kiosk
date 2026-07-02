@@ -155,9 +155,11 @@ export function clearAddonConfigCache(): void {
  * (Ingress) mode; the supervisor-proxy backs the /model-upload endpoint.
  * Returns the resolved www-relative path. Invalidates the addon-config cache so
  * a freshly-uploaded managed default is picked up on the next fetch.
+ * Takes a Blob (not just File) so a caller can upload a re-packaged Blob
+ * (e.g. sh3dParser's minifySh3d) instead of the original file as-is.
  */
 export async function uploadCentralModel(
-  file: File,
+  file: Blob,
   kind: "glb" | "sh3d",
 ): Promise<{ path: string; size: number }> {
   const resp = await fetch(ingressPath(`model-upload?kind=${kind}`), {

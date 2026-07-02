@@ -11,7 +11,7 @@ import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, DEFAULT_ENTITY_ICON
 import type { EntityType } from "@/types/scene.types";
 import { testConnection, type TestResult } from "@/ha/testConnection";
 import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
-import { parseSh3d } from "@/utils/sh3dParser";
+import { parseSh3d, minifySh3d } from "@/utils/sh3dParser";
 import { clearStoredModel, getModelMeta, fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type AddonConfig } from "@/utils/storage";
 import { getLoadedModelInfo } from "@/utils/modelInfo";
 import { isIngress } from "@/ha/ingress";
@@ -86,24 +86,31 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
   const glbUploadRef = useRef<HTMLInputElement>(null);
   const sh3dUploadRef = useRef<HTMLInputElement>(null);
   const [uploadBusy, setUploadBusy] = useState<null | "glb" | "sh3d">(null);
-  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [uploadMsg, setUploadMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   const uploadCentral = async (file: File, kind: "glb" | "sh3d") => {
     const ext = kind === "glb" ? ".glb" : ".sh3d";
     if (!file.name.toLowerCase().endsWith(ext)) {
-      setUploadMsg(`Please choose a ${ext} file.`);
+      setUploadMsg({ text: `Please choose a ${ext} file.`, ok: false });
       return;
     }
     setUploadBusy(kind);
     setUploadMsg(null);
     try {
-      const { path, size } = await uploadCentralModel(file, kind);
+      // Home Assistant's Ingress proxy hard-caps a proxied upload at 16 MB —
+      // a Supervisor-level limit this add-on can't raise. A full .sh3d
+      // bundles every catalog furniture piece's 3D preview (tens of MB) but
+      // this app only ever reads Home.xml out of it, so re-zip down to just
+      // that before sending — same content the app actually uses, comfortably
+      // under the ceiling for any realistic villa plan.
+      const payload: Blob = kind === "sh3d" ? await minifySh3d(file) : file;
+      const { path, size } = await uploadCentralModel(payload, kind);
       clearAddonConfigCache();
       setAddonCfg(await fetchAddonConfig());
-      setUploadMsg(`Uploaded ${(size / 1_000_000).toFixed(1)} MB → www/${path}. Reloading…`);
+      setUploadMsg({ text: `Uploaded ${(size / 1_000_000).toFixed(1)} MB → www/${path}. Reloading…`, ok: true });
       setTimeout(() => onModelChanged(), 600); // remount to load the new central model
     } catch (err) {
-      setUploadMsg((err as Error).message);
+      setUploadMsg({ text: (err as Error).message, ok: false });
     } finally {
       setUploadBusy(null);
     }
@@ -532,7 +539,11 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
             Each upload overwrites the current central file and reloads every kiosk on next open.
           </p>
-          {uploadMsg && <div className="test-result ok" style={{ marginTop: 8 }}>{uploadMsg}</div>}
+          {uploadMsg && (
+            <div className={`test-result ${uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
+              {uploadMsg.text}
+            </div>
+          )}
           </>
         ) : (
           <>

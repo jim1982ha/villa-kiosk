@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.4.64
+
+### Fix: "Upload central SH3D" failed with HTTP 413 for any real-sized villa
+- Root cause, finally confirmed from the browser console: Home Assistant's
+  Supervisor Ingress proxy hard-caps a proxied request body at **16 MB** — a
+  platform-level limit (home-assistant/supervisor#2950) this add-on has no
+  way to raise, no matter how nginx's or aiohttp's own limits are set (both
+  were already generous — verified aiohttp's own default doesn't even apply
+  to this handler's streaming upload path). A SweetHome `.sh3d` bundles the
+  full 3D preview model (OBJ/MTL/textures) for every catalog furniture piece
+  used in the plan, which is what actually balloons it to tens of MB — a
+  46.8 MB villa file in testing.
+- This app only ever reads `Home.xml` out of a `.sh3d` (room names/shapes +
+  a few furniture positions) — never the embedded furniture previews. The
+  central-SH3D upload now re-zips down to just that entry before sending:
+  confirmed 46.8 MB → 20.7 KB on a real villa file, byte-identical on
+  round-trip, all rooms intact. Comfortably clears the 16 MB ceiling for any
+  realistic villa plan, with zero functional loss.
+- Also fixed: a failed upload's message was shown in green (success)
+  styling regardless of outcome — it now shows red for a failure.
+
 ## 2.4.63
 
 ### Fix: a re-uploaded central GLB/SH3D could silently stay stale for up to an hour

@@ -66,3 +66,29 @@ export async function parseSh3d(data: ArrayBuffer | File): Promise<ParsedSh3d> {
 
   return { rooms, entities };
 }
+
+/**
+ * Re-zip a .sh3d down to just its Home.xml — the only entry this app ever
+ * reads (see parseSh3d above). A SweetHome project also bundles the full 3D
+ * preview model (OBJ/MTL/textures) for every catalog piece of furniture used
+ * in the plan, which is what actually makes these files tens of MB; none of
+ * that is ever touched here.
+ *
+ * This exists because Home Assistant's Ingress proxy hard-caps a proxied
+ * request body at 16 MB (a Supervisor-level limit — see
+ * github.com/home-assistant/supervisor/issues/2950 — that this add-on has no
+ * way to raise), so uploading a full multi-tens-of-MB .sh3d through the
+ * kiosk's "Upload central SH3D" button fails with a 413 no matter how large
+ * nginx/aiohttp's own limits are set. Home.xml alone is realistically well
+ * under a megabyte even for a large villa, so minifying before upload avoids
+ * the ceiling entirely with zero functional loss.
+ */
+export async function minifySh3d(data: ArrayBuffer | File): Promise<Blob> {
+  const zip = await JSZip.loadAsync(data);
+  const homeXml = zip.file("Home.xml");
+  if (!homeXml) throw new Error("Not a valid .sh3d (no Home.xml inside).");
+  const xmlText = await homeXml.async("string");
+  const mini = new JSZip();
+  mini.file("Home.xml", xmlText);
+  return mini.generateAsync({ type: "blob", compression: "DEFLATE" });
+}
