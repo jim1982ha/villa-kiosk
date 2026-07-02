@@ -27,12 +27,28 @@ export interface Vec3 {
   z: number;
 }
 
+/** A saved bird's-eye camera framing for this room — angle, tilt and zoom,
+ *  not just where to pan to. Independent of `position`/`target` (which are
+ *  the FIRST-PERSON teleport destination): the overview camera is one shared
+ *  rig for the whole villa, so "this room's view" in overview means "orbit
+ *  to this exact alpha/beta/radius/target", not a room-scale standing pose. */
+export interface OverviewPose {
+  alpha: number;
+  beta: number;
+  radius: number;
+  target: Vec3;
+}
+
 export interface TeleportPoint {
   name: string;
   floor: 1 | 2;
   position: Vec3;
   target: Vec3;
   thumbnail?: string;
+  /** Set by long-press/right-click on this room's card while browsing in
+   *  overview mode (see TeleportMenu.setAnchorHere) — restored exactly by
+   *  SceneManager.navigateTo when tapping the card again in overview. */
+  overviewPose?: OverviewPose;
 }
 
 /**

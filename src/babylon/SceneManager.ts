@@ -335,12 +335,18 @@ export class SceneManager {
 
   /**
    * Navigate to a teleport point correctly for whichever mode is active:
-   * first-person → animated camera teleport; overview → pan the bird's-eye
-   * target to the room centre (stays in overview mode).
+   * first-person → animated camera teleport; overview → restore that room's
+   * saved bird's-eye framing (angle/tilt/zoom) if one was set via long-press
+   * on its card, otherwise just pan the bird's-eye target to the room centre
+   * (stays in overview mode either way).
    */
   navigateTo(point: TeleportPoint): void {
     if (this.viewMode === "overview") {
-      this.overview.panTo(point.position.x, point.position.z);
+      if (point.overviewPose) {
+        this.overview.applyPose(point.overviewPose);
+      } else {
+        this.overview.panTo(point.position.x, point.position.z);
+      }
     } else {
       this.camera.teleport(point);
     }

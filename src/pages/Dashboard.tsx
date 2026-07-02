@@ -179,8 +179,17 @@ export default function Dashboard() {
         // has no sh3d counterpart, e.g. a staircase landing — has no fresh
         // entry to refresh from, so it must be preserved rather than dropped.
         const freshNames = new Set(pts.map((p) => p.name));
+        const prevByName = new Map(configRef.current.teleportPoints.map((p) => [p.name, p]));
+        // A user-saved bird's-eye framing (Rooms-menu long-press in overview,
+        // see TeleportMenu) is independent of the room-polygon fit that just
+        // ran — carry it forward onto the refreshed point instead of losing
+        // it every time a model reload or mirror-flip toggle re-calibrates.
+        const merged = pts.map((p) => {
+          const savedPose = prevByName.get(p.name)?.overviewPose;
+          return savedPose ? { ...p, overviewPose: savedPose } : p;
+        });
         const custom = configRef.current.teleportPoints.filter((p) => !freshNames.has(p.name));
-        update({ teleportPoints: [...pts, ...custom] });
+        update({ teleportPoints: [...merged, ...custom] });
       }
     };
     const offReady = manager.onReady(adopt);

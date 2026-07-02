@@ -84,20 +84,32 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
    * camera goes dormant (input detached, position frozen) while browsing in
    * overview — reading it there silently returns a stale pose from wherever
    * it was last left (often the initial spawn), not what's on screen. That
-   * was the bug: the anchor confirmation fired correctly, but in overview
-   * mode it was anchoring to the wrong camera, so clicking the card back
-   * never appeared to go anywhere new.
+   * was the first bug here: the anchor confirmation fired correctly, but in
+   * overview mode it was anchoring to the wrong camera, so clicking the card
+   * back never appeared to go anywhere new.
    *
-   * In overview mode there's no first-person "look direction" to capture
-   * (it's a top-down pan/zoom, not a walk-through pose), so we derive a
-   * standing position at the panned-to spot instead — same synthesis
-   * SceneManager already uses for its own calibrated-room fallback target.
+   * In overview mode there's no first-person "look direction" to derive a
+   * standing position/target from, so those two are still synthesized (same
+   * fallback SceneManager uses for its own calibrated rooms) purely so a
+   * LATER first-person teleport to this room lands somewhere sane. The part
+   * that actually matters in overview — the full angle/tilt/zoom the user
+   * just framed by hand — is captured separately as `overviewPose` (a second
+   * bug: navigateTo used to only ever pan to position.x/z in overview,
+   * silently discarding whatever height/rotation/zoom had been dialled in;
+   * SceneManager.navigateTo now restores overviewPose exactly when present).
    */
-  const captureCurrentPose = (): { position: Vec3; target: Vec3 } => {
+  const captureCurrentPose = (): { position: Vec3; target: Vec3; overviewPose?: TeleportPoint["overviewPose"] } => {
     if (manager!.getViewMode() === "overview") {
-      const t = manager!.overview.camera.target;
-      const position = { x: round(t.x), y: round(config.eyeHeight), z: round(t.z) };
-      return { position, target: { x: position.x, y: position.y, z: position.z + 1.5 } };
+      const pose = manager!.overview.getPose();
+      const position = { x: round(pose.target.x), y: round(config.eyeHeight), z: round(pose.target.z) };
+      return {
+        position,
+        target: { x: position.x, y: position.y, z: position.z + 1.5 },
+        overviewPose: {
+          alpha: pose.alpha, beta: pose.beta, radius: pose.radius,
+          target: { x: round(pose.target.x), y: round(pose.target.y), z: round(pose.target.z) },
+        },
+      };
     }
     const cam = manager!.camera.camera;
     const pos = cam.position;
@@ -111,9 +123,15 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
   /** Calibrate: store the current pose as this room's anchor. */
   const setAnchorHere = (point: TeleportPoint) => {
     if (!manager) return;
-    const { position, target } = captureCurrentPose();
+    const { position, target, overviewPose } = captureCurrentPose();
     const updated = config.teleportPoints.map((p) =>
-      p.name === point.name ? { ...p, position, target } : p,
+      p.name === point.name
+        // Re-anchoring from first-person leaves a previously-set overviewPose
+        // untouched (the two modes calibrate independent things) rather than
+        // dropping it just because this particular save didn't come from
+        // overview mode.
+        ? { ...p, position, target, ...(overviewPose ? { overviewPose } : {}) }
+        : p,
     );
     update({ teleportPoints: updated });
 
@@ -156,8 +174,8 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
     if (!manager) return;
     const name = prompt("Name this room/viewpoint:")?.trim();
     if (!name) return;
-    const { position, target } = captureCurrentPose();
-    const point: TeleportPoint = { name, floor: currentFloor as 1 | 2, position, target };
+    const { position, target, overviewPose } = captureCurrentPose();
+    const point: TeleportPoint = { name, floor: currentFloor as 1 | 2, position, target, overviewPose };
     update({ teleportPoints: [...config.teleportPoints, point] });
   };
 

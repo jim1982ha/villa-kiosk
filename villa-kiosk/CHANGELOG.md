@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.4.57
+
+### Fix: re-anchoring a room's bird's-eye view in the Rooms menu didn't restore the angle/tilt/zoom
+- v2.4.56 fixed which camera the long-press/right-click gesture captured
+  (the overview camera instead of a stale dormant first-person one) but the
+  restore side was still broken: `TeleportPoint` only ever stored a flat
+  position + look-at target, and clicking a room card while in overview mode
+  did nothing but pan the camera to that x/z — the height, rotation and zoom
+  you'd carefully framed were silently discarded, so the view you got back
+  never matched what you saved.
+- Added a proper `overviewPose` (angle/tilt/zoom + pan target) captured from
+  the live overview camera on long-press/right-click, and overview-mode
+  navigation now restores it exactly instead of just panning. "Add room
+  here" gained the same capture.
+- Also fixed a durability gap this uncovered: rooms parsed from the villa's
+  floor plan get their position fully rebuilt on every model reload or
+  mirror-flip recalibration (by design, so the fit stays correct) — which
+  would have silently discarded a saved `overviewPose` on the very next
+  reload. It's now carried forward across recalibration instead of being
+  dropped.
+
 ## 2.4.56
 
 ### New: fix a per-device default overview view
