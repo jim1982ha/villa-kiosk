@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.4.65
+
+### Fix: a state badge could become untappable when crowded next to another one
+- State labels are deliberately never auto-hidden when crowded (an earlier
+  version tried that and it backfired — see `cullLabels()`'s docstring), but
+  nobody had accounted for a side effect: when two badges visually overlap
+  on screen, Babylon's GUI layer gives the topmost one exclusive claim to
+  taps landing in the overlapping area — the one underneath became a dead
+  zone there. Camera-angle-dependent (the two badges' screen positions
+  change relative to each other) and explained why hovering near the actual
+  3D device sometimes "fixed" it — that's a different screen position than
+  the badge's exact center, one that happened to land outside the overlap.
+- `cullLabels()` now nudges overlapping badges apart by a few pixels every
+  frame, live, whenever two are closer than their combined tap-target size —
+  nothing is hidden, both stay independently visible and tappable. Verified
+  the separation math standalone: near-overlapping pair separates to just
+  past the minimum distance, exactly-coincident badges use a stable fallback
+  direction (no divide-by-zero), and distant badges are completely
+  untouched.
+
 ## 2.4.64
 
 ### Fix: "Upload central SH3D" failed with HTTP 413 for any real-sized villa

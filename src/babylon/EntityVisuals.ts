@@ -63,6 +63,16 @@ const LABEL_ANCHOR_MARGIN = 0.12;
 const LABEL_HEIGHT_PX = 76;
 // Height of the value pill (e.g. "42%", "21°") shown under the badge.
 const VALUE_CHIP_HEIGHT_PX = 18;
+// The badge circle's rendered diameter (unscaled) — also the basis for the
+// overlap-separation check in cullLabels (see BADGE_MIN_SEPARATION_FRAC).
+const BADGE_DIAMETER_PX = 40;
+// Two badges' tap targets are Babylon GUI rectangles; whichever is drawn on
+// top exclusively claims a tap landing where they overlap, so the one
+// underneath becomes a dead zone at that screen position. Every badge stays
+// visible all the time by design (see cullLabels' docstring) — the fix is to
+// nudge overlapping badges apart by a few pixels, not hide either one.
+// <1 so badges separate slightly before their circles are fully touching.
+const BADGE_MIN_SEPARATION_FRAC = 0.9;
 
 // Pulse animation speed in radians per second (was 0.06 per frame at ~60 fps).
 // Advanced by real elapsed time so the alert pulse breathes at the same rate on
@@ -607,9 +617,9 @@ export class EntityVisuals {
       container.linkOffsetYInPixels = -LABEL_HEIGHT_PX / 2;
 
       const badge = new Rectangle(`lbl_badge_${entityId}`);
-      badge.width = "40px";
-      badge.height = "40px";
-      badge.cornerRadius = 20; // = half of width/height -> a circle
+      badge.width = `${BADGE_DIAMETER_PX}px`;
+      badge.height = `${BADGE_DIAMETER_PX}px`;
+      badge.cornerRadius = BADGE_DIAMETER_PX / 2; // = half of width/height -> a circle
       badge.thickness = 2.5;
       badge.background = BADGE_BASE_FILL;
       badge.color = BADGE_STYLE.off.ring;
@@ -737,13 +747,52 @@ export class EntityVisuals {
     const tm = this.scene.getTransformMatrix();
     const hidden = this.config.hiddenCategories;
 
+    // First pass: visibility (category filter + behind-camera) and each
+    // shown badge's raw screen pixel position.
+    const visible: { lbl: LabelControls; x: number; y: number }[] = [];
     for (const lbl of this.labels.values()) {
       if (hidden.includes(lbl.category)) {
         lbl.container.isVisible = false;
         continue;
       }
       const p = Vector3.Project(lbl.anchor.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
-      lbl.container.isVisible = p.z >= 0 && p.z <= 1;
+      const onScreen = p.z >= 0 && p.z <= 1;
+      lbl.container.isVisible = onScreen;
+      if (onScreen) visible.push({ lbl, x: p.x * w, y: p.y * h });
+    }
+
+    // Second pass: nudge apart any two badges close enough that the topmost
+    // one (Babylon GUI hit-tests front-to-back) would fully claim taps meant
+    // for the one underneath — recomputed every frame so it tracks the
+    // camera live. Only the offset changes; nothing is hidden.
+    const badgeSize = BADGE_DIAMETER_PX * this.iconUserScale * this.iconZoomScale;
+    const minSep = badgeSize * BADGE_MIN_SEPARATION_FRAC;
+    const nudge = new Map<LabelControls, { x: number; y: number }>();
+    for (let i = 0; i < visible.length; i++) {
+      for (let j = i + 1; j < visible.length; j++) {
+        const a = visible[i];
+        const b = visible[j];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist >= minSep) continue;
+        // Push apart along the line between them; a stable fallback
+        // direction (straight up/down) when their centres coincide exactly.
+        const ux = dist > 1e-3 ? dx / dist : 0;
+        const uy = dist > 1e-3 ? dy / dist : 1;
+        const push = (minSep - dist) / 2 + 1;
+        const na = nudge.get(a.lbl) ?? { x: 0, y: 0 };
+        const nb = nudge.get(b.lbl) ?? { x: 0, y: 0 };
+        na.x -= ux * push; na.y -= uy * push;
+        nb.x += ux * push; nb.y += uy * push;
+        nudge.set(a.lbl, na);
+        nudge.set(b.lbl, nb);
+      }
+    }
+    for (const { lbl } of visible) {
+      const n = nudge.get(lbl);
+      lbl.container.linkOffsetXInPixels = n ? n.x : 0;
+      lbl.container.linkOffsetYInPixels = -LABEL_HEIGHT_PX / 2 + (n ? n.y : 0);
     }
   }
 
