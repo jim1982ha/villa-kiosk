@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.4.63
+
+### Fix: a re-uploaded central GLB/SH3D could silently stay stale for up to an hour
+- Root cause, finally isolated: `versionedModelUrl()` (the client-side logic
+  that detects a replaced central model file) HEADs the bare, query-less
+  `/model/...` URL first to read its current ETag/Last-Modified, then appends
+  that as `?v=<tag>` before the real download — that tag change is the ONLY
+  signal the app has that the file was replaced. The service worker only
+  intercepts `GET` requests, so that HEAD request fell through to the
+  browser's own native HTTP cache — and nginx was sending
+  `Cache-Control: public, max-age=3600` on EVERY `/model/` response,
+  including that probe. Net effect: the browser could keep answering the
+  version-check with the OLD file's headers for up to an hour after any
+  re-upload, producing the same stale `?v=` tag, which hit the same entry in
+  the service worker's own model cache — so a fresh GLB or SH3D upload could
+  silently fail to take effect no matter how many times you re-uploaded or
+  hard-refreshed, until that hour happened to elapse.
+- `nginx.conf`'s `/model/` location now varies `Cache-Control` by whether the
+  request carries `?v=`: a versioned URL is a distinct, immutable resource by
+  construction (a changed file always gets a new tag) and is now cached
+  aggressively forever; the bare/unversioned path (used only for the
+  freshness probe) now always revalidates (`no-cache`), so a re-upload is
+  detected on the very next load. Verified with `nginx -t` and a live
+  request against both URL shapes before shipping.
+- This affected the GLB exactly as much as the SH3D — if your kitchen
+  geometry also hadn't visually updated yet, this is why.
+
 ## 2.4.62
 
 ### Change: surface a failed central .sh3d refresh instead of failing silently
