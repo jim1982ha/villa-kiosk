@@ -30,26 +30,13 @@ import { loadModelInto } from "./ModelLoader";
 import { applyGrassGround } from "./GroundGrass";
 import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
-import { fitAffine, affineResidual, spanArea, type PlanWorldPair } from "@/utils/affineFit";
+import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
+import type { PlanWorldPair } from "@/utils/affineFit";
 import type { Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint, SceneMarker } from "@/types/scene.types";
-
-/**
- * SweetHome 3D plan-space unit direction for an object's `angle` (degrees).
- * SweetHome's plan is Y-down (X east, Y south) and the angle spinner turns
- * furniture CLOCKWISE from its modelled "south-facing" (plan +Y) default —
- * unverified against a real rotated camera yet (every camera in the current
- * villa is still at the default angle=0, see EntityCategories/CHANGELOG); if
- * a live test with an actually-rotated camera shows the beam pointing the
- * wrong way, this is the one place to flip the sign or swap sin/cos.
- */
-function planAngleToDir(angleDeg: number): { px: number; py: number } {
-  const rad = (angleDeg * Math.PI) / 180;
-  return { px: Math.sin(rad), py: Math.cos(rad) };
-}
 
 export interface SceneManagerOptions {
   config: AppConfig;
@@ -480,113 +467,36 @@ export class SceneManager {
     }
 
     // --- Build the plan→world transform ---
-    // Three strategies, in order of accuracy:
-    //   1. ≥3 well-spread entity meshes → full affine fit (exact; any rotation/mirror).
-    //   2. 1–2 entity meshes → solve sign + translation against the bbox scale
-    //      (deterministically fixes left/right + front/back mirroring).
-    //   3. No entity meshes → raycast-vote orientation over all four mirror combos.
-    // A manual flipX/flipZ override (Settings) is applied on top of whichever runs.
-    let planToWorld: ((px: number, py: number) => { x: number; z: number }) | null = null;
-
-    // Room-polygon bounding box + scale (needed by strategies 2 and 3).
-    let pxMin = Infinity, pxMax = -Infinity, pyMin = Infinity, pyMax = -Infinity;
-    for (const r of rooms) for (const p of r.points) {
-      pxMin = Math.min(pxMin, p.x); pxMax = Math.max(pxMax, p.x);
-      pyMin = Math.min(pyMin, p.y); pyMax = Math.max(pyMax, p.y);
-    }
-    const planCx = (pxMin + pxMax) / 2;
-    const planCy = (pyMin + pyMax) / 2;
+    // Delegated to the pure solver in roomCalibration.ts (three strategies, in
+    // order of accuracy). A manual flipX/flipZ override (Settings) is applied
+    // on top of whichever runs. The solver only needs one scene query — the
+    // no-entity fallback's "does a downward ray hit a floor here?" probe.
     const ext = this.worldExtends(meshes);
-    const modelW = ext.max.x - ext.min.x;
-    const modelD = ext.max.z - ext.min.z;
-    const scaleX = pxMax > pxMin ? modelW / (pxMax - pxMin) : 0.01;
-    const scaleZ = pyMax > pyMin ? modelD / (pyMax - pyMin) : 0.01;
-    const planScale = (scaleX + scaleZ) / 2;
-    // A correct fit should reproduce entity positions to well within the model
-    // size; reject a fit whose RMS error exceeds this (ill-conditioned/mismatched).
-    const residualLimit = 0.15 * Math.max(modelW, modelD, 1);
+    const solution = solvePlanToWorld({
+      pairs,
+      rooms,
+      modelWidth: ext.max.x - ext.min.x,
+      modelDepth: ext.max.z - ext.min.z,
+      hitsFloorAt: (wx, wz) => {
+        const hit = this.scene.pickWithRay(
+          new Ray(new Vector3(wx, 20, wz), new Vector3(0, -1, 0), 40),
+          (m) => {
+            if (!m.isPickable || !m.isVisible || m.metadata?.isMarker) return false;
+            const bb = m.getBoundingInfo().boundingBox;
+            return (bb.maximumWorld.y - bb.minimumWorld.y) < 0.8; // flat = floor/ground
+          },
+        );
+        return hit?.hit ?? false;
+      },
+    });
 
-    // Strategy 1: affine fit (only if points span real 2D area and fit is tight).
-    const M = pairs.length >= 3 && spanArea(pairs) > 1e4 ? fitAffine(pairs) : null;
-    if (M && affineResidual(pairs, M) <= residualLimit) {
-      planToWorld = (px, py) => M(px, py);
-      devLog(
-        `[Villa] calibration: affine fit from ${pairs.length} entity meshes ` +
-        `(residual ${affineResidual(pairs, M).toFixed(2)} m)`,
-      );
-    } else if (pairs.length >= 1) {
-      // Strategy 2: anchor on the entity centroid, choose the mirror signs that
-      // best reproduce the observed entity world positions.
-      const pCx = pairs.reduce((s, p) => s + p.px, 0) / pairs.length;
-      const pCy = pairs.reduce((s, p) => s + p.py, 0) / pairs.length;
-      const wCx = pairs.reduce((s, p) => s + p.wx, 0) / pairs.length;
-      const wCz = pairs.reduce((s, p) => s + p.wz, 0) / pairs.length;
-      let best = { xSign: 1, zSign: 1, err: Infinity };
-      for (const xSign of [1, -1]) for (const zSign of [1, -1]) {
-        let err = 0;
-        for (const p of pairs) {
-          const wx = wCx + (p.px - pCx) * planScale * xSign;
-          const wz = wCz + (p.py - pCy) * planScale * zSign;
-          err += (wx - p.wx) ** 2 + (wz - p.wz) ** 2;
-        }
-        if (err < best.err) best = { xSign, zSign, err };
-      }
-      const { xSign, zSign } = best;
-      planToWorld = (px, py) => ({
-        x: wCx + (px - pCx) * planScale * xSign,
-        z: wCz + (py - pCy) * planScale * zSign,
-      });
-      devLog(
-        `[Villa] calibration: ${pairs.length}-entity sign fit ` +
-        `(flipX=${xSign < 0} flipZ=${zSign < 0}, scale=${planScale.toPrecision(4)})`,
-      );
-    } else if (rooms.length > 0) {
-      // Strategy 3: no entity meshes — vote orientation by raycasting indoor room
-      // centroids onto floor meshes across all four mirror combinations.
-      const outdoorPat = /garden|pathway|terrace|patio|water|pool|outdoor|ext[eé]|lawn|grass|back.side|carport/i;
-      const indoorRooms = rooms.filter((r) => !outdoorPat.test(r.name));
-      const testRooms = indoorRooms.length >= 2 ? indoorRooms : rooms;
-
-      const countHits = (xSign: number, zSign: number): number => {
-        let hits = 0;
-        for (const room of testRooms) {
-          const c = polygonCentroid(room.points);
-          const wx = (c.x - planCx) * planScale * xSign;
-          const wz = (c.y - planCy) * planScale * zSign;
-          const hit = this.scene.pickWithRay(
-            new Ray(new Vector3(wx, 20, wz), new Vector3(0, -1, 0), 40),
-            (m) => {
-              if (!m.isPickable || !m.isVisible || m.metadata?.isMarker) return false;
-              const bb = m.getBoundingInfo().boundingBox;
-              return (bb.maximumWorld.y - bb.minimumWorld.y) < 0.8; // flat = floor/ground
-            },
-          );
-          if (hit?.hit) hits++;
-        }
-        return hits;
-      };
-
-      let best = { xSign: 1, zSign: 1, hits: -1 };
-      for (const xSign of [1, -1]) for (const zSign of [1, -1]) {
-        const hits = countHits(xSign, zSign);
-        if (hits > best.hits) best = { xSign, zSign, hits };
-      }
-      const { xSign, zSign } = best;
-      planToWorld = (px, py) => ({
-        x: (px - planCx) * planScale * xSign,
-        z: (py - planCy) * planScale * zSign,
-      });
-      devLog(
-        `[Villa] calibration: raycast-vote fallback (no entity meshes) ` +
-        `flipX=${xSign < 0} flipZ=${zSign < 0}, ${best.hits}/${testRooms.length} hits`,
-      );
-    }
-
-    if (!planToWorld) {
+    if (!solution) {
       console.warn("[Villa] room calibration skipped — no rooms and no entity meshes");
       this.calibratedPoints = null;
       return;
     }
+    let planToWorld = solution.planToWorld;
+    devLog(`[Villa] calibration: ${solution.strategy}`);
 
     // Manual override (Settings): mirror the auto-fitted result about the model
     // centre (model is recentred on the origin) when detection comes out reversed.

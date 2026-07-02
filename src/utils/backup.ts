@@ -3,6 +3,7 @@
 
 import JSZip from "jszip";
 import type { AppConfig } from "@/config/AppConfig";
+import { sanitizeImportedConfig } from "@/config/sanitizeConfig";
 import { loadModelFromIndexedDB, saveModelToIndexedDB, getModelMeta } from "./storage";
 
 const CONFIG_ENTRY = "config.json";
@@ -35,10 +36,18 @@ export async function importBackup(file: File): Promise<ImportResult> {
 
   const cfgFile = zip.file(CONFIG_ENTRY);
   if (cfgFile) {
+    let parsed: unknown;
     try {
-      config = JSON.parse(await cfgFile.async("string")) as Partial<AppConfig>;
+      parsed = JSON.parse(await cfgFile.async("string"));
     } catch {
       throw new Error("Backup is corrupt: config.json is not valid JSON.");
+    }
+    // The ZIP came from outside this app's control — keep only known config
+    // keys with the expected shape so one malformed field can't crash the app
+    // long after the import (and never adopt a token from a shared file).
+    config = sanitizeImportedConfig(parsed);
+    if (!config) {
+      throw new Error("Backup is corrupt: config.json is not a config object.");
     }
   }
 

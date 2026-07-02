@@ -105,6 +105,7 @@ function HudMenu({ icon: Icon, title, items }: { icon: IconType; title: string; 
       <button
         className={`icon-btn${open ? " active" : ""}`}
         title={title}
+        aria-label={title}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
@@ -182,7 +183,12 @@ export default function HUD({
         <div className="hud-brand">
           <Home size={22} />
           <span className="hud-title">{title}</span>
-          <span className={`conn-dot ${connClass}`} title={`Connection: ${connection}`}>
+          <span
+            className={`conn-dot ${connClass}`}
+            title={`Connection: ${connection}`}
+            role="img"
+            aria-label={`Connection: ${connection}`}
+          >
             <span className="dot" />
           </span>
           {/* Time sits right next to the villa name + connection dot. */}
@@ -203,6 +209,8 @@ export default function HUD({
                   className={`icon-btn${config.highlightInteractive ? " active" : ""}`}
                   onClick={toggleHighlight}
                   title="Highlight clickable objects"
+                  aria-label="Highlight clickable objects"
+                  aria-pressed={config.highlightInteractive}
                 >
                   <Sparkles size={18} />
                 </button>
@@ -210,6 +218,8 @@ export default function HUD({
                   className={`icon-btn${config.showEntityLabels ? " active" : ""}`}
                   onClick={toggleLabels}
                   title="Show device state labels"
+                  aria-label="Show device state labels"
+                  aria-pressed={config.showEntityLabels}
                 >
                   <Tag size={18} />
                 </button>
@@ -217,10 +227,20 @@ export default function HUD({
 
               {/* Build */}
               <div className="hud-group">
-                <button className="icon-btn" onClick={onEnterBindMode} title="Bind 3D object to entity">
+                <button
+                  className="icon-btn"
+                  onClick={onEnterBindMode}
+                  title="Bind 3D object to entity"
+                  aria-label="Bind 3D object to entity"
+                >
                   <Link2 size={18} />
                 </button>
-                <button className="icon-btn" onClick={onEnterPlaceMode} title="Drop control marker">
+                <button
+                  className="icon-btn"
+                  onClick={onEnterPlaceMode}
+                  title="Drop control marker"
+                  aria-label="Drop control marker"
+                >
                   <MapPin size={18} />
                 </button>
               </div>
@@ -231,7 +251,7 @@ export default function HUD({
         {/* All Clear badge, then Settings pinned to the far right. */}
         <div className="hud-right">
           <AlertBadge />
-          <button className="icon-btn" onClick={onOpenSettings} title="Settings">
+          <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
             <Settings size={20} />
           </button>
         </div>
@@ -258,10 +278,11 @@ export default function HUD({
             className={`icon-btn${overviewActive ? " active" : ""}`}
             onClick={onToggleViewMode}
             title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
+            aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
           >
             {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
           </button>
-          <button className="icon-btn" onClick={onOpenTeleport} title="Rooms">
+          <button className="icon-btn" onClick={onOpenTeleport} title="Rooms" aria-label="Rooms">
             <Grid3x3 size={18} />
           </button>
         </div>
@@ -278,6 +299,7 @@ export default function HUD({
                 className={`icon-btn${hidden ? "" : " active"}`}
                 onClick={() => toggleCategory(cat)}
                 title={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map`}
+                aria-label={`${CATEGORY_LABELS[cat]} devices on the map`}
                 aria-pressed={!hidden}
               >
                 <Icon size={18} />
@@ -301,6 +323,7 @@ export default function HUD({
               className={`icon-btn${hintOpen ? " active" : ""}`}
               onClick={() => setHintOpen((o) => !o)}
               title="Navigation tips"
+              aria-label="Navigation tips"
               aria-expanded={hintOpen}
             >
               <Info size={20} />

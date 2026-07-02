@@ -16,8 +16,8 @@
 
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
-  Vector3, Matrix, Quaternion, TransformNode, MeshBuilder, Ray,
-  type AbstractMesh, type Mesh, type Scene, type Material,
+  Vector3, Matrix, TransformNode,
+  type AbstractMesh, type Scene, type Material,
 } from "@babylonjs/core";
 import {
   AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel, Image,
@@ -30,6 +30,7 @@ import { resolveMeshToMapping } from "@/config/EntityMap";
 import { categoryForEntity } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { RoomHighlight } from "./RoomHighlight";
+import { CameraBeams, type BeamSource } from "./CameraBeams";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 0.85;
@@ -63,24 +64,10 @@ const LABEL_HEIGHT_PX = 76;
 // Height of the value pill (e.g. "42%", "21°") shown under the badge.
 const VALUE_CHIP_HEIGHT_PX = 18;
 
-// ── Camera motion-detection beam ─────────────────────────────────────────
-// A simulated "diffused red light beam" pointing the way a camera prop was
-// rotated in SweetHome 3D (see sh3dParser's `angle`), toggled by that
-// camera's linked motion binary_sensor (EntityMapping.motionEntityId). It is
-// a translucent unlit cone, not a real light — no shadow map, no surface
-// interaction — matching how MarkerManager's marker orbs are built. A camera
-// only has a flat plan-rotation (no elevation/tilt data), so the beam is
-// always horizontal; that's an honest simplification, not a bug.
-const BEAM_COLOR = new Color3(0.95, 0.15, 0.12);
-const BEAM_TIP_DIAMETER = 0.08;
-const BEAM_END_DIAMETER = 1.6;
-// How far the beam reaches before being clipped by a single raycast against
-// the villa's structural meshes at build time (walls, furniture — anything
-// that isn't a bound entity; see `shadowCasters`). Cameras aimed at open
-// outdoor space use the full length; ones aimed into a room stop at the wall.
-const BEAM_MAX_LENGTH = 6;
-const BEAM_BASE_ALPHA = 0.16;
-const BEAM_PULSE_ALPHA = 0.4;
+// Pulse animation speed in radians per second (was 0.06 per frame at ~60 fps).
+// Advanced by real elapsed time so the alert pulse breathes at the same rate on
+// a 60 Hz tablet and a 120 Hz phone.
+const PULSE_RAD_PER_SEC = 3.6;
 
 interface LabelControls {
   container: StackPanel;
@@ -183,9 +170,9 @@ export class EntityVisuals {
   /** camera entity_id -> horizontal world-space facing direction, computed by
    *  SceneManager from the sh3d plan `angle` (see setCameraDirections). */
   private cameraDirections = new Map<string, { x: number; z: number }>();
-  private beams = new Map<string, { mesh: Mesh; material: StandardMaterial }>();
-  /** Camera entity_ids whose beam is currently pulsing (motion detected). */
-  private beamsActive = new Set<string>();
+  /** Camera motion-detection cones — mesh lifecycle owned by CameraBeams;
+   *  this class only decides WHICH cameras get a beam and when it pulses. */
+  private beams: CameraBeams;
   /** motion binary_sensor entity_id -> camera entity_ids it drives (see
    *  EntityMapping.motionEntityId). Rebuilt from config.entityMap on every
    *  indexMeshes() (structural entityMap edits re-trigger that already). */
@@ -208,6 +195,7 @@ export class EntityVisuals {
     // A long-press opens the full detail panel; fall back to the tap handler.
     this.onEntityLongPicked = onEntityLongPicked ?? onEntityPicked ?? null;
     this.roomHighlight = new RoomHighlight(scene, requestRender);
+    this.beams = new CameraBeams(scene);
     scene.registerBeforeRender(() => {
       this.animatePulse();
       this.cullLabels();
@@ -246,7 +234,7 @@ export class EntityVisuals {
     // Dispose previously created light sources + shadow maps before re-indexing.
     this.disposeLights();
     this.disposeLabelAnchors();
-    this.disposeBeams();
+    this.beams.dispose();
     this.pulsing.clear();
     this.byEntity.clear();
     this.mapping.clear();
@@ -428,76 +416,38 @@ export class EntityVisuals {
     this.buildCameraBeams();
   }
 
-  /** One translucent cone per camera entity that has BOTH a resolved mesh
-   *  position (byEntity, from indexMeshes) and a facing direction (from
+  /** One beam per camera entity that has BOTH a resolved mesh position
+   *  (byEntity, from indexMeshes) and a facing direction (from
    *  setCameraDirections) — cameras with no sh3d angle data yet simply get no
-   *  beam, rather than guessing a direction. Length is clipped by a single
-   *  raycast against the villa's structural meshes so it stops at the near
-   *  wall instead of poking through it forever. */
+   *  beam, rather than guessing a direction. This class decides WHICH cameras
+   *  qualify; CameraBeams owns the cone geometry and wall clipping. */
   private buildCameraBeams(): void {
-    this.disposeBeams();
-    if (this.cameraDirections.size === 0) return;
-    const casters = new Set(this.shadowCasters);
+    const sources: BeamSource[] = [];
+    if (this.cameraDirections.size > 0) {
+      for (const [entityId, meshes] of this.byEntity) {
+        const map = this.mapping.get(entityId);
+        if (!map || map.type !== "camera" || !meshes.length) continue;
+        const dir2 = this.cameraDirections.get(entityId);
+        if (!dir2) continue;
+        const planar = Math.hypot(dir2.x, dir2.z);
+        if (planar < 1e-6) continue; // no meaningful rotation authored yet
 
-    for (const [entityId, meshes] of this.byEntity) {
-      const map = this.mapping.get(entityId);
-      if (!map || map.type !== "camera" || !meshes.length) continue;
-      const dir2 = this.cameraDirections.get(entityId);
-      if (!dir2) continue;
-      const planar = Math.hypot(dir2.x, dir2.z);
-      if (planar < 1e-6) continue; // no meaningful rotation authored yet
-      const direction = new Vector3(dir2.x / planar, 0, dir2.z / planar);
-
-      const bounds = this.mergedWorldBounds(meshes);
-      if (!bounds) continue;
-      const origin = Vector3.Center(bounds.min, bounds.max);
-
-      const ray = new Ray(origin.add(direction.scale(0.15)), direction, BEAM_MAX_LENGTH);
-      const hit = this.scene.pickWithRay(ray, (m) => casters.has(m));
-      const length = hit?.hit && hit.distance > 0.3 ? hit.distance * 0.95 : BEAM_MAX_LENGTH;
-
-      const mesh = MeshBuilder.CreateCylinder(`beam_${entityId}`, {
-        diameterTop: BEAM_END_DIAMETER, diameterBottom: BEAM_TIP_DIAMETER,
-        height: length, tessellation: 14,
-      }, this.scene);
-      // Re-pivot from "centred on Y" (Babylon's default) to "narrow tip at the
-      // origin", so positioning the mesh at the camera puts the TIP there,
-      // not the middle of the cone.
-      mesh.bakeTransformIntoVertices(Matrix.Translation(0, length / 2, 0));
-      const rot = new Quaternion();
-      Quaternion.FromUnitVectorsToRef(Vector3.Up(), direction, rot);
-      mesh.rotationQuaternion = rot;
-      mesh.position = origin.clone();
-
-      const material = new StandardMaterial(`beamMat_${entityId}`, this.scene);
-      material.disableLighting = true;
-      material.emissiveColor = BEAM_COLOR;
-      material.alpha = 0;
-      material.backFaceCulling = false;
-      mesh.material = material;
-      mesh.isPickable = false;
-      mesh.metadata = { isMarker: true }; // exclude from shadow casters/IBL, like markers
-
-      this.beams.set(entityId, { mesh, material });
+        const bounds = this.mergedWorldBounds(meshes);
+        if (!bounds) continue;
+        sources.push({
+          entityId,
+          origin: Vector3.Center(bounds.min, bounds.max),
+          direction: new Vector3(dir2.x / planar, 0, dir2.z / planar),
+        });
+      }
     }
-  }
-
-  private disposeBeams(): void {
-    for (const { mesh, material } of this.beams.values()) { mesh.dispose(); material.dispose(); }
-    this.beams.clear();
-    this.beamsActive.clear();
+    this.beams.rebuild(sources, new Set(this.shadowCasters));
   }
 
   /** Turn a camera's beam on/off (driven by its linked motion sensor state). */
   private setBeamActive(entityId: string, on: boolean): void {
     if (!this.beams.has(entityId)) return;
-    if (on) {
-      this.beamsActive.add(entityId);
-    } else {
-      this.beamsActive.delete(entityId);
-      const b = this.beams.get(entityId);
-      if (b) b.material.alpha = 0;
-    }
+    this.beams.setActive(entityId, on);
     this.requestRender();
   }
 
@@ -994,18 +944,15 @@ export class EntityVisuals {
   }
 
   private animatePulse(): void {
-    if (this.pulsing.size === 0 && this.beamsActive.size === 0) return;
-    this.pulseT += 0.06;
+    if (this.pulsing.size === 0 && !this.beams.hasActive()) return;
+    // Advance by real elapsed time, clamped: the on-demand render loop can idle
+    // for seconds, and a raw delta after such a gap would make the pulse jump.
+    const dtMs = Math.min(this.scene.getEngine().getDeltaTime(), 100);
+    this.pulseT += (dtMs / 1000) * PULSE_RAD_PER_SEC;
     const intensity = (Math.sin(this.pulseT) + 1) / 2; // 0..1
     const col = new Color3(intensity, 0, 0);
     for (const mesh of this.pulsing) this.emissiveOf(mesh)?.(col);
-    if (this.beamsActive.size > 0) {
-      const alpha = BEAM_BASE_ALPHA + (BEAM_PULSE_ALPHA - BEAM_BASE_ALPHA) * intensity;
-      for (const id of this.beamsActive) {
-        const b = this.beams.get(id);
-        if (b) b.material.alpha = alpha;
-      }
-    }
+    this.beams.applyPulse(intensity);
     this.requestRender();
   }
 }

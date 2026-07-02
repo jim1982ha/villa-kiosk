@@ -51,6 +51,15 @@ WWW_ROOT = "/homeassistant/www"
 MANAGED_PATH = {"glb": "villa-kiosk/villa.glb", "sh3d": "villa-kiosk/villa.sh3d"}
 # Safety cap on a single upload (the GLB is the big one, ~tens of MB).
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+# Leading bytes the upload must start with for its declared kind: a binary
+# glTF container always begins with "glTF"; a .sh3d is a ZIP. Files under
+# /config/www are served by both this add-on (/model/) and HA itself
+# (/local/), so without this check any bytes POSTed as kind=glb would be
+# published there verbatim (unrestricted file upload).
+UPLOAD_MAGIC = {
+    "glb": (b"glTF",),
+    "sh3d": (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"),
+}
 
 # Headers that must not be copied verbatim when relaying a proxied response.
 HOP_BY_HOP = {
@@ -198,9 +207,21 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(dest), suffix=".part")
     total = 0
+    # Magic-byte check runs on the stream head (chunks can in principle arrive
+    # smaller than 4 bytes, so accumulate until there is enough to compare).
+    head = b""
+    head_checked = False
     try:
         with os.fdopen(fd, "wb") as out:
             async for chunk in request.content.iter_chunked(64 * 1024):
+                if not head_checked:
+                    head += chunk[: 8 - len(head)]
+                    if len(head) >= 4:
+                        if not head.startswith(UPLOAD_MAGIC[kind]):
+                            raise web.HTTPBadRequest(
+                                text=f"upload does not look like a {kind} file",
+                            )
+                        head_checked = True
                 total += len(chunk)
                 if total > MAX_UPLOAD_BYTES:
                     raise web.HTTPRequestEntityTooLarge(
@@ -209,6 +230,8 @@ async def model_upload_handler(request: web.Request) -> web.Response:
                 out.write(chunk)
         if total == 0:
             raise web.HTTPBadRequest(text="empty upload")
+        if not head_checked:  # body shorter than any valid signature
+            raise web.HTTPBadRequest(text=f"upload does not look like a {kind} file")
         # mkstemp() creates the temp file 0600 (root-only). nginx workers run
         # unprivileged, so a 0600 model file makes nginx return HTTP 403 when it
         # tries to serve /model/... . Relax to 0644 (world-readable, matching a

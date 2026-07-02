@@ -1,5 +1,49 @@
 # Changelog
 
+## 2.4.55
+
+Internal refactor round — no functional or visual change to any existing
+behavior; camera-beam direction math, room calibration, and pulse timing all
+verified to reproduce the prior 2.4.54 behavior exactly.
+
+### Structure: extracted two Babylon modules to keep single-responsibility
+- `src/babylon/roomCalibration.ts` (new) — the three-strategy plan→world
+  calibration solver (affine fit / entity-anchored sign fit / raycast-vote
+  fallback) moved out of `SceneManager.calibrateRooms` as pure, engine-free
+  functions. The one scene dependency (the fallback's downward floor
+  raycast) is now injected as a callback, so the solver has no Babylon
+  import and is unit-testable on its own.
+- `src/babylon/CameraBeams.ts` (new) — camera motion-detection beam mesh
+  lifecycle (build/clip/dispose/pulse) extracted from `EntityVisuals`,
+  matching the existing `RoomHighlight` pattern. `EntityVisuals` keeps the
+  policy (which cameras qualify, motion-sensor routing) and delegates cone
+  geometry.
+- The alert-pulse / beam-pulse animation is now driven by real elapsed time
+  (`PULSE_RAD_PER_SEC`, clamped for the on-demand render loop's idle gaps)
+  instead of a fixed per-frame increment, so it breathes at the same
+  perceived rate regardless of display refresh rate.
+
+### Security: harden the two places untrusted bytes enter the app
+- `src/config/sanitizeConfig.ts` (new) — importing a backup ZIP (Settings →
+  Import) used to cast the parsed JSON straight to `Partial<AppConfig>` with
+  no validation, so a corrupted or handcrafted `config.json` could inject a
+  wrong-typed field (crashing far from the import site) or an `haToken`.
+  Imports are now whitelist-validated key-by-key against the app's own
+  default config shape, and `haToken` is always stripped.
+- `rootfs/usr/bin/supervisor-proxy.py` — the add-on's `/model-upload`
+  endpoint accepted any bytes under a claimed `kind=glb|sh3d` and published
+  them into Home Assistant's `www` folder (served by both the add-on and HA
+  itself). It now checks the upload's stream-head magic bytes (`glTF` for a
+  binary glTF, a ZIP signature for `.sh3d`) before accepting it.
+
+### Accessibility: icon-only controls now have accessible names
+- Every icon-only button in `HUD.tsx` (mobile dropdown triggers, display/
+  build toggles, Settings, view-mode switch, Rooms, category filter,
+  navigation-tips) and `TeleportMenu.tsx` (close, remove-room) gained an
+  `aria-label`, plus `aria-pressed` on the two display toggles — `title`
+  alone is invisible on touch and unreliable for screen readers. The
+  connection-status dot got `role="img"` + a matching label.
+
 ## 2.4.54
 
 ### Fix: long-press to re-anchor a room blocked ALL scrolling on the Rooms screen on mobile

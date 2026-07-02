@@ -159,6 +159,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
           right: "calc(20px + env(safe-area-inset-right, 0px))",
         }}
         onClick={onClose}
+        aria-label="Close rooms menu"
       >
         <X size={22} />
       </button>
@@ -205,6 +206,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
                 if (confirm(`Remove "${p.name}"?`)) removeRoom(p.name);
               }}
               title="Remove room"
+              aria-label={`Remove room ${p.name}`}
             >
               <Trash2 size={14} />
             </span>
