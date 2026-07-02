@@ -168,11 +168,6 @@ export class EntityVisuals {
    *  the badge container is scaled by their product. */
   private iconUserScale = 1;
   private iconZoomScale = 1;
-  /** Each visible badge's last-computed screen position + tap radius, in the
-   *  engine's render-target pixel space (same space cullLabels projects
-   *  into) — see pickBadgeAt(). Populated fresh every frame in cullLabels;
-   *  entities culled by category or off-screen are absent, not stale. */
-  private badgeScreenPos = new Map<string, { x: number; y: number; radius: number }>();
 
   /** camera entity_id -> horizontal world-space facing direction, computed by
    *  SceneManager from the sh3d plan `angle` (see setCameraDirections). */
@@ -700,85 +695,106 @@ export class EntityVisuals {
     const cam = this.scene.activeCamera;
     if (!cam) return;
     const eng = this.scene.getEngine();
-    const w = eng.getRenderWidth();
-    const h = eng.getRenderHeight();
-    const vp = cam.viewport.toGlobal(w, h);
+    const vp = cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight());
     const tm = this.scene.getTransformMatrix();
     const hidden = this.config.hiddenCategories;
-    const radius = (BADGE_DIAMETER_PX * this.iconUserScale * this.iconZoomScale) / 2;
 
-    this.badgeScreenPos.clear();
-    for (const [entityId, lbl] of this.labels) {
+    for (const lbl of this.labels.values()) {
       if (hidden.includes(lbl.category)) {
         lbl.container.isVisible = false;
         continue;
       }
-      // Vector3.Project, given a viewport already converted to pixel space
-      // via toGlobal(w, h) (as `vp` is), returns p.x/p.y ALREADY in that same
-      // pixel space (see ProjectToRef's viewportMatrix — it uses viewport.x/
-      // width directly as the translation/scale terms, not a 0..1 fraction).
-      // A prior version of this code multiplied by w/h again here, inflating
-      // every stored badge position by ~1000x and making pickBadgeAt() miss
-      // almost every tap — confirmed by reading Babylon's own source, not
-      // guessed. Use p.x/p.y directly.
+      // Only cull anchors projecting BEHIND the camera (z outside [0,1] — a
+      // genuinely invalid screen position). Tap hit-testing does NOT read
+      // this projection: it asks each badge control directly via the GUI's
+      // own contains() (see pickBadgeAt), so there is no stored screen
+      // position to drift out of sync with what's actually drawn.
       const p = Vector3.Project(lbl.anchor.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
-      const onScreen = p.z >= 0 && p.z <= 1;
-      lbl.container.isVisible = onScreen;
-      if (onScreen) this.badgeScreenPos.set(entityId, { x: p.x, y: p.y, radius });
+      lbl.container.isVisible = p.z >= 0 && p.z <= 1;
     }
   }
 
   /**
-   * Resolve a tap/long-press at CSS-pixel client coordinates to the nearest
-   * visible badge within its tap radius, or null if none qualify.
+   * Resolve a tap/long-press at CSS-pixel client coordinates to the visible
+   * badge under it (with a small touch-slop ring), or null if none.
    *
    * Badges deliberately do NOT wire their own Babylon GUI pointer
-   * observables (onPointerDownObservable etc.) anymore — that per-control
-   * hit-testing turned out unreliable in a way that was hard to pin down: a
-   * badge could go untappable at some camera angles with no visible overlap
-   * with any neighbour, yet start working again after a totally unrelated
-   * hover over the 3D mesh. Rather than chase that further, badge taps are
-   * now resolved with the exact same tap/long-press pipeline already proven
-   * reliable for 3D meshes (CameraController/OverviewController's own gesture
-   * recognizer, calling here BEFORE falling through to PickHandler's 3D
-   * raycast — see SceneManager's constructor). Plain nearest-centre distance
-   * math instead of GUI z-order hit-testing: deterministic, and two
-   * overlapping badges resolve sensibly (whichever centre the tap landed
-   * closer to) instead of one silently winning every time.
+   * observables (onPointerDownObservable etc.) — that event pipeline races
+   * with the camera controllers' pointer capture on touch, which is exactly
+   * why tap detection for 3D meshes also lives in the controllers (see
+   * PickHandler's header comment). Badge taps resolve through that same
+   * proven gesture pipeline, calling here BEFORE falling through to
+   * PickHandler's 3D raycast (see SceneManager's constructor).
+   *
+   * The hit test itself is Babylon GUI's own Control.contains(), which
+   * inverse-transforms the point through the exact transform chain used to
+   * DRAW the badge (linked-mesh position + linkOffset + container scale,
+   * parent matrices composed in — see Control._transformMatrix). Earlier
+   * versions re-derived badge screen positions from the anchor's projection
+   * and hit-tested a circle there; that stored point is where the ANCHOR
+   * projects, not where the badge is drawn — the visible circle renders
+   * ~56px ABOVE it (linkOffsetY centres the 76px container above the
+   * anchor, and the 40px badge sits at the container's top), so a tap dead
+   * on the badge always measured ~56px from the stored centre and missed
+   * its 20px radius. Asking the rendered control directly cannot drift from
+   * what's on screen, at any scale, zoom, or DPI.
    */
   pickBadgeAt(clientX: number, clientY: number): string | null {
-    if (this.badgeScreenPos.size === 0) {
-      tapDebug(`pickBadgeAt: 0 tracked badges (labels=${this.labels.size} showLabels=${this.config.showEntityLabels})`);
+    if (!this.config.showEntityLabels || this.labels.size === 0) {
+      tapDebug(`pickBadgeAt: no badges (labels=${this.labels.size} showLabels=${this.config.showEntityLabels})`);
       return null;
     }
-    const canvas = this.scene.getEngine().getRenderingCanvas();
+    const eng = this.scene.getEngine();
+    const canvas = eng.getRenderingCanvas();
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
-    const eng = this.scene.getEngine();
-    // cullLabels() projects into render-target pixel space (getRenderWidth/
-    // Height), which differs from CSS client pixels whenever hardware
-    // scaling != 1 (see SceneManager's setHardwareScalingLevel) — convert
-    // the incoming client coords into that same space before comparing.
+    // The GUI layer renders at the engine's render-target size, which differs
+    // from CSS client pixels whenever hardware scaling != 1 (see
+    // SceneManager's setHardwareScalingLevel) — convert the incoming client
+    // coords into that space before hit-testing.
     const scaleX = eng.getRenderWidth() / rect.width;
     const scaleY = eng.getRenderHeight() / rect.height;
     const px = (clientX - rect.left) * scaleX;
     const py = (clientY - rect.top) * scaleY;
 
-    let best: { entityId: string; dist: number } | null = null;
-    let nearestAny: { entityId: string; dist: number; radius: number } | null = null;
-    for (const [entityId, pos] of this.badgeScreenPos) {
-      const dist = Math.hypot(px - pos.x, py - pos.y);
-      if (!nearestAny || dist < nearestAny.dist) nearestAny = { entityId, dist, radius: pos.radius };
-      if (dist > pos.radius) continue;
-      if (!best || dist < best.dist) best = { entityId, dist };
+    // Exact hit first, then two widening rings of samples around the tap
+    // point (~10 CSS px of slop, converted to render px) so a slightly-off
+    // finger still lands — every sample uses the same contains() truth, so
+    // the slop can never claim screen space the badge doesn't visually own
+    // beyond that ring.
+    const slop = 10 * scaleX;
+    const samples: Array<[number, number]> = [[0, 0]];
+    for (const r of [slop * 0.5, slop]) {
+      for (let k = 0; k < 8; k++) {
+        const a = (Math.PI / 4) * k;
+        samples.push([r * Math.cos(a), r * Math.sin(a)]);
+      }
     }
-    tapDebug(
-      `pickBadgeAt(${px.toFixed(0)},${py.toFixed(0)}) tracked=${this.badgeScreenPos.size} ` +
-      `nearest=${nearestAny?.entityId}@${nearestAny?.dist.toFixed(0)}px(r=${nearestAny?.radius.toFixed(0)}) ` +
-      `hit=${best?.entityId ?? "none"}`,
-    );
-    return best?.entityId ?? null;
+    for (const [dx, dy] of samples) {
+      const hit = this.badgeContaining(px + dx, py + dy);
+      if (hit) {
+        tapDebug(`pickBadgeAt(${px.toFixed(0)},${py.toFixed(0)}) hit=${hit} offset=${Math.hypot(dx, dy).toFixed(0)}px`);
+        return hit;
+      }
+    }
+    let visible = 0;
+    for (const lbl of this.labels.values()) if (lbl.container.isVisible) visible++;
+    tapDebug(`pickBadgeAt(${px.toFixed(0)},${py.toFixed(0)}) hit=none (visible=${visible}/${this.labels.size})`);
+    return null;
+  }
+
+  /** The visible badge (or its value pill) containing this render-space
+   *  point, via the GUI's own transform-accurate Control.contains().
+   *  Iterated newest-first: the GUI draws later-added controls on top, so
+   *  when badges overlap the tap goes to the one the user actually sees. */
+  private badgeContaining(x: number, y: number): string | null {
+    for (const [entityId, lbl] of [...this.labels].reverse()) {
+      if (!lbl.container.isVisible) continue;
+      if (lbl.badge.contains(x, y)) return entityId;
+      if (lbl.valueWrap.isVisible && lbl.valueWrap.contains(x, y)) return entityId;
+    }
+    return null;
   }
 
   /** Distil any entity's live state into one of four colour-coded badge kinds. */

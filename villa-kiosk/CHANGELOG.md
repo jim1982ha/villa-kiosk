@@ -1,5 +1,35 @@
 # Changelog
 
+## 2.4.69
+
+### Fix: badge taps — root cause finally found and removed
+- The real bug all along: the tap target stored for each badge was the
+  projection of the entity's 3D ANCHOR point, but the badge circle you see
+  is drawn ~56 px ABOVE that point. Babylon places the linked label
+  container's CENTER at `anchorProjection + linkOffsetY(−38px)`, and the
+  40 px badge sits at the TOP of the 76 px label stack, another 18 px up.
+  So a tap dead-centre on a visible badge always measured ~56 px away from
+  the stored centre and missed; the circle that actually accepted taps
+  floated invisibly over the device mesh below. That explains every
+  confusing symptom: taps "sometimes worked" because the miss fell through
+  to the 3D raycast which often picked the same entity's mesh, and the
+  hover hand-cursor appeared below the badge, not on it. v2.4.68 fixed the
+  coordinate-space inflation but kept measuring from the wrong centre.
+- Fix: the parallel screen-position bookkeeping is gone entirely. Badge
+  hit-testing now asks the GUI's own transform-accurate
+  `Control.contains()` on the exact geometry Babylon rendered (badge circle
+  + value pill), with a small slop ring for fat fingers. There is no second
+  model of where badges are to drift out of sync ever again.
+- Bonus fixes that fall out for free: toggling labels off no longer leaves
+  stale invisible tap targets swallowing taps, and where two badges
+  overlap the tap now goes to the one drawn on top (what you actually see),
+  not the one created first.
+- Verified against a real render this time: a headless-browser tap sweep of
+  3,619 synthetic taps across the whole viewport produced hits ONLY in
+  tight clusters centred on the 39 visible badges (worst centroid error
+  19 px on a 40 px badge, most within 12 px), confirmed against Babylon's
+  own rendered layout positions.
+
 ## 2.4.68
 
 ### Fix: the actual bug — badge screen positions were inflated ~1000x, breaking almost every tap
