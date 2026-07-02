@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.4.59
+
+### Fix: a point-room's motion glow floated at one flat height, poking out from under sloped assets like a staircase
+- A "room" added via the Rooms menu's "Add room here" (no drawn sh3d polygon
+  behind it — e.g. a staircase landing) drew its glow as a flat disc at a
+  single Y height. A staircase rises well above that one height, so the
+  disc appeared to float below/behind the stairs' geometry instead of lit
+  across their surface.
+- `RoomHighlight` now probes straight down from the anchor and, if it finds
+  real geometry there, projects the glow as a Babylon decal draped onto that
+  surface (steps, slopes, whatever it actually is) instead of a rigid flat
+  circle. Falls back to the previous flat circle when nothing sensible is
+  found to project onto, so ordinary flat-floor rooms are unaffected.
+
 ## 2.4.58
 
 ### Change: the anchor (default-view) button now goes-to instead of only saving

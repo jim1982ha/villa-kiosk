@@ -18,7 +18,7 @@
 //     a real polygon always wins — no redundant circle on top of a real room.
 
 import {
-  Mesh, VertexData, StandardMaterial, Color3,
+  Mesh, VertexData, StandardMaterial, Color3, Vector3, Ray, MeshBuilder,
   type Scene,
 } from "@babylonjs/core";
 import { earClipTriangulate, type Pt2 } from "@/utils/geometry";
@@ -30,9 +30,21 @@ const PULSE_ALPHA = 0.5;
 // so it doesn't z-fight with the actual floor mesh underneath it.
 const FLOOR_Y_OFFSET = 0.02;
 // Radius of the synthetic patch drawn for a point-only "room" (no real
-// polygon) — a small landing/nook-sized area, not a whole room's worth.
+// polygon) — a small landing/nook-sized area, not a whole room's worth. Used
+// both as the flat-circle fallback's radius and the decal footprint's size.
 const POINT_ROOM_RADIUS = 1.1;
 const POINT_ROOM_SEGMENTS = 16;
+// How far above the anchor's estimated floor level to start looking for real
+// geometry to drape the glow over, and how far down to look for it. Generous
+// enough to clear a single flight of stairs (whose treads sit above the
+// landing the anchor was probably set from) without reaching into the floor
+// below on a multi-storey villa.
+const DECAL_PROBE_ABOVE = 3;
+const DECAL_PROBE_DEPTH = 8;
+// Depth of the decal's clipping box along the hit surface's normal — needs to
+// be deep enough to also catch a staircase's riser/tread steps near the
+// anchor, not just the single triangle directly under it.
+const DECAL_DEPTH = 2.5;
 
 interface RoomEntry {
   mesh: Mesh;
@@ -61,6 +73,20 @@ export class RoomHighlight {
     return name.trim().toLowerCase();
   }
 
+  /** Shared "glowing glass" material every glow mesh (flat polygon, flat
+   *  circle, or decal) is painted with. `zOffset` only matters for a decal —
+   *  it hugs a real surface, so without a small pull toward the camera it
+   *  z-fights with the mesh it's projected onto. */
+  private makeGlowMaterial(key: string, isDecal: boolean): StandardMaterial {
+    const material = new StandardMaterial(`roomGlowMat_${key}`, this.scene);
+    material.disableLighting = true;
+    material.emissiveColor = GLOW_COLOR.scale(BASE_ALPHA);
+    material.alpha = 0;
+    material.backFaceCulling = false;
+    if (isDecal) material.zOffset = -2;
+    return material;
+  }
+
   private buildMesh(key: string, pts: Pt2[], y: number): RoomEntry | null {
     if (pts.length < 3) return null;
     const tris = earClipTriangulate(pts);
@@ -84,16 +110,52 @@ export class RoomHighlight {
     vd.normals = normals;
     vd.applyToMesh(mesh);
 
-    const material = new StandardMaterial(`roomGlowMat_${key}`, this.scene);
-    material.disableLighting = true;
-    material.emissiveColor = GLOW_COLOR.scale(BASE_ALPHA);
-    material.alpha = 0;
-    material.backFaceCulling = false;
+    const material = this.makeGlowMaterial(key, false);
     mesh.material = material;
     mesh.isPickable = false;
     mesh.metadata = { isMarker: true }; // exclude from shadow casters/IBL surfaces, same as markers
 
     return { mesh, material };
+  }
+
+  /**
+   * A point-room's glow projected onto whatever real geometry is actually
+   * there (Babylon decal — conforms to the target mesh's surface instead of
+   * sitting at one flat height), so it drapes over a sloped/stepped asset
+   * like a staircase instead of floating at a single Y and poking out from
+   * underneath it. Probes straight down from above the anchor's estimated
+   * floor level; returns null (caller falls back to the flat circle) if
+   * nothing sensible is hit or the decal comes out empty (e.g. the hit
+   * surface is too thin/oddly-shaped for a clean projection).
+   */
+  private buildDecal(key: string, x: number, z: number, floorY: number): RoomEntry | null {
+    const from = new Vector3(x, floorY + DECAL_PROBE_ABOVE, z);
+    const hit = this.scene.pickWithRay(
+      new Ray(from, Vector3.Down(), DECAL_PROBE_ABOVE + DECAL_PROBE_DEPTH),
+      (m) => m.isPickable && m.isVisible && !m.metadata?.isMarker,
+    );
+    if (!hit?.hit || !hit.pickedMesh || !hit.pickedPoint) return null;
+
+    try {
+      const mesh = MeshBuilder.CreateDecal(`roomGlowDecal_${key}`, hit.pickedMesh, {
+        position: hit.pickedPoint,
+        normal: hit.getNormal(true) ?? Vector3.Up(),
+        size: new Vector3(POINT_ROOM_RADIUS * 2.2, POINT_ROOM_RADIUS * 2.2, DECAL_DEPTH),
+      });
+      if (mesh.getTotalVertices() === 0) {
+        mesh.dispose();
+        return null;
+      }
+      const material = this.makeGlowMaterial(key, true);
+      mesh.material = material;
+      mesh.isPickable = false;
+      mesh.metadata = { isMarker: true };
+      return { mesh, material };
+    } catch {
+      // Decals have real limitations (e.g. no morph-target meshes) — fall
+      // back to the flat circle rather than let a rare bad case crash setup.
+      return null;
+    }
   }
 
   /** (Re)build one floor mesh per REAL room polygon. Called every time
@@ -107,30 +169,34 @@ export class RoomHighlight {
     }
   }
 
-  /** (Re)build a small synthetic circular patch for each named TeleportMenu
-   *  point that ISN'T already covered by a real room polygon — e.g. a
-   *  staircase landing added via "Add room here" that was never drawn as an
-   *  enclosed room in SweetHome. Called on load/recalibration AND live
-   *  whenever config.teleportPoints changes (adding a room shouldn't need a
-   *  full model reload to start glowing).
+  /** (Re)build a synthetic glow for each named TeleportMenu point that ISN'T
+   *  already covered by a real room polygon — e.g. a staircase landing added
+   *  via "Add room here" that was never drawn as an enclosed room in
+   *  SweetHome. Called on load/recalibration AND live whenever
+   *  config.teleportPoints changes (adding a room shouldn't need a full
+   *  model reload to start glowing).
    *
-   *  `floorY` is the LOCAL floor height under that point (SceneManager derives
-   *  it from the anchor's stored camera Y minus eye height), not the global
-   *  recentred-floor 0. A staircase landing sits well above y≈0, so drawing
-   *  the patch at the flat FLOOR_Y_OFFSET used for ground-floor room polygons
-   *  buried it inside the stairs/slab below — invisible even though `active`
-   *  was correctly set (this is why the sensor's Room said "Staircase" but
-   *  nothing visibly glowed). */
+   *  Prefers draping a decal over whatever's really there (see buildDecal);
+   *  falls back to a flat circle at the anchor's estimated local floor
+   *  height (SceneManager derives it from the anchor's stored camera Y minus
+   *  eye height — a staircase landing sits well above the global recentred
+   *  floor, so this can't use the flat 0-height real room polygons use) when
+   *  the probe finds nothing to project onto. */
   setPointRooms(points: { name: string; x: number; z: number; floorY: number }[]): void {
     this.disposeMap(this.pointRooms);
     for (const p of points) {
       const key = RoomHighlight.normalise(p.name);
       if (this.polyRooms.has(key)) continue; // a real room polygon always wins
-      const circle: Pt2[] = Array.from({ length: POINT_ROOM_SEGMENTS }, (_, i) => {
-        const a = (i / POINT_ROOM_SEGMENTS) * Math.PI * 2;
-        return { x: p.x + Math.cos(a) * POINT_ROOM_RADIUS, z: p.z + Math.sin(a) * POINT_ROOM_RADIUS };
-      });
-      const entry = this.buildMesh(key, circle, p.floorY + FLOOR_Y_OFFSET);
+      const entry =
+        this.buildDecal(key, p.x, p.z, p.floorY) ??
+        this.buildMesh(
+          key,
+          Array.from({ length: POINT_ROOM_SEGMENTS }, (_, i) => {
+            const a = (i / POINT_ROOM_SEGMENTS) * Math.PI * 2;
+            return { x: p.x + Math.cos(a) * POINT_ROOM_RADIUS, z: p.z + Math.sin(a) * POINT_ROOM_RADIUS };
+          }),
+          p.floorY + FLOOR_Y_OFFSET,
+        );
       if (entry) this.pointRooms.set(key, entry);
     }
   }
