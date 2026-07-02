@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.4.68
+
+### Fix: the actual bug — badge screen positions were inflated ~1000x, breaking almost every tap
+- Found by reading Babylon's own `Vector3.ProjectToRef` source rather than
+  guessing again: given a viewport already converted to pixel space via
+  `.toGlobal(w, h)` (as this code does), `Vector3.Project` returns `p.x`/
+  `p.y` ALREADY in that pixel space — not normalized 0..1. `cullLabels()`
+  was multiplying by `w`/`h` a second time, inflating every badge's stored
+  screen position by roughly the render width/height. This bug was
+  introduced in v2.4.65 (the overlap-nudge attempt) and silently carried
+  through v2.4.66's rewrite — explaining why that rewrite made things worse
+  instead of better: it depended on this same broken position data for
+  every badge, not just the one originally reported.
+- Verified the fix with a hand-checked coordinate round-trip (including
+  hardware-scaling/HiDPI) before shipping, not just code review this time.
+- Also restored the hover-cursor feedback dropped in v2.4.66 (mouse pointer
+  changes to a hand over a badge) — now driven through the same corrected
+  pipeline instead of Babylon GUI's own per-control handling.
+- The on-screen tap diagnostic from v2.4.67 stays in place (`?debug` or
+  `localStorage villa:debug=1`) in case anything is still off.
+
 ## 2.4.67
 
 ### Diagnostic only — no fix in this release

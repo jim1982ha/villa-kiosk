@@ -713,10 +713,18 @@ export class EntityVisuals {
         lbl.container.isVisible = false;
         continue;
       }
+      // Vector3.Project, given a viewport already converted to pixel space
+      // via toGlobal(w, h) (as `vp` is), returns p.x/p.y ALREADY in that same
+      // pixel space (see ProjectToRef's viewportMatrix — it uses viewport.x/
+      // width directly as the translation/scale terms, not a 0..1 fraction).
+      // A prior version of this code multiplied by w/h again here, inflating
+      // every stored badge position by ~1000x and making pickBadgeAt() miss
+      // almost every tap — confirmed by reading Babylon's own source, not
+      // guessed. Use p.x/p.y directly.
       const p = Vector3.Project(lbl.anchor.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
       const onScreen = p.z >= 0 && p.z <= 1;
       lbl.container.isVisible = onScreen;
-      if (onScreen) this.badgeScreenPos.set(entityId, { x: p.x * w, y: p.y * h, radius });
+      if (onScreen) this.badgeScreenPos.set(entityId, { x: p.x, y: p.y, radius });
     }
   }
 

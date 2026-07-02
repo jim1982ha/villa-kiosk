@@ -28,6 +28,11 @@ export class PickHandler {
   /** Place mode: report the tapped 3D point so a marker can be dropped there. */
   private placeMode = false;
   private onPointPicked: ((point: Vec3) => void) | null = null;
+  /** Optional: is a state badge under these client coords? Wired from
+   *  SceneManager to EntityVisuals.pickBadgeAt so the hover cursor also
+   *  reacts to badges, not just 3D meshes (badges have no pointer handling
+   *  of their own — see EntityVisuals.pickBadgeAt's docstring). */
+  private badgeHitTest: ((clientX: number, clientY: number) => boolean) | null = null;
 
   constructor(
     scene: Scene,
@@ -35,6 +40,7 @@ export class PickHandler {
     entityMap: Record<string, EntityMapping> = {},
     bindings: Record<string, string> = {},
     onLongPicked?: (entityId: string) => void,
+    badgeHitTest?: (clientX: number, clientY: number) => boolean,
   ) {
     this.scene = scene;
     this.onPicked = onPicked;
@@ -42,6 +48,7 @@ export class PickHandler {
     this.onLongPicked = onLongPicked ?? onPicked;
     this.entityMap = entityMap;
     this.bindings = bindings;
+    this.badgeHitTest = badgeHitTest ?? null;
 
     scene.onPointerObservable.add((info) => this.handlePointer(info));
   }
@@ -86,8 +93,9 @@ export class PickHandler {
     return null;
   }
 
-  /** Mouse-only hover cursor: show a pointer over interactive objects. Touch has
-   *  no hover, so this is a no-op there and never interferes with tapping. */
+  /** Mouse-only hover cursor: show a pointer over interactive objects (3D
+   *  meshes or state badges). Touch has no hover, so this is a no-op there
+   *  and never interferes with tapping. */
   private handlePointer(info: PointerInfo): void {
     if (info.type !== PointerEventTypes.POINTERMOVE) return;
     if (this.bindMode || this.placeMode) return;
@@ -95,8 +103,9 @@ export class PickHandler {
     if (evt.pointerType === "touch") return;
     const canvas = this.scene.getEngine().getRenderingCanvas();
     if (!canvas) return;
+    const overBadge = !!this.badgeHitTest?.(evt.clientX, evt.clientY);
     const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY);
-    const interactive = !!pick?.hit && !!pick.pickedMesh && !!this.resolveMesh(pick.pickedMesh);
+    const interactive = overBadge || (!!pick?.hit && !!pick.pickedMesh && !!this.resolveMesh(pick.pickedMesh));
     canvas.style.cursor = interactive ? "pointer" : "";
   }
 

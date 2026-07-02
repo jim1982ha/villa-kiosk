@@ -155,6 +155,7 @@ export class SceneManager {
     this.pick = new PickHandler(
       this.scene, opts.onEntityPicked, opts.config.entityMap, opts.config.meshBindings,
       opts.onEntityLongPressed,
+      (x, y) => !!this.visuals.pickBadgeAt(x, y),
     );
 
     // Bird's-eye overview camera (a second control mode). Created up front but
