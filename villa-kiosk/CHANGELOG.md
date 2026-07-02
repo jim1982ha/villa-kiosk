@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.4.70
+
+### Fix: badge icon glyphs rendered off-centre (vertically)
+- `glyphDataUrl()` drew each emoji to a canvas using `textBaseline: "middle"`,
+  which centres on the FONT's ascent/descent metrics, not the glyph's actual
+  visible ink. Colour emoji glyphs routinely sit well off that metric centre
+  — measured up to 3.5px off on a 72px canvas for 💡 (the exact icon
+  reported), and nearly every other glyph (🔒 🔓 🚪 🪟 💧 📺 🛜) had the
+  same upward bias by varying amounts, which is why it was visible on badges
+  generally, not just one icon.
+- Fix: draw the glyph once, measure the real non-transparent pixel bounding
+  box via `getImageData`, then redraw shifted so THAT box — not the font's
+  metrics — is centred on the badge. Verified this brings every tested
+  glyph to within ±0.5px of dead-centre.
+
 ## 2.4.69
 
 ### Fix: badge taps — root cause finally found and removed

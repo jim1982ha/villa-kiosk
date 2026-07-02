@@ -98,11 +98,16 @@ const BADGE_STYLE: Record<BadgeKind, { ring: string; alpha: number; glow: string
   unavailable: { ring: "rgba(148,163,184,0.4)",   alpha: 0.5, glow: "rgba(0,0,0,0.4)" },
 };
 
-/** Render an emoji/glyph to a square canvas, centred on the em box (textBaseline
- *  "middle"), and cache the data URL. Drawing a pre-centred bitmap and showing it
- *  through a GUI Image sidesteps Babylon TextBlock's alphabetic-baseline math,
- *  which renders colour emoji high and inconsistently across platforms — a bitmap
- *  is pixel-centred everywhere and needs no per-glyph nudging. */
+/** Render an emoji/glyph to a square canvas and cache the data URL. Drawing a
+ *  pre-centred bitmap and showing it through a GUI Image sidesteps Babylon
+ *  TextBlock's alphabetic-baseline math entirely, but canvas's own
+ *  `textBaseline: "middle"` isn't a fix by itself — it centres on the FONT's
+ *  ascent/descent metrics, not the glyph's actual visible ink, and colour
+ *  emoji glyphs routinely sit well off that metric centre (varies by glyph
+ *  and platform). So: draw once, measure the real non-transparent pixel
+ *  bounding box via getImageData, then redraw shifted so THAT box is
+ *  centred — this is what actually guarantees a vertically/horizontally
+ *  centred icon everywhere, no per-glyph hand-tuning. */
 const glyphCache = new Map<string, string>();
 function glyphDataUrl(glyph: string): string {
   const cached = glyphCache.get(glyph);
@@ -114,11 +119,33 @@ function glyphDataUrl(glyph: string): string {
   const ctx = canvas.getContext("2d");
   let url = "";
   if (ctx) {
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = `${Math.round(px * 0.72)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif`;
-    ctx.fillStyle = "#f8fafc";
-    ctx.fillText(glyph, px / 2, px / 2);
+    const font = `${Math.round(px * 0.72)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif`;
+    const draw = (dx: number, dy: number) => {
+      ctx.clearRect(0, 0, px, px);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = font;
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillText(glyph, px / 2 + dx, px / 2 + dy);
+    };
+    draw(0, 0);
+    const { data } = ctx.getImageData(0, 0, px, px);
+    let minX = px, minY = px, maxX = -1, maxY = -1;
+    for (let y = 0; y < px; y++) {
+      for (let x = 0; x < px; x++) {
+        if (data[(y * px + x) * 4 + 3] > 10) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX >= minX && maxY >= minY) {
+      const offX = px / 2 - (minX + maxX) / 2;
+      const offY = px / 2 - (minY + maxY) / 2;
+      draw(offX, offY);
+    }
     url = canvas.toDataURL();
   }
   glyphCache.set(glyph, url);
