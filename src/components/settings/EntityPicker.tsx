@@ -65,6 +65,15 @@ export default function EntityPicker({
   }, [entities, query, domains]);
 
   const selected = value ? entities[value] : undefined;
+  // What to show once a pick has been made and the dropdown is closed —
+  // the live entity's friendly name, or (allowCustom) the raw entity_id
+  // itself if it doesn't exist in HA yet. This MUST win over a caller-supplied
+  // `placeholder` (e.g. "New entity ID…" on the rename picker): `placeholder`
+  // is a static hint for the empty state, so `placeholder ?? selectedLabel`
+  // always picked the static hint once it was non-null, silently hiding the
+  // selection the user just made (the picker looked untouched after clicking
+  // a dropdown row, even though `value`/`onChange` had already fired).
+  const selectedLabel = value && !open ? (selected?.attributes.friendly_name ?? value) : undefined;
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
@@ -72,12 +81,7 @@ export default function EntityPicker({
         <Search size={16} className="muted" />
         <input
           style={{ flex: 1, padding: 10, borderRadius: 8, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
-          placeholder={
-            placeholder ??
-            (selected && !open
-              ? (selected.attributes.friendly_name ?? value)
-              : "Search entities…")
-          }
+          placeholder={selectedLabel ?? placeholder ?? "Search entities…"}
           value={query}
           onFocus={() => setOpen(true)}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}

@@ -2,7 +2,7 @@
 // Room grid for instant navigation, with an in-app "set anchor here" calibration
 // affordance (long-press a card) so placeholder coordinates can be fixed live.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, MapPin, Plus, Trash2, Check } from "lucide-react";
 import { Axis } from "@babylonjs/core";
 import { useConfig } from "@/config/ConfigContext";
@@ -20,6 +20,9 @@ interface Props {
 // same threshold used for the in-scene badge tap/long-press gesture
 // (EntityVisuals.wireBadgeGestures) so the two feel consistent.
 const LONG_PRESS_MS = 480;
+// How far (px) a touch can drift from its start point while still counting
+// as a still-finger hold rather than an intentional scroll.
+const MOVE_TOLERANCE_PX = 10;
 
 export default function TeleportMenu({ manager, currentFloor, onClose, onTeleport }: Props) {
   const { config, update } = useConfig();
@@ -31,10 +34,47 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
   const anchoredTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Shared press-tracking state for whichever card is currently being held —
   // only one card can be pressed at a time, so a single ref is enough.
-  const press = useRef<{ timer: ReturnType<typeof setTimeout> | null; longFired: boolean }>({
+  const press = useRef<{
+    timer: ReturnType<typeof setTimeout> | null;
+    longFired: boolean;
+    startX: number;
+    startY: number;
+  }>({
     timer: null,
     longFired: false,
+    startX: 0,
+    startY: 0,
   });
+  // The Rooms grid scrolls (more rooms than fit on a phone screen), so cards
+  // can't use touch-action: none — that blocks scrolling from ever starting
+  // on a card at all, which on a phone (cards filling nearly the whole width)
+  // means no scrolling anywhere. Instead we manually swallow touchmove only
+  // while the finger is still within MOVE_TOLERANCE_PX of where it landed —
+  // enough to survive ordinary jitter during the hold — and let go the moment
+  // it moves further, so a real scroll gesture takes over normally. Needs a
+  // real (non-passive) DOM listener: React's synthetic touchmove is passive
+  // by default, so preventDefault() there is silently ignored.
+  const cardsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = cardsRef.current;
+    if (!el) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (!press.current.timer) return; // no hold in progress — let the browser scroll freely
+      const t = e.touches[0];
+      if (!t) return;
+      const dx = t.clientX - press.current.startX;
+      const dy = t.clientY - press.current.startY;
+      if (Math.hypot(dx, dy) < MOVE_TOLERANCE_PX) {
+        e.preventDefault();
+      } else {
+        cancelPress();
+      }
+    };
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onTouchMove);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const points = config.teleportPoints;
 
@@ -123,21 +163,14 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
         <X size={22} />
       </button>
       <h2>Rooms</h2>
-      <div className="tp-cards">
+      <div className="tp-cards" ref={cardsRef}>
         {points.map((p) => (
           <button
             key={p.name}
             className="tp-card"
             style={{
               ...(p.thumbnail ? { backgroundImage: `url(${p.thumbnail})` } : undefined),
-              // "manipulation" still lets the browser start a native pan/scroll
-              // on this element (the grid container is scroll-y), and normal
-              // finger tremor over the 480ms hold is enough for that to win —
-              // firing pointercancel and killing the long-press timer before it
-              // ever completes ("nothing happens" on a touch kiosk). "none"
-              // keeps a touch that starts on a card from being claimed as a
-              // scroll gesture; the gaps between cards are still free to scroll.
-              touchAction: "none",
+              touchAction: "manipulation",
               WebkitTouchCallout: "none",
             }}
             onClick={() => onCardClick(p)}
@@ -147,6 +180,8 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
             }}
             onPointerDown={(e) => {
               if (e.button !== undefined && e.button !== 0) return; // ignore right/middle click
+              press.current.startX = e.clientX;
+              press.current.startY = e.clientY;
               onCardPointerDown(p);
             }}
             onPointerUp={cancelPress}

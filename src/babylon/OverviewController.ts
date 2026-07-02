@@ -108,12 +108,28 @@ export class OverviewController {
       minX: ext.min.x - span * 0.25, maxX: ext.max.x + span * 0.25,
       minZ: ext.min.z - span * 0.25, maxZ: ext.max.z + span * 0.25,
     };
+    // Babylon's default FOVMODE_VERTICAL_FIXED keeps `camera.fov` as the
+    // VERTICAL angle and derives the horizontal one from the aspect ratio
+    // (tan(hFov/2) = tan(vFov/2) * aspect) — so at a fixed radius, a portrait
+    // phone (aspect < 1) sees proportionally LESS width than a landscape
+    // desktop window does, cropping most of a villa that's wider than it is
+    // deep. `span * 1.05` alone was tuned against a landscape aspect, so it
+    // undershoots on portrait. Scaling by 1/aspect (only below aspect 1, so
+    // desktop — always ≥1 — is untouched) restores the same visible width a
+    // square viewport would give, which is what the flat multiplier assumed.
+    // Applied to upperRadiusLimit too, or the camera's own per-frame clamp
+    // would just clip the corrected radius straight back down on narrow
+    // phones (aspect ~0.46 alone needs more headroom than the old 2.2× cap).
+    const aspect = this.scene.getEngine().getAspectRatio(this.camera);
+    const aspectCorrection = aspect < 1 ? 1 / aspect : 1;
+    const correctedSpan = span * aspectCorrection;
+
     this.camera.lowerRadiusLimit = Math.max(2, span * 0.08);
-    this.camera.upperRadiusLimit = span * 2.2;
+    this.camera.upperRadiusLimit = correctedSpan * 2.2;
     this.camera.setTarget(new Vector3(cx, ext.min.y + 1, cz));
     this.camera.alpha = -Math.PI / 2;
     this.camera.beta = 0.5;
-    this.camera.radius = span * 1.05;
+    this.camera.radius = correctedSpan * 1.05;
     // The icon "1x" reference is deliberately CLOSER than the whole-villa fit
     // radius, not equal to it: the default overview is the single most crowded
     // view (every device in the villa on screen at once), so anchoring "1x" to

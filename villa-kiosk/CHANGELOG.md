@@ -1,5 +1,56 @@
 # Changelog
 
+## 2.4.54
+
+### Fix: long-press to re-anchor a room blocked ALL scrolling on the Rooms screen on mobile
+- 2.4.53 fixed the long-press being cancelled as a scroll gesture by setting
+  `touch-action: none` on the Rooms cards. On a phone, the cards fill nearly
+  the whole screen, so that left no gap to grab and scroll the list from —
+  the Rooms screen became unscrollable on mobile.
+- Cards are back to `touch-action: manipulation` (scrolling works normally).
+  Instead, a real (non-passive) `touchmove` listener on the grid now only
+  swallows movement while a finger stays within ~10px of where it first
+  touched down — enough to survive ordinary hold jitter — and releases
+  control back to native scrolling the moment it moves further, so a genuine
+  scroll swipe still works exactly as before.
+
+### Fix: renaming an entity_id showed no confirmation of the picked entity
+- The Entity ID picker (pencil icon → search/select a new entity_id) passed
+  a static placeholder ("New entity ID…") into the shared `EntityPicker`
+  component. Its display logic was `placeholder ?? selectedName`, so once
+  that static placeholder existed it always won — picking an entity from the
+  dropdown updated the value correctly (the Confirm button un-disabled) but
+  the input kept showing "New entity ID…", looking exactly like nothing had
+  happened.
+- The selected entity's name (or, for a not-yet-existing custom entity_id,
+  the raw id itself) now always takes priority over a caller-supplied static
+  placeholder once something is picked.
+
+### Fix: default overview was zoomed in too far on mobile portrait screens
+- The overview camera's default "fit the whole villa" framing used a flat
+  radius multiplier with no awareness of screen aspect ratio. Babylon's
+  default vertical-fixed FOV mode derives the *horizontal* field of view from
+  the aspect ratio, so a portrait phone (narrower than tall) sees
+  proportionally less width at the same distance than a landscape desktop
+  window does — cropping most of a villa that's wider than it is deep.
+- The default fit radius (and its zoom-out ceiling) now scales by the
+  screen's aspect ratio when it's narrower than square, restoring the same
+  visible width a square-ish viewport would give. Desktop (always ≥1 aspect)
+  is completely unaffected.
+
+### Fix: binary_sensor "more details" panel always showed leak wording
+- Every `binary_sensor` — motion, door/window contact, smoke, occupancy,
+  whatever — showed the same hard-coded "LEAK DETECTED" / "No leak" text and
+  droplet icon in its details panel, regardless of what it actually
+  monitors.
+- The panel now reads HA's own `device_class` attribute (motion, moisture,
+  door, smoke, occupancy, gas, safety, connectivity, etc.) and shows the
+  correct wording and icon for that class. It also fixes the danger styling
+  to match: a motion/door/occupancy sensor reporting "on" is informational,
+  not a fault, so it's no longer auto-flagged red the way an actual leak or
+  smoke alarm is. A per-entity override in Settings → Alert Thresholds still
+  always wins over these defaults.
+
 ## 2.4.53
 
 ### Fix: "Staircase" point-room glow was still invisible after 2.4.52

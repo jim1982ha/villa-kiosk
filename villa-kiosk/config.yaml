@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: Villa Kiosk
-version: "2.4.53"
+version: "2.4.54"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard served through Ingress
 url: https://github.com/jim1982ha/villa-kiosk
