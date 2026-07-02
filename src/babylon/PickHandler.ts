@@ -11,6 +11,7 @@ import {
   PointerEventTypes, type PointerInfo, type AbstractMesh, type Scene, type Node,
 } from "@babylonjs/core";
 import { resolveMeshToMapping, mappingForEntityId } from "@/config/EntityMap";
+import { tapDebug } from "@/utils/tapDebug";
 import type { EntityMapping, Vec3 } from "@/types/scene.types";
 
 export class PickHandler {
@@ -110,7 +111,10 @@ export class PickHandler {
     const canvas = this.scene.getEngine().getRenderingCanvas();
     const rect = canvas?.getBoundingClientRect();
     const pick = this.scene.pick(clientX - (rect?.left ?? 0), clientY - (rect?.top ?? 0));
-    if (!pick?.hit || !pick.pickedMesh) return;
+    if (!pick?.hit || !pick.pickedMesh) {
+      tapDebug("3D pick: no hit");
+      return;
+    }
 
     if (this.placeMode) {
       // Report the surface point so the UI can drop a marker there.
@@ -134,6 +138,7 @@ export class PickHandler {
     }
 
     const mapping = this.resolveMesh(pick.pickedMesh);
+    tapDebug(`3D pick: mesh="${pick.pickedMesh.name}" mapping=${mapping?.entityId ?? "none"}`);
     if (mapping) (longPress ? this.onLongPicked : this.onPicked)(mapping.entityId);
   }
 }

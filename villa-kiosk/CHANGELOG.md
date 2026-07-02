@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.4.67
+
+### Diagnostic only — no fix in this release
+- v2.4.66's rewrite (bypassing Babylon GUI's own click handling for badges
+  entirely) did NOT resolve the untappable-badge issue either. Two attempts
+  based on code review alone have both missed the actual cause, so this
+  release adds a visible, on-screen diagnostic instead of a third guess.
+- Enable with `?debug` in the kiosk's URL, or run
+  `localStorage.setItem("villa:debug", "1")` in the browser console then
+  reload. A small green-on-black box appears bottom-left showing, for every
+  tap/long-press: the raw touch coordinates, how many badges are currently
+  tracked, the nearest badge and its distance (hit or miss), and — if no
+  badge was hit — what the 3D raycast found instead (or "no hit" if nothing
+  was struck at all). Tapping the "dead" badge with this on will show
+  exactly which stage of the pipeline is failing, or whether the tap is
+  reaching the app at all.
+- Not gated behind the usual dev-only build flag (unlike existing debug
+  logging) since this failure has only ever reproduced on a real kiosk, not
+  in development — opt-in via the flag above, invisible otherwise.
+
 ## 2.4.66
 
 ### Change: state badges no longer use Babylon GUI's own click handling — at all

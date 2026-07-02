@@ -29,6 +29,7 @@ import { DEFAULT_ENTITY_ICONS } from "@/config/AppConfig";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import { categoryForEntity } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
+import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 
@@ -738,7 +739,10 @@ export class EntityVisuals {
    * closer to) instead of one silently winning every time.
    */
   pickBadgeAt(clientX: number, clientY: number): string | null {
-    if (this.badgeScreenPos.size === 0) return null;
+    if (this.badgeScreenPos.size === 0) {
+      tapDebug(`pickBadgeAt: 0 tracked badges (labels=${this.labels.size} showLabels=${this.config.showEntityLabels})`);
+      return null;
+    }
     const canvas = this.scene.getEngine().getRenderingCanvas();
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
@@ -754,11 +758,18 @@ export class EntityVisuals {
     const py = (clientY - rect.top) * scaleY;
 
     let best: { entityId: string; dist: number } | null = null;
+    let nearestAny: { entityId: string; dist: number; radius: number } | null = null;
     for (const [entityId, pos] of this.badgeScreenPos) {
       const dist = Math.hypot(px - pos.x, py - pos.y);
+      if (!nearestAny || dist < nearestAny.dist) nearestAny = { entityId, dist, radius: pos.radius };
       if (dist > pos.radius) continue;
       if (!best || dist < best.dist) best = { entityId, dist };
     }
+    tapDebug(
+      `pickBadgeAt(${px.toFixed(0)},${py.toFixed(0)}) tracked=${this.badgeScreenPos.size} ` +
+      `nearest=${nearestAny?.entityId}@${nearestAny?.dist.toFixed(0)}px(r=${nearestAny?.radius.toFixed(0)}) ` +
+      `hit=${best?.entityId ?? "none"}`,
+    );
     return best?.entityId ?? null;
   }
 

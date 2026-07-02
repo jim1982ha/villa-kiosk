@@ -34,6 +34,7 @@ import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import type { Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
+import { tapDebug } from "@/utils/tapDebug";
 import { loadOverviewView, saveOverviewView } from "@/utils/storage";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
@@ -126,11 +127,13 @@ export class SceneManager {
     // meshes, rather than Babylon GUI's own per-control pointer observables —
     // see EntityVisuals.pickBadgeAt()'s docstring for why that was dropped.
     const handleTap = (x: number, y: number) => {
+      tapDebug(`TAP client(${x.toFixed(0)},${y.toFixed(0)})`);
       const badgeEntity = this.visuals.pickBadgeAt(x, y);
       if (badgeEntity) { opts.onEntityPicked(badgeEntity); return; }
       this.pick.pickAtScreen(x, y);
     };
     const handleLongPress = (x: number, y: number) => {
+      tapDebug(`LONGPRESS client(${x.toFixed(0)},${y.toFixed(0)})`);
       const badgeEntity = this.visuals.pickBadgeAt(x, y);
       if (badgeEntity) { opts.onEntityLongPressed(badgeEntity); return; }
       this.pick.pickAtScreen(x, y, true);
