@@ -68,6 +68,42 @@ export function getModelMeta(): ModelMeta | null {
   return raw ? (JSON.parse(raw) as ModelMeta) : null;
 }
 
+// ── Per-device overview camera default ──────────────────────────────────────
+// Deliberately NOT part of AppConfig: AppConfig is exported/imported as part
+// of a backup (see utils/backup.ts) and shared across devices that way, but
+// the whole reason a saved overview pose is needed is that different devices
+// (a wall tablet vs. a phone in portrait) need different framing for the same
+// villa. Keeping it in its own localStorage key means it never travels with a
+// backup restore and always reflects THIS device/browser's own screen.
+
+const OVERVIEW_VIEW_KEY = "villa-kiosk:overview-view";
+
+export interface OverviewViewSnapshot {
+  alpha: number;
+  beta: number;
+  radius: number;
+  targetX: number;
+  targetY: number;
+  targetZ: number;
+}
+
+export function saveOverviewView(view: OverviewViewSnapshot): void {
+  try {
+    localStorage.setItem(OVERVIEW_VIEW_KEY, JSON.stringify(view));
+  } catch (err) {
+    console.error("[storage] failed to save overview view", err);
+  }
+}
+
+export function loadOverviewView(): OverviewViewSnapshot | null {
+  const raw = localStorage.getItem(OVERVIEW_VIEW_KEY);
+  return raw ? (JSON.parse(raw) as OverviewViewSnapshot) : null;
+}
+
+export function clearOverviewView(): void {
+  localStorage.removeItem(OVERVIEW_VIEW_KEY);
+}
+
 // ── Add-on central configuration ────────────────────────────────────────────
 // When model_path is set in the HA add-on options page, all clients load the
 // 3D model from the add-on's /model/ endpoint (backed by HA's www folder)

@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Home, Grid3x3, Settings, Link2, MapPin, Map,
-  PersonStanding, Sparkles, Tag, Eye, Wrench, Info,
+  PersonStanding, Sparkles, Tag, Eye, Wrench, Info, Anchor,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, MoreHorizontal,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
@@ -48,6 +48,14 @@ interface Props {
   onMove: (x: number, y: number) => void;
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
+  /** Whether THIS device has a saved default overview framing (button's
+   *  pressed/lit state). */
+  hasOverviewDefault: boolean;
+  /** Save the overview camera's current angle/tilt/zoom/pan as this
+   *  device's default — reapplied every time the app lands in overview. */
+  onSaveOverviewDefault: () => void;
+  /** Forget the saved default — reverts to the plain whole-villa auto-fit. */
+  onClearOverviewDefault: () => void;
 }
 
 interface MenuItem {
@@ -142,6 +150,7 @@ export default function HUD({
   currentFloor, floorsAvailable, onSwitchFloor, onOpenTeleport,
   onOpenSettings, onEnterBindMode, onEnterPlaceMode, onMove,
   viewMode, onToggleViewMode,
+  hasOverviewDefault, onSaveOverviewDefault, onClearOverviewDefault,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -150,6 +159,39 @@ export default function HUD({
   const title = resolveSiteTitle(config, haConfig?.location_name);
   const floors = [1, 2];
   const [hintOpen, setHintOpen] = useState(false);
+
+  // Tap = save the current overview framing as this device's default;
+  // long-press / right-click = clear it (same tap-vs-hold convention as the
+  // Rooms menu's re-anchor gesture and the in-scene badge gestures). A brief
+  // confirmation line replaces the tips text for ~1.8s either way.
+  const [viewFlash, setViewFlash] = useState<"saved" | "cleared" | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longFired = useRef(false);
+
+  const flashView = (kind: "saved" | "cleared") => {
+    setViewFlash(kind);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setViewFlash(null), 1800);
+  };
+  const cancelViewPress = () => {
+    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
+  };
+  const onViewBtnDown = () => {
+    longFired.current = false;
+    cancelViewPress();
+    pressTimer.current = setTimeout(() => {
+      longFired.current = true;
+      onClearOverviewDefault();
+      flashView("cleared");
+    }, 480);
+  };
+  const onViewBtnClick = () => {
+    cancelViewPress();
+    if (longFired.current) { longFired.current = false; return; }
+    onSaveOverviewDefault();
+    flashView("saved");
+  };
 
   useEffect(() => { document.title = title; }, [title]);
 
@@ -314,20 +356,46 @@ export default function HUD({
           <VirtualJoystick onMove={onMove} />
         ) : (
           <div className="overview-help">
-            {hintOpen && (
+            {viewFlash ? (
+              <div className="overview-hint">
+                {viewFlash === "saved"
+                  ? "Default view saved for this device — it'll open here every reload."
+                  : "Default view cleared — back to auto-fitting the whole villa."}
+              </div>
+            ) : hintOpen ? (
               <div className="overview-hint">
                 Bird's-eye · drag or two-finger slide to pan · pinch/wheel to zoom · Shift+drag to rotate &amp; tilt · tap an object
               </div>
-            )}
-            <button
-              className={`icon-btn${hintOpen ? " active" : ""}`}
-              onClick={() => setHintOpen((o) => !o)}
-              title="Navigation tips"
-              aria-label="Navigation tips"
-              aria-expanded={hintOpen}
-            >
-              <Info size={20} />
-            </button>
+            ) : null}
+            <div className="overview-help-buttons">
+              <button
+                className={`icon-btn${hasOverviewDefault ? " active" : ""}`}
+                onPointerDown={onViewBtnDown}
+                onPointerUp={cancelViewPress}
+                onPointerLeave={cancelViewPress}
+                onPointerCancel={cancelViewPress}
+                onClick={onViewBtnClick}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onClearOverviewDefault();
+                  flashView("cleared");
+                }}
+                title="Tap to fix this view as the default for this device · long-press / right-click to clear it"
+                aria-label="Fix current view as this device's default"
+                aria-pressed={hasOverviewDefault}
+              >
+                <Anchor size={18} />
+              </button>
+              <button
+                className={`icon-btn${hintOpen ? " active" : ""}`}
+                onClick={() => setHintOpen((o) => !o)}
+                title="Navigation tips"
+                aria-label="Navigation tips"
+                aria-expanded={hintOpen}
+              >
+                <Info size={20} />
+              </button>
+            </div>
           </div>
         )}
       </div>

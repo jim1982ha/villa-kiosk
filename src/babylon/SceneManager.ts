@@ -34,6 +34,7 @@ import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import type { Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
+import { loadOverviewView, saveOverviewView, clearOverviewView } from "@/utils/storage";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint, SceneMarker } from "@/types/scene.types";
@@ -259,6 +260,16 @@ export class SceneManager {
       if (this.loadedMeshes.length) {
         const ext = this.worldExtends(this.loadedMeshes);
         this.overview.fitTo({ min: ext.min, max: ext.max });
+        // A saved per-device default (see saveOverviewDefault) overrides the
+        // auto-fit angle/tilt/zoom/pan — fitTo() still ran first so the pan
+        // bounds and icon-zoom reference are correct for THIS model.
+        const saved = loadOverviewView();
+        if (saved) {
+          this.overview.applyPose({
+            alpha: saved.alpha, beta: saved.beta, radius: saved.radius,
+            target: { x: saved.targetX, y: saved.targetY, z: saved.targetZ },
+          });
+        }
       }
       this.overview.enable();
       this.scene.activeCamera = this.overview.camera;
@@ -289,6 +300,37 @@ export class SceneManager {
     const next = this.viewMode === "overview" ? "first-person" : "overview";
     this.setViewMode(next);
     return next;
+  }
+
+  /** True if THIS device/browser has a saved default overview framing
+   *  (see saveOverviewDefault) — drives the "Fix default view" button's
+   *  pressed state so it reads as a toggle. */
+  hasOverviewDefault(): boolean {
+    return loadOverviewView() !== null;
+  }
+
+  /**
+   * Persist the overview camera's CURRENT angle/tilt/zoom/pan as this
+   * device's default framing, applied every time the app lands in overview
+   * mode from now on (fresh load, model reload, or manually switching back).
+   * Per-device (localStorage — see utils/storage.ts), never synced or
+   * exported: a wall tablet and a phone need different framing for the same
+   * villa, which is exactly why the plain auto-fit isn't always right. Only
+   * meaningful while already in overview mode.
+   */
+  saveOverviewDefault(): void {
+    if (this.viewMode !== "overview") return;
+    const pose = this.overview.getPose();
+    saveOverviewView({
+      alpha: pose.alpha, beta: pose.beta, radius: pose.radius,
+      targetX: pose.target.x, targetY: pose.target.y, targetZ: pose.target.z,
+    });
+  }
+
+  /** Forget this device's saved default — the next overview entry reverts to
+   *  the plain whole-villa auto-fit. */
+  clearOverviewDefault(): void {
+    clearOverviewView();
   }
 
   /**

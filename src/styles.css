@@ -340,8 +340,10 @@ button {
 }
 .bottom-bar > * { pointer-events: auto; }
 
-/* Overview-mode navigation tips: hidden by default, revealed by the (i) button. */
+/* Overview-mode navigation tips: hidden by default, revealed by the (i) button.
+   Shares the row with the "fix default view" button next to it. */
 .overview-help { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.overview-help-buttons { display: flex; gap: 8px; }
 .overview-hint {
   max-width: min(60vw, 460px);
   background: var(--bg-overlay); color: var(--text-secondary);

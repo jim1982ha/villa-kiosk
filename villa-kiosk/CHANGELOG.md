@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.4.56
+
+### New: fix a per-device default overview view
+- New button next to the (i) navigation-tips button (overview mode only,
+  bottom-left) that saves the bird's-eye camera's current angle/tilt/zoom/pan
+  as THIS device's default framing — reapplied every time the app lands in
+  overview from now on (cold load, model reload, or switching back from
+  first-person). Solves the auto-fit landing at an awkward rotation/crop on
+  a given phone/tablet's aspect ratio, without having to re-adjust it by hand
+  on every reload.
+- Tap to save, long-press or right-click to clear (same tap-vs-hold
+  convention as the Rooms menu's re-anchor gesture). A brief confirmation
+  line replaces the tips text either way.
+- Stored in its own `localStorage` key, deliberately kept OUT of the
+  exportable app config — a wall tablet and a phone need different framing
+  for the same villa, so this is never carried across devices by a backup
+  restore.
+
+### Fix: re-anchoring a room from the Rooms menu while in overview mode saved the wrong position
+- "Long-press / right-click a room card to save the current view as that
+  room's anchor" always captured the FIRST-PERSON camera's position, even
+  when the Rooms menu was opened while browsing in the bird's-eye overview.
+  That camera goes dormant (input detached) while in overview, frozen
+  wherever it was last left — often the initial spawn point — so the
+  confirmation checkmark fired correctly but silently saved a stale,
+  unrelated pose instead of the room actually being viewed. Clicking the
+  card again would then pan to the wrong spot, looking like the save had
+  simply been ignored.
+- The capture is now mode-aware: in overview mode it reads the overview
+  camera's current pan target (which live-updates as you pan/zoom) instead
+  of the stale first-person position. "Add room here" had the identical bug
+  and got the same fix.
+
 ## 2.4.55
 
 Internal refactor round — no functional or visual change to any existing

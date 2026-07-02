@@ -142,6 +142,31 @@ export class OverviewController {
     this.cb.onActivity();
   }
 
+  /** Snapshot of the current camera pose (see applyPose). */
+  getPose(): { alpha: number; beta: number; radius: number; target: { x: number; y: number; z: number } } {
+    return {
+      alpha: this.camera.alpha,
+      beta: this.camera.beta,
+      radius: this.camera.radius,
+      target: { x: this.camera.target.x, y: this.camera.target.y, z: this.camera.target.z },
+    };
+  }
+
+  /** Restore a previously captured pose, e.g. a device's saved default
+   *  overview framing. Applied AFTER fitTo() (whose bounds/radius-limits this
+   *  clamps against), so it overrides the auto-fit angles without losing the
+   *  pan bounds / icon-zoom reference fitTo just computed for this model. */
+  applyPose(pose: { alpha: number; beta: number; radius: number; target: { x: number; y: number; z: number } }): void {
+    this.camera.alpha = pose.alpha;
+    this.camera.beta = clamp(pose.beta, OverviewController.BETA_MIN, OverviewController.BETA_MAX);
+    this.camera.radius = clamp(pose.radius, this.camera.lowerRadiusLimit ?? 2, this.camera.upperRadiusLimit ?? 200);
+    const t = this.camera.target;
+    t.x = clamp(pose.target.x, this.bounds.minX, this.bounds.maxX);
+    t.y = pose.target.y;
+    t.z = clamp(pose.target.z, this.bounds.minZ, this.bounds.maxZ);
+    this.cb.onActivity();
+  }
+
   panTo(x: number, z: number): void {
     // Mutate the orbit target IN PLACE — calling setTarget() would recompute
     // alpha/beta/radius from the current position and spin the view.

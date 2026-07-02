@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { X, MapPin, Plus, Trash2, Check } from "lucide-react";
 import { Axis } from "@babylonjs/core";
 import { useConfig } from "@/config/ConfigContext";
-import type { TeleportPoint } from "@/types/scene.types";
+import type { TeleportPoint, Vec3 } from "@/types/scene.types";
 import type { SceneManager } from "@/babylon/SceneManager";
 
 interface Props {
@@ -78,20 +78,42 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
 
   const points = config.teleportPoints;
 
-  /** Calibrate: store the camera's current pose as this room's anchor. */
-  const setAnchorHere = (point: TeleportPoint) => {
-    if (!manager) return;
-    const cam = manager.camera.camera;
+  /**
+   * "Where am I looking" — captured from whichever camera is ACTUALLY active.
+   * The Rooms menu can be opened from either mode, but the first-person
+   * camera goes dormant (input detached, position frozen) while browsing in
+   * overview — reading it there silently returns a stale pose from wherever
+   * it was last left (often the initial spawn), not what's on screen. That
+   * was the bug: the anchor confirmation fired correctly, but in overview
+   * mode it was anchoring to the wrong camera, so clicking the card back
+   * never appeared to go anywhere new.
+   *
+   * In overview mode there's no first-person "look direction" to capture
+   * (it's a top-down pan/zoom, not a walk-through pose), so we derive a
+   * standing position at the panned-to spot instead — same synthesis
+   * SceneManager already uses for its own calibrated-room fallback target.
+   */
+  const captureCurrentPose = (): { position: Vec3; target: Vec3 } => {
+    if (manager!.getViewMode() === "overview") {
+      const t = manager!.overview.camera.target;
+      const position = { x: round(t.x), y: round(config.eyeHeight), z: round(t.z) };
+      return { position, target: { x: position.x, y: position.y, z: position.z + 1.5 } };
+    }
+    const cam = manager!.camera.camera;
     const pos = cam.position;
     const dir = cam.getDirection(Axis.Z);
+    return {
+      position: { x: round(pos.x), y: round(pos.y), z: round(pos.z) },
+      target: { x: round(pos.x + dir.x), y: round(pos.y + dir.y), z: round(pos.z + dir.z) },
+    };
+  };
+
+  /** Calibrate: store the current pose as this room's anchor. */
+  const setAnchorHere = (point: TeleportPoint) => {
+    if (!manager) return;
+    const { position, target } = captureCurrentPose();
     const updated = config.teleportPoints.map((p) =>
-      p.name === point.name
-        ? {
-            ...p,
-            position: { x: round(pos.x), y: round(pos.y), z: round(pos.z) },
-            target: { x: round(pos.x + dir.x), y: round(pos.y + dir.y), z: round(pos.z + dir.z) },
-          }
-        : p,
+      p.name === point.name ? { ...p, position, target } : p,
     );
     update({ teleportPoints: updated });
 
@@ -128,20 +150,14 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
     onTeleport(point);
   };
 
-  /** Add a brand-new room anchored at the camera's current pose. */
+  /** Add a brand-new room anchored at the current pose (same mode-aware
+   *  capture as re-anchoring — see captureCurrentPose). */
   const addRoomHere = () => {
     if (!manager) return;
     const name = prompt("Name this room/viewpoint:")?.trim();
     if (!name) return;
-    const cam = manager.camera.camera;
-    const pos = cam.position;
-    const dir = cam.getDirection(Axis.Z);
-    const point: TeleportPoint = {
-      name,
-      floor: currentFloor as 1 | 2,
-      position: { x: round(pos.x), y: round(pos.y), z: round(pos.z) },
-      target: { x: round(pos.x + dir.x), y: round(pos.y + dir.y), z: round(pos.z + dir.z) },
-    };
+    const { position, target } = captureCurrentPose();
+    const point: TeleportPoint = { name, floor: currentFloor as 1 | 2, position, target };
     update({ teleportPoints: [...config.teleportPoints, point] });
   };
 

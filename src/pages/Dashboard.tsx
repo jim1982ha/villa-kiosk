@@ -46,6 +46,11 @@ export default function Dashboard() {
   const [placeMode, setPlaceMode] = useState(false);
   const [pointToPlace, setPointToPlace] = useState<Vec3 | null>(null);
   const [viewMode, setViewMode] = useState<"first-person" | "overview">("first-person");
+  // Mirrors SceneManager.hasOverviewDefault() (a localStorage read) into React
+  // state so the HUD button's pressed state updates immediately after
+  // save/clear, without polling. Re-derived per manager since a model reload
+  // swaps the manager but the saved device pose is still valid to show.
+  const [hasOverviewDefault, setHasOverviewDefault] = useState(false);
 
   // Auto-connect on load / refresh. As an add-on we reach HA through the
   // same-origin Supervisor proxy (token injected server-side), so no credentials
@@ -126,6 +131,23 @@ export default function Dashboard() {
     };
     if (manager.isReady()) goOverview();
     return manager.onReady(goOverview);
+  }, [manager]);
+
+  // Read this device's saved-default-view flag whenever the manager changes
+  // (a model reload swaps it) so the HUD button's pressed state is correct
+  // from the start, not just after the user next saves/clears it.
+  useEffect(() => {
+    setHasOverviewDefault(manager?.hasOverviewDefault() ?? false);
+  }, [manager]);
+
+  const saveOverviewDefault = useCallback(() => {
+    manager?.saveOverviewDefault();
+    setHasOverviewDefault(true);
+  }, [manager]);
+
+  const clearOverviewDefault = useCallback(() => {
+    manager?.clearOverviewDefault();
+    setHasOverviewDefault(false);
   }, [manager]);
 
   const onFloorChange = useCallback(
@@ -251,6 +273,9 @@ export default function Dashboard() {
         onMove={(x, y) => manager?.camera.setMovement(x, y)}
         viewMode={viewMode}
         onToggleViewMode={toggleViewMode}
+        hasOverviewDefault={hasOverviewDefault}
+        onSaveOverviewDefault={saveOverviewDefault}
+        onClearOverviewDefault={clearOverviewDefault}
       />
 
       {teleportOpen && (
