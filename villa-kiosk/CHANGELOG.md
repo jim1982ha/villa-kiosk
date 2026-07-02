@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.4.60
+
+### Fix: a re-uploaded central .sh3d's new/renamed rooms never appeared in the Rooms menu
+- The add-on's central .sh3d (shared by every device) is fetched and parsed
+  in the *background* after the GLB loads, so first paint doesn't wait on
+  parsing a large SweetHome project file — this is intentional. The bug:
+  once that background parse landed, nothing told the scene to actually
+  re-run room calibration with the fresh data, so a new room (e.g.
+  "Kitchen") or a rename (e.g. "Bedroom1" → "Bedroom 1") sat in memory
+  unused — the Rooms menu kept showing whatever was calibrated from the
+  *previous* upload.
+- `SceneManager.updateConfig()` now treats a change to the parsed sh3d room/
+  entity data as a reason to recalibrate, the same as it already does for an
+  entity-map change or a mirror-flip toggle.
+- Side effect worth knowing about: since the app can't tell "renamed" apart
+  from "deleted old room + added new one", a renamed room will show up
+  ALONGSIDE its old, now-orphaned name in the Rooms menu after this fix
+  applies (by design — it never silently deletes a room in case it was
+  hand-customized). Delete the stale one via its trash icon once.
+
 ## 2.4.59
 
 ### Fix: a point-room's motion glow floated at one flat height, poking out from under sloped assets like a staircase

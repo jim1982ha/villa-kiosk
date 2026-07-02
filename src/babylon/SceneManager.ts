@@ -883,6 +883,17 @@ export class SceneManager {
       prev.latitude !== config.latitude ||
       prev.longitude !== config.longitude;
 
+    // A freshly (re)uploaded central .sh3d lands here asynchronously — see
+    // BabylonCanvas's background "central SH3D refresh", which fetches +
+    // parses it AFTER first paint and just calls update({ sh3dRooms,
+    // sh3dEntities }), with no full remount to force a re-fit. Without this,
+    // the new room names/shapes sat in config but nothing ever re-ran
+    // calibrateRooms() to pick them up — the Rooms menu kept showing
+    // whatever was calibrated at the PREVIOUS model load until a second full
+    // reload happened to already have the fresh data cached from last time.
+    const sh3dChanged =
+      prev.sh3dRooms !== config.sh3dRooms || prev.sh3dEntities !== config.sh3dEntities;
+
     // indexMeshes()/applyStructure() only read entity↔mesh bindings and the
     // calibration flips; everything else (glass hints, grass, model transform)
     // takes effect on the next model load, not here.
@@ -890,7 +901,8 @@ export class SceneManager {
       prev.entityMap !== config.entityMap ||
       prev.meshBindings !== config.meshBindings ||
       prev.calibrationFlipX !== config.calibrationFlipX ||
-      prev.calibrationFlipZ !== config.calibrationFlipZ;
+      prev.calibrationFlipZ !== config.calibrationFlipZ ||
+      sh3dChanged;
 
     // renderFx first (sets base IBL + builds/clears the env texture), THEN the
     // sun pass so SunController has the final word on the fill light + day/night
@@ -927,6 +939,7 @@ export class SceneManager {
       const needsRecalibration =
         prev.calibrationFlipX !== config.calibrationFlipX ||
         prev.calibrationFlipZ !== config.calibrationFlipZ ||
+        sh3dChanged ||
         entityDelta > 0;  // new entities improve the plan→world fit
 
       if (needsRecalibration) {
