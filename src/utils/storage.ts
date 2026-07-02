@@ -100,10 +100,6 @@ export function loadOverviewView(): OverviewViewSnapshot | null {
   return raw ? (JSON.parse(raw) as OverviewViewSnapshot) : null;
 }
 
-export function clearOverviewView(): void {
-  localStorage.removeItem(OVERVIEW_VIEW_KEY);
-}
-
 // ── Add-on central configuration ────────────────────────────────────────────
 // When model_path is set in the HA add-on options page, all clients load the
 // 3D model from the add-on's /model/ endpoint (backed by HA's www folder)

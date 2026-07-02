@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.4.58
+
+### Change: the anchor (default-view) button now goes-to instead of only saving
+- Tap now jumps straight to this device's saved default overview framing
+  (useful as a "home" button while browsing around, not just something that
+  happens automatically on load/reload). If nothing has been saved yet, a
+  hint explains how to set one instead of silently doing nothing.
+- Long-press / right-click now (re)defines the default as whatever
+  angle/tilt/zoom/pan the camera is currently at — same gesture, new role
+  (previously tap saved and long-press cleared; there's no separate "clear"
+  anymore, since redefining always overwrites the old value).
+
 ## 2.4.57
 
 ### Fix: re-anchoring a room's bird's-eye view in the Rooms menu didn't restore the angle/tilt/zoom

@@ -135,19 +135,19 @@ export default function Dashboard() {
 
   // Read this device's saved-default-view flag whenever the manager changes
   // (a model reload swaps it) so the HUD button's pressed state is correct
-  // from the start, not just after the user next saves/clears it.
+  // from the start, not just after the user next saves it.
   useEffect(() => {
     setHasOverviewDefault(manager?.hasOverviewDefault() ?? false);
   }, [manager]);
 
+  // Tap the anchor button → jump to the saved default (if any).
+  const applyOverviewDefault = useCallback((): boolean => manager?.applyOverviewDefault() ?? false, [manager]);
+
+  // Long-press / right-click the anchor button → (re)define the default as
+  // the current angle/tilt/zoom/pan.
   const saveOverviewDefault = useCallback(() => {
     manager?.saveOverviewDefault();
     setHasOverviewDefault(true);
-  }, [manager]);
-
-  const clearOverviewDefault = useCallback(() => {
-    manager?.clearOverviewDefault();
-    setHasOverviewDefault(false);
   }, [manager]);
 
   const onFloorChange = useCallback(
@@ -283,8 +283,8 @@ export default function Dashboard() {
         viewMode={viewMode}
         onToggleViewMode={toggleViewMode}
         hasOverviewDefault={hasOverviewDefault}
+        onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
-        onClearOverviewDefault={clearOverviewDefault}
       />
 
       {teleportOpen && (

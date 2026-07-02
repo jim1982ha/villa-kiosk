@@ -51,11 +51,13 @@ interface Props {
   /** Whether THIS device has a saved default overview framing (button's
    *  pressed/lit state). */
   hasOverviewDefault: boolean;
-  /** Save the overview camera's current angle/tilt/zoom/pan as this
-   *  device's default — reapplied every time the app lands in overview. */
+  /** Tap: jump to this device's saved default view right now. Returns false
+   *  (no saved default to jump to) so the caller can show the right hint. */
+  onApplyOverviewDefault: () => boolean;
+  /** Long-press / right-click: (re)define the default as the overview
+   *  camera's current angle/tilt/zoom/pan — reapplied every time the app
+   *  lands in overview from now on. */
   onSaveOverviewDefault: () => void;
-  /** Forget the saved default — reverts to the plain whole-villa auto-fit. */
-  onClearOverviewDefault: () => void;
 }
 
 interface MenuItem {
@@ -150,7 +152,7 @@ export default function HUD({
   currentFloor, floorsAvailable, onSwitchFloor, onOpenTeleport,
   onOpenSettings, onEnterBindMode, onEnterPlaceMode, onMove,
   viewMode, onToggleViewMode,
-  hasOverviewDefault, onSaveOverviewDefault, onClearOverviewDefault,
+  hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -160,16 +162,16 @@ export default function HUD({
   const floors = [1, 2];
   const [hintOpen, setHintOpen] = useState(false);
 
-  // Tap = save the current overview framing as this device's default;
-  // long-press / right-click = clear it (same tap-vs-hold convention as the
-  // Rooms menu's re-anchor gesture and the in-scene badge gestures). A brief
-  // confirmation line replaces the tips text for ~1.8s either way.
-  const [viewFlash, setViewFlash] = useState<"saved" | "cleared" | null>(null);
+  // Tap = jump to this device's saved default view; long-press / right-click
+  // = (re)define it as the current framing (same tap-vs-hold convention as
+  // the Rooms menu's re-anchor gesture and the in-scene badge gestures). A
+  // brief confirmation line replaces the tips text for ~1.8s either way.
+  const [viewFlash, setViewFlash] = useState<"applied" | "none" | "saved" | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longFired = useRef(false);
 
-  const flashView = (kind: "saved" | "cleared") => {
+  const flashView = (kind: "applied" | "none" | "saved") => {
     setViewFlash(kind);
     if (flashTimer.current) clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setViewFlash(null), 1800);
@@ -182,15 +184,14 @@ export default function HUD({
     cancelViewPress();
     pressTimer.current = setTimeout(() => {
       longFired.current = true;
-      onClearOverviewDefault();
-      flashView("cleared");
+      onSaveOverviewDefault();
+      flashView("saved");
     }, 480);
   };
   const onViewBtnClick = () => {
     cancelViewPress();
     if (longFired.current) { longFired.current = false; return; }
-    onSaveOverviewDefault();
-    flashView("saved");
+    flashView(onApplyOverviewDefault() ? "applied" : "none");
   };
 
   useEffect(() => { document.title = title; }, [title]);
@@ -358,9 +359,11 @@ export default function HUD({
           <div className="overview-help">
             {viewFlash ? (
               <div className="overview-hint">
-                {viewFlash === "saved"
-                  ? "Default view saved for this device — it'll open here every reload."
-                  : "Default view cleared — back to auto-fitting the whole villa."}
+                {viewFlash === "applied"
+                  ? "Jumped to this device's default view."
+                  : viewFlash === "saved"
+                    ? "Default view updated for this device — it'll open here every reload."
+                    : "No default view saved yet — long-press (or right-click) to set one."}
               </div>
             ) : hintOpen ? (
               <div className="overview-hint">
@@ -377,11 +380,11 @@ export default function HUD({
                 onClick={onViewBtnClick}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  onClearOverviewDefault();
-                  flashView("cleared");
+                  onSaveOverviewDefault();
+                  flashView("saved");
                 }}
-                title="Tap to fix this view as the default for this device · long-press / right-click to clear it"
-                aria-label="Fix current view as this device's default"
+                title="Tap to go to this device's default view · long-press / right-click to set it to the current view"
+                aria-label="Go to this device's default overview view"
                 aria-pressed={hasOverviewDefault}
               >
                 <Anchor size={18} />

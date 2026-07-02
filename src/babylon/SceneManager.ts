@@ -34,7 +34,7 @@ import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import type { Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
-import { loadOverviewView, saveOverviewView, clearOverviewView } from "@/utils/storage";
+import { loadOverviewView, saveOverviewView } from "@/utils/storage";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint, SceneMarker } from "@/types/scene.types";
@@ -327,10 +327,21 @@ export class SceneManager {
     });
   }
 
-  /** Forget this device's saved default — the next overview entry reverts to
-   *  the plain whole-villa auto-fit. */
-  clearOverviewDefault(): void {
-    clearOverviewView();
+  /**
+   * Jump to this device's saved default overview framing right now — the
+   * anchor button's tap gesture (not just the automatic apply-on-landing in
+   * setViewMode). Returns false (no-op) when nothing has been saved yet or
+   * we're not currently in overview, so the caller can show the right hint.
+   */
+  applyOverviewDefault(): boolean {
+    if (this.viewMode !== "overview") return false;
+    const saved = loadOverviewView();
+    if (!saved) return false;
+    this.overview.applyPose({
+      alpha: saved.alpha, beta: saved.beta, radius: saved.radius,
+      target: { x: saved.targetX, y: saved.targetY, z: saved.targetZ },
+    });
+    return true;
   }
 
   /**
