@@ -2,6 +2,7 @@
 // Owns the <canvas> + SceneManager lifecycle and wires HA state -> 3D visuals.
 
 import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, X } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -78,6 +79,12 @@ export default function BabylonCanvas({
   // True when the error came from a failed addon-config model fetch — the user
   // should fix their add-on settings, not upload a file.
   const [addonError, setAddonError] = useState(false);
+  // The central SH3D refresh below runs silently in the background by design
+  // (so first paint isn't blocked on parsing a large SweetHome project) — but
+  // "silent" also meant a genuine failure (bad path, unparsable file, no
+  // named rooms) was invisible on a kiosk tablet with no devtools console.
+  // Surface it instead of only console.warn-ing.
+  const [sh3dSyncMsg, setSh3dSyncMsg] = useState<string | null>(null);
 
   // Create the scene once.
   useEffect(() => {
@@ -182,14 +189,28 @@ export default function BabylonCanvas({
           void (async () => {
             try {
               const sh3dResp = await fetch(await versionedModelUrl(addonCfg.sh3d_path));
-              if (!sh3dResp.ok) return;
+              if (!sh3dResp.ok) {
+                if (!cancelled) {
+                  setSh3dSyncMsg(
+                    `Central .sh3d not found (HTTP ${sh3dResp.status}) — room names weren't refreshed. ` +
+                    `Check Settings → Add-ons → Villa Kiosk → Configuration.`,
+                  );
+                }
+                return;
+              }
               const sh3dBuf = await sh3dResp.arrayBuffer();
               const { rooms, entities: sh3dEntities } = await parseSh3d(sh3dBuf);
-              if (!cancelled && rooms.length > 0) {
-                update({ sh3dRooms: rooms, sh3dEntities });
+              if (cancelled) return;
+              if (rooms.length === 0) {
+                setSh3dSyncMsg("The central .sh3d has no named rooms — room list wasn't refreshed.");
+                return;
               }
+              update({ sh3dRooms: rooms, sh3dEntities });
             } catch (err) {
               console.warn("[BabylonCanvas] central SH3D refresh failed", err);
+              if (!cancelled) {
+                setSh3dSyncMsg(`Failed to refresh room names from the central .sh3d: ${(err as Error).message}`);
+              }
             }
           })();
         }
@@ -281,6 +302,15 @@ export default function BabylonCanvas({
           {!addonError && (
             <button className="btn primary" onClick={onNeedModel}>Upload model</button>
           )}
+        </div>
+      )}
+      {sh3dSyncMsg && (
+        <div className="sh3d-sync-banner">
+          <AlertTriangle size={16} />
+          <span>{sh3dSyncMsg}</span>
+          <button onClick={() => setSh3dSyncMsg(null)} aria-label="Dismiss">
+            <X size={14} />
+          </button>
         </div>
       )}
     </>

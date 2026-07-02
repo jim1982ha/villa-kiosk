@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.4.62
+
+### Change: surface a failed central .sh3d refresh instead of failing silently
+- The background central-`.sh3d` refresh (add-on mode, runs after every load
+  to pick up room-name changes without blocking first paint) only ever
+  logged a failure to the browser console — invisible on a kiosk tablet with
+  no devtools. If a re-uploaded `.sh3d` still doesn't update the Rooms menu
+  after updating to v2.4.61+, this will now show exactly why: a 404 on the
+  central file, a plan with no named rooms, or a parse error with its
+  message — as a small dismissible banner instead of nothing at all.
+
 ## 2.4.61
 
 ### Change: Room field now suggests your actual room names (typo protection)

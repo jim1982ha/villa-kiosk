@@ -719,6 +719,22 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 .bind-banner span { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 
+/* --- Central .sh3d background-refresh failure banner --- */
+.sh3d-sync-banner {
+  position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%);
+  z-index: 45; display: flex; align-items: center; gap: 10px;
+  background: var(--bg-overlay); backdrop-filter: blur(12px);
+  border: 1px solid var(--status-danger); border-radius: 14px;
+  padding: 10px 14px; max-width: 92vw;
+  box-shadow: 0 6px 24px var(--shadow);
+  font-size: 13px; color: var(--text-primary);
+}
+.sh3d-sync-banner svg:first-child { color: var(--status-danger); flex-shrink: 0; }
+.sh3d-sync-banner button {
+  background: none; border: none; color: var(--text-secondary); cursor: pointer;
+  display: flex; padding: 2px; flex-shrink: 0;
+}
+
 .muted { color: var(--text-secondary); }
 .danger-text { color: var(--status-danger); }
 .row { display: flex; align-items: center; gap: 10px; }
