@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.4.61
+
+### Change: Room field now suggests your actual room names (typo protection)
+- The "Room" field (Bound 3D objects table and the Config Editor) is matched
+  EXACTLY (case/whitespace aside) against a real room's name by the
+  motion-glow and teleport code — a typo, or a name that doesn't match any
+  actual room, silently does nothing with no error anywhere. That's the
+  likely cause if a sensor's floor glow works for one room but not another
+  with no other difference.
+- Both Room fields now autocomplete from your real Rooms-menu names (a
+  native browser suggestion list), so a mismatch is visible while typing.
+  Still plain text underneath — typing a name that doesn't exist yet (e.g.
+  ahead of adding that room) still works, it's just no longer a silent trap.
+
 ## 2.4.60
 
 ### Fix: a re-uploaded central .sh3d's new/renamed rooms never appeared in the Rooms menu

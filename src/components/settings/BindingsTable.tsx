@@ -24,6 +24,17 @@ export default function BindingsTable() {
   const { entities } = useHA();
   const [showUnbound, setShowUnbound] = useState(false);
 
+  // The "Room" field below is free text matched EXACTLY (case/whitespace
+  // aside) against a real room's name by RoomHighlight — a typo or a name
+  // that doesn't match any actual room (sh3d polygon or Rooms-menu point)
+  // silently does nothing, with no error anywhere. Suggest the real names as
+  // a native <datalist> autocomplete so a mismatch is visible while typing,
+  // without blocking a not-yet-created room name.
+  const roomNames = useMemo(
+    () => Array.from(new Set(config.teleportPoints.map((p) => p.name))).sort(),
+    [config.teleportPoints],
+  );
+
   const catalog = useMemo(() => loadMeshCatalog(), []);
   const bound = Object.keys(config.meshBindings);
   const unbound = useMemo(
@@ -51,6 +62,10 @@ export default function BindingsTable() {
         villa. Change the entity or its display settings without reloading the
         model.
       </p>
+
+      <datalist id="bindings-room-names">
+        {roomNames.map((n) => <option key={n} value={n} />)}
+      </datalist>
 
       {bound.length === 0 && (
         <p className="muted body-text mt">
@@ -143,7 +158,8 @@ export default function BindingsTable() {
                   placeholder="Room"
                   value={meta.room}
                   onChange={(e) => patchMeta(entityId, { room: e.target.value })}
-                  title="Room name"
+                  title="Room name — must match a Rooms-menu name exactly for motion-glow/teleport to find it"
+                  list="bindings-room-names"
                 />
                 {meta.type === "camera" && (
                   <div style={{ flex: "1 1 220px", minWidth: 180 }}>

@@ -37,6 +37,17 @@ export default function ConfigEditor() {
     [config.entityMap, boundEntityIds],
   );
 
+  // The "Room" field below is free text matched EXACTLY (case/whitespace
+  // aside) against a real room's name by RoomHighlight — a typo or a name
+  // that doesn't match any actual room (sh3d polygon or Rooms-menu point)
+  // silently does nothing, with no error anywhere. Suggest the real names as
+  // a native <datalist> autocomplete so a mismatch is visible while typing,
+  // without blocking a not-yet-created room name.
+  const roomNames = useMemo(
+    () => Array.from(new Set(config.teleportPoints.map((p) => p.name))).sort(),
+    [config.teleportPoints],
+  );
+
   const patch = (key: string, change: Partial<EntityMapping>) =>
     update({ entityMap: { ...config.entityMap, [key]: { ...config.entityMap[key], ...change } } });
 
@@ -84,6 +95,10 @@ export default function ConfigEditor() {
         <code style={{ fontSize: 11 }}>camera.patio_1f_cam</code>). Edit the
         display name, room or panel type without reloading the model.
       </p>
+
+      <datalist id="config-editor-room-names">
+        {roomNames.map((n) => <option key={n} value={n} />)}
+      </datalist>
 
       {entries.length === 0 && (
         <p className="muted body-text mt">
@@ -183,7 +198,14 @@ export default function ConfigEditor() {
                   </select>
                 </td>
                 <td data-label="Label"><input value={m.label} onChange={(e) => patch(key, { label: e.target.value })} /></td>
-                <td data-label="Room"><input value={m.room} onChange={(e) => patch(key, { room: e.target.value })} /></td>
+                <td data-label="Room">
+                  <input
+                    value={m.room}
+                    onChange={(e) => patch(key, { room: e.target.value })}
+                    title="Room name — must match a Rooms-menu name exactly for motion-glow/teleport to find it"
+                    list="config-editor-room-names"
+                  />
+                </td>
                 <td data-label="Motion sensor" style={{ minWidth: 180 }}>
                   {m.type === "camera" ? (
                     <EntityPicker
