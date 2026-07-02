@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.4.66
+
+### Change: state badges no longer use Babylon GUI's own click handling — at all
+- v2.4.65's overlap-nudge fix turned out to be treating the wrong cause:
+  badges reported untappable with zero visible overlap with any neighbour,
+  which ruled out screen-position collision as the explanation. That fix is
+  fully reverted.
+- Rather than keep chasing an intermittent, hard-to-pin-down failure inside
+  Babylon GUI's own per-control pointer observables, badges no longer use
+  them at all. A tap/long-press now checks badge hit-testing FIRST (plain
+  nearest-centre distance math against each visible badge's last-known
+  screen position) using the SAME gesture pipeline already reliably driving
+  3D-mesh taps, falling through to the existing 3D raycast only when no
+  badge was hit. This also means two overlapping badges now resolve by
+  "whichever centre the tap landed closer to" instead of an opaque
+  z-order winner.
+- Known trade-off: the desktop-only pointer-cursor hover hint and the
+  press-scale animation on a badge are dropped for now, in favor of
+  reliability over that polish — can be reintroduced against the new
+  pipeline later if wanted.
+
 ## 2.4.65
 
 ### Fix: a state badge could become untappable when crowded next to another one

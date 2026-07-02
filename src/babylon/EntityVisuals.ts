@@ -63,16 +63,9 @@ const LABEL_ANCHOR_MARGIN = 0.12;
 const LABEL_HEIGHT_PX = 76;
 // Height of the value pill (e.g. "42%", "21°") shown under the badge.
 const VALUE_CHIP_HEIGHT_PX = 18;
-// The badge circle's rendered diameter (unscaled) — also the basis for the
-// overlap-separation check in cullLabels (see BADGE_MIN_SEPARATION_FRAC).
+// The badge circle's rendered diameter (unscaled) — also its tap radius
+// basis for pickBadgeAt()'s nearest-centre hit-testing.
 const BADGE_DIAMETER_PX = 40;
-// Two badges' tap targets are Babylon GUI rectangles; whichever is drawn on
-// top exclusively claims a tap landing where they overlap, so the one
-// underneath becomes a dead zone at that screen position. Every badge stays
-// visible all the time by design (see cullLabels' docstring) — the fix is to
-// nudge overlapping badges apart by a few pixels, not hide either one.
-// <1 so badges separate slightly before their circles are fully touching.
-const BADGE_MIN_SEPARATION_FRAC = 0.9;
 
 // Pulse animation speed in radians per second (was 0.06 per frame at ~60 fps).
 // Advanced by real elapsed time so the alert pulse breathes at the same rate on
@@ -135,8 +128,6 @@ export class EntityVisuals {
   private scene: Scene;
   private config: AppConfig;
   private requestRender: () => void;
-  private onEntityPicked: ((entityId: string) => void) | null = null;
-  private onEntityLongPicked: ((entityId: string) => void) | null = null;
 
   /** entity_id -> meshes (one entity can drive several meshes, e.g. curtains). */
   private byEntity = new Map<string, AbstractMesh[]>();
@@ -176,6 +167,11 @@ export class EntityVisuals {
    *  the badge container is scaled by their product. */
   private iconUserScale = 1;
   private iconZoomScale = 1;
+  /** Each visible badge's last-computed screen position + tap radius, in the
+   *  engine's render-target pixel space (same space cullLabels projects
+   *  into) — see pickBadgeAt(). Populated fresh every frame in cullLabels;
+   *  entities culled by category or off-screen are absent, not stale. */
+  private badgeScreenPos = new Map<string, { x: number; y: number; radius: number }>();
 
   /** camera entity_id -> horizontal world-space facing direction, computed by
    *  SceneManager from the sh3d plan `angle` (see setCameraDirections). */
@@ -195,15 +191,10 @@ export class EntityVisuals {
     scene: Scene,
     config: AppConfig,
     requestRender: () => void,
-    onEntityPicked?: (entityId: string) => void,
-    onEntityLongPicked?: (entityId: string) => void,
   ) {
     this.scene = scene;
     this.config = config;
     this.requestRender = requestRender;
-    this.onEntityPicked = onEntityPicked ?? null;
-    // A long-press opens the full detail panel; fall back to the tap handler.
-    this.onEntityLongPicked = onEntityLongPicked ?? onEntityPicked ?? null;
     this.roomHighlight = new RoomHighlight(scene, requestRender);
     this.beams = new CameraBeams(scene);
     scene.registerBeforeRender(() => {
@@ -626,12 +617,8 @@ export class EntityVisuals {
       badge.shadowColor = "rgba(0,0,0,0.55)";
       badge.shadowBlur = 6;
       badge.shadowOffsetY = 2;
-      // Tap = quick action (toggle / open); long-press = full detail panel.
-      if (this.onEntityPicked || this.onEntityLongPicked) {
-        badge.isPointerBlocker = true;
-        badge.hoverCursor = "pointer";
-        this.wireBadgeGestures(badge, entityId);
-      }
+      // Tap/long-press handling is NOT wired here — see pickBadgeAt()'s
+      // docstring for why. The badge is a purely visual control now.
       container.addControl(badge);
 
       const glyph = new Image(`lbl_glyph_${entityId}`, glyphDataUrl(this.iconFor(type)));
@@ -697,35 +684,6 @@ export class EntityVisuals {
     lbl.valueWrap.isVisible = value.length > 0;
   }
 
-  /** Tap vs long-press on a badge. Tap → quick action (toggle/open); a press held
-   *  past the threshold → the full detail panel, matching the 3D-mesh gesture. */
-  private wireBadgeGestures(badge: Rectangle, entityId: string): void {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let longFired = false;
-    const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
-    badge.onPointerDownObservable.add(() => {
-      longFired = false;
-      badge.scaleX = badge.scaleY = 1.12;
-      this.requestRender();
-      clear();
-      timer = setTimeout(() => {
-        longFired = true;
-        this.onEntityLongPicked?.(entityId);
-      }, 480);
-    });
-    badge.onPointerUpObservable.add(() => {
-      clear();
-      badge.scaleX = badge.scaleY = 1;
-      this.requestRender();
-      if (!longFired) this.onEntityPicked?.(entityId);
-    });
-    badge.onPointerOutObservable.add(() => {
-      clear();
-      badge.scaleX = badge.scaleY = 1;
-      this.requestRender();
-    });
-  }
-
   /** Deliberately NOT a "declutter": every registered device's tag stays
    *  visible all the time — that's the point of the "Show device state
    *  labels" toggle. An earlier version greedily hid same-screen-cluster
@@ -746,11 +704,10 @@ export class EntityVisuals {
     const vp = cam.viewport.toGlobal(w, h);
     const tm = this.scene.getTransformMatrix();
     const hidden = this.config.hiddenCategories;
+    const radius = (BADGE_DIAMETER_PX * this.iconUserScale * this.iconZoomScale) / 2;
 
-    // First pass: visibility (category filter + behind-camera) and each
-    // shown badge's raw screen pixel position.
-    const visible: { lbl: LabelControls; x: number; y: number }[] = [];
-    for (const lbl of this.labels.values()) {
+    this.badgeScreenPos.clear();
+    for (const [entityId, lbl] of this.labels) {
       if (hidden.includes(lbl.category)) {
         lbl.container.isVisible = false;
         continue;
@@ -758,42 +715,51 @@ export class EntityVisuals {
       const p = Vector3.Project(lbl.anchor.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
       const onScreen = p.z >= 0 && p.z <= 1;
       lbl.container.isVisible = onScreen;
-      if (onScreen) visible.push({ lbl, x: p.x * w, y: p.y * h });
+      if (onScreen) this.badgeScreenPos.set(entityId, { x: p.x * w, y: p.y * h, radius });
     }
+  }
 
-    // Second pass: nudge apart any two badges close enough that the topmost
-    // one (Babylon GUI hit-tests front-to-back) would fully claim taps meant
-    // for the one underneath — recomputed every frame so it tracks the
-    // camera live. Only the offset changes; nothing is hidden.
-    const badgeSize = BADGE_DIAMETER_PX * this.iconUserScale * this.iconZoomScale;
-    const minSep = badgeSize * BADGE_MIN_SEPARATION_FRAC;
-    const nudge = new Map<LabelControls, { x: number; y: number }>();
-    for (let i = 0; i < visible.length; i++) {
-      for (let j = i + 1; j < visible.length; j++) {
-        const a = visible[i];
-        const b = visible[j];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist >= minSep) continue;
-        // Push apart along the line between them; a stable fallback
-        // direction (straight up/down) when their centres coincide exactly.
-        const ux = dist > 1e-3 ? dx / dist : 0;
-        const uy = dist > 1e-3 ? dy / dist : 1;
-        const push = (minSep - dist) / 2 + 1;
-        const na = nudge.get(a.lbl) ?? { x: 0, y: 0 };
-        const nb = nudge.get(b.lbl) ?? { x: 0, y: 0 };
-        na.x -= ux * push; na.y -= uy * push;
-        nb.x += ux * push; nb.y += uy * push;
-        nudge.set(a.lbl, na);
-        nudge.set(b.lbl, nb);
-      }
+  /**
+   * Resolve a tap/long-press at CSS-pixel client coordinates to the nearest
+   * visible badge within its tap radius, or null if none qualify.
+   *
+   * Badges deliberately do NOT wire their own Babylon GUI pointer
+   * observables (onPointerDownObservable etc.) anymore — that per-control
+   * hit-testing turned out unreliable in a way that was hard to pin down: a
+   * badge could go untappable at some camera angles with no visible overlap
+   * with any neighbour, yet start working again after a totally unrelated
+   * hover over the 3D mesh. Rather than chase that further, badge taps are
+   * now resolved with the exact same tap/long-press pipeline already proven
+   * reliable for 3D meshes (CameraController/OverviewController's own gesture
+   * recognizer, calling here BEFORE falling through to PickHandler's 3D
+   * raycast — see SceneManager's constructor). Plain nearest-centre distance
+   * math instead of GUI z-order hit-testing: deterministic, and two
+   * overlapping badges resolve sensibly (whichever centre the tap landed
+   * closer to) instead of one silently winning every time.
+   */
+  pickBadgeAt(clientX: number, clientY: number): string | null {
+    if (this.badgeScreenPos.size === 0) return null;
+    const canvas = this.scene.getEngine().getRenderingCanvas();
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const eng = this.scene.getEngine();
+    // cullLabels() projects into render-target pixel space (getRenderWidth/
+    // Height), which differs from CSS client pixels whenever hardware
+    // scaling != 1 (see SceneManager's setHardwareScalingLevel) — convert
+    // the incoming client coords into that same space before comparing.
+    const scaleX = eng.getRenderWidth() / rect.width;
+    const scaleY = eng.getRenderHeight() / rect.height;
+    const px = (clientX - rect.left) * scaleX;
+    const py = (clientY - rect.top) * scaleY;
+
+    let best: { entityId: string; dist: number } | null = null;
+    for (const [entityId, pos] of this.badgeScreenPos) {
+      const dist = Math.hypot(px - pos.x, py - pos.y);
+      if (dist > pos.radius) continue;
+      if (!best || dist < best.dist) best = { entityId, dist };
     }
-    for (const { lbl } of visible) {
-      const n = nudge.get(lbl);
-      lbl.container.linkOffsetXInPixels = n ? n.x : 0;
-      lbl.container.linkOffsetYInPixels = -LABEL_HEIGHT_PX / 2 + (n ? n.y : 0);
-    }
+    return best?.entityId ?? null;
   }
 
   /** Distil any entity's live state into one of four colour-coded badge kinds. */

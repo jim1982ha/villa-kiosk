@@ -116,17 +116,33 @@ export class SceneManager {
     this.sky = new SkyDome(this.scene);
     this.sun = new SunController(this.scene, this.lighting, this.hemi, opts.config, this.sky);
     this.sun.setRenderHook(() => this.requestRender());
-    this.visuals = new EntityVisuals(this.scene, opts.config, () => this.requestRender(), opts.onEntityPicked, opts.onEntityLongPressed);
+    this.visuals = new EntityVisuals(this.scene, opts.config, () => this.requestRender());
     this.markers = new MarkerManager(this.scene, () => this.requestRender());
     this.weather = new WeatherEffects(this.scene, () => this.requestRender());
+
+    // A tap/long-press checks state-badge hit-testing FIRST, falling through
+    // to PickHandler's 3D raycast only when no badge was hit. Badges resolve
+    // through this same gesture pipeline that already reliably handles 3D
+    // meshes, rather than Babylon GUI's own per-control pointer observables —
+    // see EntityVisuals.pickBadgeAt()'s docstring for why that was dropped.
+    const handleTap = (x: number, y: number) => {
+      const badgeEntity = this.visuals.pickBadgeAt(x, y);
+      if (badgeEntity) { opts.onEntityPicked(badgeEntity); return; }
+      this.pick.pickAtScreen(x, y);
+    };
+    const handleLongPress = (x: number, y: number) => {
+      const badgeEntity = this.visuals.pickBadgeAt(x, y);
+      if (badgeEntity) { opts.onEntityLongPressed(badgeEntity); return; }
+      this.pick.pickAtScreen(x, y, true);
+    };
 
     this.camera = new CameraController(this.scene, canvas, opts.config, {
       onRoomChange: opts.onRoomChange,
       onActivity: () => this.requestRender(),
       // Tap-to-pick is detected in the camera (sole owner of the pointer
       // pipeline) and dispatched to the picker — reliable on touch & mouse.
-      onTap: (x, y) => this.pick.pickAtScreen(x, y),
-      onLongPress: (x, y) => this.pick.pickAtScreen(x, y, true),
+      onTap: handleTap,
+      onLongPress: handleLongPress,
     });
 
     // FloorManager watches the camera for staircase transitions.
@@ -144,8 +160,8 @@ export class SceneManager {
     // picker as first-person.
     this.overview = new OverviewController(this.scene, canvas, {
       onActivity: () => this.requestRender(),
-      onTap: (x, y) => this.pick.pickAtScreen(x, y),
-      onLongPress: (x, y) => this.pick.pickAtScreen(x, y, true),
+      onTap: handleTap,
+      onLongPress: handleLongPress,
     });
     this.overview.setNaturalScrolling(opts.config.naturalScrolling ?? true);
     // Grow/shrink the state-icon badges with the bird's-eye zoom level. The
