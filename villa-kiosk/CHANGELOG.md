@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.4.88
+
+### Fix: v2.4.87's corner-gap fix was real but incomplete — mid-edge breaks that shift with zoom
+- User correctly pushed back: v2.4.87 only explains gaps AT a rectangle's
+  corners, not a break in the middle of an edge, and definitely not a break
+  that moves to a DIFFERENT segment when you zoom in/out on the exact same
+  wall. A fixed geometric gap wouldn't do that — something view-dependent
+  was still going on.
+- Found it: SweetHome's Led Line piece is authored 1cm wide **and** 3cm
+  tall — TWO separate thin dimensions, not one. `inflateThinStrip` (v2.4.74)
+  only ever thickened the SINGLE thinnest axis it could find, leaving the
+  other short axis untouched. From a near-overhead camera looking down at a
+  low cove strip, WHICH of the two short axes actually determines the
+  strip's on-screen thickness depends on the exact camera elevation/zoom —
+  so a segment could render fine at one zoom level (the now-6cm axis
+  dominates its screen footprint) and vanish at another (the still-thin
+  axis takes over). That's exactly "a different part goes dark when I
+  zoom" — a single-axis fix could never fully solve this.
+- `inflateThinStrip` now thickens EVERY short axis below the 6cm floor
+  (excluding the strip's own long axis, left untouched), not just the
+  thinnest one. Same fixed-offset approach as before (not a scale factor —
+  see the v2.4.74 lesson about unbounded scaling), applied per-axis.
+- The v2.4.87 corner-joint fix stays — it's a real, separate, additional
+  issue (confirmed from the raw .sh3d coordinates) and worth keeping even
+  though it wasn't the whole story.
+
 ## 2.4.87
 
 ### Fix: LED-strip rectangles had a real (tiny) gap baked in at each corner

@@ -526,16 +526,32 @@ export class EntityVisuals {
     }
   }
 
-  /** Thicken a mesh's thinnest local axis to MIN_STRIP_THICKNESS, symmetric
-   *  about its own centre on that axis, by editing vertex positions directly
-   *  (no node scaling — the mesh's node transform is identity, see the caller,
-   *  and scaling around the wrong pivot would shift the whole strip sideways
-   *  instead of just thickening it). No-op for anything not razor-thin (normal
-   *  lamp/fixture meshes).
+  /** Thicken EVERY local axis of a mesh that's below MIN_STRIP_THICKNESS
+   *  (not just the single thinnest one — see below), symmetric about its own
+   *  centre on that axis, by editing vertex positions directly (no node
+   *  scaling — the mesh's node transform is identity, see the caller, and
+   *  scaling around the wrong pivot would shift the whole strip sideways
+   *  instead of just thickening it). No-op for anything not razor-thin
+   *  (normal lamp/fixture meshes) and for the LONG axis (a strip's length,
+   *  which is exactly what should stay untouched here).
+   *
+   *  A SweetHome Led Line piece is typically authored 1cm wide AND 3cm tall —
+   *  TWO separate thin dimensions, not one. Only fixing the SINGLE thinnest
+   *  axis (the original v2.4.74 fix) leaves the other one still sub-pixel
+   *  from steep-enough viewing angles: from a near-overhead camera looking
+   *  down at a low cove strip, which of the two short axes actually
+   *  determines the strip's on-screen thickness depends on the exact camera
+   *  elevation/zoom — so a segment could render fine at one zoom level (the
+   *  now-thick 6cm axis dominates its screen footprint) and vanish at another
+   *  (the OTHER, still-thin axis takes over as the dominant screen-space
+   *  dimension). That's what made the exact broken segment shift between two
+   *  screenshots of the very same wall at slightly different zoom — a
+   *  single-axis fix was never going to fully solve this since the strip had
+   *  two independent thin dimensions to begin with.
    *
    *  Pushes each vertex to a FIXED distance from centre (±MIN_STRIP_THICKNESS/2)
    *  rather than multiplying its offset by a scale factor. A multiplicative
-   *  scale (MIN_STRIP_THICKNESS / size[thin]) is unbounded as size[thin] shrinks
+   *  scale (MIN_STRIP_THICKNESS / size[axis]) is unbounded as size[axis] shrinks
    *  towards zero — and it does, in practice: Draco compression quantises
    *  vertex positions, so a strip modelled 1cm thick in SweetHome can come out
    *  of the GLB at a fraction of a millimetre. That produced scale factors in
@@ -548,17 +564,20 @@ export class EntityVisuals {
     const bb = mesh.getBoundingInfo().boundingBox;
     const size = bb.maximum.subtract(bb.minimum);
     const axes: Array<"x" | "y" | "z"> = ["x", "y", "z"];
-    const thin = axes.reduce((a, b) => (size[b] < size[a] ? b : a));
-    if (size[thin] >= MIN_STRIP_THICKNESS) return;
+    const longAxis = axes.reduce((a, b) => (size[b] > size[a] ? b : a));
+    const thinAxes = axes.filter((a) => a !== longAxis && size[a] < MIN_STRIP_THICKNESS);
+    if (thinAxes.length === 0) return;
 
     const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
     if (!positions) return;
-    const idx = thin === "x" ? 0 : thin === "y" ? 1 : 2;
-    const center = (bb.minimum[thin] + bb.maximum[thin]) / 2;
     const halfTarget = MIN_STRIP_THICKNESS / 2;
-    for (let i = idx; i < positions.length; i += 3) {
-      const sign = positions[i] < center ? -1 : 1;
-      positions[i] = center + sign * halfTarget;
+    for (const axis of thinAxes) {
+      const idx = axis === "x" ? 0 : axis === "y" ? 1 : 2;
+      const center = (bb.minimum[axis] + bb.maximum[axis]) / 2;
+      for (let i = idx; i < positions.length; i += 3) {
+        const sign = positions[i] < center ? -1 : 1;
+        positions[i] = center + sign * halfTarget;
+      }
     }
     mesh.setVerticesData(VertexBuffer.PositionKind, positions, true);
     mesh.refreshBoundingInfo(false, false);
