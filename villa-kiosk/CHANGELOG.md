@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.4.83
+
+### Fix: real WebGL error every frame — "Active draw buffers with missing fragment shader outputs"
+- User reported this exact GL_INVALID_OPERATION spamming the console on every
+  load. Cause: v2.4.78's `needDepthPrePass = true` on glass materials adds a
+  whole SEPARATE render pass with its own shader. `GlowLayer` (used for lit
+  fixtures) works by re-rendering every material in the scene into its own
+  texture to composite the glow correctly — so that extra depth-prepass
+  shader gets invoked there too, and its output didn't match what that
+  render target expected, which is exactly what this GL error reports. A
+  genuine WebGL error is far more serious than the visual glitch it was
+  meant to fix (rendering corruption/dropped draw calls, not just "looks a
+  bit off"), so this needed reverting immediately rather than living with it.
+- Replaced with `forceDepthWrite = true` — a much lighter fix for the same
+  underlying problem (opaque geometry near/behind glass depth-testing
+  correctly regardless of alpha-blend sort order). It just makes the
+  material's NORMAL alpha-blend pass also write depth, with no separate pass
+  or shader, so it cannot produce this class of render-target mismatch.
+
 ## 2.4.82
 
 ### Improvement: debug logs now also go to the browser console

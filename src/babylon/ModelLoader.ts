@@ -93,7 +93,7 @@ export async function loadModelInto(
     const allMats = new Set<string>();
     for (const m of result.meshes) {
       const mat = m.material as
-        | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean; roughness?: number; metallic?: number; needDepthPrePass?: boolean }
+        | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean; roughness?: number; metallic?: number; forceDepthWrite?: boolean }
         | null;
       if (!mat) continue;
       if (mat.name) allMats.add(mat.name);
@@ -110,10 +110,18 @@ export async function loadModelInto(
         // top edge), making the strip intermittently render as if it were
         // behind the glass when it isn't: a camera-angle-dependent
         // appear/disappear glitch with nothing actually between the two.
-        // needDepthPrePass adds a depth-only pass for this material before
-        // the colour pass, so opaque geometry near/behind the glass is
-        // depth-tested correctly regardless of blend sort order.
-        mat.needDepthPrePass = true;
+        // v2.4.78 used needDepthPrePass for this — REVERTED in v2.4.83: it
+        // adds a whole separate render pass with its own shader, which (in
+        // combination with GlowLayer's internal render-to-texture pass, which
+        // re-renders every material in the scene to composite the glow)
+        // produced a real WebGL error every frame — "glDrawElements: Active
+        // draw buffers with missing fragment shader outputs" — because that
+        // extra pass's shader didn't match the active framebuffer's expected
+        // outputs. forceDepthWrite is a much lighter fix for the same
+        // problem: it just tells the material's NORMAL alpha-blend pass to
+        // also write depth, no separate pass/shader involved, so it can't
+        // create this class of render-target mismatch.
+        mat.forceDepthWrite = true;
         // Smooth + slightly metallic so the pane catches highlights and reads as
         // glass rather than a flat translucent sheet (PBR materials only).
         if ("roughness" in mat) mat.roughness = 0.1;
