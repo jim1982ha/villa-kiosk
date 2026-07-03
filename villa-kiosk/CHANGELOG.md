@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.4.78
+
+### Fix: LED strip still broke up near the glass wall with nothing actually in the way
+- The dining-table strip's edge running along the glass sliding-door wall
+  kept showing gaps in testing even with no furniture/plants overlapping it
+  on screen — ruling out ordinary occlusion. Root cause: glass materials are
+  alpha-blended (`ModelLoader.ts`), and alpha-blended surfaces don't write
+  depth by default, so Babylon sorts them back-to-front by distance from the
+  camera every frame. That sort order can flip relative to nearby OPAQUE
+  geometry (the LED strip mounted right at the glass wall's top edge) as the
+  camera moves, making the strip intermittently render as if it were behind
+  the glass when it isn't — a camera-angle-dependent appear/disappear glitch
+  with nothing actually between the two, exactly matching what was reported.
+  Fixed by setting `needDepthPrePass = true` on glass materials — adds a
+  depth-only pass before the colour pass so nearby opaque geometry is
+  depth-tested correctly regardless of alpha-blend sort order.
+
 ## 2.4.77
 
 ### Fix: camera motion-detection beams pointed the wrong way (radians/degrees bug)

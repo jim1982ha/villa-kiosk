@@ -93,7 +93,7 @@ export async function loadModelInto(
     const allMats = new Set<string>();
     for (const m of result.meshes) {
       const mat = m.material as
-        | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean; roughness?: number; metallic?: number }
+        | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean; roughness?: number; metallic?: number; needDepthPrePass?: boolean }
         | null;
       if (!mat) continue;
       if (mat.name) allMats.add(mat.name);
@@ -103,6 +103,17 @@ export async function loadModelInto(
         mat.alpha = GLASS_ALPHA;
         mat.transparencyMode = Material.MATERIAL_ALPHABLEND;
         mat.backFaceCulling = false; // see both faces of a thin pane
+        // Alpha-blended materials don't write depth by default, so Babylon
+        // sorts them back-to-front by distance-from-camera each frame — as
+        // the camera moves, that sort can flip relative to nearby OPAQUE
+        // geometry (e.g. an LED cove strip mounted right at the glass wall's
+        // top edge), making the strip intermittently render as if it were
+        // behind the glass when it isn't: a camera-angle-dependent
+        // appear/disappear glitch with nothing actually between the two.
+        // needDepthPrePass adds a depth-only pass for this material before
+        // the colour pass, so opaque geometry near/behind the glass is
+        // depth-tested correctly regardless of blend sort order.
+        mat.needDepthPrePass = true;
         // Smooth + slightly metallic so the pane catches highlights and reads as
         // glass rather than a flat translucent sheet (PBR materials only).
         if ("roughness" in mat) mat.roughness = 0.1;
