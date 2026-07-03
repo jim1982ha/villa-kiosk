@@ -12,11 +12,14 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Home, Grid3x3, Settings, Map,
-  PersonStanding, Sparkles, Tag, Info, Anchor,
+  PersonStanding, Sparkles, Tag, Info, Anchor, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, MoreHorizontal,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
+import { useProfile } from "@/auth/ProfileContext";
+import { isCategoryAllowed } from "@/auth/permissions";
+import { ROLE_LABELS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { CATEGORY_ORDER, CATEGORY_LABELS } from "@/config/EntityCategories";
 import type { Category } from "@/types/scene.types";
@@ -42,6 +45,8 @@ interface Props {
   onSwitchFloor: (floor: number) => void;
   onOpenTeleport: () => void;
   onOpenSettings: () => void;
+  /** RBAC: whether the active profile may open Settings at all. */
+  canOpenSettings: boolean;
   onMove: (x: number, y: number) => void;
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
@@ -68,16 +73,23 @@ function useClock(): string {
 
 export default function HUD({
   currentFloor, floorsAvailable, onSwitchFloor, onOpenTeleport,
-  onOpenSettings, onMove,
+  onOpenSettings, canOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
+  const { role, logout } = useProfile();
   const clock = useClock();
   const title = resolveSiteTitle(config, haConfig?.location_name);
   const floors = [1, 2];
   const [hintOpen, setHintOpen] = useState(false);
+  // Only the categories this profile may see get a filter button; the scene
+  // enforces the same set (see filterConfigForRole), so the HUD never offers
+  // a toggle that could reveal a denied category.
+  const visibleCategories = role
+    ? CATEGORY_ORDER.filter((c) => isCategoryAllowed(role, c))
+    : CATEGORY_ORDER;
 
   // Tap = jump to this device's saved default view; long-press / right-click
   // = (re)define it as the current framing (same tap-vs-hold convention as
@@ -149,7 +161,7 @@ export default function HUD({
             the map. Lit = category shown. Icon + tooltip only, no text. */}
         <div className="hud-center">
           <div className="hud-group">
-            {CATEGORY_ORDER.map((cat) => {
+            {visibleCategories.map((cat) => {
               const hidden = config.hiddenCategories.includes(cat);
               const Icon = CATEGORY_ICONS[cat];
               return (
@@ -168,11 +180,26 @@ export default function HUD({
           </div>
         </div>
 
-        {/* Settings, then the first-person / overview view toggle beside it. */}
+        {/* Profile chip, Settings (when permitted), then the view toggle. */}
         <div className="hud-right">
-          <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
-            <Settings size={20} />
-          </button>
+          {role && (
+            <span className="hud-profile" title={`Signed in as ${ROLE_LABELS[role]}`}>
+              <span className="hud-profile-name">{ROLE_LABELS[role]}</span>
+              <button
+                className="icon-btn"
+                onClick={logout}
+                title="Switch profile"
+                aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
+              >
+                <LogOut size={16} />
+              </button>
+            </span>
+          )}
+          {canOpenSettings && (
+            <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
+              <Settings size={20} />
+            </button>
+          )}
           <button
             className={`icon-btn${overviewActive ? " active" : ""}`}
             onClick={onToggleViewMode}

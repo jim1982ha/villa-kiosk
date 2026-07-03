@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: Villa Kiosk
-version: "2.4.88"
+version: "2.5.0"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard served through Ingress
 url: https://github.com/jim1982ha/villa-kiosk
@@ -29,12 +29,22 @@ startup: application
 # Central 3D model configuration — set these paths once in the add-on settings
 # so ALL clients load the same model automatically (no per-browser upload needed).
 # Paths are relative to the HA www folder, e.g. "villa-kiosk/villa.glb".
+#
+# Profile passcodes: a 4-digit PIN per kiosk profile (Guest / Owner / Facility
+# manager). Leave a PIN empty to let that profile in without a passcode. PINs
+# are verified server-side by the add-on (never sent to the browser).
 options:
   model_path: ""
   sh3d_path: ""
+  guest_pin: ""
+  owner_pin: ""
+  ops_pin: ""
 schema:
   model_path: str?
   sh3d_path: str?
+  guest_pin: match(^[0-9]{4}$|^$)?
+  owner_pin: match(^[0-9]{4}$|^$)?
+  ops_pin: match(^[0-9]{4}$|^$)?
 # Mount the HA config directory read-write so the add-on can BOTH serve model
 # files from /config/www/ via nginx (clients fetch /model/{path}) AND accept
 # uploads of the central GLB/SH3D from the kiosk Settings UI (POST /model-upload,

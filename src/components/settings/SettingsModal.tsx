@@ -6,6 +6,8 @@ import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plug, Download, Upload, Bug, FileText, Info, Sliders, Sun, Moon, Monitor } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
+import { useProfile } from "@/auth/ProfileContext";
+import { hasCapability, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, DEFAULT_ENTITY_ICONS, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
 import type { EntityType } from "@/types/scene.types";
@@ -42,8 +44,12 @@ const ICON_CATEGORY_LABEL: Record<EntityType, string> = {
 
 export default function SettingsModal({ manager, onClose, onModelChanged }: Props) {
   const { config, update, replace } = useConfig();
+  const { role } = useProfile();
   const { connect, haConfig } = useHA();
   const navigate = useNavigate();
+  // RBAC: which settings areas the active profile may use. Dashboard already
+  // refuses to open this modal without "openSettings"; these narrow further.
+  const can = (c: Capability) => role != null && hasCapability(role, c);
 
   // Snapshot the config at mount so Cancel can undo every live-applied tweak
   // (render preview, eye height, walk speed, and the toggles that update()
@@ -487,8 +493,9 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
             Add-on (Ingress) mode: the model is managed centrally via the add-on
             configuration page — NO per-browser upload UI. We only display which
             files are in use (read from the add-on options). Standalone / dev
-            mode keeps the upload UI. */}
-        {ingress ? (
+            mode keeps the upload UI. RBAC: only profiles with "manageModel"
+            (the owner) see this block at all. */}
+        {!can("manageModel") ? null : ingress ? (
           <>
           {addonCfg === null ? (
             <p className="muted body-text">Reading add-on configuration…</p>
@@ -603,44 +610,50 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           </>
         )}
 
-        <div className="settings-section-title" style={{ marginTop: 22 }}>Advanced</div>
-        <div className="tile-grid">
-          <button
-            className="tile-btn"
-            onClick={() => {
-              onClose();
-              navigate("/config");
-            }}
-          >
-            <Sliders size={20} />
-            <span>Config Editor</span>
-          </button>
-          <button
-            className="tile-btn"
-            onClick={() => {
-              onClose();
-              manager?.toggleInspector();
-            }}
-          >
-            <Bug size={20} />
-            <span>Inspector</span>
-          </button>
-          <button className="tile-btn" onClick={doExport}>
-            <Download size={20} />
-            <span>Export backup</span>
-          </button>
-          <button className="tile-btn" onClick={() => importRef.current?.click()}>
-            <Upload size={20} />
-            <span>Import backup</span>
-          </button>
-          <input
-            ref={importRef} type="file" accept=".zip" style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) doImport(f);
-            }}
-          />
-        </div>
+        {/* RBAC: the Advanced tools (Config Editor, Inspector, backups) are
+            for the profile that administers the kiosk configuration. */}
+        {can("editConfig") && (
+          <>
+            <div className="settings-section-title" style={{ marginTop: 22 }}>Advanced</div>
+            <div className="tile-grid">
+              <button
+                className="tile-btn"
+                onClick={() => {
+                  onClose();
+                  navigate("/config");
+                }}
+              >
+                <Sliders size={20} />
+                <span>Config Editor</span>
+              </button>
+              <button
+                className="tile-btn"
+                onClick={() => {
+                  onClose();
+                  manager?.toggleInspector();
+                }}
+              >
+                <Bug size={20} />
+                <span>Inspector</span>
+              </button>
+              <button className="tile-btn" onClick={doExport}>
+                <Download size={20} />
+                <span>Export backup</span>
+              </button>
+              <button className="tile-btn" onClick={() => importRef.current?.click()}>
+                <Upload size={20} />
+                <span>Import backup</span>
+              </button>
+              <input
+                ref={importRef} type="file" accept=".zip" style={{ display: "none" }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) doImport(f);
+                }}
+              />
+            </div>
+          </>
+        )}
 
         </div>{/* end settings-body */}
 

@@ -10,6 +10,8 @@ import PanelRouter from "@/components/panels/PanelRouter";
 import SettingsModal from "@/components/settings/SettingsModal";
 import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 import { useConfig } from "@/config/ConfigContext";
+import { useProfile } from "@/auth/ProfileContext";
+import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { isIngress, ingressHaUrl } from "@/ha/ingress";
 import { mappingForEntityId } from "@/config/EntityMap";
@@ -21,7 +23,13 @@ import type { TeleportPoint } from "@/types/scene.types";
 
 export default function Dashboard() {
   const { config, update } = useConfig();
+  const { role } = useProfile();
   const { connect, entities, ws } = useHA();
+  // ProfileGate guarantees a signed-in role before this page mounts; the
+  // fallback only defends against a direct render in tests.
+  const canControl = role != null && hasCapability(role, "controlEntities");
+  const canOpenSettings = role != null && hasCapability(role, "openSettings");
+  const canManageModel = role != null && hasCapability(role, "manageModel");
   // Read inside the onCalibrated/onReady effect below (which intentionally
   // only depends on [manager], so its closure would otherwise see a stale
   // config.teleportPoints from whenever that effect last ran).
@@ -75,6 +83,9 @@ export default function Dashboard() {
       // (e.g. input_boolean entities bound before that domain was recognized).
       const mapping = mappingForEntityId(entityId, config.entityMap);
       if (!mapping) return;
+      // RBAC: the scene already hides badges for denied entities, but the raw
+      // 3D mesh is still tappable — enforce the permission here too.
+      if (!canControl || !role || !isMappingAllowed(role, entityId, mapping)) return;
 
       // Simple on/off entities act in-world without the panel: a tap toggles
       // instantly. A long-press always opens the full panel instead (see
@@ -89,7 +100,7 @@ export default function Dashboard() {
       // Rich entities (sliders, streams, info) open their control panel as before.
       setActivePanel({ entityId, mapping });
     },
-    [config.entityMap, entities, ws],
+    [config.entityMap, entities, ws, role, canControl],
   );
 
   // Long-press always opens the full control panel — even for quick-toggle
@@ -99,9 +110,10 @@ export default function Dashboard() {
     (entityId: string) => {
       const mapping = mappingForEntityId(entityId, config.entityMap);
       if (!mapping) return;
+      if (!canControl || !role || !isMappingAllowed(role, entityId, mapping)) return;
       setActivePanel({ entityId, mapping });
     },
-    [config.entityMap],
+    [config.entityMap, role, canControl],
   );
 
   // Open the app in the bird's-eye overview by default — seeing the whole villa
@@ -227,7 +239,7 @@ export default function Dashboard() {
         onEntityLongPressed={onEntityLongPressed}
         onFloorChange={(f) => setCurrentFloor(f)}
         onRoomChange={setRoom}
-        onNeedModel={() => setSettingsOpen(true)}
+        onNeedModel={() => { if (canOpenSettings) setSettingsOpen(true); }}
         onModelUploaded={() => setModelKey((k) => k + 1)}
       />
 
@@ -238,7 +250,8 @@ export default function Dashboard() {
         floorsAvailable={floorsAvailable}
         onSwitchFloor={onFloorChange}
         onOpenTeleport={() => setTeleportOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => { if (canOpenSettings) setSettingsOpen(true); }}
+        canOpenSettings={canOpenSettings}
         onMove={(x, y) => manager?.camera.setMovement(x, y)}
         viewMode={viewMode}
         onToggleViewMode={toggleViewMode}
@@ -260,7 +273,7 @@ export default function Dashboard() {
         <PanelRouter active={activePanel} onClose={() => setActivePanel(null)} pinContinuous={pinContinuous} />
       )}
 
-      {settingsOpen && (
+      {settingsOpen && canOpenSettings && (
         <SettingsModal
           manager={manager}
           onClose={() => setSettingsOpen(false)}
@@ -271,7 +284,7 @@ export default function Dashboard() {
         />
       )}
 
-      {showOnboarding && (
+      {showOnboarding && canManageModel && (
         <OnboardingWizard
           onComplete={() => {
             setShowOnboarding(false);

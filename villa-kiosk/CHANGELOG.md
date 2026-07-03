@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.5.0
+
+### Feature: profiles, passcodes and role-based access control
+- New entry screen: pick a profile — **Guest**, **Owner** or **Facility
+  manager** — before the dashboard opens. Each profile can be gated behind a
+  4-digit passcode.
+- Passcodes are configured in the add-on options (`guest_pin` / `owner_pin` /
+  `ops_pin`; leave one empty to let that profile in with a single tap). In
+  add-on mode PINs are verified **server-side** by the supervisor-proxy
+  (constant-time compare, 5-failure lockout for 5 minutes) and never reach
+  the browser. Standalone builds use `VITE_GUEST_PIN` / `VITE_OWNER_PIN` /
+  `VITE_OPS_PIN` from `.env` (courtesy gate — Vite bakes env into the
+  bundle).
+- Role-based device visibility on top of the existing map categories
+  (`src/auth/permissions.ts` is the single editable matrix):
+  - **Guest** sees comfort, lights, wifi and doors — never energy devices,
+    cameras or motion sensors — and gets a clamped A/C range (22–28 °C).
+  - **Owner** sees everything and is the only profile with Settings, the
+    Config Editor, model uploads and backups.
+  - **Facility manager** sees all device categories for on-site orientation
+    and can control devices, but has no settings/customization access.
+- Enforcement is layered: the 3D scene receives a role-filtered config
+  (denied categories hidden, denied entities stripped from the entity map
+  and mesh bindings), taps on denied meshes are refused, the HUD only offers
+  permitted category filters, the Settings button/model tools/Advanced
+  section render per capability, and `/config` deep links redirect without
+  the `editConfig` capability.
+- The active profile lives in per-tab `sessionStorage` (never in backups,
+  never synced across tabs/devices); signing out returns to the profile
+  screen and fully unmounts/disposes the 3D scene. The PIN itself is never
+  stored client-side.
+- New `/auth/roles` + `/auth/verify` endpoints on the supervisor-proxy with
+  whitelist input validation (role + strict 4-digit shape) and a 1 KB nginx
+  body cap; `/addon-config` continues to expose model paths only, so the
+  PINs stay server-side.
+
 ## 2.4.88
 
 ### Fix: v2.4.87's corner-gap fix was real but incomplete — mid-edge breaks that shift with zoom

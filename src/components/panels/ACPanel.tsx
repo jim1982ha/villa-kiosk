@@ -4,6 +4,8 @@ import { Snowflake, Minus, Plus } from "lucide-react";
 import BasePanel from "./BasePanel";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
+import { useProfile } from "@/auth/ProfileContext";
+import { climateLimits } from "@/auth/permissions";
 import { HAServices } from "@/ha/HAServiceCalls";
 
 const MODE_LABELS: Record<string, string> = {
@@ -13,10 +15,14 @@ const MODE_LABELS: Record<string, string> = {
 
 export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
+  const { role } = useProfile();
   const a = entity?.attributes;
   const step = a?.target_temp_step ?? 0.5;
-  const min = a?.min_temp ?? 16;
-  const max = a?.max_temp ?? 30;
+  // RBAC bounded controls: a profile with a climate range (guests) gets the
+  // device limits narrowed to it — the stepper simply can't leave the band.
+  const limits = role ? climateLimits(role) : null;
+  const min = Math.max(a?.min_temp ?? 16, limits?.climateMin ?? -Infinity);
+  const max = Math.min(a?.max_temp ?? 30, limits?.climateMax ?? Infinity);
 
   const [target, setTarget] = useState<number>(a?.temperature ?? 24);
   useEffect(() => {
@@ -40,10 +46,15 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
       </div>
 
       <div className="temp-stepper">
-        <button onClick={() => commit(target - step)}><Minus size={26} /></button>
+        <button onClick={() => commit(target - step)} aria-label="Lower target temperature"><Minus size={26} /></button>
         <div className="target">{target}°C</div>
-        <button onClick={() => commit(target + step)}><Plus size={26} /></button>
+        <button onClick={() => commit(target + step)} aria-label="Raise target temperature"><Plus size={26} /></button>
       </div>
+      {limits && (
+        <div className="muted" style={{ textAlign: "center", fontSize: 13 }}>
+          Adjustable between {min}–{max} °C
+        </div>
+      )}
 
       <div className="field">
         <label className="entity-label">Mode</label>

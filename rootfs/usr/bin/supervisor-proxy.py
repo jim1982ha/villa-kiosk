@@ -11,11 +11,16 @@ ever needed and the powerful Supervisor token never reaches the browser.
          and the in-band `{"type":"auth"}` message's access_token is rewritten to
          the Supervisor token, since the HA websocket authenticates in-band).
 
-It also serves two local helper routes (no Supervisor token involved):
+It also serves local helper routes (no Supervisor token involved):
   GET  /addon-config  -> the non-sensitive model paths for the frontend.
   POST /model-upload?kind=glb|sh3d -> writes the body to the central model file
        under /config/www (atomic overwrite), so the kiosk can be re-skinned from
        its own Settings UI instead of SSH/Samba.
+  GET  /auth/roles    -> which kiosk profiles require a passcode (booleans only).
+  POST /auth/verify   -> server-side profile passcode check. The configured PINs
+       (guest_pin/owner_pin/ops_pin add-on options) never leave this process:
+       the frontend submits {role, pin} and gets back only an ok/locked verdict.
+       Comparison is constant-time; repeated failures rate-limit the role.
 
 Runs on 127.0.0.1:8100; nginx proxies the Ingress `/core/` paths to it.
 
@@ -31,9 +36,12 @@ Security notes:
     to loopback only and is never directly reachable.
 """
 import asyncio
+import hmac
 import json
 import os
+import re
 import tempfile
+import time
 
 from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
 
@@ -183,9 +191,91 @@ async def addon_config_handler(request: web.Request) -> web.Response:
     """Expose the non-sensitive add-on options (model paths) to the frontend.
 
     The full /data/options.json is never forwarded — only the two model-path
-    fields are returned, so future options with credentials stay server-side.
+    fields are returned, so options with credentials (the profile PINs) stay
+    server-side.
     """
     return web.json_response(_effective_paths())
+
+
+# ── Profile passcode verification ────────────────────────────────────────────
+# The kiosk's role-based access control gates each profile behind a 4-digit
+# PIN configured in the add-on options. Verification lives HERE so the PINs
+# never reach the browser (the /addon-config route deliberately omits them).
+
+AUTH_ROLES = ("guest", "owner", "ops")
+PIN_OPTION = {"guest": "guest_pin", "owner": "owner_pin", "ops": "ops_pin"}
+PIN_RE = re.compile(r"^[0-9]{4}$")
+# Brute-force limiter: after this many consecutive failures for a role, verify
+# refuses (HTTP 429) until the window has passed since the last failure. State
+# is a fixed-size dict keyed by the three role names — bounded memory forever.
+AUTH_MAX_FAILURES = 5
+AUTH_LOCKOUT_SECONDS = 300
+_auth_failures: dict = {r: {"count": 0, "last": 0.0} for r in AUTH_ROLES}
+
+
+def _configured_pin(role: str) -> str:
+    """The valid configured PIN for a role, or "" when unset/malformed.
+
+    A malformed value (schema bypass via a hand-edited options.json) is
+    treated as unset rather than comparable — never let a weird value widen
+    what a submitted string could match.
+    """
+    raw = str(_read_options().get(PIN_OPTION[role], "") or "").strip()
+    return raw if PIN_RE.fullmatch(raw) else ""
+
+
+def _lockout_remaining(role: str) -> int:
+    st = _auth_failures[role]
+    if st["count"] < AUTH_MAX_FAILURES:
+        return 0
+    remaining = AUTH_LOCKOUT_SECONDS - (time.monotonic() - st["last"])
+    if remaining <= 0:
+        st["count"] = 0
+        return 0
+    return int(remaining) + 1
+
+
+async def auth_roles_handler(request: web.Request) -> web.Response:
+    """Report which profiles require a passcode — booleans only, no secrets."""
+    return web.json_response(
+        {"roles": {r: {"pinRequired": bool(_configured_pin(r))} for r in AUTH_ROLES}},
+    )
+
+
+async def auth_verify_handler(request: web.Request) -> web.Response:
+    """Constant-time, rate-limited check of a submitted profile passcode."""
+    try:
+        body = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return web.json_response({"error": "invalid JSON body"}, status=400)
+    role = body.get("role")
+    pin = body.get("pin")
+    # Whitelist validation: role must be one of the three known profiles and
+    # the pin exactly four digits — anything else is rejected before any
+    # comparison or counter is touched.
+    if role not in AUTH_ROLES:
+        return web.json_response({"error": "unknown role"}, status=400)
+    if not isinstance(pin, str) or not PIN_RE.fullmatch(pin):
+        return web.json_response({"error": "pin must be 4 digits"}, status=400)
+
+    retry_after = _lockout_remaining(role)
+    if retry_after > 0:
+        return web.json_response(
+            {"ok": False, "locked": True, "retryAfter": retry_after}, status=429,
+        )
+
+    configured = _configured_pin(role)
+    # An unconfigured role needs no PIN — the frontend normally skips the pad
+    # (see /auth/roles), but accept a direct verify too so the two endpoints
+    # can never disagree.
+    ok = not configured or hmac.compare_digest(pin, configured)
+    st = _auth_failures[role]
+    if ok:
+        st["count"] = 0
+    else:
+        st["count"] += 1
+        st["last"] = time.monotonic()
+    return web.json_response({"ok": ok})
 
 
 async def model_upload_handler(request: web.Request) -> web.Response:
@@ -262,6 +352,8 @@ def main() -> None:
     app.on_cleanup.append(on_cleanup)
     app.router.add_get("/addon-config", addon_config_handler)
     app.router.add_post("/model-upload", model_upload_handler)
+    app.router.add_get("/auth/roles", auth_roles_handler)
+    app.router.add_post("/auth/verify", auth_verify_handler)
     app.router.add_get("/core/websocket", ws_handler)
     app.router.add_route("*", "/core/api/{path:.*}", rest_handler)
     web.run_app(app, host="127.0.0.1", port=8100, print=None)

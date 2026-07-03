@@ -1,10 +1,12 @@
 // src/components/canvas/BabylonCanvas.tsx
 // Owns the <canvas> + SceneManager lifecycle and wires HA state -> 3D visuals.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { useConfig } from "@/config/ConfigContext";
+import { useProfile } from "@/auth/ProfileContext";
+import { filterConfigForRole, hasCapability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel, versionedModelUrl } from "@/utils/storage";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
@@ -59,7 +61,17 @@ export default function BabylonCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const managerRef = useRef<SceneManager | null>(null);
   const { config, update } = useConfig();
+  const { role } = useProfile();
   const { subscribeAll, entities } = useHA();
+  // What the SCENE is allowed to show for the active profile: role-denied
+  // categories folded into the hidden set, denied entities stripped from the
+  // entity map. The stored config stays complete (auto-detect below still
+  // writes the full map); only the Babylon layer sees the filtered view.
+  const sceneConfig = useMemo(
+    () => (role ? filterConfigForRole(config, role) : config),
+    [config, role],
+  );
+  const canManageModel = role != null && hasCapability(role, "manageModel");
   // Keep a live ref so the one-shot loadModel callback can read the latest config
   // without being recreated (BabylonCanvas mounts once with empty deps).
   const configRef = useRef(config);
@@ -91,7 +103,7 @@ export default function BabylonCanvas({
     if (!canvasRef.current) return;
     let cancelled = false;
     const manager = new SceneManager(canvasRef.current, {
-      config,
+      config: sceneConfig,
       onEntityPicked: (id) => onPickedRef.current(id),
       onEntityLongPressed: (id) => onLongPressedRef.current(id),
       onFloorChange,
@@ -238,17 +250,17 @@ export default function BabylonCanvas({
   useEffect(() => {
     const m = managerRef.current;
     if (!m) return;
-    m.updateConfig(config);
+    m.updateConfig(sceneConfig);
     // Apply the weather master switch live: unchecking "Live weather effects"
     // must clear existing particles now (no HA event fires on a settings change),
     // and re-checking it must re-apply the current weather immediately.
-    m.weather.setEnabled(config.weatherEffects);
+    m.weather.setEnabled(sceneConfig.weatherEffects);
     Object.values(entities).forEach((e) => {
       m.applyEntityState(e);
       if (e.entity_id.startsWith("weather.")) m.weather.setWeather(e.state);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config]);
+  }, [sceneConfig]);
 
   // Pipe every state change into the scene (imperative — no React re-render of canvas).
   useEffect(() => {
@@ -279,7 +291,11 @@ export default function BabylonCanvas({
       {status === "no-model" && (
         <div className="center-overlay">
           <div className="body-text">No 3D model loaded yet.</div>
-          {isIngress() ? (
+          {!canManageModel ? (
+            <div className="muted body-text">
+              Ask the owner to set up the villa's 3D model.
+            </div>
+          ) : isIngress() ? (
             <div className="muted body-text" style={{ whiteSpace: "pre-line" }}>
               Set <strong>model_path</strong> in the add-on configuration
               (Settings → Add-ons → Villa Kiosk → Configuration) to the GLB in
@@ -299,7 +315,7 @@ export default function BabylonCanvas({
         <div className="center-overlay">
           <div className="danger-text">Failed to load the 3D model.</div>
           <div className="muted body-text" style={{ whiteSpace: "pre-line" }}>{errorMsg}</div>
-          {!addonError && (
+          {!addonError && canManageModel && (
             <button className="btn primary" onClick={onNeedModel}>Upload model</button>
           )}
         </div>
