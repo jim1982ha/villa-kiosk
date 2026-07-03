@@ -3,12 +3,10 @@
 // lifecycle lives in one place (same pattern as RoomHighlight).
 //
 // A simulated "diffused red light beam" pointing the way a camera prop was
-// rotated in SweetHome 3D (see sh3dParser's `angle`), toggled by that
-// camera's linked motion binary_sensor (EntityMapping.motionEntityId). It is
-// a translucent unlit cone, not a real light — no shadow map, no surface
-// interaction. A camera only has a flat plan-rotation (no elevation/tilt
-// data), so the beam is always horizontal; that's an honest simplification,
-// not a bug.
+// rotated AND tilted in SweetHome 3D (see sh3dParser's `angle` for yaw and
+// `pitch` for tilt), toggled by that camera's linked motion binary_sensor
+// (EntityMapping.motionEntityId). It is a translucent unlit cone, not a real
+// light — no shadow map, no surface interaction.
 
 import {
   Color3, Matrix, MeshBuilder, Quaternion, Ray, StandardMaterial, Vector3,
@@ -30,7 +28,8 @@ export interface BeamSource {
   entityId: string;
   /** World-space beam origin (the camera asset's centre). */
   origin: Vector3;
-  /** Horizontal unit facing direction. */
+  /** World-space unit facing direction — may include a vertical component
+   *  from the camera's authored tilt (pitch), not just horizontal yaw. */
   direction: Vector3;
 }
 

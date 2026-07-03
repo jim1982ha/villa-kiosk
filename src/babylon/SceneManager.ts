@@ -611,12 +611,18 @@ export class SceneManager {
     this.lastRoomPolyNames = new Set(worldPolys.map((r) => r.name.trim().toLowerCase()));
     this.syncRoomPoints();
 
-    // Camera motion-beam directions: each camera's sh3d plan `angle` rotated
-    // into world space by the SAME planToWorld fit (translation cancels out
-    // by transforming two nearby points and taking the difference, so this
-    // works regardless of which of the three calibration strategies above
-    // ran, or whether a manual mirror override is layered on top).
-    const cameraDirections = new Map<string, { x: number; z: number }>();
+    // Camera motion-beam directions: each camera's sh3d plan `angle` (yaw)
+    // rotated into world space by the SAME planToWorld fit (translation
+    // cancels out by transforming two nearby points and taking the
+    // difference, so this works regardless of which of the three calibration
+    // strategies above ran, or whether a manual mirror override is layered on
+    // top), THEN tilted by `pitch` (SweetHome's "Horizontal rotation around X
+    // axis" field) for a vertical component. `pitch` only tilts the plan-space
+    // horizontal direction up/down — it isn't itself a plan-space quantity, so
+    // it's applied AFTER the world-space yaw is known, scaling the horizontal
+    // part by cos(pitch) and adding a vertical part, which keeps the result a
+    // unit vector without needing its own world-transform trip.
+    const cameraDirections = new Map<string, { x: number; y: number; z: number }>();
     if (this.config.sh3dEntities?.length) {
       for (const e of this.config.sh3dEntities) {
         const map = this.config.entityMap[e.entityId];
@@ -626,7 +632,15 @@ export class SceneManager {
         const p1 = planToWorld(e.x + d.px, e.y + d.py);
         const wx = p1.x - p0.x, wz = p1.z - p0.z;
         const len = Math.hypot(wx, wz);
-        if (len > 1e-6) cameraDirections.set(e.entityId, { x: wx / len, z: wz / len });
+        if (len <= 1e-6) continue;
+        const pitch = e.pitch ?? 0;
+        // Sign/axis convention unverified against a real tilted camera yet
+        // (same caveat as planAngleToDir's yaw mapping) — if the beam tilts
+        // the wrong way (up instead of down or vice versa) once tested live,
+        // flip this sign.
+        const vy = -Math.sin(pitch);
+        const horizScale = Math.cos(pitch) / len;
+        cameraDirections.set(e.entityId, { x: wx * horizScale, y: vy, z: wz * horizScale });
       }
     }
     this.visuals.setCameraDirections(cameraDirections);

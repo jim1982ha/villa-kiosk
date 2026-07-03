@@ -186,8 +186,9 @@ export interface AppConfig {
   /** Room polygons parsed from an uploaded .sh3d (auto room names, any villa). */
   sh3dRooms?: { name: string; points: { x: number; y: number }[] }[];
   /** Entity plan positions parsed from an uploaded .sh3d (for the transform fit).
-   *  `angle` (degrees, plan rotation) drives the camera motion-beam direction. */
-  sh3dEntities?: { entityId: string; x: number; y: number; angle: number }[];
+   *  `angle` (radians, plan yaw) and `pitch` (radians, tilt) drive the camera
+   *  motion-beam direction. */
+  sh3dEntities?: { entityId: string; x: number; y: number; angle: number; pitch: number }[];
   /**
    * Manual override for room calibration when auto-detection comes out reversed.
    * The app first auto-fits the plan→model transform; these flips are applied on

@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.4.84
+
+### Add: camera tilt (pitch) now steers the motion-detection beam vertically
+- The camera beam only ever used SweetHome's `angle` (yaw / rotation around
+  the vertical Z axis), so changing a camera's TILT — the "Horizontal
+  rotation around X axis" field in the Modify furniture dialog's Orientation
+  section — had no effect on the beam at all, even though SweetHome already
+  records it (as a `pitch` attribute in the `.sh3d` XML, radians, omitted
+  when 0 exactly like `angle`). `sh3dParser.ts` now reads it;
+  `SceneManager.ts` composes it with the existing yaw into a full 3D unit
+  direction (horizontal part scaled by cos(pitch), vertical part
+  −sin(pitch)); `CameraBeams`/`EntityVisuals` already built their cone/raycast
+  from a general 3D vector, so no change was needed there beyond accepting a
+  non-zero Y component.
+- To use it: in SweetHome 3D, select the camera prop → Modify → Orientation →
+  choose the **X axis** rotation field (not Y — that one is roll, which spins
+  the camera around its own aim, not the aim itself) → set a tilt angle →
+  save → re-upload the `.sh3d`. Positive/negative direction (tilts the beam
+  down vs. up) is not yet verified against a real tilted camera in-app — if
+  it goes the wrong way, that's a one-line sign flip in `SceneManager.ts`'s
+  `vy = -Math.sin(pitch)`, tell me which way it actually went and I'll flip it.
+- Also fixed a related gap while investigating: the ingress/add-on "Upload
+  central SH3D" button uploaded the file to the server but never parsed it
+  client-side, so `config.sh3dEntities`/`sh3dRooms` — and therefore every
+  camera's beam direction — silently never updated after using that button.
+  Only the separate standalone-mode uploader did this. Both now parse and
+  apply the file's data immediately on upload.
+
 ## 2.4.83
 
 ### Fix: real WebGL error every frame — "Active draw buffers with missing fragment shader outputs"

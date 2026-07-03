@@ -105,6 +105,21 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
       // under the ceiling for any realistic villa plan.
       const payload: Blob = kind === "sh3d" ? await minifySh3d(file) : file;
       const { path, size } = await uploadCentralModel(payload, kind);
+      // Uploading the file to the server (above) makes it available to the
+      // Blender export pipeline, but does NOT by itself give THIS running
+      // app any of the data it needs live — camera motion-beam directions
+      // and sh3d-derived room polygons both come from client-side parsing
+      // (see loadSh3d below), which used to run ONLY in the standalone-mode
+      // uploader. Ingress/add-on mode (this branch) had no equivalent, so
+      // "Upload central SH3D" silently left config.sh3dEntities/sh3dRooms
+      // empty forever — e.g. every camera's motion-detection beam reporting
+      // "no sh3d angle data" no matter what, with no error and no way to fix
+      // it from the ingress UI. Parse it here too so both modes get the same
+      // live data, not just the standalone one.
+      if (kind === "sh3d") {
+        const { rooms, entities } = await parseSh3d(file);
+        update({ sh3dRooms: rooms, sh3dEntities: entities });
+      }
       clearAddonConfigCache();
       setAddonCfg(await fetchAddonConfig());
       setUploadMsg({ text: `Uploaded ${(size / 1_000_000).toFixed(1)} MB → www/${path}. Reloading…`, ok: true });

@@ -217,9 +217,10 @@ export class EntityVisuals {
   private iconUserScale = 1;
   private iconZoomScale = 1;
 
-  /** camera entity_id -> horizontal world-space facing direction, computed by
-   *  SceneManager from the sh3d plan `angle` (see setCameraDirections). */
-  private cameraDirections = new Map<string, { x: number; z: number }>();
+  /** camera entity_id -> world-space unit facing direction (may include a
+   *  vertical tilt component from SweetHome's `pitch`), computed by
+   *  SceneManager from the sh3d plan `angle`/`pitch` (see setCameraDirections). */
+  private cameraDirections = new Map<string, { x: number; y: number; z: number }>();
   /** Camera motion-detection cones — mesh lifecycle owned by CameraBeams;
    *  this class only decides WHICH cameras get a beam and when it pulses. */
   private beams: CameraBeams;
@@ -576,11 +577,11 @@ export class EntityVisuals {
     this.roomHighlight.setPointRooms(points);
   }
 
-  /** Replace camera facing directions (world-space, horizontal) and rebuild
-   *  every beam mesh. Called by SceneManager right after setRoomPolygons, from
-   *  the same re-fit — a camera's direction depends on the same plan→world
-   *  transform the room polygons do. */
-  setCameraDirections(dirs: Map<string, { x: number; z: number }>): void {
+  /** Replace camera facing directions (world-space unit vectors, may include
+   *  vertical tilt) and rebuild every beam mesh. Called by SceneManager right
+   *  after setRoomPolygons, from the same re-fit — a camera's direction
+   *  depends on the same plan→world transform the room polygons do. */
+  setCameraDirections(dirs: Map<string, { x: number; y: number; z: number }>): void {
     this.cameraDirections = dirs;
     this.buildCameraBeams();
   }
@@ -604,15 +605,22 @@ export class EntityVisuals {
       if (!meshes.length) { skipped.push(`${entityId}: no mesh`); continue; }
       const dir2 = this.cameraDirections.get(entityId);
       if (!dir2) { skipped.push(`${entityId}: no sh3d angle data`); continue; }
-      const planar = Math.hypot(dir2.x, dir2.z);
-      if (planar < 1e-6) { skipped.push(`${entityId}: angle is 0 (no rotation authored)`); continue; }
+      // dir2 already comes out of SceneManager as a unit vector (it composes
+      // the yaw's unit horizontal direction with cos/sin(pitch), so its own
+      // magnitude is always ~1 regardless of tilt) — re-normalise defensively
+      // rather than gating on the horizontal-only length like before, which
+      // would wrongly read "no rotation" for a camera tilted close to
+      // straight down/up (cos(pitch) shrinks the horizontal part near zero
+      // even though a real direction — mostly vertical — exists).
+      const mag = Math.hypot(dir2.x, dir2.y, dir2.z);
+      if (mag < 1e-6) { skipped.push(`${entityId}: angle is 0 (no rotation authored)`); continue; }
 
       const bounds = this.mergedWorldBounds(meshes);
       if (!bounds) { skipped.push(`${entityId}: no world bounds`); continue; }
       sources.push({
         entityId,
         origin: Vector3.Center(bounds.min, bounds.max),
-        direction: new Vector3(dir2.x / planar, 0, dir2.z / planar),
+        direction: new Vector3(dir2.x / mag, dir2.y / mag, dir2.z / mag),
       });
     }
     if (sources.length || skipped.length) {

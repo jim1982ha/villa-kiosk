@@ -23,6 +23,14 @@ export interface ParsedEntity {
    *  was rotated to face in the plan — rotate the camera in SweetHome 3D to
    *  aim it, no other config needed. */
   angle: number;
+  /** SweetHome 3D's "tilt" for this object — rotation around the LOCAL X axis
+   *  (the "Horizontal rotation around X axis" field in the Modify furniture
+   *  dialog's Orientation section, mutually exclusive with the Y-axis field
+   *  in that same UI). Radians, matching the raw `.sh3d` XML attribute — like
+   *  `angle`, SweetHome omits this entirely when it's 0. Lets a camera's
+   *  simulated detection beam tilt up/down to match how the camera prop was
+   *  tilted in the plan, not just its flat rotation. */
+  pitch: number;
 }
 export interface ParsedSh3d {
   rooms: ParsedRoom[];
@@ -61,7 +69,12 @@ export async function parseSh3d(data: ArrayBuffer | File): Promise<ParsedSh3d> {
     if (!name || x === null || y === null) return;
     if (!ENTITY_ID_RE.test(name)) return;
     const angle = f.getAttribute("angle"); // omitted by SweetHome when 0
-    entities.push({ entityId: name, x: Number(x), y: Number(y), angle: angle === null ? 0 : Number(angle) });
+    const pitch = f.getAttribute("pitch"); // omitted by SweetHome when 0
+    entities.push({
+      entityId: name, x: Number(x), y: Number(y),
+      angle: angle === null ? 0 : Number(angle),
+      pitch: pitch === null ? 0 : Number(pitch),
+    });
   });
 
   return { rooms, entities };
