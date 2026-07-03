@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.4.86
+
+### Fix: camera beam now stays inside small rooms, and is a rounded shape instead of a hard-edged cone
+- The beam's LENGTH was already clipped by a raycast along its centreline so
+  it stopped at the nearest wall — but that only controlled reach, not
+  WIDTH. In a narrow room, the cone's wide far end was often wider than the
+  room itself, so its sides visibly poked through the side walls into the
+  next room even though the centre axis correctly stopped short.
+  `CameraBeams.clippedLength()` now also samples several rays fanned out at
+  the cone's own half-angle from the SAME apex point — a ray from a cone's
+  apex at exactly its half-angle traces along the cone's actual surface, so
+  this is a correct (not approximate) test of where that surface first hits
+  a wall in every sampled direction, not just straight ahead. The shortest
+  hit across all of them is what the whole cone is allowed to reach, so it
+  now narrows itself to fit whatever room it's in instead of a fixed-size
+  wedge crammed into the available space.
+- Replaced the hard-edged cylinder-cone with a `CreateLathe`-based rounded
+  profile: an eased curve widens smoothly from the apex, then rounds into a
+  soft dome at the far end instead of an abrupt flat disc — reads as a
+  rounded spotlight instead of a sharp-edged wedge, per feedback after the
+  first size pass.
+- Beam radius now scales with its (possibly wall-shortened) length rather
+  than always using the same fixed far-end diameter, so a beam that gets
+  clipped very short in a small room narrows proportionally too instead of
+  looking like an oversized megaphone stub jammed into the space.
+
 ## 2.4.85
 
 ### Changed: camera motion-beam is a short, wide "spotlight" instead of a long thin streak
