@@ -33,8 +33,10 @@ export interface LoadResult {
 // be within range of more than 4 — beyond the cap Babylon keeps only the nearest
 // few, and the chosen set changes as the camera moves, causing light "popping".
 // Raise the cap modestly so dense strips light smoothly without the full per-pixel
-// cost of an unbounded count on kiosk-tablet GPUs.
-const MAX_SIMULTANEOUS_LIGHTS = 6;
+// cost of an unbounded count on kiosk-tablet GPUs. 8 = sun + ambient fill + a
+// 4-piece perimeter LED entity (one light per Led Line mesh) + two more lamps
+// before anything gets dropped.
+const MAX_SIMULTANEOUS_LIGHTS = 8;
 
 // Window/door glass exports from SweetHome 3D as an opaque grey material, so you
 // can't see the sky/outside through it — the panes read as flat grey panels.

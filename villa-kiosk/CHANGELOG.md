@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.4.73
+
+### Fix: LED strips read as a chain of separate bulbs, and light pools shifted with the camera
+- v2.4.72's approach (several point lights sampled along a strip) was wrong and
+  is reverted. A point light sitting on a ceiling/wall-mounted strip is
+  centimetres from that surface, so each sample printed its own hard bright
+  pool — a dotted chain instead of a light line. Worse, up to 24 lights for one
+  perimeter LED entity blew far past the per-material simultaneous-light cap
+  (6), and Babylon's choice of which lights to keep changes with the camera —
+  the shifting/popping light pools in the screen recording.
+- New approach: the continuous "LED line" look comes from the strip mesh's own
+  emissive colour + the existing glow bloom (view-independent, always a line,
+  never bulbs). The dynamic light is back to ONE per fixture mesh and is only
+  responsible for the soft ambient wash on the room; for elongated strips
+  (>1.5 m) it is dropped partway toward the floor, well clear of the mounting
+  surface, so the wash is wide and soft instead of a tight hotspot.
+- Entity lights no longer emit specular: on the glossy tiled floor each light's
+  white specular glint slid across the tiles as the camera moved, easily read
+  as the lights themselves flickering. Diffuse-only pools now look identical
+  from every viewpoint.
+- Per-material simultaneous-light cap raised 6 → 8 (sun + ambient + a 4-piece
+  perimeter strip + two more lamps before anything gets dropped).
+
 ## 2.4.72
 
 ### Fix: line-LED strip fixtures lit unevenly and looked camera-dependent
