@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.4.79
+
+### Fix: giant vertical "light beam" punching through the ceiling near the sofa
+- Found from a close-up screenshot: a bright column of light shooting from
+  floor to ceiling, made of the same warm glow as the LED strips. This was
+  MY OWN bug from v2.4.74, not a lighting issue — `inflateThinStrip()`
+  thickens a razor-thin strip mesh's thinnest axis by multiplying each
+  vertex's offset from centre by `MIN_STRIP_THICKNESS / size[thin]`. That
+  scale factor is unbounded as the measured thickness shrinks toward zero —
+  and in practice it does: Draco compression quantises vertex positions, so
+  a strip modelled 1cm thick in SweetHome can come out of the GLB at a
+  fraction of a millimetre. A near-zero denominator produced a scale factor
+  in the hundreds, stretching that one mesh into a vertical column reaching
+  through the floor and ceiling.
+- This is also very likely why the sofa-area rectangle kept looking broken
+  even after v2.4.76's merged-light fix: `mergeStripEntityLights()` centres
+  its one shared light on the bounding box merged across all 4 side meshes,
+  and one wildly-stretched mesh drags that merged centre far from where it
+  should be — corrupting the fix's input, not the fix's logic.
+- Rewrote `inflateThinStrip` to push each vertex to a FIXED distance from
+  centre (±3cm) instead of multiplying by a scale factor — bounded for any
+  input, including exactly zero, so this class of blowup can't recur.
+
 ## 2.4.78
 
 ### Fix: LED strip still broke up near the glass wall with nothing actually in the way

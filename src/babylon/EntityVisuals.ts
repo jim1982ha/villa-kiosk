@@ -478,21 +478,34 @@ export class EntityVisuals {
    *  (no node scaling — the mesh's node transform is identity, see the caller,
    *  and scaling around the wrong pivot would shift the whole strip sideways
    *  instead of just thickening it). No-op for anything not razor-thin (normal
-   *  lamp/fixture meshes). */
+   *  lamp/fixture meshes).
+   *
+   *  Pushes each vertex to a FIXED distance from centre (±MIN_STRIP_THICKNESS/2)
+   *  rather than multiplying its offset by a scale factor. A multiplicative
+   *  scale (MIN_STRIP_THICKNESS / size[thin]) is unbounded as size[thin] shrinks
+   *  towards zero — and it does, in practice: Draco compression quantises
+   *  vertex positions, so a strip modelled 1cm thick in SweetHome can come out
+   *  of the GLB at a fraction of a millimetre. That produced scale factors in
+   *  the hundreds, blowing a thin fixture mesh up into a vertical column
+   *  punching through the floor and ceiling — the giant glowing "light beam"
+   *  artifact, not a lighting bug at all, just this function over-stretching
+   *  the mesh it was supposed to gently thicken. A fixed target offset is
+   *  bounded for any input, including exactly zero, so it can't recur. */
   private inflateThinStrip(mesh: AbstractMesh): void {
     const bb = mesh.getBoundingInfo().boundingBox;
     const size = bb.maximum.subtract(bb.minimum);
     const axes: Array<"x" | "y" | "z"> = ["x", "y", "z"];
     const thin = axes.reduce((a, b) => (size[b] < size[a] ? b : a));
-    if (size[thin] >= MIN_STRIP_THICKNESS || size[thin] <= 1e-6) return;
+    if (size[thin] >= MIN_STRIP_THICKNESS) return;
 
     const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
     if (!positions) return;
     const idx = thin === "x" ? 0 : thin === "y" ? 1 : 2;
     const center = (bb.minimum[thin] + bb.maximum[thin]) / 2;
-    const scale = MIN_STRIP_THICKNESS / size[thin];
+    const halfTarget = MIN_STRIP_THICKNESS / 2;
     for (let i = idx; i < positions.length; i += 3) {
-      positions[i] = center + (positions[i] - center) * scale;
+      const sign = positions[i] < center ? -1 : 1;
+      positions[i] = center + sign * halfTarget;
     }
     mesh.setVerticesData(VertexBuffer.PositionKind, positions, true);
     mesh.refreshBoundingInfo(false, false);
