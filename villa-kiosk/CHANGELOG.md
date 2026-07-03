@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.4.87
+
+### Fix: LED-strip rectangles had a real (tiny) gap baked in at each corner
+- User asked whether a nearby object could be "absorbing" the strip's light,
+  making the line look cut. Confirmed there's no such mechanism in Babylon —
+  materials don't dim a neighbouring emissive surface. The actual cause,
+  verified directly from the `.sh3d` source coordinates: each rectangular
+  LED cove (dining-table/sofa perimeter) is built from 4 separate straight
+  strip pieces, and their authored endpoints don't reach far enough to
+  overlap at the corners — e.g. the sofa rectangle's top-right corner has
+  the top piece ending at y≈654.05 while the right piece only starts at
+  y≈654.84, a real ~0.8cm gap. GlowLayer has nothing emissive to bloom from
+  in that gap, so it reads as a hard, camera-angle-INDEPENDENT cut — easy to
+  mistake for nearby furniture blocking it, when nothing is actually in the
+  way. Same pattern found at the dining-table rectangle too, so this is a
+  structural side-effect of the asset (4 independent rods, not one
+  continuous shape), not a one-off modelling slip.
+- Fixed generally (not just for this villa): `EntityVisuals.extendStripJoints()`
+  stretches every strip mesh belonging to a multi-piece light entity 2cm past
+  its own modelled endpoint on its long axis, so adjacent pieces always
+  overlap at their shared corner regardless of small placement gaps. Uses a
+  fixed additive distance, not a scale factor, so it can't blow up the way
+  v2.4.74's original inflateThinStrip bug did. No SweetHome changes needed.
+
 ## 2.4.86
 
 ### Fix: camera beam now stays inside small rooms, and is a rounded shape instead of a hard-edged cone

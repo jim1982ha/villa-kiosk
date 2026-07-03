@@ -72,6 +72,24 @@ const STRIP_DROP_MAX = 1.1; // metres — cap the drop so tall rooms don't put i
 // help because it was never the cause). Fix at the geometry: thicken the
 // mesh's thinnest axis to a minimum so it always covers several pixels.
 const MIN_STRIP_THICKNESS = 0.06; // metres (6 cm) — still reads as a slim cove strip
+// A rectangular LED cove (dining-table/sofa perimeter) is built from 4
+// separate straight strip pieces (top/bottom/left/right), one per side. Their
+// authored endpoints don't always reach far enough to overlap at the
+// corners — confirmed straight from the .sh3d source coordinates (not a
+// camera-angle or occlusion effect): the sofa rectangle's top-right corner
+// has the top piece ending at y≈654.05 while the right piece only starts at
+// y≈654.84, a real ~0.8cm gap baked into the model. GlowLayer has nothing
+// emissive to bloom from in that gap, so it reads as a hard, camera-angle-
+// INDEPENDENT "cut" in the line — easy to mistake for the nearby furniture
+// blocking it, when nothing is actually occluding anything. Stretch every
+// strip mesh belonging to a multi-piece light entity past its own modelled
+// endpoints by this margin (safely bigger than the largest gap measured
+// above) so adjacent pieces always overlap at their shared corner. Skipped
+// for single-mesh light entities — there's no joint to close, and no camera
+// angle where this could look wrong (the extension is a fixed absolute
+// distance, not a scale, so it can't blow up — same lesson as
+// inflateThinStrip's earlier bug).
+const STRIP_JOINT_EXTENSION = 0.02; // metres (2 cm) past each modelled endpoint
 // Cube shadow maps for point lights are 6 faces each, so keep them small. We cast
 // ONE per light ENTITY (the markers of a strip are clustered, so a single occluder
 // covers them) and only while the light is on, so an idle/off light costs nothing.
@@ -403,6 +421,7 @@ export class EntityVisuals {
       }
     }
 
+    this.extendStripJoints();
     this.mergeStripEntityLights();
     scene.blockMaterialDirtyMechanism = false;
 
@@ -458,6 +477,39 @@ export class EntityVisuals {
       shared.specular = Color3.Black();
       shared.setEnabled(false);
       for (const m of meshes) this.meshLights.set(m.uniqueId, shared);
+    }
+  }
+
+  /** Stretch every strip mesh of a multi-piece light entity past its own
+   *  modelled endpoints by STRIP_JOINT_EXTENSION, so adjacent pieces (e.g.
+   *  the 4 sides of a rectangular LED cove) always overlap at their shared
+   *  corner even when the source .sh3d placed them with a small (sub-cm) gap
+   *  — see the constant's comment for the measured evidence this is real,
+   *  not a camera-angle artifact. Runs on the LONG axis (the one
+   *  inflateThinStrip does NOT touch — that one only thickens the SHORT
+   *  axis), so the two passes complement rather than fight each other. */
+  private extendStripJoints(): void {
+    for (const [entityId, meshes] of this.byEntity) {
+      const map = this.mapping.get(entityId);
+      if (!map || map.type !== "light" || meshes.length < 2) continue;
+      for (const m of meshes) {
+        const bb = m.getBoundingInfo().boundingBox;
+        const size = bb.maximum.subtract(bb.minimum);
+        const axes: Array<"x" | "y" | "z"> = ["x", "y", "z"];
+        const longAxis = axes.reduce((a, b) => (size[b] > size[a] ? b : a));
+        if (size[longAxis] < STRIP_MIN_LENGTH) continue; // not a strip piece (e.g. a small marker)
+
+        const positions = m.getVerticesData(VertexBuffer.PositionKind);
+        if (!positions) continue;
+        const idx = longAxis === "x" ? 0 : longAxis === "y" ? 1 : 2;
+        const center = (bb.minimum[longAxis] + bb.maximum[longAxis]) / 2;
+        for (let i = idx; i < positions.length; i += 3) {
+          const sign = positions[i] < center ? -1 : 1;
+          positions[i] += sign * STRIP_JOINT_EXTENSION;
+        }
+        m.setVerticesData(VertexBuffer.PositionKind, positions, true);
+        m.refreshBoundingInfo(false, false);
+      }
     }
   }
 
