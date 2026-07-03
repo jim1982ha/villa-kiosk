@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.4.77
+
+### Fix: camera motion-detection beams pointed the wrong way (radians/degrees bug)
+- `binary_sensor.livingroom_motiondetection` going active should show a red
+  "detection beam" cone from `camera.livingroom_cam` (`CameraBeams.ts`), and
+  its motion-sensor binding was already correctly configured. The beam was
+  invisible anyway because `planAngleToDir()` (`roomCalibration.ts`) treated
+  its input as DEGREES and converted it to radians a second time — but
+  `sh3dParser.ts` stores `angle` straight from the `.sh3d` XML, which is
+  ALREADY in radians (confirmed straight from the source file: values run
+  0..~6.28, e.g. `angle='3.1415927'` for `camera.livingroom_cam`'s real
+  180° rotation). The double conversion silently mangled every
+  nonzero-rotation camera's direction into a near-arbitrary ~1°-equivalent
+  facing, so the beam pointed into whatever was nearest (usually a wall) and
+  got clipped to nothing — invisible, not merely wrong-facing. Every other
+  camera in the villa happened to still be at the model's default angle=0,
+  which is unaffected by this bug either way, so this went unnoticed until
+  now. Fixed by taking the angle as radians directly, matching the source
+  data — no unit conversion needed.
+- The sin/cos → facing-direction mapping itself is still unverified against
+  a real rotated camera's actual facing in-app (only the unit bug is
+  confirmed fixed) — if the beam now shows but points the wrong way, that's
+  a sign/axis convention issue in the same function, not this bug.
+
 ## 2.4.76
 
 ### Fix: found and fixed the actual cause of the LED-strip breakup (two causes, not one)

@@ -34,17 +34,26 @@ export interface CalibrationSolution {
 }
 
 /**
- * SweetHome 3D plan-space unit direction for an object's `angle` (degrees).
+ * SweetHome 3D plan-space unit direction for an object's `angle` — RADIANS,
+ * matching both the raw `.sh3d` XML attribute (confirmed straight from a real
+ * file: values run 0..~6.28, e.g. `angle='3.1415927'` for a 180°-rotated
+ * camera) and sh3dParser's `Number(angle)`, which stores it as-is with no
+ * conversion. This function used to treat its input as DEGREES and convert
+ * to radians again — a double-conversion that silently mangled every
+ * nonzero-rotation camera into a near-arbitrary ~1°-equivalent direction
+ * instead of its real facing, so camera motion-detection beams pointed the
+ * wrong way (usually straight into the nearest wall and clipped to nothing)
+ * instead of missing outright — which is why a camera with motion correctly
+ * wired up still showed no visible red beam.
  * SweetHome's plan is Y-down (X east, Y south) and the angle spinner turns
  * furniture CLOCKWISE from its modelled "south-facing" (plan +Y) default —
- * unverified against a real rotated camera yet (every camera in the current
- * villa is still at the default angle=0, see EntityCategories/CHANGELOG); if
- * a live test with an actually-rotated camera shows the beam pointing the
- * wrong way, this is the one place to flip the sign or swap sin/cos.
+ * the sin/cos mapping below is still unverified against a real rotated
+ * camera's ACTUAL facing direction in-app (only the unit bug is confirmed);
+ * if a live test shows the beam pointing the wrong way, this is the one
+ * place to flip the sign or swap sin/cos.
  */
-export function planAngleToDir(angleDeg: number): { px: number; py: number } {
-  const rad = (angleDeg * Math.PI) / 180;
-  return { px: Math.sin(rad), py: Math.cos(rad) };
+export function planAngleToDir(angleRad: number): { px: number; py: number } {
+  return { px: Math.sin(angleRad), py: Math.cos(angleRad) };
 }
 
 /**
