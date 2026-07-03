@@ -12,7 +12,7 @@
 // danger styling matches what the sensor actually monitors instead of
 // assuming every binary_sensor is a leak alarm.
 //
-// A per-entity Settings → Alert Thresholds override always wins over the
+// A per-entity config.alertThresholds override always wins over the
 // `alarmState` default here (see SensorPanel.tsx) — this table only supplies
 // the sensible starting point for a class the user hasn't customised.
 

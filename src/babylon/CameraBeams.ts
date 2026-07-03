@@ -6,9 +6,9 @@
 // rotated in SweetHome 3D (see sh3dParser's `angle`), toggled by that
 // camera's linked motion binary_sensor (EntityMapping.motionEntityId). It is
 // a translucent unlit cone, not a real light — no shadow map, no surface
-// interaction — matching how MarkerManager's marker orbs are built. A camera
-// only has a flat plan-rotation (no elevation/tilt data), so the beam is
-// always horizontal; that's an honest simplification, not a bug.
+// interaction. A camera only has a flat plan-rotation (no elevation/tilt
+// data), so the beam is always horizontal; that's an honest simplification,
+// not a bug.
 
 import {
   Color3, Matrix, MeshBuilder, Quaternion, Ray, StandardMaterial, Vector3,

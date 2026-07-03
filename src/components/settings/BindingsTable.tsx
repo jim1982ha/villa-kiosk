@@ -69,9 +69,8 @@ export default function BindingsTable() {
 
       {bound.length === 0 && (
         <p className="muted body-text mt">
-          No objects bound yet. Go back to the villa, open{" "}
-          <strong>Settings → Bind 3D objects</strong> and tap any object to link
-          it to an entity.
+          No objects bound yet. Expand <strong>unbound objects</strong> below
+          and pick an entity for any 3D object you want to control.
         </p>
       )}
 

@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.4.71
+
+### Removed: Drop Control Marker and All Clear features
+- Deleted the floating "drop a control marker at a tapped 3D point" feature
+  entirely — HUD button, place-mode picking, marker meshes/visuals, config
+  storage and the Config Editor's marker management table are all gone
+  (`MarkerManager.ts`, `MarkerDialog.tsx`, `MarkersTable.tsx`,
+  `markerUtils.ts` removed).
+- Deleted the "All Clear" alert-count badge and the Config Editor's "Alert
+  thresholds" section. Per-sensor danger/warning coloring in the sensor
+  detail panel is unaffected — that's a separate feature that doesn't need
+  the removed admin UI to keep working.
+
+### Changed: Bind 3D Object to Entity moved out of the main screen
+- Removed the "tap an object to bind it" button and its interactive picker
+  from the main villa view. Binding a 3D object to an entity is now done
+  entirely from the Config Editor's "Bound 3D objects" table, which already
+  supported picking an entity for any unbound object directly — no 3D tap
+  required.
+
+### Changed: HUD layout reshuffled
+- The category filter (which device types show their state badge) moved
+  from the left column to a horizontal pill centered in the top bar, where
+  the old bind/marker buttons used to sit.
+- The "highlight clickable objects" and "show device state labels" toggles
+  moved from the top bar into a new vertical section on the left, directly
+  below the floor switch.
+- The Rooms button is now a third button in the floor switch, below 2F.
+- The first-person / bird's-eye view toggle moved next to Settings at the
+  top right.
+
 ## 2.4.70
 
 ### Fix: badge icon glyphs rendered off-centre (vertically)

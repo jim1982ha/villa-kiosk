@@ -31,7 +31,8 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   // wording/icon/danger-styling below matches what's actually being
   // monitored instead of assuming every binary_sensor is a leak alarm.
   const classInfo = binarySensorClassInfo(entity?.attributes.device_class);
-  // A user's own Settings → Alert Thresholds override always wins; otherwise
+  // A per-entity threshold override (config.alertThresholds, currently only
+  // seeded from DEFAULT_THRESHOLDS — no in-app editor) always wins; otherwise
   // fall back to the device_class's default problem state ("none" = this
   // class is purely informational — e.g. motion/occupancy — so it's never
   // auto-flagged as an alert).

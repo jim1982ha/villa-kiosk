@@ -93,8 +93,4 @@ export class FloorManager {
     this.cooldownUntil = performance.now() + 1500;
     this.onFloorChange(floor);
   }
-
-  getCurrentFloor(): number {
-    return this.currentFloor;
-  }
 }

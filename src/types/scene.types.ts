@@ -68,18 +68,3 @@ export interface SceneReadyInfo {
   meshNames: string[];
   floorsDetected: number[];
 }
-
-/**
- * A floating, app-created control point (3Dash-style). Lets you control a device
- * that is NOT a separate object in the model — or whose HA entity doesn't exist
- * yet. Dropped at a tapped 3D point and bound to an entity_id (which may be added
- * to HA later). Persisted in config; recreated on every model load.
- */
-export interface SceneMarker {
-  id: string;
-  entityId: string; // may not exist in HA yet
-  type: EntityType; // drives icon, visual reaction and control panel
-  label?: string;
-  position: Vec3;
-  floor: number;
-}

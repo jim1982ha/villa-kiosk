@@ -184,10 +184,6 @@ export class EntityVisuals {
    *  badge at a fixed screen-space height regardless of how tall the asset
    *  actually was or how high up it sat. */
   private labelAnchors = new Map<string, TransformNode>();
-  /** Floating control-marker anchors (MarkerManager) — devices with no mesh of
-   *  their own. Label-only: the marker's orb/halo glow stays owned there, this
-   *  just feeds the same badge pipeline mesh-bound entities use. */
-  private markerAnchors = new Map<string, { type: EntityType; anchor: AbstractMesh }>();
   /** Last seen HA state per entity, so a label rebuild (toggle on / icon edit)
    *  can repaint badges immediately instead of waiting for the next push. */
   private lastState = new Map<string, HassEntity>();
@@ -522,29 +518,6 @@ export class EntityVisuals {
     }
   }
 
-  /** Replace the set of floating marker anchors (called whenever MarkerManager
-   *  re-syncs). A mesh binding for the same entity_id always wins — a marker
-   *  is only a fallback for devices without real geometry. */
-  syncMarkerAnchors(defs: { entityId: string; type: EntityType; anchor: AbstractMesh }[]): void {
-    this.markerAnchors.clear();
-    for (const d of defs) {
-      if (this.byEntity.has(d.entityId)) continue;
-      this.markerAnchors.set(d.entityId, { type: d.type, anchor: d.anchor });
-    }
-    if (this.config.showEntityLabels) this.rebuildLabels();
-  }
-
-  /** State push for a marker-bound entity. Mesh-bound entities go through
-   *  apply(); this is the marker-only equivalent — label only, since the
-   *  marker's own orb/halo visuals are updated separately by MarkerManager. */
-  applyMarker(entity: HassEntity): void {
-    const m = this.markerAnchors.get(entity.entity_id);
-    if (!m) return;
-    this.lastState.set(entity.entity_id, entity);
-    this.updateLabel(entity.entity_id, m.type, entity);
-    this.requestRender();
-  }
-
   // ---------------------------------------------------------------------------
   // State labels (BJS GUI fullscreen overlay)
   // ---------------------------------------------------------------------------
@@ -557,8 +530,7 @@ export class EntityVisuals {
   /** An entity's map-filter category: whatever the user set in the Config
    *  Editor (persisted on its EntityMapping), falling back to the type-based
    *  default (config/EntityCategories.ts) for entities that don't have one
-   *  yet — covers mesh-bound AND marker-bound entities alike, since both are
-   *  always mirrored into config.entityMap (see markerUtils/bindingUtils). */
+   *  yet (see bindingUtils). */
   private categoryOf(entityId: string, type: EntityType): Category {
     return this.config.entityMap[entityId]?.category ?? categoryForEntity(entityId, type);
   }
@@ -591,12 +563,8 @@ export class EntityVisuals {
     this.labels.clear();
     this.labelLayer.rootContainer.isVisible = true;
 
-    // Two anchor sources feed the same badge pipeline: real mesh-bound entities
-    // (from the GLB, anchored at their own bounding-box top — see
-    // buildLabelAnchors) and floating control markers (devices with no mesh of
-    // their own — see MarkerManager, anchored at the marker orb itself). A mesh
-    // binding always takes priority for a given entity_id (enforced in
-    // syncMarkerAnchors).
+    // Every mesh-bound entity feeds the same badge pipeline, anchored at its
+    // own bounding-box top (see buildLabelAnchors).
     const sources: { entityId: string; anchor: TransformNode; type: EntityType }[] = [];
     for (const [entityId, meshes] of this.byEntity) {
       if (!meshes.length) continue;
@@ -604,9 +572,6 @@ export class EntityVisuals {
       if (!map) continue;
       const anchor = this.labelAnchors.get(entityId) ?? meshes[0];
       sources.push({ entityId, anchor, type: map.type });
-    }
-    for (const [entityId, m] of this.markerAnchors) {
-      sources.push({ entityId, anchor: m.anchor, type: m.type });
     }
 
     for (const { entityId, anchor, type } of sources) {
@@ -624,8 +589,8 @@ export class EntityVisuals {
       this.labelLayer.addControl(container);
       container.linkWithMesh(anchor);
       // The anchor already sits at (or just above) the asset's own top edge —
-      // see buildLabelAnchors / the marker orb position — so the only pixel
-      // offset needed is to lift the WHOLE container clear of that point
+      // see buildLabelAnchors — so the only pixel offset needed is to lift
+      // the WHOLE container clear of that point
       // (rather than centering it on the point), not the large hand-tuned
       // constant this used to be.
       container.linkOffsetYInPixels = -LABEL_HEIGHT_PX / 2;

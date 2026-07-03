@@ -232,28 +232,6 @@ button {
 .hud-stack .icon-btn:hover { background: var(--bg-input); }
 .hud-stack .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
 
-/* Mobile dropdown menus (Display / Build / Config collapse into these). */
-.hud-menu { position: relative; display: inline-flex; }
-.hud-menu-panel {
-  position: absolute; top: calc(100% + 8px); right: 0;
-  display: flex; flex-direction: column; gap: 2px;
-  min-width: 220px; padding: 6px; z-index: 60;
-  background: var(--bg-overlay); backdrop-filter: blur(12px);
-  border: 1px solid var(--hairline-strong); border-radius: 12px;
-  box-shadow: 0 8px 28px var(--shadow);
-  animation: fadeIn 0.12s ease;
-}
-.hud-menu-item {
-  display: flex; align-items: center; gap: 10px;
-  width: 100%; padding: 11px 12px; border-radius: 9px;
-  font-size: 14px; color: var(--text-primary); text-align: left;
-}
-.hud-menu-item:hover { background: var(--bg-input); }
-.hud-menu-item > svg { flex: 0 0 auto; color: var(--text-secondary); }
-.hud-menu-item.active > svg { color: var(--accent); }
-.hud-menu-item span { flex: 1 1 auto; }
-.hud-menu-check { flex: 0 0 auto; width: 16px; text-align: center; color: var(--accent); font-weight: 700; }
-
 /* --- HUD --- */
 /* Three zones: brand + time (left) · action icons (centre) · alerts + settings (right). */
 .hud-topbar {
@@ -308,6 +286,7 @@ button {
 .floor-switch-v button {
   width: 40px; height: 36px; border-radius: 9px;
   font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
 }
 .floor-switch-v button.active { background: var(--accent); color: var(--text-on-accent); }
 .floor-switch-v button:disabled { opacity: 0.35; }
@@ -353,24 +332,6 @@ button {
   box-shadow: 0 6px 24px var(--shadow);
   animation: fadeIn 0.12s ease;
 }
-
-/* --- Alert badge --- */
-.alert-badge {
-  display: inline-flex; align-items: center; gap: 8px;
-  background: var(--status-danger); color: #fff;
-  padding: 10px 16px; border-radius: 999px; font-weight: 600; font-size: 14px;
-  box-shadow: 0 4px 16px var(--shadow);
-}
-.alert-badge.ok { background: var(--bg-panel); color: var(--status-on); border: 1px solid var(--hairline); }
-/* Alert detail list drops down from the badge (now top-right). */
-.alert-list {
-  position: absolute; top: calc(56px + env(safe-area-inset-top, 0px)); right: 16px; width: 280px;
-  background: var(--bg-overlay); border-radius: var(--panel-radius);
-  padding: 14px; z-index: 30; backdrop-filter: blur(12px);
-  border: 1px solid var(--hairline-strong);
-  box-shadow: 0 8px 28px var(--shadow);
-}
-.alert-list .row { display: flex; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid var(--hairline); }
 
 /* --- Virtual joystick --- */
 .joystick-base {
@@ -708,17 +669,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-/* --- Bind mode banner --- */
-.bind-banner {
-  position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
-  z-index: 45; display: flex; align-items: center; gap: 16px;
-  background: var(--bg-overlay); backdrop-filter: blur(12px);
-  border: 1px solid var(--accent); border-radius: 14px;
-  padding: 12px 16px; max-width: 92vw;
-  box-shadow: 0 6px 24px var(--shadow);
-}
-.bind-banner span { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-
 /* --- Central .sh3d background-refresh failure banner --- */
 .sh3d-sync-banner {
   position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%);
@@ -773,9 +723,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .hud-brand svg { width: 22px; height: 22px; }
   /* Clock takes too much space — hide it; the phone already shows the time. */
   .hud-clock { display: none; }
-  /* All Clear collapses to an icon-only badge to save width. */
-  .alert-badge-text { display: none; }
-  .alert-badge { padding: 8px; }
   /* Tighter centre/right groups and smaller icon buttons. */
   .hud-center { gap: 4px; }
   .hud-right { gap: 6px; }
@@ -785,23 +732,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .floor-switch-v button { width: 36px; height: 32px; font-size: 12px; }
   /* Left control stack: slightly narrower icon buttons to save width. */
   .hud-stack .icon-btn { width: 36px; }
-
-  /* Dropdown menus (Display / Build / Config) are triggered from the centred
-     icon cluster. Anchoring each panel to its trigger's right edge (right: 0 +
-     min-width: 220px) pushes the left menus off the left screen edge, clipping
-     their labels. Pin all of them to a single fixed spot just under the bar on
-     the right instead — never clipped, never overlapping the left floor switch.
-     They inherit the top bar's z-index context (raised to 22), so they paint
-     above the floor selector. */
-  .hud-menu-panel {
-    position: fixed;
-    top: calc(52px + env(safe-area-inset-top, 0px) + 6px);
-    right: calc(10px + env(safe-area-inset-right, 0px));
-    left: auto;
-    min-width: 0;
-    width: min(280px, calc(100vw - 20px));
-    max-width: calc(100vw - 20px);
-  }
 
   /* Dialogs fill the small screen and never crop their header/footer. The body
      scrolls between a pinned header and footer; dvh tracks the real visible

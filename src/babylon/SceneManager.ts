@@ -23,7 +23,6 @@ import { SkyDome } from "./SkyDome";
 import { FloorManager } from "./FloorManager";
 import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
-import { MarkerManager } from "./MarkerManager";
 import { WeatherEffects } from "./WeatherEffects";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
@@ -38,7 +37,7 @@ import { tapDebug } from "@/utils/tapDebug";
 import { loadOverviewView, saveOverviewView } from "@/utils/storage";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
-import type { TeleportPoint, SceneMarker } from "@/types/scene.types";
+import type { TeleportPoint } from "@/types/scene.types";
 
 export interface SceneManagerOptions {
   config: AppConfig;
@@ -63,7 +62,6 @@ export class SceneManager {
   readonly floors: FloorManager;
   readonly pick: PickHandler;
   readonly visuals: EntityVisuals;
-  readonly markers: MarkerManager;
   readonly weather: WeatherEffects;
   readonly renderFx: RenderEnhancements;
 
@@ -118,7 +116,6 @@ export class SceneManager {
     this.sun = new SunController(this.scene, this.lighting, this.hemi, opts.config, this.sky);
     this.sun.setRenderHook(() => this.requestRender());
     this.visuals = new EntityVisuals(this.scene, opts.config, () => this.requestRender());
-    this.markers = new MarkerManager(this.scene, () => this.requestRender());
     this.weather = new WeatherEffects(this.scene, () => this.requestRender());
 
     // A tap/long-press checks state-badge hit-testing FIRST, falling through
@@ -495,9 +492,6 @@ export class SceneManager {
     // anchors / teleport points correctly for THIS model.
     this.calibrateRooms(result.meshes);
 
-    // Recreate persisted floating markers for this villa.
-    this.syncMarkersAndAnchors(this.config.markers);
-
     // Spawn INSIDE a real room (the main/living room if we have it). Falls back to
     // the model centre. This matters for models with big outdoor areas, where the
     // bounding-box centre would land you outside on the garden.
@@ -696,16 +690,6 @@ export class SceneManager {
     this.requestRender();
   }
 
-  /** Enter/exit "tap an object to bind it" mode. */
-  setBindMode(on: boolean, cb?: (meshName: string) => void): void {
-    this.pick.setBindMode(on, cb);
-  }
-
-  /** Enter/exit "tap a spot to drop a control marker" mode. */
-  setPlaceMode(on: boolean, cb?: (point: { x: number; y: number; z: number }) => void): void {
-    this.pick.setPlaceMode(on, cb);
-  }
-
   /**
    * Enforce solid (opaque) walls and wall collisions, per config. SweetHome
    * exports sometimes carry a low wall alpha; we force structural surfaces
@@ -832,30 +816,8 @@ export class SceneManager {
     this.requestRender();
   }
 
-  /** Re-sync floating markers from config (after add/remove/edit). */
-  syncMarkers(): void {
-    this.syncMarkersAndAnchors(this.config.markers);
-    this.requestRender();
-  }
-
-  /** Rebuild the floating markers AND re-register their anchors with
-   *  EntityVisuals, so markers get the same state-label badge as mesh-bound
-   *  entities (they otherwise only get their own orb/halo glow). */
-  private syncMarkersAndAnchors(defs: SceneMarker[]): void {
-    this.markers.sync(defs);
-    this.visuals.syncMarkerAnchors(this.markers.getAnchors());
-  }
-
-  /** Current active floor (for tagging a newly placed marker). */
-  getCurrentFloor(): number {
-    return this.floors.getCurrentFloor();
-  }
-
-  /** Fan a state change out to both real-mesh visuals and floating markers. */
   applyEntityState(entity: HassEntity): void {
     this.visuals.apply(entity);
-    this.visuals.applyMarker(entity);
-    this.markers.apply(entity);
   }
 
   private markReady() {
@@ -978,9 +940,6 @@ export class SceneManager {
 
     if (this.loadedMeshes.length && prev.highlightInteractive !== config.highlightInteractive) {
       this.applyHighlight(this.loadedMeshes);
-    }
-    if (prev.markers !== config.markers) {
-      this.syncMarkersAndAnchors(config.markers);
     }
     this.requestRender();
   }

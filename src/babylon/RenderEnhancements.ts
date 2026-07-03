@@ -238,7 +238,7 @@ export class RenderEnhancements {
   // small fixture mesh at a distance. GlowLayer adds a soft halo around any
   // emissive surface for free (it reads material.emissiveColor directly), so
   // every one of those existing "on" states gets more visible with no change
-  // to EntityVisuals/MarkerManager's own colour logic.
+  // to EntityVisuals' own colour logic.
   private applyGlow(cfg: RenderConfig): void {
     if (cfg.glow) {
       if (!this.glow) {

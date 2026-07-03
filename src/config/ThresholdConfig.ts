@@ -1,6 +1,6 @@
 // src/config/ThresholdConfig.ts
-// Alert thresholds per entity. Used by the AlertBadge and SensorPanel to decide
-// normal / warning / danger. Editable in Settings and persisted to localStorage.
+// Alert thresholds per entity. Used by SensorPanel to decide normal / warning /
+// danger for a sensor's reading (no in-app editor — seeded from DEFAULT_THRESHOLDS).
 
 export interface Threshold {
   min?: number; // below -> alert

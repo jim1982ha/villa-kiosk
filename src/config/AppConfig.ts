@@ -1,7 +1,7 @@
 // src/config/AppConfig.ts
 // Config schema + defaults + load/save (localStorage). All runtime-editable.
 
-import type { Category, EntityMapping, EntityType, ModelTransform, SceneMarker, TeleportPoint } from "@/types/scene.types";
+import type { Category, EntityMapping, EntityType, ModelTransform, TeleportPoint } from "@/types/scene.types";
 import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_THRESHOLDS, type Threshold } from "./ThresholdConfig";
@@ -172,8 +172,6 @@ export interface AppConfig {
    * tapping objects in the scene. Takes priority over name-based matching.
    */
   meshBindings: Record<string, string>;
-  /** Floating control markers for devices that aren't separate meshes (3Dash-style). */
-  markers: SceneMarker[];
   teleportPoints: TeleportPoint[];
   alertThresholds: Record<string, Threshold>;
   modelTransform: ModelTransform;
@@ -257,7 +255,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   currentFloor: 1,
   entityMap: ENTITY_MAP,
   meshBindings: {},
-  markers: [],
   teleportPoints: TELEPORT_POINTS,
   alertThresholds: DEFAULT_THRESHOLDS,
   modelTransform: DEFAULT_MODEL_TRANSFORM,
@@ -297,7 +294,6 @@ export function loadConfig(): AppConfig {
       modelTransform: { ...DEFAULT_CONFIG.modelTransform, ...(stored.modelTransform ?? {}) },
       render: { ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) },
       entityIcons: { ...DEFAULT_ENTITY_ICONS, ...(stored.entityIcons ?? {}) },
-      markers: stored.markers ?? DEFAULT_CONFIG.markers,
       teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
     };
   } catch (err) {

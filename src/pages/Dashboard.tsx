@@ -8,11 +8,7 @@ import RoomLabel from "@/components/hud/RoomLabel";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
 import PanelRouter from "@/components/panels/PanelRouter";
 import SettingsModal from "@/components/settings/SettingsModal";
-import BindDialog from "@/components/settings/BindDialog";
-import MarkerDialog from "@/components/settings/MarkerDialog";
 import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
-import { Link2, MapPin, X } from "lucide-react";
-import type { Vec3 } from "@/types/scene.types";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { isIngress, ingressHaUrl } from "@/ha/ingress";
@@ -41,10 +37,6 @@ export default function Dashboard() {
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
   const [showOnboarding, setShowOnboarding] = useState(!config.onboarded);
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
-  const [bindMode, setBindMode] = useState(false);
-  const [meshToBind, setMeshToBind] = useState<string | null>(null);
-  const [placeMode, setPlaceMode] = useState(false);
-  const [pointToPlace, setPointToPlace] = useState<Vec3 | null>(null);
   const [viewMode, setViewMode] = useState<"first-person" | "overview">("first-person");
   // Mirrors SceneManager.hasOverviewDefault() (a localStorage read) into React
   // state so the HUD button's pressed state updates immediately after
@@ -220,36 +212,6 @@ export default function Dashboard() {
 
   const pinContinuous = useCallback(() => manager?.pinContinuous() ?? (() => {}), [manager]);
 
-  // Bind mode: tapping an object reports its mesh name to open the BindDialog.
-  const enterBindMode = useCallback(() => {
-    if (!manager) return;
-    setSettingsOpen(false);
-    setActivePanel(null);
-    setBindMode(true);
-    manager.setBindMode(true, (meshName) => setMeshToBind(meshName));
-  }, [manager]);
-
-  const exitBindMode = useCallback(() => {
-    setBindMode(false);
-    setMeshToBind(null);
-    manager?.setBindMode(false);
-  }, [manager]);
-
-  // Place mode: tapping a surface drops a floating marker there.
-  const enterPlaceMode = useCallback(() => {
-    if (!manager) return;
-    setSettingsOpen(false);
-    setActivePanel(null);
-    setPlaceMode(true);
-    manager.setPlaceMode(true, (point) => setPointToPlace(point));
-  }, [manager]);
-
-  const exitPlaceMode = useCallback(() => {
-    setPlaceMode(false);
-    setPointToPlace(null);
-    manager?.setPlaceMode(false);
-  }, [manager]);
-
   // Swap between first-person walking and the bird's-eye overview camera.
   const toggleViewMode = useCallback(() => {
     if (!manager) return;
@@ -277,8 +239,6 @@ export default function Dashboard() {
         onSwitchFloor={onFloorChange}
         onOpenTeleport={() => setTeleportOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
-        onEnterBindMode={enterBindMode}
-        onEnterPlaceMode={enterPlaceMode}
         onMove={(x, y) => manager?.camera.setMovement(x, y)}
         viewMode={viewMode}
         onToggleViewMode={toggleViewMode}
@@ -308,32 +268,6 @@ export default function Dashboard() {
             setSettingsOpen(false);
             setModelKey((k) => k + 1);
           }}
-        />
-      )}
-
-      {bindMode && (
-        <div className="bind-banner">
-          <span><Link2 size={18} /> Bind mode — tap an object in the villa to link it to an entity.</span>
-          <button className="btn primary" onClick={exitBindMode}><X size={16} /> Done</button>
-        </div>
-      )}
-
-      {meshToBind && (
-        <BindDialog meshName={meshToBind} onClose={() => setMeshToBind(null)} />
-      )}
-
-      {placeMode && (
-        <div className="bind-banner">
-          <span><MapPin size={18} /> Place mode — tap anywhere in the villa to drop a control there.</span>
-          <button className="btn primary" onClick={exitPlaceMode}><X size={16} /> Done</button>
-        </div>
-      )}
-
-      {pointToPlace && (
-        <MarkerDialog
-          point={pointToPlace}
-          floor={manager?.getCurrentFloor() ?? currentFloor}
-          onClose={() => setPointToPlace(null)}
         />
       )}
 

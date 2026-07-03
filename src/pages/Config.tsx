@@ -1,16 +1,13 @@
 // src/pages/Config.tsx
-// Full-page Config Editor: entity metadata, mesh bindings, markers, thresholds.
+// Full-page Config Editor: entity metadata, mesh bindings.
 
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import ConfigEditor from "@/components/settings/ConfigEditor";
 import BindingsTable from "@/components/settings/BindingsTable";
-import MarkersTable from "@/components/settings/MarkersTable";
-import { useConfig } from "@/config/ConfigContext";
 
 export default function Config() {
   const navigate = useNavigate();
-  const { config, update } = useConfig();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: "var(--bg-base)", color: "var(--text-primary)" }}>
@@ -47,59 +44,6 @@ export default function Config() {
             Bound 3D objects
           </h3>
           <BindingsTable />
-
-          {/* 3 — Floating control markers */}
-          <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 400, marginTop: 40 }}>
-            Floating control markers
-          </h3>
-          <MarkersTable />
-
-          {/* 4 — Alert thresholds */}
-          <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 400, marginTop: 40 }}>
-            Alert thresholds
-          </h3>
-          <p className="muted body-text">
-            Min / max values for numeric sensors. Exceeding the range turns the
-            sensor label red in the scene.
-          </p>
-          <table className="config-table">
-            <thead>
-              <tr><th>Entity</th><th>Min</th><th>Max</th></tr>
-            </thead>
-            <tbody>
-              {Object.entries(config.alertThresholds).map(([id, t]) => (
-                <tr key={id}>
-                  <td style={{ fontSize: 12 }}>{id}</td>
-                  <td>
-                    <input
-                      type="number" value={t.min ?? ""}
-                      onChange={(e) =>
-                        update({
-                          alertThresholds: {
-                            ...config.alertThresholds,
-                            [id]: { ...t, min: e.target.value === "" ? undefined : Number(e.target.value) },
-                          },
-                        })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number" value={t.max ?? ""}
-                      onChange={(e) =>
-                        update({
-                          alertThresholds: {
-                            ...config.alertThresholds,
-                            [id]: { ...t, max: e.target.value === "" ? undefined : Number(e.target.value) },
-                          },
-                        })
-                      }
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
 
         </div>
       </div>
