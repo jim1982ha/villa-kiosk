@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.5.1
+
+### Guests can now tune the look & feel
+- The **Guest** profile can open Settings and use every visualisation / UI
+  option: theme (light/dark/auto), render quality preset, brightness, shadows,
+  live weather, glow, night dimming, device state icons + icon size, eye
+  height, walk speed, natural scrolling and wall collisions.
+- Administration stays owner-only inside the same Settings screen: dashboard
+  title, Home Assistant connection, villa coordinates, room-detection
+  calibration, 3D model source and the Advanced tools (Config Editor,
+  Inspector, backups) are hidden for guests.
+- Saving Settings no longer reconnects the Home Assistant websocket unless the
+  connection details actually changed.
+
 ## 2.5.0
 
 ### Feature: profiles, passcodes and role-based access control

@@ -175,7 +175,10 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
   const save = () => {
     const cleanUrl = normaliseHaUrl(url);
     update({ siteTitle: siteTitle.trim(), haUrl: cleanUrl, haToken: token, latitude: Number(lat), longitude: Number(lng), eyeHeight, walkSpeed, render });
-    if (!ingress) {
+    // Only bounce the websocket when the connection details actually changed —
+    // profiles that can't edit them (guests saving a theme tweak) keep the
+    // live connection untouched.
+    if (!ingress && (cleanUrl !== config.haUrl || token !== config.haToken)) {
       connect(cleanUrl, token).catch(() => {});
     }
     onClose();
@@ -207,16 +210,23 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
         </div>
         <div className="settings-body">
 
-        <label>Dashboard title</label>
-        <input
-          value={siteTitle}
-          onChange={(e) => setSiteTitle(e.target.value)}
-          placeholder={haConfig?.location_name || DEFAULT_SITE_TITLE}
-        />
+        {/* RBAC: shared branding — administration, not personal taste. */}
+        {can("editConfig") && (
+          <>
+            <label>Dashboard title</label>
+            <input
+              value={siteTitle}
+              onChange={(e) => setSiteTitle(e.target.value)}
+              placeholder={haConfig?.location_name || DEFAULT_SITE_TITLE}
+            />
+          </>
+        )}
 
         {/* ── Appearance ──────────────────────────────────────────────────
             Light / Dark / Auto. Applied instantly (config.theme drives the
             data-theme attribute in ConfigContext), and persisted on Save. */}
+        {can("customizeAppearance") && (
+        <>
         <div className="settings-section-title">Appearance</div>
         <div className="segmented" role="group" aria-label="Theme">
           {([
@@ -237,8 +247,10 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
         <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
           Auto follows this device's system light/dark setting.
         </p>
+        </>
+        )}
 
-        {!ingress && (
+        {!ingress && can("editConfig") && (
           <>
             <label>Home Assistant URL</label>
             <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://homeassistant.local:8123" />
@@ -248,18 +260,21 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           </>
         )}
 
-        <div className="row" style={{ gap: 12 }}>
-          <div style={{ flex: 1 }}>
-            <label>Latitude</label>
-            <input value={lat} onChange={(e) => setLat(e.target.value)} />
+        {/* RBAC: villa coordinates drive sun tracking — administration. */}
+        {can("editConfig") && (
+          <div className="row" style={{ gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label>Latitude</label>
+              <input value={lat} onChange={(e) => setLat(e.target.value)} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>Longitude</label>
+              <input value={lng} onChange={(e) => setLng(e.target.value)} />
+            </div>
           </div>
-          <div style={{ flex: 1 }}>
-            <label>Longitude</label>
-            <input value={lng} onChange={(e) => setLng(e.target.value)} />
-          </div>
-        </div>
+        )}
 
-        {!ingress && (
+        {!ingress && can("editConfig") && (
           <>
             <button className="btn ghost mt" style={{ width: "100%" }} onClick={runTest} disabled={testing}>
               <Plug size={18} /> {testing ? "Testing…" : "Test connection"}
@@ -283,6 +298,12 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           </>
         )}
 
+        {/* ── Visual & UI tuning ──────────────────────────────────────────
+            Movement feel, render quality and device icons. Available to any
+            profile with "customizeAppearance" (guests included) — these are
+            per-device comfort settings, not administration. */}
+        {can("customizeAppearance") && (
+        <>
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         <label>Eye height (walking) · {eyeHeight.toFixed(2)} m</label>
@@ -464,30 +485,40 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
         >
           Reset icons to defaults
         </button>
+        </>
+        )}
 
-        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
+        {/* RBAC: room-detection calibration belongs to kiosk administration,
+            not personal visual taste. */}
+        {can("editConfig") && (
+          <>
+            <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
-        <label className="toggle">
-          <input
-            type="checkbox" checked={config.calibrationFlipX}
-            onChange={(e) => update({ calibrationFlipX: e.target.checked })}
-          />
-          <span>Mirror room detection left ↔ right</span>
-        </label>
-        <label className="toggle">
-          <input
-            type="checkbox" checked={config.calibrationFlipZ}
-            onChange={(e) => update({ calibrationFlipZ: e.target.checked })}
-          />
-          <span>Mirror room detection front ↔ back</span>
-        </label>
-        <p className="muted body-text" style={{ marginTop: 6 }}>
-          The app auto-aligns rooms to the model. If the detected room is reversed
-          versus the real villa (e.g. the laundry shows on the wrong side), toggle
-          these to flip it. Updates live.
-        </p>
+            <label className="toggle">
+              <input
+                type="checkbox" checked={config.calibrationFlipX}
+                onChange={(e) => update({ calibrationFlipX: e.target.checked })}
+              />
+              <span>Mirror room detection left ↔ right</span>
+            </label>
+            <label className="toggle">
+              <input
+                type="checkbox" checked={config.calibrationFlipZ}
+                onChange={(e) => update({ calibrationFlipZ: e.target.checked })}
+              />
+              <span>Mirror room detection front ↔ back</span>
+            </label>
+            <p className="muted body-text" style={{ marginTop: 6 }}>
+              The app auto-aligns rooms to the model. If the detected room is reversed
+              versus the real villa (e.g. the laundry shows on the wrong side), toggle
+              these to flip it. Updates live.
+            </p>
+          </>
+        )}
 
-        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
+        {can("manageModel") && (
+          <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
+        )}
 
         {/* ── 3D model source ──────────────────────────────────────────────
             Add-on (Ingress) mode: the model is managed centrally via the add-on

@@ -44,6 +44,9 @@ export interface RolePermissions {
  *  - guest  — comfort, lights, wifi, doors. Never energy, monitoring or
  *             security devices (cameras / motion sensors share the "network"
  *             and "others" buckets, hence the type denials). A/C is clamped.
+ *             May open Settings for the visual/UI options (theme, render
+ *             quality, icons, movement feel) — never connection, calibration,
+ *             model or config administration.
  *  - owner  — sees everything and administers the kiosk (the owner is the
  *             only profile that validates and customises).
  *  - ops    — sees everything to find their way around on site, but the
@@ -53,7 +56,7 @@ export const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
   guest: {
     allowedCategories: ["comfort", "light", "network", "access_control"],
     deniedTypes: ["camera", "binary_sensor"],
-    capabilities: ["controlEntities"],
+    capabilities: ["controlEntities", "openSettings", "customizeAppearance"],
     controlLimits: { climateMin: 22, climateMax: 28 },
   },
   owner: {
