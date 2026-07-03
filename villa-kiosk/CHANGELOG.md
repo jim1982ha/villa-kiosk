@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.4.74
+
+### Fix: found the actual cause of the LED-strip "changes with camera position" look
+- v2.4.72/73 both targeted the strip's dynamic PointLight (the room-wash source)
+  and made no visible difference, because the dynamic light was never what the
+  user was looking at. The visible glowing LINE is the fixture MESH's own
+  emissive surface, and that mesh — SweetHome's Led Line asset — is modelled
+  only **1 cm wide** (3 cm tall, 2.5-3 m long). From nearly any camera distance
+  that's under a pixel on screen, so the rasteriser only lights a scattered
+  handful of sub-pixel samples along the strip's length — which samples "hit"
+  depends on the exact camera position, so the line reads as patchy/broken and
+  visibly reshuffles as the camera moves by even a little. Confirmed straight
+  from the .sh3d source (`width='1.0'`/`depth='1.0'` on all 4 perimeter
+  segments), independent of anything camera- or lighting-related.
+- Fixed at the geometry: `EntityVisuals.inflateThinStrip()` thickens a light
+  fixture mesh's thinnest axis to a 6 cm floor (still reads as a slim cove
+  strip) by nudging vertex positions symmetrically about the mesh's own
+  centre — no SweetHome re-export needed. No-op for normal (non-strip) light
+  fixtures, whose thinnest dimension is already well above the floor.
+
 ## 2.4.73
 
 ### Fix: LED strips read as a chain of separate bulbs, and light pools shifted with the camera

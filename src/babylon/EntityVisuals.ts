@@ -16,7 +16,7 @@
 
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
-  Vector3, Matrix, TransformNode, Ray,
+  Vector3, Matrix, TransformNode, Ray, VertexBuffer,
   type AbstractMesh, type Scene, type Material,
 } from "@babylonjs/core";
 import {
@@ -62,6 +62,16 @@ const LIGHT_RANGE = 2.8;
 const STRIP_MIN_LENGTH = 1.5; // metres — fixture meshes longer than this are "strips"
 const STRIP_DROP_FRACTION = 0.45; // drop the light this fraction of the way to the floor
 const STRIP_DROP_MAX = 1.1; // metres — cap the drop so tall rooms don't put it at knee height
+// SweetHome's Led Line asset is modelled just 1 cm wide (and 3 cm tall) — from
+// almost any camera angle/distance that's under a pixel on screen, so the
+// rasteriser only lights a handful of scattered sub-pixel samples along its
+// 2.5-3 m length. WHICH samples survive depends on the exact camera position,
+// so the visible line looks patchy and seems to shift/break up as the camera
+// moves — this is the actual mechanism behind "the light beams changing based
+// on camera position", not the dynamic PointLight (fixed in v2.4.73, didn't
+// help because it was never the cause). Fix at the geometry: thicken the
+// mesh's thinnest axis to a minimum so it always covers several pixels.
+const MIN_STRIP_THICKNESS = 0.06; // metres (6 cm) — still reads as a slim cove strip
 // Cube shadow maps for point lights are 6 faces each, so keep them small. We cast
 // ONE per light ENTITY (the markers of a strip are clustered, so a single occluder
 // covers them) and only while the light is on, so an idle/off light costs nothing.
@@ -354,6 +364,7 @@ export class EntityVisuals {
         // pipeline), the node position is (0,0,0) for every entity mesh and the
         // actual 3D location is encoded only in vertex data.
         m.computeWorldMatrix(true);
+        this.inflateThinStrip(m);
         const bb = m.getBoundingInfo().boundingBox;
         const pos = bb.centerWorld.clone();
         // Elongated strips are mounted flush against a ceiling or wall; a light
@@ -409,6 +420,31 @@ export class EntityVisuals {
       list.push(map.entityId);
       this.motionToCameraIds.set(map.motionEntityId, list);
     }
+  }
+
+  /** Thicken a mesh's thinnest local axis to MIN_STRIP_THICKNESS, symmetric
+   *  about its own centre on that axis, by editing vertex positions directly
+   *  (no node scaling — the mesh's node transform is identity, see the caller,
+   *  and scaling around the wrong pivot would shift the whole strip sideways
+   *  instead of just thickening it). No-op for anything not razor-thin (normal
+   *  lamp/fixture meshes). */
+  private inflateThinStrip(mesh: AbstractMesh): void {
+    const bb = mesh.getBoundingInfo().boundingBox;
+    const size = bb.maximum.subtract(bb.minimum);
+    const axes: Array<"x" | "y" | "z"> = ["x", "y", "z"];
+    const thin = axes.reduce((a, b) => (size[b] < size[a] ? b : a));
+    if (size[thin] >= MIN_STRIP_THICKNESS || size[thin] <= 1e-6) return;
+
+    const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+    if (!positions) return;
+    const idx = thin === "x" ? 0 : thin === "y" ? 1 : 2;
+    const center = (bb.minimum[thin] + bb.maximum[thin]) / 2;
+    const scale = MIN_STRIP_THICKNESS / size[thin];
+    for (let i = idx; i < positions.length; i += 3) {
+      positions[i] = center + (positions[i] - center) * scale;
+    }
+    mesh.setVerticesData(VertexBuffer.PositionKind, positions, true);
+    mesh.refreshBoundingInfo(false, false);
   }
 
   /** Tear down all entity light sources and their shadow generators. */
