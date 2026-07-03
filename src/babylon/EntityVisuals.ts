@@ -72,6 +72,12 @@ const STRIP_DROP_MAX = 1.1; // metres — cap the drop so tall rooms don't put i
 // help because it was never the cause). Fix at the geometry: thicken the
 // mesh's thinnest axis to a minimum so it always covers several pixels.
 const MIN_STRIP_THICKNESS = 0.06; // metres (6 cm) — still reads as a slim cove strip
+// TEST value (see the z-fighting comment at the call site) — how far to nudge an
+// elongated strip mesh down, away from whatever ceiling/beam detail it may be
+// mounted flush against. If this fixes the flicker, dial in the real fix upstream
+// (lower the piece's Elevation in SweetHome, not this constant) with margin to
+// spare; if it does NOT fix the flicker, z-fighting is ruled out.
+const STRIP_CEILING_CLEARANCE = 0.04; // metres (4 cm)
 // Cube shadow maps for point lights are 6 faces each, so keep them small. We cast
 // ONE per light ENTITY (the markers of a strip are clustered, so a single occluder
 // covers them) and only while the light is on, so an idle/off light costs nothing.
@@ -365,7 +371,23 @@ export class EntityVisuals {
         // actual 3D location is encoded only in vertex data.
         m.computeWorldMatrix(true);
         this.inflateThinStrip(m);
-        const bb = m.getBoundingInfo().boundingBox;
+        let bb = m.getBoundingInfo().boundingBox;
+        {
+          // TEST — z-fighting hypothesis: a cove-mounted strip sits at the exact
+          // ceiling/beam junction, and coincident-or-overlapping surfaces flicker
+          // between which renders on top as the camera angle changes (classic
+          // z-fighting) — matching the reported symptom exactly, and explaining
+          // why nothing lighting-related (v2.4.72-74) changed anything, since
+          // none of those touched the mesh's own vertical clearance. Nudge the
+          // strip mesh itself down a few cm, off whatever it's flush against.
+          const size0 = bb.maximumWorld.subtract(bb.minimumWorld);
+          const longest0 = Math.max(size0.x, size0.y, size0.z);
+          if (longest0 >= STRIP_MIN_LENGTH) {
+            m.position.y -= STRIP_CEILING_CLEARANCE;
+            m.computeWorldMatrix(true);
+            bb = m.getBoundingInfo().boundingBox;
+          }
+        }
         const pos = bb.centerWorld.clone();
         // Elongated strips are mounted flush against a ceiling or wall; a light
         // AT the strip prints a hard hotspot on that surface (or a chain of

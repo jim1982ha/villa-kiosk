@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.4.75
+
+### Test: nudge LED strip meshes down, off whatever they're mounted flush against
+- v2.4.74's geometry fix (thickening the strip's 1cm width to 6cm) did not
+  change the reported flicker either — which rules out sub-pixel aliasing as
+  the (sole) cause and points at something neither of the last three releases
+  touched: the strip's *vertical* position. A cove LED strip is mounted right
+  at the ceiling/wall junction; if it's touching or slightly overlapping a
+  ceiling or beam surface there, the two coincident surfaces "z-fight" —
+  flicker between which one renders on top as the camera angle changes, which
+  matches the reported symptom exactly and would explain why nothing
+  lighting-related has helped.
+- This release nudges elongated fixture meshes down 4cm (`STRIP_CEILING_CLEARANCE`
+  in `EntityVisuals.ts`) purely to test that theory. This is a diagnostic, not
+  a confirmed fix: if the flicker goes away, the real fix is to lower the
+  strip's Elevation in SweetHome 3D with a proper margin; if it doesn't change
+  anything, z-fighting is ruled out too.
+
 ## 2.4.74
 
 ### Fix: found the actual cause of the LED-strip "changes with camera position" look
