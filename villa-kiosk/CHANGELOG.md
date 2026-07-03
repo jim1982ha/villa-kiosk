@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.4.80
+
+### Diagnostic: camera motion-beam now reports WHY it isn't showing
+- After the v2.4.77 radians/degrees fix, a camera set to a real 70° rotation
+  still showed no beam at all — not just aimed wrong, genuinely invisible.
+  That means the beam mesh likely isn't being created in the first place
+  (missing sh3d angle data reaching this camera, a mesh/entity mismatch, or
+  similar), which the code was previously silent about either way.
+- `buildCameraBeams()` and `setBeamActive()` now report through `tapDebug` —
+  a small on-screen log box (bottom-left), NOT the dev-only console logger,
+  so it works on the actual kiosk/tablet, not just in a browser dev console.
+  Enable it with `?debug` in the URL or `localStorage.setItem("villa:debug","1")`
+  then reload. It reports, per camera entity: whether a beam was built, or
+  the exact reason it was skipped (no mesh / no sh3d angle data / angle is
+  zero / no world bounds) — and when motion turns a beam on/off, whether a
+  beam mesh existed for that camera at all.
+- Next step: with `?debug` on, trigger the motion sensor again and read what
+  the on-screen box says — that pinpoints the actual failure instead of
+  guessing at it.
+
 ## 2.4.79
 
 ### Fix: giant vertical "light beam" punching through the ceiling near the sofa

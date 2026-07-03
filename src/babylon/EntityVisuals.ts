@@ -592,30 +592,42 @@ export class EntityVisuals {
    *  qualify; CameraBeams owns the cone geometry and wall clipping. */
   private buildCameraBeams(): void {
     const sources: BeamSource[] = [];
-    if (this.cameraDirections.size > 0) {
-      for (const [entityId, meshes] of this.byEntity) {
-        const map = this.mapping.get(entityId);
-        if (!map || map.type !== "camera" || !meshes.length) continue;
-        const dir2 = this.cameraDirections.get(entityId);
-        if (!dir2) continue;
-        const planar = Math.hypot(dir2.x, dir2.z);
-        if (planar < 1e-6) continue; // no meaningful rotation authored yet
+    // Visible, production-safe diagnostic (tapDebug, not devLog — this needs
+    // to be readable on the actual kiosk tablet via ?debug, not just in a dev
+    // console) for exactly the failure mode "I set a real rotation and still
+    // see no beam at all": report WHICH cameras qualified and which were
+    // skipped, and why, instead of leaving it a silent no-op.
+    const skipped: string[] = [];
+    for (const [entityId, meshes] of this.byEntity) {
+      const map = this.mapping.get(entityId);
+      if (!map || map.type !== "camera") continue;
+      if (!meshes.length) { skipped.push(`${entityId}: no mesh`); continue; }
+      const dir2 = this.cameraDirections.get(entityId);
+      if (!dir2) { skipped.push(`${entityId}: no sh3d angle data`); continue; }
+      const planar = Math.hypot(dir2.x, dir2.z);
+      if (planar < 1e-6) { skipped.push(`${entityId}: angle is 0 (no rotation authored)`); continue; }
 
-        const bounds = this.mergedWorldBounds(meshes);
-        if (!bounds) continue;
-        sources.push({
-          entityId,
-          origin: Vector3.Center(bounds.min, bounds.max),
-          direction: new Vector3(dir2.x / planar, 0, dir2.z / planar),
-        });
-      }
+      const bounds = this.mergedWorldBounds(meshes);
+      if (!bounds) { skipped.push(`${entityId}: no world bounds`); continue; }
+      sources.push({
+        entityId,
+        origin: Vector3.Center(bounds.min, bounds.max),
+        direction: new Vector3(dir2.x / planar, 0, dir2.z / planar),
+      });
+    }
+    if (sources.length || skipped.length) {
+      tapDebug(`camera beams: ${sources.length} built [${sources.map((s) => s.entityId).join(", ")}]`
+        + (skipped.length ? ` | skipped: ${skipped.join("; ")}` : ""));
     }
     this.beams.rebuild(sources, new Set(this.shadowCasters));
   }
 
   /** Turn a camera's beam on/off (driven by its linked motion sensor state). */
   private setBeamActive(entityId: string, on: boolean): void {
-    if (!this.beams.has(entityId)) return;
+    if (!this.beams.has(entityId)) {
+      tapDebug(`beam ${entityId}: motion ${on ? "ON" : "off"} but NO BEAM MESH exists for this camera`);
+      return;
+    }
     this.beams.setActive(entityId, on);
     this.requestRender();
   }
