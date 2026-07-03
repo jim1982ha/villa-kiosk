@@ -1,11 +1,16 @@
 // src/utils/tapDebug.ts
-// A visible, on-screen tap/badge-hit-test diagnostic — deliberately NOT
-// gated behind import.meta.env.DEV like devLog.ts, because the failure this
-// exists to diagnose (a state badge intermittently not responding to taps)
-// has only ever been reproduced on a real production kiosk, never in dev.
+// A visible, on-screen tap/badge-hit-test diagnostic (PLUS a mirrored
+// console.log) — deliberately NOT gated behind import.meta.env.DEV like
+// devLog.ts, because the failures this exists to diagnose (a state badge
+// intermittently not responding to taps, camera-beam mesh lookups, etc.)
+// have only ever been reproduced on a real production kiosk, never in dev.
 // It's opt-in via the same "?debug" URL param / localStorage flag devLog.ts
 // uses, so it costs nothing unless deliberately enabled, and does not appear
-// in the production bundle's behavior for ordinary users.
+// in the production bundle's behavior for ordinary users. The on-screen box
+// is for reading at a glance on a locked-down kiosk tablet with no devtools;
+// the console.log mirror is for whenever real devtools ARE available (e.g.
+// testing from a desktop browser), where the console's native scrollback,
+// search and copy beat a custom on-screen div.
 
 const DEBUG_KEY = "villa:debug";
 
@@ -36,16 +41,19 @@ function ensureBox(): HTMLDivElement {
   return box;
 }
 
-/** Log one line to the on-screen debug box (only visible with ?debug or
- *  localStorage villa:debug=1) — a rolling window of the last several
- *  entries. Kept generous (not just the last few) because one-off summaries
- *  (e.g. camera-beam build results, logged once at load/calibration) would
- *  otherwise get evicted almost immediately by routine per-tap logging like
- *  pickBadgeAt, long before anyone has a chance to read or copy them. */
+/** Log one line to the on-screen debug box AND the browser console (only
+ *  active with ?debug or localStorage villa:debug=1). The on-screen box is a
+ *  rolling window (last 40 entries) for at-a-glance reading on a kiosk
+ *  tablet with no devtools; `console.log` is unbounded and searchable/
+ *  copyable properly whenever real devtools ARE available (e.g. testing from
+ *  a desktop browser pointed at the kiosk) — plain console.log is ordinary
+ *  JS, not stripped in production like devLog.ts's calls are, so this works
+ *  in the deployed build same as the on-screen box does. */
 export function tapDebug(msg: string): void {
   if (!debugEnabled()) return;
-  const el = ensureBox();
   const stamp = new Date().toISOString().slice(11, 23);
+  console.log(`[tapDebug] ${stamp} ${msg}`);
+  const el = ensureBox();
   const lines = (el.dataset.lines ?? "").split("\n").filter(Boolean);
   lines.push(`${stamp} ${msg}`);
   while (lines.length > 40) lines.shift();

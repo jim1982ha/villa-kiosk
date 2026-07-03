@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.4.82
+
+### Improvement: debug logs now also go to the browser console
+- `tapDebug()` (the diagnostic used for the camera-beam investigation, among
+  others) now mirrors every line to `console.log` as well as the on-screen
+  box, prefixed `[tapDebug]`. Plain `console.log` isn't stripped in
+  production the way `devLog.ts`'s calls are, so this works in the deployed
+  build exactly like the on-screen box does — but with the browser
+  console's native scrollback, search and copy, for whenever real devtools
+  ARE available (e.g. testing from a desktop browser pointed at the kiosk)
+  instead of only the kiosk-tablet on-screen fallback.
+
 ## 2.4.81
 
 ### Fix: on-screen debug box couldn't be copied, and evicted its own useful lines too fast
