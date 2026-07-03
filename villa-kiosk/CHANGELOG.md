@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.4.81
+
+### Fix: on-screen debug box couldn't be copied, and evicted its own useful lines too fast
+- The v2.4.80 debug box (`tapDebug`) had `pointer-events:none` — completely
+  unclickable/unselectable by design, so there was no way to actually copy
+  its text off a kiosk tablet with no devtools. Changed to
+  `pointer-events:auto` + `user-select:text` (safe: this element only exists
+  at all when debug mode is deliberately opted into) so it can be
+  long-pressed/dragged to select and copy. Also added scrolling
+  (`max-height:60vh;overflow-y:auto`) and raised the rolling buffer 6 → 40
+  lines, since routine per-tap logs (`pickBadgeAt`, `3D pick`) were evicting
+  one-off summaries — like the camera-beam build report — within seconds.
+
+### What the first debug capture already showed
+- At page load, EVERY camera entity (`garden_and_terrace_cam`, `kitchen_cam`,
+  `swimming_pool_cam`, `garden_public_wall_cam`, `livingroom_cam`,
+  `patio_terrace_cam`) reports "NO BEAM MESH exists" — and the
+  `buildCameraBeams()` summary line never appeared at all. That line only
+  fires when at least one camera-typed entry is found in this session's
+  `byEntity` index; total silence there means NONE of the 6 configured
+  cameras currently have a matching 3D mesh in the loaded model, not just
+  livingroom_cam's rotation being unresolved. That's a different, more basic
+  problem than the angle bug fixed in v2.4.77 — worth confirming directly
+  (can any camera prop be tapped/selected as a 3D object in the villa view
+  at all?) rather than continuing to chase the angle.
+
 ## 2.4.80
 
 ### Diagnostic: camera motion-beam now reports WHY it isn't showing
