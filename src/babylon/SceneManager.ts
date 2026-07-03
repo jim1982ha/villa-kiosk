@@ -9,7 +9,7 @@
 
 import {
   Engine, Scene, Color3, Color4, Vector3, HemisphericLight, Material, PBRMaterial, Ray,
-  HighlightLayer, Mesh,
+  Mesh,
   type AbstractMesh,
 } from "@babylonjs/core";
 import "@babylonjs/core/Debug/debugLayer";
@@ -74,7 +74,7 @@ export class SceneManager {
   private forceContinuous = 0; // ref count for animations/streams
   private loadedMeshes: AbstractMesh[] = [];
   private calibratedPoints: TeleportPoint[] | null = null;
-  private highlightLayer: HighlightLayer | null = null;
+  private highlightedMeshes: AbstractMesh[] = [];
   private viewMode: "first-person" | "overview" = "first-person";
   /** Names of the real (polygon-backed) rooms from the last calibration —
    *  used to exclude them when deriving RoomHighlight's point-only "rooms"
@@ -781,38 +781,44 @@ export class SceneManager {
   }
 
   /**
-   * Build (or rebuild) a HighlightLayer that draws a blue outline around every
-   * mesh that is bound to an entity. Toggled by config.highlightInteractive.
+   * Mark every mesh bound to an entity with a blue outline so it reads as
+   * clickable. Toggled by config.highlightInteractive.
+   *
+   * This used to be a Babylon HighlightLayer (a screen-space glow effect).
+   * HighlightLayer and GlowLayer (used for lit fixtures' emissive glow, see
+   * RenderEnhancements) are both post-process "EffectLayer"s that render the
+   * whole scene into their own off-screen buffer and composite back via a
+   * shared stencil test — Babylon has a long-standing, only partially fixed
+   * limitation where two simultaneously-active EffectLayers corrupt each
+   * other's output exactly where their affected meshes overlap on screen
+   * (BabylonJS/Babylon.js#4463). That's why an LED strip printed broken/cut
+   * segments specifically where it passed near/behind a highlighted curtain
+   * or TV, and why turning highlighting off made it render as a clean line.
+   * `renderOutline` is a per-mesh property drawn in the NORMAL forward pass
+   * (an extruded backface silhouette, depth-tested against the whole scene
+   * like any other mesh) rather than a competing screen-space effect layer,
+   * so it cannot corrupt GlowLayer's output no matter what overlaps it.
    */
   private applyHighlight(meshes: AbstractMesh[]): void {
-    if (this.highlightLayer) {
-      this.highlightLayer.dispose();
-      this.highlightLayer = null;
-    }
-    if (!this.config.highlightInteractive) return;
+    for (const m of this.highlightedMeshes) m.renderOutline = false;
+    this.highlightedMeshes = [];
+    if (!this.config.highlightInteractive) { this.requestRender(); return; }
 
-    const hl = new HighlightLayer("interactiveHL", this.scene);
-    hl.outerGlow = true;
-    hl.blurHorizontalSize = 0.4;
-    hl.blurVerticalSize = 0.4;
     const blue = new Color3(0.25, 0.55, 1.0);
-
     for (const m of meshes) {
       if (!m.isEnabled() || !m.isVisible) continue;
       const mapping = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
       if (!mapping) continue;
-      // Lights use PointLight + emissive colour for feedback; a blue outline
-      // glow on placeholder sphere meshes would make them visible as blue
-      // balls floating at ceiling height.
+      // Lights use PointLight + emissive colour for feedback; an outline on
+      // placeholder sphere meshes would make them visible as blue balls
+      // floating at ceiling height.
       if (mapping.type === "light") continue;
       if (!(m instanceof Mesh)) continue;
-      try {
-        hl.addMesh(m, blue);
-      } catch {
-        // Some meshes (no material, instanced, etc.) can't be highlighted.
-      }
+      m.outlineColor = blue;
+      m.outlineWidth = 0.02;
+      m.renderOutline = true;
+      this.highlightedMeshes.push(m);
     }
-    this.highlightLayer = hl;
     this.requestRender();
   }
 

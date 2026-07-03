@@ -72,12 +72,6 @@ const STRIP_DROP_MAX = 1.1; // metres — cap the drop so tall rooms don't put i
 // help because it was never the cause). Fix at the geometry: thicken the
 // mesh's thinnest axis to a minimum so it always covers several pixels.
 const MIN_STRIP_THICKNESS = 0.06; // metres (6 cm) — still reads as a slim cove strip
-// TEST value (see the z-fighting comment at the call site) — how far to nudge an
-// elongated strip mesh down, away from whatever ceiling/beam detail it may be
-// mounted flush against. If this fixes the flicker, dial in the real fix upstream
-// (lower the piece's Elevation in SweetHome, not this constant) with margin to
-// spare; if it does NOT fix the flicker, z-fighting is ruled out.
-const STRIP_CEILING_CLEARANCE = 0.04; // metres (4 cm)
 // Cube shadow maps for point lights are 6 faces each, so keep them small. We cast
 // ONE per light ENTITY (the markers of a strip are clustered, so a single occluder
 // covers them) and only while the light is on, so an idle/off light costs nothing.
@@ -371,23 +365,7 @@ export class EntityVisuals {
         // actual 3D location is encoded only in vertex data.
         m.computeWorldMatrix(true);
         this.inflateThinStrip(m);
-        let bb = m.getBoundingInfo().boundingBox;
-        {
-          // TEST — z-fighting hypothesis: a cove-mounted strip sits at the exact
-          // ceiling/beam junction, and coincident-or-overlapping surfaces flicker
-          // between which renders on top as the camera angle changes (classic
-          // z-fighting) — matching the reported symptom exactly, and explaining
-          // why nothing lighting-related (v2.4.72-74) changed anything, since
-          // none of those touched the mesh's own vertical clearance. Nudge the
-          // strip mesh itself down a few cm, off whatever it's flush against.
-          const size0 = bb.maximumWorld.subtract(bb.minimumWorld);
-          const longest0 = Math.max(size0.x, size0.y, size0.z);
-          if (longest0 >= STRIP_MIN_LENGTH) {
-            m.position.y -= STRIP_CEILING_CLEARANCE;
-            m.computeWorldMatrix(true);
-            bb = m.getBoundingInfo().boundingBox;
-          }
-        }
+        const bb = m.getBoundingInfo().boundingBox;
         const pos = bb.centerWorld.clone();
         // Elongated strips are mounted flush against a ceiling or wall; a light
         // AT the strip prints a hard hotspot on that surface (or a chain of
@@ -424,11 +402,62 @@ export class EntityVisuals {
       }
     }
 
+    this.mergeStripEntityLights();
     scene.blockMaterialDirtyMechanism = false;
 
     this.buildLabelAnchors();
     this.buildMotionToCameraIndex();
     if (this.config.showEntityLabels) this.rebuildLabels();
+  }
+
+  /** A rectangular LED cove (e.g. the dining-table or sofa-area perimeter) is
+   *  modelled as SEVERAL separate elongated strip meshes — one per side — so
+   *  the per-mesh loop above gives it one PointLight per side: 4 hotspots
+   *  instead of one even wash. GlowLayer's bloom blends those into something
+   *  that reads fine from a distance, but up close (or with the blur
+   *  relatively small vs. the strip's on-screen size) they separate into the
+   *  distinct light "pools" the user does not want ("I want to keep seeing a
+   *  light line, not separate light bulbs"). When EVERY mesh of a light
+   *  entity is an elongated strip, merge their individual PointLights into
+   *  ONE shared light at the merged bounding box's centre — one soft,
+   *  even room-fill instead of N hotspots. Genuinely separate fixtures under
+   *  one entity (e.g. two bedside lamps) don't pass the "every mesh is a
+   *  strip" test, so each keeps its own light exactly as before. */
+  private mergeStripEntityLights(): void {
+    for (const [entityId, meshes] of this.byEntity) {
+      const map = this.mapping.get(entityId);
+      if (!map || map.type !== "light" || meshes.length < 2) continue;
+      const allStrips = meshes.every((m) => {
+        const size = m.getBoundingInfo().boundingBox.maximumWorld.subtract(
+          m.getBoundingInfo().boundingBox.minimumWorld);
+        return Math.max(size.x, size.y, size.z) >= STRIP_MIN_LENGTH;
+      });
+      if (!allStrips) continue;
+
+      const bounds = this.mergedWorldBounds(meshes);
+      if (!bounds) continue;
+      const pos = Vector3.Center(bounds.min, bounds.max);
+      const ray = new Ray(pos, Vector3.Down(), 8);
+      const hit = this.scene.pickWithRay(ray, (candidate) =>
+        !meshes.includes(candidate) && candidate.getTotalVertices() > 0 &&
+        !/^(halo_|label_|marker)/i.test(candidate.name));
+      if (hit?.hit && hit.distance > 0.3) {
+        pos.y -= Math.min(STRIP_DROP_MAX, hit.distance * STRIP_DROP_FRACTION);
+      }
+
+      const seen = new Set<PointLight>();
+      for (const m of meshes) {
+        const l = this.meshLights.get(m.uniqueId);
+        if (l && !seen.has(l)) { seen.add(l); l.dispose(); }
+      }
+      const shared = new PointLight(`elight_${entityId}_merged`, pos, this.scene);
+      shared.intensity = 0;
+      shared.range = LIGHT_RANGE;
+      shared.diffuse = WARM_GLOW.clone();
+      shared.specular = Color3.Black();
+      shared.setEnabled(false);
+      for (const m of meshes) this.meshLights.set(m.uniqueId, shared);
+    }
   }
 
   /** motion binary_sensor -> camera(s) it drives, from the FULL entityMap (not
@@ -473,7 +502,10 @@ export class EntityVisuals {
   private disposeLights(): void {
     this.lightShadows.forEach((g) => g.dispose());
     this.lightShadows.clear();
-    this.meshLights.forEach((l) => l.dispose());
+    // A merged strip entity (mergeStripEntityLights) stores the SAME light
+    // instance under several mesh keys — dedupe before disposing.
+    const seen = new Set<PointLight>();
+    this.meshLights.forEach((l) => { if (!seen.has(l)) { seen.add(l); l.dispose(); } });
     this.meshLights.clear();
   }
 
@@ -595,7 +627,13 @@ export class EntityVisuals {
     const map = this.mapping.get(entity.entity_id);
     if (!meshes || !map) return;
     this.lastState.set(entity.entity_id, entity);
-    for (const mesh of meshes) this.applyToMesh(mesh, map, entity);
+    // Normalise by the number of DISTINCT light objects, not meshes — a merged
+    // strip entity (mergeStripEntityLights) shares ONE light across several
+    // meshes, so it must get the full intensity, not 1/N of it.
+    const lightShare = map.type === "light"
+      ? new Set(meshes.map((m) => this.meshLights.get(m.uniqueId)).filter(Boolean)).size || 1
+      : 1;
+    for (const mesh of meshes) this.applyToMesh(mesh, map, entity, lightShare);
     if (map.type === "light") {
       this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
     }
@@ -1013,7 +1051,7 @@ export class EntityVisuals {
     this.lightShadows.set(entityId, gen);
   }
 
-  private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity): void {
+  private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity, lightShare = 1): void {
     const setEmissive = this.emissiveOf(mesh);
     const setDiffuse = this.diffuseOf(mesh);
 
@@ -1032,13 +1070,14 @@ export class EntityVisuals {
         //    lights for a soft, diffuse spread). Each marker becomes its own
         //    PointLight, and point lights are ADDITIVE — 12 markers at full
         //    intensity would blow out to solid white. Normalise by the number of
-        //    fixture meshes sharing this entity so the whole group reads as one
-        //    fixture's worth of light, regardless of how many markers model it.
+        //    DISTINCT lights sharing this entity (lightShare, computed in apply())
+        //    so the whole group reads as one fixture's worth of light, regardless
+        //    of how many markers/meshes model it or whether they share one merged
+        //    light (mergeStripEntityLights).
         const light = this.meshLights.get(mesh.uniqueId);
         if (light) {
-          const fixtureCount = this.byEntity.get(map.entityId)?.length ?? 1;
           light.diffuse = colour;
-          light.intensity = on ? (MAX_LIGHT_INTENSITY * brightnessFrac) / fixtureCount : 0;
+          light.intensity = on ? (MAX_LIGHT_INTENSITY * brightnessFrac) / lightShare : 0;
           // Drop the light out of (or back into) shaders entirely with its state,
           // so only lights that are actually on add per-pixel cost.
           light.setEnabled(on);

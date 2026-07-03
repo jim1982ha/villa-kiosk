@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.4.76
+
+### Fix: found and fixed the actual cause of the LED-strip breakup (two causes, not one)
+- **Cause 1 (confirmed by a user-provided side-by-side comparison): "Highlight
+  clickable objects" corrupted nearby glowing meshes.** That toggle used a
+  Babylon `HighlightLayer` — a screen-space post-process that, like `GlowLayer`
+  (used for lit fixtures), renders the whole scene into its own off-screen
+  buffer and composites back via a shared stencil test. Two active
+  "EffectLayers" are a long-standing, only partially fixed Babylon limitation
+  (BabylonJS/Babylon.js#4463): they corrupt each other's output exactly where
+  their affected meshes overlap on screen. That's why an LED strip printed
+  broken/cut segments specifically where it passed near a highlighted curtain,
+  TV, etc., and why turning highlighting off made it render as a clean line.
+  Replaced `HighlightLayer` with per-mesh `renderOutline`/`outlineColor` —
+  drawn in the normal forward render pass (an extruded backface silhouette),
+  not a competing screen-space effect layer, so it cannot corrupt any glow no
+  matter what overlaps it. Same blue outline look, no interaction with glow.
+- **Cause 2: a rectangular LED cove (dining-table / sofa-area perimeter) is
+  modelled as 4 separate elongated meshes (one per side), so the room-wash
+  logic gave it 4 separate PointLights — 4 hotspots instead of one even wash.**
+  Bloom blends those into something passable from a distance, but up close
+  they separate into visible "pools" — the "separate light bulbs" look
+  explicitly not wanted. `EntityVisuals.mergeStripEntityLights()` now merges
+  a light entity's PointLights into ONE shared light at the merged bounding
+  box's centre whenever EVERY mesh of that entity is an elongated strip.
+  Genuinely separate fixtures under one entity (e.g. two bedside lamps) are
+  unaffected — they don't pass the "every mesh is a strip" test, so each
+  keeps its own light exactly as before.
+- Removed v2.4.75's unconfirmed z-fighting test nudge (ruled out — the user
+  confirmed no visible change from it).
+- Note: ordinary furniture/plants sitting between the camera and a thin,
+  low-mounted strip WILL still occlude part of it from some angles — that's
+  correct depth-tested 3D rendering, not a bug, and changes with viewpoint by
+  nature. Worth telling apart from the two fixes above when checking results.
+
 ## 2.4.75
 
 ### Test: nudge LED strip meshes down, off whatever they're mounted flush against
