@@ -14,13 +14,19 @@ import {
 } from "@babylonjs/core";
 
 const BEAM_COLOR = new Color3(0.95, 0.15, 0.12);
-const BEAM_TIP_DIAMETER = 0.08;
-const BEAM_END_DIAMETER = 1.6;
+const BEAM_TIP_DIAMETER = 0.12;
+// A short, wide "spotlight" cone — user feedback (2026-07-03) was that the
+// original 6m/1.6m combo read as a long thin streak reaching across multiple
+// rooms, not a beam coming OUT of the camera. Roughly halving the length and
+// nearly doubling the end diameter makes the cone's spread angle much wider
+// for a given reach (before: (1.6/2)/6 ≈ 7.6° half-angle; now: (3.0/2)/3 = 30°
+// half-angle) — reads as a stubby wide-angle spotlight instead of a laser.
+const BEAM_END_DIAMETER = 3.0;
 // How far the beam reaches before being clipped by a single raycast against
 // the villa's structural meshes at build time (walls, furniture — anything
 // that isn't a bound entity). Cameras aimed at open outdoor space use the
 // full length; ones aimed into a room stop at the wall.
-const BEAM_MAX_LENGTH = 6;
+const BEAM_MAX_LENGTH = 3;
 const BEAM_BASE_ALPHA = 0.16;
 const BEAM_PULSE_ALPHA = 0.4;
 

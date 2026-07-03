@@ -634,10 +634,19 @@ export class SceneManager {
         const len = Math.hypot(wx, wz);
         if (len <= 1e-6) continue;
         const pitch = e.pitch ?? 0;
-        // Sign/axis convention unverified against a real tilted camera yet
-        // (same caveat as planAngleToDir's yaw mapping) — if the beam tilts
-        // the wrong way (up instead of down or vice versa) once tested live,
-        // flip this sign.
+        // CONFIRMED live (2026-07-03): positive pitch tilts the beam DOWN, as
+        // expected for a ceiling-mounted security camera looking into the
+        // room — no sign flip needed. Only sensible over roughly 0°..90°
+        // (level -> straight down); beyond 90° cos(pitch) goes negative and
+        // flips the HORIZONTAL component to the opposite compass direction
+        // while the vertical part stays downward (sin stays positive up to
+        // 180°) — mathematically correct for a literal axis rotation (past
+        // vertical the camera is now aiming behind-and-up), but easy to
+        // mistake for a bug: a pitch of e.g. 140° combined with a small yaw
+        // can point the beam at whatever's immediately behind the camera
+        // instead of continuing to tilt "further down", clipping to a
+        // near-invisible stub the instant it hits nearby geometry. Keep pitch
+        // within 0°..90° in SweetHome for an intuitive result.
         const vy = -Math.sin(pitch);
         const horizScale = Math.cos(pitch) / len;
         cameraDirections.set(e.entityId, { x: wx * horizScale, y: vy, z: wz * horizScale });

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.4.85
+
+### Changed: camera motion-beam is a short, wide "spotlight" instead of a long thin streak
+- User feedback after the pitch/tilt work landed: the beam's proportions
+  (6m reach, 1.6m diameter at the far end) read as a long thin laser
+  crossing multiple rooms, not a light coming OUT of the camera. Roughly
+  halved the max reach (6m → 3m) and nearly doubled the far-end diameter
+  (1.6m → 3m), which widens the cone's spread angle from about 7.6°
+  half-angle to 30° — same direction/tilt as before, just a stubby wide
+  spotlight instead of a laser streak.
+
 ## 2.4.84
 
 ### Add: camera tilt (pitch) now steers the motion-detection beam vertically
