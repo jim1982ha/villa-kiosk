@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.4.72
+
+### Fix: line-LED strip fixtures lit unevenly and looked camera-dependent
+- SweetHome 3D's linear LED asset (the "Sweet Home Light" plugin's `Led Line.obj`)
+  is a single long fused mesh (up to ~3 m). Each light fixture only ever got ONE
+  `PointLight`, placed at that mesh's centroid, so the middle of the strip lit
+  the room while the ends — beyond the light's range — stayed dark. A single
+  point source that close to the ceiling/walls also threw a hard specular
+  hotspot that visibly slid across nearby surfaces as the camera moved, which
+  read as the light itself flickering or being inconsistent even though the
+  emitted light never changed.
+- Elongated fixture meshes now get several `PointLight`s sampled along their
+  long axis instead of one at the centre, approximating a continuous linear
+  emitter — the total intensity is normalised across all of them so overall
+  brightness is unchanged. Also zeroed specular/metallic reflectivity on light
+  fixture meshes so their housing reads as a matte diffuser instead of a
+  mirror.
+
 ## 2.4.71
 
 ### Removed: Drop Control Marker and All Clear features

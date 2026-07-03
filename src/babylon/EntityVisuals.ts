@@ -49,6 +49,18 @@ const LIGHT_BASELINE_GLOW = 0.5;
 // range to stay out of the adjacent room, while the entity's representative light
 // is wall-blocked by the per-entity shadow below.
 const LIGHT_RANGE = 2.8;
+// A SweetHome "line light" (e.g. the Sweet Home Light plugin's linear LED strip)
+// exports as ONE long fused mesh, unlike the old multi-marker strips (many small
+// co-located spheres, one PointLight each — see meshLights below). A single
+// PointLight at that one mesh's centroid only lights the middle of the strip;
+// the ends fall outside LIGHT_RANGE and read dark/uneven, and a lone point
+// source close to glossy surfaces produces a hot specular blob that visibly
+// slides as the camera moves — reading as "inconsistent" even though the light
+// itself never changes. Approximate a continuous linear emitter the standard
+// graphics way: sample several PointLights along the mesh's long axis instead
+// of one at its centre, each carrying an even share of the total intensity.
+const STRIP_LIGHT_SPACING = 0.7; // metres between sampled point lights along a long strip
+const STRIP_LIGHT_MAX_SAMPLES = 6; // cap so a very long strip doesn't blow up light/shadow count
 // Cube shadow maps for point lights are 6 faces each, so keep them small. We cast
 // ONE per light ENTITY (the markers of a strip are clustered, so a single occluder
 // covers them) and only while the light is on, so an idle/off light costs nothing.
@@ -167,7 +179,10 @@ export class EntityVisuals {
   // id) so an entity whose fixture is several distinct meshes — e.g. the two
   // bedside lamps that share one HA entity, or multiple curtain-rail downlights —
   // gets a real light at EACH lamp instead of one merged light at their midpoint.
-  private meshLights = new Map<number, PointLight>();
+  // An elongated fixture mesh (a fused "line light" strip) gets SEVERAL lights
+  // sampled along its length rather than one at its centroid — see
+  // STRIP_LIGHT_SPACING above — so the array, not a single PointLight.
+  private meshLights = new Map<number, PointLight[]>();
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
    *  attached to that entity's representative light. Created lazily while the
    *  light is on; a 12-marker strip therefore costs a single shadow map, not 12. */
@@ -326,22 +341,53 @@ export class EntityVisuals {
         }
         const setBaseline = this.emissiveOf(m);
         if (setBaseline) setBaseline(WARM_GLOW.scale(LIGHT_BASELINE_GLOW));
+        // A glossy fixture housing catches specular highlights from the sun/room
+        // lights that visibly slide across the surface as the camera moves —
+        // easy to mistake for the fixture's OWN light looking inconsistent, when
+        // it's actually unrelated reflection. Fixtures should read as diffuse
+        // emitters, not mirrors, regardless of whatever material SweetHome/the
+        // Blender pipeline attached.
+        const mat = m.material;
+        if (mat instanceof StandardMaterial) mat.specularColor = Color3.Black();
+        else if (mat instanceof PBRMaterial) { mat.metallic = 0; mat.roughness = 1; }
         // Use bounding-box centre: when the model came from an OBJ (Blender
         // pipeline), the node position is (0,0,0) for every entity mesh and the
         // actual 3D location is encoded only in vertex data.
         m.computeWorldMatrix(true);
-        const pos = m.getBoundingInfo().boundingBox.centerWorld.clone();
-        const light = new PointLight(`elight_${m.name}_${m.uniqueId}`, pos, this.scene);
-        light.intensity = 0;
-        light.range = LIGHT_RANGE;
-        light.diffuse = WARM_GLOW.clone();
-        // Start DISABLED, not just intensity 0. A disabled light is dropped from
-        // every material's shader light-loop entirely, so an off fixture costs
-        // nothing to compile or shade; it's re-enabled in applyToMesh when the
-        // entity turns on. With most lights off at load, this slashes the active
-        // light count the first frame has to compile shaders for.
-        light.setEnabled(false);
-        this.meshLights.set(m.uniqueId, light);
+        const bb = m.getBoundingInfo().boundingBox;
+        // A fused "line light" strip (SweetHome's linear LED plugin) is ONE long
+        // mesh rather than many small markers. A single PointLight at its centroid
+        // only lights the middle third of the strip — the ends fall outside
+        // LIGHT_RANGE and read dark. Sample several lights along the mesh's long
+        // axis instead, spaced STRIP_LIGHT_SPACING apart, to approximate a
+        // continuous linear emitter (each carries an even share of the total
+        // intensity — see the fixtureCount normalisation in applyToMesh).
+        const size = bb.maximumWorld.subtract(bb.minimumWorld);
+        const longest = Math.max(size.x, size.y, size.z);
+        const sampleCount = Math.min(
+          STRIP_LIGHT_MAX_SAMPLES,
+          Math.max(1, Math.round(longest / STRIP_LIGHT_SPACING) + 1),
+        );
+        const lights: PointLight[] = [];
+        for (let i = 0; i < sampleCount; i++) {
+          // t=0.5 for a single sample (centroid); evenly spread across the full
+          // extent for multiple samples so the outermost lights sit near the
+          // strip's ends, not inset from them.
+          const t = sampleCount === 1 ? 0.5 : i / (sampleCount - 1);
+          const pos = Vector3.Lerp(bb.minimumWorld, bb.maximumWorld, t);
+          const light = new PointLight(`elight_${m.name}_${m.uniqueId}_${i}`, pos, this.scene);
+          light.intensity = 0;
+          light.range = LIGHT_RANGE;
+          light.diffuse = WARM_GLOW.clone();
+          // Start DISABLED, not just intensity 0. A disabled light is dropped from
+          // every material's shader light-loop entirely, so an off fixture costs
+          // nothing to compile or shade; it's re-enabled in applyToMesh when the
+          // entity turns on. With most lights off at load, this slashes the active
+          // light count the first frame has to compile shaders for.
+          light.setEnabled(false);
+          lights.push(light);
+        }
+        this.meshLights.set(m.uniqueId, lights);
       }
     }
 
@@ -369,7 +415,7 @@ export class EntityVisuals {
   private disposeLights(): void {
     this.lightShadows.forEach((g) => g.dispose());
     this.lightShadows.clear();
-    this.meshLights.forEach((l) => l.dispose());
+    this.meshLights.forEach((ls) => ls.forEach((l) => l.dispose()));
     this.meshLights.clear();
   }
 
@@ -491,7 +537,14 @@ export class EntityVisuals {
     const map = this.mapping.get(entity.entity_id);
     if (!meshes || !map) return;
     this.lastState.set(entity.entity_id, entity);
-    for (const mesh of meshes) this.applyToMesh(mesh, map, entity);
+    // Total individual PointLights across every mesh of this entity (a strip
+    // mesh may contribute several — see STRIP_LIGHT_SPACING), so their combined
+    // (additive) contribution normalises to one fixture's worth of light
+    // regardless of how many samples/markers model it.
+    const totalSubLights = map.type === "light"
+      ? meshes.reduce((n, m) => n + (this.meshLights.get(m.uniqueId)?.length ?? 0), 0)
+      : 0;
+    for (const mesh of meshes) this.applyToMesh(mesh, map, entity, totalSubLights);
     if (map.type === "light") {
       this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
     }
@@ -891,11 +944,12 @@ export class EntityVisuals {
     }
     if (existing) return; // already casting
 
-    // Representative light = the first fixture mesh that owns a PointLight.
+    // Representative light = the middle sample of the first fixture mesh that
+    // owns any PointLights (most central to the whole strip's coverage).
     let light: PointLight | undefined;
     for (const m of meshes) {
-      light = this.meshLights.get(m.uniqueId);
-      if (light) break;
+      const ls = this.meshLights.get(m.uniqueId);
+      if (ls && ls.length) { light = ls[Math.floor(ls.length / 2)]; break; }
     }
     if (!light) return;
 
@@ -909,7 +963,7 @@ export class EntityVisuals {
     this.lightShadows.set(entityId, gen);
   }
 
-  private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity): void {
+  private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity, totalSubLights = 0): void {
     const setEmissive = this.emissiveOf(mesh);
     const setDiffuse = this.diffuseOf(mesh);
 
@@ -922,22 +976,28 @@ export class EntityVisuals {
         // 1) The fixture mesh glows.
         setEmissive?.(on ? colour.scale(brightnessFrac) : Color3.Black());
 
-        // 2) This fixture mesh's own light source illuminates the room.
+        // 2) This fixture mesh's own light source(s) illuminate the room.
         //    A single HA light is frequently modelled in SweetHome 3D as MANY
         //    co-located virtual markers (e.g. a LED strip drawn as 8–12 point
-        //    lights for a soft, diffuse spread). Each marker becomes its own
-        //    PointLight, and point lights are ADDITIVE — 12 markers at full
-        //    intensity would blow out to solid white. Normalise by the number of
-        //    fixture meshes sharing this entity so the whole group reads as one
-        //    fixture's worth of light, regardless of how many markers model it.
-        const light = this.meshLights.get(mesh.uniqueId);
-        if (light) {
-          const fixtureCount = this.byEntity.get(map.entityId)?.length ?? 1;
-          light.diffuse = colour;
-          light.intensity = on ? (MAX_LIGHT_INTENSITY * brightnessFrac) / fixtureCount : 0;
-          // Drop the light out of (or back into) shaders entirely with its state,
-          // so only lights that are actually on add per-pixel cost.
-          light.setEnabled(on);
+        //    lights for a soft, diffuse spread), OR as one long fused "line
+        //    light" mesh that we sample into several PointLights ourselves (see
+        //    STRIP_LIGHT_SPACING). Either way, point lights are ADDITIVE — many
+        //    of them at full intensity would blow out to solid white. Normalise
+        //    by the TOTAL number of individual PointLights sharing this entity
+        //    (computed once in apply()) so the whole group reads as one
+        //    fixture's worth of light, regardless of how many markers/samples
+        //    model it.
+        const lights = this.meshLights.get(mesh.uniqueId);
+        if (lights) {
+          const share = totalSubLights || 1;
+          const intensity = on ? (MAX_LIGHT_INTENSITY * brightnessFrac) / share : 0;
+          for (const light of lights) {
+            light.diffuse = colour;
+            light.intensity = intensity;
+            // Drop the light out of (or back into) shaders entirely with its
+            // state, so only lights that are actually on add per-pixel cost.
+            light.setEnabled(on);
+          }
         }
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;
