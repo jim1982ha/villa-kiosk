@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.7.0
+
+### Real night for baked GLBs — day/night atlas crossfade
+
+- A baked GLB rendered a fixed *daytime* image around the clock: the sun and
+  its shadows are painted into the texture, so after sunset the app could only
+  dim the whole picture (exposure × ~0.6), and a dimmed sunny photo still
+  reads as day — "how come I see sun light and shadows while the sun is set."
+- The pipeline (v2.1.0) now bakes a SECOND, sun-free night atlas (dark
+  moonlit sky + low warm interior fill) sharing the same UV layout, shipped as
+  the base-colour texture of a `BAKED_Structure_Night` material on a hidden
+  microscopic carrier plane (glTF can't ship an unreferenced texture).
+- The app detects that material, disables the carrier, mounts the night image
+  in the day material's emissive slot (Babylon's PBR shader adds emissive even
+  on unlit materials), and crossfades albedo↓/emissive↑ with the real sun —
+  ramping over civil twilight (0→1 as the sun sinks 0→6° below the horizon),
+  so dusk is a gradual ~25-minute fade, not a snap.
+- With a night atlas present the old night exposure dim is OFF (the night bake
+  is already dark; dimming would double-darken). Single-atlas baked GLBs and
+  non-baked GLBs behave exactly as before.
+- Requires re-running the bake with pipeline ≥2.1.0 to get the night look;
+  existing GLBs keep working unchanged. New pipeline dials:
+  `--night-sky-strength` (default 0.10), `--night-fill` (default 0.30),
+  `--bake-day-only` to skip the second pass.
+
 ## 2.6.3
 
 ### "Others" category icon no longer reads like the overflow menu

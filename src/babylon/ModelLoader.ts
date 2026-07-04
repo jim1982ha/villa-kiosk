@@ -2,7 +2,7 @@
 // Load a GLB into the scene from an ArrayBuffer (IndexedDB) or an uploaded File,
 // and persist uploads to IndexedDB so a refresh doesn't re-upload.
 
-import { SceneLoader, Material, DracoCompression, type AbstractMesh, type Scene } from "@babylonjs/core";
+import { SceneLoader, Material, Color3, DracoCompression, type AbstractMesh, type Scene } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 // Bundle the Draco decoder from @babylonjs/core so a Draco-compressed GLB loads
 // WITHOUT hitting Babylon's default CDN — required for the offline HA-Ingress
@@ -28,6 +28,14 @@ export interface LoadResult {
   meshes: AbstractMesh[];
   /** True when the GLB carries pre-baked lighting (see BAKED_MATERIAL_PREFIX). */
   baked: boolean;
+  /**
+   * Present when the GLB also carries a second, sun-free NIGHT atlas
+   * (pipeline ≥2.1.0). Call with 0 = full day atlas … 1 = full night atlas;
+   * SunController drives it from the real sun altitude so the structure
+   * crossfades to a genuinely dark bake after sunset instead of just dimming
+   * the (sunlit) day image.
+   */
+  nightBlend?: (t: number) => void;
 }
 
 // A GLB produced by blender_pipeline.py --bake names its lit-structure material
@@ -38,6 +46,15 @@ export interface LoadResult {
 // whole contract between pipeline and app: no sidecar files, no custom glTF
 // extensions, and a GLB without it behaves exactly as before this existed.
 const BAKED_MATERIAL_PREFIX = "BAKED_";
+// Pipeline ≥2.1.0 additionally ships a sun-free NIGHT bake of the same atlas
+// layout: a microscopic hidden plane ("BAKED_NightCarrier") wears a material
+// matching this test whose base-colour texture is the night atlas (glTF can't
+// ship an unreferenced texture). We lift that texture into the day material's
+// EMISSIVE slot — Babylon's PBR shader adds emissive even in unlit mode — so
+// day↔night is a two-scalar crossfade: albedoColor scales the day image down
+// while emissiveColor scales the night image up. Both bakes share TEXCOORD_0,
+// so the images stay texel-aligned through the fade.
+const BAKED_NIGHT_RE = /night/i;
 
 // Babylon caps the lights a material's shader handles at once (default 4). A LED
 // strip is modelled as many co-located point lights, so a wall/floor near one can
@@ -103,6 +120,16 @@ export async function loadModelInto(
     const glassMats = new Set<string>();
     const allMats = new Set<string>();
     let baked = false;
+    type BakedMat = {
+      name?: string;
+      unlit?: boolean;
+      albedoTexture?: unknown;
+      emissiveTexture?: unknown;
+      albedoColor?: Color3;
+      emissiveColor?: Color3;
+    };
+    const bakedDayMats = new Set<BakedMat>();
+    let nightMat: BakedMat | null = null;
     for (const m of result.meshes) {
       const mat = m.material as
         | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean; roughness?: number; metallic?: number; forceDepthWrite?: boolean; unlit?: boolean }
@@ -116,8 +143,17 @@ export async function loadModelInto(
       // later pass) matters because a fused Structure imports as one Babylon
       // mesh PER glTF primitive, all sharing this material instance.
       if (mat.name?.startsWith(BAKED_MATERIAL_PREFIX) && "unlit" in mat) {
+        if (BAKED_NIGHT_RE.test(mat.name)) {
+          // Night-atlas carrier: keep the material (it owns the texture) but
+          // the micro-plane itself must never render or catch a tap.
+          nightMat = mat as BakedMat;
+          m.setEnabled(false);
+          m.isPickable = false;
+          continue;
+        }
         mat.unlit = true;
         baked = true;
+        bakedDayMats.add(mat as BakedMat);
       }
 
       if (looksLikeGlass([mat.name, m.name], glassHints)) {
@@ -163,6 +199,25 @@ export async function loadModelInto(
         "dynamic light simulation will be disabled scene-wide");
     }
 
+    // Wire the day↔night crossfade when the GLB carries a night atlas.
+    let nightBlend: ((t: number) => void) | undefined;
+    const nightTex = nightMat?.albedoTexture;
+    if (baked && nightTex && bakedDayMats.size > 0) {
+      for (const dm of bakedDayMats) {
+        dm.emissiveTexture = nightTex; // samples the day material's TEXCOORD_0
+        dm.emissiveColor = Color3.Black(); // start at full day
+      }
+      nightBlend = (t: number) => {
+        const day = 1 - t;
+        for (const dm of bakedDayMats) {
+          dm.albedoColor = new Color3(day, day, day);
+          dm.emissiveColor = new Color3(t, t, t);
+        }
+      };
+      devLog("[ModelLoader] night atlas found (" + (nightMat?.name ?? "?") +
+        ") — day/night handled by texture crossfade instead of exposure dimming");
+    }
+
     // A custom-imported window (e.g. window_3x1) can carry a material whose name
     // has no glass keyword, so it slips past the name match above and stays a grey
     // panel. Rather than guess, find the geometry that LOOKS like a pane — a large,
@@ -196,7 +251,7 @@ export async function loadModelInto(
         panes,
       );
     }
-    return { meshes: result.meshes, baked };
+    return { meshes: result.meshes, baked, nightBlend };
   } finally {
     URL.revokeObjectURL(url);
   }

@@ -483,10 +483,13 @@ export class SceneManager {
     // indexMeshes below (that's where per-entity PointLights would be created),
     // and renderFx BEFORE sun (SunController's exposure write must be the
     // final word — all its call paths run after renderFx.apply()).
-    if (result.baked) devLog("[SceneManager] baked mode ON — dynamic lighting disabled");
+    if (result.baked) {
+      devLog("[SceneManager] baked mode ON — dynamic lighting disabled" +
+        (result.nightBlend ? "; night atlas present (day/night crossfade)" : ""));
+    }
     this.visuals.setBakedMode(result.baked);
     this.renderFx.setBakedMode(result.baked);
-    this.sun.setBakedMode(result.baked);
+    this.sun.setBakedMode(result.baked, result.nightBlend);
 
     this.normalizeScale(result.meshes); // bring to metres BEFORE recentring
     this.recenterModel(result.meshes); // align to origin BEFORE indexing positions

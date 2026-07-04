@@ -21,6 +21,11 @@ export class SunController {
   // first-person so the real sky shows through the windows again.
   private bgOverride: Color4 | null = null;
   private baked = false;
+  // Crossfade hook for dual-atlas baked GLBs (pipeline ≥2.1.0): 0 = day
+  // atlas, 1 = the sun-free night atlas. Provided by ModelLoader when the
+  // GLB carries a BAKED_Structure_Night texture; null = single-atlas GLB,
+  // where night falls back to the exposure dim below.
+  private nightBlend: ((t: number) => void) | null = null;
 
   constructor(
     scene: Scene,
@@ -44,12 +49,16 @@ export class SunController {
   /**
    * Baked-lighting GLB loaded: the structure is unlit, so changing the sun/hemi
    * intensities does nothing to it — night ambience is instead conveyed through
-   * a scene-wide exposure drop (see applyDayNight). The lights above still run
-   * at their usual values for the ENTITY meshes, which stay lit PBR.
+   * the `nightBlend` texture crossfade when the GLB ships a night atlas, or a
+   * scene-wide exposure drop when it doesn't (see applyDayNight). The lights
+   * above still run at their usual values for the ENTITY meshes, which stay
+   * lit PBR. Always re-applies (no early-out): a model reload passes a NEW
+   * blend closure over the new materials — keeping the old one would drive
+   * disposed materials.
    */
-  setBakedMode(baked: boolean): void {
-    if (this.baked === baked) return;
+  setBakedMode(baked: boolean, nightBlend?: (t: number) => void): void {
     this.baked = baked;
+    this.nightBlend = nightBlend ?? null;
     this.applyRealSun();
   }
 
@@ -87,17 +96,23 @@ export class SunController {
       -Math.cos(azimuth) * Math.cos(altitude),
     ).normalize();
 
-    this.applyDayNight(isDay, dir);
+    // Night-atlas crossfade factor: ramp 0→1 as the sun sinks from the
+    // horizon to 6° below it (civil twilight), so the baked day image fades
+    // into the night bake over ~25 real minutes instead of snapping.
+    const TWILIGHT = (6 * Math.PI) / 180;
+    const nightT = Math.min(1, Math.max(0, -altitude / TWILIGHT));
+
+    this.applyDayNight(isDay, dir, nightT);
   }
 
   /** Override from HA sun.sun entity ("above_horizon" | "below_horizon"). */
   applyHaSunState(state: string): void {
     const isDay = state === "above_horizon";
     const dir = isDay ? new Vector3(-0.4, -1, -0.6) : new Vector3(-0.2, -1, -0.2);
-    this.applyDayNight(isDay, dir.normalize());
+    this.applyDayNight(isDay, dir.normalize(), isDay ? 0 : 1);
   }
 
-  private applyDayNight(isDay: boolean, dir: Vector3): void {
+  private applyDayNight(isDay: boolean, dir: Vector3, nightT: number = isDay ? 0 : 1): void {
     // Render-quality multipliers let Settings rebalance the key light + fill
     // without touching the day/night base values here.
     const r = this.config.render ?? DEFAULT_RENDER;
@@ -142,15 +157,27 @@ export class SunController {
     // dark. (renderFx owns whether the texture exists; we own how much it counts.)
     if (r.ibl) this.scene.environmentIntensity = r.environmentIntensity * (isDay ? 1 : lerp(0.4, 0.12));
 
-    // Baked mode: the structure's texture is a fixed daytime render, so the only
-    // way to sell "night" is post-processing. Scale the user's exposure down
-    // after dark, deepening with nightDimming. This deliberately runs AFTER
-    // renderFx.applyToneMapping wrote cfg.exposure (all call paths order
-    // renderFx.apply() before the sun pass — same ownership discipline as the
-    // hemi fill above), so this write is the final word on exposure.
+    // Baked mode, two flavours:
+    // • Dual-atlas GLB (pipeline ≥2.1.0): crossfade the structure between its
+    //   day and sun-free night bakes — real darkness, no phantom sun shadows.
+    //   Exposure stays at the user's daytime value: the night atlas is
+    //   ALREADY dark (baked with no sun, dim sky, low warm fill), so dimming
+    //   on top would double-darken it.
+    // • Single-atlas GLB: the texture is a fixed daytime render, so the only
+    //   way to sell "night" is post-processing — scale the user's exposure
+    //   down after dark, deepening with nightDimming. Either way this runs
+    //   AFTER renderFx.applyToneMapping wrote cfg.exposure (all call paths
+    //   order renderFx.apply() before the sun pass — same ownership
+    //   discipline as the hemi fill above), so this write is the final word
+    //   on exposure.
     if (this.baked) {
-      this.scene.imageProcessingConfiguration.exposure =
-        r.exposure * (isDay ? 1 : lerp(1, 0.45));
+      if (this.nightBlend) {
+        this.nightBlend(nightT);
+        this.scene.imageProcessingConfiguration.exposure = r.exposure;
+      } else {
+        this.scene.imageProcessingConfiguration.exposure =
+          r.exposure * (isDay ? 1 : lerp(1, 0.45));
+      }
     }
 
     // Drive the procedural sky from the same sun direction (it shows through the
