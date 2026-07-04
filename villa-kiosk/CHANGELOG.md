@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.7.1
+
+### Fix night crossfade washing the whole villa in white glow
+
+- First real-world night with a dual-atlas GLB (v2.7.0) looked WORSE than
+  before: a scene-wide milky white halo. Root cause: the night image rides in
+  the structure material's emissive slot (that's the crossfade mechanism), and
+  the GlowLayer — which blooms anything emissive so lit fixtures stand out —
+  happily bloomed the entire villa like one giant LED strip after sunset.
+- The baked structure meshes are now excluded from the GlowLayer (stored
+  exclusion, survives the layer's lazy creation and re-creation). Entity
+  fixtures keep their glow untouched.
+- Pipeline 2.1.1 companion fix: the villa model has no ceilings (top-down
+  authoring), so the night bake's ambient fill lit every room straight from
+  above — at the 2.1.0 defaults the night atlas was a flat warm wash at ~40%
+  of daytime. Night defaults dropped to `--night-fill 0.10` +
+  `--night-sky-strength 0.05` (~15% of daytime). A re-bake with pipeline
+  ≥2.1.1 is needed for the darker night texture; the glow fix applies to the
+  existing GLB immediately.
+
 ## 2.7.0
 
 ### Real night for baked GLBs — day/night atlas crossfade

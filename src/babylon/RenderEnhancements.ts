@@ -51,6 +51,7 @@ export class RenderEnhancements {
   private meshes: AbstractMesh[] = [];
   private cfg: RenderConfig | null = null;
   private baked = false;
+  private glowExcluded: Mesh[] = [];
 
   constructor(scene: Scene, sun: DirectionalLight) {
     this.scene = scene;
@@ -76,6 +77,22 @@ export class RenderEnhancements {
     if (this.baked === baked) return;
     this.baked = baked;
     if (this.cfg) this.apply(this.cfg);
+  }
+
+  /**
+   * Keep these meshes out of the GlowLayer's emissive pass. Needed for the
+   * dual-atlas baked structure: its night image rides in the material's
+   * EMISSIVE slot (that's how the day/night crossfade works, see ModelLoader),
+   * and without this the GlowLayer blooms the ENTIRE villa after sunset like
+   * one giant lit fixture — a scene-wide washed-out white halo. Stored, not
+   * just applied: the GlowLayer is created lazily in applyGlow, possibly
+   * after the model loads, so the exclusion must survive (re)creation.
+   */
+  excludeFromGlow(meshes: AbstractMesh[]): void {
+    this.glowExcluded = meshes.filter((m): m is Mesh => m instanceof Mesh);
+    if (this.glow) {
+      for (const m of this.glowExcluded) this.glow.addExcludedMesh(m);
+    }
   }
 
   /** Apply the full render config. Idempotent — safe to call on every change. */
@@ -262,6 +279,7 @@ export class RenderEnhancements {
           mainTextureRatio: 0.5, // half-res blur target — glow is inherently soft, doesn't need full-res
           blurKernelSize: 32,
         });
+        for (const m of this.glowExcluded) this.glow.addExcludedMesh(m);
       }
       this.glow.isEnabled = true;
       this.glow.intensity = cfg.glowIntensity;

@@ -25,7 +25,7 @@ import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
 import { WeatherEffects } from "./WeatherEffects";
 import { RenderEnhancements } from "./RenderEnhancements";
-import { loadModelInto } from "./ModelLoader";
+import { loadModelInto, BAKED_MATERIAL_PREFIX } from "./ModelLoader";
 import { applyGrassGround } from "./GroundGrass";
 import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
 import { axisWorldScale } from "./meshUnits";
@@ -490,6 +490,13 @@ export class SceneManager {
     this.visuals.setBakedMode(result.baked);
     this.renderFx.setBakedMode(result.baked);
     this.sun.setBakedMode(result.baked, result.nightBlend);
+    if (result.baked) {
+      // The baked structure must never bloom: with a night atlas its material
+      // carries a full-villa emissive texture (the crossfade mechanism), which
+      // the GlowLayer would otherwise smear into a scene-wide white halo.
+      this.renderFx.excludeFromGlow(result.meshes.filter(
+        (m) => m.material?.name?.startsWith(BAKED_MATERIAL_PREFIX)));
+    }
 
     this.normalizeScale(result.meshes); // bring to metres BEFORE recentring
     this.recenterModel(result.meshes); // align to origin BEFORE indexing positions
