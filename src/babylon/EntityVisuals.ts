@@ -16,8 +16,8 @@
 
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
-  Vector3, Matrix, TransformNode, Ray, VertexBuffer,
-  type AbstractMesh, type Scene, type Material,
+  Vector3, Matrix, TransformNode, Ray, VertexBuffer, Material,
+  type AbstractMesh, type Scene,
 } from "@babylonjs/core";
 import {
   AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel, Image,
@@ -95,13 +95,20 @@ const LED_HOUSING_COLOR = new Color3(0.8, 0.79, 0.77);
 // GlowLayer halo need several on-screen pixels to read as one continuous
 // line. When the light is OFF that same bar is just dead geometry, and no
 // base colour can make a 6cm slab at ceiling height look like the ~1cm
-// recessed channel it really is. So the OFF state fades the mesh itself:
-// mostly transparent, it reads as a faint seam hinting where the strip runs.
-// Alpha (mesh.visibility) does not affect pickability, so an off strip stays
-// clickable exactly where its faint trace shows. Only meshes tagged
-// __inflatedStrip get this treatment — real lamp geometry keeps full
+// recessed channel it really is. So the OFF state turns the strip
+// see-through — the SAME technique as window glass (ModelLoader): material
+// alpha + MATERIAL_ALPHABLEND + forceDepthWrite. Material-level alpha rather
+// than mesh.visibility on purpose: forceDepthWrite is a material flag, and
+// without depth writing Babylon sorts transparent meshes back-to-front per
+// frame, which can flip against the (also transparent) glass walls as the
+// camera moves — the exact appear/disappear glitch ModelLoader documents for
+// glass vs. strips. Transparency does not affect pickability, so an off
+// strip stays clickable exactly where its faint trace shows. Only meshes
+// tagged __inflatedStrip get this treatment — real lamp geometry keeps full
 // visibility when off (a physical lamp doesn't vanish when switched off).
-const STRIP_OFF_VISIBILITY = 0.22;
+// When the light is ON, applyToMesh restores alpha 1 + MATERIAL_OPAQUE, so
+// the on-state render path is byte-identical to before this existed.
+const STRIP_OFF_ALPHA = 0.25; // slightly clearer than window glass (0.38)
 // A rectangular LED cove (dining-table/sofa perimeter) is built from 4
 // separate straight strip pieces (top/bottom/left/right), one per side. Their
 // authored endpoints don't always reach far enough to overlap at the
@@ -628,6 +635,12 @@ export class EntityVisuals {
     const mat = mesh.material;
     if (mat instanceof StandardMaterial) mat.diffuseColor = LED_HOUSING_COLOR.clone();
     else if (mat instanceof PBRMaterial) mat.albedoColor = LED_HOUSING_COLOR.clone();
+    // Same depth-sort fix as window glass (see ModelLoader): while the strip
+    // is alpha-blended (OFF state), keep writing depth so its draw order
+    // can't flip against the glass walls as the camera moves. Harmless while
+    // opaque (ON) — opaque geometry writes depth anyway. Set once here; the
+    // per-state alpha/transparencyMode toggle lives in applyToMesh.
+    if (mat) mat.forceDepthWrite = true;
     mesh.metadata = { ...(mesh.metadata ?? {}), __inflatedStrip: true };
 
     const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
@@ -1232,10 +1245,18 @@ export class EntityVisuals {
         setEmissive?.(on ? colour.scale(brightnessFrac) : Color3.Black());
 
         // An artificially-inflated LED strip bar is only meant to be seen
-        // while it IS the light — off, it fades to a faint trace instead of
-        // sitting at the ceiling as a solid 6cm slab (see STRIP_OFF_VISIBILITY).
+        // while it IS the light — off, it goes window-glass transparent
+        // instead of sitting at the ceiling as a solid 6cm slab; on, it's
+        // fully opaque again so the glow renders exactly as always (see
+        // STRIP_OFF_ALPHA for why material alpha, not mesh.visibility).
         if (mesh.metadata?.__inflatedStrip) {
-          mesh.visibility = on ? 1 : STRIP_OFF_VISIBILITY;
+          const stripMat = mesh.material;
+          if (stripMat) {
+            stripMat.alpha = on ? 1 : STRIP_OFF_ALPHA;
+            stripMat.transparencyMode = on
+              ? Material.MATERIAL_OPAQUE
+              : Material.MATERIAL_ALPHABLEND;
+          }
         }
 
         // 2) This fixture mesh's own light source illuminates the room.

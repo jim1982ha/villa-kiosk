@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.5.5
+
+### LED strips: off state now uses window-glass transparency
+- The off-state fade now uses the exact same rendering technique as window
+  panes (ModelLoader's glass handling): material alpha (0.25) with
+  MATERIAL_ALPHABLEND and forceDepthWrite, instead of 2.5.4's mesh.visibility.
+  Visually similar, but technically safer: forceDepthWrite keeps the
+  transparent strip writing depth, so its draw order can't flip against the
+  (also transparent) glass walls as the camera moves — the same
+  camera-angle-dependent appear/disappear glitch already documented and fixed
+  for glass-vs-strip in v2.4.83. When the light turns ON the material is
+  restored to fully opaque (alpha 1, MATERIAL_OPAQUE), so the on-state glow
+  render path is exactly the same as 2.5.2's confirmed-good behaviour.
+
 ## 2.5.4
 
 ### LED strips: off state fades out instead of painting a black frame
