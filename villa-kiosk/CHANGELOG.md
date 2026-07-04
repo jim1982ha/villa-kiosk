@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.6.1
+
+### Top bar no longer overflows the screen on phones
+
+- **Fixed:** on narrow screens the header buttons (category filter + right-side
+  controls) ran past the screen edge and overlapped. The centre grid track was
+  `auto`, so it always claimed its full content width no matter how many
+  category buttons the active profile/config produced.
+- The category pill now takes only the width left over between the brand and
+  the right-side controls, at ANY screen width and ANY button count. When the
+  buttons don't fit, the pill pans horizontally (touch swipe / trackpad /
+  wheel) instead of pushing anything off-screen; `overscroll-behavior` keeps
+  the pan from leaking into the 3D canvas.
+- Edge fades on the pill show when more buttons exist to the left/right,
+  driven by real scroll metrics (updated on scroll, resize/rotation and
+  category-set changes) — scrollbars stay hidden.
+- The category row is now an accessible `toolbar` landmark.
+
 ## 2.6.0
 
 ### Photo-realistic baked lighting (pre-computed, offline) — full revamp

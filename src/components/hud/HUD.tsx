@@ -91,6 +91,29 @@ export default function HUD({
     ? CATEGORY_ORDER.filter((c) => isCategoryAllowed(role, c))
     : CATEGORY_ORDER;
 
+  // The category pill scrolls horizontally when its (variable) button count
+  // exceeds the width its grid track got. CSS can't know whether the row
+  // actually overflows, so the edge-fade "more buttons this way" hints are
+  // toggled here from real scroll metrics — re-measured on scroll, on any
+  // resize/rotation (ResizeObserver) and when the category set changes.
+  const catRowRef = useRef<HTMLDivElement | null>(null);
+  const [catFade, setCatFade] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = catRowRef.current;
+    if (!el) return;
+    const measure = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      const left = max > 1 && el.scrollLeft > 1;
+      const right = max > 1 && el.scrollLeft < max - 1;
+      setCatFade((p) => (p.left === left && p.right === right ? p : { left, right }));
+    };
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", measure); ro.disconnect(); };
+  }, [visibleCategories.length]);
+
   // Tap = jump to this device's saved default view; long-press / right-click
   // = (re)define it as the current framing (same tap-vs-hold convention as
   // the Rooms menu's re-anchor gesture and the in-scene badge gestures). A
@@ -160,7 +183,12 @@ export default function HUD({
         {/* Category filter: which device categories show their state tag on
             the map. Lit = category shown. Icon + tooltip only, no text. */}
         <div className="hud-center">
-          <div className="hud-group">
+          <div
+            ref={catRowRef}
+            className={`hud-group hud-group-scroll${catFade.left ? " fade-left" : ""}${catFade.right ? " fade-right" : ""}`}
+            role="toolbar"
+            aria-label="Device category filters"
+          >
             {visibleCategories.map((cat) => {
               const hidden = config.hiddenCategories.includes(cat);
               const Icon = CATEGORY_ICONS[cat];
