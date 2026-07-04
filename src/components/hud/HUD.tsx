@@ -14,6 +14,7 @@ import {
   Home, Grid3x3, Settings, Map,
   PersonStanding, Sparkles, Tag, Info, Anchor, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, MoreHorizontal,
+  EllipsisVertical,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -114,6 +115,27 @@ export default function HUD({
     return () => { el.removeEventListener("scroll", measure); ro.disconnect(); };
   }, [visibleCategories.length]);
 
+  // On narrow screens the right-side controls (view mode, Settings, switch
+  // profile) collapse into ONE overflow button with a dropdown — CSS decides
+  // which of the two renderings is visible (same breakpoint as the rest of
+  // the compact bar), this state only drives the dropdown. Closes on outside
+  // tap and Escape, and after any action is chosen.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
   // Tap = jump to this device's saved default view; long-press / right-click
   // = (re)define it as the current framing (same tap-vs-hold convention as
   // the Rooms menu's re-anchor gesture and the in-scene badge gestures). A
@@ -208,34 +230,84 @@ export default function HUD({
           </div>
         </div>
 
-        {/* Profile chip, Settings (when permitted), then the view toggle. */}
+        {/* Profile chip, Settings (when permitted), then the view toggle.
+            Rendered twice: inline on roomy screens, collapsed into a single
+            overflow-menu button on phones (CSS shows exactly one of the two). */}
         <div className="hud-right">
-          {role && (
-            <span className="hud-profile" title={`Signed in as ${ROLE_LABELS[role]}`}>
-              <span className="hud-profile-name">{ROLE_LABELS[role]}</span>
-              <button
-                className="icon-btn"
-                onClick={logout}
-                title="Switch profile"
-                aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
-              >
-                <LogOut size={16} />
+          <div className="hud-right-inline">
+            {role && (
+              <span className="hud-profile" title={`Signed in as ${ROLE_LABELS[role]}`}>
+                <span className="hud-profile-name">{ROLE_LABELS[role]}</span>
+                <button
+                  className="icon-btn"
+                  onClick={logout}
+                  title="Switch profile"
+                  aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
+                >
+                  <LogOut size={16} />
+                </button>
+              </span>
+            )}
+            {canOpenSettings && (
+              <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
+                <Settings size={20} />
               </button>
-            </span>
-          )}
-          {canOpenSettings && (
-            <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
-              <Settings size={20} />
+            )}
+            <button
+              className={`icon-btn${overviewActive ? " active" : ""}`}
+              onClick={onToggleViewMode}
+              title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
+              aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
+            >
+              {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
             </button>
-          )}
-          <button
-            className={`icon-btn${overviewActive ? " active" : ""}`}
-            onClick={onToggleViewMode}
-            title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-            aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-          >
-            {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
-          </button>
+          </div>
+
+          <div className="hud-overflow" ref={menuRef}>
+            <button
+              className={`icon-btn${menuOpen ? " active" : ""}`}
+              onClick={() => setMenuOpen((o) => !o)}
+              title="Menu"
+              aria-label="Menu"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              <EllipsisVertical size={19} />
+            </button>
+            {menuOpen && (
+              <div className="hud-menu" role="menu" aria-label="View, settings and profile">
+                {role && <div className="hud-menu-header">Signed in as {ROLE_LABELS[role]}</div>}
+                <button
+                  role="menuitem"
+                  className="hud-menu-item"
+                  onClick={() => { setMenuOpen(false); onToggleViewMode(); }}
+                >
+                  {overviewActive ? <PersonStanding size={18} /> : <Map size={18} />}
+                  <span>{overviewActive ? "First-person view" : "Overview view"}</span>
+                </button>
+                {canOpenSettings && (
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    onClick={() => { setMenuOpen(false); onOpenSettings(); }}
+                  >
+                    <Settings size={18} />
+                    <span>Settings</span>
+                  </button>
+                )}
+                {role && (
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    onClick={() => { setMenuOpen(false); logout(); }}
+                  >
+                    <LogOut size={18} />
+                    <span>Switch profile</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

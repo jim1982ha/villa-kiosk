@@ -262,6 +262,37 @@ button {
 .hud-brand svg { color: var(--accent); flex: 0 0 auto; }
 .hud-center { justify-self: center; display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%; }
 .hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
+.hud-right-inline { display: flex; align-items: center; gap: 12px; }
+
+/* Overflow menu: on phones the right-side controls (view mode, Settings,
+   switch profile) collapse into this single button + dropdown. Hidden on
+   roomy screens where the inline buttons fit; the compact-bar media query
+   below swaps the two. */
+.hud-overflow { position: relative; display: none; }
+.hud-menu {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  min-width: 210px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--bg-panel); backdrop-filter: blur(8px);
+  border: 1px solid var(--hairline); border-radius: 14px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.hud-menu-header {
+  font-size: 12px; color: var(--text-secondary);
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--hairline); margin-bottom: 4px;
+  white-space: nowrap;
+}
+.hud-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 11px 10px;
+  background: transparent; border: none; border-radius: 10px;
+  color: var(--text-primary); font-size: 14px; text-align: left;
+  cursor: pointer;
+}
+.hud-menu-item svg { flex: 0 0 auto; color: var(--text-secondary); }
+.hud-menu-item:hover, .hud-menu-item:active { background: var(--bg-input); }
 
 /* Scrollable variant of a .hud-group (the category filter): however many
    buttons the profile/config produces, the pill never wraps and never grows
@@ -759,6 +790,10 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .hud-right { gap: 6px; }
   .hud-center .icon-btn,
   .hud-right .icon-btn { width: 32px; height: 32px; }
+  /* Right side collapses to the single overflow-menu button; its dropdown
+     hosts the view toggle, Settings and profile switch. */
+  .hud-right-inline { display: none; }
+  .hud-overflow { display: block; }
   /* Smaller floating floor switch on a phone. */
   .floor-switch-v button { width: 36px; height: 32px; font-size: 12px; }
   /* Left control stack: slightly narrower icon buttons to save width. */

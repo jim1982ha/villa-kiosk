@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.6.2
+
+### Single menu button on phones for view / Settings / profile
+
+- On narrow screens the three right-side controls (view-mode toggle, Settings,
+  switch profile) collapse into one ⋮ button that opens a dropdown, freeing
+  top-bar width for the category filter. Roomier screens keep the inline
+  buttons exactly as before.
+- The dropdown shows who is signed in, then: Overview/First-person view
+  (label follows the current mode), Settings (only when the profile may open
+  it), and Switch profile. It closes on outside tap, Escape, or after
+  choosing any action; proper `menu`/`menuitem` roles + `aria-expanded`.
+
 ## 2.6.1
 
 ### Top bar no longer overflows the screen on phones
