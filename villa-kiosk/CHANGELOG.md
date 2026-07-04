@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.5.2
+
+### The actual LED-line fix: the strip repairs never ran (unit mismatch)
+- Root cause of every "light line breaks up depending on camera/zoom" report,
+  found and fixed for real this time: the GLB keeps SweetHome's **centimetre**
+  vertex data and the loader converts to metres by scaling the **root node**,
+  so each mesh's local geometry is ~100x its world size. All strip repairs
+  (thin-axis inflation v2.4.74/v2.4.88, corner-joint extension v2.4.87)
+  compared and applied **metre** constants directly on that local data — the
+  1 mm LED filament measured "0.1 units", which is not "< 0.06 m", so the
+  inflation **never modified a single vertex**, and corners were extended by
+  0.2 mm instead of 2 cm. Meanwhile the light-placement logic (world-space,
+  correct units) kept visibly changing per release, masking the dead code.
+- All strip repairs are now unit-aware: sizes are compared in world metres
+  and vertex edits converted into each mesh's own local units via its world
+  matrix, so the SweetHome "Led Line" filament really becomes a ≥6 cm bar and
+  corners really overlap by 2 cm. Also made the joint extension idempotent
+  across re-indexing (it's additive on vertex data).
+
 ## 2.5.1
 
 ### Guests can now tune the look & feel

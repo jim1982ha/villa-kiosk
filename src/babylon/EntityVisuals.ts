@@ -493,22 +493,34 @@ export class EntityVisuals {
       const map = this.mapping.get(entityId);
       if (!map || map.type !== "light" || meshes.length < 2) continue;
       for (const m of meshes) {
+        // The extension is ADDITIVE on the vertex data, and indexMeshes()
+        // re-runs on config changes — without this flag every re-index would
+        // stretch the strip another 2 cm per end.
+        if (m.metadata?.__stripJointExtended) continue;
         const bb = m.getBoundingInfo().boundingBox;
         const size = bb.maximum.subtract(bb.minimum);
+        const unit = this.axisWorldScale(m);
         const axes: Array<"x" | "y" | "z"> = ["x", "y", "z"];
-        const longAxis = axes.reduce((a, b) => (size[b] > size[a] ? b : a));
-        if (size[longAxis] < STRIP_MIN_LENGTH) continue; // not a strip piece (e.g. a small marker)
+        // World metres for the checks, local units for the vertex edit — the
+        // local data is in the model's own (cm) units, see axisWorldScale.
+        const worldSize = {
+          x: size.x * unit.x, y: size.y * unit.y, z: size.z * unit.z,
+        };
+        const longAxis = axes.reduce((a, b) => (worldSize[b] > worldSize[a] ? b : a));
+        if (worldSize[longAxis] < STRIP_MIN_LENGTH || unit[longAxis] <= 0) continue; // not a strip piece (e.g. a small marker)
 
         const positions = m.getVerticesData(VertexBuffer.PositionKind);
         if (!positions) continue;
         const idx = longAxis === "x" ? 0 : longAxis === "y" ? 1 : 2;
         const center = (bb.minimum[longAxis] + bb.maximum[longAxis]) / 2;
+        const extension = STRIP_JOINT_EXTENSION / unit[longAxis];
         for (let i = idx; i < positions.length; i += 3) {
           const sign = positions[i] < center ? -1 : 1;
-          positions[i] += sign * STRIP_JOINT_EXTENSION;
+          positions[i] += sign * extension;
         }
         m.setVerticesData(VertexBuffer.PositionKind, positions, true);
         m.refreshBoundingInfo(false, false);
+        m.metadata = { ...(m.metadata ?? {}), __stripJointExtended: true };
       }
     }
   }
@@ -526,14 +538,39 @@ export class EntityVisuals {
     }
   }
 
+  /** World length of one LOCAL unit along each of a mesh's local axes.
+   *
+   *  THE unit trap this codebase fell into for 14 straight releases: the GLB
+   *  keeps SweetHome's CENTIMETRE vertex data and SceneManager.autoScale
+   *  converts to metres by scaling the ROOT node (~0.01) — so a mesh's LOCAL
+   *  bounding box and vertex positions are ~100x its world (metre) size.
+   *  Every strip-repair pass below edits LOCAL vertex data but was comparing
+   *  and applying METRE constants directly: a 1 mm-thin LED filament is 0.1
+   *  LOCAL units, which is NOT "< 0.06", so inflateThinStrip never fired at
+   *  all (v2.4.74 and v2.4.88 were silent no-ops), and extendStripJoints
+   *  extended corners by 0.02 local units = 0.2 mm instead of 2 cm (v2.4.87,
+   *  also a no-op). The light-placement logic kept visibly working because it
+   *  reads WORLD-space boxes — which is what made the dead code paths look
+   *  alive. Every metre constant crossing into local space MUST be divided by
+   *  these per-axis factors (and local sizes multiplied by them). */
+  private axisWorldScale(mesh: AbstractMesh): { x: number; y: number; z: number } {
+    const m = mesh.getWorldMatrix().m;
+    return {
+      x: Math.hypot(m[0], m[1], m[2]),
+      y: Math.hypot(m[4], m[5], m[6]),
+      z: Math.hypot(m[8], m[9], m[10]),
+    };
+  }
+
   /** Thicken EVERY local axis of a mesh that's below MIN_STRIP_THICKNESS
    *  (not just the single thinnest one — see below), symmetric about its own
    *  centre on that axis, by editing vertex positions directly (no node
-   *  scaling — the mesh's node transform is identity, see the caller, and
-   *  scaling around the wrong pivot would shift the whole strip sideways
-   *  instead of just thickening it). No-op for anything not razor-thin
-   *  (normal lamp/fixture meshes) and for the LONG axis (a strip's length,
-   *  which is exactly what should stay untouched here).
+   *  scaling — scaling around the wrong pivot would shift the whole strip
+   *  sideways instead of just thickening it). No-op for anything not
+   *  razor-thin (normal lamp/fixture meshes) and for the LONG axis (a
+   *  strip's length, which is exactly what should stay untouched here).
+   *  All size comparisons happen in WORLD metres and all vertex edits in
+   *  LOCAL units via axisWorldScale — see that helper for why.
    *
    *  A SweetHome Led Line piece is typically authored 1cm wide AND 3cm tall —
    *  TWO separate thin dimensions, not one. Only fixing the SINGLE thinnest
@@ -563,17 +600,24 @@ export class EntityVisuals {
   private inflateThinStrip(mesh: AbstractMesh): void {
     const bb = mesh.getBoundingInfo().boundingBox;
     const size = bb.maximum.subtract(bb.minimum);
+    const unit = this.axisWorldScale(mesh);
     const axes: Array<"x" | "y" | "z"> = ["x", "y", "z"];
-    const longAxis = axes.reduce((a, b) => (size[b] > size[a] ? b : a));
-    const thinAxes = axes.filter((a) => a !== longAxis && size[a] < MIN_STRIP_THICKNESS);
+    // Compare in WORLD metres — local sizes are in the model's own units (cm).
+    const worldSize = {
+      x: size.x * unit.x, y: size.y * unit.y, z: size.z * unit.z,
+    };
+    const longAxis = axes.reduce((a, b) => (worldSize[b] > worldSize[a] ? b : a));
+    const thinAxes = axes.filter(
+      (a) => a !== longAxis && unit[a] > 0 && worldSize[a] < MIN_STRIP_THICKNESS);
     if (thinAxes.length === 0) return;
 
     const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
     if (!positions) return;
-    const halfTarget = MIN_STRIP_THICKNESS / 2;
     for (const axis of thinAxes) {
       const idx = axis === "x" ? 0 : axis === "y" ? 1 : 2;
       const center = (bb.minimum[axis] + bb.maximum[axis]) / 2;
+      // Convert the metre target into this mesh's LOCAL units for the edit.
+      const halfTarget = MIN_STRIP_THICKNESS / 2 / unit[axis];
       for (let i = idx; i < positions.length; i += 3) {
         const sign = positions[i] < center ? -1 : 1;
         positions[i] = center + sign * halfTarget;
