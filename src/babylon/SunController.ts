@@ -20,6 +20,7 @@ export class SunController {
   // ground instead of the bright daytime sky blue. Cleared (null) in
   // first-person so the real sky shows through the windows again.
   private bgOverride: Color4 | null = null;
+  private baked = false;
 
   constructor(
     scene: Scene,
@@ -38,6 +39,18 @@ export class SunController {
 
   setRenderHook(fn: () => void): void {
     this.requestRender = fn;
+  }
+
+  /**
+   * Baked-lighting GLB loaded: the structure is unlit, so changing the sun/hemi
+   * intensities does nothing to it — night ambience is instead conveyed through
+   * a scene-wide exposure drop (see applyDayNight). The lights above still run
+   * at their usual values for the ENTITY meshes, which stay lit PBR.
+   */
+  setBakedMode(baked: boolean): void {
+    if (this.baked === baked) return;
+    this.baked = baked;
+    this.applyRealSun();
   }
 
   /**
@@ -128,6 +141,17 @@ export class SunController {
     // night — another source of the grey look. Scale its contribution down after
     // dark. (renderFx owns whether the texture exists; we own how much it counts.)
     if (r.ibl) this.scene.environmentIntensity = r.environmentIntensity * (isDay ? 1 : lerp(0.4, 0.12));
+
+    // Baked mode: the structure's texture is a fixed daytime render, so the only
+    // way to sell "night" is post-processing. Scale the user's exposure down
+    // after dark, deepening with nightDimming. This deliberately runs AFTER
+    // renderFx.applyToneMapping wrote cfg.exposure (all call paths order
+    // renderFx.apply() before the sun pass — same ownership discipline as the
+    // hemi fill above), so this write is the final word on exposure.
+    if (this.baked) {
+      this.scene.imageProcessingConfiguration.exposure =
+        r.exposure * (isDay ? 1 : lerp(1, 0.45));
+    }
 
     // Drive the procedural sky from the same sun direction (it shows through the
     // windows). clearColor is kept as a fallback for when the sky dome is absent.

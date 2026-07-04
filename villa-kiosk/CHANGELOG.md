@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.6.0
+
+### Photo-realistic baked lighting (pre-computed, offline) — full revamp
+- The app now auto-detects a GLB produced by the Blender pipeline's new
+  `--bake` mode (pipeline v2.0.0). The bake runs a full Cycles global-
+  illumination render (sun + Nishita sky + bounce light + real shadows +
+  ambient occlusion) of the villa structure into a single texture atlas,
+  embedded in the GLB as WebP. Detection is by material name: a GLB whose
+  structure material is named `BAKED_Structure` switches the app into baked
+  mode; any other GLB renders exactly as before — nothing to configure.
+- In baked mode the structure renders **unlit** (its texture IS the finished
+  lit image), and every dynamic-light system stands down because its work is
+  already painted in: SSAO off (the bake has real AO — stacking screen-space
+  AO on top double-darkens corners), sun shadow maps off, and per-entity
+  PointLights + their cube shadow maps are skipped entirely. Entity state
+  feedback is fully kept: emissive glow, GlowLayer bloom, highlights, badges,
+  camera beams, room glow — everything the kiosk uses to show live HA state.
+- Night ambience in baked mode comes from a scene-wide exposure drop (scaled
+  by the existing Night dimming setting) instead of relighting — the baked
+  image is a fixed daytime render.
+- Expected wins: near-photo-realistic look (real GI/shadows) AND faster
+  rendering (no shadow passes, no SSAO, far fewer active lights) — it should
+  run better than 2.5.x on tablets, not worse.
+- Note: a baked GLB is larger (embedded 4K atlas, typically ~10–20 MB). The
+  HA Supervisor Ingress proxy caps uploads at 16 MB — if a central upload
+  fails with 413, either bake with `--bake-size 2048`, or place the file in
+  `/config/www` and point `model_path` at it. Browser-local uploads
+  (Settings → stored in this browser) are not affected by the cap.
+
 ## 2.5.5
 
 ### LED strips: off state now uses window-glass transparency

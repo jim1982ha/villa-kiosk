@@ -50,6 +50,7 @@ export class RenderEnhancements {
 
   private meshes: AbstractMesh[] = [];
   private cfg: RenderConfig | null = null;
+  private baked = false;
 
   constructor(scene: Scene, sun: DirectionalLight) {
     this.scene = scene;
@@ -60,6 +61,21 @@ export class RenderEnhancements {
   registerMeshes(meshes: AbstractMesh[]): void {
     this.meshes = meshes;
     if (this.cfg) this.applyShadows(this.cfg); // wire casters now that meshes exist
+  }
+
+  /**
+   * Baked-lighting GLB loaded (see ModelLoader's BAKED_MATERIAL_PREFIX): the
+   * structure's texture already contains real Cycles ambient occlusion, GI and
+   * sun shadows. SSAO on top double-darkens every corner the bake already
+   * darkened, and the sun ShadowGenerator burns a whole render pass drawing
+   * shadows the unlit structure ignores anyway — both are forced off while a
+   * baked model is loaded, whatever the quality preset says. Tone mapping, IBL
+   * (entity meshes are still lit PBR) and GlowLayer stay user-controlled.
+   */
+  setBakedMode(baked: boolean): void {
+    if (this.baked === baked) return;
+    this.baked = baked;
+    if (this.cfg) this.apply(this.cfg);
   }
 
   /** Apply the full render config. Idempotent — safe to call on every change. */
@@ -90,7 +106,7 @@ export class RenderEnhancements {
 
   // ── 3. SSAO2 (screen-space ambient occlusion) ────────────────────────────
   private applySSAO(cfg: RenderConfig): void {
-    if (cfg.ssao) {
+    if (cfg.ssao && !this.baked) {
       if (!this.ssao) {
         try {
           this.ssao = new SSAO2RenderingPipeline("villaSSAO", this.scene, { ssaoRatio: 0.75, blurRatio: 1.0 });
@@ -121,7 +137,7 @@ export class RenderEnhancements {
 
   // ── 4. Directional shadows ───────────────────────────────────────────────
   private applyShadows(cfg: RenderConfig): void {
-    if (!cfg.shadows) {
+    if (!cfg.shadows || this.baked) {
       if (this.shadowGen) {
         this.shadowGen.dispose();
         this.shadowGen = null;

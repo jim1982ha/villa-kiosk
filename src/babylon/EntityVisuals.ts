@@ -272,6 +272,16 @@ export class EntityVisuals {
   private iconUserScale = 1;
   private iconZoomScale = 1;
 
+  /** Baked-lighting GLB loaded (see ModelLoader). All lighting — including
+   *  every fixture's contribution to the room — is already painted into the
+   *  structure's texture, and the structure is unlit, so a runtime PointLight
+   *  can't brighten it anyway; per-entity lights and their cube shadow maps
+   *  would be pure cost with no visible effect. Skipped entirely in baked
+   *  mode. Emissive glow + GlowLayer feedback is KEPT — that's surface glow
+   *  on the fixture itself (the on/off signal the user reads), not light
+   *  transport. */
+  private bakedMode = false;
+
   /** camera entity_id -> world-space unit facing direction (may include a
    *  vertical tilt component from SweetHome's `pitch`), computed by
    *  SceneManager from the sh3d plan `angle`/`pitch` (see setCameraDirections). */
@@ -301,6 +311,11 @@ export class EntityVisuals {
       this.animatePulse();
       this.cullLabels();
     });
+  }
+
+  /** MUST be called before indexMeshes() — that's where lights are created. */
+  setBakedMode(baked: boolean): void {
+    this.bakedMode = baked;
   }
 
   updateConfig(config: AppConfig): void {
@@ -421,40 +436,47 @@ export class EntityVisuals {
         // actual 3D location is encoded only in vertex data.
         m.computeWorldMatrix(true);
         this.inflateThinStrip(m);
-        const bb = m.getBoundingInfo().boundingBox;
-        const pos = bb.centerWorld.clone();
-        // Elongated strips are mounted flush against a ceiling or wall; a light
-        // AT the strip prints a hard hotspot on that surface (or a chain of
-        // them). Drop the light partway toward whatever is below so its pool is
-        // a wide soft wash instead — the visible "LED line" itself stays the
-        // mesh's emissive + glow, not this light.
-        const size = bb.maximumWorld.subtract(bb.minimumWorld);
-        const longest = Math.max(size.x, size.y, size.z);
-        if (longest >= STRIP_MIN_LENGTH) {
-          const ray = new Ray(pos, Vector3.Down(), 8);
-          const hit = this.scene.pickWithRay(ray, (candidate) =>
-            candidate !== m && candidate.getTotalVertices() > 0 &&
-            !/^(halo_|label_|marker)/i.test(candidate.name));
-          if (hit?.hit && hit.distance > 0.3) {
-            pos.y -= Math.min(STRIP_DROP_MAX, hit.distance * STRIP_DROP_FRACTION);
+        // Baked mode: no runtime light — the room's illumination from this
+        // fixture is already painted into the structure's texture, and the
+        // unlit structure wouldn't respond to a PointLight anyway (see
+        // bakedMode). Everything above (material, baseline glow, strip
+        // inflation) still runs: the fixture's own on/off glow is kept.
+        if (!this.bakedMode) {
+          const bb = m.getBoundingInfo().boundingBox;
+          const pos = bb.centerWorld.clone();
+          // Elongated strips are mounted flush against a ceiling or wall; a light
+          // AT the strip prints a hard hotspot on that surface (or a chain of
+          // them). Drop the light partway toward whatever is below so its pool is
+          // a wide soft wash instead — the visible "LED line" itself stays the
+          // mesh's emissive + glow, not this light.
+          const size = bb.maximumWorld.subtract(bb.minimumWorld);
+          const longest = Math.max(size.x, size.y, size.z);
+          if (longest >= STRIP_MIN_LENGTH) {
+            const ray = new Ray(pos, Vector3.Down(), 8);
+            const hit = this.scene.pickWithRay(ray, (candidate) =>
+              candidate !== m && candidate.getTotalVertices() > 0 &&
+              !/^(halo_|label_|marker)/i.test(candidate.name));
+            if (hit?.hit && hit.distance > 0.3) {
+              pos.y -= Math.min(STRIP_DROP_MAX, hit.distance * STRIP_DROP_FRACTION);
+            }
           }
+          const light = new PointLight(`elight_${m.name}_${m.uniqueId}`, pos, this.scene);
+          light.intensity = 0;
+          light.range = LIGHT_RANGE;
+          light.diffuse = WARM_GLOW.clone();
+          // No specular: on glossy surfaces (the tiled floor) a point light's
+          // white specular lobe is a bright glint that SLIDES as the camera moves
+          // — easily mistaken for the light itself flickering. Diffuse-only keeps
+          // the wash identical from every viewpoint.
+          light.specular = Color3.Black();
+          // Start DISABLED, not just intensity 0. A disabled light is dropped from
+          // every material's shader light-loop entirely, so an off fixture costs
+          // nothing to compile or shade; it's re-enabled in applyToMesh when the
+          // entity turns on. With most lights off at load, this slashes the active
+          // light count the first frame has to compile shaders for.
+          light.setEnabled(false);
+          this.meshLights.set(m.uniqueId, light);
         }
-        const light = new PointLight(`elight_${m.name}_${m.uniqueId}`, pos, this.scene);
-        light.intensity = 0;
-        light.range = LIGHT_RANGE;
-        light.diffuse = WARM_GLOW.clone();
-        // No specular: on glossy surfaces (the tiled floor) a point light's
-        // white specular lobe is a bright glint that SLIDES as the camera moves
-        // — easily mistaken for the light itself flickering. Diffuse-only keeps
-        // the wash identical from every viewpoint.
-        light.specular = Color3.Black();
-        // Start DISABLED, not just intensity 0. A disabled light is dropped from
-        // every material's shader light-loop entirely, so an off fixture costs
-        // nothing to compile or shade; it's re-enabled in applyToMesh when the
-        // entity turns on. With most lights off at load, this slashes the active
-        // light count the first frame has to compile shaders for.
-        light.setEnabled(false);
-        this.meshLights.set(m.uniqueId, light);
       }
     }
 
@@ -481,6 +503,7 @@ export class EntityVisuals {
    *  one entity (e.g. two bedside lamps) don't pass the "every mesh is a
    *  strip" test, so each keeps its own light exactly as before. */
   private mergeStripEntityLights(): void {
+    if (this.bakedMode) return; // no per-mesh lights exist to merge — and this must not CREATE one
     for (const [entityId, meshes] of this.byEntity) {
       const map = this.mapping.get(entityId);
       if (!map || map.type !== "light" || meshes.length < 2) continue;
@@ -1202,6 +1225,7 @@ export class EntityVisuals {
    * idle/off light costs nothing. Called once per entity from apply().
    */
   private syncEntityShadow(entityId: string, meshes: AbstractMesh[], on: boolean): void {
+    if (this.bakedMode) return; // no entity lights in baked mode → nothing to occlude
     const existing = this.lightShadows.get(entityId);
 
     if (!on) {

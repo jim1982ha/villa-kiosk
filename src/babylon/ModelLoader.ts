@@ -26,7 +26,18 @@ DracoCompression.Configuration = {
 
 export interface LoadResult {
   meshes: AbstractMesh[];
+  /** True when the GLB carries pre-baked lighting (see BAKED_MATERIAL_PREFIX). */
+  baked: boolean;
 }
+
+// A GLB produced by blender_pipeline.py --bake names its lit-structure material
+// "BAKED_Structure": its base-colour texture already contains the COMPLETE
+// lighting (sun + sky + GI bounces + shadows, Cycles-rendered offline). Such a
+// material must be rendered UNLIT — applying the runtime sun/hemi/point lights
+// on top would light the image of a lit room a second time. The prefix is the
+// whole contract between pipeline and app: no sidecar files, no custom glTF
+// extensions, and a GLB without it behaves exactly as before this existed.
+const BAKED_MATERIAL_PREFIX = "BAKED_";
 
 // Babylon caps the lights a material's shader handles at once (default 4). A LED
 // strip is modelled as many co-located point lights, so a wall/floor near one can
@@ -91,13 +102,23 @@ export async function loadModelInto(
     const result = await SceneLoader.ImportMeshAsync("", "", url, scene, undefined, ".glb");
     const glassMats = new Set<string>();
     const allMats = new Set<string>();
+    let baked = false;
     for (const m of result.meshes) {
       const mat = m.material as
-        | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean; roughness?: number; metallic?: number; forceDepthWrite?: boolean }
+        | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean; roughness?: number; metallic?: number; forceDepthWrite?: boolean; unlit?: boolean }
         | null;
       if (!mat) continue;
       if (mat.name) allMats.add(mat.name);
       if ("maxSimultaneousLights" in mat) mat.maxSimultaneousLights = MAX_SIMULTANEOUS_LIGHTS;
+
+      // Pre-baked lighting: render the baked material unlit — its texture IS
+      // the finished lit image. Setting the flag here (not just per-mesh in a
+      // later pass) matters because a fused Structure imports as one Babylon
+      // mesh PER glTF primitive, all sharing this material instance.
+      if (mat.name?.startsWith(BAKED_MATERIAL_PREFIX) && "unlit" in mat) {
+        mat.unlit = true;
+        baked = true;
+      }
 
       if (looksLikeGlass([mat.name, m.name], glassHints)) {
         mat.alpha = GLASS_ALPHA;
@@ -137,6 +158,10 @@ export async function loadModelInto(
       "| all materials:",
       [...allMats].sort(),
     );
+    if (baked) {
+      devLog("[ModelLoader] BAKED-lighting GLB detected — structure renders unlit; " +
+        "dynamic light simulation will be disabled scene-wide");
+    }
 
     // A custom-imported window (e.g. window_3x1) can carry a material whose name
     // has no glass keyword, so it slips past the name match above and stays a grey
@@ -171,7 +196,7 @@ export async function loadModelInto(
         panes,
       );
     }
-    return { meshes: result.meshes };
+    return { meshes: result.meshes, baked };
   } finally {
     URL.revokeObjectURL(url);
   }

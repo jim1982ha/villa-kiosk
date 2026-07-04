@@ -476,6 +476,18 @@ export class SceneManager {
   async loadModel(data: ArrayBuffer): Promise<void> {
     const result = await loadModelInto(this.scene, data, this.config.extraGlassHints ?? []);
     this.loadedMeshes = result.meshes;
+
+    // Baked-lighting GLB (blender_pipeline --bake): the structure carries its
+    // full Cycles-rendered lighting in its texture and renders unlit, so every
+    // dynamic-light system stands down. Order matters: visuals BEFORE its
+    // indexMeshes below (that's where per-entity PointLights would be created),
+    // and renderFx BEFORE sun (SunController's exposure write must be the
+    // final word — all its call paths run after renderFx.apply()).
+    if (result.baked) devLog("[SceneManager] baked mode ON — dynamic lighting disabled");
+    this.visuals.setBakedMode(result.baked);
+    this.renderFx.setBakedMode(result.baked);
+    this.sun.setBakedMode(result.baked);
+
     this.normalizeScale(result.meshes); // bring to metres BEFORE recentring
     this.recenterModel(result.meshes); // align to origin BEFORE indexing positions
     this.floors.indexFloors(result.meshes);
