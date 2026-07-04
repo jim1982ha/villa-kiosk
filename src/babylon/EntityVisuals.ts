@@ -32,6 +32,7 @@ import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
+import { axisWorldScale } from "./meshUnits";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 0.85;
@@ -72,6 +73,18 @@ const STRIP_DROP_MAX = 1.1; // metres — cap the drop so tall rooms don't put i
 // help because it was never the cause). Fix at the geometry: thicken the
 // mesh's thinnest axis to a minimum so it always covers several pixels.
 const MIN_STRIP_THICKNESS = 0.06; // metres (6 cm) — still reads as a slim cove strip
+// The Led Line asset's baked material ("LedLineSource") is a bright, near-white
+// self-lit surface — meant to look like a light source in SweetHome's OWN
+// renderer. While the filament was sub-pixel-thin (the bug just fixed above)
+// that base colour never mattered; now that inflateThinStrip gives it real
+// ~6cm geometry, that same bright base reads as a solid glossy white tube
+// whenever the light is OFF (applyToMesh only ever overrides the EMISSIVE
+// channel for on/off, never this base colour). Recessed LED channels in
+// reality are a dark, unobtrusive housing — the light itself is the only
+// part meant to be visible. Applied ONLY to meshes inflateThinStrip actually
+// inflates (the genuine filament pieces), so real fixture geometry (lamp
+// bodies, housings with their own baked look) keeps its authored material.
+const LED_HOUSING_COLOR = new Color3(0.05, 0.05, 0.055);
 // A rectangular LED cove (dining-table/sofa perimeter) is built from 4
 // separate straight strip pieces (top/bottom/left/right), one per side. Their
 // authored endpoints don't always reach far enough to overlap at the
@@ -499,7 +512,7 @@ export class EntityVisuals {
         if (m.metadata?.__stripJointExtended) continue;
         const bb = m.getBoundingInfo().boundingBox;
         const size = bb.maximum.subtract(bb.minimum);
-        const unit = this.axisWorldScale(m);
+        const unit = axisWorldScale(m);
         const axes: Array<"x" | "y" | "z"> = ["x", "y", "z"];
         // World metres for the checks, local units for the vertex edit — the
         // local data is in the model's own (cm) units, see axisWorldScale.
@@ -538,29 +551,8 @@ export class EntityVisuals {
     }
   }
 
-  /** World length of one LOCAL unit along each of a mesh's local axes.
-   *
-   *  THE unit trap this codebase fell into for 14 straight releases: the GLB
-   *  keeps SweetHome's CENTIMETRE vertex data and SceneManager.autoScale
-   *  converts to metres by scaling the ROOT node (~0.01) — so a mesh's LOCAL
-   *  bounding box and vertex positions are ~100x its world (metre) size.
-   *  Every strip-repair pass below edits LOCAL vertex data but was comparing
-   *  and applying METRE constants directly: a 1 mm-thin LED filament is 0.1
-   *  LOCAL units, which is NOT "< 0.06", so inflateThinStrip never fired at
-   *  all (v2.4.74 and v2.4.88 were silent no-ops), and extendStripJoints
-   *  extended corners by 0.02 local units = 0.2 mm instead of 2 cm (v2.4.87,
-   *  also a no-op). The light-placement logic kept visibly working because it
-   *  reads WORLD-space boxes — which is what made the dead code paths look
-   *  alive. Every metre constant crossing into local space MUST be divided by
-   *  these per-axis factors (and local sizes multiplied by them). */
-  private axisWorldScale(mesh: AbstractMesh): { x: number; y: number; z: number } {
-    const m = mesh.getWorldMatrix().m;
-    return {
-      x: Math.hypot(m[0], m[1], m[2]),
-      y: Math.hypot(m[4], m[5], m[6]),
-      z: Math.hypot(m[8], m[9], m[10]),
-    };
-  }
+  // axisWorldScale moved to ./meshUnits — shared with SceneManager's outline
+  // width, which hit the exact same local-cm-vs-world-metre trap (see there).
 
   /** Thicken EVERY local axis of a mesh that's below MIN_STRIP_THICKNESS
    *  (not just the single thinnest one — see below), symmetric about its own
@@ -600,7 +592,7 @@ export class EntityVisuals {
   private inflateThinStrip(mesh: AbstractMesh): void {
     const bb = mesh.getBoundingInfo().boundingBox;
     const size = bb.maximum.subtract(bb.minimum);
-    const unit = this.axisWorldScale(mesh);
+    const unit = axisWorldScale(mesh);
     const axes: Array<"x" | "y" | "z"> = ["x", "y", "z"];
     // Compare in WORLD metres — local sizes are in the model's own units (cm).
     const worldSize = {
@@ -610,6 +602,14 @@ export class EntityVisuals {
     const thinAxes = axes.filter(
       (a) => a !== longAxis && unit[a] > 0 && worldSize[a] < MIN_STRIP_THICKNESS);
     if (thinAxes.length === 0) return;
+
+    // This mesh is a genuine filament we're artificially thickening — mute its
+    // baked "self-lit" base colour so the OFF state reads as a dark channel,
+    // not a glossy white tube. The dynamic on/off glow (applyToMesh) is carried
+    // entirely by the emissive channel, untouched by this.
+    const mat = mesh.material;
+    if (mat instanceof StandardMaterial) mat.diffuseColor = LED_HOUSING_COLOR.clone();
+    else if (mat instanceof PBRMaterial) mat.albedoColor = LED_HOUSING_COLOR.clone();
 
     const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
     if (!positions) return;

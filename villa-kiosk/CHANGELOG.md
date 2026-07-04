@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.5.3
+
+### LED strips: dark housing when off (same unit bug, new symptom)
+- Now that v2.5.2 correctly inflates SweetHome's 1mm LED filament to a real
+  ~6cm bar, its baked "self-lit" base material — bright near-white, meant to
+  look like a light source in SweetHome's own renderer — became visible as a
+  solid glossy white tube whenever the light was off (the app only ever
+  overrode the emissive on/off glow, never that base colour). Strip meshes
+  that get inflated now also get a dark, unobtrusive base colour, so off =
+  a recessed channel and on = the same warm glowing line as before. Real
+  fixture geometry (lamp bodies, housings) is untouched — only the meshes
+  that are actually artificial filaments get the treatment.
+
+### Fix: "Highlight clickable objects" no longer highlighted anything
+- Root cause: the SAME local-cm-vs-world-metre unit trap as the LED strip
+  bug, in a different subsystem. Babylon's mesh outline (`outlineWidth`) is a
+  LOCAL-space vertex offset; this model's local vertex data is in
+  centimetres, so the flat `outlineWidth = 0.02` meant "0.2mm before the
+  ~100x root scale" — invisible on screen ever since outlines replaced the
+  old HighlightLayer effect in v2.4.76. Outline width is now converted from
+  the intended 2cm WORLD thickness into each mesh's own local units, so the
+  blue "clickable" outline is visible again.
+- Extracted the local↔world conversion (`axisWorldScale`) shared by both
+  fixes into `src/babylon/meshUnits.ts` so future mesh-geometry code doesn't
+  have to rediscover this the hard way.
+
 ## 2.5.2
 
 ### The actual LED-line fix: the strip repairs never ran (unit mismatch)

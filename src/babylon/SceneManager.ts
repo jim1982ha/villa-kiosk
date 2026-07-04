@@ -28,6 +28,7 @@ import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
 import { applyGrassGround } from "./GroundGrass";
 import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
+import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
 import type { PlanWorldPair } from "@/utils/affineFit";
@@ -821,6 +822,18 @@ export class SceneManager {
    * (an extruded backface silhouette, depth-tested against the whole scene
    * like any other mesh) rather than a competing screen-space effect layer,
    * so it cannot corrupt GlowLayer's output no matter what overlaps it.
+   *
+   * `outlineWidth` is a LOCAL-space offset — Babylon's outline shader adds
+   * `normal * outlineWidth` to the vertex position BEFORE the world-matrix
+   * multiply (see @babylonjs/core Shaders/outline.vertex.js), so it's in the
+   * same units as the mesh's own vertex data. This model's GLB keeps
+   * SweetHome's CENTIMETRE vertex data and the loader converts to metres by
+   * scaling only the root node (~0.01) — the same unit trap that made the LED
+   * strip repairs silent no-ops (see EntityVisuals/meshUnits.ts). A flat
+   * `outlineWidth = 0.02` meant "0.02 local cm units", i.e. 0.2mm before the
+   * root scale even applies — invisible on screen. Converting the intended
+   * WORLD width through axisWorldScale (same helper the strip fixes use) is
+   * what makes the outline actually show up.
    */
   private applyHighlight(meshes: AbstractMesh[]): void {
     for (const m of this.highlightedMeshes) m.renderOutline = false;
@@ -828,6 +841,7 @@ export class SceneManager {
     if (!this.config.highlightInteractive) { this.requestRender(); return; }
 
     const blue = new Color3(0.25, 0.55, 1.0);
+    const targetWorldWidth = 0.02; // metres (2cm) — the intended outline thickness
     for (const m of meshes) {
       if (!m.isEnabled() || !m.isVisible) continue;
       const mapping = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
@@ -837,8 +851,13 @@ export class SceneManager {
       // floating at ceiling height.
       if (mapping.type === "light") continue;
       if (!(m instanceof Mesh)) continue;
+      const unit = axisWorldScale(m);
+      // Outline offset follows the vertex normal (any direction), so a single
+      // scalar is needed; scaling in this model is uniform (SceneManager
+      // scales x/y/z together), so any one axis represents it.
+      const localScale = unit.x || unit.y || unit.z || 1;
       m.outlineColor = blue;
-      m.outlineWidth = 0.02;
+      m.outlineWidth = targetWorldWidth / localScale;
       m.renderOutline = true;
       this.highlightedMeshes.push(m);
     }
