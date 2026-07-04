@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.5.4
+
+### LED strips: off state fades out instead of painting a black frame
+- 2.5.3's "dark housing" colour backfired: a near-black 6cm bar against white
+  ceilings is maximal contrast, so from the overview the off strips printed
+  as bold black rectangles above the beds — worse than the white tube it
+  replaced. No base colour can make a bar sized for the ON-state glow look
+  like the ~1cm recessed channel it really is, so the off state now fades the
+  strip mesh itself to ~22% opacity with a soft plaster-grey base colour: a
+  faint seam hinting where the strip runs, still clickable, gone as a shape.
+  Turning the light on restores full visibility with the same warm glow as
+  2.5.2. Only artificially-inflated strip meshes are affected — real lamp
+  geometry keeps full visibility when off.
+
+### Highlight clickable objects: visible at overview zoom (blue tint + rim)
+- 2.5.3 fixed the outline width units, but a 2cm blue rim is only 1–3 screen
+  pixels at the whole-villa overview zoom — technically rendering, practically
+  invisible. Clickable meshes now also get a translucent blue overlay tint
+  across their whole surface (Babylon `renderOverlay`), which stays obvious at
+  any zoom, plus a thicker 4cm outline rim for close-up views. The overlay is
+  drawn by the same forward-pass renderer as the outline — NOT an EffectLayer
+  — so it cannot corrupt the LED strips' GlowLayer (the original reason the
+  old HighlightLayer glow was removed in v2.4.76).
+
 ## 2.5.3
 
 ### LED strips: dark housing when off (same unit bug, new symptom)

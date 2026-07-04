@@ -75,7 +75,7 @@ export class SceneManager {
   private forceContinuous = 0; // ref count for animations/streams
   private loadedMeshes: AbstractMesh[] = [];
   private calibratedPoints: TeleportPoint[] | null = null;
-  private highlightedMeshes: AbstractMesh[] = [];
+  private highlightedMeshes: Mesh[] = [];
   private viewMode: "first-person" | "overview" = "first-person";
   /** Names of the real (polygon-backed) rooms from the last calibration —
    *  used to exclude them when deriving RoomHighlight's point-only "rooms"
@@ -833,20 +833,33 @@ export class SceneManager {
    * `outlineWidth = 0.02` meant "0.02 local cm units", i.e. 0.2mm before the
    * root scale even applies — invisible on screen. Converting the intended
    * WORLD width through axisWorldScale (same helper the strip fixes use) is
-   * what makes the outline actually show up.
+   * what makes the outline actually render.
+   *
+   * An outline ALONE is still not enough, though: the kiosk's default view is
+   * the whole-villa overview, where 1 screen pixel covers roughly 1–2cm of
+   * floor — any sane outline width is a 2–3px rim, invisible in practice.
+   * That's why "the blue glow" seemed gone even with the width bug fixed. So
+   * each clickable mesh ALSO gets `renderOverlay`: a translucent blue tint
+   * over the whole object, rendered by the same forward-pass component as the
+   * outline (Rendering/outlineRenderer — NOT an EffectLayer, so it cannot
+   * corrupt the GlowLayer either). The full-surface tint stays obvious at any
+   * zoom level; the outline adds the crisp rim when close.
    */
   private applyHighlight(meshes: AbstractMesh[]): void {
-    for (const m of this.highlightedMeshes) m.renderOutline = false;
+    for (const m of this.highlightedMeshes) {
+      m.renderOutline = false;
+      m.renderOverlay = false;
+    }
     this.highlightedMeshes = [];
     if (!this.config.highlightInteractive) { this.requestRender(); return; }
 
     const blue = new Color3(0.25, 0.55, 1.0);
-    const targetWorldWidth = 0.02; // metres (2cm) — the intended outline thickness
+    const targetWorldWidth = 0.04; // metres — outline rim, sized for close-up views
     for (const m of meshes) {
       if (!m.isEnabled() || !m.isVisible) continue;
       const mapping = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
       if (!mapping) continue;
-      // Lights use PointLight + emissive colour for feedback; an outline on
+      // Lights use PointLight + emissive colour for feedback; a tint/outline on
       // placeholder sphere meshes would make them visible as blue balls
       // floating at ceiling height.
       if (mapping.type === "light") continue;
@@ -859,6 +872,9 @@ export class SceneManager {
       m.outlineColor = blue;
       m.outlineWidth = targetWorldWidth / localScale;
       m.renderOutline = true;
+      m.overlayColor = blue;
+      m.overlayAlpha = 0.3;
+      m.renderOverlay = true;
       this.highlightedMeshes.push(m);
     }
     this.requestRender();

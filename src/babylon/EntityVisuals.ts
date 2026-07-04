@@ -79,12 +79,29 @@ const MIN_STRIP_THICKNESS = 0.06; // metres (6 cm) — still reads as a slim cov
 // that base colour never mattered; now that inflateThinStrip gives it real
 // ~6cm geometry, that same bright base reads as a solid glossy white tube
 // whenever the light is OFF (applyToMesh only ever overrides the EMISSIVE
-// channel for on/off, never this base colour). Recessed LED channels in
-// reality are a dark, unobtrusive housing — the light itself is the only
-// part meant to be visible. Applied ONLY to meshes inflateThinStrip actually
-// inflates (the genuine filament pieces), so real fixture geometry (lamp
-// bodies, housings with their own baked look) keeps its authored material.
-const LED_HOUSING_COLOR = new Color3(0.05, 0.05, 0.055);
+// channel for on/off, never this base colour). Applied ONLY to meshes
+// inflateThinStrip actually inflates (the genuine filament pieces), so real
+// fixture geometry (lamp bodies, housings with their own baked look) keeps
+// its authored material.
+//
+// The colour is deliberately a soft plaster-grey, NOT a dark "housing" tone:
+// a dark strip against white ceilings/walls is maximal contrast — from the
+// overview it printed as bold black frames above the beds, worse than the
+// white tube it replaced. Off-state unobtrusiveness comes from
+// STRIP_OFF_VISIBILITY below, not from the colour; the colour's only job is
+// to blend with the ceiling around it for whatever alpha remains.
+const LED_HOUSING_COLOR = new Color3(0.8, 0.79, 0.77);
+// The inflated ~6cm bar is sized for the ON state, where the emissive core +
+// GlowLayer halo need several on-screen pixels to read as one continuous
+// line. When the light is OFF that same bar is just dead geometry, and no
+// base colour can make a 6cm slab at ceiling height look like the ~1cm
+// recessed channel it really is. So the OFF state fades the mesh itself:
+// mostly transparent, it reads as a faint seam hinting where the strip runs.
+// Alpha (mesh.visibility) does not affect pickability, so an off strip stays
+// clickable exactly where its faint trace shows. Only meshes tagged
+// __inflatedStrip get this treatment — real lamp geometry keeps full
+// visibility when off (a physical lamp doesn't vanish when switched off).
+const STRIP_OFF_VISIBILITY = 0.22;
 // A rectangular LED cove (dining-table/sofa perimeter) is built from 4
 // separate straight strip pieces (top/bottom/left/right), one per side. Their
 // authored endpoints don't always reach far enough to overlap at the
@@ -604,12 +621,14 @@ export class EntityVisuals {
     if (thinAxes.length === 0) return;
 
     // This mesh is a genuine filament we're artificially thickening — mute its
-    // baked "self-lit" base colour so the OFF state reads as a dark channel,
-    // not a glossy white tube. The dynamic on/off glow (applyToMesh) is carried
-    // entirely by the emissive channel, untouched by this.
+    // baked "self-lit" base colour to a ceiling-matched grey and tag it so
+    // applyToMesh can fade it out when the light is OFF (see
+    // STRIP_OFF_VISIBILITY). The dynamic on/off glow is carried entirely by
+    // the emissive channel, untouched by this.
     const mat = mesh.material;
     if (mat instanceof StandardMaterial) mat.diffuseColor = LED_HOUSING_COLOR.clone();
     else if (mat instanceof PBRMaterial) mat.albedoColor = LED_HOUSING_COLOR.clone();
+    mesh.metadata = { ...(mesh.metadata ?? {}), __inflatedStrip: true };
 
     const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
     if (!positions) return;
@@ -1211,6 +1230,13 @@ export class EntityVisuals {
 
         // 1) The fixture mesh glows.
         setEmissive?.(on ? colour.scale(brightnessFrac) : Color3.Black());
+
+        // An artificially-inflated LED strip bar is only meant to be seen
+        // while it IS the light — off, it fades to a faint trace instead of
+        // sitting at the ceiling as a solid 6cm slab (see STRIP_OFF_VISIBILITY).
+        if (mesh.metadata?.__inflatedStrip) {
+          mesh.visibility = on ? 1 : STRIP_OFF_VISIBILITY;
+        }
 
         // 2) This fixture mesh's own light source illuminates the room.
         //    A single HA light is frequently modelled in SweetHome 3D as MANY
