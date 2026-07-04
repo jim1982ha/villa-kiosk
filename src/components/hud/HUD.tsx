@@ -13,7 +13,7 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Home, Grid3x3, Settings, Map,
   PersonStanding, Sparkles, Tag, Info, Anchor, LogOut,
-  Armchair, Lightbulb, Wifi, Zap, ShieldCheck, MoreHorizontal,
+  Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
   EllipsisVertical,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
@@ -37,7 +37,9 @@ const CATEGORY_ICONS: Record<Category, IconType> = {
   network: Wifi,
   energy: Zap,
   access_control: ShieldCheck,
-  others: MoreHorizontal,
+  // Puzzle (not a dots/lines glyph) — reads as its own distinct shape rather
+  // than being confused with the ⋮ overflow-menu button on small screens.
+  others: Puzzle,
 };
 
 interface Props {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.6.3
+
+### "Others" category icon no longer reads like the overflow menu
+
+- Swapped the "Others" category-filter icon from the horizontal-dots
+  `MoreHorizontal` glyph to `Puzzle`. At small mobile sizes the dots read too
+  close to the new ⋮ overflow-menu button (v2.6.2), inviting mix-ups between
+  "toggle the misc-device category" and "open the view/Settings/profile menu."
+
 ## 2.6.2
 
 ### Single menu button on phones for view / Settings / profile
