@@ -21,14 +21,49 @@ export class HAWebSocket {
   private messageId = 1;
   private url = "";
   private token = "";
-  private pending = new Map<number, { resolve: Resolver; reject: Rejecter }>();
+  private pending = new Map<number, { resolve: Resolver; reject: Rejecter; timer?: ReturnType<typeof setTimeout> }>();
   private subscriptions = new Map<number, PendingSubscription>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private manuallyClosed = false;
   private state: ConnectionState = "disconnected";
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private pongTimer: ReturnType<typeof setTimeout> | null = null;
 
   onStateChange: (state: ConnectionState) => void = () => {};
+  /** Every failed service call is reported here (panels fire-and-forget). */
+  onServiceError: (err: Error) => void = () => {};
+
+  constructor() {
+    // A phone that slept or roamed Wi-Fi kills the TCP socket without firing
+    // onclose for minutes — the app still says "connected" but every tap goes
+    // into a black hole. Waking the tab / regaining network is the moment to
+    // health-check and, if needed, reconnect NOW instead of on backoff delay.
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) this.checkHealth();
+      });
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", () => this.checkHealth());
+    }
+  }
+
+  /** Ping a live-looking connection (dead sockets fail fast via the pong
+   *  timeout) or, when down, skip the backoff delay and reconnect now. */
+  private checkHealth() {
+    if (this.manuallyClosed || !this.url) return;
+    if (this.state === "connected") {
+      this.sendPing();
+    } else if (!["connecting", "authenticating"].includes(this.state)) {
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      this.reconnectAttempts = 0;
+      this.openSocket().catch(() => this.scheduleReconnect());
+    }
+  }
 
   getState(): ConnectionState {
     return this.state;
@@ -118,6 +153,7 @@ export class HAWebSocket {
             this.setState("connected");
             this.reconnectAttempts = 0;
             this.resubscribeAll();
+            this.startHeartbeat();
             finish(() => resolve());
             break;
           case "auth_invalid":
@@ -132,11 +168,16 @@ export class HAWebSocket {
             this.subscriptions.get(msg.id)?.callback(msg.event);
             break;
           case "pong":
+            if (this.pongTimer) {
+              clearTimeout(this.pongTimer);
+              this.pongTimer = null;
+            }
             break;
         }
       };
 
       this.ws.onclose = () => {
+        this.stopHeartbeat();
         this.setState("disconnected");
         this.rejectAllPending(new Error("Connection closed"));
         // If we never authenticated, settle the connect() promise as a failure.
@@ -154,12 +195,16 @@ export class HAWebSocket {
     const p = this.pending.get(msg.id);
     if (!p) return;
     this.pending.delete(msg.id);
+    clearTimeout(p.timer);
     if (msg.success) p.resolve(msg.result);
     else p.reject(new Error(msg.error?.message ?? "Service call failed"));
   }
 
   private rejectAllPending(err: Error) {
-    this.pending.forEach((p) => p.reject(err));
+    this.pending.forEach((p) => {
+      clearTimeout(p.timer);
+      p.reject(err);
+    });
     this.pending.clear();
   }
 
@@ -177,15 +222,57 @@ export class HAWebSocket {
     return this.messageId++;
   }
 
+  // ---- Heartbeat: detect dead sockets the browser won't report -----------
+  // HA answers {type:"ping"} with {type:"pong"}. A socket that swallows the
+  // ping without answering within 5s is dead (slept phone, Wi-Fi roam): force
+  // close so onclose fires and the normal reconnect path takes over. Without
+  // this the app can sit "connected" for minutes while every tap does nothing.
+  private startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => this.sendPing(), 25000);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    if (this.pongTimer) {
+      clearTimeout(this.pongTimer);
+      this.pongTimer = null;
+    }
+  }
+
+  private sendPing() {
+    if (this.state !== "connected" || !this.ws || this.pongTimer) return;
+    this.pongTimer = setTimeout(() => {
+      this.pongTimer = null;
+      this.ws?.close(); // dead socket → onclose → reconnect
+    }, 5000);
+    try {
+      this.ws.send(JSON.stringify({ id: this.nextId(), type: "ping" }));
+    } catch {
+      this.ws?.close();
+    }
+  }
+
   /** Send a command and resolve with its result. */
   sendMessage<T = unknown>(type: string, payload: Record<string, unknown> = {}): Promise<T> {
     return new Promise((resolve, reject) => {
       if (this.state !== "connected" || !this.ws) {
-        reject(new Error("Not connected"));
+        reject(new Error("Not connected to Home Assistant"));
         return;
       }
       const id = this.nextId();
-      this.pending.set(id, { resolve: resolve as Resolver, reject });
+      // A reply that never comes (socket died mid-flight) must not hang the
+      // caller forever — settle with a clear error after 10s.
+      const timer = setTimeout(() => {
+        if (this.pending.delete(id)) {
+          reject(new Error("Home Assistant did not respond"));
+          this.sendPing(); // probe the socket — a dead one reconnects in ≤5s
+        }
+      }, 10000);
+      this.pending.set(id, { resolve: resolve as Resolver, reject, timer });
       this.ws.send(JSON.stringify({ id, type, ...payload }));
     });
   }
@@ -226,15 +313,24 @@ export class HAWebSocket {
     data: Record<string, unknown> = {},
     target?: HassServiceTarget,
   ): Promise<void> {
-    await this.sendMessage("call_service", {
-      domain,
-      service,
-      service_data: data,
-      ...(target ? { target } : {}),
-    });
+    try {
+      await this.sendMessage("call_service", {
+        domain,
+        service,
+        service_data: data,
+        ...(target ? { target } : {}),
+      });
+    } catch (err) {
+      // Every button in the app fires service calls without awaiting them; a
+      // silently swallowed rejection is exactly the "I tap and nothing
+      // happens" bug. Route failures to one place (the HUD toast) instead of
+      // throwing at callers that never catch.
+      this.onServiceError(err as Error);
+    }
   }
 
   disconnect() {
+    this.stopHeartbeat();
     this.manuallyClosed = true;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

@@ -34,6 +34,9 @@ interface HAStateContextType {
   callService: (domain: string, service: string, data?: Record<string, unknown>, target?: HassServiceTarget) => Promise<void>;
   connect: (url: string, token: string) => Promise<void>;
   lastError: string | null;
+  /** Most recent failed service call (tap did nothing) — shown as a toast.
+   *  Wrapped in an object so firing the SAME error twice still re-triggers. */
+  serviceError: { message: string; at: number } | null;
 }
 
 const HAStateContext = createContext<HAStateContextType | null>(null);
@@ -52,6 +55,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const [connection, setConnection] = useState<ConnectionState>("disconnected");
   const [haConfig, setHaConfig] = useState<HAConfig | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [serviceError, setServiceError] = useState<{ message: string; at: number } | null>(null);
 
   // Imperative subscriber registries (don't trigger React renders).
   const perEntity = useRef(new Map<string, Set<EntityCallback>>());
@@ -64,8 +68,10 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     ws.onStateChange = setConnection;
+    ws.onServiceError = (err) => setServiceError({ message: err.message, at: Date.now() });
     return () => {
       ws.onStateChange = () => {};
+      ws.onServiceError = () => {};
     };
   }, [ws]);
 
@@ -143,8 +149,9 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       callService,
       connect,
       lastError,
+      serviceError,
     }),
-    [entities, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError],
+    [entities, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
   );
 
   return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import BabylonCanvas from "@/components/canvas/BabylonCanvas";
 import HUD from "@/components/hud/HUD";
 import RoomLabel from "@/components/hud/RoomLabel";
+import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
 import PanelRouter from "@/components/panels/PanelRouter";
 import SettingsModal from "@/components/settings/SettingsModal";
@@ -244,6 +245,8 @@ export default function Dashboard() {
       />
 
       <RoomLabel room={room} />
+
+      <ServiceErrorToast />
 
       <HUD
         currentFloor={currentFloor}

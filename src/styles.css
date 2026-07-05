@@ -374,6 +374,19 @@ button {
   border: 1px solid var(--hairline);
 }
 
+/* Failed-service-call feedback: sits above panels/sheets so a tap that did
+   nothing always explains itself, wherever it happened. */
+.service-toast {
+  position: absolute; top: calc(64px + env(safe-area-inset-top, 0px));
+  left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg-panel); backdrop-filter: blur(8px);
+  border: 1px solid var(--status-danger); color: var(--status-danger);
+  padding: 10px 18px; border-radius: 999px; z-index: 70;
+  animation: fadeSlide 0.3s ease-out;
+  max-width: 86vw; font-size: 14px;
+}
+
 .bottom-bar {
   position: absolute; bottom: 0; left: 0; right: 0; height: 96px;
   display: flex; align-items: flex-end; justify-content: flex-start;
@@ -464,6 +477,7 @@ input[type="range"]::-moz-range-thumb {
   background: var(--bg-input); color: var(--text-secondary);
 }
 .big-toggle.on { background: linear-gradient(135deg, var(--accent), var(--accent-strong)); color: var(--text-on-accent); }
+.big-toggle:active { transform: scale(0.97); }
 
 .status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-weight: 600; }
 .status-pill.on { background: color-mix(in srgb, var(--status-on) 20%, transparent); color: var(--status-on); }

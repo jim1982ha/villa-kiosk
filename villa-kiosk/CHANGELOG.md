@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.7.2
+
+### Fix unresponsive controls (taps that silently do nothing)
+
+- Reported on the phone kiosk: tapping the TV panel's On/Off button did
+  nothing. Two systemic causes, both fixed globally:
+- **Dead sockets looked connected.** A phone that slept or roamed Wi-Fi kills
+  the WebSocket without the browser firing `onclose` for minutes — the app
+  kept saying "connected" while every service call went into a black hole.
+  The HA connection now has a heartbeat (ping every 25s, force-reconnect if
+  no pong within 5s), reconnects immediately when the tab becomes visible or
+  the network comes back (no backoff wait), and every in-flight call times
+  out after 10s instead of hanging forever.
+- **Failures were invisible.** Every button fires its service call without
+  awaiting it, so real HA errors (disconnected, unsupported service, backend
+  error) vanished silently. All service-call failures now surface in a
+  global toast — a tap that can't act tells you why, from any panel.
+- The big power toggle also gets a pressed-state animation so a registered
+  tap is visually distinct from a dead one.
+
 ## 2.7.1
 
 ### Fix night crossfade washing the whole villa in white glow
