@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.7.3
+
+### Clickable-highlight fixes + first-person grounding
+
+- **Lights now get the blue "clickable" glow.** `applyHighlight` explicitly
+  skipped `type === "light"` mappings (old fear of tinting invisible
+  placeholder spheres — moot, since invisible meshes are already filtered
+  by the `isVisible` check). The skip is removed; visible light fixtures
+  highlight like every other clickable object.
+- **The glow respects the category chips.** Objects whose category is
+  hidden (HUD filter) no longer advertise themselves as clickable: the
+  highlight pass skips them, and toggling a category chip re-applies the
+  highlight live (updateConfig now watches `hiddenCategories` too).
+- **First-person no longer floats above the floor.** Two holes, both fixed:
+  `followFloor()`'s down-ray only searched a 2.6 m band, so walking over
+  any drop taller than 1 m (terrace edge → garden, stair void) left you
+  hovering at the old height forever — it now falls back to a long ray and
+  glides down to the real floor. And switching overview → first-person
+  never grounded the camera (only teleports did); it now lands on the
+  floor immediately via `groundCamera()`.
+
+Also in this release cycle (pipeline, not shipped in the container):
+blender_pipeline v2.2.2 — reverts the 2.2.1 experiment and fixes the black
+rectangles on walls/floors at the source. Measured on the shipped GLBs:
+~17% of the structure's surface area baked pitch black because SweetHome
+exports overlapping boxes (wall filler above door/window openings, cabinet
+backs, a second level roofing the rooms) — those faces are buried flush
+against other geometry, get zero light in Cycles, and win the z-fight as
+black rectangles. The day bake now applies an albedo-based ambient floor
+(`--bake-day-ambient`, default 0.30), the same trick the night pass already
+used: black area drops from 24.9% to 1.6% of the structure's surface.
+Re-export both GLBs with v2.2.2 to see the fix on the kiosk.
+
 ## 2.7.2
 
 ### Fix unresponsive controls (taps that silently do nothing)

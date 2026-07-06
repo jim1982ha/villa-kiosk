@@ -360,11 +360,20 @@ export class CameraController {
     // Search 1.6 m above current feet (to catch a stair step ahead) and
     // 1.0 m below (a small drop-off). Total band = 2.6 m.
     const originY = currentFloorY + 1.6;
-    const hit = this.scene.pickWithRay(
-      new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 2.6),
-      (m) => m.isPickable && m.isVisible && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name),
-    );
-    if (!hit?.hit || !hit.pickedPoint) return;
+    const predicate = (m: AbstractMesh) =>
+      m.isPickable && m.isVisible && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name);
+    let hit = this.scene.pickWithRay(
+      new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 2.6), predicate);
+    if (!hit?.hit || !hit.pickedPoint) {
+      // The band missed: we walked over a drop taller than 1 m (terrace edge
+      // down to the garden, a stair void) or re-entered first-person above
+      // the floor. Without this fallback the early return kept the old
+      // height for good — the "person floats above the ground" bug. Catch
+      // the real floor however far below and glide down (MAX_STEP paces it).
+      hit = this.scene.pickWithRay(
+        new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 200), predicate);
+      if (!hit?.hit || !hit.pickedPoint) return;
+    }
 
     const hitFloorY = hit.pickedPoint.y;
     const stepUp = hitFloorY - currentFloorY;

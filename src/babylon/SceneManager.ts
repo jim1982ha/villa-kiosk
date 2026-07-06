@@ -28,6 +28,7 @@ import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto, BAKED_MATERIAL_PREFIX } from "./ModelLoader";
 import { applyGrassGround } from "./GroundGrass";
 import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
+import { categoryForEntity } from "@/config/EntityCategories";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
@@ -301,6 +302,10 @@ export class SceneManager {
       this.overview.disable();
       this.scene.activeCamera = this.camera.camera;
       this.camera.attachInput();
+      // Land on the real floor immediately — followFloor only corrects while
+      // walking, so without this you can re-enter first-person hovering at
+      // whatever height the camera was left at.
+      if (this.loadedMeshes.length) this.camera.groundCamera();
       // Restore the real sky for the immersive walk-through view.
       this.sky.setEnabled(true);
       this.sun.setBackgroundOverride(null);
@@ -881,10 +886,10 @@ export class SceneManager {
       if (!m.isEnabled() || !m.isVisible) continue;
       const mapping = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
       if (!mapping) continue;
-      // Lights use PointLight + emissive colour for feedback; a tint/outline on
-      // placeholder sphere meshes would make them visible as blue balls
-      // floating at ceiling height.
-      if (mapping.type === "light") continue;
+      // Glow only for categories currently shown (HUD chips): a hidden
+      // category's objects shouldn't advertise themselves as clickable.
+      const category = mapping.category ?? categoryForEntity(mapping.entityId, mapping.type);
+      if (this.config.hiddenCategories.includes(category)) continue;
       if (!(m instanceof Mesh)) continue;
       const unit = axisWorldScale(m);
       // Outline offset follows the vertex normal (any direction), so a single
@@ -1024,7 +1029,11 @@ export class SceneManager {
       }
     }
 
-    if (this.loadedMeshes.length && prev.highlightInteractive !== config.highlightInteractive) {
+    if (
+      this.loadedMeshes.length &&
+      (prev.highlightInteractive !== config.highlightInteractive ||
+        prev.hiddenCategories.join() !== config.hiddenCategories.join())
+    ) {
       this.applyHighlight(this.loadedMeshes);
     }
     this.requestRender();
