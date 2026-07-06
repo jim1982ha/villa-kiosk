@@ -147,8 +147,12 @@ export class SceneManager {
       onLongPress: handleLongPress,
     });
 
-    // FloorManager watches the camera for staircase transitions.
-    this.floors = new FloorManager(this.scene, opts.onFloorChange);
+    // FloorManager watches the camera for staircase transitions. Floor
+    // switches toggle mesh visibility, so the on-demand renderer must wake up.
+    this.floors = new FloorManager(this.scene, (floor) => {
+      opts.onFloorChange(floor);
+      this.requestRender();
+    });
     this.floors.setCamera(this.camera);
 
     this.pick = new PickHandler(

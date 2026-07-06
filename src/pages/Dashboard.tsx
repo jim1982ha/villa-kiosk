@@ -212,9 +212,10 @@ export default function Dashboard() {
   const handleTeleport = useCallback(
     (point: TeleportPoint) => {
       if (!manager) return;
-      // In overview mode: pan the bird's-eye camera to the room — don't switch
-      // floors or move the FP camera (that camera isn't active).
-      if (viewMode === "first-person" && point.floor !== currentFloor) {
+      // Switch floors in BOTH camera modes: floor visibility is real now
+      // (split-structure GLBs hide the upper storey), so panning the
+      // bird's-eye camera to a 2F room must also reveal the 2F.
+      if (point.floor !== currentFloor) {
         onFloorChange(point.floor);
       }
       manager.navigateTo(point);

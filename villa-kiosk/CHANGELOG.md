@@ -1,5 +1,44 @@
 # Changelog
 
+## 2.8.0
+
+### Real 1F/2F floor toggle + per-device-class binary sensor icons
+
+- **The floor toggle now actually hides the upper floor.** `FloorManager`
+  classified meshes but never changed anything on screen. It now toggles
+  visibility (`setEnabled`, orthogonal to the ceiling-hide) whenever the
+  floor changes: meshes above the active floor disappear, lower floors stay
+  visible from above so the staircase reads correctly. Works best with a
+  pipeline ≥2.3.0 GLB, whose structure ships pre-split as `Structure`
+  (ground) + `Structure_L1` (upper) sharing one baked atlas — switching
+  floors is instant visibility, no model reload. Entity badges vanish with
+  their floor (label anchors now inherit the mesh's enabled state), and
+  teleporting to a room on another floor switches floors in the bird's-eye
+  view too, not just first-person.
+- **Binary sensors get per-device-class icons.** `binary_sensor` is a
+  catch-all domain — a water-leak sensor and a motion sensor shared the one
+  generic 🚨 badge. The badge glyph now reads the entity's `device_class`
+  state attribute from Home Assistant (the same signal the details panel's
+  wording already used): 💧 moisture, 🚶 motion, 👁️ occupancy, 🚪 door,
+  🔥 smoke and ~25 more, each editable in Settings → Device state icons
+  under "Binary sensors by device class" (the list shows the classes of
+  your bound sensors when connected). Entities without a `device_class`
+  keep the generic binary-sensor icon.
+
+Also in this release cycle (pipeline, not shipped in the container):
+blender_pipeline v2.3.0 — two changes. (1) Bake-verification backstop: on
+Blender 5.1.2/Apple Metal, Cycles silently skipped rasterizing entire UV
+islands (~6% of the covered atlas exact-zero in *every* pass — the
+surviving black exterior strip in the v2.2.2 GLBs; Blender 4.2.3/CPU wrote
+the same islands fine). The pipeline knows the exact rect every island and
+micro-patch was packed into, so after the albedo pass it stamps any rect
+that came back empty with the material's real base colour, and the
+existing day/night ambient floors carry it into both atlases — deterministic,
+whatever the Cycles version/backend does. (2) `--level-split` (default
+auto): multi-level homes export `Structure` + `Structure_L1` split at the
+.sh3d level elevations, assigned per 3D-connectivity island by lowest
+point, so stairs and palms stay grounded. Re-export both GLBs with v2.3.0.
+
 ## 2.7.3
 
 ### Clickable-highlight fixes + first-person grounding

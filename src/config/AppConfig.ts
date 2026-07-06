@@ -39,6 +39,47 @@ export const DEFAULT_ENTITY_ICONS: Record<EntityType, string> = {
   assist_satellite: "🎙️",
 };
 
+/**
+ * binary_sensor is a catch-all HA domain — a water-leak sensor and a PIR
+ * motion sensor are both "binary_sensor", so one per-type glyph can't tell
+ * them apart. HA distinguishes them via the entity's `device_class` state
+ * attribute (the same signal SensorPanel's wording uses, see
+ * config/BinarySensorClasses.ts); this table gives each class its own badge
+ * glyph. Resolution order for a binary_sensor badge: the user's per-class
+ * override (config.binarySensorIcons) → this default → the generic
+ * binary_sensor entry in entityIcons for entities with no device_class.
+ */
+export const DEFAULT_BINARY_SENSOR_ICONS: Record<string, string> = {
+  moisture: "💧",
+  motion: "🚶",
+  moving: "🏃",
+  occupancy: "👁️",
+  presence: "🏠",
+  door: "🚪",
+  garage_door: "🚪",
+  window: "🪟",
+  opening: "🚪",
+  lock: "🔓",
+  smoke: "🔥",
+  gas: "💨",
+  carbon_monoxide: "💨",
+  vibration: "📳",
+  sound: "🔊",
+  light: "🔆",
+  battery: "🪫",
+  battery_charging: "🔋",
+  connectivity: "📶",
+  plug: "🔌",
+  power: "⚡",
+  running: "▶️",
+  safety: "⚠️",
+  problem: "⚠️",
+  tamper: "⚠️",
+  heat: "🌡️",
+  cold: "❄️",
+  update: "🔄",
+};
+
 /** Tone-mapping operator applied to the whole scene (see RenderConfig). */
 export type ToneMappingMode = "none" | "standard" | "aces" | "khr_neutral";
 
@@ -237,6 +278,10 @@ export interface AppConfig {
   grassGroundHints?: string[];
   /** Per-category state-badge glyphs (see DEFAULT_ENTITY_ICONS). Editable in Settings. */
   entityIcons: Record<EntityType, string>;
+  /** Per-device_class badge glyphs for binary_sensor entities (see
+   *  DEFAULT_BINARY_SENSOR_ICONS). Editable in Settings; a class missing here
+   *  falls back to the default table, then to entityIcons.binary_sensor. */
+  binarySensorIcons: Record<string, string>;
   /** Global size multiplier for the in-scene state-icon badges (1 = default).
    *  In the bird's-eye view this is further scaled by the zoom level. */
   entityIconScale: number;
@@ -272,6 +317,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   naturalScrolling: true,
   render: DEFAULT_RENDER,
   entityIcons: { ...DEFAULT_ENTITY_ICONS },
+  binarySensorIcons: { ...DEFAULT_BINARY_SENSOR_ICONS },
   // 1.5x at the default whole-villa overview packed badges too tightly for the
   // overlap-avoiding declutter to keep more than one per room visible (most
   // devices in a room fall within the same clash radius). 1.0x is the badge's
@@ -295,6 +341,7 @@ export function loadConfig(): AppConfig {
       modelTransform: { ...DEFAULT_CONFIG.modelTransform, ...(stored.modelTransform ?? {}) },
       render: { ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) },
       entityIcons: { ...DEFAULT_ENTITY_ICONS, ...(stored.entityIcons ?? {}) },
+      binarySensorIcons: { ...DEFAULT_BINARY_SENSOR_ICONS, ...(stored.binarySensorIcons ?? {}) },
       teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
     };
   } catch (err) {

@@ -2,14 +2,14 @@
 // HA connection + token + location + model + backup/restore. Plus a link to the
 // full Config Editor and a button to toggle the Babylon Inspector for calibration.
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plug, Download, Upload, Bug, FileText, Info, Sliders, Sun, Moon, Monitor } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, DEFAULT_ENTITY_ICONS, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
+import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, DEFAULT_ENTITY_ICONS, DEFAULT_BINARY_SENSOR_ICONS, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
 import type { EntityType } from "@/types/scene.types";
 import { testConnection, type TestResult } from "@/ha/testConnection";
 import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
@@ -45,7 +45,7 @@ const ICON_CATEGORY_LABEL: Record<EntityType, string> = {
 export default function SettingsModal({ manager, onClose, onModelChanged }: Props) {
   const { config, update, replace } = useConfig();
   const { role } = useProfile();
-  const { connect, haConfig } = useHA();
+  const { connect, haConfig, entities } = useHA();
   const navigate = useNavigate();
   // RBAC: which settings areas the active profile may use. Dashboard already
   // refuses to open this modal without "openSettings"; these narrow further.
@@ -61,6 +61,23 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
     onClose();
   };
   const ingress = isIngress();
+
+  // Which binary_sensor device classes to offer icon overrides for: the
+  // classes of the sensors actually bound in this villa (read live from HA —
+  // device_class is a state attribute, not part of our config). Without a
+  // connection, fall back to every class the defaults table knows.
+  const binarySensorClasses = useMemo(() => {
+    const found = new Set<string>();
+    for (const [id, map] of Object.entries(config.entityMap ?? {})) {
+      if (map?.type !== "binary_sensor") continue;
+      const dc = entities[id]?.attributes?.device_class as string | undefined;
+      if (dc) found.add(dc);
+    }
+    return found.size
+      ? { detected: true, classes: [...found].sort() }
+      : { detected: false, classes: Object.keys(DEFAULT_BINARY_SENSOR_ICONS) };
+  }, [config.entityMap, entities]);
+
   const importRef = useRef<HTMLInputElement>(null);
   const sh3dRef = useRef<HTMLInputElement>(null);
   const [sh3dMsg, setSh3dMsg] = useState<string | null>(null);
@@ -478,10 +495,37 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
             </label>
           ))}
         </div>
+        <h4 style={{ margin: "16px 0 0", fontSize: 13 }}>Binary sensors by device class</h4>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          "Binary sensor" is a catch-all — a water-leak sensor and a motion
+          sensor are both binary_sensor entities. Home Assistant tells them
+          apart via each entity&apos;s <code>device_class</code> attribute, so the
+          badge icon can too. {binarySensorClasses.detected
+            ? "These are the classes of your bound binary sensors:"
+            : "Connect to Home Assistant to list only your sensors' classes; until then, all known classes:"}
+        </p>
+        <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>
+          {binarySensorClasses.classes.map((dc) => (
+            <label key={dc} style={{ display: "flex", alignItems: "center", gap: 8, width: "calc(50% - 5px)" }}>
+              <input
+                type="text"
+                value={config.binarySensorIcons?.[dc] ?? DEFAULT_BINARY_SENSOR_ICONS[dc] ?? DEFAULT_ENTITY_ICONS.binary_sensor}
+                onChange={(e) => update({ binarySensorIcons: { ...config.binarySensorIcons, [dc]: e.target.value } })}
+                style={{ width: 44, textAlign: "center", fontSize: 18, padding: "4px 0" }}
+                maxLength={4}
+                aria-label={`${dc} binary sensor icon`}
+              />
+              <span className="body-text" style={{ fontSize: 12, textTransform: "capitalize" }}>{dc.replace(/_/g, " ")}</span>
+            </label>
+          ))}
+        </div>
         <button
           className="btn ghost mt"
           style={{ fontSize: 12 }}
-          onClick={() => update({ entityIcons: { ...DEFAULT_ENTITY_ICONS } })}
+          onClick={() => update({
+            entityIcons: { ...DEFAULT_ENTITY_ICONS },
+            binarySensorIcons: { ...DEFAULT_BINARY_SENSOR_ICONS },
+          })}
         >
           Reset icons to defaults
         </button>

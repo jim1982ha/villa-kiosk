@@ -25,7 +25,7 @@ import {
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-import { DEFAULT_ENTITY_ICONS } from "@/config/AppConfig";
+import { DEFAULT_ENTITY_ICONS, DEFAULT_BINARY_SENSOR_ICONS } from "@/config/AppConfig";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import { categoryForEntity } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
@@ -321,12 +321,14 @@ export class EntityVisuals {
   updateConfig(config: AppConfig): void {
     const prevLabels = this.config.showEntityLabels;
     const prevIcons = this.config.entityIcons;
+    const prevBsIcons = this.config.binarySensorIcons;
     this.config = config;
     // Entity-light wall occlusion is always-on (independent of the global Shadows
     // quality toggle, which drives the expensive sun shadows): walls block lamp
     // light out of the box, so there is nothing to tear down here when the toggle
     // changes.
-    const iconsChanged = config.entityIcons !== prevIcons;
+    const iconsChanged = config.entityIcons !== prevIcons
+      || config.binarySensorIcons !== prevBsIcons;
     // Apply the user's size multiplier (combined with the live zoom factor).
     if (typeof config.entityIconScale === "number" && config.entityIconScale !== this.iconUserScale) {
       this.iconUserScale = config.entityIconScale;
@@ -722,6 +724,10 @@ export class EntityVisuals {
       const { min, max } = bounds;
       const node = new TransformNode(`lblAnchor_${entityId}`, this.scene);
       node.position.set((min.x + max.x) / 2, max.y + LABEL_ANCHOR_MARGIN, (min.z + max.z) / 2);
+      // Parent to the entity's mesh (world position preserved) so the anchor
+      // inherits enabled-state: when FloorManager hides a floor, the label
+      // culler sees the disabled anchor and hides the badge with the device.
+      node.setParent(meshes[0]);
       this.labelAnchors.set(entityId, node);
     }
   }
@@ -867,8 +873,21 @@ export class EntityVisuals {
   // State labels (BJS GUI fullscreen overlay)
   // ---------------------------------------------------------------------------
 
-  /** Resolve the per-category glyph (Settings override > built-in default). */
-  private iconFor(type: EntityType): string {
+  /** Resolve the per-category glyph (Settings override > built-in default).
+   *  binary_sensor is the one generic domain: when the entity's live state is
+   *  known, its `device_class` attribute (moisture, motion, door …) picks a
+   *  class-specific glyph so a leak sensor and a PIR stop sharing one icon.
+   *  Before the first state arrives — or with no device_class at all — the
+   *  per-type glyph applies; updateLabel refreshes the badge on every state
+   *  change, so the class glyph appears as soon as HA reports it. */
+  private iconFor(type: EntityType, entity?: HassEntity): string {
+    if (type === "binary_sensor") {
+      const dc = entity?.attributes?.device_class as string | undefined;
+      const icon = dc
+        ? this.config.binarySensorIcons?.[dc] ?? DEFAULT_BINARY_SENSOR_ICONS[dc]
+        : undefined;
+      if (icon) return icon;
+    }
     return this.config.entityIcons?.[type] ?? DEFAULT_ENTITY_ICONS[type] ?? "●";
   }
 
@@ -954,7 +973,8 @@ export class EntityVisuals {
       // docstring for why. The badge is a purely visual control now.
       container.addControl(badge);
 
-      const glyph = new Image(`lbl_glyph_${entityId}`, glyphDataUrl(this.iconFor(type)));
+      const glyph = new Image(`lbl_glyph_${entityId}`,
+        glyphDataUrl(this.iconFor(type, this.lastState.get(entityId))));
       glyph.width = "26px";
       glyph.height = "26px";
       glyph.stretch = Image.STRETCH_UNIFORM;
@@ -1009,7 +1029,7 @@ export class EntityVisuals {
     lbl.badge.alpha = style.alpha;
     lbl.badge.shadowColor = style.glow;
     lbl.badge.shadowBlur = kind === "on" || kind === "alert" ? 10 : 6;
-    lbl.glyph.source = glyphDataUrl(this.iconFor(type)); // honour live icon edits
+    lbl.glyph.source = glyphDataUrl(this.iconFor(type, entity)); // honour live icon + device_class
     lbl.glyph.alpha = kind === "unavailable" ? 0.6 : 1;
 
     const value = this.compactValue(type, entity);
@@ -1025,8 +1045,9 @@ export class EntityVisuals {
    *  zoom, that reliably hid most non-priority tags no matter how the
    *  camera moved — worse than the overlap it was trying to prevent. What
    *  this still hides: an anchor that projects BEHIND the camera (z outside
-   *  [0,1], a genuinely invalid screen position), and any entity whose
-   *  category is currently off in the HUD's category filter. */
+   *  [0,1], a genuinely invalid screen position), any entity whose
+   *  category is currently off in the HUD's category filter, and any entity
+   *  sitting on a floor the 1F/2F toggle has hidden. */
   private cullLabels(): void {
     if (!this.config.showEntityLabels || this.labels.size === 0) return;
     const cam = this.scene.activeCamera;
@@ -1038,6 +1059,12 @@ export class EntityVisuals {
 
     for (const lbl of this.labels.values()) {
       if (hidden.includes(lbl.category)) {
+        lbl.container.isVisible = false;
+        continue;
+      }
+      // Anchor disabled = its mesh is on a hidden floor (FloorManager's
+      // 1F/2F toggle) — the badge must vanish with the device.
+      if (!lbl.anchor.isEnabled()) {
         lbl.container.isVisible = false;
         continue;
       }
