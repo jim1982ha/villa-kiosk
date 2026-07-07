@@ -152,6 +152,15 @@ export async function loadModelInto(
           continue;
         }
         mat.unlit = true;
+        // Double-side the baked structure. SweetHome exports thin slabs (floors,
+        // ceilings) whose covering can carry a downward normal; with the default
+        // backFaceCulling the camera above the 2F sees the culled back of those
+        // floor faces and looks straight through to the now-hidden 1F, reading
+        // as black holes. The texture already IS the finished lit image, so
+        // rendering both faces is free of any lighting artefact — it just fills
+        // the hole. (Glass panes below set this for the same see-both-sides
+        // reason.)
+        if ("backFaceCulling" in mat) mat.backFaceCulling = false;
         baked = true;
         bakedDayMats.add(mat as BakedMat);
       }

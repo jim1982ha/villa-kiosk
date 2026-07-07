@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.9.1
+
+### 2F floor no longer punches black holes to the hidden 1F
+
+- **Baked structure is now double-sided.** SweetHome exports thin floor/ceiling
+  slabs whose covering can carry a *downward* face normal. Rendered unlit with
+  Babylon's default `backFaceCulling`, the camera above the 2F saw the culled
+  back of those floor faces and looked straight through to the exclusive-hidden
+  1F — reading as black. The baked material's texture already IS the finished
+  lit image, so drawing both faces costs nothing and fills the hole. (Measured:
+  42 of 558 walkable-2F-floor faces had downward normals.)
+
 ## 2.9.0
 
 ### Exclusive floor toggle + always-visible exterior (garden & palms)
