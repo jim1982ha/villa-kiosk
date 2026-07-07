@@ -2,6 +2,9 @@
 // Floor visibility and staircase trigger zones.
 //
 // Classification, in priority order:
+//  0. `Structure_Exterior` (blender_pipeline ≥ 2.5.0): the always-visible
+//     ground + garden + palm group. It is NEVER culled by a floor toggle, so
+//     the villa keeps its plot and the palms stay whole on every floor.
 //  1. Pipeline-split structure meshes (blender_pipeline ≥ 2.3.0): a
 //     multi-level GLB ships `Structure` (ground level) plus `Structure_L1`
 //     (`_L2`, …) sharing one baked atlas. Name decides the floor:
@@ -10,24 +13,28 @@
 //     older GLBs (which rule 1 pins to floor 1 so it can never vanish) — by
 //     elevation: bounding-box centre Y below FLOOR_SPLIT_Y is floor 1.
 //
-// Switching floors is pure visibility: meshes above the active floor are
-// setEnabled(false), lower floors stay visible from above so the staircase
-// reads correctly. setEnabled is deliberately NOT isVisible — applyStructure
-// hides ceilings with isVisible, and the two must not stomp each other.
-// Invisible `trigger_stair_up/down` meshes (if present) switch floors when
-// the camera walks into them.
+// Switching floors is pure visibility and EXCLUSIVE (2.5.0): only the active
+// floor's meshes are enabled, every other floor is setEnabled(false), so the
+// 2F view shows the 2F floor alone with the ground-floor rooms hidden (the
+// pipeline bakes each floor open-sky to match). The exterior group stays on
+// throughout. setEnabled is deliberately NOT isVisible — applyStructure hides
+// ceilings with isVisible, and the two must not stomp each other. Invisible
+// `trigger_stair_up/down` meshes (if present) switch floors when the camera
+// walks into them.
 
 import type { AbstractMesh, Scene } from "@babylonjs/core";
 import type { CameraController } from "./CameraController";
 
 const FLOOR_SPLIT_Y = 2.8; // metres; ground floor wall height is ~2.5 m
 const STRUCTURE_LEVEL = /^Structure(?:_L(\d+))?$/i;
+const STRUCTURE_EXTERIOR = /^Structure_Exterior$/i;
 
 export class FloorManager {
   private camera: CameraController | null = null;
   private onFloorChange: (floor: number) => void;
 
   private floorMeshes = new Map<number, AbstractMesh[]>();
+  private alwaysOnMeshes: AbstractMesh[] = [];
   private triggerUp: AbstractMesh | null = null;
   private triggerDown: AbstractMesh | null = null;
   private currentFloor = 1;
@@ -45,6 +52,7 @@ export class FloorManager {
 
   indexFloors(meshes: AbstractMesh[]): void {
     this.floorMeshes.clear();
+    this.alwaysOnMeshes = [];
     for (const m of meshes) {
       if (/^trigger_stair_up/i.test(m.name)) {
         this.triggerUp = m;
@@ -63,6 +71,13 @@ export class FloorManager {
       // carrier is managed by the day/night crossfade, not by floors.
       if (m.getTotalVertices() === 0) continue;
       if (m.name === "BAKED_NightCarrier") continue;
+      // The exterior group (ground + garden + palms) is always visible — it
+      // belongs to no floor and must survive every toggle.
+      if (STRUCTURE_EXTERIOR.test(m.name)) {
+        this.alwaysOnMeshes.push(m);
+        if (!m.isEnabled(false)) m.setEnabled(true);
+        continue;
+      }
       const lvl = STRUCTURE_LEVEL.exec(m.name);
       const floor = lvl
         ? (lvl[1] ? Number(lvl[1]) + 1 : 1)
@@ -90,13 +105,20 @@ export class FloorManager {
     return this.currentFloor;
   }
 
-  /** Hide every mesh above the active floor; keep lower floors visible. */
+  /**
+   * Show ONLY the active floor (exclusive): every other floor is disabled so
+   * the 2F view hides the ground-floor rooms entirely. The exterior group
+   * (ground + palms) stays enabled regardless of floor.
+   */
   private applyVisibility(): void {
     for (const [floor, list] of this.floorMeshes) {
-      const on = floor <= this.currentFloor;
+      const on = floor === this.currentFloor;
       for (const m of list) {
         if (m.isEnabled(false) !== on) m.setEnabled(on);
       }
+    }
+    for (const m of this.alwaysOnMeshes) {
+      if (!m.isEnabled(false)) m.setEnabled(true);
     }
   }
 
@@ -113,8 +135,8 @@ export class FloorManager {
   }
 
   /**
-   * Switch active floor: floors above it are hidden, lower floors stay
-   * visible from above (so the staircase reads correctly).
+   * Switch active floor: only that floor's meshes are shown (exclusive), the
+   * others are hidden; the exterior group stays visible throughout.
    */
   switchToFloor(floor: number): void {
     if (floor === this.currentFloor) return;

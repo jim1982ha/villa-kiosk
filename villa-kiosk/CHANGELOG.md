@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.9.0
+
+### Exclusive floor toggle + always-visible exterior (garden & palms)
+
+- **Floors are now shown one at a time.** `FloorManager` switched from
+  cumulative (`floor <= current`) to **exclusive** (`floor === current`)
+  visibility, so selecting **2F** hides the ground-floor rooms entirely and
+  shows the second storey alone with its own floor texture — the previous
+  behaviour left the 1F ceiling/2F slab showing through. On the **1F** view
+  the result is unchanged (floor 1 was always the only floor ≤ 1).
+- **New always-visible `Structure_Exterior` group.** Pipeline ≥2.5.0 peels
+  the ground, garden and palm trees into a `Structure_Exterior` mesh that the
+  floor toggle **never culls**, so the villa keeps its plot and the palms
+  stay whole on every floor (fixes palm crowns getting truncated on the 1F
+  view). Requires a GLB baked with `blender_pipeline` ≥2.5.0.
+- Single-level / older GLBs are unaffected: with only one floor detected,
+  switching to a non-existent floor still reports "coming soon" rather than
+  blanking the model.
+
 ## 2.8.0
 
 ### Real 1F/2F floor toggle + per-device-class binary sensor icons
