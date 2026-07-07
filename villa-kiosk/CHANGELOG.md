@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.9.2
+
+### Windows read as glass again over dark rooms
+
+- **Detected glass panes get a faint constant sheen.** A pane is a clear PBR
+  material, so it shows whatever is behind it. With the exclusive floor toggle
+  (2.9.0) the other floor is hidden, so a ground-floor room loses its ceiling
+  (the upper slab) and a window ends up framing the dim evening interior or the
+  dark sky — a clear pane over near-black read as an opaque black panel. A small
+  emissive sheen (independent of the dimmed night hemi light) plus a normalised
+  light albedo keep every pane reading as a lit glass surface, even when what's
+  behind it is dark, without glowing like a light. Verified the 2F GLB itself
+  ships all six glass materials transparent (`alphaMode=BLEND`, α 0.25–0.5) with
+  nothing baked opaque — the panes were see-through all along; they just framed
+  darkness.
+
 ## 2.9.1
 
 ### 2F floor no longer punches black holes to the hidden 1F

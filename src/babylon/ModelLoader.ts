@@ -132,7 +132,7 @@ export async function loadModelInto(
     let nightMat: BakedMat | null = null;
     for (const m of result.meshes) {
       const mat = m.material as
-        | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean; roughness?: number; metallic?: number; forceDepthWrite?: boolean; unlit?: boolean }
+        | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean; roughness?: number; metallic?: number; forceDepthWrite?: boolean; unlit?: boolean; emissiveColor?: Color3; albedoColor?: Color3 }
         | null;
       if (!mat) continue;
       if (mat.name) allMats.add(mat.name);
@@ -192,6 +192,19 @@ export async function loadModelInto(
         // glass rather than a flat translucent sheet (PBR materials only).
         if ("roughness" in mat) mat.roughness = 0.1;
         if ("metallic" in mat) mat.metallic = 0;
+        // A pane is a clear PBR material, so what you see through it is whatever
+        // sits behind: with the exclusive floor toggle (2.9.0) the OTHER floor is
+        // hidden, so a ground-floor room loses its ceiling (the upper floor slab)
+        // and a window ends up framing the dim evening interior or the dark
+        // sky — a clear pane over near-black reads as an opaque black panel, not
+        // glass. A small CONSTANT emissive sheen (independent of the dimmed night
+        // hemi) keeps every detected pane reading as a lit glass surface even
+        // when what's behind it is dark; it's faint enough not to glow like a
+        // light. SweetHome pane base colours also range down to a near-black
+        // 0.18 grey — normalising the albedo to a light neutral stops those dark
+        // panes from reading as solid panels too.
+        if ("albedoColor" in mat) mat.albedoColor = new Color3(0.74, 0.80, 0.86);
+        if ("emissiveColor" in mat) mat.emissiveColor = new Color3(0.20, 0.23, 0.27);
         if (mat.name) glassMats.add(mat.name);
       }
     }
