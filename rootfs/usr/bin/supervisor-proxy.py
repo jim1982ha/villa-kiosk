@@ -301,12 +301,151 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
     return web.json_response({"ok": ok})
 
 
+async def _stream_upload_body(request: web.Request, out, kind: str,
+                              check_magic: bool, base: int) -> int:
+    """Stream the request body into `out`, returning the bytes written.
+
+    check_magic — validate the stream head against UPLOAD_MAGIC[kind] (the
+    check accumulates across 64 KiB reads, since a read can in principle be
+    shorter than the longest signature).
+    base — bytes already accumulated for this upload (non-zero in chunked
+    mode) so the MAX_UPLOAD_BYTES cap applies to the WHOLE file, not to each
+    individual chunk.
+    """
+    total = 0
+    head = b""
+    head_checked = not check_magic
+    async for chunk in request.content.iter_chunked(64 * 1024):
+        if not head_checked:
+            head += chunk[: 8 - len(head)]
+            if len(head) >= 4:
+                if not head.startswith(UPLOAD_MAGIC[kind]):
+                    raise web.HTTPBadRequest(
+                        text=f"upload does not look like a {kind} file",
+                    )
+                head_checked = True
+        total += len(chunk)
+        if base + total > MAX_UPLOAD_BYTES:
+            raise web.HTTPRequestEntityTooLarge(
+                max_size=MAX_UPLOAD_BYTES, actual_size=base + total,
+            )
+        out.write(chunk)
+    if check_magic and not head_checked and total > 0:
+        # Body shorter than any valid signature — cannot be a real file.
+        raise web.HTTPBadRequest(text=f"upload does not look like a {kind} file")
+    return total
+
+
+def _write_upload_sidecar(request: web.Request, dest: str) -> None:
+    """Record what was ACTUALLY uploaded. The overwrite keeps the configured
+    filename forever, so without this sidecar the info panel can only show
+    the server-side name — which users read as "wrong file loaded" after
+    uploading e.g. villa_1F_2048.glb over TheLysHouse_1F.glb. Best-effort:
+    a failed sidecar write must never fail the (already completed) upload."""
+    original_name = os.path.basename(request.query.get("name", "").strip())[:120]
+    if not original_name:
+        return
+    try:
+        with open(dest + ".upload.json", "w", encoding="utf-8") as f:
+            json.dump({
+                "original_name": original_name,
+                "uploaded_at": datetime.now(timezone.utc)
+                               .isoformat(timespec="seconds"),
+            }, f)
+        os.chmod(dest + ".upload.json", 0o644)
+    except OSError:
+        pass
+
+
+# Chunked uploads: HA's Ingress gateway rejects any single request over about
+# 16 MB (413) — a Supervisor-level cap this add-on cannot raise. A baked villa
+# GLB easily exceeds that, so the frontend slices big files into ~8 MB pieces
+# and POSTs them sequentially with upload_id/offset/last query params; pieces
+# accumulate in a client-named .part file next to the destination and the last
+# piece atomically replaces the live model, exactly like a single-shot upload.
+CHUNK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+STALE_PART_SECONDS = 24 * 3600
+
+
+def _sweep_stale_parts(dirname: str) -> None:
+    """Delete abandoned chunked-upload .part files older than a day."""
+    try:
+        cutoff = time.time() - STALE_PART_SECONDS
+        for fn in os.listdir(dirname):
+            if ".upload-" not in fn or not fn.endswith(".part"):
+                continue
+            p = os.path.join(dirname, fn)
+            try:
+                if os.path.getmtime(p) < cutoff:
+                    os.unlink(p)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+async def _chunked_upload(request: web.Request, kind: str, dest: str,
+                          upload_id: str) -> web.Response:
+    """One piece of a chunked upload (see the CHUNK_ID_RE comment above)."""
+    if not CHUNK_ID_RE.fullmatch(upload_id):
+        return web.json_response({"error": "bad upload_id"}, status=400)
+    try:
+        offset = int(request.query.get("offset", ""))
+    except ValueError:
+        return web.json_response(
+            {"error": "chunked upload needs an integer offset"}, status=400)
+    if offset < 0:
+        return web.json_response({"error": "negative offset"}, status=400)
+    last = request.query.get("last") == "1"
+    part = f"{dest}.upload-{upload_id}.part"
+
+    if offset == 0:
+        _sweep_stale_parts(os.path.dirname(dest))
+    else:
+        # The offset doubles as a sequence check: a dropped or duplicated
+        # piece shows up as a size mismatch and the client restarts cleanly
+        # instead of assembling a corrupt file.
+        try:
+            have = os.path.getsize(part)
+        except OSError:
+            return web.json_response(
+                {"error": "unknown upload_id — restart the upload"}, status=409)
+        if have != offset:
+            return web.json_response(
+                {"error": f"offset mismatch (server has {have}, client sent "
+                          f"{offset}) — restart the upload"}, status=409)
+
+    try:
+        with open(part, "wb" if offset == 0 else "ab") as out:
+            n = await _stream_upload_body(
+                request, out, kind, check_magic=(offset == 0), base=offset)
+        if n == 0:
+            raise web.HTTPBadRequest(text="empty chunk")
+        if not last:
+            return web.json_response({"ok": True, "received": offset + n})
+        # See the single-shot handler for why 0644 before the atomic replace.
+        os.chmod(part, 0o644)
+        os.replace(part, dest)
+    except BaseException:
+        try:
+            os.unlink(part)
+        except OSError:
+            pass
+        raise
+
+    _write_upload_sidecar(request, dest)
+    rel = os.path.relpath(dest, os.path.realpath(WWW_ROOT))
+    return web.json_response({"path": rel, "size": offset + n})
+
+
 async def model_upload_handler(request: web.Request) -> web.Response:
     """Stream an uploaded GLB/SH3D to the central model file (atomic overwrite).
 
     The body is written to a temp file in the destination directory, then
     os.replace()'d over the existing file — so a partial/failed upload never
     corrupts the live model, and a success cleanly erases the previous file.
+    With upload_id/offset/last query params the body is one piece of a chunked
+    upload instead (files above HA Ingress's ~16 MB per-request cap).
     """
     kind = request.query.get("kind", "")
     if kind not in ("glb", "sh3d"):
@@ -316,35 +455,19 @@ async def model_upload_handler(request: web.Request) -> web.Response:
         dest = _resolve_upload_target(kind)
     except ValueError as err:
         return web.json_response({"error": str(err)}, status=400)
-
     os.makedirs(os.path.dirname(dest), exist_ok=True)
+
+    upload_id = request.query.get("upload_id", "").strip()
+    if upload_id:
+        return await _chunked_upload(request, kind, dest, upload_id)
+
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(dest), suffix=".part")
-    total = 0
-    # Magic-byte check runs on the stream head (chunks can in principle arrive
-    # smaller than 4 bytes, so accumulate until there is enough to compare).
-    head = b""
-    head_checked = False
     try:
         with os.fdopen(fd, "wb") as out:
-            async for chunk in request.content.iter_chunked(64 * 1024):
-                if not head_checked:
-                    head += chunk[: 8 - len(head)]
-                    if len(head) >= 4:
-                        if not head.startswith(UPLOAD_MAGIC[kind]):
-                            raise web.HTTPBadRequest(
-                                text=f"upload does not look like a {kind} file",
-                            )
-                        head_checked = True
-                total += len(chunk)
-                if total > MAX_UPLOAD_BYTES:
-                    raise web.HTTPRequestEntityTooLarge(
-                        max_size=MAX_UPLOAD_BYTES, actual_size=total,
-                    )
-                out.write(chunk)
+            total = await _stream_upload_body(
+                request, out, kind, check_magic=True, base=0)
         if total == 0:
             raise web.HTTPBadRequest(text="empty upload")
-        if not head_checked:  # body shorter than any valid signature
-            raise web.HTTPBadRequest(text=f"upload does not look like a {kind} file")
         # mkstemp() creates the temp file 0600 (root-only). nginx workers run
         # unprivileged, so a 0600 model file makes nginx return HTTP 403 when it
         # tries to serve /model/... . Relax to 0644 (world-readable, matching a
@@ -358,24 +481,7 @@ async def model_upload_handler(request: web.Request) -> web.Response:
             pass
         raise
 
-    # Record what was ACTUALLY uploaded. The overwrite keeps the configured
-    # filename forever, so without this sidecar the info panel can only show
-    # the server-side name — which users read as "wrong file loaded" after
-    # uploading e.g. villa_1F_2048.glb over TheLysHouse_1F.glb. Best-effort:
-    # a failed sidecar write must never fail the (already completed) upload.
-    original_name = os.path.basename(request.query.get("name", "").strip())[:120]
-    if original_name:
-        try:
-            with open(dest + ".upload.json", "w", encoding="utf-8") as f:
-                json.dump({
-                    "original_name": original_name,
-                    "uploaded_at": datetime.now(timezone.utc)
-                                   .isoformat(timespec="seconds"),
-                }, f)
-            os.chmod(dest + ".upload.json", 0o644)
-        except OSError:
-            pass
-
+    _write_upload_sidecar(request, dest)
     rel = os.path.relpath(dest, os.path.realpath(WWW_ROOT))
     return web.json_response({"path": rel, "size": total})
 

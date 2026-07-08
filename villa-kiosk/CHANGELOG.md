@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.9.6
+
+### Central upload no longer fails at 16 MB (HTTP 413)
+
+- **Chunked central uploads.** HA's Ingress gateway rejects any single
+  request above ~16 MB with HTTP 413 — a Supervisor-level cap the add-on
+  cannot raise, and a baked lightmap GLB (~17.5 MB) already exceeds it. The
+  app now slices files above 12 MB into sequential 8 MB pieces
+  (`upload_id`/`offset`/`last` query params); the supervisor-proxy
+  accumulates them in a `.part` file next to the destination and atomically
+  replaces the live model on the last piece — same magic-byte check, same
+  200 MB total cap, same atomic-overwrite guarantee as before. Small files
+  still upload in one request, and copying a file in via SSH/Samba still
+  works unchanged. Abandoned part files are swept after 24 h.
+
+### Lightmap GLBs missing their bake UVs are now called out
+
+- **Console warning when a lightmap GLB has no TEXCOORD_1.** Blender's glTF
+  exporter silently drops UV layers that no material references, which cost
+  pipeline 2.7.0's lightmap GLBs their BakeUV channel — the lightmap then
+  samples at the tiling texture UVs and the lighting looks smeared/wrong.
+  The app now detects this and says exactly what to do (re-bake with
+  blender_pipeline ≥ 2.7.1, which pins BakeUV into the export by wiring the
+  atlas into each structure material's glTF occlusion slot — inert at render
+  time, since these materials run with `environmentIntensity = 0`).
+
 ## 2.9.5
 
 ### Model info panel shows what was actually uploaded

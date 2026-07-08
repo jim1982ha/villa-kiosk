@@ -2,7 +2,7 @@
 // Load a GLB into the scene from an ArrayBuffer (IndexedDB) or an uploaded File,
 // and persist uploads to IndexedDB so a refresh doesn't re-upload.
 
-import { SceneLoader, Material, Color3, Vector3, HemisphericLight, DracoCompression, type AbstractMesh, type Scene } from "@babylonjs/core";
+import { SceneLoader, Material, Color3, Vector3, HemisphericLight, DracoCompression, VertexBuffer, type AbstractMesh, type Scene } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { normaliseMeshName } from "../config/EntityMap";
 // Bundle the Draco decoder from @babylonjs/core so a Draco-compressed GLB loads
@@ -301,9 +301,14 @@ export async function loadModelInto(
       lmDayTex.coordinatesIndex = 1; // the pipeline's BakeUV → TEXCOORD_1
       const structureMeshes: AbstractMesh[] = [];
       const lmMats = new Set<LightmapMat>();
+      let missingUv2 = 0;
       for (const m of result.meshes) {
         if (!STRUCTURE_MESH_RE.test(normaliseMeshName(m.name))) continue;
         if (m.getTotalVertices() === 0) continue;
+        // Blender's glTF exporter drops UV layers no material references —
+        // pipeline < 2.7.1 lost BakeUV that way, and without TEXCOORD_1 the
+        // lightmap samples at the tiling texture UVs (light smeared per tile).
+        if (!m.isVerticesDataPresent(VertexBuffer.UV2Kind)) missingUv2++;
         structureMeshes.push(m);
         const mat = m.material as LightmapMat | null;
         if (!mat) continue;
@@ -364,6 +369,15 @@ export async function loadModelInto(
         `${structureMeshes.length} mesh(es)` +
         (lmNightTex ? "; night lightmap present (hard swap at twilight)" : ""),
       );
+      if (missingUv2 > 0) {
+        console.warn(
+          `[ModelLoader] ${missingUv2}/${structureMeshes.length} structure ` +
+          `mesh(es) have NO TEXCOORD_1 — the lightmap cannot be sampled at ` +
+          `its bake UVs and lighting will look wrong. This GLB was exported ` +
+          `by pipeline 2.7.0 (Blender drops the unused BakeUV layer); ` +
+          `re-bake with blender_pipeline ≥ 2.7.1.`,
+        );
+      }
     }
 
     // A custom-imported window (e.g. window_3x1) can carry a material whose name

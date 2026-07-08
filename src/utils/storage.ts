@@ -158,27 +158,21 @@ export function clearAddonConfigCache(): void {
   _addonConfigCache = null;
 }
 
-/**
- * Upload a central model file (GLB or SH3D) to the add-on, which writes it into
- * the HA www folder (overwriting the previous one). Only meaningful in add-on
- * (Ingress) mode; the supervisor-proxy backs the /model-upload endpoint.
- * Returns the resolved www-relative path. Invalidates the addon-config cache so
- * a freshly-uploaded managed default is picked up on the next fetch.
- * Takes a Blob (not just File) so a caller can upload a re-packaged Blob
- * (e.g. sh3dParser's minifySh3d) instead of the original file as-is.
- */
-export async function uploadCentralModel(
-  file: Blob,
-  kind: "glb" | "sh3d",
-  originalName?: string,
+// HA's Ingress gateway rejects any single request over ~16 MB with HTTP 413
+// (a Supervisor-level cap the add-on cannot raise), so anything bigger goes up
+// as sequential ~8 MB pieces the supervisor-proxy reassembles server-side.
+// 12 MB single-shot threshold leaves margin under the cap.
+const SINGLE_SHOT_MAX_BYTES = 12 * 1024 * 1024;
+const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
+
+async function postUploadRequest(
+  query: string,
+  body: Blob,
 ): Promise<{ path: string; size: number }> {
-  // The original filename rides along so the add-on can record WHAT was
-  // uploaded (the destination file keeps the configured name forever).
-  const nameQ = originalName ? `&name=${encodeURIComponent(originalName)}` : "";
-  const resp = await fetch(ingressPath(`model-upload?kind=${kind}${nameQ}`), {
+  const resp = await fetch(ingressPath(`model-upload?${query}`), {
     method: "POST",
     headers: { "Content-Type": "application/octet-stream" },
-    body: file,
+    body,
   });
   if (!resp.ok) {
     let msg = `Upload failed (HTTP ${resp.status})`;
@@ -188,8 +182,49 @@ export async function uploadCentralModel(
     } catch { /* non-JSON error body */ }
     throw new Error(msg);
   }
-  _addonConfigCache = null;
   return resp.json() as Promise<{ path: string; size: number }>;
+}
+
+/**
+ * Upload a central model file (GLB or SH3D) to the add-on, which writes it into
+ * the HA www folder (overwriting the previous one). Only meaningful in add-on
+ * (Ingress) mode; the supervisor-proxy backs the /model-upload endpoint.
+ * Returns the resolved www-relative path. Invalidates the addon-config cache so
+ * a freshly-uploaded managed default is picked up on the next fetch.
+ * Takes a Blob (not just File) so a caller can upload a re-packaged Blob
+ * (e.g. sh3dParser's minifySh3d) instead of the original file as-is.
+ * Requires add-on ≥ 2.9.6 for files above ~12 MB (chunked protocol).
+ */
+export async function uploadCentralModel(
+  file: Blob,
+  kind: "glb" | "sh3d",
+  originalName?: string,
+): Promise<{ path: string; size: number }> {
+  // The original filename rides along so the add-on can record WHAT was
+  // uploaded (the destination file keeps the configured name forever).
+  const nameQ = originalName ? `&name=${encodeURIComponent(originalName)}` : "";
+  const base = `kind=${kind}${nameQ}`;
+
+  let result: { path: string; size: number };
+  if (file.size <= SINGLE_SHOT_MAX_BYTES) {
+    result = await postUploadRequest(base, file);
+  } else {
+    const uploadId =
+      typeof crypto?.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}0000`;
+    result = { path: "", size: 0 };
+    for (let offset = 0; offset < file.size; offset += UPLOAD_CHUNK_BYTES) {
+      const piece = file.slice(offset, offset + UPLOAD_CHUNK_BYTES);
+      const last = offset + UPLOAD_CHUNK_BYTES >= file.size;
+      result = await postUploadRequest(
+        `${base}&upload_id=${uploadId}&offset=${offset}${last ? "&last=1" : ""}`,
+        piece,
+      );
+    }
+  }
+  _addonConfigCache = null;
+  return result;
 }
 
 /** Fetch the add-on options from the supervisor-proxy. Cached after first call. */
