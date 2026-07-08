@@ -12,7 +12,7 @@ import {
 } from "@babylonjs/core";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import { tapDebug } from "@/utils/tapDebug";
-import type { EntityMapping } from "@/types/scene.types";
+import type { EntityMapping, EntityType } from "@/types/scene.types";
 
 export class PickHandler {
   private scene: Scene;
@@ -20,6 +20,9 @@ export class PickHandler {
   private onLongPicked: (entityId: string) => void;
   private entityMap: Record<string, EntityMapping>;
   private bindings: Record<string, string> = {};
+  /** RBAC type denials (AppConfig.deniedTypes) — a mesh resolving to one of
+   *  these is NOT interactive, even when its name is a valid entity_id. */
+  private deniedTypes: readonly EntityType[] = [];
 
   /** Optional: is a state badge under these client coords? Wired from
    *  SceneManager to EntityVisuals.pickBadgeAt so the hover cursor also
@@ -46,9 +49,14 @@ export class PickHandler {
     scene.onPointerObservable.add((info) => this.handlePointer(info));
   }
 
-  setMaps(map: Record<string, EntityMapping>, bindings: Record<string, string>): void {
+  setMaps(
+    map: Record<string, EntityMapping>,
+    bindings: Record<string, string>,
+    deniedTypes: readonly EntityType[] = [],
+  ): void {
     this.entityMap = map;
     this.bindings = bindings;
+    this.deniedTypes = deniedTypes;
   }
 
   /** Flag interactive meshes pickable; everything else stays non-interactive. */
@@ -63,7 +71,7 @@ export class PickHandler {
     let node: Node | null = mesh;
     let depth = 0;
     while (node && depth < 4) {
-      const mapping = resolveMeshToMapping(node.name, this.entityMap, this.bindings);
+      const mapping = resolveMeshToMapping(node.name, this.entityMap, this.bindings, this.deniedTypes);
       if (mapping) return mapping;
       node = node.parent;
       depth++;

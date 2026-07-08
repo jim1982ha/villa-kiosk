@@ -161,6 +161,9 @@ export class SceneManager {
       opts.onEntityLongPressed,
       (x, y) => !!this.visuals.pickBadgeAt(x, y),
     );
+    // The construction args above don't carry the RBAC type denials — push
+    // them now so a restricted profile's first pick is already filtered.
+    this.pick.setMaps(opts.config.entityMap, opts.config.meshBindings, opts.config.deniedTypes);
 
     // Bird's-eye overview camera (a second control mode). Created up front but
     // dormant: its input is attached and it becomes the active camera only when
@@ -415,7 +418,9 @@ export class SceneManager {
     const pts: Array<{ wx: number; wz: number; px: number; py: number }> = [];
     const seen = new Map<string, { x: number; z: number; n: number }>();
     for (const m of meshes) {
-      const map = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
+      const map = resolveMeshToMapping(
+        m.name, this.config.entityMap, this.config.meshBindings, this.config.deniedTypes,
+      );
       if (!map || !(map.entityId in calib)) continue;
       // Use bounding-box centre rather than getAbsolutePosition(): when the model
       // was created from an OBJ (e.g. via the Blender pipeline), Blender sets every
@@ -555,7 +560,9 @@ export class SceneManager {
 
     const world = new Map<string, { x: number; z: number; n: number }>();
     for (const m of meshes) {
-      const map = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
+      const map = resolveMeshToMapping(
+        m.name, this.config.entityMap, this.config.meshBindings, this.config.deniedTypes,
+      );
       if (!map || !(map.entityId in entityCalib)) continue;
       // Use bounding-box centre (same reason as in normalizeScale above).
       m.computeWorldMatrix(true);
@@ -741,7 +748,7 @@ export class SceneManager {
   /** Re-apply entityMap + meshBindings live (after the user edits a binding). */
   reindex(config: AppConfig): void {
     this.config = config;
-    this.pick.setMaps(config.entityMap, config.meshBindings);
+    this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes);
     this.visuals.updateConfig(config);
     this.visuals.indexMeshes(this.loadedMeshes);
     this.requestRender();
@@ -897,7 +904,9 @@ export class SceneManager {
     const targetWorldWidth = 0.04; // metres — outline rim, sized for close-up views
     for (const m of meshes) {
       if (!m.isEnabled() || !m.isVisible) continue;
-      const mapping = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
+      const mapping = resolveMeshToMapping(
+        m.name, this.config.entityMap, this.config.meshBindings, this.config.deniedTypes,
+      );
       if (!mapping) continue;
       // Glow only for categories currently shown (HUD chips): a hidden
       // category's objects shouldn't advertise themselves as clickable.
@@ -1004,7 +1013,7 @@ export class SceneManager {
     }
     this.camera.updateConfig(config);
     this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
-    this.pick.setMaps(config.entityMap, config.meshBindings);
+    this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes);
     this.visuals.updateConfig(config); // internally cheap; rebuilds labels only on its own diff
 
     // A room added/renamed/removed via the Rooms menu ("Add room here") should

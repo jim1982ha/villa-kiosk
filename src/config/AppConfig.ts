@@ -246,6 +246,14 @@ export interface AppConfig {
    *  column category filter). Empty = every category shown. See
    *  config/EntityCategories.ts for the category set + default assignment. */
   hiddenCategories: Category[];
+  /** Device TYPES the active profile must never see or tap (RBAC). Written by
+   *  filterConfigForRole, never persisted or user-edited. Filtering entityMap/
+   *  meshBindings alone is NOT enough: resolveMeshToMapping's inference
+   *  fallback fabricates a mapping from the MESH NAME alone ("camera.gate" is
+   *  a valid entity_id), which gave guests camera badges + highlights the
+   *  matrix denies. Every resolver call passes this so a denied type resolves
+   *  to null — the mesh stays visible, but as plain untappable geometry. */
+  deniedTypes?: EntityType[];
   /** Draw a blue highlight outline around all interactive (bound) objects. */
   highlightInteractive: boolean;
   /**

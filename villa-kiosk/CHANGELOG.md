@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.9.10
+
+### Guests no longer see camera badges or highlights
+
+- **Fixed: RBAC type denials leaked through mesh-name inference.** The
+  permission matrix already denies guests the `camera` and `binary_sensor`
+  types, and `filterConfigForRole` strips those entities from the entity map
+  and mesh bindings — but the mesh resolver has an inference fallback that
+  fabricates a mapping from the MESH NAME alone, and a pipeline GLB names
+  entity meshes with their entity_id (`camera.gate_cam`). So a guest still
+  got the camera's icon badge, the blue interactive highlight, and a tap
+  target for a stream they can never open. The role's denied types now ride
+  the filtered config (`deniedTypes`) and every resolver call honours them:
+  for guests a camera resolves to nothing — no badge, no blue highlight,
+  not tappable — while the camera asset itself stays visible as plain
+  geometry. Owner and ops are unaffected.
+- **Pipeline v2.7.4 (companion, for the huge-GLB report):** collapse-
+  decimates any non-entity object above 5,000 faces (`--max-object-faces`,
+  0 disables) before joining/baking. SweetHome vegetation is 20k-70k faces
+  per placed copy, so a bushy garden exploded Structure_Exterior to 5.2 M
+  triangles / 119 MB of the 155 MB GLB. Re-bake required to shrink it.
+
 ## 2.9.9
 
 ### Window glass no longer glows white at night

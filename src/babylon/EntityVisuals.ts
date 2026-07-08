@@ -370,7 +370,9 @@ export class EntityVisuals {
     scene.blockMaterialDirtyMechanism = true;
 
     for (const m of meshes) {
-      const map = resolveMeshToMapping(m.name, this.config.entityMap, this.config.meshBindings);
+      const map = resolveMeshToMapping(
+        m.name, this.config.entityMap, this.config.meshBindings, this.config.deniedTypes,
+      );
       if (!map) {
         // Everything that isn't a bound entity is villa shell / furniture: it can
         // block a lamp's light, so keep it as a potential shadow caster. Skip the

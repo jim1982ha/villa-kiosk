@@ -248,6 +248,23 @@ export function resolveMeshToMapping(
   meshName: string,
   map: Record<string, EntityMapping> = ENTITY_MAP,
   bindings: Record<string, string> = {},
+  deniedTypes: readonly EntityType[] = [],
+): EntityMapping | null {
+  const mapping = resolveMeshUnchecked(meshName, map, bindings);
+  // RBAC backstop (AppConfig.deniedTypes). map/bindings arrive role-filtered,
+  // but strategy 4 below fabricates a mapping from the mesh NAME alone — a
+  // pipeline GLB names entity meshes with their entity_id, so "camera.gate"
+  // self-binds and a guest got camera badges/highlights the permission matrix
+  // denies. A denied type resolves to null: no badge, no blue highlight, not
+  // tappable — the mesh itself stays visible as plain geometry.
+  if (mapping && deniedTypes.includes(mapping.type)) return null;
+  return mapping;
+}
+
+function resolveMeshUnchecked(
+  meshName: string,
+  map: Record<string, EntityMapping>,
+  bindings: Record<string, string>,
 ): EntityMapping | null {
   if (!meshName) return null;
 

@@ -130,5 +130,9 @@ export function filterConfigForRole(config: AppConfig, role: Role): AppConfig {
     entityMap,
     meshBindings,
     hiddenCategories: [...new Set([...config.hiddenCategories, ...denied])],
+    // Blocks the resolver's mesh-NAME inference fallback too (see the field's
+    // doc in AppConfig): stripping entityMap/meshBindings above doesn't stop a
+    // mesh literally named after an entity_id from self-binding.
+    deniedTypes: perms.deniedTypes,
   };
 }
