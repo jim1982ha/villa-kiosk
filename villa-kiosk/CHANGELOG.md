@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.9.8
+
+### 2F view keeps the ground floor (and the outdoor) underneath
+
+- **Cumulative floor visibility.** Switching to 2F used to hide the entire
+  ground floor, leaving the upper storey floating in mid-air over the
+  garden. Floor toggles are now cumulative downward: the active floor AND
+  every floor below it stay rendered, so the 2F view keeps the 1F exterior
+  walls, windows and terraces underneath — the same way the outdoor group
+  (ground, garden, palms) always stayed visible. Looking at 1F still cuts
+  the upper storey away so you can see into the rooms from above.
+- **Badges follow the active floor only.** With lower floors rendered, their
+  entity badges would draw straight through the 2F slab (they are GUI
+  overlay, not geometry). The label culler now compares each badge's storey
+  against the active floor and shows only the active floor's badges.
+- App-only update — no re-bake or re-upload of the GLB needed.
+
 ## 2.9.7
 
 ### Thin upper-storey slabs no longer vanish as "ceilings"

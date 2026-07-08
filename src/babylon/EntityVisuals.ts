@@ -271,6 +271,10 @@ export class EntityVisuals {
    *  the badge container is scaled by their product. */
   private iconUserScale = 1;
   private iconZoomScale = 1;
+  /** Active storey from FloorManager (1-based). Floors below it stay rendered
+   *  (cumulative visibility), so enabled-state alone can't cull their badges —
+   *  cullLabels compares each label's stamped floorIndex against this. */
+  private activeFloor = 1;
 
   /** Baked-lighting GLB loaded (see ModelLoader). All lighting — including
    *  every fixture's contribution to the room — is already painted into the
@@ -899,6 +903,14 @@ export class EntityVisuals {
     return this.config.entityMap[entityId]?.category ?? categoryForEntity(entityId, type);
   }
 
+  /** Follow FloorManager's floor toggle — only the active floor's badges are
+   *  drawn (see cullLabels). Called by SceneManager on every floor change. */
+  setActiveFloor(floor: number): void {
+    if (floor === this.activeFloor) return;
+    this.activeFloor = floor;
+    this.requestRender();
+  }
+
   /** Live bird's-eye zoom factor (1 = default fit). Driven per-frame by
    *  SceneManager from the overview camera; ignored (reset to 1) elsewhere. */
   setIconZoomScale(z: number): void {
@@ -1065,6 +1077,18 @@ export class EntityVisuals {
       // Anchor disabled = its mesh is on a hidden floor (FloorManager's
       // 1F/2F toggle) — the badge must vanish with the device.
       if (!lbl.anchor.isEnabled()) {
+        lbl.container.isVisible = false;
+        continue;
+      }
+      // Floors below the active one stay RENDERED (2.9.8 cumulative floors:
+      // the 2F view keeps the 1F shell underneath), but their badges are GUI
+      // overlay and would draw straight through the 2F slab — show only the
+      // active floor's badges. The floorIndex is stamped by FloorManager on
+      // the entity mesh; the anchor is either that mesh or a TransformNode
+      // parented to it.
+      const floorIdx = (lbl.anchor.metadata as { floorIndex?: number } | null)?.floorIndex
+        ?? (lbl.anchor.parent?.metadata as { floorIndex?: number } | null)?.floorIndex;
+      if (floorIdx !== undefined && floorIdx !== this.activeFloor) {
         lbl.container.isVisible = false;
         continue;
       }

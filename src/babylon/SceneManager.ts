@@ -151,6 +151,7 @@ export class SceneManager {
     // switches toggle mesh visibility, so the on-demand renderer must wake up.
     this.floors = new FloorManager(this.scene, (floor) => {
       opts.onFloorChange(floor);
+      this.visuals.setActiveFloor(floor);
       this.requestRender();
     });
     this.floors.setCamera(this.camera);

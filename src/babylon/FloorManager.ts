@@ -13,12 +13,15 @@
 //     older GLBs (which rule 1 pins to floor 1 so it can never vanish) — by
 //     elevation: bounding-box centre Y below FLOOR_SPLIT_Y is floor 1.
 //
-// Switching floors is pure visibility and EXCLUSIVE (2.5.0): only the active
-// floor's meshes are enabled, every other floor is setEnabled(false), so the
-// 2F view shows the 2F floor alone with the ground-floor rooms hidden (the
-// pipeline bakes each floor open-sky to match). The exterior group stays on
-// throughout. setEnabled is deliberately NOT isVisible — applyStructure hides
-// ceilings with isVisible, and the two must not stomp each other. Invisible
+// Switching floors is pure visibility and CUMULATIVE DOWNWARD (2.9.8): the
+// active floor AND every floor below it are enabled; only floors ABOVE are
+// setEnabled(false). Looking at 1F still cuts the upper storey away so you
+// can see inside from above, but the 2F view keeps the ground floor's
+// exterior walls, windows and terraces underneath — without them the upper
+// storey read as a slab floating over the garden. (Pre-2.9.8 this was
+// exclusive — active floor only.) The exterior group stays on throughout.
+// setEnabled is deliberately NOT isVisible — applyStructure hides ceilings
+// with isVisible, and the two must not stomp each other. Invisible
 // `trigger_stair_up/down` meshes (if present) switch floors when the camera
 // walks into them.
 
@@ -93,6 +96,9 @@ export class FloorManager {
         : m.getBoundingInfo().boundingBox.centerWorld.y > FLOOR_SPLIT_Y
           ? 2
           : 1;
+      // Stamp the floor on the mesh so other systems (the entity-label culler)
+      // can tell which storey a mesh belongs to without re-deriving the rules.
+      m.metadata = { ...(m.metadata ?? {}), floorIndex: floor };
       const list = this.floorMeshes.get(floor) ?? [];
       list.push(m);
       this.floorMeshes.set(floor, list);
@@ -115,13 +121,16 @@ export class FloorManager {
   }
 
   /**
-   * Show ONLY the active floor (exclusive): every other floor is disabled so
-   * the 2F view hides the ground-floor rooms entirely. The exterior group
-   * (ground + palms) stays enabled regardless of floor.
+   * Show the active floor and every floor BELOW it; only floors above are
+   * disabled. The 1F view still cuts the upper storey away (top-down look
+   * into the rooms), while the 2F view keeps the ground floor's shell —
+   * exterior walls, windows, terraces — underneath so the upper storey
+   * doesn't float in mid-air. The exterior group (ground + palms) stays
+   * enabled regardless of floor.
    */
   private applyVisibility(): void {
     for (const [floor, list] of this.floorMeshes) {
-      const on = floor === this.currentFloor;
+      const on = floor <= this.currentFloor;
       for (const m of list) {
         if (m.isEnabled(false) !== on) m.setEnabled(on);
       }
