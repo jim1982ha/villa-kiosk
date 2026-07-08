@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.9.7
+
+### Thin upper-storey slabs no longer vanish as "ceilings"
+
+- **Fixed: 1 cm floor patches on the 2F storey rendered as a see-through
+  hole.** `applyStructure` hides any flat mesh (height < 0.35 m) whose
+  bottom sits above 2.5 m — a heuristic for un-named ceilings/roofs in old
+  fused GLBs. Babylon splits a pipeline `Structure_L1` into one child mesh
+  per material, so a thin SweetHome "Box" floor patch at 2.56 m became a
+  lone flat primitive and was hidden. Pipeline-split structure groups
+  (`Structure`, `Structure_L1…`, `Structure_Exterior`) are now exempt from
+  the height heuristic — the Blender pipeline (≥ 2.6.0) already drops the
+  top ceiling/roof before export. Name-matched ceilings are still hidden.
+- **Pipeline v2.7.3 (companion fix, re-bake required): upper-storey devices
+  are now clickable.** SweetHome stores a piece's elevation RELATIVE to its
+  level; the pipeline ignored the level offset, so every upper-storey
+  device's OBJ geometry was searched one storey too low — the device's real
+  meshes were silently fused into the structure (not tappable) and whatever
+  ground-floor part sat at that plan position was bound instead (a door
+  hinge became `binary_sensor.leak4_water_leak`). Placeholder lights were
+  buried at the storey below's ceiling. `_parse_entities` now adds each
+  piece's `<level>` elevation.
+
 ## 2.9.6
 
 ### Central upload no longer fails at 16 MB (HTTP 413)

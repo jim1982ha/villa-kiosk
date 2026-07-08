@@ -27,7 +27,7 @@ import { WeatherEffects } from "./WeatherEffects";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto, BAKED_MATERIAL_PREFIX } from "./ModelLoader";
 import { applyGrassGround } from "./GroundGrass";
-import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
+import { resolveMeshToMapping, inferTypeFromEntityId, normaliseMeshName } from "@/config/EntityMap";
 import { categoryForEntity } from "@/config/EntityCategories";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
@@ -801,7 +801,14 @@ export class SceneManager {
       // "Above floor level" = bounding box bottom is above 2.5 m and the mesh
       // is flat (height < 0.3 m). This removes outdoor "roofs" and ceilings without
       // hiding Floor 2 elements (whose FLOOR sits at ≈ 3 m but has height > 0.3 m).
-      if (ceilingPat.test(name) || (meshMinY > 2.5 && meshH < 0.35)) {
+      // Pipeline-split structure groups are EXEMPT from the height heuristic:
+      // blender_pipeline (≥2.6.0) already drops the top ceiling/roof in Blender,
+      // and Babylon splits Structure_L1 into one child mesh per material — so a
+      // thin upper-storey slab (a 1 cm SweetHome "Box" floor patch at 2.56 m)
+      // is a flat lone primitive that this heuristic ate, leaving a see-through
+      // hole in the 2F floor. Name-matched ceilings are still hidden.
+      const isPipelineStructure = /^Structure(?:_L\d+|_Exterior)?$/i.test(normaliseMeshName(name));
+      if (ceilingPat.test(name) || (!isPipelineStructure && meshMinY > 2.5 && meshH < 0.35)) {
         m.isVisible = false;
         m.checkCollisions = false;
         continue;
