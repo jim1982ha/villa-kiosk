@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.9.4
+
+### Lightmap-mode GLBs: full texture sharpness + baked lighting
+
+- **Support for `blender_pipeline.py ≥2.7.0 --bake-lightmap` GLBs.** The
+  classic bake squeezes the whole villa's colour into ONE atlas — at 2048² over
+  ~2,210 m² that is ~4 cm/texel, which is why re-baking at a bigger size never
+  looked sharper (the original tiled textures resolve ~0.2 cm/px, ~20× finer).
+  Lightmap mode splits the job: the GLB keeps every original crisp texture on
+  UV0 and ships only the baked light (sun + sky + GI + shadows) as an atlas on
+  UV1. The app detects the `BAKED_Lightmap` carrier material, multiplies the
+  atlas onto every structure material (`useLightmapAsShadowmap`), lights the
+  structure with a dedicated uniform white fill (excluded from the sun/hemi/IBL
+  so nothing double-lights), and keeps all baked-mode behaviour (SSAO off, sun
+  shadows off, no entity point lights, exposure dimming at night for day-only
+  bakes; a night lightmap, when shipped, swaps in at twilight). Glass panes
+  keep the runtime transparency treatment. Result: original texture detail
+  with Cycles global illumination on top.
+
 ## 2.9.3
 
 ### Floor toggle works on baked multi-floor GLBs

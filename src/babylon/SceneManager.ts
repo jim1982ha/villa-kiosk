@@ -494,6 +494,7 @@ export class SceneManager {
     // final word — all its call paths run after renderFx.apply()).
     if (result.baked) {
       devLog("[SceneManager] baked mode ON — dynamic lighting disabled" +
+        (result.lightmapped ? " (LIGHTMAP flavour: original textures × baked light)" : "") +
         (result.nightBlend ? "; night atlas present (day/night crossfade)" : ""));
     }
     this.visuals.setBakedMode(result.baked);

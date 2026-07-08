@@ -2,8 +2,9 @@
 // Load a GLB into the scene from an ArrayBuffer (IndexedDB) or an uploaded File,
 // and persist uploads to IndexedDB so a refresh doesn't re-upload.
 
-import { SceneLoader, Material, Color3, DracoCompression, type AbstractMesh, type Scene } from "@babylonjs/core";
+import { SceneLoader, Material, Color3, Vector3, HemisphericLight, DracoCompression, type AbstractMesh, type Scene } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
+import { normaliseMeshName } from "../config/EntityMap";
 // Bundle the Draco decoder from @babylonjs/core so a Draco-compressed GLB loads
 // WITHOUT hitting Babylon's default CDN — required for the offline HA-Ingress
 // kiosk. Vite's `?url` rewrites these to hashed, correctly-based build assets.
@@ -28,6 +29,14 @@ export interface LoadResult {
   meshes: AbstractMesh[];
   /** True when the GLB carries pre-baked lighting (see BAKED_MATERIAL_PREFIX). */
   baked: boolean;
+  /**
+   * True for a LIGHTMAP-mode GLB (pipeline ≥2.7.0 --bake-lightmap): the
+   * structure keeps its original crisp tiled textures (UV0) and the baked
+   * light rides a second atlas (UV1) multiplied in at render time — instead
+   * of the classic single albedo atlas that caps the whole villa at a few
+   * cm/texel. Implies `baked` (all dynamic-light systems stand down).
+   */
+  lightmapped?: boolean;
   /**
    * Present when the GLB also carries a second, sun-free NIGHT atlas
    * (pipeline ≥2.1.0). Call with 0 = full day atlas … 1 = full night atlas;
@@ -55,6 +64,24 @@ export const BAKED_MATERIAL_PREFIX = "BAKED_";
 // while emissiveColor scales the night image up. Both bakes share TEXCOORD_0,
 // so the images stay texel-aligned through the fade.
 const BAKED_NIGHT_RE = /night/i;
+
+// LIGHTMAP-mode GLB (pipeline ≥2.7.0 --bake-lightmap): the structure keeps its
+// ORIGINAL tiled textures/materials on TEXCOORD_0 and the baked light arrives
+// as a separate atlas on TEXCOORD_1, carried by hidden micro-planes wearing
+// these materials (glTF can't ship an unreferenced texture). The app wires the
+// atlas into each structure material's lightmapTexture with
+// useLightmapAsShadowmap=true — Babylon's PBR shader then MULTIPLIES the lit
+// result by the lightmap — and lights the structure with a dedicated uniform
+// white hemispheric so "the lit result" is exactly the albedo. Net effect:
+// finalColor ≈ original texture × baked light, i.e. full texture sharpness
+// AND Cycles GI, where the classic albedo bake capped the whole villa at a
+// few cm/texel. Must be tested BEFORE the generic BAKED_ branch below (the
+// night carrier would otherwise be captured as an albedo night atlas).
+const BAKED_LIGHTMAP_PREFIX = "BAKED_Lightmap";
+// Meshes whose materials receive the lightmap: the pipeline's structure
+// groups (it forks any material shared with entities to a private _ST copy,
+// so wiring these never leaks the lightmap onto UV2-less entity meshes).
+const STRUCTURE_MESH_RE = /^Structure(?:_L\d+|_Exterior)?$/i;
 
 // Babylon caps the lights a material's shader handles at once (default 4). A LED
 // strip is modelled as many co-located point lights, so a wall/floor near one can
@@ -130,6 +157,8 @@ export async function loadModelInto(
     };
     const bakedDayMats = new Set<BakedMat>();
     let nightMat: BakedMat | null = null;
+    let lightmapDayMat: BakedMat | null = null;
+    let lightmapNightMat: BakedMat | null = null;
     for (const m of result.meshes) {
       const mat = m.material as
         | { name?: string; maxSimultaneousLights?: number; alpha?: number; transparencyMode?: number | null; backFaceCulling?: boolean; roughness?: number; metallic?: number; forceDepthWrite?: boolean; unlit?: boolean; emissiveColor?: Color3; albedoColor?: Color3 }
@@ -137,6 +166,19 @@ export async function loadModelInto(
       if (!mat) continue;
       if (mat.name) allMats.add(mat.name);
       if ("maxSimultaneousLights" in mat) mat.maxSimultaneousLights = MAX_SIMULTANEOUS_LIGHTS;
+
+      // Lightmap carriers (checked FIRST — their names also match the generic
+      // BAKED_ prefix and the night one matches BAKED_NIGHT_RE): keep the
+      // material (it owns the light atlas), hide the micro-plane, and wire
+      // the atlas into the structure materials after this loop.
+      if (mat.name?.startsWith(BAKED_LIGHTMAP_PREFIX)) {
+        if (BAKED_NIGHT_RE.test(mat.name)) lightmapNightMat = mat as BakedMat;
+        else lightmapDayMat = mat as BakedMat;
+        baked = true;
+        m.setEnabled(false);
+        m.isPickable = false;
+        continue;
+      }
 
       // Pre-baked lighting: render the baked material unlit — its texture IS
       // the finished lit image. Setting the flag here (not just per-mesh in a
@@ -240,6 +282,90 @@ export async function loadModelInto(
         ") — day/night handled by texture crossfade instead of exposure dimming");
     }
 
+    // ---- Lightmap-mode wiring (see BAKED_LIGHTMAP_PREFIX) ----------------
+    type LightmapTex = { coordinatesIndex?: number } | undefined;
+    type LightmapMat = {
+      name?: string;
+      lightmapTexture?: unknown;
+      useLightmapAsShadowmap?: boolean;
+      environmentIntensity?: number;
+      specularIntensity?: number;
+      backFaceCulling?: boolean;
+    };
+    const lightmapped = !!lightmapDayMat;
+    // A model reload must not leave the previous model's fill light behind
+    // (its includedOnlyMeshes point at disposed meshes).
+    scene.getLightByName("lightmapFill")?.dispose();
+    const lmDayTex = lightmapDayMat?.albedoTexture as LightmapTex;
+    if (lmDayTex) {
+      lmDayTex.coordinatesIndex = 1; // the pipeline's BakeUV → TEXCOORD_1
+      const structureMeshes: AbstractMesh[] = [];
+      const lmMats = new Set<LightmapMat>();
+      for (const m of result.meshes) {
+        if (!STRUCTURE_MESH_RE.test(normaliseMeshName(m.name))) continue;
+        if (m.getTotalVertices() === 0) continue;
+        structureMeshes.push(m);
+        const mat = m.material as LightmapMat | null;
+        if (!mat) continue;
+        // Panes keep the runtime glass treatment above — a lightmap multiply
+        // would just darken what you see through them.
+        if (mat.name && glassMats.has(mat.name)) continue;
+        lmMats.add(mat);
+      }
+      for (const sm of lmMats) {
+        // useLightmapAsShadowmap makes the PBR shader MULTIPLY the lit result
+        // by the lightmap (without it the lightmap is ADDED, unscaled by the
+        // texture). The uniform white hemi below makes "the lit result" the
+        // plain albedo, so finalColor = texture × baked light.
+        sm.lightmapTexture = lmDayTex;
+        sm.useLightmapAsShadowmap = true;
+        // The bake already contains ALL ambient light — the scene's IBL
+        // gradient (which ignores light.excludedMeshes) would double-light.
+        sm.environmentIntensity = 0;
+        sm.specularIntensity = 0;
+        // Same thin-slab reason as the albedo-baked branch: floors export
+        // with downward normals; culling their backs opens holes to the
+        // hidden floor below. Uniform hemi light = no back-face artefact.
+        sm.backFaceCulling = false;
+      }
+      // The structure's ONLY runtime light: a uniform white hemispheric
+      // (diffuse = ground = white ⇒ every normal receives exactly 1.0), so
+      // the material evaluates to its plain albedo before the lightmap
+      // multiply. The scene's real sun/fill must not add on top — the bake
+      // already contains them — so the structure is excluded from every
+      // other light. (Lights created later — per-entity point lights — are
+      // never created in baked mode, which `baked = true` guarantees.)
+      const fill = new HemisphericLight("lightmapFill", new Vector3(0, 1, 0), scene);
+      fill.diffuse = new Color3(1, 1, 1);
+      fill.groundColor = new Color3(1, 1, 1);
+      fill.specular = new Color3(0, 0, 0);
+      fill.intensity = 1.0;
+      fill.includedOnlyMeshes = structureMeshes;
+      for (const l of scene.lights) {
+        if (l === fill) continue;
+        for (const m of structureMeshes) l.excludedMeshes.push(m);
+      }
+      // Night lightmap: swap the atlas at solar midnight of the twilight ramp
+      // (a hard swap — smoothly crossfading two lightmaps needs a shader
+      // plugin; day-only bakes never get here and use exposure dimming).
+      const lmNightTex = lightmapNightMat?.albedoTexture as LightmapTex;
+      if (lmNightTex) {
+        lmNightTex.coordinatesIndex = 1;
+        nightBlend = (t: number) => {
+          const tex = t >= 0.5 ? lmNightTex : lmDayTex;
+          for (const sm of lmMats) {
+            if (sm.lightmapTexture !== tex) sm.lightmapTexture = tex;
+          }
+        };
+      }
+      devLog(
+        `[ModelLoader] LIGHTMAP GLB detected — baked light on UV1 multiplied ` +
+        `onto ${lmMats.size} original structure material(s) across ` +
+        `${structureMeshes.length} mesh(es)` +
+        (lmNightTex ? "; night lightmap present (hard swap at twilight)" : ""),
+      );
+    }
+
     // A custom-imported window (e.g. window_3x1) can carry a material whose name
     // has no glass keyword, so it slips past the name match above and stays a grey
     // panel. Rather than guess, find the geometry that LOOKS like a pane — a large,
@@ -273,7 +399,7 @@ export async function loadModelInto(
         panes,
       );
     }
-    return { meshes: result.meshes, baked, nightBlend };
+    return { meshes: result.meshes, baked, lightmapped, nightBlend };
   } finally {
     URL.revokeObjectURL(url);
   }
