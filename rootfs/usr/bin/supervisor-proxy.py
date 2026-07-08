@@ -42,6 +42,7 @@ import os
 import re
 import tempfile
 import time
+from datetime import datetime, timezone
 
 from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
 
@@ -158,6 +159,14 @@ def _effective_paths() -> dict:
     An explicit model_path/sh3d_path option wins (back-compat with files placed
     manually via SSH/Samba). Otherwise, if a managed upload exists on disk, report
     that — so a UI upload is picked up with no option edit or restart.
+
+    Each path also carries its upload provenance (model_upload/sh3d_upload):
+    the ORIGINAL browser-side filename + time recorded by the upload handler.
+    A central upload overwrites the file AT the configured path, so the served
+    name never changes (e.g. always TheLysHouse_1F.glb) no matter what file was
+    picked — which read as "the info panel is wrong" until the panel could show
+    what was actually uploaded. None = placed manually (SSH/Samba), or uploaded
+    before this existed.
     """
     opts = _read_options()
     out = {}
@@ -169,6 +178,20 @@ def _effective_paths() -> dict:
             out[opt_key] = MANAGED_PATH[kind]
         else:
             out[opt_key] = ""
+        meta_key = "model_upload" if kind == "glb" else "sh3d_upload"
+        out[meta_key] = None
+        if out[opt_key]:
+            try:
+                with open(os.path.join(WWW_ROOT, out[opt_key]) + ".upload.json",
+                          encoding="utf-8") as f:
+                    meta = json.load(f)
+                if isinstance(meta, dict):
+                    out[meta_key] = {
+                        "original_name": str(meta.get("original_name", "")),
+                        "uploaded_at": str(meta.get("uploaded_at", "")),
+                    }
+            except (OSError, json.JSONDecodeError, ValueError):
+                pass
     return out
 
 
@@ -334,6 +357,24 @@ async def model_upload_handler(request: web.Request) -> web.Response:
         except OSError:
             pass
         raise
+
+    # Record what was ACTUALLY uploaded. The overwrite keeps the configured
+    # filename forever, so without this sidecar the info panel can only show
+    # the server-side name — which users read as "wrong file loaded" after
+    # uploading e.g. villa_1F_2048.glb over TheLysHouse_1F.glb. Best-effort:
+    # a failed sidecar write must never fail the (already completed) upload.
+    original_name = os.path.basename(request.query.get("name", "").strip())[:120]
+    if original_name:
+        try:
+            with open(dest + ".upload.json", "w", encoding="utf-8") as f:
+                json.dump({
+                    "original_name": original_name,
+                    "uploaded_at": datetime.now(timezone.utc)
+                                   .isoformat(timespec="seconds"),
+                }, f)
+            os.chmod(dest + ".upload.json", 0o644)
+        except OSError:
+            pass
 
     rel = os.path.relpath(dest, os.path.realpath(WWW_ROOT))
     return web.json_response({"path": rel, "size": total})

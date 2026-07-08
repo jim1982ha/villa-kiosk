@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.9.5
+
+### Model info panel shows what was actually uploaded
+
+- **The ⓘ panel now has an "Uploaded" row with the original filename and time
+  of the last central upload.** A central upload overwrites the file AT the
+  configured `model_path`, so the served name never changes (always e.g.
+  `TheLysHouse_1F.glb`) no matter which file you picked — which repeatedly
+  read as "the info panel shows the wrong file". The add-on now records the
+  browser-side filename in a sidecar (`<model>.upload.json`) on every upload
+  and reports it via `/addon-config`; the panel shows it next to the served
+  path, and the footer text explains the overwrite. Files placed manually
+  (SSH/Samba) or uploaded by an older add-on simply show no "Uploaded" row.
+
 ## 2.9.4
 
 ### Lightmap-mode GLBs: full texture sharpness + baked lighting

@@ -110,6 +110,15 @@ export interface AddonConfig {
   model_path: string;
   /** Optional SH3D path for central room-name loading. */
   sh3d_path: string;
+  /**
+   * Provenance of the file currently AT model_path: a central upload
+   * overwrites that file in place, so the served name never changes — this
+   * records the original browser-side filename + time of the last upload
+   * (null/absent when the file was placed manually or by an older add-on).
+   */
+  model_upload?: { original_name: string; uploaded_at: string } | null;
+  /** Same provenance for the sh3d_path file. */
+  sh3d_upload?: { original_name: string; uploaded_at: string } | null;
 }
 
 /**
@@ -161,8 +170,12 @@ export function clearAddonConfigCache(): void {
 export async function uploadCentralModel(
   file: Blob,
   kind: "glb" | "sh3d",
+  originalName?: string,
 ): Promise<{ path: string; size: number }> {
-  const resp = await fetch(ingressPath(`model-upload?kind=${kind}`), {
+  // The original filename rides along so the add-on can record WHAT was
+  // uploaded (the destination file keeps the configured name forever).
+  const nameQ = originalName ? `&name=${encodeURIComponent(originalName)}` : "";
+  const resp = await fetch(ingressPath(`model-upload?kind=${kind}${nameQ}`), {
     method: "POST",
     headers: { "Content-Type": "application/octet-stream" },
     body: file,

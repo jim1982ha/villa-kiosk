@@ -127,7 +127,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
       // that before sending — same content the app actually uses, comfortably
       // under the ceiling for any realistic villa plan.
       const payload: Blob = kind === "sh3d" ? await minifySh3d(file) : file;
-      const { path, size } = await uploadCentralModel(payload, kind);
+      const { path, size } = await uploadCentralModel(payload, kind, file.name);
       // Uploading the file to the server (above) makes it available to the
       // Blender export pipeline, but does NOT by itself give THIS running
       // app any of the data it needs live — camera motion-beam directions
@@ -587,6 +587,19 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
                 </button>
                 <div className="info-pop" role="tooltip">
                   <div className="row"><span>GLB</span><span><code>www/{addonCfg.model_path}</code></span></div>
+                  {/* Every central upload overwrites the file AT model_path, so
+                      the served name above never changes — show what was
+                      actually uploaded or the panel reads as "wrong file". */}
+                  {addonCfg.model_upload?.original_name && (
+                    <div className="row">
+                      <span>Uploaded</span>
+                      <span>
+                        <code>{addonCfg.model_upload.original_name}</code>
+                        {addonCfg.model_upload.uploaded_at &&
+                          ` · ${new Date(addonCfg.model_upload.uploaded_at).toLocaleString()}`}
+                      </span>
+                    </div>
+                  )}
                   {loadedModel && (
                     <>
                       <div className="row"><span>Loaded</span><span>{(loadedModel.bytes / 1_000_000).toFixed(2)} MB · {loadedModel.meshCount} meshes</span></div>
@@ -598,7 +611,9 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
                   )}
                   <div className="row"><span>SH3D</span><span>{addonCfg.sh3d_path ? <code>www/{addonCfg.sh3d_path}</code> : "not configured (optional)"}</span></div>
                   <div style={{ marginTop: 8, color: "var(--text-dim)" }}>
-                    Served from the add-on's configured paths (relative to <code>www/</code>). Set
+                    Served from the add-on's configured paths (relative to <code>www/</code>) — an
+                    upload overwrites the file at that path, so the GLB name above stays the same
+                    whatever file you pick ("Uploaded" shows the file it came from). Set
                     <code> model_path</code> / <code>sh3d_path</code> under Settings → Add-ons → Villa Kiosk →
                     Configuration. Verify on disk: <code>shasum -a 256 {addonCfg.model_path.split("/").pop()}</code>
                   </div>
