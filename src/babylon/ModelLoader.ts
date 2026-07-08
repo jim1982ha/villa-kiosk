@@ -45,6 +45,13 @@ export interface LoadResult {
    * the (sunlit) day image.
    */
   nightBlend?: (t: number) => void;
+  /**
+   * Present when glass panes were detected. Call with the same 0 = day …
+   * 1 = night factor as nightBlend: ramps the panes' forced light albedo and
+   * constant emissive sheen down for the night, so windows dim with the rest
+   * of the villa instead of staying day-bright white panels after dark.
+   */
+  glassDim?: (t: number) => void;
 }
 
 // A GLB produced by blender_pipeline.py --bake names its lit-structure material
@@ -112,6 +119,21 @@ const GLASS_NAME_HINTS = [
 // through, but NOT zero — a faint tint so it still reads as a real glass surface
 // rather than an empty hole in the wall.
 const GLASS_ALPHA = 0.38;
+// Daytime pane colours (see the long comment at the assignment site): a light
+// neutral albedo plus a small constant emissive sheen so a clear pane over a
+// dark background reads as glass, not a black hole. Both are DAY values — at
+// night the only structure dim for a day-only bake is a global exposure drop,
+// which scales walls and panes equally, so a pane whose intrinsic luminance is
+// ~1.0 (bright albedo under the uniform white lightmap fill, plus the sheen)
+// stays 2-3× brighter than the darkest-lit wall and tonemaps to glowing white
+// panels (the "why is the glass so bright at night" report). glassDim() below
+// ramps both colours down to GLASS_NIGHT_LEVEL over the same civil-twilight
+// ramp SunController uses for everything else.
+const GLASS_DAY_ALBEDO = new Color3(0.74, 0.80, 0.86);
+const GLASS_DAY_SHEEN = new Color3(0.20, 0.23, 0.27);
+// Fraction of the day colours left at full night — enough that a pane still
+// reads as a faint surface (not a hole), nowhere near enough to glow.
+const GLASS_NIGHT_LEVEL = 0.18;
 
 function looksLikeGlass(names: (string | undefined)[], hints: string[]): boolean {
   for (const n of names) {
@@ -145,6 +167,9 @@ export async function loadModelInto(
   try {
     const result = await SceneLoader.ImportMeshAsync("", "", url, scene, undefined, ".glb");
     const glassMats = new Set<string>();
+    // Material OBJECT refs (a Set — one material is shared by many meshes) so
+    // glassDim below can re-drive their colours every day/night tick.
+    const glassMatObjs = new Set<{ albedoColor?: Color3; emissiveColor?: Color3 }>();
     const allMats = new Set<string>();
     let baked = false;
     type BakedMat = {
@@ -244,9 +269,11 @@ export async function loadModelInto(
         // when what's behind it is dark; it's faint enough not to glow like a
         // light. SweetHome pane base colours also range down to a near-black
         // 0.18 grey — normalising the albedo to a light neutral stops those dark
-        // panes from reading as solid panels too.
-        if ("albedoColor" in mat) mat.albedoColor = new Color3(0.74, 0.80, 0.86);
-        if ("emissiveColor" in mat) mat.emissiveColor = new Color3(0.20, 0.23, 0.27);
+        // panes from reading as solid panels too. These are the DAY values;
+        // glassDim() scales them down after dark (see GLASS_NIGHT_LEVEL).
+        if ("albedoColor" in mat) mat.albedoColor = GLASS_DAY_ALBEDO.clone();
+        if ("emissiveColor" in mat) mat.emissiveColor = GLASS_DAY_SHEEN.clone();
+        glassMatObjs.add(mat);
         if (mat.name) glassMats.add(mat.name);
       }
     }
@@ -413,7 +440,21 @@ export async function loadModelInto(
         panes,
       );
     }
-    return { meshes: result.meshes, baked, lightmapped, nightBlend };
+    // Day/night hook for the panes. Works in every mode: in lightmap/albedo
+    // baked GLBs the panes skip the bake (a lightmap multiply would darken
+    // the view THROUGH them) so nothing else ever dims their colours; in
+    // unbaked GLBs the scene lights dim but the constant emissive sheen
+    // would not. SunController drives this with its twilight ramp.
+    const glassDim = glassMatObjs.size > 0
+      ? (t: number) => {
+          const s = 1 - (1 - GLASS_NIGHT_LEVEL) * Math.min(1, Math.max(0, t));
+          for (const gm of glassMatObjs) {
+            if ("albedoColor" in gm) gm.albedoColor = GLASS_DAY_ALBEDO.scale(s);
+            if ("emissiveColor" in gm) gm.emissiveColor = GLASS_DAY_SHEEN.scale(s);
+          }
+        }
+      : undefined;
+    return { meshes: result.meshes, baked, lightmapped, nightBlend, glassDim };
   } finally {
     URL.revokeObjectURL(url);
   }

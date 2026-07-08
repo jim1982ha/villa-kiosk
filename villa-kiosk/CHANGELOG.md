@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.9.9
+
+### Window glass no longer glows white at night
+
+- **Panes now dim with the rest of the villa after dark.** Detected glass
+  gets a forced light albedo and a small constant emissive sheen so a clear
+  pane over a dark background reads as glass rather than a black hole — but
+  those were fixed DAY values, and panes are deliberately excluded from the
+  bake/lightmap (a lightmap multiply would darken the view through them), so
+  no night mechanism ever touched them. After sunset the whole villa dims
+  while the panes stayed at full daytime brightness, tonemapping into
+  glowing white panels. The pane colours now ramp down to 18 % over the same
+  civil-twilight curve the sun controller uses for everything else — at
+  night a pane keeps just a faint sheen instead of glowing. Applies in
+  baked, lightmap and unbaked modes alike; daytime look is unchanged.
+
 ## 2.9.8
 
 ### 2F view keeps the ground floor (and the outdoor) underneath

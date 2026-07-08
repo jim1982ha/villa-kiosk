@@ -26,6 +26,12 @@ export class SunController {
   // GLB carries a BAKED_Structure_Night texture; null = single-atlas GLB,
   // where night falls back to the exposure dim below.
   private nightBlend: ((t: number) => void) | null = null;
+  // Pane dimmer from ModelLoader: ramps the glass materials' forced light
+  // albedo + emissive sheen down after dark (they are excluded from every
+  // bake/lightmap, so no other night mechanism touches them — without this
+  // the windows stay day-bright white panels all night). Driven with the
+  // same twilight factor as nightBlend, in baked AND unbaked modes.
+  private glassDim: ((t: number) => void) | null = null;
 
   constructor(
     scene: Scene,
@@ -56,9 +62,14 @@ export class SunController {
    * blend closure over the new materials — keeping the old one would drive
    * disposed materials.
    */
-  setBakedMode(baked: boolean, nightBlend?: (t: number) => void): void {
+  setBakedMode(
+    baked: boolean,
+    nightBlend?: (t: number) => void,
+    glassDim?: (t: number) => void,
+  ): void {
     this.baked = baked;
     this.nightBlend = nightBlend ?? null;
+    this.glassDim = glassDim ?? null;
     this.applyRealSun();
   }
 
@@ -179,6 +190,9 @@ export class SunController {
           r.exposure * (isDay ? 1 : lerp(1, 0.45));
       }
     }
+    // Window panes dim on the same twilight ramp (see the field's comment) —
+    // in every mode, since no bake, lightmap or scene light drives them.
+    this.glassDim?.(nightT);
 
     // Drive the procedural sky from the same sun direction (it shows through the
     // windows). clearColor is kept as a fallback for when the sky dome is absent.

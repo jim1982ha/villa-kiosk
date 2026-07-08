@@ -500,7 +500,7 @@ export class SceneManager {
     }
     this.visuals.setBakedMode(result.baked);
     this.renderFx.setBakedMode(result.baked);
-    this.sun.setBakedMode(result.baked, result.nightBlend);
+    this.sun.setBakedMode(result.baked, result.nightBlend, result.glassDim);
     if (result.baked) {
       // The baked structure must never bloom: with a night atlas its material
       // carries a full-villa emissive texture (the crossfade mechanism), which
