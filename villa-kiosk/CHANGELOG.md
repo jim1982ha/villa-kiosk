@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.9.3
+
+### Floor toggle works on baked multi-floor GLBs
+
+- **The 2F floor slab showed on the 1F view (covering the ground-floor rooms
+  from above) and vanished on the 2F view; the garden disappeared on 2F.**
+  Babylon's glTF loader splits a multi-primitive mesh into child meshes renamed
+  `Structure_primitive<N>` — and a baked Structure keeps one material slot per
+  original material (~150 slots, all pointing at `BAKED_Structure`), so every
+  structure mesh imports multi-primitive. FloorManager matched mesh names with
+  anchored regexes (`^Structure$`, `^Structure_L1$`, `^Structure_Exterior$`)
+  that none of the renamed pieces hit, so everything fell through to the
+  bounding-box fallback: the 2F slab (centre ~2.5 m, below the 2.8 m split)
+  classified as floor 1, and the garden lost its always-visible status.
+  FloorManager now normalises mesh names (shared `normaliseMeshName`, the same
+  helper entity resolution already uses) before classifying. The GLB itself was
+  verified correct — the slab geometry is in `Structure_L1` where it belongs.
+
 ## 2.9.2
 
 ### Windows read as glass again over dark rooms

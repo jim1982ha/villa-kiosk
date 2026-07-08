@@ -24,6 +24,7 @@
 
 import type { AbstractMesh, Scene } from "@babylonjs/core";
 import type { CameraController } from "./CameraController";
+import { normaliseMeshName } from "../config/EntityMap";
 
 const FLOOR_SPLIT_Y = 2.8; // metres; ground floor wall height is ~2.5 m
 const STRUCTURE_LEVEL = /^Structure(?:_L(\d+))?$/i;
@@ -71,14 +72,22 @@ export class FloorManager {
       // carrier is managed by the day/night crossfade, not by floors.
       if (m.getTotalVertices() === 0) continue;
       if (m.name === "BAKED_NightCarrier") continue;
+      // Babylon's glTF loader splits a multi-primitive mesh (one primitive per
+      // material slot — a baked Structure keeps ~150 slots all pointing at
+      // BAKED_Structure) into child meshes renamed `Structure_primitive<N>`.
+      // Match on the normalised base name, or every structure piece falls
+      // through to the bounding-box rule: the 2F floor slab (centre ~2.5 m,
+      // below FLOOR_SPLIT_Y) then lands on floor 1 — visible on 1F, missing
+      // on 2F — and the garden loses its always-on status.
+      const base = normaliseMeshName(m.name);
       // The exterior group (ground + garden + palms) is always visible — it
       // belongs to no floor and must survive every toggle.
-      if (STRUCTURE_EXTERIOR.test(m.name)) {
+      if (STRUCTURE_EXTERIOR.test(base)) {
         this.alwaysOnMeshes.push(m);
         if (!m.isEnabled(false)) m.setEnabled(true);
         continue;
       }
-      const lvl = STRUCTURE_LEVEL.exec(m.name);
+      const lvl = STRUCTURE_LEVEL.exec(base);
       const floor = lvl
         ? (lvl[1] ? Number(lvl[1]) + 1 : 1)
         : m.getBoundingInfo().boundingBox.centerWorld.y > FLOOR_SPLIT_Y

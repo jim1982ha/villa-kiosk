@@ -8,6 +8,7 @@ dist-ssr
 *.log
 .vite
 tsconfig.tsbuildinfo
+sources/
 
 # Local model & asset working files — these are user data, never committed.
 *.sh3d
