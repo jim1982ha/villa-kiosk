@@ -189,26 +189,29 @@ export class SunController {
     if (r.ibl) this.scene.environmentIntensity = r.environmentIntensity * (isDay ? 1 : lerp(0.4, 0.12));
 
     // Baked mode, two flavours:
-    // • Dual-atlas GLB (pipeline ≥2.1.0): crossfade the structure between its
-    //   day and sun-free night bakes — real darkness, no phantom sun shadows.
-    //   Exposure stays at the user's daytime value: the night atlas is
-    //   ALREADY dark (baked with no sun, dim sky, low warm fill), so dimming
-    //   on top would double-darken it.
+    // • Dual-atlas / lightmap GLB (pipeline ≥2.1.0): the structure crossfades
+    //   (or hard-swaps) between its day and sun-free night bakes, so night is
+    //   ALREADY dark from the atlas. But that darkness is fixed — nothing the
+    //   "Night dimming" slider does reaches the baked structure, because its
+    //   IBL/hemi/sun are all zeroed or replaced by the flat lightmap fill. So
+    //   the slider only ever changed the ENTITY meshes (lamps), which read as
+    //   "night dimming only affects the bulbs/windows". Apply nightDimming to
+    //   the scene EXPOSURE here too so it dims the whole night scene, structure
+    //   included: nd=0 leaves the night atlas exactly as baked (the long-
+    //   standing look), higher nd deepens it toward `min`.
     // • Single-atlas GLB: the texture is a fixed daytime render, so the only
-    //   way to sell "night" is post-processing — scale the user's exposure
-    //   down after dark, deepening with nightDimming. Either way this runs
-    //   AFTER renderFx.applyToneMapping wrote cfg.exposure (all call paths
-    //   order renderFx.apply() before the sun pass — same ownership
-    //   discipline as the hemi fill above), so this write is the final word
-    //   on exposure.
+    //   way to sell "night" is post-processing — scale the user's exposure down
+    //   after dark, deepening with nightDimming.
+    // Either way this runs AFTER renderFx.applyToneMapping wrote cfg.exposure
+    // (all call paths order renderFx.apply() before the sun pass), so this
+    // write is the final word on exposure.
     if (this.baked) {
-      if (this.nightBlend) {
-        this.nightBlend(nightT);
-        this.scene.imageProcessingConfiguration.exposure = r.exposure;
-      } else {
-        this.scene.imageProcessingConfiguration.exposure =
-          r.exposure * (isDay ? 1 : lerp(1, 0.45));
-      }
+      if (this.nightBlend) this.nightBlend(nightT);
+      // nightBlend present → atlas already dark, so only ADD dimming (floor
+      // 0.5); single-atlas → the full day→0.45 range sells night by itself.
+      const nightExposure = this.nightBlend ? lerp(1, 0.5) : lerp(1, 0.45);
+      this.scene.imageProcessingConfiguration.exposure =
+        r.exposure * (isDay ? 1 : nightExposure);
     }
     // Window panes dim on the same twilight ramp (see the field's comment) —
     // in every mode, since no bake, lightmap or scene light drives them.

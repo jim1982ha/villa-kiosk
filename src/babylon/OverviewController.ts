@@ -418,16 +418,18 @@ export class OverviewController {
   ): void {
     const g0 = this.groundAt(oldX, oldY);
     const g1 = this.groundAt(newX, newY);
-    if (!g0 || !g1) { this.applyPan(dx * s, dy * -s, DRAG_SENS); return; }
+    if (!g0 || !g1) { this.applyPan(dx * s, dy * s, DRAG_SENS); return; }
     const t = this.camera.target;
-    // s flips the direction for the natural-scrolling toggle: +1 makes the map
-    // follow the finger (the grabbed point stays pinned to it), -1 inverts it.
-    // The vertical (up/down swipe) axis needed the OPPOSITE sign from
-    // horizontal to read as "natural" in either toggle state — left/right
-    // tracked the finger correctly on its own, but up/down came out reversed
-    // (reported: dragging down panned as if dragging up, and vice versa).
+    // Exact ground tracking is inherently symmetric: pinning the grabbed ground
+    // point to the finger makes BOTH axes follow it — that IS "natural"
+    // scrolling. So the naturalScrolling toggle (`s`) inverts BOTH axes the
+    // same way; the two must never carry different signs. (v2.9.11 tried an
+    // asymmetric `-s` on z to fix a reported up/down inversion — wrong lever:
+    // that broke the axis symmetry and re-inverted up/down in the other toggle
+    // state. natural ON = content follows the finger on both axes; OFF =
+    // opposes on both.)
     t.x = clamp(t.x + (g0.x - g1.x) * s, this.bounds.minX, this.bounds.maxX);
-    t.z = clamp(t.z + (g0.z - g1.z) * -s, this.bounds.minZ, this.bounds.maxZ);
+    t.z = clamp(t.z + (g0.z - g1.z) * s, this.bounds.minZ, this.bounds.maxZ);
   }
 
   /**

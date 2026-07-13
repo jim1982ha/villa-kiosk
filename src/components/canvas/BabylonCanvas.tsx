@@ -217,7 +217,17 @@ export default function BabylonCanvas({
                 setSh3dSyncMsg("The central .sh3d has no named rooms — room list wasn't refreshed.");
                 return;
               }
-              update({ sh3dRooms: rooms, sh3dEntities });
+              // If the central plan's room SET changed (admin swapped the file),
+              // drop stale rooms so only the new plan's rooms remain — the scene
+              // re-calibrates from the fresh set. If it's the same set (the usual
+              // every-open refresh), leave teleportPoints alone so user-added
+              // rooms + saved overview poses survive.
+              const prevNames = (configRef.current.sh3dRooms ?? []).map((r) => r.name).sort().join("|");
+              const nextNames = rooms.map((r) => r.name).sort().join("|");
+              const roomsChanged = prevNames !== nextNames;
+              update(roomsChanged
+                ? { sh3dRooms: rooms, sh3dEntities, teleportPoints: [] }
+                : { sh3dRooms: rooms, sh3dEntities });
             } catch (err) {
               console.warn("[BabylonCanvas] central SH3D refresh failed", err);
               if (!cancelled) {

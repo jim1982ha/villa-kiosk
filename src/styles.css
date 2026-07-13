@@ -554,8 +554,16 @@ input[type="range"]::-moz-range-thumb {
    it's excluded here. (Mobile overrides this in the media query below.) */
 .modal:not(.settings-modal) { padding: 24px 28px; }
 
-/* Settings modal — scrollable body, sticky footer */
-.settings-modal { }
+/* Settings modal — scrollable body, sticky footer. ~25% wider than a plain
+   modal (520 → 660) so the 3-across device-icon grid and the two-column
+   coordinate/URL fields breathe on desktop/tablet; still capped at the
+   viewport so mobile is unaffected (the media query below takes over). */
+.settings-modal { max-width: 660px; }
+/* The Config Editor holds full-width entity/binding TABLES — give it the most
+   room the viewport allows. */
+.config-editor-modal { max-width: 960px; }
+.config-editor-modal .config-topbar { display: flex; align-items: center; gap: 16px; }
+.config-editor-modal .config-topbar h2 { margin: 0; }
 .settings-header { padding: 24px 28px 16px; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
 .settings-body { flex: 1 1 auto; overflow-y: auto; padding: 8px 28px 12px; }
 .settings-body label { display: block; font-size: 13px; color: var(--text-secondary); margin: 14px 0 6px; }
@@ -575,22 +583,15 @@ input[type="range"]::-moz-range-thumb {
 .segmented button svg { flex: 0 0 auto; }
 .segmented button.active { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
 
-/* Utility tile grid (Config Editor / Inspector / Export / Import in Settings).
-   Replaces two disjoint ghost-button rows with a single tidy 2×2 grid of equal
-   tiles — clearer grouping and no ragged trailing gaps on wide modals. */
-.tile-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px;
-}
-.tile-btn {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 8px; min-height: 76px; padding: 12px 10px; border-radius: 14px;
-  background: var(--bg-card); border: 1px solid var(--hairline);
-  color: var(--text-primary); font-size: 13px; font-weight: 500;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
-}
-.tile-btn svg { color: var(--accent); flex: 0 0 auto; }
-.tile-btn:hover { background: var(--bg-input); border-color: var(--hairline-strong); }
-.tile-btn:active { transform: scale(0.97); }
+/* Device-icon picker cells — 3 across (was 2) so the category / binary-sensor /
+   sensor icon lists need far less vertical scrolling. The wider settings modal
+   (below) gives each cell room. Collapses to 2 across on narrow screens. */
+.icon-select { display: flex; align-items: center; gap: 8px; width: calc(33.333% - 7px); }
+@media (max-width: 560px) { .icon-select { width: calc(50% - 5px); } }
+
+/* Villa Latitude/Longitude pair in the Config Editor. */
+.coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 460px; }
+.coord-grid label { margin-top: 0; }
 
 /* Inline (i) info button + hover/focus tooltip (replaces the model info block). */
 .info-tip { position: relative; display: inline-flex; }

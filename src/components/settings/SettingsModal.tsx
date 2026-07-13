@@ -1,10 +1,10 @@
 // src/components/settings/SettingsModal.tsx
-// HA connection + token + model. Plus a link to the full Config Editor (which
-// also holds villa coordinates) and a button to toggle the Babylon Inspector.
+// HA connection + token + model + appearance + device icons. A footer button
+// opens the full Config Editor (villa coordinates, entity metadata, bindings)
+// as a modal over the live villa.
 
 import { useRef, useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plug, Upload, Bug, FileText, Info, Sliders, Sun, Moon, Monitor } from "lucide-react";
+import { Plug, Upload, FileText, Info, Sliders, Sun, Moon, Monitor } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
@@ -23,6 +23,8 @@ interface Props {
   manager: SceneManager | null;
   onClose: () => void;
   onModelChanged: () => void;
+  /** Open the full Config Editor (a modal over the live villa). */
+  onOpenConfigEditor: () => void;
 }
 
 /** Friendly category names for the per-type device-icon editor. */
@@ -41,11 +43,10 @@ const ICON_CATEGORY_LABEL: Record<EntityType, string> = {
   assist_satellite: "Assist satellites",
 };
 
-export default function SettingsModal({ manager, onClose, onModelChanged }: Props) {
+export default function SettingsModal({ manager, onClose, onModelChanged, onOpenConfigEditor }: Props) {
   const { config, update, replace } = useConfig();
   const { role } = useProfile();
   const { connect, haConfig, entities } = useHA();
-  const navigate = useNavigate();
   // RBAC: which settings areas the active profile may use. Dashboard already
   // refuses to open this modal without "openSettings"; these narrow further.
   const can = (c: Capability) => role != null && hasCapability(role, c);
@@ -105,6 +106,11 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
       update({
         sh3dRooms: rooms,
         sh3dEntities: entities,
+        // A new plan replaces the villa's rooms wholesale — drop every
+        // previously-defined room (old-sh3d rooms AND any "Add room here"
+        // points) so the Rooms menu shows ONLY what this file defines. The
+        // scene re-calibrates from the new rooms on reload.
+        teleportPoints: [],
       });
       setSh3dMsg(`Loaded ${rooms.length} rooms${entities.length ? ` + ${entities.length} calibration points` : ""}. Reloading…`);
       setTimeout(() => onModelChanged(), 600); // remount to re-fit room labels
@@ -154,7 +160,8 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
       // live data, not just the standalone one.
       if (kind === "sh3d") {
         const { rooms, entities } = await parseSh3d(file);
-        update({ sh3dRooms: rooms, sh3dEntities: entities });
+        // New plan → replace rooms wholesale (see loadSh3d for the reasoning).
+        update({ sh3dRooms: rooms, sh3dEntities: entities, teleportPoints: [] });
       }
       clearAddonConfigCache();
       setAddonCfg(await fetchAddonConfig());
@@ -339,15 +346,9 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           drag up = content scrolls down — like a web page. Affects overview camera pan and zoom.
         </p>
 
-        <label className="toggle">
-          <input
-            type="checkbox" checked={config.wallCollisions}
-            onChange={(e) => update({ wallCollisions: e.target.checked })}
-          />
-          <span>Wall collisions (can't walk through walls)</span>
-        </label>
-        {/* Live weather effects moved into "Render quality & look" below — it's a
-            visual/scene option, so it belongs with the other look settings. */}
+        {/* Wall collisions are always on now (you should never be able to walk
+            through a wall) — the toggle was removed. Live weather effects moved
+            into "Render quality & look" below. */}
 
         {/* "Highlight clickable objects" and "Show device state labels" now live
             as direct toggles in the top bar (desktop) / a dropdown (mobile). */}
@@ -468,7 +469,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
 
         <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>
           {(Object.keys(DEFAULT_ENTITY_ICONS) as EntityType[]).map((type) => (
-            <label key={type} style={{ display: "flex", alignItems: "center", gap: 8, width: "calc(50% - 5px)" }}>
+            <label key={type} className="icon-select">
               <input
                 type="text"
                 value={config.entityIcons?.[type] ?? DEFAULT_ENTITY_ICONS[type]}
@@ -492,7 +493,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
         </p>
         <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>
           {binarySensorClasses.classes.map((dc) => (
-            <label key={dc} style={{ display: "flex", alignItems: "center", gap: 8, width: "calc(50% - 5px)" }}>
+            <label key={dc} className="icon-select">
               <input
                 type="text"
                 value={config.binarySensorIcons?.[dc] ?? DEFAULT_BINARY_SENSOR_ICONS[dc] ?? DEFAULT_ENTITY_ICONS.binary_sensor}
@@ -515,7 +516,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
         </p>
         <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>
           {sensorClasses.classes.map((dc) => (
-            <label key={dc} style={{ display: "flex", alignItems: "center", gap: 8, width: "calc(50% - 5px)" }}>
+            <label key={dc} className="icon-select">
               <input
                 type="text"
                 value={config.sensorIcons?.[dc] ?? DEFAULT_SENSOR_ICONS[dc] ?? DEFAULT_ENTITY_ICONS.sensor}
@@ -682,46 +683,21 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           </>
         )}
 
-        {/* RBAC: the Config Editor is for the profile that administers the
-            kiosk configuration. Villa coordinates, the Inspector toggle and
-            (elsewhere) the Rooms-mirror override used to live on this
-            landing screen too — moved into the Config Editor itself so this
-            screen stays a short, everyday list. Inspector specifically can't
-            move any further than Settings: it toggles Babylon's debug
-            overlay on the LIVE scene, which only exists while Dashboard is
-            mounted — the Config Editor is a separate route that replaces it,
-            with no scene to inspect. */}
-        {can("editConfig") && (
-          <>
-            <div className="settings-section-title" style={{ marginTop: 22 }}>Advanced</div>
-            <div className="tile-grid">
-              <button
-                className="tile-btn"
-                onClick={() => {
-                  onClose();
-                  navigate("/config");
-                }}
-              >
-                <Sliders size={20} />
-                <span>Config Editor</span>
-              </button>
-              <button
-                className="tile-btn"
-                onClick={() => {
-                  onClose();
-                  manager?.toggleInspector();
-                }}
-              >
-                <Bug size={20} />
-                <span>Inspector</span>
-              </button>
-            </div>
-          </>
-        )}
+        {/* The villa Latitude/Longitude, the old Rooms-mirror override, the
+            backup buttons and the Inspector used to sit on this landing screen.
+            Coordinates + entity/binding editing now live in the Config Editor
+            (footer button below); the rest were removed — keeping this screen a
+            short, everyday list. */}
 
         </div>{/* end settings-body */}
 
-        <div className="settings-footer" style={{ justifyContent: "flex-end" }}>
+        <div className="settings-footer">
+          {/* Config Editor opens as a modal over the live villa (no reload). */}
+          {can("editConfig") ? (
+            <button className="btn ghost" onClick={onOpenConfigEditor}>
+              <Sliders size={18} /> Config Editor
+            </button>
+          ) : <span />}
           <div className="row" style={{ gap: 12 }}>
             <button className="btn ghost" onClick={handleCancel}>Cancel</button>
             <button className="btn primary" onClick={save}>Save</button>

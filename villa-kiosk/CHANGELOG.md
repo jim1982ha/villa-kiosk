@@ -1,5 +1,35 @@
 # Changelog
 
+## 2.9.12
+
+### Config Editor as a modal, floor-correct highlights, working night dimming, and pipeline v2.7.8
+
+- **Config Editor is now a modal over the live villa, not a page.** Leaving it
+  no longer re-downloads and re-parses the whole model — it returns you to
+  Settings, and every edit already applied live. Its button moved to the
+  Settings footer (next to Save/Cancel); the "Advanced" section and the
+  Babylon Inspector were removed (and the inspector dependency dropped).
+- **Villa Latitude/Longitude** moved into the Config Editor with proper
+  styling, and the **Room** column there is now a real dropdown of the villa's
+  detected rooms (not a text field).
+- **Loading a new .sh3d clears the old rooms** so the Rooms menu shows only the
+  new plan's rooms.
+- **2F motion highlight sits on the floor, not the ceiling** — the floor height
+  is now found by a downward ray at the room's centre (a wall's tall
+  bounding box no longer pulls the glow up to the ceiling).
+- **"Night dimming" now dims the whole night scene**, structure included
+  (previously it only touched the lamps in baked-lightmap mode).
+- **Overview up/down swipe** direction corrected (both axes now follow the
+  finger in natural mode, oppose it when off).
+- **Wall collisions are always on** (redundant toggle removed); the device-icon
+  pickers use 3 columns and the Settings modal is wider so they scroll less.
+- **Pipeline v2.7.8:** ceiling FANS on 2F keep their blades (the top-ceiling cut
+  now spares small ceiling-height objects via connected-component area, cutting
+  only the room-sized lid), and 2F hedges/vegetation are culled with the 2F
+  view (an object's SweetHome level now vetoes it from the always-visible
+  exterior group, instead of the geometry heuristic mis-chaining it). Re-bake
+  required to pick these up.
+
 ## 2.9.11
 
 ### Ten-issue batch: night sky, category-gated taps, floor-aware highlights, profile switching, and a Settings declutter

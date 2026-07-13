@@ -24,7 +24,7 @@ export type Capability =
   | "openSettings"
   /** Appearance / behaviour tweaks inside Settings (theme, quality, icons…). */
   | "customizeAppearance"
-  /** The full Config Editor (/config): bindings, thresholds, calibration. */
+  /** The full Config Editor modal: villa coordinates, bindings, entity metadata. */
   | "editConfig"
   /** Upload / replace / reset the central 3D model and SH3D plan. */
   | "manageModel";

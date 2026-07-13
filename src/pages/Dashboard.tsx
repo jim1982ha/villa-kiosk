@@ -9,6 +9,7 @@ import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
 import PanelRouter from "@/components/panels/PanelRouter";
 import SettingsModal from "@/components/settings/SettingsModal";
+import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
 import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -41,6 +42,7 @@ export default function Dashboard() {
   const [activePanel, setActivePanel] = useState<ActivePanel | null>(null);
   const [teleportOpen, setTeleportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [configEditorOpen, setConfigEditorOpen] = useState(false);
   const [room, setRoom] = useState<string | null>(null);
   const [currentFloor, setCurrentFloor] = useState(1);
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
@@ -288,10 +290,19 @@ export default function Dashboard() {
         <SettingsModal
           manager={manager}
           onClose={() => setSettingsOpen(false)}
+          onOpenConfigEditor={() => { setSettingsOpen(false); setConfigEditorOpen(true); }}
           onModelChanged={() => {
             setSettingsOpen(false);
             setModelKey((k) => k + 1);
           }}
+        />
+      )}
+
+      {/* Config Editor as a modal OVER the live villa (not a route) — leaving
+          it returns to Settings with no GLB reload; edits already applied live. */}
+      {configEditorOpen && canOpenSettings && (
+        <ConfigEditorModal
+          onBack={() => { setConfigEditorOpen(false); setSettingsOpen(true); }}
         />
       )}
 

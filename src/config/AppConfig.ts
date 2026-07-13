@@ -247,8 +247,6 @@ export interface AppConfig {
   eyeHeight: number;
   /** Walk-speed multiplier (1.0 = default). Configurable in Settings. */
   walkSpeed: number;
-  /** Enable camera collision with walls. */
-  wallCollisions: boolean;
   /** Rain/weather particle effects (off by default — can look noisy). */
   weatherEffects: boolean;
   /** Room polygons parsed from an uploaded .sh3d (auto room names, any villa).
@@ -340,7 +338,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   modelTransform: DEFAULT_MODEL_TRANSFORM,
   eyeHeight: 1.7,
   walkSpeed: 1,
-  wallCollisions: true,
   weatherEffects: false,
   renderOnDemand: true,
   showEntityLabels: false,

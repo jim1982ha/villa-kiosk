@@ -12,7 +12,6 @@ import {
   Mesh,
   type AbstractMesh,
 } from "@babylonjs/core";
-import "@babylonjs/core/Debug/debugLayer";
 import "@babylonjs/loaders/glTF";
 
 import { CameraController } from "./CameraController";
@@ -401,26 +400,33 @@ export class SceneManager {
   }
 
   /**
-   * Real floor-surface Y for a given storey at (x, z), from FloorManager's
-   * own per-floor mesh list (stable regardless of which floor is currently
-   * being VIEWED — a scene raycast here would miss whatever storey isn't
-   * currently enabled). Used to place a room's RoomHighlight glow (and its
-   * teleport point) at the storey it's actually on instead of always
-   * ground level — see RoomHighlight.setRooms's docstring for the bug this
-   * fixes (a 2F room's red highlight rendering on the ground floor).
-   * Returns 0 (ground level) when nothing on that floor covers (x, z) —
-   * single-storey models, or a room slightly outside every floor mesh's
-   * footprint.
+   * Real floor-surface (walking-surface) Y for a given storey at (x, z). Used
+   * to place a room's RoomHighlight glow (and its teleport point) on the
+   * storey it's actually on.
+   *
+   * Cast a ray straight DOWN at the room's centre, hitting only that storey's
+   * structure meshes: the first (highest) hit is the floor slab's top surface.
+   * A room centroid sits in open floor, so the ray does NOT hit the wall tops
+   * that ring the room — which is exactly why an earlier bbox-max approach put
+   * a 2F glow on the CEILING: a wall's material-mesh bbox spans floor→ceiling
+   * and its XZ footprint wraps the whole room, so "max Y of covering meshes"
+   * returned the ceiling height, not the floor. FloorManager hides every
+   * storey except the one being viewed, and picking skips disabled meshes, so
+   * the target storey's meshes are momentarily force-enabled for the probe and
+   * restored after. Falls back to 0 (ground) when nothing is hit.
    */
   private estimateFloorY(x: number, z: number, floor: number): number {
-    let best = -Infinity;
-    for (const m of this.floors.getFloorMeshes(floor)) {
-      const bb = m.getBoundingInfo().boundingBox;
-      if (x < bb.minimumWorld.x || x > bb.maximumWorld.x) continue;
-      if (z < bb.minimumWorld.z || z > bb.maximumWorld.z) continue;
-      if (bb.maximumWorld.y > best) best = bb.maximumWorld.y;
-    }
-    return best === -Infinity ? 0 : best;
+    const meshes = this.floors.getFloorMeshes(floor);
+    if (!meshes.length) return 0;
+    const saved = meshes.map((m) => [m.isEnabled(false), m.isPickable] as const);
+    for (const m of meshes) { m.setEnabled(true); m.isPickable = true; }
+    // World Y is metres after normalisation; ±1000 comfortably brackets any villa.
+    const hit = this.scene.pickWithRay(
+      new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000),
+      (m) => meshes.includes(m),
+    );
+    meshes.forEach((m, i) => { m.setEnabled(saved[i][0]); m.isPickable = saved[i][1]; });
+    return hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : 0;
   }
 
   private entityCalibration(): Record<string, { x: number; y: number }> {
@@ -850,7 +856,9 @@ export class SceneManager {
       const isWallShaped = meshH > 1.2 && (footMin < 0.5 || footMax > 3.0);
       const isExplicit = structuralByName.test(name);
       const isExcluded = neverCollide.test(name) || isStair;
-      m.checkCollisions = this.config.wallCollisions && !isExcluded && (isExplicit || isWallShaped);
+      // Wall collisions are always on (the toggle was removed — you should
+      // never walk through a wall); only shape/exclusion decides.
+      m.checkCollisions = !isExcluded && (isExplicit || isWallShaped);
 
       // --- Opacity ---
       // alpha > 0.5 → wall/furniture that bled alpha → force opaque.
@@ -1077,32 +1085,6 @@ export class SceneManager {
   /** All entity mappings resolved from the last model load (for Config Editor auto-population). */
   getAutoDetectedMappings() {
     return this.visuals.getDetectedMappings();
-  }
-
-  /** Toggle the Babylon Inspector — used to calibrate teleport coordinates. */
-  async toggleInspector(): Promise<void> {
-    try {
-      if (this.scene.debugLayer.isVisible()) {
-        this.scene.debugLayer.hide();
-        return;
-      }
-      // The inspector bundle is a UMD file that expects window.BABYLON to exist.
-      // With Vite's ES modules that global is never set — we set it here first.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const win = window as any;
-      if (!win.BABYLON) {
-        // The inspector UMD bundle tries to assign win.BABYLON.Inspector = …
-        // ES module objects are frozen, so we spread into a plain mutable object.
-        const core = await import("@babylonjs/core");
-        win.BABYLON = { ...core };
-      }
-      await import("@babylonjs/inspector");
-      await this.scene.debugLayer.show({ embedMode: true, overlay: true, globalRoot: document.body });
-      this.requestRender();
-    } catch (err) {
-      console.error("[Inspector] failed to open:", err);
-      alert("Inspector failed to load — see the browser console for details.");
-    }
   }
 
   dispose(): void {

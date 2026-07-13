@@ -37,15 +37,19 @@ export default function ConfigEditor() {
     [config.entityMap, boundEntityIds],
   );
 
-  // The "Room" field below is free text matched EXACTLY (case/whitespace
-  // aside) against a real room's name by RoomHighlight — a typo or a name
-  // that doesn't match any actual room (sh3d polygon or Rooms-menu point)
-  // silently does nothing, with no error anywhere. Suggest the real names as
-  // a native <datalist> autocomplete so a mismatch is visible while typing,
-  // without blocking a not-yet-created room name.
+  // The "Room" field is matched EXACTLY (case/whitespace aside) against a real
+  // room's name by RoomHighlight. Offer the real rooms as a proper dropdown so
+  // there's nothing to mistype — sourced from BOTH the calibrated viewpoints
+  // (teleportPoints) AND the parsed .sh3d rooms, so the list is populated even
+  // before calibration has run. A row's current value is always kept in the
+  // list even if it no longer matches a known room, so editing it never drops
+  // an existing binding.
   const roomNames = useMemo(
-    () => Array.from(new Set(config.teleportPoints.map((p) => p.name))).sort(),
-    [config.teleportPoints],
+    () => Array.from(new Set([
+      ...config.teleportPoints.map((p) => p.name),
+      ...(config.sh3dRooms ?? []).map((r) => r.name),
+    ].filter(Boolean))).sort(),
+    [config.teleportPoints, config.sh3dRooms],
   );
 
   const patch = (key: string, change: Partial<EntityMapping>) =>
@@ -95,10 +99,6 @@ export default function ConfigEditor() {
         <code style={{ fontSize: 11 }}>camera.patio_1f_cam</code>). Edit the
         display name, room or panel type without reloading the model.
       </p>
-
-      <datalist id="config-editor-room-names">
-        {roomNames.map((n) => <option key={n} value={n} />)}
-      </datalist>
 
       {entries.length === 0 && (
         <p className="muted body-text mt">
@@ -199,12 +199,20 @@ export default function ConfigEditor() {
                 </td>
                 <td data-label="Label"><input value={m.label} onChange={(e) => patch(key, { label: e.target.value })} /></td>
                 <td data-label="Room">
-                  <input
-                    value={m.room}
+                  <select
+                    value={m.room ?? ""}
                     onChange={(e) => patch(key, { room: e.target.value })}
-                    title="Room name — must match a Rooms-menu name exactly for motion-glow/teleport to find it"
-                    list="config-editor-room-names"
-                  />
+                    title="Room this device is in — used for motion-glow and teleport. Pick from the villa's detected rooms."
+                  >
+                    <option value="">— none —</option>
+                    {/* Keep the current value selectable even if it's not (or
+                        no longer) a known room, so editing never silently drops
+                        an existing binding. */}
+                    {m.room && !roomNames.includes(m.room) && (
+                      <option value={m.room}>{m.room} (custom)</option>
+                    )}
+                    {roomNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
                 </td>
                 <td data-label="Motion sensor" style={{ minWidth: 180 }}>
                   {m.type === "camera" ? (
