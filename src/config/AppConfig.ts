@@ -80,6 +80,33 @@ export const DEFAULT_BINARY_SENSOR_ICONS: Record<string, string> = {
   update: "🔄",
 };
 
+/**
+ * `sensor` is HA's other catch-all domain — a Shelly power meter, a
+ * temperature probe and a humidity probe are all "sensor", so (like
+ * binary_sensor above) one per-type glyph can't tell them apart. Keyed by
+ * the entity's `device_class` state attribute, same resolution order as
+ * DEFAULT_BINARY_SENSOR_ICONS: config.sensorIcons override → this default →
+ * the generic sensor entry in entityIcons for a class not listed here.
+ */
+export const DEFAULT_SENSOR_ICONS: Record<string, string> = {
+  temperature: "🌡️",
+  humidity: "💧",
+  power: "⚡",
+  energy: "🔋",
+  current: "⚡",
+  voltage: "⚡",
+  battery: "🪫",
+  illuminance: "☀️",
+  pressure: "📊",
+  gas: "💨",
+  carbon_dioxide: "💨",
+  volatile_organic_compounds: "💨",
+  pm25: "💨",
+  signal_strength: "📶",
+  timestamp: "🕐",
+  duration: "⏱️",
+};
+
 /** Tone-mapping operator applied to the whole scene (see RenderConfig). */
 export type ToneMappingMode = "none" | "standard" | "aces" | "khr_neutral";
 
@@ -224,21 +251,14 @@ export interface AppConfig {
   wallCollisions: boolean;
   /** Rain/weather particle effects (off by default — can look noisy). */
   weatherEffects: boolean;
-  /** Room polygons parsed from an uploaded .sh3d (auto room names, any villa). */
-  sh3dRooms?: { name: string; points: { x: number; y: number }[] }[];
+  /** Room polygons parsed from an uploaded .sh3d (auto room names, any villa).
+   *  `floor` is the 1-based storey the room's SweetHome level resolves to
+   *  (see sh3dParser.ts) — defaults to 1 for older stored configs. */
+  sh3dRooms?: { name: string; points: { x: number; y: number }[]; floor?: number }[];
   /** Entity plan positions parsed from an uploaded .sh3d (for the transform fit).
    *  `angle` (radians, plan yaw) and `pitch` (radians, tilt) drive the camera
    *  motion-beam direction. */
   sh3dEntities?: { entityId: string; x: number; y: number; angle: number; pitch: number }[];
-  /**
-   * Manual override for room calibration when auto-detection comes out reversed.
-   * The app first auto-fits the plan→model transform; these flips are applied on
-   * top of the result, mirroring room detection about the model centre. Use them
-   * if the detected room is left-right (flipX) or front-back (flipZ) reversed
-   * versus the real villa.
-   */
-  calibrationFlipX: boolean;
-  calibrationFlipZ: boolean;
   renderOnDemand: boolean;
   /** Show floating state labels above each bound device in the 3D scene. */
   showEntityLabels: boolean;
@@ -290,6 +310,12 @@ export interface AppConfig {
    *  DEFAULT_BINARY_SENSOR_ICONS). Editable in Settings; a class missing here
    *  falls back to the default table, then to entityIcons.binary_sensor. */
   binarySensorIcons: Record<string, string>;
+  /** Per-device_class badge glyphs for sensor entities (see
+   *  DEFAULT_SENSOR_ICONS) — lets a power/temperature/humidity sensor each
+   *  show a distinct glyph instead of sharing the generic "sensor" one.
+   *  Editable in Settings; a class missing here falls back to the default
+   *  table, then to entityIcons.sensor. */
+  sensorIcons: Record<string, string>;
   /** Global size multiplier for the in-scene state-icon badges (1 = default).
    *  In the bird's-eye view this is further scaled by the zoom level. */
   entityIconScale: number;
@@ -316,8 +342,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   walkSpeed: 1,
   wallCollisions: true,
   weatherEffects: false,
-  calibrationFlipX: false,
-  calibrationFlipZ: false,
   renderOnDemand: true,
   showEntityLabels: false,
   hiddenCategories: [],
@@ -326,6 +350,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   render: DEFAULT_RENDER,
   entityIcons: { ...DEFAULT_ENTITY_ICONS },
   binarySensorIcons: { ...DEFAULT_BINARY_SENSOR_ICONS },
+  sensorIcons: { ...DEFAULT_SENSOR_ICONS },
   // 1.5x at the default whole-villa overview packed badges too tightly for the
   // overlap-avoiding declutter to keep more than one per room visible (most
   // devices in a room fall within the same clash radius). 1.0x is the badge's
@@ -350,6 +375,7 @@ export function loadConfig(): AppConfig {
       render: { ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) },
       entityIcons: { ...DEFAULT_ENTITY_ICONS, ...(stored.entityIcons ?? {}) },
       binarySensorIcons: { ...DEFAULT_BINARY_SENSOR_ICONS, ...(stored.binarySensorIcons ?? {}) },
+      sensorIcons: { ...DEFAULT_SENSOR_ICONS, ...(stored.sensorIcons ?? {}) },
       teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
     };
   } catch (err) {

@@ -25,7 +25,7 @@ import {
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-import { DEFAULT_ENTITY_ICONS, DEFAULT_BINARY_SENSOR_ICONS } from "@/config/AppConfig";
+import { DEFAULT_ENTITY_ICONS, DEFAULT_BINARY_SENSOR_ICONS, DEFAULT_SENSOR_ICONS } from "@/config/AppConfig";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import { categoryForEntity } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
@@ -326,13 +326,15 @@ export class EntityVisuals {
     const prevLabels = this.config.showEntityLabels;
     const prevIcons = this.config.entityIcons;
     const prevBsIcons = this.config.binarySensorIcons;
+    const prevSensorIcons = this.config.sensorIcons;
     this.config = config;
     // Entity-light wall occlusion is always-on (independent of the global Shadows
     // quality toggle, which drives the expensive sun shadows): walls block lamp
     // light out of the box, so there is nothing to tear down here when the toggle
     // changes.
     const iconsChanged = config.entityIcons !== prevIcons
-      || config.binarySensorIcons !== prevBsIcons;
+      || config.binarySensorIcons !== prevBsIcons
+      || config.sensorIcons !== prevSensorIcons;
     // Apply the user's size multiplier (combined with the live zoom factor).
     if (typeof config.entityIconScale === "number" && config.entityIconScale !== this.iconUserScale) {
       this.iconUserScale = config.entityIconScale;
@@ -746,7 +748,7 @@ export class EntityVisuals {
   /** Replace the calibrated room polygons (world space) — forwarded straight
    *  to RoomHighlight. Called by SceneManager after every plan→world re-fit
    *  (load + mirror-flip toggles), same trigger as the teleport grid. */
-  setRoomPolygons(polys: { name: string; pts: { x: number; z: number }[] }[]): void {
+  setRoomPolygons(polys: { name: string; pts: { x: number; z: number }[]; floorY?: number }[]): void {
     this.roomHighlight.setRooms(polys);
   }
 
@@ -891,6 +893,13 @@ export class EntityVisuals {
       const dc = entity?.attributes?.device_class as string | undefined;
       const icon = dc
         ? this.config.binarySensorIcons?.[dc] ?? DEFAULT_BINARY_SENSOR_ICONS[dc]
+        : undefined;
+      if (icon) return icon;
+    }
+    if (type === "sensor") {
+      const dc = entity?.attributes?.device_class as string | undefined;
+      const icon = dc
+        ? this.config.sensorIcons?.[dc] ?? DEFAULT_SENSOR_ICONS[dc]
         : undefined;
       if (icon) return icon;
     }
@@ -1393,6 +1402,21 @@ export class EntityVisuals {
       // the case so cover entities don't fall through to the default and get
       // treated as something else, but apply no visual transform.
       case "cover":
+        break;
+
+      // Purely informational domains — never meant to glow. Explicit (not
+      // `default`) because a geometry-less sensor/climate device falls back
+      // to a placeholder sphere sharing the SAME warm-emissive marker
+      // material lights use (see blender_pipeline's _light_marker_material:
+      // "the app overrides its emissive from live HA state ... the baked
+      // baseline only makes an UNWIRED marker visible"). Every other domain
+      // above does override it; sensor/climate never did, so a sensor that
+      // fell back to a placeholder (e.g. its real geometry got matched to a
+      // nearby entity instead — see compute_group_instance_map) stayed at
+      // that baked-in glow forever, reading as "lit like a light fixture".
+      case "sensor":
+      case "climate":
+        setEmissive?.(Color3.Black());
         break;
 
       default:

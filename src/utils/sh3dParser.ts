@@ -12,6 +12,10 @@ import JSZip from "jszip";
 export interface ParsedRoom {
   name: string;
   points: { x: number; y: number }[];
+  /** 1-based storey index (1 = ground floor), derived from the room's
+   *  SweetHome `level` by sorting every `<level>` in the file by elevation.
+   *  Defaults to 1 for single-storey files / rooms with no `level`. */
+  floor: number;
 }
 export interface ParsedEntity {
   entityId: string;
@@ -48,6 +52,24 @@ export async function parseSh3d(data: ArrayBuffer | File): Promise<ParsedSh3d> {
   const doc = new DOMParser().parseFromString(xmlText, "application/xml");
   if (doc.querySelector("parsererror")) throw new Error("Could not parse Home.xml.");
 
+  // Levels: sort by elevation to turn SweetHome's opaque `level-<uuid>` ids
+  // into 1-based storey numbers (matching the Blender pipeline's own
+  // `_parse_levels` convention). Sub-levels sharing an elevation (SweetHome's
+  // "same elevation" levels) collapse onto the same storey number.
+  const levelFloor = new Map<string, number>();
+  {
+    const byId = new Map<string, number>();
+    doc.querySelectorAll("level").forEach((lv) => {
+      const id = lv.getAttribute("id");
+      if (!id) return;
+      byId.set(id, Number(lv.getAttribute("elevation") ?? 0));
+    });
+    const elevations = [...new Set(byId.values())].sort((a, b) => a - b);
+    for (const [id, elevation] of byId) {
+      levelFloor.set(id, elevations.indexOf(elevation) + 1);
+    }
+  }
+
   // Rooms: named polygons.
   const rooms: ParsedRoom[] = [];
   doc.querySelectorAll("room").forEach((roomEl) => {
@@ -57,7 +79,9 @@ export async function parseSh3d(data: ArrayBuffer | File): Promise<ParsedSh3d> {
     roomEl.querySelectorAll("point").forEach((p) => {
       points.push({ x: Number(p.getAttribute("x")), y: Number(p.getAttribute("y")) });
     });
-    if (points.length >= 3) rooms.push({ name, points });
+    const levelId = roomEl.getAttribute("level");
+    const floor = (levelId && levelFloor.get(levelId)) || 1;
+    if (points.length >= 3) rooms.push({ name, points, floor });
   });
 
   // Entity calibration: furniture whose name is an HA entity_id, at known x/y.

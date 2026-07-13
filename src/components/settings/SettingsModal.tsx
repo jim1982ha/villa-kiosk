@@ -1,18 +1,17 @@
 // src/components/settings/SettingsModal.tsx
-// HA connection + token + location + model + backup/restore. Plus a link to the
-// full Config Editor and a button to toggle the Babylon Inspector for calibration.
+// HA connection + token + model. Plus a link to the full Config Editor (which
+// also holds villa coordinates) and a button to toggle the Babylon Inspector.
 
 import { useRef, useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plug, Download, Upload, Bug, FileText, Info, Sliders, Sun, Moon, Monitor } from "lucide-react";
+import { Plug, Upload, Bug, FileText, Info, Sliders, Sun, Moon, Monitor } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, DEFAULT_ENTITY_ICONS, DEFAULT_BINARY_SENSOR_ICONS, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
+import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, DEFAULT_ENTITY_ICONS, DEFAULT_BINARY_SENSOR_ICONS, DEFAULT_SENSOR_ICONS, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
 import type { EntityType } from "@/types/scene.types";
 import { testConnection, type TestResult } from "@/ha/testConnection";
-import { exportBackup, importBackup, downloadBlob } from "@/utils/backup";
 import { parseSh3d, minifySh3d } from "@/utils/sh3dParser";
 import { clearStoredModel, getModelMeta, fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type AddonConfig } from "@/utils/storage";
 import { getLoadedModelInfo } from "@/utils/modelInfo";
@@ -78,7 +77,21 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
       : { detected: false, classes: Object.keys(DEFAULT_BINARY_SENSOR_ICONS) };
   }, [config.entityMap, entities]);
 
-  const importRef = useRef<HTMLInputElement>(null);
+  // Same idea as binarySensorClasses above, for the OTHER catch-all domain:
+  // a Shelly power meter, a temperature probe and a humidity probe are all
+  // "sensor" entities, told apart only by device_class.
+  const sensorClasses = useMemo(() => {
+    const found = new Set<string>();
+    for (const [id, map] of Object.entries(config.entityMap ?? {})) {
+      if (map?.type !== "sensor") continue;
+      const dc = entities[id]?.attributes?.device_class as string | undefined;
+      if (dc) found.add(dc);
+    }
+    return found.size
+      ? { detected: true, classes: [...found].sort() }
+      : { detected: false, classes: Object.keys(DEFAULT_SENSOR_ICONS) };
+  }, [config.entityMap, entities]);
+
   const sh3dRef = useRef<HTMLInputElement>(null);
   const [sh3dMsg, setSh3dMsg] = useState<string | null>(null);
 
@@ -157,8 +170,6 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);
   const [url, setUrl] = useState(config.haUrl);
   const [token, setToken] = useState(config.haToken);
-  const [lat, setLat] = useState(String(config.latitude));
-  const [lng, setLng] = useState(String(config.longitude));
   const [eyeHeight, setEyeHeight] = useState(config.eyeHeight ?? 1.7);
   const [walkSpeed, setWalkSpeed] = useState(config.walkSpeed ?? 1);
   const [render, setRender] = useState<RenderConfig>(config.render ?? DEFAULT_RENDER);
@@ -191,7 +202,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
 
   const save = () => {
     const cleanUrl = normaliseHaUrl(url);
-    update({ siteTitle: siteTitle.trim(), haUrl: cleanUrl, haToken: token, latitude: Number(lat), longitude: Number(lng), eyeHeight, walkSpeed, render });
+    update({ siteTitle: siteTitle.trim(), haUrl: cleanUrl, haToken: token, eyeHeight, walkSpeed, render });
     // Only bounce the websocket when the connection details actually changed —
     // profiles that can't edit them (guests saving a theme tweak) keep the
     // live connection untouched.
@@ -206,17 +217,6 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
     setResult(null);
     setResult(await testConnection(normaliseHaUrl(url), token));
     setTesting(false);
-  };
-
-  const doExport = async () => {
-    const blob = await exportBackup(config, true);
-    downloadBlob(blob, `villa-kiosk-backup-${Date.now()}.zip`);
-  };
-
-  const doImport = async (file: File) => {
-    const { config: imported, modelImported } = await importBackup(file);
-    if (imported) replace({ ...config, ...imported, haToken: config.haToken });
-    if (modelImported) onModelChanged();
   };
 
   return (
@@ -275,20 +275,6 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
             <label>Long-lived access token</label>
             <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="eyJhbGciOi…" />
           </>
-        )}
-
-        {/* RBAC: villa coordinates drive sun tracking — administration. */}
-        {can("editConfig") && (
-          <div className="row" style={{ gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label>Latitude</label>
-              <input value={lat} onChange={(e) => setLat(e.target.value)} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label>Longitude</label>
-              <input value={lng} onChange={(e) => setLng(e.target.value)} />
-            </div>
-          </div>
         )}
 
         {!ingress && can("editConfig") && (
@@ -519,45 +505,41 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
             </label>
           ))}
         </div>
+        <h4 style={{ margin: "16px 0 0", fontSize: 13 }}>Sensors by device class</h4>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          Same idea for the other catch-all domain — a power meter, a
+          temperature probe and a humidity probe are all sensor entities,
+          told apart by <code>device_class</code>. {sensorClasses.detected
+            ? "These are the classes of your bound sensors:"
+            : "Connect to Home Assistant to list only your sensors' classes; until then, all known classes:"}
+        </p>
+        <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>
+          {sensorClasses.classes.map((dc) => (
+            <label key={dc} style={{ display: "flex", alignItems: "center", gap: 8, width: "calc(50% - 5px)" }}>
+              <input
+                type="text"
+                value={config.sensorIcons?.[dc] ?? DEFAULT_SENSOR_ICONS[dc] ?? DEFAULT_ENTITY_ICONS.sensor}
+                onChange={(e) => update({ sensorIcons: { ...config.sensorIcons, [dc]: e.target.value } })}
+                style={{ width: 44, textAlign: "center", fontSize: 18, padding: "4px 0" }}
+                maxLength={4}
+                aria-label={`${dc} sensor icon`}
+              />
+              <span className="body-text" style={{ fontSize: 12, textTransform: "capitalize" }}>{dc.replace(/_/g, " ")}</span>
+            </label>
+          ))}
+        </div>
         <button
           className="btn ghost mt"
           style={{ fontSize: 12 }}
           onClick={() => update({
             entityIcons: { ...DEFAULT_ENTITY_ICONS },
             binarySensorIcons: { ...DEFAULT_BINARY_SENSOR_ICONS },
+            sensorIcons: { ...DEFAULT_SENSOR_ICONS },
           })}
         >
           Reset icons to defaults
         </button>
         </>
-        )}
-
-        {/* RBAC: room-detection calibration belongs to kiosk administration,
-            not personal visual taste. */}
-        {can("editConfig") && (
-          <>
-            <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
-
-            <label className="toggle">
-              <input
-                type="checkbox" checked={config.calibrationFlipX}
-                onChange={(e) => update({ calibrationFlipX: e.target.checked })}
-              />
-              <span>Mirror room detection left ↔ right</span>
-            </label>
-            <label className="toggle">
-              <input
-                type="checkbox" checked={config.calibrationFlipZ}
-                onChange={(e) => update({ calibrationFlipZ: e.target.checked })}
-              />
-              <span>Mirror room detection front ↔ back</span>
-            </label>
-            <p className="muted body-text" style={{ marginTop: 6 }}>
-              The app auto-aligns rooms to the model. If the detected room is reversed
-              versus the real villa (e.g. the laundry shows on the wrong side), toggle
-              these to flip it. Updates live.
-            </p>
-          </>
         )}
 
         {can("manageModel") && (
@@ -700,8 +682,15 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
           </>
         )}
 
-        {/* RBAC: the Advanced tools (Config Editor, Inspector, backups) are
-            for the profile that administers the kiosk configuration. */}
+        {/* RBAC: the Config Editor is for the profile that administers the
+            kiosk configuration. Villa coordinates, the Inspector toggle and
+            (elsewhere) the Rooms-mirror override used to live on this
+            landing screen too — moved into the Config Editor itself so this
+            screen stays a short, everyday list. Inspector specifically can't
+            move any further than Settings: it toggles Babylon's debug
+            overlay on the LIVE scene, which only exists while Dashboard is
+            mounted — the Config Editor is a separate route that replaces it,
+            with no scene to inspect. */}
         {can("editConfig") && (
           <>
             <div className="settings-section-title" style={{ marginTop: 22 }}>Advanced</div>
@@ -726,21 +715,6 @@ export default function SettingsModal({ manager, onClose, onModelChanged }: Prop
                 <Bug size={20} />
                 <span>Inspector</span>
               </button>
-              <button className="tile-btn" onClick={doExport}>
-                <Download size={20} />
-                <span>Export backup</span>
-              </button>
-              <button className="tile-btn" onClick={() => importRef.current?.click()}>
-                <Upload size={20} />
-                <span>Import backup</span>
-              </button>
-              <input
-                ref={importRef} type="file" accept=".zip" style={{ display: "none" }}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) doImport(f);
-                }}
-              />
             </div>
           </>
         )}

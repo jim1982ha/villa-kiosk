@@ -82,7 +82,7 @@ export default function HUD({
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
-  const { role, logout } = useProfile();
+  const { role, beginSwitch } = useProfile();
   const clock = useClock();
   const title = resolveSiteTitle(config, haConfig?.location_name);
   const floors = [1, 2];
@@ -242,7 +242,7 @@ export default function HUD({
                 <span className="hud-profile-name">{ROLE_LABELS[role]}</span>
                 <button
                   className="icon-btn"
-                  onClick={logout}
+                  onClick={beginSwitch}
                   title="Switch profile"
                   aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
                 >
@@ -301,7 +301,7 @@ export default function HUD({
                   <button
                     role="menuitem"
                     className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); logout(); }}
+                    onClick={() => { setMenuOpen(false); beginSwitch(); }}
                   >
                     <LogOut size={18} />
                     <span>Switch profile</span>

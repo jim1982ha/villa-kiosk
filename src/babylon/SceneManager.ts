@@ -163,7 +163,7 @@ export class SceneManager {
     );
     // The construction args above don't carry the RBAC type denials — push
     // them now so a restricted profile's first pick is already filtered.
-    this.pick.setMaps(opts.config.entityMap, opts.config.meshBindings, opts.config.deniedTypes);
+    this.pick.setMaps(opts.config.entityMap, opts.config.meshBindings, opts.config.deniedTypes, opts.config.hiddenCategories);
 
     // Bird's-eye overview camera (a second control mode). Created up front but
     // dormant: its input is attached and it becomes the active camera only when
@@ -400,6 +400,29 @@ export class SceneManager {
     return this.scene.getWorldExtends((m) => set.has(m));
   }
 
+  /**
+   * Real floor-surface Y for a given storey at (x, z), from FloorManager's
+   * own per-floor mesh list (stable regardless of which floor is currently
+   * being VIEWED — a scene raycast here would miss whatever storey isn't
+   * currently enabled). Used to place a room's RoomHighlight glow (and its
+   * teleport point) at the storey it's actually on instead of always
+   * ground level — see RoomHighlight.setRooms's docstring for the bug this
+   * fixes (a 2F room's red highlight rendering on the ground floor).
+   * Returns 0 (ground level) when nothing on that floor covers (x, z) —
+   * single-storey models, or a room slightly outside every floor mesh's
+   * footprint.
+   */
+  private estimateFloorY(x: number, z: number, floor: number): number {
+    let best = -Infinity;
+    for (const m of this.floors.getFloorMeshes(floor)) {
+      const bb = m.getBoundingInfo().boundingBox;
+      if (x < bb.minimumWorld.x || x > bb.maximumWorld.x) continue;
+      if (z < bb.minimumWorld.z || z > bb.maximumWorld.z) continue;
+      if (bb.maximumWorld.y > best) best = bb.maximumWorld.y;
+    }
+    return best === -Infinity ? 0 : best;
+  }
+
   private entityCalibration(): Record<string, { x: number; y: number }> {
     return this.config.sh3dEntities?.length
       ? Object.fromEntries(this.config.sh3dEntities.map((e) => [e.entityId, { x: e.x, y: e.y }]))
@@ -609,32 +632,26 @@ export class SceneManager {
       this.calibratedPoints = null;
       return;
     }
-    let planToWorld = solution.planToWorld;
+    const planToWorld = solution.planToWorld;
     devLog(`[Villa] calibration: ${solution.strategy}`);
 
-    // Manual override (Settings): mirror the auto-fitted result about the model
-    // centre (model is recentred on the origin) when detection comes out reversed.
-    if (this.config.calibrationFlipX || this.config.calibrationFlipZ) {
-      const base = planToWorld;
-      const sx = this.config.calibrationFlipX ? -1 : 1;
-      const sz = this.config.calibrationFlipZ ? -1 : 1;
-      planToWorld = (px, py) => { const w = base(px, py); return { x: w.x * sx, z: w.z * sz }; };
-      devLog(`[Villa] manual calibration override: flipX=${sx < 0} flipZ=${sz < 0}`);
-    }
-
     // Transform each room polygon to model space; centroid → teleport point.
-    const worldPolys: Array<{ name: string; pts: Pt2[] }> = [];
+    const worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number }> = [];
     const points: TeleportPoint[] = [];
     for (const room of rooms) {
       const pts = room.points.map((p) => planToWorld(p.x, p.y));
-      worldPolys.push({ name: room.name, pts });
+      // TeleportPoint.floor (and the rest of the app) only models two
+      // storeys — clamp rather than widen that union for a hypothetical 3rd.
+      const floor: 1 | 2 = (room.floor ?? 1) >= 2 ? 2 : 1;
       const c = polygonCentroid(room.points);
       const wc = planToWorld(c.x, c.y);
+      const floorY = this.estimateFloorY(wc.x, wc.z, floor);
+      worldPolys.push({ name: room.name, pts, floorY });
       points.push({
         name: room.name,
-        floor: 1,
-        position: { x: wc.x, y: 1.7, z: wc.z },
-        target: { x: wc.x, y: 1.6, z: wc.z + 1.5 },
+        floor,
+        position: { x: wc.x, y: floorY + 1.7, z: wc.z },
+        target: { x: wc.x, y: floorY + 1.6, z: wc.z + 1.5 },
       });
     }
 
@@ -748,7 +765,7 @@ export class SceneManager {
   /** Re-apply entityMap + meshBindings live (after the user edits a binding). */
   reindex(config: AppConfig): void {
     this.config = config;
-    this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes);
+    this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes, config.hiddenCategories);
     this.visuals.updateConfig(config);
     this.visuals.indexMeshes(this.loadedMeshes);
     this.requestRender();
@@ -989,14 +1006,12 @@ export class SceneManager {
     const sh3dChanged =
       prev.sh3dRooms !== config.sh3dRooms || prev.sh3dEntities !== config.sh3dEntities;
 
-    // indexMeshes()/applyStructure() only read entity↔mesh bindings and the
-    // calibration flips; everything else (glass hints, grass, model transform)
-    // takes effect on the next model load, not here.
+    // indexMeshes()/applyStructure() only read entity↔mesh bindings; everything
+    // else (glass hints, grass, model transform) takes effect on the next
+    // model load, not here.
     const structuralChanged =
       prev.entityMap !== config.entityMap ||
       prev.meshBindings !== config.meshBindings ||
-      prev.calibrationFlipX !== config.calibrationFlipX ||
-      prev.calibrationFlipZ !== config.calibrationFlipZ ||
       sh3dChanged;
 
     // renderFx first (sets base IBL + builds/clears the env texture), THEN the
@@ -1013,7 +1028,7 @@ export class SceneManager {
     }
     this.camera.updateConfig(config);
     this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
-    this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes);
+    this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes, config.hiddenCategories);
     this.visuals.updateConfig(config); // internally cheap; rebuilds labels only on its own diff
 
     // A room added/renamed/removed via the Rooms menu ("Add room here") should
@@ -1032,8 +1047,6 @@ export class SceneManager {
       const entityDelta = newEntityCount - prevEntityCount;
 
       const needsRecalibration =
-        prev.calibrationFlipX !== config.calibrationFlipX ||
-        prev.calibrationFlipZ !== config.calibrationFlipZ ||
         sh3dChanged ||
         entityDelta > 0;  // new entities improve the plan→world fit
 

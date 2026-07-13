@@ -46,7 +46,14 @@ export default function Dashboard() {
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
   const [showOnboarding, setShowOnboarding] = useState(!config.onboarded);
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
-  const [viewMode, setViewMode] = useState<"first-person" | "overview">("first-person");
+  // Starts "overview" to match the actual landing view (see the one-shot
+  // effect below): the HUD reads this to decide joystick vs. overview-help
+  // in the bottom bar, and it used to default to "first-person" here, so the
+  // joystick flashed on screen during the initial load before the one-shot
+  // effect below caught up and flipped it — nothing is interactive yet
+  // during loading anyway, so there's no reason this initial value should
+  // ever have differed from the view the user actually lands in.
+  const [viewMode, setViewMode] = useState<"first-person" | "overview">("overview");
   // Mirrors SceneManager.hasOverviewDefault() (a localStorage read) into React
   // state so the HUD button's pressed state updates immediately after
   // save/clear, without polling. Re-derived per manager since a model reload

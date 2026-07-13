@@ -37,6 +37,10 @@ export const ENTITY_CALIBRATION_CM: Record<string, PlanXY> = {
 export interface RoomPolygon {
   name: string;
   points: PlanXY[]; // plan polygon (cm)
+  /** 1-based storey (ground floor = 1). Omitted here — this reference table
+   *  is ground-floor-only; an uploaded .sh3d's parsed rooms carry a real
+   *  value (see sh3dParser.ts). */
+  floor?: number;
 }
 
 /**

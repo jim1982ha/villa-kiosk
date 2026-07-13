@@ -159,12 +159,25 @@ export class RoomHighlight {
   }
 
   /** (Re)build one floor mesh per REAL room polygon. Called every time
-   *  SceneManager re-fits the plan→world transform (load + mirror toggles). */
-  setRooms(polys: { name: string; pts: Pt2[] }[]): void {
+   *  SceneManager re-fits the plan→world transform (load + mirror toggles).
+   *  `floorY` is resolved by the caller (SceneManager, via FloorManager's
+   *  per-storey mesh list) rather than probed here with a scene raycast:
+   *  Babylon's picking skips `setEnabled(false)` meshes, and FloorManager
+   *  hides every storey except the one currently being viewed — a raycast
+   *  run here could miss the very floor a room lives on, depending on
+   *  whatever floor happened to be active at calibration time. Defaults to
+   *  ground level (FLOOR_Y_OFFSET) when the caller has nothing better —
+   *  single-storey models, or a model too old for FloorManager's per-mesh
+   *  floorIndex stamp. This is also what fixed "a 2F room's red highlight
+   *  shows on the ground floor": every room used to render at this same
+   *  fixed ground-level Y regardless of its real storey.
+   */
+  setRooms(polys: { name: string; pts: Pt2[]; floorY?: number }[]): void {
     this.disposeMap(this.polyRooms);
     for (const room of polys) {
       const key = RoomHighlight.normalise(room.name);
-      const entry = this.buildMesh(key, room.pts, FLOOR_Y_OFFSET);
+      const y = (room.floorY ?? 0) + FLOOR_Y_OFFSET;
+      const entry = this.buildMesh(key, room.pts, y);
       if (entry) this.polyRooms.set(key, entry);
     }
   }

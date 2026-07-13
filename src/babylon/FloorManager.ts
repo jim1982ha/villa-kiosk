@@ -116,6 +116,14 @@ export class FloorManager {
     return (this.floorMeshes.get(floor)?.length ?? 0) > 0;
   }
 
+  /** Every mesh indexed under `floor`, regardless of its CURRENT visibility
+   *  (setEnabled toggles with the active floor, this list doesn't). Lets a
+   *  caller (RoomHighlight, via SceneManager) find a storey's real floor
+   *  height without a scene raycast, which would miss a hidden floor. */
+  getFloorMeshes(floor: number): AbstractMesh[] {
+    return this.floorMeshes.get(floor) ?? [];
+  }
+
   getCurrentFloor(): number {
     return this.currentFloor;
   }

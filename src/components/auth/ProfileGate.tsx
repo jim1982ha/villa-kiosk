@@ -19,7 +19,7 @@ const ROLE_ICONS: Record<Role, typeof UserRound> = {
 };
 
 export default function ProfileGate({ children }: { children: ReactNode }) {
-  const { role, login } = useProfile();
+  const { role, login, switching, cancelSwitch } = useProfile();
   const { config } = useConfig();
   const [pending, setPending] = useState<Role | null>(null);
   const [pinRequired, setPinRequired] = useState<Record<Role, boolean> | null>(null);
@@ -28,7 +28,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   // Which profiles are gated — fetched once per visit to the select screen.
   // Until the answer arrives we assume every profile needs a PIN (fail closed).
   useEffect(() => {
-    if (role) return; // already signed in, nothing to fetch
+    if (role && !switching) return; // already signed in and not switching, nothing to fetch
     let cancelled = false;
     getPinVerifier()
       .pinRequired()
@@ -40,9 +40,17 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
         }
       });
     return () => { cancelled = true; };
-  }, [role]);
+  }, [role, switching]);
 
-  if (role) return <>{children}</>;
+  if (role && !switching) return <>{children}</>;
+
+  // A profile switch keeps the CURRENT role's villa scene mounted (and thus
+  // still fully loaded) underneath this overlay — see ProfileContext's
+  // beginSwitch docstring for why: unmounting `children` here would force a
+  // full GLB re-fetch + re-parse just to show a PIN pad. `.auth-screen` is a
+  // fixed, opaque full-viewport layer (styles.css), so it fully covers the
+  // scene beneath exactly like any other modal.
+  const isSwitch = !!role && switching;
 
   const choose = (r: Role) => {
     setGateError(null);
@@ -53,46 +61,57 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
     }
   };
 
+  const cancel = isSwitch ? cancelSwitch : undefined;
+
   if (pending) {
     return (
-      <div className="auth-screen">
-        <PinPad
-          roleLabel={ROLE_LABELS[pending]}
-          onSubmit={(pin) => getPinVerifier().verify(pending, pin)}
-          onAccepted={() => { login(pending); setPending(null); }}
-          onBack={() => setPending(null)}
-        />
-      </div>
+      <>
+        {isSwitch && children}
+        <div className="auth-screen">
+          <PinPad
+            roleLabel={ROLE_LABELS[pending]}
+            onSubmit={(pin) => getPinVerifier().verify(pending, pin)}
+            onAccepted={() => { login(pending); setPending(null); }}
+            onBack={() => setPending(null)}
+          />
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="auth-screen">
-      <div className="profile-select">
-        <h1 className="profile-title">{resolveSiteTitle(config)}</h1>
-        <p className="profile-sub">Who's using the kiosk?</p>
-        {gateError && (
-          <p className="profile-error" role="alert">{gateError}</p>
-        )}
-        <div className="profile-cards">
-          {ROLE_ORDER.map((r) => {
-            const Icon = ROLE_ICONS[r];
-            return (
-              <button
-                key={r}
-                className="profile-card"
-                onClick={() => choose(r)}
-                disabled={!pinRequired}
-              >
-                <Icon size={34} aria-hidden="true" />
-                <span className="profile-card-name">{ROLE_LABELS[r]}</span>
-                <span className="profile-card-desc">{ROLE_DESCRIPTIONS[r]}</span>
-              </button>
-            );
-          })}
+    <>
+      {isSwitch && children}
+      <div className="auth-screen">
+        <div className="profile-select">
+          <h1 className="profile-title">{resolveSiteTitle(config)}</h1>
+          <p className="profile-sub">Who's using the kiosk?</p>
+          {gateError && (
+            <p className="profile-error" role="alert">{gateError}</p>
+          )}
+          <div className="profile-cards">
+            {ROLE_ORDER.map((r) => {
+              const Icon = ROLE_ICONS[r];
+              return (
+                <button
+                  key={r}
+                  className="profile-card"
+                  onClick={() => choose(r)}
+                  disabled={!pinRequired}
+                >
+                  <Icon size={34} aria-hidden="true" />
+                  <span className="profile-card-name">{ROLE_LABELS[r]}</span>
+                  <span className="profile-card-desc">{ROLE_DESCRIPTIONS[r]}</span>
+                </button>
+              );
+            })}
+          </div>
+          {!pinRequired && !gateError && <div className="muted">Loading profiles…</div>}
+          {cancel && (
+            <button className="btn ghost mt" onClick={cancel}>Cancel</button>
+          )}
         </div>
-        {!pinRequired && !gateError && <div className="muted">Loading profiles…</div>}
       </div>
-    </div>
+    </>
   );
 }

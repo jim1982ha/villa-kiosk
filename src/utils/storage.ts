@@ -69,12 +69,11 @@ export function getModelMeta(): ModelMeta | null {
 }
 
 // ── Per-device overview camera default ──────────────────────────────────────
-// Deliberately NOT part of AppConfig: AppConfig is exported/imported as part
-// of a backup (see utils/backup.ts) and shared across devices that way, but
-// the whole reason a saved overview pose is needed is that different devices
-// (a wall tablet vs. a phone in portrait) need different framing for the same
-// villa. Keeping it in its own localStorage key means it never travels with a
-// backup restore and always reflects THIS device/browser's own screen.
+// Deliberately NOT part of AppConfig, which is shared across devices: the
+// whole reason a saved overview pose is needed is that different devices (a
+// wall tablet vs. a phone in portrait) need different framing for the same
+// villa. Keeping it in its own localStorage key means it always reflects
+// THIS device/browser's own screen.
 
 const OVERVIEW_VIEW_KEY = "villa-kiosk:overview-view";
 

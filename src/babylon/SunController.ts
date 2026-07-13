@@ -100,10 +100,24 @@ export class SunController {
     const { azimuth, altitude } = getSunPosition(date, latitude, longitude);
     const isDay = altitude > 0;
 
-    // Direction the light travels: from the sun toward the scene.
+    // Direction the light travels: from the sun toward the scene. Floored at
+    // 0.05 so the lighting never goes fully edge-on after dark (the hemi/
+    // ambient fill carries the room past sunset) — but that floor must NOT
+    // reach the sky dome below: reusing it there kept SkyMaterial's "sun"
+    // hovering just above the horizon all night, so the physical scattering
+    // model never actually rendered a dark sky, just a dimmer haze of the
+    // daytime one ("night sky doesn't look like night" in first person).
     const dir = new Vector3(
       -Math.sin(azimuth) * Math.cos(altitude),
       -Math.max(0.05, Math.sin(altitude)),
+      -Math.cos(azimuth) * Math.cos(altitude),
+    ).normalize();
+
+    // Unclamped sun direction for the sky dome ONLY — lets the sun marker
+    // genuinely sink below the horizon at night.
+    const skyDir = new Vector3(
+      -Math.sin(azimuth) * Math.cos(altitude),
+      -Math.sin(altitude),
       -Math.cos(azimuth) * Math.cos(altitude),
     ).normalize();
 
@@ -113,17 +127,23 @@ export class SunController {
     const TWILIGHT = (6 * Math.PI) / 180;
     const nightT = Math.min(1, Math.max(0, -altitude / TWILIGHT));
 
-    this.applyDayNight(isDay, dir, nightT);
+    this.applyDayNight(isDay, dir, nightT, skyDir);
   }
 
   /** Override from HA sun.sun entity ("above_horizon" | "below_horizon"). */
   applyHaSunState(state: string): void {
     const isDay = state === "above_horizon";
     const dir = isDay ? new Vector3(-0.4, -1, -0.6) : new Vector3(-0.2, -1, -0.2);
-    this.applyDayNight(isDay, dir.normalize(), isDay ? 0 : 1);
+    // No real azimuth/altitude from the binary HA state — mirror the
+    // lighting direction below the horizon (positive Y) for the sky at
+    // night, same reasoning as the unclamped skyDir above.
+    const skyDir = isDay ? dir : new Vector3(-0.2, 1, -0.2);
+    this.applyDayNight(isDay, dir.normalize(), isDay ? 0 : 1, skyDir.normalize());
   }
 
-  private applyDayNight(isDay: boolean, dir: Vector3, nightT: number = isDay ? 0 : 1): void {
+  private applyDayNight(
+    isDay: boolean, dir: Vector3, nightT: number = isDay ? 0 : 1, skyDir: Vector3 = dir,
+  ): void {
     // Render-quality multipliers let Settings rebalance the key light + fill
     // without touching the day/night base values here.
     const r = this.config.render ?? DEFAULT_RENDER;
@@ -194,9 +214,12 @@ export class SunController {
     // in every mode, since no bake, lightmap or scene light drives them.
     this.glassDim?.(nightT);
 
-    // Drive the procedural sky from the same sun direction (it shows through the
-    // windows). clearColor is kept as a fallback for when the sky dome is absent.
-    this.sky?.update(dir, isDay);
+    // Drive the procedural sky from the UNCLAMPED sun direction (it shows
+    // through the windows) — see skyDir's comment in applyRealSun/
+    // applyHaSunState for why this must not be the same floored `dir` used
+    // for scene lighting. clearColor is kept as a fallback for when the sky
+    // dome is absent.
+    this.sky?.update(skyDir, isDay);
     // In overview mode bgOverride pins a calm dark backdrop; otherwise the empty
     // space tracks the day/night sky colour.
     this.scene.clearColor = this.bgOverride ?? (isDay

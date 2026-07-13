@@ -11,8 +11,9 @@ import {
   PointerEventTypes, type PointerInfo, type AbstractMesh, type Scene, type Node,
 } from "@babylonjs/core";
 import { resolveMeshToMapping } from "@/config/EntityMap";
+import { categoryForEntity } from "@/config/EntityCategories";
 import { tapDebug } from "@/utils/tapDebug";
-import type { EntityMapping, EntityType } from "@/types/scene.types";
+import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 
 export class PickHandler {
   private scene: Scene;
@@ -23,6 +24,13 @@ export class PickHandler {
   /** RBAC type denials (AppConfig.deniedTypes) — a mesh resolving to one of
    *  these is NOT interactive, even when its name is a valid entity_id. */
   private deniedTypes: readonly EntityType[] = [];
+  /** HUD category filter (AppConfig.hiddenCategories) — a mesh whose entity
+   *  falls in a category the user switched off is NOT interactive either.
+   *  Mirrors SceneManager.applyHighlight's own gate (hidden categories don't
+   *  glow as clickable) — without this, the asset stayed tappable and still
+   *  fired the HA action/panel even though nothing on screen suggested it
+   *  could be tapped. */
+  private hiddenCategories: readonly Category[] = [];
 
   /** Optional: is a state badge under these client coords? Wired from
    *  SceneManager to EntityVisuals.pickBadgeAt so the hover cursor also
@@ -53,10 +61,12 @@ export class PickHandler {
     map: Record<string, EntityMapping>,
     bindings: Record<string, string>,
     deniedTypes: readonly EntityType[] = [],
+    hiddenCategories: readonly Category[] = [],
   ): void {
     this.entityMap = map;
     this.bindings = bindings;
     this.deniedTypes = deniedTypes;
+    this.hiddenCategories = hiddenCategories;
   }
 
   /** Flag interactive meshes pickable; everything else stays non-interactive. */
@@ -72,7 +82,14 @@ export class PickHandler {
     let depth = 0;
     while (node && depth < 4) {
       const mapping = resolveMeshToMapping(node.name, this.entityMap, this.bindings, this.deniedTypes);
-      if (mapping) return mapping;
+      if (mapping) {
+        // Same backstop as the deniedTypes check inside resolveMeshToMapping:
+        // a category the HUD filter switched off is not interactive either,
+        // matching SceneManager.applyHighlight's own gate (hidden categories
+        // don't glow as clickable, so they shouldn't fire on tap either).
+        const category = mapping.category ?? categoryForEntity(mapping.entityId, mapping.type);
+        if (!this.hiddenCategories.includes(category)) return mapping;
+      }
       node = node.parent;
       depth++;
     }

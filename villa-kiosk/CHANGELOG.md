@@ -1,5 +1,47 @@
 # Changelog
 
+## 2.9.11
+
+### Ten-issue batch: night sky, category-gated taps, floor-aware highlights, profile switching, and a Settings declutter
+
+- **Night sky now reads as night in first-person.** The sky dome reused the
+  same sun direction as scene lighting, which is floored just above the
+  horizon after dark so interiors don't go pitch black — but that kept the
+  procedural sky glowing like dusk all night. The dome now gets its own
+  unclamped sun direction (real altitude, can sink below the horizon) while
+  lighting keeps the floored one.
+- **Tapping an asset in a hidden category no longer triggers it.** Switching
+  a device category off in the top bar removed its highlight but the 3D
+  object stayed tappable and still fired the HA action. Picks now honour the
+  category filter too.
+- **A 2F room's motion highlight no longer shows on the ground floor.** Room
+  polygons never carried their storey through calibration, so every room's
+  red presence-glow was drawn at ground level. Rooms now parse their
+  SweetHome level into a floor number and the glow (and 2F teleport landings)
+  sit at the correct height.
+- **Temperature/humidity/power sensors no longer glow like lights, and get
+  their own icons.** A sensor placed next to a larger device (an AC unit)
+  could lose its geometry to that device in the pipeline's containment match
+  and fall back to a lit placeholder. The pipeline now assigns each object to
+  the *closest* containing entity, and the app forces sensor/climate meshes
+  non-emissive as a backstop. Sensors also gain per-`device_class` badge
+  icons (power/temperature/humidity now distinct), editable in Settings.
+- **Switching profile no longer reloads the whole villa.** Guest/Owner/
+  Facility-manager switching unmounted the 3D scene and re-downloaded +
+  re-parsed the model; it now happens in an overlay while the scene stays
+  loaded underneath.
+- **The bird's-eye view is shown from the first frame** (the first-person
+  joystick no longer flashes during load), and the overview's natural-
+  scrolling up/down swipe direction is fixed to match left/right.
+- **Settings decluttered.** Removed the redundant mirror-room-detection
+  toggles and Export/Import backup buttons (and their dead code); moved the
+  Inspector-adjacent villa Latitude/Longitude into the Config Editor.
+- **Pipeline v2.7.7 (companion):** closest-entity containment match (above),
+  plus the earlier v2.7.6 work — a pre-join, per-object decision for which
+  vegetation is ground-rooted (so 2F planters stop showing on the 1F view)
+  and a higher default night-ambient floor so a texel-starved two-storey
+  bake's walls don't read as black. Re-bake required to pick these up.
+
 ## 2.9.10
 
 ### Guests no longer see camera badges or highlights
