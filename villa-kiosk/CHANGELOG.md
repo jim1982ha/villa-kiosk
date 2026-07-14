@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.10.1
+
+- **Camera feeds now work in the standalone (non-add-on) build.** When the app
+  is served from `/config/www` and talks to HA directly, its camera images were
+  authenticated with the long-lived token as a `?token=` query param — but HA's
+  `/api/camera_proxy[_stream]` rejects that (the long-lived token only works via
+  the Authorization header, which an `<img>` can't send). The stream then errored
+  and the snapshot fallback 401'd too, so the panel read "unavailable". It now
+  uses the camera entity's own rotating `access_token` attribute (the token HA
+  actually accepts on that endpoint), which rides on the live entity and stays
+  valid. Ingress mode was unaffected (the Supervisor proxy injects real auth).
+
 ## 2.10.0
 
 - **No more uploading the full `.sh3d`.** The SweetHome project file had grown to

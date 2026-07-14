@@ -102,9 +102,15 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     return () => clearInterval(id);
   }, [mode]);
 
-  const haveCreds = isIngress() || Boolean(config.haUrl && config.haToken);
-  const streamUrl = haveCreds ? cameraStreamUrl(config.haUrl, config.haToken, mapping.entityId) : "";
-  const snapshotBase = haveCreds ? cameraSnapshotUrl(config.haUrl, config.haToken, mapping.entityId) : "";
+  // Standalone (non-Ingress) camera URLs must carry the CAMERA'S OWN signed
+  // token (its `access_token` attribute), not the long-lived token — see
+  // HACameraProxy. It rides on the live entity and HA rotates it, so reading it
+  // here each render keeps the URL valid.
+  const camAccessToken =
+    typeof entity?.attributes.access_token === "string" ? entity.attributes.access_token : "";
+  const haveCreds = isIngress() || Boolean(config.haUrl && camAccessToken);
+  const streamUrl = haveCreds ? cameraStreamUrl(config.haUrl, camAccessToken, mapping.entityId) : "";
+  const snapshotBase = haveCreds ? cameraSnapshotUrl(config.haUrl, camAccessToken, mapping.entityId) : "";
   // Cache-bust each poll so the browser actually re-requests the frame.
   const snapshotUrl = snapshotBase
     ? `${snapshotBase}${snapshotBase.includes("?") ? "&" : "?"}_=${tick}`

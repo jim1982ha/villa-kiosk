@@ -44,6 +44,12 @@ export interface HassEntityAttributes {
   media_title?: string;
   media_artist?: string;
 
+  // camera — a rotating, per-entity signed token HA accepts as ?token= on
+  // /api/camera_proxy[_stream]. NOT the long-lived access token (which only
+  // authenticates via header/cookie, unusable from an <img>).
+  access_token?: string;
+  entity_picture?: string;
+
   // generic
   [key: string]: unknown;
 }
