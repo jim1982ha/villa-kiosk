@@ -47,6 +47,9 @@ interface Props {
   currentFloor: number;
   floorsAvailable: number[];
   onSwitchFloor: (floor: number) => void;
+  /** Rooms-dial floor pick: switch to that floor AND frame its whole bird's-eye
+   *  view (saved default), not just toggle visibility. */
+  onShowFloor: (floor: number) => void;
   onOpenTeleport: () => void;
   /** Rooms-dial navigation: jump straight to a room (switches floor + zooms in),
    *  bypassing the full Rooms list. */
@@ -79,7 +82,7 @@ function useClock(): string {
 }
 
 export default function HUD({
-  currentFloor, floorsAvailable, onSwitchFloor, onOpenTeleport, onNavigateRoom,
+  currentFloor, floorsAvailable, onShowFloor, onOpenTeleport, onNavigateRoom,
   onOpenSettings, canOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
@@ -102,9 +105,6 @@ export default function HUD({
   const [radial, setRadial] = useState<RadialState | null>(null);
   const roomsLongTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const roomsLongFired = useRef(false);
-  // Ignore the backdrop click that belongs to the very tap that opened the dial
-  // (that tap's synthesised click lands on the freshly-shown backdrop).
-  const justOpened = useRef(false);
 
   const availFloors = floors.filter((f) => floorsAvailable.includes(f));
   const FLOOR_R = 78;    // inner arc radius (floors)
@@ -152,8 +152,6 @@ export default function HUD({
       Math.min(margin, window.innerHeight / 2),
       Math.min(b.top + b.height / 2, window.innerHeight - margin),
     );
-    justOpened.current = true;
-    setTimeout(() => { justOpened.current = false; }, 320);
     // Open pre-expanded on the floor you're currently on, so a room is one tap away.
     setRadial({ cx, cy, activeFloor: currentFloor ?? availFloors[0] ?? null });
   };
@@ -177,7 +175,7 @@ export default function HUD({
   const onRadialPick = (it: RadialItem) => {
     if (it.kind === "floor") {
       const f = Number(it.key.slice(1));
-      onSwitchFloor(f);                                   // tap a floor → switch to it …
+      onShowFloor(f);                                     // tap a floor → switch to it + frame its whole view …
       setRadial((r) => (r ? { ...r, activeFloor: f } : r)); // … and reveal its rooms
     } else {
       const point = config.teleportPoints.find((p) => p.name === it.label);
@@ -186,7 +184,6 @@ export default function HUD({
     }
   };
   const onRadialBackdrop = () => {
-    if (justOpened.current) return; // swallow the opening tap's stray click
     closeRadial();
   };
 
@@ -292,8 +289,8 @@ export default function HUD({
 
   return (
     <>
-      {/* Long-press room dial overlay (pointer-events:none — the Rooms button's
-          captured pointer drives selection; this just paints the chips). */}
+      {/* Rooms dial overlay — tappable chips + a dismiss backdrop (pointerdown
+          driven; see RadialRoomMenu). */}
       <RadialRoomMenu
         items={radialItems}
         open={!!radial}

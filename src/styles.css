@@ -361,23 +361,26 @@ button {
   top: 50%; transform: translateY(-50%);
 }
 
-/* Long-press "marking menu" for the Rooms button: floating chips on arcs to the
-   right of the button. Non-interactive overlay — the button's pointer drives
-   the selection; these chips are purely visual (see RadialRoomMenu). A faint
-   scrim behind them focuses attention and reads as "modal". */
-.radial-room-menu { position: fixed; inset: 0; z-index: 60; pointer-events: none; background: var(--scrim); backdrop-filter: blur(1px); }
+/* Rooms dial popup: tappable floating chips on arcs beside the button (see
+   RadialRoomMenu). The full-screen backdrop catches an outside tap to dismiss;
+   a faint scrim focuses attention and reads as "modal". */
+.radial-room-menu { position: fixed; inset: 0; z-index: 60; pointer-events: auto; background: var(--scrim); backdrop-filter: blur(1px); }
 .radial-item {
   position: fixed; transform: translate(-50%, -50%);
   display: flex; align-items: center; justify-content: center;
-  padding: 6px 12px; border-radius: 999px; white-space: nowrap;
-  font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
+  padding: 7px 13px; border-radius: 999px; white-space: nowrap; cursor: pointer;
+  font-size: 12.5px; font-weight: 600; color: var(--text-primary);
   background: var(--bg-overlay); border: 1px solid var(--hairline-strong);
   box-shadow: 0 6px 20px var(--shadow); backdrop-filter: blur(8px);
-  max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+  max-width: 190px; overflow: hidden;
   animation: radial-pop 0.12s ease-out;
+  transition: background 0.12s, transform 0.08s;
 }
-.radial-item.radial-floor { min-width: 44px; height: 44px; padding: 0; font-size: 14px; font-weight: 700; border-radius: 50%; }
-.radial-item.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); transform: translate(-50%, -50%) scale(1.08); }
+.radial-item > span { overflow: hidden; text-overflow: ellipsis; }
+.radial-item:hover { background: var(--bg-input); }
+.radial-item:active { transform: translate(-50%, -50%) scale(0.94); }
+.radial-item.radial-floor { min-width: 46px; height: 46px; padding: 0; font-size: 14px; font-weight: 700; border-radius: 50%; }
+.radial-item.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 @keyframes radial-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } }
 
 /* Left-side control column: floor switch, then the Room + Switch View stack,

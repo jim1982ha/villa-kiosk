@@ -178,6 +178,23 @@ export default function Dashboard() {
     [manager],
   );
 
+  // Picking a floor in the Rooms dial: switch to that floor AND frame the whole
+  // floor from the bird's-eye — jump into overview and apply this device's saved
+  // default framing (falls back to the auto-fit that entering overview already
+  // did when no default is saved).
+  const handleShowFloor = useCallback(
+    (floor: number) => {
+      if (!manager) return;
+      onFloorChange(floor);
+      if (manager.getViewMode() !== "overview") {
+        manager.setViewMode("overview");
+        setViewMode("overview");
+      }
+      manager.applyOverviewDefault();
+    },
+    [manager, onFloorChange],
+  );
+
   // When the model finishes loading, read which floors exist and adopt the
   // room/teleport anchors the scene fitted to THIS model (so the teleport menu
   // and room labels are correct regardless of the GLB's scale/orientation).
@@ -262,6 +279,7 @@ export default function Dashboard() {
         currentFloor={currentFloor}
         floorsAvailable={floorsAvailable}
         onSwitchFloor={onFloorChange}
+        onShowFloor={handleShowFloor}
         onOpenTeleport={() => setTeleportOpen(true)}
         onNavigateRoom={handleTeleport}
         onOpenSettings={() => { if (canOpenSettings) setSettingsOpen(true); }}

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.9.18
+
+- **Fixed the Rooms dial getting stuck** (open but unclickable). It's now driven
+  by pointerdown instead of relying on the synthesised click that a tap emits —
+  that click could land on the freshly-mounted backdrop (or be eaten as a
+  "ghost click"), which is what froze it. Tapping a room, a floor, or outside
+  the dial all work reliably now.
+- **Tapping a floor (1F / 2F) in the dial now frames that whole floor** from the
+  bird's-eye — it switches to overview and applies this device's saved default
+  framing (and still reveals the floor's rooms for a further tap).
+
 ## 2.9.17
 
 ### Rooms dial: tap to open, long-press to edit
