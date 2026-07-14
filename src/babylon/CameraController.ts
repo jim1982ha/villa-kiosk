@@ -271,7 +271,7 @@ export class CameraController {
     const pick = this.scene.pick(
       clientX - rect.left,
       clientY - rect.top,
-      (m) => m.isPickable && m.isVisible && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name),
+      (m) => m.isPickable && m.isVisible && m.isEnabled() && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name),
     );
     if (pick?.hit && pick.pickedPoint) this.walkTo(pick.pickedPoint.x, pick.pickedPoint.z);
   }
@@ -360,8 +360,11 @@ export class CameraController {
     // Search 1.6 m above current feet (to catch a stair step ahead) and
     // 1.0 m below (a small drop-off). Total band = 2.6 m.
     const originY = currentFloorY + 1.6;
+    // isEnabled() matters: FloorManager HIDES upper storeys with setEnabled(false)
+    // (not isVisible), so without it the follower would snap onto a hidden floor's
+    // slab above you.
     const predicate = (m: AbstractMesh) =>
-      m.isPickable && m.isVisible && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name);
+      m.isPickable && m.isVisible && m.isEnabled() && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name);
     let hit = this.scene.pickWithRay(
       new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 2.6), predicate);
     if (!hit?.hit || !hit.pickedPoint) {
@@ -397,8 +400,11 @@ export class CameraController {
 
   groundCamera(): void {
     const p = this.camera.position;
+    // isEnabled() so we never ground on a HIDDEN upper floor (FloorManager
+    // disables storeys above the active one) — that slab sits right over the
+    // staircase and would otherwise teleport the spawn up onto the 2nd floor.
     const predicate = (m: AbstractMesh) =>
-      m.isPickable && m.isVisible && !/^(halo_|label_)/i.test(m.name) && !m.metadata?.isMarker;
+      m.isPickable && m.isVisible && m.isEnabled() && !/^(halo_|label_)/i.test(m.name) && !m.metadata?.isMarker;
 
     // Try directly below, then a ring of nearby points, in case the exact spot is
     // over a gap (doorway, L-shaped notch). Cast from high above to catch any floor.

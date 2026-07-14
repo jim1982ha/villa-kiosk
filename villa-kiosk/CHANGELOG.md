@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.11.1
+
+- **Fix: the first-person staircase spawn landed on the 2nd floor.** Grounding
+  the camera raycasts down for the floor beneath it, but the predicate only
+  filtered on `isVisible` — while FloorManager hides upper storeys with
+  `setEnabled(false)`. The hidden 2F slab sits directly over the staircase, so it
+  got picked first and the spawn snapped up onto it. Grounding (and click-to-walk
+  targeting) now also require `isEnabled()`, so they only ever land on the active
+  floor set — you now start on the ground floor next to the stairs as intended.
+
 ## 2.11.0
 
 - **First-person view now starts at the foot of the staircase (ground floor),
