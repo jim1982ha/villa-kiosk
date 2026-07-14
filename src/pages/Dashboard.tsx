@@ -178,19 +178,21 @@ export default function Dashboard() {
     [manager],
   );
 
-  // Picking a floor in the Rooms dial: switch to that floor AND frame the whole
-  // floor from the bird's-eye — jump into overview and apply this device's saved
-  // default framing (falls back to the auto-fit that entering overview already
-  // did when no default is saved).
+  // Picking a floor chip in the Rooms dial. The dial reveals that floor's room
+  // chips regardless (HUD-local state); this only decides what the SCENE does,
+  // and it must PRESERVE the current view mode:
+  //   • Overview  → switch to that storey and frame the whole floor (this
+  //                 device's saved bird's-eye default, or the auto-fit).
+  //   • First-person → do nothing to the camera/mode. You're browsing to a room;
+  //                 picking one then teleports (and switches floors) in first-
+  //                 person. Forcing overview here was the bad UX being reported.
   const handleShowFloor = useCallback(
     (floor: number) => {
       if (!manager) return;
-      onFloorChange(floor);
-      if (manager.getViewMode() !== "overview") {
-        manager.setViewMode("overview");
-        setViewMode("overview");
+      if (manager.getViewMode() === "overview") {
+        onFloorChange(floor);
+        manager.applyOverviewDefault();
       }
-      manager.applyOverviewDefault();
     },
     [manager, onFloorChange],
   );

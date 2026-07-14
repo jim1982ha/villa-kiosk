@@ -356,34 +356,62 @@ export class SceneManager {
     return this.viewMode;
   }
 
-  /** The default first-person landing pose: the foot of the staircase on the
-   *  ground floor, else the main/living room, else the first room, else origin. */
+  /** The default first-person landing pose. Always on the GROUND FLOOR: the foot
+   *  of the staircase if we can locate it, else a ground-floor living/entry room,
+   *  else the first ground-floor room, else the origin. Never a 2F room. */
   private firstPersonSpawn(): TeleportPoint {
     const eye = this.config.eyeHeight ?? 1.7;
+    const ground = (p: TeleportPoint) => p.floor === 1;
     return (
       this.staircaseSpawn() ??
-      this.calibratedPoints?.find((p) => /main|living/i.test(p.name)) ??
+      this.calibratedPoints?.find((p) => ground(p) && /main|living|salon|séjour|sejour|hall|entr/i.test(p.name)) ??
+      this.calibratedPoints?.find(ground) ??
       this.calibratedPoints?.[0] ??
       { name: "Start", floor: 1, position: { x: 0, y: eye, z: 0 }, target: { x: 0, y: 1.6, z: 2 } }
     );
   }
 
+  /** A horizontal look-target that faces from (x,z) toward the model centre, so
+   *  the spawn looks INTO the house rather than at the nearest wall. */
+  private lookInward(x: number, z: number, y: number): { x: number; y: number; z: number } {
+    if (!this.loadedMeshes.length) return { x, y, z: z + 1 };
+    const ext = this.worldExtends(this.loadedMeshes);
+    const cx = (ext.min.x + ext.max.x) / 2;
+    const cz = (ext.min.z + ext.max.z) / 2;
+    return Math.hypot(cx - x, cz - z) < 0.5 ? { x, y, z: z + 1 } : { x: cx, y, z: cz };
+  }
+
   /**
-   * A spawn at the FOOT of the staircase on the ground floor, facing up the
-   * flight. Preference: a room the plan names as a staircase (any language);
-   * otherwise derived from the stair geometry (meshes tagged `isStair` by the
-   * structure pass); otherwise null so the caller falls back to a room spawn.
+   * A spawn at the FOOT of the staircase on the ground floor. In this pipeline
+   * stairs are baked into the fused `Structure` mesh, so there's no stair mesh to
+   * measure — the reliable signal is a stair-NAMED element (a plan room, or an
+   * entity mesh like `camera.staircase_2f_cam`). We take its plan XZ and ground
+   * it on floor 1 → the 1F spot beneath/beside the stairwell. Falls back to real
+   * stair GEOMETRY (split-structure GLBs) and finally null.
    */
   private staircaseSpawn(): TeleportPoint | null {
     const eye = this.config.eyeHeight ?? 1.7;
+    const groundAt = (x: number, z: number): TeleportPoint => {
+      const y = this.estimateFloorY(x, z, 1) + eye;
+      return { name: "Staircase", floor: 1, position: { x, y, z }, target: this.lookInward(x, z, y - 0.1) };
+    };
 
-    // 1. A named staircase room from the plan is the cleanest anchor.
-    const named = this.calibratedPoints?.find((p) =>
+    // 1. A room the plan names as a staircase.
+    const namedRoom = this.calibratedPoints?.find((p) =>
       /stair|escalier|escalera|scala|treppe|stufe|trap\b/i.test(p.name));
-    if (named) return { ...named, floor: 1 };
+    if (namedRoom) return groundAt(namedRoom.position.x, namedRoom.position.z);
 
-    // 2. Derive from the stair geometry: the combined world AABB of every mesh
-    //    the structure pass tagged as stairs.
+    // 2. A stair-named entity/structure mesh marks the stairwell's plan XZ.
+    const stairMesh =
+      this.loadedMeshes.find((m) => /staircase|escalier/i.test(m.name)) ??
+      this.loadedMeshes.find((m) => /\bstairs?\b|_stair/i.test(m.name));
+    if (stairMesh) {
+      stairMesh.computeWorldMatrix(true);
+      const c = stairMesh.getBoundingInfo().boundingBox.centerWorld;
+      return groundAt(c.x, c.z);
+    }
+
+    // 3. Real stair geometry (only present in split-structure GLBs).
     const stairs = this.loadedMeshes.filter(
       (m) => m.metadata?.isStair === true && m.getTotalVertices() > 0);
     if (!stairs.length) return null;
@@ -395,13 +423,11 @@ export class SceneManager {
       min = Vector3.Minimize(min, bb.minimumWorld);
       max = Vector3.Maximize(max, bb.maximumWorld);
     }
-    // Ascent runs along the longer horizontal axis; width along the shorter.
     const alongX = max.x - min.x >= max.z - min.z;
     const crossC = alongX ? (min.z + max.z) / 2 : (min.x + max.x) / 2;
     const loEnd = alongX ? min.x : min.z;
     const hiEnd = alongX ? max.x : max.z;
     const span = hiEnd - loEnd || 1;
-    // The bottom is the end whose stair SURFACE sits lower — sample both ends.
     const surfaceY = (along: number): number => {
       const ox = alongX ? along : crossC;
       const oz = alongX ? crossC : along;
@@ -413,8 +439,7 @@ export class SceneManager {
     const loY = surfaceY(loEnd + span * 0.1);
     const hiY = surfaceY(hiEnd - span * 0.1);
     const bottom = loY <= hiY ? loEnd : hiEnd;
-    const dir = Math.sign((loY <= hiY ? hiEnd : loEnd) - bottom) || 1; // toward the top
-    // Stand ~1.2 m before the lowest step, at ground-floor eye height, looking up.
+    const dir = Math.sign((loY <= hiY ? hiEnd : loEnd) - bottom) || 1;
     const standAlong = bottom - dir * 1.2;
     const px = alongX ? standAlong : crossC;
     const pz = alongX ? crossC : standAlong;
@@ -423,11 +448,7 @@ export class SceneManager {
       name: "Staircase",
       floor: 1,
       position: { x: px, y: min.y + eye, z: pz },
-      target: {
-        x: alongX ? tAlong : crossC,
-        y: min.y + eye + 0.3,
-        z: alongX ? crossC : tAlong,
-      },
+      target: { x: alongX ? tAlong : crossC, y: min.y + eye + 0.3, z: alongX ? crossC : tAlong },
     };
   }
 

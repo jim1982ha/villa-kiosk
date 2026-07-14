@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.11.2
+
+- **First-person now really starts on the ground floor at the stairs.** The
+  stairs are baked into the fused `Structure` mesh, so there was no stair
+  geometry to detect — the spawn fell through to the first room, which happened
+  to be the 2F gym. It now locates the stairwell from a stair-named element (a
+  plan room, or an entity mesh like `camera.staircase_2f_cam`), grounds that XZ
+  on floor 1, and always guarantees a ground-floor spawn (never a 2F room).
+- **The Rooms dial now keeps your current view mode.** Tapping a floor chip used
+  to force the bird's-eye view even when you were walking in first-person, so
+  navigating to a room always kicked you out to overview. Now the floor chip only
+  reframes the storey when you're already in overview; in first-person it just
+  reveals that floor's room chips, and picking one teleports you there (switching
+  floors as needed) while staying in first-person and honouring the room's saved
+  landing position.
+
 ## 2.11.1
 
 - **Fix: the first-person staircase spawn landed on the 2nd floor.** Grounding
