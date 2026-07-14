@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.9.17
+
+### Rooms dial: tap to open, long-press to edit
+
+- **Swapped the Rooms interaction to be more natural.** A **single tap** now
+  opens the radial dial (pre-expanded on your current floor) — tap a floor to
+  switch to it and see its rooms, tap a room to zoom there, tap outside to
+  dismiss. **Long-press** opens the full Rooms list for creating/editing rooms.
+- **Bigger room wheel** so a long room list no longer stacks on top of itself
+  (radius 152 → 228, wider arc).
+
 ## 2.9.16
 
 - iOS: also disable the GlowLayer (blur render targets + an extra per-frame
