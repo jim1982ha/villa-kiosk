@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.12.0
+
+First-person navigation UX pass — three fixes:
+
+- **Walking speed is now frame-rate independent.** The joystick/keyboard walk
+  added a fixed impulse *per frame* with no delta-time scaling, so on a slower
+  tablet (fewer frames per second) you crawled — "barely moved forward". Movement
+  now scales by frame time, so it holds the configured pace on any device, and
+  your walk-speed setting is honoured consistently.
+- **Spawns land on the floor, facing open space** — not on top of furniture or
+  into a wall. Grounding now targets the structural shell (floor slabs) instead
+  of grabbing the first surface below (a table/bed top), and every spawn turns to
+  face the most open direction around it instead of an arbitrary heading.
+- **Select a room in overview, switch to first-person → you land in that room.**
+  Previously switching always dropped you at the staircase, discarding the room
+  you'd navigated to. Now first-person entry lands in the last room you selected
+  in overview (grounded, facing open space); a fresh/default overview still
+  defaults to the ground-floor staircase.
+
 ## 2.11.2
 
 - **First-person now really starts on the ground floor at the stairs.** The

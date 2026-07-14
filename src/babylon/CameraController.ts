@@ -325,6 +325,20 @@ export class CameraController {
     this.nudge(forward, strafe);
   };
 
+  /**
+   * Per-frame movement scale that keeps walking speed CONSTANT regardless of
+   * frame rate. WALK_SPEED is tuned for 60 fps; on a slower tablet a raw
+   * per-frame impulse crawls (fewer frames = less distance), which is why the
+   * joystick "barely moved forward". Scaling by (Δt / 16.67 ms) restores the
+   * configured pace on any device. Capped so a long stall (tab switch) can't
+   * fling the camera on the next frame.
+   */
+  private frameFactor(): number {
+    const dt = this.scene.getEngine().getDeltaTime(); // ms since last frame
+    if (!Number.isFinite(dt) || dt <= 0) return 1;
+    return Math.min(3, dt / 16.667);
+  }
+
   /** Apply a one-off world-space horizontal movement impulse (used by wheel). */
   private nudge(forward: number, strafe: number): void {
     this.requestedMove = true;
@@ -403,23 +417,28 @@ export class CameraController {
     // isEnabled() so we never ground on a HIDDEN upper floor (FloorManager
     // disables storeys above the active one) — that slab sits right over the
     // staircase and would otherwise teleport the spawn up onto the 2nd floor.
-    const predicate = (m: AbstractMesh) =>
+    const base = (m: AbstractMesh) =>
       m.isPickable && m.isVisible && m.isEnabled() && !/^(halo_|label_)/i.test(m.name) && !m.metadata?.isMarker;
+    // Prefer the STRUCTURAL shell (floor slabs) so we land on the actual floor,
+    // never on a table/bed/sofa top the generic ray would hit first ("landing
+    // above an asset"). Fall back to any surface for GLBs without tagged structure.
+    const structural = (m: AbstractMesh) => base(m) && m.metadata?.isStructure === true;
 
     // Try directly below, then a ring of nearby points, in case the exact spot is
     // over a gap (doorway, L-shaped notch). Cast from high above to catch any floor.
     const offsets: Array<[number, number]> = [
       [0, 0], [0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6], [1.2, 1.2], [-1.2, -1.2],
     ];
-    let floorY: number | null = null;
-    for (const [dx, dz] of offsets) {
-      const origin = new Vector3(p.x + dx, p.y + 20, p.z + dz);
-      const hit = this.scene.pickWithRay(new Ray(origin, new Vector3(0, -1, 0), 200), predicate);
-      if (hit?.hit && hit.pickedPoint) {
-        floorY = hit.pickedPoint.y;
-        break;
+    const probe = (pred: (m: AbstractMesh) => boolean): number | null => {
+      for (const [dx, dz] of offsets) {
+        const origin = new Vector3(p.x + dx, p.y + 20, p.z + dz);
+        const hit = this.scene.pickWithRay(new Ray(origin, new Vector3(0, -1, 0), 200), pred);
+        if (hit?.hit && hit.pickedPoint) return hit.pickedPoint.y;
       }
-    }
+      return null;
+    };
+    let floorY = probe(structural);
+    if (floorY === null) floorY = probe(base);
     if (floorY === null) {
       console.warn("[Villa] no floor found under camera; defaulting floor=0");
       floorY = 0;
@@ -512,7 +531,7 @@ export class CameraController {
       const right = this.camera.getDirection(Axis.X);
       forward.y = 0; right.y = 0;
       forward.normalize(); right.normalize();
-      const speed = WALK_SPEED * this.walkSpeed;
+      const speed = WALK_SPEED * this.walkSpeed * this.frameFactor();
       const move = forward.scale(my * speed).add(right.scale(mx * speed));
       move.y = 0;
       this.camera.cameraDirection.addInPlace(move);
@@ -554,7 +573,7 @@ export class CameraController {
     this.lastAutoPos = { x: pos.x, z: pos.z };
 
     this.requestedMove = true;
-    const speed = WALK_SPEED * this.walkSpeed * 1.6;
+    const speed = WALK_SPEED * this.walkSpeed * 1.6 * this.frameFactor();
     const inv = 1 / dist;
     this.camera.cameraDirection.addInPlace(new Vector3(dx * inv * speed, 0, dz * inv * speed));
     this.followFloor();

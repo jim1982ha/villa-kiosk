@@ -79,6 +79,11 @@ export class SceneManager {
   private forceContinuous = 0; // ref count for animations/streams
   private loadedMeshes: AbstractMesh[] = [];
   private calibratedPoints: TeleportPoint[] | null = null;
+  // The room the user last navigated to while in overview. Cleared on entering
+  // overview; set by navigateTo. When they then switch to first-person we drop
+  // them INTO that room (not back at the staircase) — otherwise a fresh/default
+  // overview → first-person lands at the staircase.
+  private lastNavigatedRoom: TeleportPoint | null = null;
   private highlightedMeshes: Mesh[] = [];
   private viewMode: "first-person" | "overview" = "first-person";
   /** Names of the real (polygon-backed) rooms from the last calibration —
@@ -325,6 +330,7 @@ export class SceneManager {
       this.overview.enable();
       this.scene.activeCamera = this.overview.camera;
       this.floors.setFirstPerson(false); // walker camera is parked; don't let its Y drive floors
+      this.lastNavigatedRoom = null; // fresh overview: a later → first-person defaults to the staircase
       // Bird's-eye floor plan reads best on a calm, neutral backdrop rather
       // than the bright daytime sky blue (which "crashes the eyes", day or
       // night). Hide the sky dome and pin a themed backdrop; lighting is untouched.
@@ -336,13 +342,16 @@ export class SceneManager {
       this.scene.activeCamera = this.camera.camera;
       this.camera.attachInput();
       this.floors.setFirstPerson(true); // walking now — feet elevation drives the storey
-      // Land at the foot of the staircase on the ground floor, facing up the
-      // flight — a consistent, recognisable start for every walk-through
-      // (followFloor only corrects height while moving, so we ground on entry).
-      // Force floor 1 first so the spawn settles on the ground floor.
+      // Where to drop the walker: INTO the room the user picked in overview if
+      // there is one (so "select a room, switch to first-person" lands there),
+      // else the default staircase spawn. Either way switch to that floor FIRST
+      // so grounding settles on the right storey, and face open space (not a wall).
       if (this.loadedMeshes.length) {
-        this.floors.switchToFloor(1);
-        this.camera.teleport(this.firstPersonSpawn(), true);
+        const spawn = this.lastNavigatedRoom
+          ? this.roomSpawn(this.lastNavigatedRoom)
+          : this.firstPersonSpawn();
+        this.floors.switchToFloor(spawn.floor);
+        this.camera.teleport(spawn, true);
       }
       // Restore the real sky for the immersive walk-through view.
       this.sky.setEnabled(true);
@@ -371,14 +380,35 @@ export class SceneManager {
     );
   }
 
-  /** A horizontal look-target that faces from (x,z) toward the model centre, so
-   *  the spawn looks INTO the house rather than at the nearest wall. */
-  private lookInward(x: number, z: number, y: number): { x: number; y: number; z: number } {
-    if (!this.loadedMeshes.length) return { x, y, z: z + 1 };
-    const ext = this.worldExtends(this.loadedMeshes);
-    const cx = (ext.min.x + ext.max.x) / 2;
-    const cz = (ext.min.z + ext.max.z) / 2;
-    return Math.hypot(cx - x, cz - z) < 0.5 ? { x, y, z: z + 1 } : { x: cx, y, z: cz };
+  /** A horizontal look-target facing the MOST OPEN direction from (x,z): probe
+   *  rays all around at eye height and aim down the one with the most clearance,
+   *  so a spawn never stares straight into the nearest wall or a piece of
+   *  furniture. Falls back to +Z if nothing blocks anywhere. */
+  private bestFacing(x: number, z: number, y: number): { x: number; y: number; z: number } {
+    const DIRS = 16;
+    const REACH = 8;
+    const blocks = (m: AbstractMesh) =>
+      m.isPickable && m.isVisible && m.isEnabled() && m.checkCollisions && !m.metadata?.isMarker;
+    let bestAng = 0;
+    let bestDist = -1;
+    for (let i = 0; i < DIRS; i++) {
+      const a = (i / DIRS) * Math.PI * 2;
+      const dir = new Vector3(Math.cos(a), 0, Math.sin(a));
+      const hit = this.scene.pickWithRay(new Ray(new Vector3(x, y, z), dir, REACH), blocks);
+      const dist = hit?.hit ? hit.distance : REACH;
+      if (dist > bestDist) { bestDist = dist; bestAng = a; }
+    }
+    return { x: x + Math.cos(bestAng) * 3, y, z: z + Math.sin(bestAng) * 3 };
+  }
+
+  /** Ground a room's calibrated centre on its own storey and face open space —
+   *  used when switching overview → first-person into a selected room. */
+  private roomSpawn(room: TeleportPoint): TeleportPoint {
+    const eye = this.config.eyeHeight ?? 1.7;
+    const x = room.position.x;
+    const z = room.position.z;
+    const y = this.estimateFloorY(x, z, room.floor) + eye;
+    return { name: room.name, floor: room.floor, position: { x, y, z }, target: this.bestFacing(x, z, y - 0.1) };
   }
 
   /**
@@ -393,7 +423,7 @@ export class SceneManager {
     const eye = this.config.eyeHeight ?? 1.7;
     const groundAt = (x: number, z: number): TeleportPoint => {
       const y = this.estimateFloorY(x, z, 1) + eye;
-      return { name: "Staircase", floor: 1, position: { x, y, z }, target: this.lookInward(x, z, y - 0.1) };
+      return { name: "Staircase", floor: 1, position: { x, y, z }, target: this.bestFacing(x, z, y - 0.1) };
     };
 
     // 1. A room the plan names as a staircase.
@@ -509,6 +539,8 @@ export class SceneManager {
    * (stays in overview mode either way).
    */
   navigateTo(point: TeleportPoint): void {
+    // Remember the target so a later overview → first-person switch lands here.
+    this.lastNavigatedRoom = point;
     if (this.viewMode === "overview") {
       if (point.overviewPose) {
         this.overview.applyPose(point.overviewPose);
@@ -973,6 +1005,11 @@ export class SceneManager {
       // is a flat lone primitive that this heuristic ate, leaving a see-through
       // hole in the 2F floor. Name-matched ceilings are still hidden.
       const isPipelineStructure = /^Structure(?:_L\d+|_Exterior)?$/i.test(normaliseMeshName(name));
+      // Tag the load-bearing shell (floor slabs + walls + baked stairs) so the
+      // camera can ground on the real FLOOR and never on furniture: these fused
+      // meshes contain no furniture, so a downward ray against them alone finds
+      // the walking surface even when a table/bed sits directly overhead.
+      m.metadata = { ...(m.metadata ?? {}), isStructure: isPipelineStructure };
       if (ceilingPat.test(name) || (!isPipelineStructure && meshMinY > 2.5 && meshH < 0.35)) {
         m.isVisible = false;
         m.checkCollisions = false;
