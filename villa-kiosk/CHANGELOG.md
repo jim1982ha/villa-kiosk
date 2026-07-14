@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.20
+
+- Overview two-finger tilt now actually tilts (was still zooming). Tilt is
+  driven by the vertical distance BOTH fingers move TOGETHER — so a two-finger
+  vertical drag (keeping them the same distance apart) tilts cleanly, while a
+  pinch zooms. The two no longer contaminate each other. Tilt sensitivity
+  nudged up so the effect is clearly visible.
+
 ## 2.9.19
 
 - Rooms dial: a hovered room/floor chip now highlights with the solid accent

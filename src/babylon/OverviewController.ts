@@ -52,7 +52,7 @@ const ROT_SENS_DRAG   = 0.005;  // radians per pixel (Shift+drag horizontal → 
 const TILT_SENS_DRAG  = 0.005;  // radians per pixel (Shift+drag vertical → pitch)
 const ZOOM_SENS_DRAG  = 0.004;  // per pixel × radius (Ctrl+drag vertical → zoom)
 const WHEEL_ZOOM_SENS = 0.006;  // per normalised wheel pixel (wheel / pinch → zoom)
-const TILT_SENS_TOUCH = 0.005;  // radians per pixel (two-finger centroid drag)
+const TILT_SENS_TOUCH = 0.007;  // radians per px of the two fingers' SHARED vertical drag
 // Fraction of the whole-villa fit radius used as the icon-scaling "1×"
 // reference (see fitTo). <1 so the default overview starts with shrunk
 // badges instead of full-size ones.
@@ -205,8 +205,10 @@ export class OverviewController {
   // ── Pointer state ──────────────────────────────────────────────────────────
   private pointers = new Map<number, { x: number; y: number; type: string }>();
 
-  // Two-finger gesture snapshot (updated incrementally on every pointermove).
-  private touchBase: { dist: number; angle: number; centX: number; centY: number } | null = null;
+  // Two-finger gesture snapshot — the two fingers' previous positions (updated
+  // incrementally on every pointermove). Per-finger (not just derived dist/
+  // centroid) so tilt can read the movement the fingers made TOGETHER.
+  private touchBase: { ax: number; ay: number; bx: number; by: number } | null = null;
 
   // Tap detection (single brief press with minimal movement → entity pick).
   private readonly tap = new TapRecognizer();
@@ -289,12 +291,7 @@ export class OverviewController {
     const pts = [...this.pointers.values()];
     if (pts.length < 2) return;
     const [a, b] = pts;
-    this.touchBase = {
-      dist:   Math.hypot(b.x - a.x, b.y - a.y),
-      angle:  Math.atan2(b.y - a.y, b.x - a.x),
-      centX:  (a.x + b.x) / 2,
-      centY:  (a.y + b.y) / 2,
-    };
+    this.touchBase = { ax: a.x, ay: a.y, bx: b.x, by: b.y };
   }
 
   private handleTwoFingerTouch(): void {
@@ -302,53 +299,51 @@ export class OverviewController {
     if (pts.length < 2) return;
     const [a, b] = pts;
 
-    const dist   = Math.hypot(b.x - a.x, b.y - a.y);
-    const angle  = Math.atan2(b.y - a.y, b.x - a.x);
-    const centX  = (a.x + b.x) / 2;
-    const centY  = (a.y + b.y) / 2;
-
     if (!this.touchBase) {
-      this.touchBase = { dist, angle, centX, centY };
+      this.touchBase = { ax: a.x, ay: a.y, bx: b.x, by: b.y };
       return;
     }
 
     const base = this.touchBase;
     const s = this.naturalScrolling ? 1 : -1;
 
-    // ── Zoom: ratio of distances (spread fingers = zoom in = smaller radius) ──
-    if (base.dist > 1 && dist > 1) {
-      // base.dist / dist > 1 when pinching (fingers closer) = zoom out
+    const dist     = Math.hypot(b.x - a.x, b.y - a.y);
+    const baseDist = Math.hypot(base.bx - base.ax, base.by - base.ay);
+    const angle     = Math.atan2(b.y - a.y, b.x - a.x);
+    const baseAngle = Math.atan2(base.by - base.ay, base.bx - base.ax);
+
+    // ── Rotation: incremental twist angle ─────────────────────────────────────
+    let dAngle = angle - baseAngle;
+    if (dAngle >  Math.PI) dAngle -= 2 * Math.PI;
+    if (dAngle < -Math.PI) dAngle += 2 * Math.PI;
+    this.camera.alpha += dAngle;
+
+    // ── Zoom: ratio of finger distances (spread = zoom in = smaller radius) ────
+    if (baseDist > 1 && dist > 1) {
       this.camera.radius = clamp(
-        this.camera.radius * (base.dist / dist),
+        this.camera.radius * (baseDist / dist),
         this.camera.lowerRadiusLimit ?? 2,
         this.camera.upperRadiusLimit ?? 200,
       );
     }
 
-    // ── Rotation: incremental twist angle ─────────────────────────────────────
-    let dAngle = angle - base.angle;
-    if (dAngle >  Math.PI) dAngle -= 2 * Math.PI;
-    if (dAngle < -Math.PI) dAngle += 2 * Math.PI;
-    this.camera.alpha += dAngle;
+    // ── Tilt: the vertical distance BOTH fingers travelled TOGETHER ───────────
+    // The map-app standard, and the clean way to keep tilt from fighting zoom:
+    // only the SHARED vertical movement tilts (both fingers moving the same way,
+    // taking the smaller of the two). So a two-finger vertical DRAG (fingers
+    // stay the same distance apart) tilts with no zoom, while a PINCH (fingers
+    // move opposite ways) or one stationary finger yields zero shared movement
+    // → no tilt, just zoom. They no longer contaminate each other.
+    const dyA = a.y - base.ay;
+    const dyB = b.y - base.by;
+    let commonDy = 0;
+    if (dyA > 0 && dyB > 0) commonDy = Math.min(dyA, dyB);       // both fingers down
+    else if (dyA < 0 && dyB < 0) commonDy = Math.max(dyA, dyB);  // both fingers up
+    if (commonDy !== 0) this.applyTilt(commonDy * TILT_SENS_TOUCH * s);
 
-    // ── Tilt: vertical movement of the two-finger centroid ────────────────────
-    // Applied every frame ALONGSIDE zoom + rotate (no "pinch must be stable"
-    // guard): moving just ONE finger up/down — the other held still — shifts the
-    // centroid and so tilts, which is what a user reaches for ("let me tilt with
-    // two fingers"). It also covers the map-app standard of dragging BOTH
-    // fingers up/down together (their distance barely changes, so that reads as
-    // near-pure tilt). A symmetric pinch keeps the centroid put, so zooming
-    // doesn't spuriously tilt.
-    const dCentY = centY - base.centY;
-    this.applyTilt(dCentY * TILT_SENS_TOUCH * s);
-
-    // Update the baseline incrementally (correct result because both fingers
-    // fire separate pointermove events — each step applies a partial delta,
-    // together they sum to the full gesture change).
-    base.dist  = dist;
-    base.angle = angle;
-    base.centX = centX;
-    base.centY = centY;
+    // Update the baseline incrementally (each pointermove applies a partial
+    // delta; together they sum to the full gesture change).
+    base.ax = a.x; base.ay = a.y; base.bx = b.x; base.by = b.y;
   }
 
   // ── Wheel events (trackpad gestures + mouse wheel, no click needed) ────────
