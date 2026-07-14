@@ -13,9 +13,10 @@ ever needed and the powerful Supervisor token never reaches the browser.
 
 It also serves local helper routes (no Supervisor token involved):
   GET  /addon-config  -> the non-sensitive model paths for the frontend.
-  POST /model-upload?kind=glb|sh3d -> writes the body to the central model file
-       under /config/www (atomic overwrite), so the kiosk can be re-skinned from
-       its own Settings UI instead of SSH/Samba.
+  POST /model-upload?kind=glb|rooms -> writes the body to the central model file
+       (GLB) or its room-data sidecar (.rooms.json) under /config/www (atomic
+       overwrite), so the kiosk can be re-skinned from its own Settings UI
+       instead of SSH/Samba.
   GET  /auth/roles    -> which kiosk profiles require a passcode (booleans only).
   POST /auth/verify   -> server-side profile passcode check. The configured PINs
        (guest_pin/owner_pin/ops_pin add-on options) never leave this process:
@@ -54,20 +55,21 @@ AUTH = {"Authorization": f"Bearer {TOKEN}"}
 # serves it at /model/<path>; the upload handler below writes into it.
 WWW_ROOT = "/homeassistant/www"
 # Where an uploaded file lands when the admin hasn't set an explicit
-# model_path/sh3d_path — a managed location the add-on owns. addon_config_handler
+# model_path — a managed location the add-on owns. addon_config_handler
 # reports these as the effective paths once the files exist, so an uploaded model
 # lights up for every client with no Supervisor API call or add-on restart.
-MANAGED_PATH = {"glb": "villa-kiosk/villa.glb", "sh3d": "villa-kiosk/villa.sh3d"}
+MANAGED_PATH = {"glb": "villa-kiosk/villa.glb"}
 # Safety cap on a single upload (the GLB is the big one, ~tens of MB).
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 # Leading bytes the upload must start with for its declared kind: a binary
-# glTF container always begins with "glTF"; a .sh3d is a ZIP. Files under
-# /config/www are served by both this add-on (/model/) and HA itself
-# (/local/), so without this check any bytes POSTed as kind=glb would be
-# published there verbatim (unrestricted file upload).
+# glTF container always begins with "glTF"; the room-data sidecar is JSON, so it
+# starts with "{" (optionally a UTF-8 BOM). Files under /config/www are served by
+# both this add-on (/model/) and HA itself (/local/), so without this check any
+# bytes POSTed as kind=glb would be published there verbatim (unrestricted file
+# upload).
 UPLOAD_MAGIC = {
     "glb": (b"glTF",),
-    "sh3d": (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"),
+    "rooms": (b"{", b"\xef\xbb\xbf{"),
 }
 
 # Headers that must not be copied verbatim when relaying a proxied response.
@@ -153,56 +155,73 @@ def _read_options() -> dict:
         return {}
 
 
+def _rooms_rel(model_rel: str) -> str:
+    """The room-data sidecar path (<model>.glb → <model>.rooms.json) that sits
+    next to the GLB. The kiosk reads this tiny file instead of the full .sh3d."""
+    if model_rel.lower().endswith(".glb"):
+        return model_rel[:-4] + ".rooms.json"
+    return model_rel + ".rooms.json"
+
+
+def _upload_meta(rel: str) -> dict | None:
+    """The ORIGINAL browser-side filename + time recorded for the file at ``rel``
+    by the upload handler, or None if placed manually / never uploaded here."""
+    if not rel:
+        return None
+    try:
+        with open(os.path.join(WWW_ROOT, rel) + ".upload.json", encoding="utf-8") as f:
+            meta = json.load(f)
+        if isinstance(meta, dict):
+            return {
+                "original_name": str(meta.get("original_name", "")),
+                "uploaded_at": str(meta.get("uploaded_at", "")),
+            }
+    except (OSError, json.JSONDecodeError, ValueError):
+        pass
+    return None
+
+
 def _effective_paths() -> dict:
-    """The model paths the frontend should use.
+    """The model path the frontend should use, plus upload provenance.
 
-    An explicit model_path/sh3d_path option wins (back-compat with files placed
-    manually via SSH/Samba). Otherwise, if a managed upload exists on disk, report
-    that — so a UI upload is picked up with no option edit or restart.
+    An explicit model_path option wins (back-compat with files placed manually
+    via SSH/Samba). Otherwise, if a managed upload exists on disk, report that —
+    so a UI upload is picked up with no option edit or restart.
 
-    Each path also carries its upload provenance (model_upload/sh3d_upload):
-    the ORIGINAL browser-side filename + time recorded by the upload handler.
-    A central upload overwrites the file AT the configured path, so the served
-    name never changes (e.g. always TheLysHouse_1F.glb) no matter what file was
-    picked — which read as "the info panel is wrong" until the panel could show
-    what was actually uploaded. None = placed manually (SSH/Samba), or uploaded
-    before this existed.
+    model_upload / rooms_upload carry the ORIGINAL browser-side filename + time
+    recorded by the upload handler. A central upload overwrites the file AT the
+    configured path, so the served name never changes (e.g. always
+    TheLysHouse_1F.glb) no matter what file was picked — which read as "the info
+    panel is wrong" until the panel could show what was actually uploaded. The
+    room-data sidecar (.rooms.json) is derived from model_path, not separately
+    configurable. None = placed manually (SSH/Samba), or uploaded before this
+    existed.
     """
     opts = _read_options()
-    out = {}
-    for opt_key, kind in (("model_path", "glb"), ("sh3d_path", "sh3d")):
-        explicit = (opts.get(opt_key) or "").strip()
-        if explicit:
-            out[opt_key] = explicit
-        elif os.path.exists(os.path.join(WWW_ROOT, MANAGED_PATH[kind])):
-            out[opt_key] = MANAGED_PATH[kind]
-        else:
-            out[opt_key] = ""
-        meta_key = "model_upload" if kind == "glb" else "sh3d_upload"
-        out[meta_key] = None
-        if out[opt_key]:
-            try:
-                with open(os.path.join(WWW_ROOT, out[opt_key]) + ".upload.json",
-                          encoding="utf-8") as f:
-                    meta = json.load(f)
-                if isinstance(meta, dict):
-                    out[meta_key] = {
-                        "original_name": str(meta.get("original_name", "")),
-                        "uploaded_at": str(meta.get("uploaded_at", "")),
-                    }
-            except (OSError, json.JSONDecodeError, ValueError):
-                pass
-    return out
+    explicit = (opts.get("model_path") or "").strip()
+    if explicit:
+        model_rel = explicit
+    elif os.path.exists(os.path.join(WWW_ROOT, MANAGED_PATH["glb"])):
+        model_rel = MANAGED_PATH["glb"]
+    else:
+        model_rel = ""
+    return {
+        "model_path": model_rel,
+        "model_upload": _upload_meta(model_rel),
+        "rooms_upload": _upload_meta(_rooms_rel(model_rel)) if model_rel else None,
+    }
 
 
 def _resolve_upload_target(kind: str) -> str:
     """Absolute, traversal-checked destination path for an upload of this kind.
 
-    Writes to the configured option path if set, else the managed default.
+    The GLB writes to the configured model_path (or the managed default); the
+    room-data sidecar is derived from that GLB path (<model>.rooms.json), so both
+    files always sit together no matter where the admin points model_path.
     Raises ValueError if the resolved path escapes the www root.
     """
-    opt_key = "model_path" if kind == "glb" else "sh3d_path"
-    rel = (_read_options().get(opt_key) or "").strip() or MANAGED_PATH[kind]
+    model_rel = (_read_options().get("model_path") or "").strip() or MANAGED_PATH["glb"]
+    rel = model_rel if kind == "glb" else _rooms_rel(model_rel)
     root = os.path.realpath(WWW_ROOT)
     dest = os.path.realpath(os.path.join(root, rel))
     if dest != root and not dest.startswith(root + os.sep):
@@ -439,7 +458,7 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
 
 
 async def model_upload_handler(request: web.Request) -> web.Response:
-    """Stream an uploaded GLB/SH3D to the central model file (atomic overwrite).
+    """Stream an uploaded GLB or .rooms.json to its central file (atomic overwrite).
 
     The body is written to a temp file in the destination directory, then
     os.replace()'d over the existing file — so a partial/failed upload never
@@ -448,8 +467,8 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     upload instead (files above HA Ingress's ~16 MB per-request cap).
     """
     kind = request.query.get("kind", "")
-    if kind not in ("glb", "sh3d"):
-        return web.json_response({"error": "kind must be 'glb' or 'sh3d'"}, status=400)
+    if kind not in ("glb", "rooms"):
+        return web.json_response({"error": "kind must be 'glb' or 'rooms'"}, status=400)
 
     try:
         dest = _resolve_upload_target(kind)

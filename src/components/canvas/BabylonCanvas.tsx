@@ -8,10 +8,10 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { filterConfigForRole, hasCapability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel, versionedModelUrl } from "@/utils/storage";
+import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel, versionedModelUrl, roomsPathFor } from "@/utils/storage";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { isIngress } from "@/ha/ingress";
-import { parseSh3d } from "@/utils/sh3dParser";
+import { parseRoomData } from "@/utils/sh3dParser";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
 import ModelUploader from "@/components/settings/ModelUploader";
 import type { EntityMapping } from "@/types/scene.types";
@@ -192,31 +192,29 @@ export default function BabylonCanvas({
         // persisted config, so we don't make first paint wait on it.
         setStatus("ready");
 
-        // Refresh central room names + calibration in the BACKGROUND. The SH3D
-        // can be tens of MB (it's the full SweetHome project) and we fetch +
-        // unzip + parse it only for room metadata — doing that inline blocked
-        // first paint for seconds on mobile. This keeps all clients in sync when
-        // the file changes without holding up the render.
-        if (fromAddon && addonCfg.sh3d_path) {
+        // Refresh central room names + calibration in the BACKGROUND from the
+        // compact "<model>.rooms.json" sidecar the Blender pipeline emits next to
+        // the GLB. (This replaced fetching the full multi-hundred-MB .sh3d, which
+        // bundles the whole furniture catalog we never needed.) Doing it off the
+        // render path keeps first paint fast and all clients in sync when the
+        // file changes.
+        if (fromAddon && addonCfg.model_path) {
+          const roomsPath = roomsPathFor(addonCfg.model_path);
           void (async () => {
             try {
-              const sh3dResp = await fetch(await versionedModelUrl(addonCfg.sh3d_path));
-              if (!sh3dResp.ok) {
+              const roomsResp = await fetch(await versionedModelUrl(roomsPath));
+              if (!roomsResp.ok) {
                 if (!cancelled) {
                   setSh3dSyncMsg(
-                    `Central .sh3d not found (HTTP ${sh3dResp.status}) — room names weren't refreshed. ` +
-                    `Check Settings → Add-ons → Villa Kiosk → Configuration.`,
+                    `Central room data (${roomsPath}) not found (HTTP ${roomsResp.status}) — room names ` +
+                    `weren't refreshed. Re-run the Blender pipeline and upload the .rooms.json in Settings.`,
                   );
                 }
                 return;
               }
-              const sh3dBuf = await sh3dResp.arrayBuffer();
-              const { rooms, entities: sh3dEntities } = await parseSh3d(sh3dBuf);
+              const roomsText = await roomsResp.text();
+              const { rooms, entities: sh3dEntities } = parseRoomData(roomsText);
               if (cancelled) return;
-              if (rooms.length === 0) {
-                setSh3dSyncMsg("The central .sh3d has no named rooms — room list wasn't refreshed.");
-                return;
-              }
               // If the central plan's room SET changed (admin swapped the file),
               // drop stale rooms so only the new plan's rooms remain — the scene
               // re-calibrates from the fresh set. If it's the same set (the usual
@@ -229,9 +227,9 @@ export default function BabylonCanvas({
                 ? { sh3dRooms: rooms, sh3dEntities, teleportPoints: [] }
                 : { sh3dRooms: rooms, sh3dEntities });
             } catch (err) {
-              console.warn("[BabylonCanvas] central SH3D refresh failed", err);
+              console.warn("[BabylonCanvas] central room-data refresh failed", err);
               if (!cancelled) {
-                setSh3dSyncMsg(`Failed to refresh room names from the central .sh3d: ${(err as Error).message}`);
+                setSh3dSyncMsg(`Failed to refresh room names from the central .rooms.json: ${(err as Error).message}`);
               }
             }
           })();

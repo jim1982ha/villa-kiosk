@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.10.0
+
+- **No more uploading the full `.sh3d`.** The SweetHome project file had grown to
+  ~300 MB (it bundles the entire furniture catalog) while the kiosk only ever
+  needed <20 KB of it — room polygons and HA-entity plan positions. The Blender
+  pipeline now emits a compact `<model>.rooms.json` sidecar right next to the GLB
+  carrying exactly that, and the app reads it instead. Settings now uploads the
+  tiny `.rooms.json` (and the app auto-loads `<model_path>.rooms.json` centrally),
+  so a re-skin is two small files, no 300 MB round-trip.
+- All `.sh3d` import code is removed: the browser no longer unzips/parses the
+  SweetHome file, the `sh3d_path` add-on option is gone, and the central upload
+  now accepts `kind=rooms` (JSON) instead of `kind=sh3d`. Re-run the pipeline to
+  produce the `.rooms.json`, then upload it once.
+
 ## 2.9.21
 
 - **Two-finger tilt actually works now.** The previous attempt required both

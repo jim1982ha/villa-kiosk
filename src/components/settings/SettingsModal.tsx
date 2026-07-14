@@ -12,7 +12,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, DEFAULT_ENTITY_ICONS, DEFAULT_BINARY_SENSOR_ICONS, DEFAULT_SENSOR_ICONS, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
 import type { EntityType } from "@/types/scene.types";
 import { testConnection, type TestResult } from "@/ha/testConnection";
-import { parseSh3d, minifySh3d } from "@/utils/sh3dParser";
+import { parseRoomData } from "@/utils/sh3dParser";
 import { clearStoredModel, getModelMeta, fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type AddonConfig } from "@/utils/storage";
 import { getLoadedModelInfo } from "@/utils/modelInfo";
 import { isIngress } from "@/ha/ingress";
@@ -93,29 +93,30 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
       : { detected: false, classes: Object.keys(DEFAULT_SENSOR_ICONS) };
   }, [config.entityMap, entities]);
 
-  const sh3dRef = useRef<HTMLInputElement>(null);
-  const [sh3dMsg, setSh3dMsg] = useState<string | null>(null);
+  const roomsRef = useRef<HTMLInputElement>(null);
+  const [roomsMsg, setRoomsMsg] = useState<string | null>(null);
 
-  const loadSh3d = async (file: File) => {
+  // Adopt a room-data sidecar (<model>.rooms.json emitted by the Blender
+  // pipeline) — the tiny replacement for uploading the full .sh3d.
+  const applyRoomData = (text: string) => {
+    const { rooms, entities } = parseRoomData(text);
+    update({
+      sh3dRooms: rooms,
+      sh3dEntities: entities,
+      // A new plan replaces the villa's rooms wholesale — drop every previously
+      // defined room (old rooms AND any "Add room here" points) so the Rooms
+      // menu shows ONLY what this file defines. The scene re-calibrates on reload.
+      teleportPoints: [],
+    });
+    return `Loaded ${rooms.length} rooms${entities.length ? ` + ${entities.length} calibration points` : ""}. Reloading…`;
+  };
+
+  const loadRoomData = async (file: File) => {
     try {
-      const { rooms, entities } = await parseSh3d(file);
-      if (rooms.length === 0) {
-        setSh3dMsg("No named rooms found in that .sh3d.");
-        return;
-      }
-      update({
-        sh3dRooms: rooms,
-        sh3dEntities: entities,
-        // A new plan replaces the villa's rooms wholesale — drop every
-        // previously-defined room (old-sh3d rooms AND any "Add room here"
-        // points) so the Rooms menu shows ONLY what this file defines. The
-        // scene re-calibrates from the new rooms on reload.
-        teleportPoints: [],
-      });
-      setSh3dMsg(`Loaded ${rooms.length} rooms${entities.length ? ` + ${entities.length} calibration points` : ""}. Reloading…`);
+      setRoomsMsg(applyRoomData(await file.text()));
       setTimeout(() => onModelChanged(), 600); // remount to re-fit room labels
     } catch (err) {
-      setSh3dMsg((err as Error).message);
+      setRoomsMsg((err as Error).message);
     }
   };
 
@@ -123,49 +124,31 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
   const [addonCfg, setAddonCfg] = useState<AddonConfig | null>(null);
   useEffect(() => { fetchAddonConfig().then(setAddonCfg); }, []);
 
-  // Central model upload (Ingress / add-on mode): push a GLB or SH3D straight to
-  // the HA www folder via the supervisor-proxy, no SSH/Samba needed.
+  // Central upload (Ingress / add-on mode): push a GLB or the room-data sidecar
+  // straight to the HA www folder via the supervisor-proxy, no SSH/Samba needed.
   const glbUploadRef = useRef<HTMLInputElement>(null);
-  const sh3dUploadRef = useRef<HTMLInputElement>(null);
-  const [uploadBusy, setUploadBusy] = useState<null | "glb" | "sh3d">(null);
+  const roomsUploadRef = useRef<HTMLInputElement>(null);
+  const [uploadBusy, setUploadBusy] = useState<null | "glb" | "rooms">(null);
   const [uploadMsg, setUploadMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  const uploadCentral = async (file: File, kind: "glb" | "sh3d") => {
-    const ext = kind === "glb" ? ".glb" : ".sh3d";
-    if (!file.name.toLowerCase().endsWith(ext)) {
-      setUploadMsg({ text: `Please choose a ${ext} file.`, ok: false });
+  const uploadCentral = async (file: File, kind: "glb" | "rooms") => {
+    const okExt = kind === "glb" ? [".glb"] : [".json"];
+    if (!okExt.some((e) => file.name.toLowerCase().endsWith(e))) {
+      setUploadMsg({ text: `Please choose a ${okExt.join(" / ")} file.`, ok: false });
       return;
     }
     setUploadBusy(kind);
     setUploadMsg(null);
     try {
-      // Home Assistant's Ingress proxy hard-caps a proxied upload at 16 MB —
-      // a Supervisor-level limit this add-on can't raise. A full .sh3d
-      // bundles every catalog furniture piece's 3D preview (tens of MB) but
-      // this app only ever reads Home.xml out of it, so re-zip down to just
-      // that before sending — same content the app actually uses, comfortably
-      // under the ceiling for any realistic villa plan.
-      const payload: Blob = kind === "sh3d" ? await minifySh3d(file) : file;
-      const { path, size } = await uploadCentralModel(payload, kind, file.name);
-      // Uploading the file to the server (above) makes it available to the
-      // Blender export pipeline, but does NOT by itself give THIS running
-      // app any of the data it needs live — camera motion-beam directions
-      // and sh3d-derived room polygons both come from client-side parsing
-      // (see loadSh3d below), which used to run ONLY in the standalone-mode
-      // uploader. Ingress/add-on mode (this branch) had no equivalent, so
-      // "Upload central SH3D" silently left config.sh3dEntities/sh3dRooms
-      // empty forever — e.g. every camera's motion-detection beam reporting
-      // "no sh3d angle data" no matter what, with no error and no way to fix
-      // it from the ingress UI. Parse it here too so both modes get the same
-      // live data, not just the standalone one.
-      if (kind === "sh3d") {
-        const { rooms, entities } = await parseSh3d(file);
-        // New plan → replace rooms wholesale (see loadSh3d for the reasoning).
-        update({ sh3dRooms: rooms, sh3dEntities: entities, teleportPoints: [] });
-      }
+      const { path, size } = await uploadCentralModel(file, kind, file.name);
+      // For the room-data sidecar, ALSO adopt it into this running client's
+      // config so its rooms/beams take effect immediately (not just for other
+      // clients on their next open).
+      if (kind === "rooms") applyRoomData(await file.text());
       clearAddonConfigCache();
       setAddonCfg(await fetchAddonConfig());
-      setUploadMsg({ text: `Uploaded ${(size / 1_000_000).toFixed(1)} MB → www/${path}. Reloading…`, ok: true });
+      const mb = size / 1_000_000;
+      setUploadMsg({ text: `Uploaded ${mb < 1 ? `${(size / 1000).toFixed(0)} KB` : `${mb.toFixed(1)} MB`} → www/${path}. Reloading…`, ok: true });
       setTimeout(() => onModelChanged(), 600); // remount to load the new central model
     } catch (err) {
       setUploadMsg({ text: (err as Error).message, ok: false });
@@ -577,13 +560,14 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
                       <div className="row"><span>From</span><span><code>{loadedModel.url}</code></span></div>
                     </>
                   )}
-                  <div className="row"><span>SH3D</span><span>{addonCfg.sh3d_path ? <code>www/{addonCfg.sh3d_path}</code> : "not configured (optional)"}</span></div>
+                  <div className="row"><span>Room data</span><span>{addonCfg.rooms_upload?.original_name ? <code>{addonCfg.rooms_upload.original_name}</code> : <code>{addonCfg.model_path.replace(/\.glb$/i, ".rooms.json").split("/").pop()}</code>}</span></div>
                   <div style={{ marginTop: 8, color: "var(--text-dim)" }}>
-                    Served from the add-on's configured paths (relative to <code>www/</code>) — an
+                    Served from the add-on's <code>model_path</code> (relative to <code>www/</code>) — an
                     upload overwrites the file at that path, so the GLB name above stays the same
-                    whatever file you pick ("Uploaded" shows the file it came from). Set
-                    <code> model_path</code> / <code>sh3d_path</code> under Settings → Add-ons → Villa Kiosk →
-                    Configuration. Verify on disk: <code>shasum -a 256 {addonCfg.model_path.split("/").pop()}</code>
+                    whatever file you pick ("Uploaded" shows the file it came from). The room-data
+                    sidecar (<code>.rooms.json</code>, emitted next to the GLB by the Blender pipeline)
+                    lives alongside it. Set <code>model_path</code> under Settings → Add-ons → Villa
+                    Kiosk → Configuration. Verify on disk: <code>shasum -a 256 {addonCfg.model_path.split("/").pop()}</code>
                   </div>
                 </div>
               </span>
@@ -594,8 +578,9 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
                 ⚠ No central model yet
               </div>
               <p className="muted body-text" style={{ fontSize: 12, margin: 0 }}>
-                Upload your <code>.glb</code> (and optional <code>.sh3d</code>) below — it's stored centrally
-                so every kiosk loads it automatically. No SSH/Samba needed.
+                Upload your <code>.glb</code> and its <code>.rooms.json</code> (both emitted by the
+                Blender pipeline) below — stored centrally so every kiosk loads them automatically.
+                No SSH/Samba needed.
               </p>
             </div>
           )}
@@ -604,20 +589,21 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
               add-on, overwriting the current central files. */}
           <input ref={glbUploadRef} type="file" accept=".glb,model/gltf-binary" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCentral(f, "glb"); e.target.value = ""; }} />
-          <input ref={sh3dUploadRef} type="file" accept=".sh3d" style={{ display: "none" }}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCentral(f, "sh3d"); e.target.value = ""; }} />
+          <input ref={roomsUploadRef} type="file" accept=".json,application/json" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCentral(f, "rooms"); e.target.value = ""; }} />
           <div className="row" style={{ gap: 10, marginTop: 12 }}>
             <button className="btn ghost" style={{ flex: 1 }} disabled={uploadBusy !== null}
               onClick={() => glbUploadRef.current?.click()}>
               <Upload size={15} /> {uploadBusy === "glb" ? "Uploading…" : "Upload central GLB"}
             </button>
             <button className="btn ghost" style={{ flex: 1 }} disabled={uploadBusy !== null}
-              onClick={() => sh3dUploadRef.current?.click()}>
-              <Upload size={15} /> {uploadBusy === "sh3d" ? "Uploading…" : "Upload central SH3D"}
+              onClick={() => roomsUploadRef.current?.click()}>
+              <Upload size={15} /> {uploadBusy === "rooms" ? "Uploading…" : "Upload room data (.rooms.json)"}
             </button>
           </div>
           <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
             Each upload overwrites the current central file and reloads every kiosk on next open.
+            The tiny <code>.rooms.json</code> replaces the old full <code>.sh3d</code> upload.
           </p>
           {uploadMsg && (
             <div className={`test-result ${uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
@@ -648,23 +634,23 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
               add-on options to serve one shared model to all clients — no per-device upload needed.
             </p>
 
-            {/* SH3D upload — standalone mode only */}
-            <label style={{ marginTop: 16 }}>Room names (.sh3d) — optional</label>
-            <button className="btn ghost" style={{ width: "100%" }} onClick={() => sh3dRef.current?.click()}>
-              <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload SweetHome .sh3d"}
+            {/* Room-data sidecar upload — standalone mode only */}
+            <label style={{ marginTop: 16 }}>Room data (.rooms.json) — optional</label>
+            <button className="btn ghost" style={{ width: "100%" }} onClick={() => roomsRef.current?.click()}>
+              <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload room data (.rooms.json)"}
             </button>
             <input
-              ref={sh3dRef} type="file" accept=".sh3d" style={{ display: "none" }}
+              ref={roomsRef} type="file" accept=".json,application/json" style={{ display: "none" }}
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) loadSh3d(f);
+                if (f) loadRoomData(f);
               }}
             />
             <p className="muted body-text" style={{ marginTop: 6 }}>
-              Reads room names + shapes straight from the SweetHome file so rooms are
-              labelled automatically — works for any villa, no rebuild.
+              The compact room/entity file the Blender pipeline emits next to the GLB —
+              gives automatic room labels + calibration for any villa, no full .sh3d needed.
             </p>
-            {sh3dMsg && <div className="test-result ok">{sh3dMsg}</div>}
+            {roomsMsg && <div className="test-result ok">{roomsMsg}</div>}
           </>
         )}
 

@@ -1,131 +1,78 @@
 // src/utils/sh3dParser.ts
-// Parse a SweetHome 3D ".sh3d" file (a ZIP containing Home.xml) entirely in the
-// browser to extract room names + polygons and entity-named furniture positions.
-//
-// This is what makes room identification automatic for ANY future villa: upload
-// the .sh3d alongside the GLB and the app learns the room names + the plan
-// positions it needs to fit the plan->model transform — no code changes, no
-// per-file work.
-
-import JSZip from "jszip";
+// Room + entity plan metadata for the kiosk. This used to parse the full
+// SweetHome ".sh3d" (a ZIP) in the browser — but that file bundles every
+// furniture catalog model + texture, so it grew to hundreds of MB while the app
+// only ever needed <20 KB of it. The Blender pipeline now emits a compact
+// "<model>.rooms.json" sidecar next to the GLB (see _write_room_sidecar in
+// blender_pipeline.py); this module just validates + adopts that JSON. Nothing
+// in the app parses a raw .sh3d anymore.
 
 export interface ParsedRoom {
   name: string;
   points: { x: number; y: number }[];
-  /** 1-based storey index (1 = ground floor), derived from the room's
-   *  SweetHome `level` by sorting every `<level>` in the file by elevation.
-   *  Defaults to 1 for single-storey files / rooms with no `level`. */
+  /** 1-based storey index (1 = ground floor). */
   floor: number;
 }
 export interface ParsedEntity {
   entityId: string;
   x: number;
   y: number;
-  /** SweetHome 3D's plan-rotation for this object, in degrees (0 = default
-   *  unrotated orientation; SweetHome omits the attribute at 0). Lets a
-   *  camera's simulated "detection beam" point the same way the camera prop
-   *  was rotated to face in the plan — rotate the camera in SweetHome 3D to
-   *  aim it, no other config needed. */
+  /** SweetHome plan-rotation (radians) — drives a camera's motion beam. */
   angle: number;
-  /** SweetHome 3D's "tilt" for this object — rotation around the LOCAL X axis
-   *  (the "Horizontal rotation around X axis" field in the Modify furniture
-   *  dialog's Orientation section, mutually exclusive with the Y-axis field
-   *  in that same UI). Radians, matching the raw `.sh3d` XML attribute — like
-   *  `angle`, SweetHome omits this entirely when it's 0. Lets a camera's
-   *  simulated detection beam tilt up/down to match how the camera prop was
-   *  tilted in the plan, not just its flat rotation. */
+  /** SweetHome tilt around the local X axis (radians) — beam up/down. */
   pitch: number;
 }
-export interface ParsedSh3d {
+export interface ParsedRoomData {
   rooms: ParsedRoom[];
   entities: ParsedEntity[];
 }
 
 const ENTITY_ID_RE = /^[a-z_]+\.[a-z0-9_]+$/;
 
-export async function parseSh3d(data: ArrayBuffer | File): Promise<ParsedSh3d> {
-  const zip = await JSZip.loadAsync(data);
-  const homeFile = zip.file("Home.xml");
-  if (!homeFile) throw new Error("Not a valid .sh3d (no Home.xml inside).");
+/**
+ * Parse + validate the pipeline's room-data sidecar (the JSON described above).
+ * Defensive because the bytes come from an uploaded/served file: every field is
+ * coerced to the expected shape and anything malformed is dropped rather than
+ * trusted. Throws only when there isn't a single usable room (so the caller can
+ * surface "that file has no rooms").
+ */
+export function parseRoomData(text: string): ParsedRoomData {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new Error("Not valid room-data JSON.");
+  }
+  const obj = raw as { rooms?: unknown; entities?: unknown };
 
-  const xmlText = await homeFile.async("string");
-  const doc = new DOMParser().parseFromString(xmlText, "application/xml");
-  if (doc.querySelector("parsererror")) throw new Error("Could not parse Home.xml.");
-
-  // Levels: sort by elevation to turn SweetHome's opaque `level-<uuid>` ids
-  // into 1-based storey numbers (matching the Blender pipeline's own
-  // `_parse_levels` convention). Sub-levels sharing an elevation (SweetHome's
-  // "same elevation" levels) collapse onto the same storey number.
-  const levelFloor = new Map<string, number>();
-  {
-    const byId = new Map<string, number>();
-    doc.querySelectorAll("level").forEach((lv) => {
-      const id = lv.getAttribute("id");
-      if (!id) return;
-      byId.set(id, Number(lv.getAttribute("elevation") ?? 0));
-    });
-    const elevations = [...new Set(byId.values())].sort((a, b) => a - b);
-    for (const [id, elevation] of byId) {
-      levelFloor.set(id, elevations.indexOf(elevation) + 1);
+  const rooms: ParsedRoom[] = [];
+  if (Array.isArray(obj.rooms)) {
+    for (const r of obj.rooms as Record<string, unknown>[]) {
+      const name = typeof r?.name === "string" ? r.name : "";
+      const pts = Array.isArray(r?.points) ? (r.points as Record<string, unknown>[]) : [];
+      const points = pts
+        .map((p) => ({ x: Number(p?.x), y: Number(p?.y) }))
+        .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+      const floor = Number.isFinite(Number(r?.floor)) ? Number(r.floor) : 1;
+      if (name && points.length >= 3) rooms.push({ name, points, floor });
     }
   }
 
-  // Rooms: named polygons.
-  const rooms: ParsedRoom[] = [];
-  doc.querySelectorAll("room").forEach((roomEl) => {
-    const name = roomEl.getAttribute("name");
-    if (!name) return;
-    const points: { x: number; y: number }[] = [];
-    roomEl.querySelectorAll("point").forEach((p) => {
-      points.push({ x: Number(p.getAttribute("x")), y: Number(p.getAttribute("y")) });
-    });
-    const levelId = roomEl.getAttribute("level");
-    const floor = (levelId && levelFloor.get(levelId)) || 1;
-    if (points.length >= 3) rooms.push({ name, points, floor });
-  });
-
-  // Entity calibration: furniture whose name is an HA entity_id, at known x/y.
   const entities: ParsedEntity[] = [];
-  doc.querySelectorAll("pieceOfFurniture, doorOrWindow").forEach((f) => {
-    const name = f.getAttribute("name");
-    const x = f.getAttribute("x");
-    const y = f.getAttribute("y");
-    if (!name || x === null || y === null) return;
-    if (!ENTITY_ID_RE.test(name)) return;
-    const angle = f.getAttribute("angle"); // omitted by SweetHome when 0
-    const pitch = f.getAttribute("pitch"); // omitted by SweetHome when 0
-    entities.push({
-      entityId: name, x: Number(x), y: Number(y),
-      angle: angle === null ? 0 : Number(angle),
-      pitch: pitch === null ? 0 : Number(pitch),
-    });
-  });
+  if (Array.isArray(obj.entities)) {
+    for (const e of obj.entities as Record<string, unknown>[]) {
+      const entityId = typeof e?.entityId === "string" ? e.entityId : "";
+      const x = Number(e?.x);
+      const y = Number(e?.y);
+      if (!ENTITY_ID_RE.test(entityId) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+      entities.push({
+        entityId, x, y,
+        angle: Number.isFinite(Number(e?.angle)) ? Number(e.angle) : 0,
+        pitch: Number.isFinite(Number(e?.pitch)) ? Number(e.pitch) : 0,
+      });
+    }
+  }
 
+  if (rooms.length === 0) throw new Error("No named rooms found in that room-data file.");
   return { rooms, entities };
-}
-
-/**
- * Re-zip a .sh3d down to just its Home.xml — the only entry this app ever
- * reads (see parseSh3d above). A SweetHome project also bundles the full 3D
- * preview model (OBJ/MTL/textures) for every catalog piece of furniture used
- * in the plan, which is what actually makes these files tens of MB; none of
- * that is ever touched here.
- *
- * This exists because Home Assistant's Ingress proxy hard-caps a proxied
- * request body at 16 MB (a Supervisor-level limit — see
- * github.com/home-assistant/supervisor/issues/2950 — that this add-on has no
- * way to raise), so uploading a full multi-tens-of-MB .sh3d through the
- * kiosk's "Upload central SH3D" button fails with a 413 no matter how large
- * nginx/aiohttp's own limits are set. Home.xml alone is realistically well
- * under a megabyte even for a large villa, so minifying before upload avoids
- * the ceiling entirely with zero functional loss.
- */
-export async function minifySh3d(data: ArrayBuffer | File): Promise<Blob> {
-  const zip = await JSZip.loadAsync(data);
-  const homeXml = zip.file("Home.xml");
-  if (!homeXml) throw new Error("Not a valid .sh3d (no Home.xml inside).");
-  const xmlText = await homeXml.async("string");
-  const mini = new JSZip();
-  mini.file("Home.xml", xmlText);
-  return mini.generateAsync({ type: "blob", compression: "DEFLATE" });
 }

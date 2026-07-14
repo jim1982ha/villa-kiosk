@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: Villa Kiosk
-version: "2.9.21"
+version: "2.10.0"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard served through Ingress
 url: https://github.com/jim1982ha/villa-kiosk
@@ -35,20 +35,19 @@ startup: application
 # are verified server-side by the add-on (never sent to the browser).
 options:
   model_path: ""
-  sh3d_path: ""
   guest_pin: ""
   owner_pin: ""
   ops_pin: ""
 schema:
   model_path: str?
-  sh3d_path: str?
   guest_pin: match(^[0-9]{4}$|^$)?
   owner_pin: match(^[0-9]{4}$|^$)?
   ops_pin: match(^[0-9]{4}$|^$)?
 # Mount the HA config directory read-write so the add-on can BOTH serve model
 # files from /config/www/ via nginx (clients fetch /model/{path}) AND accept
-# uploads of the central GLB/SH3D from the kiosk Settings UI (POST /model-upload,
-# handled by supervisor-proxy.py). Uploads overwrite the file at the configured
-# model_path/sh3d_path, or a managed default (villa-kiosk/villa.glb|.sh3d).
+# uploads of the central GLB + its compact room-data sidecar (.rooms.json) from
+# the kiosk Settings UI (POST /model-upload, handled by supervisor-proxy.py).
+# Uploads overwrite the file at the configured model_path (the .rooms.json sits
+# next to it), or a managed default (villa-kiosk/villa.glb).
 map:
   - homeassistant_config:rw

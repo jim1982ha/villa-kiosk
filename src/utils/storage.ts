@@ -107,8 +107,6 @@ export function loadOverviewView(): OverviewViewSnapshot | null {
 export interface AddonConfig {
   /** Path relative to /config/www/, e.g. "villa-kiosk/villa.glb". Empty = not configured. */
   model_path: string;
-  /** Optional SH3D path for central room-name loading. */
-  sh3d_path: string;
   /**
    * Provenance of the file currently AT model_path: a central upload
    * overwrites that file in place, so the served name never changes — this
@@ -116,8 +114,15 @@ export interface AddonConfig {
    * (null/absent when the file was placed manually or by an older add-on).
    */
   model_upload?: { original_name: string; uploaded_at: string } | null;
-  /** Same provenance for the sh3d_path file. */
-  sh3d_upload?: { original_name: string; uploaded_at: string } | null;
+  /** Same provenance for the room-data sidecar (<model>.rooms.json). */
+  rooms_upload?: { original_name: string; uploaded_at: string } | null;
+}
+
+/** The room-data sidecar URL that sits next to the central GLB (model_path
+ *  with its .glb swapped for .rooms.json). The pipeline emits it; the app
+ *  reads it instead of the old multi-hundred-MB .sh3d. */
+export function roomsPathFor(modelPath: string): string {
+  return modelPath.replace(/\.glb$/i, ".rooms.json");
 }
 
 /**
@@ -190,13 +195,12 @@ async function postUploadRequest(
  * (Ingress) mode; the supervisor-proxy backs the /model-upload endpoint.
  * Returns the resolved www-relative path. Invalidates the addon-config cache so
  * a freshly-uploaded managed default is picked up on the next fetch.
- * Takes a Blob (not just File) so a caller can upload a re-packaged Blob
- * (e.g. sh3dParser's minifySh3d) instead of the original file as-is.
+ * Takes a Blob so a caller can upload a re-packaged Blob if needed.
  * Requires add-on ≥ 2.9.6 for files above ~12 MB (chunked protocol).
  */
 export async function uploadCentralModel(
   file: Blob,
-  kind: "glb" | "sh3d",
+  kind: "glb" | "rooms",
   originalName?: string,
 ): Promise<{ path: string; size: number }> {
   // The original filename rides along so the add-on can record WHAT was
@@ -238,7 +242,7 @@ export async function fetchAddonConfig(): Promise<AddonConfig> {
     _addonConfigCache = await resp.json() as AddonConfig;
   } catch {
     // Not in an add-on context (dev mode) or add-on not yet configured.
-    _addonConfigCache = { model_path: "", sh3d_path: "" };
+    _addonConfigCache = { model_path: "" };
   }
   return _addonConfigCache;
 }

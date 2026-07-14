@@ -249,13 +249,13 @@ export interface AppConfig {
   walkSpeed: number;
   /** Rain/weather particle effects (off by default — can look noisy). */
   weatherEffects: boolean;
-  /** Room polygons parsed from an uploaded .sh3d (auto room names, any villa).
-   *  `floor` is the 1-based storey the room's SweetHome level resolves to
+  /** Room polygons from the pipeline's .rooms.json sidecar (auto room names, any
+   *  villa). `floor` is the 1-based storey the room's SweetHome level resolves to
    *  (see sh3dParser.ts) — defaults to 1 for older stored configs. */
   sh3dRooms?: { name: string; points: { x: number; y: number }[]; floor?: number }[];
-  /** Entity plan positions parsed from an uploaded .sh3d (for the transform fit).
-   *  `angle` (radians, plan yaw) and `pitch` (radians, tilt) drive the camera
-   *  motion-beam direction. */
+  /** Entity plan positions from the pipeline's .rooms.json sidecar (for the
+   *  transform fit). `angle` (radians, plan yaw) and `pitch` (radians, tilt)
+   *  drive the camera motion-beam direction. */
   sh3dEntities?: { entityId: string; x: number; y: number; angle: number; pitch: number }[];
   renderOnDemand: boolean;
   /** Show floating state labels above each bound device in the 3D scene. */
