@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.9.19
+
+- Rooms dial: a hovered room/floor chip now highlights with the solid accent
+  colour (like every other button), not a faint translucent wash.
+- Overview (touch): two-finger tilt works again. Moving one finger up/down (or
+  both together) tilts the camera — the "pinch must stay perfectly still"
+  guard that was swallowing tilt whenever the finger distance changed is gone,
+  so zoom, rotate and tilt now all respond together.
+
 ## 2.9.18
 
 - **Fixed the Rooms dial getting stuck** (open but unclickable). It's now driven

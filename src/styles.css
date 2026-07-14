@@ -377,7 +377,9 @@ button {
   transition: background 0.12s, transform 0.08s;
 }
 .radial-item > span { overflow: hidden; text-overflow: ellipsis; }
-.radial-item:hover { background: var(--bg-input); }
+/* Hover = the solid accent (same as the active/selected state), not a faint
+   translucent wash — matches every other button's highlight. */
+.radial-item:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 .radial-item:active { transform: translate(-50%, -50%) scale(0.94); }
 .radial-item.radial-floor { min-width: 46px; height: 46px; padding: 0; font-size: 14px; font-weight: 700; border-radius: 50%; }
 .radial-item.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }

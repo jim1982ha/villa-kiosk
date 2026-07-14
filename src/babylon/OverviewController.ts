@@ -331,14 +331,16 @@ export class OverviewController {
     if (dAngle < -Math.PI) dAngle += 2 * Math.PI;
     this.camera.alpha += dAngle;
 
-    // ── Tilt: centroid Y movement ─────────────────────────────────────────────
-    // Guard: only apply tilt when the pinch distance is relatively stable
-    // (< 4% change) so a pure pinch doesn't spuriously tilt the camera.
-    const distChangeFrac = Math.abs(dist - base.dist) / Math.max(base.dist, 1);
-    if (distChangeFrac < 0.04) {
-      const dCentY = centY - base.centY;
-      this.applyTilt(dCentY * TILT_SENS_TOUCH * s);
-    }
+    // ── Tilt: vertical movement of the two-finger centroid ────────────────────
+    // Applied every frame ALONGSIDE zoom + rotate (no "pinch must be stable"
+    // guard): moving just ONE finger up/down — the other held still — shifts the
+    // centroid and so tilts, which is what a user reaches for ("let me tilt with
+    // two fingers"). It also covers the map-app standard of dragging BOTH
+    // fingers up/down together (their distance barely changes, so that reads as
+    // near-pure tilt). A symmetric pinch keeps the centroid put, so zooming
+    // doesn't spuriously tilt.
+    const dCentY = centY - base.centY;
+    this.applyTilt(dCentY * TILT_SENS_TOUCH * s);
 
     // Update the baseline incrementally (correct result because both fingers
     // fire separate pointermove events — each step applies a partial delta,
