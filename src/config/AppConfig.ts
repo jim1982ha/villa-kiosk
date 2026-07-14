@@ -191,7 +191,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     ibl: false, environmentIntensity: 0.6,
     ssao: false, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
     shadows: false, shadowMapSize: 1024, shadowDarkness: 0.35, shadowBlur: 32,
-    glow: true, glowIntensity: 0.7, nightDimming: 0.7,
+    glow: true, glowIntensity: 0.8, nightDimming: 0.5,
   },
   // The proven "safe win": subtle contact AO, no IBL/shadows.
   balanced: {
@@ -201,7 +201,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     ibl: false, environmentIntensity: 0.65,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
     shadows: false, shadowMapSize: 1024, shadowDarkness: 0.35, shadowBlur: 32,
-    glow: true, glowIntensity: 0.8, nightDimming: 0.7,
+    glow: true, glowIntensity: 0.8, nightDimming: 0.5,
   },
   // Best look out of the box: AO + soft sky/ground IBL + higher-sample AO.
   high: {
@@ -211,7 +211,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     ibl: true, environmentIntensity: 0.6,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.25, ssaoSamples: 16,
     shadows: false, shadowMapSize: 2048, shadowDarkness: 0.4, shadowBlur: 32,
-    glow: true, glowIntensity: 0.9, nightDimming: 0.7,
+    glow: true, glowIntensity: 0.8, nightDimming: 0.5,
   },
 };
 

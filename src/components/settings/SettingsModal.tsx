@@ -231,6 +231,30 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
       <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <h2>Settings</h2>
+          {/* Theme selector lives in the header, icon-only + right-aligned —
+              the Sun/Moon/Monitor glyphs are self-explanatory. Applied
+              instantly (config.theme drives the data-theme attribute in
+              ConfigContext) and persisted on Save. */}
+          {can("customizeAppearance") && (
+            <div className="segmented segmented-icons" role="group" aria-label="Theme">
+              {([
+                { key: "light", label: "Light theme", icon: Sun },
+                { key: "dark", label: "Dark theme", icon: Moon },
+                { key: "auto", label: "Auto (system) theme", icon: Monitor },
+              ] as const).map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  className={config.theme === key ? "active" : ""}
+                  onClick={() => update({ theme: key })}
+                  aria-pressed={config.theme === key}
+                  title={label}
+                  aria-label={label}
+                >
+                  <Icon size={17} />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="settings-body">
 
@@ -244,34 +268,6 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
               placeholder={haConfig?.location_name || DEFAULT_SITE_TITLE}
             />
           </>
-        )}
-
-        {/* ── Appearance ──────────────────────────────────────────────────
-            Light / Dark / Auto. Applied instantly (config.theme drives the
-            data-theme attribute in ConfigContext), and persisted on Save. */}
-        {can("customizeAppearance") && (
-        <>
-        <div className="settings-section-title">Appearance</div>
-        <div className="segmented" role="group" aria-label="Theme">
-          {([
-            { key: "light", label: "Light", icon: Sun },
-            { key: "dark", label: "Dark", icon: Moon },
-            { key: "auto", label: "Auto", icon: Monitor },
-          ] as const).map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              className={config.theme === key ? "active" : ""}
-              onClick={() => update({ theme: key })}
-              aria-pressed={config.theme === key}
-            >
-              <Icon size={16} /> {label}
-            </button>
-          ))}
-        </div>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          Auto follows this device's system light/dark setting.
-        </p>
-        </>
         )}
 
         {!ingress && can("editConfig") && (
@@ -316,24 +312,6 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
         <>
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
-        <label>Eye height (walking) · {eyeHeight.toFixed(2)} m</label>
-        <input
-          type="range" min={0.8} max={2.2} step={0.05} value={eyeHeight}
-          onChange={(e) => applyEyeHeight(Number(e.target.value))}
-        />
-        <p className="muted body-text" style={{ marginTop: 6 }}>
-          Adjust until the view sits at natural standing height. Updates live.
-        </p>
-
-        <label style={{ marginTop: 16 }}>Walk speed · {walkSpeed.toFixed(1)}×</label>
-        <input
-          type="range" min={0.3} max={3} step={0.1} value={walkSpeed}
-          onChange={(e) => applyWalkSpeed(Number(e.target.value))}
-        />
-        <p className="muted body-text" style={{ marginTop: 6 }}>
-          Speed of the joystick and two-finger-swipe walking. Updates live.
-        </p>
-
         <label className="toggle">
           <input
             type="checkbox" checked={config.naturalScrolling ?? true}
@@ -341,17 +319,11 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
           />
           <span>Natural scrolling (overview mode)</span>
         </label>
-        <p className="muted body-text" style={{ marginTop: 6 }}>
-          On: drag up = content moves up (map follows your finger). Off (Traditional):
-          drag up = content scrolls down — like a web page. Affects overview camera pan and zoom.
-        </p>
 
         {/* Wall collisions are always on now (you should never be able to walk
-            through a wall) — the toggle was removed. Live weather effects moved
-            into "Render quality & look" below. */}
-
-        {/* "Highlight clickable objects" and "Show device state labels" now live
-            as direct toggles in the top bar (desktop) / a dropdown (mobile). */}
+            through a wall) — the toggle was removed. Eye height + Walk speed
+            moved below the device-icon section; "Highlight clickable objects"
+            and "Show device state labels" now live in the top bar. */}
 
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
@@ -417,32 +389,25 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
             onChange={(e) => applyRender({ glow: e.target.checked })} />
           <span>Glow around lit / active devices</span>
         </label>
-        {render.glow && (
-          <>
-            <label style={{ marginTop: 10 }}>Glow strength · {render.glowIntensity.toFixed(1)}×</label>
+
+        {/* Glow strength + Night dimming side by side. */}
+        <div className="slider-pair">
+          <div>
+            <label>Glow strength · {render.glowIntensity.toFixed(1)}×</label>
             <input
               type="range" min={0.2} max={1.5} step={0.1} value={render.glowIntensity}
+              disabled={!render.glow}
               onChange={(e) => applyRender({ glowIntensity: Number(e.target.value) })}
             />
-          </>
-        )}
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          A soft bloom around any lit fixture, active lock/switch tint or alert
-          pulse, so an "on" state is clearly visible, not just a flat colour.
-        </p>
-
-        <label style={{ marginTop: 14 }}>
-          Night dimming · {render.nightDimming.toFixed(1)}×
-        </label>
-        <input
-          type="range" min={0} max={1} step={0.1} value={render.nightDimming}
-          onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
-        />
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          How much darker the villa gets after sunset. Higher makes lit rooms
-          stand out more dramatically against the dark; rooms stay dimly
-          visible even at the maximum — it's never pitch black.
-        </p>
+          </div>
+          <div>
+            <label>Night dimming · {render.nightDimming.toFixed(1)}×</label>
+            <input
+              type="range" min={0} max={1} step={0.1} value={render.nightDimming}
+              onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
+            />
+          </div>
+        </div>
 
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
@@ -540,6 +505,26 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
         >
           Reset icons to defaults
         </button>
+
+        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
+
+        {/* Movement feel — eye height + walk speed, side by side. Both update live. */}
+        <div className="slider-pair">
+          <div>
+            <label>Eye height (walking) · {eyeHeight.toFixed(2)} m</label>
+            <input
+              type="range" min={0.8} max={2.2} step={0.05} value={eyeHeight}
+              onChange={(e) => applyEyeHeight(Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <label>Walk speed · {walkSpeed.toFixed(1)}×</label>
+            <input
+              type="range" min={0.3} max={3} step={0.1} value={walkSpeed}
+              onChange={(e) => applyWalkSpeed(Number(e.target.value))}
+            />
+          </div>
+        </div>
         </>
         )}
 

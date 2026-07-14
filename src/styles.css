@@ -554,17 +554,23 @@ input[type="range"]::-moz-range-thumb {
    it's excluded here. (Mobile overrides this in the media query below.) */
 .modal:not(.settings-modal) { padding: 24px 28px; }
 
-/* Settings modal — scrollable body, sticky footer. ~25% wider than a plain
-   modal (520 → 660) so the 3-across device-icon grid and the two-column
-   coordinate/URL fields breathe on desktop/tablet; still capped at the
+/* Settings modal — scrollable body, sticky footer. 50% wider than a plain
+   modal (520 → 780) so the 3-across device-icon grid and the two-column
+   slider/coordinate rows breathe on desktop/tablet; still capped at the
    viewport so mobile is unaffected (the media query below takes over). */
-.settings-modal { max-width: 660px; }
-/* The Config Editor holds full-width entity/binding TABLES — give it the most
+.settings-modal { max-width: 780px; }
+/* The Config Editor holds full-width entity/binding cards — give it the most
    room the viewport allows. */
 .config-editor-modal { max-width: 960px; }
 .config-editor-modal .config-topbar { display: flex; align-items: center; gap: 16px; }
 .config-editor-modal .config-topbar h2 { margin: 0; }
-.settings-header { padding: 24px 28px 16px; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
+/* Header is a row: title left, the icon-only theme selector right. */
+.settings-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px 16px; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
+/* Two sliders (or coordinate fields) side by side; stacks on narrow screens. */
+.slider-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-items: start; }
+.slider-pair > div { min-width: 0; }
+.slider-pair label { margin-top: 0; }
+@media (max-width: 560px) { .slider-pair { grid-template-columns: 1fr; } }
 .settings-body { flex: 1 1 auto; overflow-y: auto; padding: 8px 28px 12px; }
 .settings-body label { display: block; font-size: 13px; color: var(--text-secondary); margin: 14px 0 6px; }
 .settings-body label.toggle { display: flex; align-items: center; gap: 12px; margin-top: 12px; cursor: pointer; font-size: 15px; color: var(--text-primary); }
@@ -583,10 +589,18 @@ input[type="range"]::-moz-range-thumb {
 .segmented button svg { flex: 0 0 auto; }
 .segmented button.active { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
 
+/* Icon-only variant (theme selector in the Settings header): compact, not
+   full-width, square buttons — the Sun/Moon/Monitor glyphs are self-explanatory. */
+.segmented-icons { flex: 0 0 auto; gap: 3px; padding: 3px; }
+.segmented-icons button { flex: 0 0 auto; width: 38px; min-height: 34px; gap: 0; }
+
 /* Device-icon picker cells — 3 across (was 2) so the category / binary-sensor /
    sensor icon lists need far less vertical scrolling. The wider settings modal
-   (below) gives each cell room. Collapses to 2 across on narrow screens. */
-.icon-select { display: flex; align-items: center; gap: 8px; width: calc(33.333% - 7px); }
+   (below) gives each cell room. Collapses to 2 across on narrow screens.
+   A comfortable gap keeps the emoji chip clearly separated from its label. */
+.icon-select { display: flex; align-items: center; gap: 12px; width: calc(33.333% - 7px); }
+.icon-select > input { flex: 0 0 auto; }
+.icon-select > span { min-width: 0; }
 @media (max-width: 560px) { .icon-select { width: calc(50% - 5px); } }
 
 /* Villa Latitude/Longitude pair in the Config Editor. */
@@ -603,7 +617,10 @@ input[type="range"]::-moz-range-thumb {
 }
 .info-tip > .info-btn:hover { color: var(--accent); }
 .info-tip .info-pop {
-  position: absolute; z-index: 80; top: calc(100% + 8px); right: 0;
+  /* Open UPWARD (the (i) sits low in the model-source section, near the modal
+     footer) so the popover stays inside the scrollable body instead of being
+     clipped by it / hidden behind the footer. z-index above the footer. */
+  position: absolute; z-index: 90; bottom: calc(100% + 8px); right: 0;
   width: min(340px, 78vw); padding: 12px 14px;
   background: var(--bg-overlay); backdrop-filter: blur(12px);
   border: 1px solid var(--hairline-strong); border-radius: 12px;
@@ -614,7 +631,7 @@ input[type="range"]::-moz-range-thumb {
   text-align: left; white-space: normal;
 }
 .info-tip:hover .info-pop,
-.info-tip:focus-within .info-pop { opacity: 1; visibility: visible; transform: translateY(0); }
+.info-tip:focus-within .info-pop { opacity: 1; visibility: visible; transform: translateY(4px); }
 .info-pop .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
 .info-pop .row span:first-child { color: var(--text-dim); flex: 0 0 auto; }
 .info-pop .row span:last-child { color: var(--text-primary); word-break: break-all; text-align: right; }
@@ -677,11 +694,49 @@ label.toggle input[type="checkbox"]:checked::after {
 }
 label.toggle span { user-select: none; line-height: 1.4; }
 
-/* --- Config editor table --- */
-.config-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.config-table th { text-align: left; color: var(--text-secondary); font-weight: 500; padding: 8px; font-size: 12px; text-transform: uppercase; }
-.config-table td { padding: 6px 8px; border-top: 1px solid var(--hairline); }
-.config-table input:not([type="checkbox"]), .config-table select { width: 100%; padding: 8px; border-radius: 8px; background: var(--bg-input); color: var(--text-primary); border: none; }
+/* --- Config editor table → ALWAYS stacked cards (every width) ---
+   The editor lives in a modal now, and a real HTML table of 6 columns × N
+   entities is unreadable on desktop (cramped, wrapping mid-word). One card per
+   entity, each cell labelled by its column via data-label, reads cleanly at
+   any width — the same layout mobile always used. */
+.config-table { width: 100%; font-size: 14px; }
+.config-table thead { display: none; }
+.config-table, .config-table tbody, .config-table tr, .config-table td { display: block; width: 100%; }
+.config-table tr {
+  border: 1px solid var(--hairline-strong); border-radius: 12px;
+  margin-bottom: 12px; padding: 8px 14px; background: var(--bg-card);
+}
+.config-table td {
+  display: flex; align-items: center; gap: 12px; border-top: none; padding: 7px 0;
+}
+.config-table td::before {
+  content: attr(data-label);
+  flex: 0 0 108px; color: var(--text-secondary);
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; text-align: left;
+}
+.config-table td[data-label=""]::before { content: none; }
+.config-table td[data-label=""] { justify-content: flex-end; }
+.config-table td.center { justify-content: flex-start; }
+/* Entity ID is the card header: full-width id text + edit/delete pinned right. */
+.config-table td[data-label="Entity ID"] { padding-top: 4px; }
+.config-table td[data-label="Entity ID"]::before { flex-basis: auto; align-self: center; }
+.config-table input:not([type="checkbox"]), .config-table select {
+  flex: 1 1 auto; min-width: 0; padding: 8px; border-radius: 8px;
+  background: var(--bg-input); color: var(--text-primary); border: none;
+}
+
+/* Config Editor entity filter box. */
+.config-search {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  padding: 0 12px; border-radius: 10px; background: var(--bg-input);
+  border: 1px solid var(--hairline);
+}
+.config-search svg { flex: 0 0 auto; color: var(--text-dim); }
+.config-search input {
+  flex: 1 1 auto; min-width: 0; border: none; background: transparent;
+  padding: 10px 0; color: var(--text-primary); font-size: 14px;
+}
+.config-search input:focus { outline: none; }
 
 /* Entity ID cell: id text on the left, action icons (edit + delete) pinned right
    so every card lines up identically. */
@@ -819,14 +874,16 @@ label.toggle span { user-select: none; line-height: 1.4; }
      height as the mobile URL bar shows/hides. */
   .modal-backdrop {
     padding: 0;
-    align-items: stretch;
+    /* Top-anchor (not stretch): the modal is content-height up to the full
+       screen, so a short Settings view no longer leaves a big blank gap above
+       its footer. */
+    align-items: flex-start;
     justify-content: stretch;
   }
   .modal {
     max-width: 100%;
     width: 100%;
     max-height: 100dvh;
-    height: 100dvh;
     border-radius: 0;
     border: none;
     /* Inset content from the notch / home indicator. */
@@ -834,10 +891,13 @@ label.toggle span { user-select: none; line-height: 1.4; }
   }
   .settings-header { padding: 16px 18px 12px; }
   .settings-body { padding: 8px 18px 12px; }
+  /* Keep the footer on one line — Config Editor left, Cancel/Save right — like
+     desktop, instead of wrapping. */
   .settings-footer {
     padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
+  .settings-footer .btn { padding-left: 12px; padding-right: 12px; }
   /* Plain (non-settings) modals scroll their own content on tiny screens. */
   .modal:not(.settings-modal) {
     overflow-y: auto;
@@ -845,54 +905,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
              calc(20px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Config table → stacked cards (no horizontal scroll on a phone). Each row
-     becomes a card; each cell shows its column name via the data-label. */
-  .config-table thead { display: none; }
-  .config-table,
-  .config-table tbody,
-  .config-table tr,
-  .config-table td {
-    display: block;
-    width: 100%;
-  }
-  .config-table tr {
-    border: 1px solid var(--hairline-strong);
-    border-radius: 12px;
-    margin-bottom: 12px;
-    padding: 6px 12px;
-    background: var(--bg-card);
-  }
-  .config-table td {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    border-top: none;
-    padding: 7px 0;
-  }
-  .config-table td::before {
-    content: attr(data-label);
-    flex: 0 0 84px;
-    color: var(--text-secondary);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    /* The Confirm cell carries .center (text-align:center) for its checkbox; without
-       this the "CONFIRM" gutter label would centre in its 84px column while TYPE/LABEL/
-       ROOM sit left. Pin all gutter labels left so they align. */
-    text-align: left;
-  }
-  /* Cells with no label (the delete button) shouldn't reserve the label gutter. */
-  .config-table td[data-label=""]::before { content: none; }
-  .config-table td[data-label=""] { justify-content: flex-end; }
-  .config-table td.center { justify-content: flex-start; }
-
-  /* Entity ID is the card header: drop the inline "ENTITY ID" gutter and let the
-     id text + action icons (edit/delete) span the full width, icons pinned right. */
-  .config-table td[data-label="Entity ID"] { padding-top: 4px; }
-  .config-table td[data-label="Entity ID"]::before {
-    flex-basis: auto;
-    align-self: center;
-  }
+  /* (Config table is card-styled at all widths now — see the base rules.) */
 
   /* Config Editor full-page header: keep Back + title on one tidy line. */
   .config-topbar { gap: 10px; }

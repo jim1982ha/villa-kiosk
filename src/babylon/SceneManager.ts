@@ -68,6 +68,10 @@ export class SceneManager {
 
   private config: AppConfig;
   private hemi: HemisphericLight;
+  /** True on iOS Safari / the HA companion WKWebView — used to strip the
+   *  memory-hungry render targets (SSAO/IBL/sun shadows) that overrun iOS's
+   *  low WebGL memory ceiling and crash-loop the loader (see the constructor). */
+  private isIOS = false;
   private ready = false;
   private readyCallbacks = new Set<() => void>();
   private calibrateCallbacks = new Set<() => void>();
@@ -85,13 +89,34 @@ export class SceneManager {
   constructor(canvas: HTMLCanvasElement, opts: SceneManagerOptions) {
     this.config = opts.config;
 
-    this.engine = new Engine(canvas, true, {
+    // iOS Safari / the HA companion app's WKWebView enforces a hard, low ceiling
+    // on total WebGL memory (framebuffers + render targets + geometry). The
+    // villa's decoded geometry is already tens of MB; on top of that a DPR-3
+    // iPhone rendered here at 2× supersampling (hardwareScaling 0.5) with 4×
+    // MSAA and every post-process render target, which overran that ceiling —
+    // iOS then kills the web content and the app reloads the page, looping
+    // forever on the "Loading the villa" spinner (reported: fine on desktop +
+    // Android, crash-loops only on iPhone; smaller BAKE sizes don't help
+    // because bake size only shrinks the light atlas, not the geometry or the
+    // framebuffer). So on iOS: no MSAA, default power preference (high-
+    // performance can make WKWebView refuse or drop the context), and render at
+    // ~device-native resolution instead of 2× — a big cut in GPU memory that
+    // keeps it under the ceiling. Non-iOS is unchanged.
+    const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    this.isIOS = isIOS;
+    this.engine = new Engine(canvas, !isIOS, {
       preserveDrawingBuffer: false,
       stencil: true,
-      antialias: true,
-      powerPreference: "high-performance",
+      antialias: !isIOS,
+      powerPreference: isIOS ? "default" : "high-performance",
     });
-    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 2));
+    // iOS: render at ≈CSS resolution or below (hardwareScaling ≥ 1) — a
+    // DPR-3 phone drops to ~0.67× CSS, ~1/9th the drawing-buffer memory of the
+    // non-iOS 2× supersample. Elsewhere keep the crisp up-to-2× supersampling.
+    this.engine.setHardwareScalingLevel(
+      isIOS ? Math.max(1, window.devicePixelRatio / 2)
+            : 1 / Math.min(window.devicePixelRatio, 2));
 
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0.7, 0.85, 1.0, 1);
@@ -187,7 +212,7 @@ export class SceneManager {
     // Created after both cameras exist so SSAO can attach to all of them; the
     // initial apply() pushes config.render onto the freshly-built scene.
     this.renderFx = new RenderEnhancements(this.scene, this.lighting.sunLight);
-    this.renderFx.apply(opts.config.render);
+    this.renderFx.apply(this.deviceRenderConfig(opts.config.render));
     // renderFx.apply() sets the *base* IBL intensity and builds the env texture.
     // Re-run the sun pass now so SunController gets the final word on the values
     // it owns (fill light + day/night-scaled IBL) with the texture in place.
@@ -397,6 +422,15 @@ export class SceneManager {
     meshes.forEach((m) => m.computeWorldMatrix(true));
     const set = new Set(meshes);
     return this.scene.getWorldExtends((m) => set.has(m));
+  }
+
+  /** On iOS, strip the full-screen / float render targets (SSAO, IBL env,
+   *  sun shadows) from a render config before applying it — they're the
+   *  heaviest WebGL-memory consumers and the ones WKWebView is least able to
+   *  afford. Glow, tone mapping and exposure stay. A no-op elsewhere. */
+  private deviceRenderConfig(render: RenderConfig): RenderConfig {
+    if (!this.isIOS) return render;
+    return { ...render, ssao: false, ibl: false, shadows: false };
   }
 
   /**
@@ -980,7 +1014,7 @@ export class SceneManager {
    */
   setRenderConfig(render: RenderConfig): void {
     this.config = { ...this.config, render };
-    this.renderFx.apply(render);
+    this.renderFx.apply(this.deviceRenderConfig(render));
     this.sun.updateConfig(this.config);
     this.requestRender();
   }
@@ -1027,7 +1061,7 @@ export class SceneManager {
     // IBL scaling it owns. Same ordering as setRenderConfig() — keeping the two
     // call sites consistent is what stops the night fill from flickering.
     if (renderChanged) {
-      this.renderFx.apply(config.render);
+      this.renderFx.apply(this.deviceRenderConfig(config.render));
       this.sun.updateConfig(config);
     }
     // Theme flip while already in overview: re-pin the backdrop to match.

@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.9.13
+
+### Settings & Config Editor polish, plus an iPhone load-crash fix
+
+- **iPhone load crash fixed.** On iOS the villa could crash-loop on the
+  "Loading the villa" spinner (fine on desktop + Android). The WebGL engine now
+  runs iOS-aware — no MSAA, default power preference, render at ~device
+  resolution instead of 2× supersampling, and the heavy SSAO/IBL/shadow render
+  targets are dropped — keeping GPU memory under iOS WKWebView's hard ceiling.
+- **Config Editor** now shows entity **cards on desktop too** (the cramped
+  table is gone), with a **search box** to filter the long entity list.
+- **Settings modal**: theme selector moved into the header as icon-only buttons
+  (right-aligned); Eye height + Walk speed moved below the icons and onto one
+  line; Glow strength + Night dimming share a line; the modal is 50% wider on
+  desktop; the device-icon grid has proper spacing; redundant descriptions and
+  the trailing blank space were removed; the model-details tooltip opens upward
+  so it's no longer clipped.
+- On **mobile**, the Settings footer keeps Config Editor left + Cancel/Save
+  right on one line (no wrap).
+- New default look: **Night dimming 0.5**, **Glow strength 0.8**.
+
 ## 2.9.12
 
 ### Config Editor as a modal, floor-correct highlights, working night dimming, and pipeline v2.7.8

@@ -5,7 +5,7 @@
 // appear (with inline settings) in the Bound 3D objects section below.
 
 import { useMemo, useState } from "react";
-import { Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { createDefaultMapping } from "@/config/EntityMap";
@@ -23,6 +23,7 @@ export default function ConfigEditor() {
   const { config, update } = useConfig();
   const { entities } = useHA();
   const [newId, setNewId] = useState<string | undefined>(undefined);
+  const [search, setSearch] = useState("");
   // Remap: which row's entity ID is currently being edited, and what new ID was picked.
   const [remapKey, setRemapKey] = useState<string | null>(null);
   const [remapNewId, setRemapNewId] = useState<string | undefined>(undefined);
@@ -32,10 +33,19 @@ export default function ConfigEditor() {
     () => new Set(Object.values(config.meshBindings)),
     [config.meshBindings],
   );
-  const entries = useMemo(
+  const allEntries = useMemo(
     () => Object.entries(config.entityMap).filter(([key]) => !boundEntityIds.has(key)),
     [config.entityMap, boundEntityIds],
   );
+  // Live filter by entity id, label or room — the auto-detected list is long.
+  const entries = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allEntries;
+    return allEntries.filter(([key, m]) =>
+      key.toLowerCase().includes(q)
+      || (m.label ?? "").toLowerCase().includes(q)
+      || (m.room ?? "").toLowerCase().includes(q));
+  }, [allEntries, search]);
 
   // The "Room" field is matched EXACTLY (case/whitespace aside) against a real
   // room's name by RoomHighlight. Offer the real rooms as a proper dropdown so
@@ -93,18 +103,35 @@ export default function ConfigEditor() {
 
   return (
     <div>
-      <p className="muted body-text" style={{ marginBottom: 16 }}>
+      <p className="muted body-text" style={{ marginBottom: 12 }}>
         Entities listed here are auto-detected because their 3D object in the
         model is already named with the entity ID (e.g.{" "}
         <code style={{ fontSize: 11 }}>camera.patio_1f_cam</code>). Edit the
         display name, room or panel type without reloading the model.
       </p>
 
-      {entries.length === 0 && (
+      {allEntries.length > 0 && (
+        <div className="config-search">
+          <Search size={16} />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter by entity ID, label or room…"
+            aria-label="Filter entities"
+          />
+        </div>
+      )}
+
+      {allEntries.length === 0 && (
         <p className="muted body-text mt">
           No auto-detected entities yet. Upload a GLB whose objects are named
           after HA entity IDs, or pre-configure one below.
         </p>
+      )}
+
+      {allEntries.length > 0 && entries.length === 0 && (
+        <p className="muted body-text mt">No entities match “{search}”.</p>
       )}
 
       {entries.length > 0 && (
