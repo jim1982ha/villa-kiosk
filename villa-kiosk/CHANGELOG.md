@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.12.1
+
+- **Blue "clickable" highlights are now contextual to the active floor.** The 2F
+  view keeps the 1F shell and its fixtures rendered underneath (cumulative
+  floors), so the ground-floor devices stayed outlined while you were on the 2nd
+  floor (and the outline set was only ever computed once, at load). The outlines
+  now match the entity badges — only the active storey's devices glow — and they
+  recompute on every floor change (Rooms dial, stairs, or first-person).
+
 ## 2.12.0
 
 First-person navigation UX pass — three fixes:

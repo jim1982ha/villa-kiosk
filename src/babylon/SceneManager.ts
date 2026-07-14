@@ -181,6 +181,9 @@ export class SceneManager {
     this.floors = new FloorManager(this.scene, (floor) => {
       opts.onFloorChange(floor);
       this.visuals.setActiveFloor(floor);
+      // Re-scope the blue "clickable" outlines to the newly-active floor (they're
+      // set once at load; without this the 1F glows persist while you're on 2F).
+      if (this.loadedMeshes.length) this.applyHighlight(this.loadedMeshes);
       this.requestRender();
     });
     this.floors.setCamera(this.camera);
@@ -1098,8 +1101,18 @@ export class SceneManager {
 
     const blue = new Color3(0.25, 0.55, 1.0);
     const targetWorldWidth = 0.04; // metres — outline rim, sized for close-up views
+    const activeFloor = this.floors.getCurrentFloor();
     for (const m of meshes) {
       if (!m.isEnabled() || !m.isVisible) continue;
+      // Blue "clickable" outlines must be contextual to the ACTIVE floor only.
+      // The 2F view keeps the 1F shell + fixtures rendered underneath (cumulative
+      // floors), so isEnabled/isVisible alone would keep 1F devices glowing while
+      // you're on 2F (and vice-versa). Match the badge culler: show only the
+      // active storey's fixtures. floorIndex is stamped by FloorManager on the
+      // entity mesh (or its parent when the mesh is a split primitive).
+      const floorIdx = (m.metadata as { floorIndex?: number } | null)?.floorIndex
+        ?? (m.parent?.metadata as { floorIndex?: number } | null)?.floorIndex;
+      if (floorIdx !== undefined && floorIdx !== activeFloor) continue;
       const mapping = resolveMeshToMapping(
         m.name, this.config.entityMap, this.config.meshBindings, this.config.deniedTypes,
       );
