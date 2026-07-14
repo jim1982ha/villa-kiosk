@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.9.15
+
+### Room dial reworked into the floor+room navigator
+
+- **The Rooms dial replaces the 1F/2F buttons.** It sits vertically centred on
+  the left edge (new compass icon). Tap it for the full Rooms list as before;
+  long-press for the radial dial — its semicircle now fans out symmetrically
+  over the whole height and never clips off the top. Slide onto a floor and
+  **release to switch to that whole floor** (what the old 1F/2F buttons did), or
+  dwell to reveal its rooms and release on one to zoom there.
+- **Fixed the dial getting stuck open** after the first selection — releasing
+  now always closes it (and commits) no matter where the finger lifts, so you
+  can keep picking rooms.
+- Tightened the 1F/2F spacing and widened the room arc so labels no longer
+  overlap.
+- **Config Editor now matches the Settings modal width** (both 780px on
+  desktop).
+
 ## 2.9.14
 
 ### Room quick-dial, plus Settings/Config Editor fixes

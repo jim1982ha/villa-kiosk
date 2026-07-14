@@ -353,10 +353,19 @@ button {
 .floor-switch-v button.active { background: var(--accent); color: var(--text-on-accent); }
 .floor-switch-v button:disabled { opacity: 0.35; }
 
+/* Rooms dial button — vertically centred on the left edge so its long-press
+   radial fans out symmetrically over the full height. */
+.rooms-dial-btn {
+  position: absolute; z-index: 21; pointer-events: auto;
+  left: calc(14px + env(safe-area-inset-left, 0px));
+  top: 50%; transform: translateY(-50%);
+}
+
 /* Long-press "marking menu" for the Rooms button: floating chips on arcs to the
-   right of the button. Non-interactive overlay — the button's captured pointer
-   drives the selection; these chips are purely visual (see RadialRoomMenu). */
-.radial-room-menu { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+   right of the button. Non-interactive overlay — the button's pointer drives
+   the selection; these chips are purely visual (see RadialRoomMenu). A faint
+   scrim behind them focuses attention and reads as "modal". */
+.radial-room-menu { position: fixed; inset: 0; z-index: 60; pointer-events: none; background: var(--scrim); backdrop-filter: blur(1px); }
 .radial-item {
   position: fixed; transform: translate(-50%, -50%);
   display: flex; align-items: center; justify-content: center;
@@ -579,7 +588,7 @@ input[type="range"]::-moz-range-thumb {
 .settings-modal { max-width: 780px; }
 /* The Config Editor holds full-width entity/binding cards — give it the most
    room the viewport allows. */
-.config-editor-modal { max-width: 960px; }
+.config-editor-modal { max-width: 780px; }
 .config-editor-modal .config-topbar { display: flex; align-items: center; gap: 16px; }
 .config-editor-modal .config-topbar h2 { margin: 0; }
 /* Header is a row: title left, the icon-only theme selector right. */
@@ -863,7 +872,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
      win — without them the desktop rule above clamped the (wider) Settings and
      Config Editor modals back to 560. */
   .settings-modal { max-width: 780px; }
-  .config-editor-modal { max-width: 960px; }
+  .config-editor-modal { max-width: 780px; }
   .teleport-grid .tp-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
   .hud-topbar { padding-left: calc(24px + env(safe-area-inset-left, 0px)); padding-right: calc(24px + env(safe-area-inset-right, 0px)); }
 }

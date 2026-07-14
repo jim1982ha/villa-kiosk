@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
-  Home, Grid3x3, Settings, Map,
+  Home, Compass, Settings, Map,
   PersonStanding, Sparkles, Tag, Info, Anchor, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
   EllipsisVertical,
@@ -79,7 +79,7 @@ function useClock(): string {
 }
 
 export default function HUD({
-  currentFloor, floorsAvailable, onSwitchFloor, onOpenTeleport, onNavigateRoom,
+  floorsAvailable, onSwitchFloor, onOpenTeleport, onNavigateRoom,
   onOpenSettings, canOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
@@ -92,47 +92,69 @@ export default function HUD({
   const floors = [1, 2];
   const [hintOpen, setHintOpen] = useState(false);
 
-  // ── Rooms button: single tap = full Rooms list (unchanged); long-press =
-  // radial marking menu (floors → dwell to expand rooms → release on a room to
-  // zoom there). See RadialRoomMenu + the gesture handlers below. ────────────
-  const roomsBtnRef = useRef<HTMLButtonElement>(null);
-  const [radial, setRadial] = useState<{
+  // ── Rooms dial: single tap = full Rooms list (unchanged); long-press = a
+  // radial marking menu. Floors fan out on an inner arc; slide/dwell onto a
+  // floor to reveal its rooms on an outer arc; RELEASE on a floor switches to
+  // that whole floor (replacing the old 1F/2F buttons), release on a room zooms
+  // there. See RadialRoomMenu. The gesture uses window-level pointer listeners
+  // (not pointer capture / button handlers) so the release is ALWAYS delivered
+  // even when it lands on a chip — the earlier capture-only version could miss
+  // it and leave the menu stuck open. ───────────────────────────────────────
+  type RadialState = {
     cx: number; cy: number;
     activeFloor: number | null;
     hover: { kind: "floor"; floor: number } | { kind: "room"; name: string } | null;
-  } | null>(null);
+  };
+  const roomsBtnRef = useRef<HTMLButtonElement>(null);
+  const [radial, setRadial] = useState<RadialState | null>(null);
+  // Ref mirror so the window listeners always hit-test against the live state.
+  const radialRef = useRef<RadialState | null>(null);
+  const setRadialState = (
+    v: RadialState | null | ((p: RadialState | null) => RadialState | null),
+  ) => {
+    const next = typeof v === "function"
+      ? (v as (p: RadialState | null) => RadialState | null)(radialRef.current)
+      : v;
+    radialRef.current = next;
+    setRadial(next);
+  };
   const gest = useRef<{
     longTimer: ReturnType<typeof setTimeout> | null; longFired: boolean;
     dwellTimer: ReturnType<typeof setTimeout> | null; dwellFloor: number | null;
-  }>({ longTimer: null, longFired: false, dwellTimer: null, dwellFloor: null });
+    move: ((e: PointerEvent) => void) | null; up: ((e: PointerEvent) => void) | null;
+  }>({ longTimer: null, longFired: false, dwellTimer: null, dwellFloor: null, move: null, up: null });
 
   const availFloors = floors.filter((f) => floorsAvailable.includes(f));
+  const FLOOR_R = 76;   // inner arc radius (floors)
+  const ROOM_R = 152;   // outer arc radius (rooms)
 
-  // Lay floors on an inner arc and (when one is expanded) its rooms on an outer
-  // arc, both in the right-hand semicircle beside the button. Pure function of
-  // the radial state — used BOTH to render (RadialRoomMenu) and to hit-test the
-  // finger, so the two can never disagree.
-  const buildRadialItems = (r: NonNullable<typeof radial>): RadialItem[] => {
+  // Pure function of the radial state — used BOTH to render (RadialRoomMenu) and
+  // to hit-test the finger, so the two can never disagree.
+  const buildRadialItems = (r: RadialState): RadialItem[] => {
     const items: RadialItem[] = [];
     const cosd = (d: number) => Math.cos((d * Math.PI) / 180);
     const sind = (d: number) => Math.sin((d * Math.PI) / 180);
-    const arc = (i: number, n: number, a0: number, a1: number) =>
-      n <= 1 ? (a0 + a1) / 2 : a0 + (a1 - a0) * (i / (n - 1));
+    const arc = (i: number, n: number, half: number) =>
+      n <= 1 ? 0 : -half + (2 * half) * (i / (n - 1));
+    // Floors: a tight fan so 1F / 2F sit close together (not far apart).
     availFloors.forEach((f, i) => {
-      const a = arc(i, availFloors.length, -46, 46);
+      const a = arc(i, availFloors.length, 22);
       items.push({
         key: `f${f}`, label: `${f}F`, kind: "floor",
-        x: r.cx + 86 * cosd(a), y: r.cy + 86 * sind(a),
+        x: r.cx + FLOOR_R * cosd(a), y: r.cy + FLOOR_R * sind(a),
         active: r.activeFloor === f || (r.hover?.kind === "floor" && r.hover.floor === f),
       });
     });
     if (r.activeFloor != null) {
       const rooms = config.teleportPoints.filter((p) => (p.floor ?? 1) === r.activeFloor);
+      // Spread rooms ~14° apart, capped to a ±78° semicircle so they never wrap
+      // behind the button or off the top/bottom.
+      const half = rooms.length <= 1 ? 0 : Math.min(78, ((rooms.length - 1) * 14) / 2);
       rooms.forEach((p, i) => {
-        const a = arc(i, rooms.length, -88, 88);
+        const a = arc(i, rooms.length, half);
         items.push({
           key: `r${p.name}`, label: p.name, kind: "room",
-          x: r.cx + 168 * cosd(a), y: r.cy + 168 * sind(a),
+          x: r.cx + ROOM_R * cosd(a), y: r.cy + ROOM_R * sind(a),
           active: r.hover?.kind === "room" && r.hover.name === p.name,
         });
       });
@@ -144,14 +166,22 @@ export default function HUD({
     if (gest.current.longTimer) { clearTimeout(gest.current.longTimer); gest.current.longTimer = null; }
     if (gest.current.dwellTimer) { clearTimeout(gest.current.dwellTimer); gest.current.dwellTimer = null; }
   };
-  const closeRadial = () => { clearRadialTimers(); gest.current.dwellFloor = null; setRadial(null); };
+  const detachWindow = () => {
+    if (gest.current.move) window.removeEventListener("pointermove", gest.current.move);
+    if (gest.current.up) {
+      window.removeEventListener("pointerup", gest.current.up);
+      window.removeEventListener("pointercancel", gest.current.up);
+    }
+    gest.current.move = null; gest.current.up = null;
+  };
+  const closeRadial = () => { clearRadialTimers(); gest.current.dwellFloor = null; setRadialState(null); };
 
-  // Nearest chip to the finger within a comfortable hit radius, computed from
-  // the CURRENT radial state (so it matches exactly what's on screen).
-  const hitTest = (r: typeof radial, px: number, py: number): RadialItem | null => {
+  // Nearest chip to the finger within a comfortable hit radius, from live state.
+  const hitTest = (px: number, py: number): RadialItem | null => {
+    const r = radialRef.current;
     if (!r) return null;
     let best: RadialItem | null = null;
-    let bestD = 48;
+    let bestD = 46;
     for (const it of buildRadialItems(r)) {
       const d = Math.hypot(px - it.x, py - it.y);
       if (d < bestD) { bestD = d; best = it; }
@@ -159,26 +189,13 @@ export default function HUD({
     return best;
   };
 
-  const onRoomsPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (e.button !== undefined && e.button !== 0) return;
-    gest.current.longFired = false;
-    try { roomsBtnRef.current?.setPointerCapture(e.pointerId); } catch { /* older WebView */ }
-    clearRadialTimers();
-    gest.current.longTimer = setTimeout(() => {
-      gest.current.longFired = true;
-      const b = roomsBtnRef.current?.getBoundingClientRect();
-      if (!b) return;
-      setRadial({ cx: b.right + 6, cy: b.top + b.height / 2, activeFloor: null, hover: null });
-    }, 350);
-  };
-
-  const onRoomsPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (!gest.current.longFired || !radial) return;
-    const hit = hitTest(radial, e.clientX, e.clientY);
-    const hover = !hit ? null
+  const handleMove = (e: PointerEvent) => {
+    if (!gest.current.longFired || !radialRef.current) return;
+    const hit = hitTest(e.clientX, e.clientY);
+    const hover: RadialState["hover"] = !hit ? null
       : hit.kind === "floor"
-        ? { kind: "floor" as const, floor: Number(hit.key.slice(1)) }
-        : { kind: "room" as const, name: hit.label };
+        ? { kind: "floor", floor: Number(hit.key.slice(1)) }
+        : { kind: "room", name: hit.label };
     // Dwell on a floor → expand its rooms after a short beat.
     if (hover?.kind === "floor") {
       if (gest.current.dwellFloor !== hover.floor) {
@@ -186,21 +203,23 @@ export default function HUD({
         if (gest.current.dwellTimer) clearTimeout(gest.current.dwellTimer);
         const floor = hover.floor;
         gest.current.dwellTimer = setTimeout(
-          () => setRadial((p) => (p ? { ...p, activeFloor: floor } : p)), 280);
+          () => setRadialState((p) => (p ? { ...p, activeFloor: floor } : p)), 260);
       }
     } else {
       gest.current.dwellFloor = null;
       if (gest.current.dwellTimer) { clearTimeout(gest.current.dwellTimer); gest.current.dwellTimer = null; }
     }
-    setRadial((p) => (p ? { ...p, hover } : p));
+    setRadialState((p) => (p ? { ...p, hover } : p));
   };
 
-  const onRoomsPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+  const handleUp = (e: PointerEvent) => {
     clearRadialTimers();
-    try { roomsBtnRef.current?.releasePointerCapture(e.pointerId); } catch { /* */ }
+    detachWindow();
     if (gest.current.longFired) {
-      const hit = hitTest(radial, e.clientX, e.clientY); // release over a room → go there
-      if (hit?.kind === "room") {
+      const hit = hitTest(e.clientX, e.clientY);
+      if (hit?.kind === "floor") {
+        onSwitchFloor(Number(hit.key.slice(1))); // release on a floor → switch to it
+      } else if (hit?.kind === "room") {
         const point = config.teleportPoints.find((p) => p.name === hit.label);
         if (point) onNavigateRoom(point);
       }
@@ -210,7 +229,29 @@ export default function HUD({
     }
   };
 
-  const onRoomsPointerCancel = () => { if (gest.current.longFired) closeRadial(); };
+  const onRoomsPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    gest.current.longFired = false;
+    clearRadialTimers();
+    detachWindow();
+    gest.current.move = handleMove;
+    gest.current.up = handleUp;
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+    gest.current.longTimer = setTimeout(() => {
+      gest.current.longFired = true;
+      const b = roomsBtnRef.current?.getBoundingClientRect();
+      if (!b) return;
+      // Anchor beside the button; clamp the centre so the full outer arc always
+      // fits on screen (never clipped at the top/bottom — the button is already
+      // vertically centred, so this is usually a no-op).
+      const cx = b.right + 14;
+      const margin = ROOM_R + 44;
+      const cy = Math.max(margin, Math.min(window.innerHeight - margin, b.top + b.height / 2));
+      setRadialState({ cx, cy, activeFloor: null, hover: null });
+    }, 350);
+  };
 
   const radialItems = radial ? buildRadialItems(radial) : [];
   // Only the categories this profile may see get a filter button; the scene
@@ -443,36 +484,24 @@ export default function HUD({
         </div>
       </div>
 
-      {/* Left control column: floor switch (1F / 2F / Rooms), then the
-          display-toggle stack (highlight clickable objects, show labels). */}
-      <div className="hud-left-col">
-        <div className="floor-switch-v">
-          {floors.map((f) => (
-            <button
-              key={f}
-              className={f === currentFloor ? "active" : ""}
-              disabled={!floorsAvailable.includes(f)}
-              title={floorsAvailable.includes(f) ? `Floor ${f}` : "Coming soon"}
-              onClick={() => onSwitchFloor(f)}
-            >
-              {f}F
-            </button>
-          ))}
-          <button
-            ref={roomsBtnRef}
-            title="Rooms — tap for the list, long-press for the quick room dial"
-            aria-label="Rooms"
-            style={{ touchAction: "none" }}
-            onPointerDown={onRoomsPointerDown}
-            onPointerMove={onRoomsPointerMove}
-            onPointerUp={onRoomsPointerUp}
-            onPointerCancel={onRoomsPointerCancel}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            <Grid3x3 size={18} />
-          </button>
-        </div>
+      {/* Rooms dial — vertically centred on the left edge so its long-press
+          radial fans out symmetrically over the whole height. Tap = full Rooms
+          list; long-press = floor→room quick nav (also the floor switcher, so
+          the old 1F/2F buttons were removed). */}
+      <button
+        ref={roomsBtnRef}
+        className={`icon-btn rooms-dial-btn${radial ? " active" : ""}`}
+        title="Rooms — tap for the list, long-press for the quick floor/room dial"
+        aria-label="Rooms"
+        style={{ touchAction: "none" }}
+        onPointerDown={onRoomsPointerDown}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <Compass size={20} />
+      </button>
 
+      {/* Left display-toggle stack (highlight clickable objects, show labels). */}
+      <div className="hud-left-col">
         <div className="hud-stack">
           <button
             className={`icon-btn${config.highlightInteractive ? " active" : ""}`}
