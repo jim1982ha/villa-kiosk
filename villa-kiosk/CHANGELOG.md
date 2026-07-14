@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.9.21
+
+- **Two-finger tilt actually works now.** The previous attempt required both
+  fingers to move within a single event, but touch delivers one finger per
+  event — so a clean two-finger vertical drag produced no tilt (and its
+  per-event distance changes cancelled out, so nothing happened at all). Tilt
+  is now decided from how far each finger has drifted vertically since the
+  gesture started: both fingers moving the same way = tilt (with zoom
+  suppressed so it's a clean tilt), fingers moving apart/together = zoom.
+
 ## 2.9.20
 
 - Overview two-finger tilt now actually tilts (was still zooming). Tilt is

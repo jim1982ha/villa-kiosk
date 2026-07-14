@@ -205,10 +205,17 @@ export class OverviewController {
   // ── Pointer state ──────────────────────────────────────────────────────────
   private pointers = new Map<number, { x: number; y: number; type: string }>();
 
-  // Two-finger gesture snapshot — the two fingers' previous positions (updated
-  // incrementally on every pointermove). Per-finger (not just derived dist/
-  // centroid) so tilt can read the movement the fingers made TOGETHER.
-  private touchBase: { ax: number; ay: number; bx: number; by: number } | null = null;
+  // Two-finger gesture snapshot. `a*/b*` are the two fingers' positions from the
+  // PREVIOUS pointermove (for incremental zoom/rotate/tilt deltas); `start*` are
+  // their positions when the two-finger gesture began — used to classify the
+  // gesture (both fingers drifting the same way vertically = TILT; otherwise
+  // ZOOM). pointermove only ever carries ONE finger's new position, so we can't
+  // compare the two fingers' movement within a single event; the from-start
+  // displacements are what make the classification possible.
+  private touchBase: {
+    ax: number; ay: number; bx: number; by: number;
+    startAy: number; startBy: number;
+  } | null = null;
 
   // Tap detection (single brief press with minimal movement → entity pick).
   private readonly tap = new TapRecognizer();
@@ -291,7 +298,7 @@ export class OverviewController {
     const pts = [...this.pointers.values()];
     if (pts.length < 2) return;
     const [a, b] = pts;
-    this.touchBase = { ax: a.x, ay: a.y, bx: b.x, by: b.y };
+    this.touchBase = { ax: a.x, ay: a.y, bx: b.x, by: b.y, startAy: a.y, startBy: b.y };
   }
 
   private handleTwoFingerTouch(): void {
@@ -300,7 +307,7 @@ export class OverviewController {
     const [a, b] = pts;
 
     if (!this.touchBase) {
-      this.touchBase = { ax: a.x, ay: a.y, bx: b.x, by: b.y };
+      this.touchBase = { ax: a.x, ay: a.y, bx: b.x, by: b.y, startAy: a.y, startBy: b.y };
       return;
     }
 
@@ -312,14 +319,35 @@ export class OverviewController {
     const angle     = Math.atan2(b.y - a.y, b.x - a.x);
     const baseAngle = Math.atan2(base.by - base.ay, base.bx - base.ax);
 
-    // ── Rotation: incremental twist angle ─────────────────────────────────────
+    // ── Rotation: incremental twist angle (always) ────────────────────────────
     let dAngle = angle - baseAngle;
     if (dAngle >  Math.PI) dAngle -= 2 * Math.PI;
     if (dAngle < -Math.PI) dAngle += 2 * Math.PI;
     this.camera.alpha += dAngle;
 
-    // ── Zoom: ratio of finger distances (spread = zoom in = smaller radius) ────
-    if (baseDist > 1 && dist > 1) {
+    // ── Classify the gesture: TILT vs ZOOM ────────────────────────────────────
+    // Since one pointermove only carries one finger's motion, we classify from
+    // how far each finger has drifted VERTICALLY since the gesture began:
+    //  • both fingers drifted the SAME way (up or down) and that shared drift
+    //    outweighs how much their vertical separation changed → a two-finger
+    //    vertical DRAG → TILT (and zoom is suppressed so it doesn't creep in);
+    //  • otherwise (a pinch, a mostly-horizontal move, one finger still) → ZOOM.
+    const totalDyA = a.y - base.startAy;
+    const totalDyB = b.y - base.startBy;
+    const shared = (totalDyA > 0 && totalDyB > 0) ? Math.min(totalDyA, totalDyB)
+                 : (totalDyA < 0 && totalDyB < 0) ? Math.max(totalDyA, totalDyB)
+                 : 0;
+    const separationDrift = Math.abs(totalDyA - totalDyB);
+    const tiltMode = Math.abs(shared) > 6 && Math.abs(shared) >= separationDrift;
+
+    if (tiltMode) {
+      // Tilt from the centroid's incremental vertical move (its net travel over
+      // the whole drag equals the shared finger movement). Zoom is intentionally
+      // skipped this frame so a clean vertical drag reads as pure tilt.
+      const dCentY = (a.y + b.y) / 2 - (base.ay + base.by) / 2;
+      this.applyTilt(dCentY * TILT_SENS_TOUCH * s);
+    } else if (baseDist > 1 && dist > 1) {
+      // Zoom: ratio of finger distances (spread = zoom in = smaller radius).
       this.camera.radius = clamp(
         this.camera.radius * (baseDist / dist),
         this.camera.lowerRadiusLimit ?? 2,
@@ -327,22 +355,7 @@ export class OverviewController {
       );
     }
 
-    // ── Tilt: the vertical distance BOTH fingers travelled TOGETHER ───────────
-    // The map-app standard, and the clean way to keep tilt from fighting zoom:
-    // only the SHARED vertical movement tilts (both fingers moving the same way,
-    // taking the smaller of the two). So a two-finger vertical DRAG (fingers
-    // stay the same distance apart) tilts with no zoom, while a PINCH (fingers
-    // move opposite ways) or one stationary finger yields zero shared movement
-    // → no tilt, just zoom. They no longer contaminate each other.
-    const dyA = a.y - base.ay;
-    const dyB = b.y - base.by;
-    let commonDy = 0;
-    if (dyA > 0 && dyB > 0) commonDy = Math.min(dyA, dyB);       // both fingers down
-    else if (dyA < 0 && dyB < 0) commonDy = Math.max(dyA, dyB);  // both fingers up
-    if (commonDy !== 0) this.applyTilt(commonDy * TILT_SENS_TOUCH * s);
-
-    // Update the baseline incrementally (each pointermove applies a partial
-    // delta; together they sum to the full gesture change).
+    // Advance the incremental baseline (start* stays fixed for classification).
     base.ax = a.x; base.ay = a.y; base.bx = b.x; base.by = b.y;
   }
 
