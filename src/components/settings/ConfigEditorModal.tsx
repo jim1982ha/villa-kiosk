@@ -7,7 +7,6 @@
 // nothing to reload on the way out.
 
 import { useState } from "react";
-import { ArrowLeft } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
@@ -68,12 +67,7 @@ export default function ConfigEditorModal({ onBack }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="settings-header">
-          <div className="config-topbar">
-            <button className="btn ghost" onClick={onBack}>
-              <ArrowLeft size={18} /> Back to Settings
-            </button>
-            <h2>Config Editor</h2>
-          </div>
+          <h2>Config Editor</h2>
         </div>
 
         <div className="settings-body">

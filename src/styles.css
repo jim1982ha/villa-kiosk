@@ -353,6 +353,24 @@ button {
 .floor-switch-v button.active { background: var(--accent); color: var(--text-on-accent); }
 .floor-switch-v button:disabled { opacity: 0.35; }
 
+/* Long-press "marking menu" for the Rooms button: floating chips on arcs to the
+   right of the button. Non-interactive overlay — the button's captured pointer
+   drives the selection; these chips are purely visual (see RadialRoomMenu). */
+.radial-room-menu { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.radial-item {
+  position: fixed; transform: translate(-50%, -50%);
+  display: flex; align-items: center; justify-content: center;
+  padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+  font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
+  background: var(--bg-overlay); border: 1px solid var(--hairline-strong);
+  box-shadow: 0 6px 20px var(--shadow); backdrop-filter: blur(8px);
+  max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+  animation: radial-pop 0.12s ease-out;
+}
+.radial-item.radial-floor { min-width: 44px; height: 44px; padding: 0; font-size: 14px; font-weight: 700; border-radius: 50%; }
+.radial-item.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); transform: translate(-50%, -50%) scale(1.08); }
+@keyframes radial-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } }
+
 /* Left-side control column: floor switch, then the Room + Switch View stack,
    all aligned under the brand on the left edge. */
 .hud-left-col {
@@ -597,11 +615,14 @@ input[type="range"]::-moz-range-thumb {
 /* Device-icon picker cells — 3 across (was 2) so the category / binary-sensor /
    sensor icon lists need far less vertical scrolling. The wider settings modal
    (below) gives each cell room. Collapses to 2 across on narrow screens.
-   A comfortable gap keeps the emoji chip clearly separated from its label. */
-.icon-select { display: flex; align-items: center; gap: 12px; width: calc(33.333% - 7px); }
-.icon-select > input { flex: 0 0 auto; }
-.icon-select > span { min-width: 0; }
-@media (max-width: 560px) { .icon-select { width: calc(50% - 5px); } }
+   A comfortable gap keeps the emoji chip clearly separated from its label.
+   NOTE: scoped under .settings-body so it beats `.settings-body label`
+   (which otherwise forces display:block + a top margin on this <label>,
+   killing the flex gap — that was why the icon sat flush against its text). */
+.settings-body .icon-select { display: flex; align-items: center; gap: 12px; width: calc(33.333% - 7px); margin: 0; }
+.settings-body .icon-select > input { flex: 0 0 auto; }
+.settings-body .icon-select > span { min-width: 0; }
+@media (max-width: 560px) { .settings-body .icon-select { width: calc(50% - 5px); } }
 
 /* Villa Latitude/Longitude pair in the Config Editor. */
 .coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 460px; }
@@ -838,6 +859,11 @@ label.toggle span { user-select: none; line-height: 1.4; }
    column sits comfortably away from the edge. */
 @media (min-width: 1024px) {
   .modal { max-width: 560px; }
+  /* These come AFTER `.modal { max-width: 560px }` at equal specificity, so they
+     win — without them the desktop rule above clamped the (wider) Settings and
+     Config Editor modals back to 560. */
+  .settings-modal { max-width: 780px; }
+  .config-editor-modal { max-width: 960px; }
   .teleport-grid .tp-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
   .hud-topbar { padding-left: calc(24px + env(safe-area-inset-left, 0px)); padding-right: calc(24px + env(safe-area-inset-right, 0px)); }
 }

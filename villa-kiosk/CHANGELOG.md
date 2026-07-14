@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.9.14
+
+### Room quick-dial, plus Settings/Config Editor fixes
+
+- **New: long-press the Rooms button for a quick room dial.** A single tap still
+  opens the full Rooms list. Press and hold, and a radial menu fans out beside
+  the button: slide onto a floor (1F / 2F) to reveal its rooms, then release on
+  a room to jump straight there. (Falls back to the list on a plain tap, so
+  nothing you relied on changed.)
+- **Facility Manager can open Settings** again (was hidden) — with the same
+  appearance/comfort access as a guest; admin-only sections stay owner-only.
+- **Config Editor**: removed the redundant "Back to Settings" button (the Done
+  button already returns you there).
+- **Fixed the Settings modal not actually widening on desktop** and the
+  **device-icon labels sitting flush against their emoji** — both were CSS
+  specificity bugs where base rules overrode the new ones.
+
 ## 2.9.13
 
 ### Settings & Config Editor polish, plus an iPhone load-crash fix

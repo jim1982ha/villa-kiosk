@@ -263,6 +263,7 @@ export default function Dashboard() {
         floorsAvailable={floorsAvailable}
         onSwitchFloor={onFloorChange}
         onOpenTeleport={() => setTeleportOpen(true)}
+        onNavigateRoom={handleTeleport}
         onOpenSettings={() => { if (canOpenSettings) setSettingsOpen(true); }}
         canOpenSettings={canOpenSettings}
         onMove={(x, y) => manager?.camera.setMovement(x, y)}

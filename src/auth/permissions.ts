@@ -69,7 +69,10 @@ export const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
   ops: {
     allowedCategories: "all",
     deniedTypes: [],
-    capabilities: ["controlEntities"],
+    // Facility managers get Settings access (open + personal appearance/comfort
+    // tweaks), same as a guest — the admin-only sections (editConfig,
+    // manageModel) stay gated to the owner.
+    capabilities: ["controlEntities", "openSettings", "customizeAppearance"],
   },
 };
 
