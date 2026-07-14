@@ -424,13 +424,14 @@ export class SceneManager {
     return this.scene.getWorldExtends((m) => set.has(m));
   }
 
-  /** On iOS, strip the full-screen / float render targets (SSAO, IBL env,
-   *  sun shadows) from a render config before applying it — they're the
-   *  heaviest WebGL-memory consumers and the ones WKWebView is least able to
-   *  afford. Glow, tone mapping and exposure stay. A no-op elsewhere. */
+  /** On iOS, strip the extra render targets (SSAO, IBL env, sun shadows, and
+   *  the GlowLayer — which allocates blur textures AND re-renders emissive
+   *  meshes to a second target every frame) before applying a render config.
+   *  They're the heaviest WebGL-memory consumers and the ones WKWebView is
+   *  least able to afford. Tone mapping + exposure stay. A no-op elsewhere. */
   private deviceRenderConfig(render: RenderConfig): RenderConfig {
     if (!this.isIOS) return render;
-    return { ...render, ssao: false, ibl: false, shadows: false };
+    return { ...render, ssao: false, ibl: false, shadows: false, glow: false };
   }
 
   /**

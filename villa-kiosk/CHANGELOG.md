@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.9.16
+
+- iOS: also disable the GlowLayer (blur render targets + an extra per-frame
+  scene render) alongside SSAO/IBL/shadows, to shave more WebGL memory for
+  the iPhone crash-loop case.
+
 ## 2.9.15
 
 ### Room dial reworked into the floor+room navigator
