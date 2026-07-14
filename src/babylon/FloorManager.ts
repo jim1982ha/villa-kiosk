@@ -38,12 +38,19 @@ export class FloorManager {
   private onFloorChange: (floor: number) => void;
 
   private floorMeshes = new Map<number, AbstractMesh[]>();
+  /** World Y of each floor's slab (its meshes' lowest point) — the elevation you
+   *  stand on when on that storey. Used to pick the storey from the walker's
+   *  feet height when the GLB ships no stair-trigger meshes. */
+  private floorBaseY = new Map<number, number>();
   private alwaysOnMeshes: AbstractMesh[] = [];
   private triggerUp: AbstractMesh | null = null;
   private triggerDown: AbstractMesh | null = null;
   private currentFloor = 1;
   private floorsDetected: number[] = [1];
   private cooldownUntil = 0;
+  // Elevation-based floor switching only runs while walking (first-person). In
+  // overview the walker camera sits at a stale position and must not drive floors.
+  private firstPerson = false;
 
   constructor(scene: Scene, onFloorChange: (floor: number) => void) {
     this.onFloorChange = onFloorChange;
@@ -54,8 +61,14 @@ export class FloorManager {
     this.camera = camera;
   }
 
+  /** Toggle elevation-driven floor switching (on only in first-person walk). */
+  setFirstPerson(active: boolean): void {
+    this.firstPerson = active;
+  }
+
   indexFloors(meshes: AbstractMesh[]): void {
     this.floorMeshes.clear();
+    this.floorBaseY.clear();
     this.alwaysOnMeshes = [];
     for (const m of meshes) {
       if (/^trigger_stair_up/i.test(m.name)) {
@@ -102,6 +115,10 @@ export class FloorManager {
       const list = this.floorMeshes.get(floor) ?? [];
       list.push(m);
       this.floorMeshes.set(floor, list);
+      // Track the storey's slab elevation = the lowest point of its meshes.
+      const minY = m.getBoundingInfo().boundingBox.minimumWorld.y;
+      const prev = this.floorBaseY.get(floor);
+      if (prev === undefined || minY < prev) this.floorBaseY.set(floor, minY);
     }
     this.floorsDetected = [...this.floorMeshes.keys()].sort();
     if (this.floorsDetected.length === 0) this.floorsDetected = [1];
@@ -153,11 +170,41 @@ export class FloorManager {
     if (performance.now() < this.cooldownUntil) return;
     const pos = this.camera.getPosition();
 
+    // Explicit stair-trigger zones (if the GLB ships them) take priority.
     if (this.triggerUp && this.currentFloor === 1 && this.triggerUp.intersectsPoint(pos)) {
       this.switchToFloor(2);
-    } else if (this.triggerDown && this.currentFloor === 2 && this.triggerDown.intersectsPoint(pos)) {
-      this.switchToFloor(1);
+      return;
     }
+    if (this.triggerDown && this.currentFloor === 2 && this.triggerDown.intersectsPoint(pos)) {
+      this.switchToFloor(1);
+      return;
+    }
+
+    // Otherwise (the pipeline emits no trigger meshes) derive the storey from
+    // the walker's feet height: climbing the stairs raises the eye, and once the
+    // feet clear onto the upper slab we reveal that storey (and hide it again on
+    // the way down). Only while actually walking — see setFirstPerson.
+    if (this.firstPerson && !this.triggerUp && !this.triggerDown && this.floorsDetected.length > 1) {
+      const desired = this.floorFromElevation(this.camera.getFeetY());
+      if (desired !== this.currentFloor) this.switchToFloor(desired);
+    }
+  }
+
+  /**
+   * Highest storey whose slab the feet have reached. Hysteresis keeps the switch
+   * from chattering at the boundary: you must climb to within 0.3 m of the upper
+   * slab to go up, but drop a full 0.9 m below it to come back down.
+   */
+  private floorFromElevation(feetY: number): number {
+    let desired = this.floorsDetected[0];
+    for (const f of this.floorsDetected) {
+      const base = this.floorBaseY.get(f);
+      if (base === undefined) continue;
+      const goingUp = f > this.currentFloor;
+      const margin = goingUp ? 0.3 : 0.9; // climb close to switch up; drop well below to switch down
+      if (feetY >= base - margin) desired = f;
+    }
+    return desired;
   }
 
   /**

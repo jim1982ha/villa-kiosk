@@ -324,6 +324,7 @@ export class SceneManager {
       }
       this.overview.enable();
       this.scene.activeCamera = this.overview.camera;
+      this.floors.setFirstPerson(false); // walker camera is parked; don't let its Y drive floors
       // Bird's-eye floor plan reads best on a calm, neutral backdrop rather
       // than the bright daytime sky blue (which "crashes the eyes", day or
       // night). Hide the sky dome and pin a themed backdrop; lighting is untouched.
@@ -334,10 +335,15 @@ export class SceneManager {
       this.overview.disable();
       this.scene.activeCamera = this.camera.camera;
       this.camera.attachInput();
-      // Land on the real floor immediately — followFloor only corrects while
-      // walking, so without this you can re-enter first-person hovering at
-      // whatever height the camera was left at.
-      if (this.loadedMeshes.length) this.camera.groundCamera();
+      this.floors.setFirstPerson(true); // walking now — feet elevation drives the storey
+      // Land at the foot of the staircase on the ground floor, facing up the
+      // flight — a consistent, recognisable start for every walk-through
+      // (followFloor only corrects height while moving, so we ground on entry).
+      // Force floor 1 first so the spawn settles on the ground floor.
+      if (this.loadedMeshes.length) {
+        this.floors.switchToFloor(1);
+        this.camera.teleport(this.firstPersonSpawn(), true);
+      }
       // Restore the real sky for the immersive walk-through view.
       this.sky.setEnabled(true);
       this.sun.setBackgroundOverride(null);
@@ -348,6 +354,81 @@ export class SceneManager {
 
   getViewMode(): "first-person" | "overview" {
     return this.viewMode;
+  }
+
+  /** The default first-person landing pose: the foot of the staircase on the
+   *  ground floor, else the main/living room, else the first room, else origin. */
+  private firstPersonSpawn(): TeleportPoint {
+    const eye = this.config.eyeHeight ?? 1.7;
+    return (
+      this.staircaseSpawn() ??
+      this.calibratedPoints?.find((p) => /main|living/i.test(p.name)) ??
+      this.calibratedPoints?.[0] ??
+      { name: "Start", floor: 1, position: { x: 0, y: eye, z: 0 }, target: { x: 0, y: 1.6, z: 2 } }
+    );
+  }
+
+  /**
+   * A spawn at the FOOT of the staircase on the ground floor, facing up the
+   * flight. Preference: a room the plan names as a staircase (any language);
+   * otherwise derived from the stair geometry (meshes tagged `isStair` by the
+   * structure pass); otherwise null so the caller falls back to a room spawn.
+   */
+  private staircaseSpawn(): TeleportPoint | null {
+    const eye = this.config.eyeHeight ?? 1.7;
+
+    // 1. A named staircase room from the plan is the cleanest anchor.
+    const named = this.calibratedPoints?.find((p) =>
+      /stair|escalier|escalera|scala|treppe|stufe|trap\b/i.test(p.name));
+    if (named) return { ...named, floor: 1 };
+
+    // 2. Derive from the stair geometry: the combined world AABB of every mesh
+    //    the structure pass tagged as stairs.
+    const stairs = this.loadedMeshes.filter(
+      (m) => m.metadata?.isStair === true && m.getTotalVertices() > 0);
+    if (!stairs.length) return null;
+    let min = new Vector3(Infinity, Infinity, Infinity);
+    let max = new Vector3(-Infinity, -Infinity, -Infinity);
+    for (const m of stairs) {
+      m.computeWorldMatrix(true);
+      const bb = m.getBoundingInfo().boundingBox;
+      min = Vector3.Minimize(min, bb.minimumWorld);
+      max = Vector3.Maximize(max, bb.maximumWorld);
+    }
+    // Ascent runs along the longer horizontal axis; width along the shorter.
+    const alongX = max.x - min.x >= max.z - min.z;
+    const crossC = alongX ? (min.z + max.z) / 2 : (min.x + max.x) / 2;
+    const loEnd = alongX ? min.x : min.z;
+    const hiEnd = alongX ? max.x : max.z;
+    const span = hiEnd - loEnd || 1;
+    // The bottom is the end whose stair SURFACE sits lower — sample both ends.
+    const surfaceY = (along: number): number => {
+      const ox = alongX ? along : crossC;
+      const oz = alongX ? crossC : along;
+      const hit = this.scene.pickWithRay(
+        new Ray(new Vector3(ox, max.y + 2, oz), new Vector3(0, -1, 0), max.y - min.y + 4),
+        (mm) => mm.metadata?.isStair === true);
+      return hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : Infinity;
+    };
+    const loY = surfaceY(loEnd + span * 0.1);
+    const hiY = surfaceY(hiEnd - span * 0.1);
+    const bottom = loY <= hiY ? loEnd : hiEnd;
+    const dir = Math.sign((loY <= hiY ? hiEnd : loEnd) - bottom) || 1; // toward the top
+    // Stand ~1.2 m before the lowest step, at ground-floor eye height, looking up.
+    const standAlong = bottom - dir * 1.2;
+    const px = alongX ? standAlong : crossC;
+    const pz = alongX ? crossC : standAlong;
+    const tAlong = standAlong + dir * 3;
+    return {
+      name: "Staircase",
+      floor: 1,
+      position: { x: px, y: min.y + eye, z: pz },
+      target: {
+        x: alongX ? tAlong : crossC,
+        y: min.y + eye + 0.3,
+        z: alongX ? crossC : tAlong,
+      },
+    };
   }
 
   /** Flip to the other view mode; returns the mode now active. */
@@ -595,14 +676,11 @@ export class SceneManager {
     // anchors / teleport points correctly for THIS model.
     this.calibrateRooms(result.meshes);
 
-    // Spawn INSIDE a real room (the main/living room if we have it). Falls back to
-    // the model centre. This matters for models with big outdoor areas, where the
-    // bounding-box centre would land you outside on the garden.
-    const spawn =
-      this.calibratedPoints?.find((p) => /main|living/i.test(p.name)) ??
-      this.calibratedPoints?.[0] ??
-      { name: "Start", floor: 1 as const, position: { x: 0, y: this.config.eyeHeight, z: 0 }, target: { x: 0, y: 1.6, z: 2 } };
-    this.camera.teleport(spawn, true);
+    // Spawn at the default first-person pose (foot of the staircase on the
+    // ground floor, else the main/living room). Keeps you inside the house even
+    // for models with big outdoor areas, where the bounding-box centre would land
+    // you outside on the garden.
+    this.camera.teleport(this.firstPersonSpawn(), true);
 
     this.markReady();
     this.requestRender(1000);
@@ -1097,13 +1175,8 @@ export class SceneManager {
         this.calibrateRooms(this.loadedMeshes);
         // On bulk auto-detection (many entities added at once) the initial
         // spawn was computed from the old, sparse entityMap and is likely
-        // wrong.  Re-teleport to the corrected living-room position now.
-        if (entityDelta >= 5) {
-          const spawn =
-            this.calibratedPoints?.find((p) => /main|living/i.test(p.name)) ??
-            this.calibratedPoints?.[0];
-          if (spawn) this.camera.teleport(spawn, true);
-        }
+        // wrong. Re-teleport to the corrected default (staircase) position now.
+        if (entityDelta >= 5) this.camera.teleport(this.firstPersonSpawn(), true);
       }
     }
 

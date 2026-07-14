@@ -680,6 +680,18 @@ export class CameraController {
     return this.camera.position;
   }
 
+  /** Current standing (eye) height above the floor. */
+  getEyeHeight(): number {
+    return this.eyeHeight;
+  }
+
+  /** World Y of the camera's FEET (floor it's standing on) — eye minus height.
+   *  Lets the FloorManager derive which storey the walker is on from elevation
+   *  when the GLB has no explicit stair-trigger meshes. */
+  getFeetY(): number {
+    return this.camera.position.y - this.eyeHeight;
+  }
+
   updateConfig(config: AppConfig): void {
     this.config = config;
     if (config.eyeHeight && config.eyeHeight !== this.eyeHeight) {

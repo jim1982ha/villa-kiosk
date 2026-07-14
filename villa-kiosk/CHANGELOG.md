@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.11.0
+
+- **First-person view now starts at the foot of the staircase (ground floor),
+  facing up the flight.** Switching into first-person (and the initial spawn)
+  lands at a consistent, recognisable spot instead of wherever the camera was
+  left. The spot is taken from a room the plan names as a staircase if there is
+  one, otherwise derived from the stair geometry, otherwise the living room.
+- **Floor management now works while walking between 1F and 2F.** The GLB ships
+  no stair-trigger meshes, so climbing the stairs never revealed the upper
+  storey — you walked up into a hidden floor. Floors are now switched from the
+  walker's feet elevation (with hysteresis so it doesn't chatter mid-flight):
+  cross onto the upper slab and 2F appears; come back down and it hides again.
+  Only active in first-person — the overview's floor selection is unchanged.
+
 ## 2.10.1
 
 - **Camera feeds now work in the standalone (non-add-on) build.** When the app
