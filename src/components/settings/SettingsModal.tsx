@@ -423,8 +423,8 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
           style={{ width: "100%" }}
         />
         <p className="muted body-text" style={{ marginTop: 4, fontSize: 11 }}>
-          Sets the base size of every badge. In the bird's-eye view the icons also
-          grow as you zoom in and shrink as you zoom out.
+          Sets the on-screen size of every badge. It stays fixed at this size in
+          both views, regardless of zoom.
         </p>
 
         <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.19.1
+
+- **Badge size is now truly fixed.** Badges no longer grow/shrink with the
+  bird's-eye zoom level — they stay at exactly the "Icon size" you set in
+  Settings, in both views, at any zoom.
+
 ## 2.19.0
 
 - **Device panels now show the HA entity id** (e.g. `climate.gym_room`) under the

@@ -207,14 +207,10 @@ export class SceneManager {
       onLongPress: handleLongPress,
     });
     this.overview.setNaturalScrolling(opts.config.naturalScrolling ?? true);
-    // Grow/shrink the state-icon badges with the bird's-eye zoom level. The
-    // overview camera fires this on every pan/rotate/zoom; EntityVisuals ignores
-    // sub-threshold changes, so the per-frame cost is negligible.
-    this.overview.camera.onViewMatrixChangedObservable.add(() => {
-      if (this.viewMode === "overview") {
-        this.visuals.setIconZoomScale(this.overview.getIconZoomScale());
-      }
-    });
+    // Badge size is the FIXED "Icon size" setting (config.entityIconScale) — it
+    // does NOT change with the bird's-eye zoom level. (We used to grow/shrink
+    // badges on every overview pan/zoom; the user expects the configured size to
+    // hold at any zoom, so the zoom-driven rescale was removed.)
 
     // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
     // Created after both cameras exist so SSAO can attach to all of them; the
@@ -339,7 +335,6 @@ export class SceneManager {
       // night). Hide the sky dome and pin a themed backdrop; lighting is untouched.
       this.sky.setEnabled(false);
       this.sun.setBackgroundOverride(this.overviewBackdropColor());
-      this.visuals.setIconZoomScale(this.overview.getIconZoomScale());
     } else {
       this.overview.disable();
       this.scene.activeCamera = this.camera.camera;
