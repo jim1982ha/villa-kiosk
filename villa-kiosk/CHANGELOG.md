@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.14.2
+
+- **Value pills no longer tuck under a neighbouring badge.** The declutter used
+  to treat each label as a circle at the badge, ignoring the value pill that
+  hangs below it — so a nearby badge could land on another label's pill. Each
+  label is now modelled as its full screen box (badge + pill, with the pill's
+  width estimated from its text) and overlaps are resolved with the minimum
+  axis-aligned nudge, keeping every badge clear of every pill. Still applied
+  directly (no easing / self-render), so labels stay rock-steady.
+
 ## 2.14.1
 
 - **Tidier value pills.** The chip under a device badge was dumping raw state,

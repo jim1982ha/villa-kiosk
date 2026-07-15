@@ -1133,47 +1133,62 @@ export class EntityVisuals {
   }
 
   /**
-   * Nudge overlapping badges apart so none share a virtual position. The layout
-   * is a DETERMINISTIC function of the current screen positions — relaxed from
-   * zero each frame (pairs closer than a badge-diameter are pushed directly
-   * apart, splitting the correction; exactly-coincident anchors — a combined
-   * light+VMC fixture — get a deterministic angular split, no NaN) — and applied
-   * DIRECTLY, not eased. That's deliberate: a static camera projects the same
-   * positions every frame, so the same offsets come out every frame and the
-   * badges sit perfectly still. (An earlier version eased toward the target and
-   * called requestRender while "moving"; that kept the render loop — and thus the
-   * overview camera's inertia — alive, which nudged the projections, which kept
-   * it "moving": a feedback loop that made the labels shake. Applying directly
-   * removes both the easing and the self-triggered render.) Offsets are the GUI
-   * link offset, so tap hit-testing (which reads each badge's real drawn box)
-   * keeps working.
+   * Nudge overlapping labels apart so none share a virtual position — and,
+   * crucially, so no BADGE lands on a neighbour's value pill. Each label is
+   * modelled as its true screen BOX (the badge, plus the value pill hanging below
+   * it when shown), not a circle, and overlaps are resolved with the minimum
+   * axis-aligned translation. The layout is a DETERMINISTIC function of the
+   * current screen positions — relaxed from zero each frame — and applied
+   * DIRECTLY, not eased: a static camera projects the same positions every frame,
+   * so the same offsets come out and the labels sit perfectly still. (An earlier
+   * version eased toward a target and called requestRender while "moving"; that
+   * kept the render loop — and the overview camera's inertia — alive, nudging the
+   * projections and sustaining the motion: a feedback loop that made labels
+   * shake. Direct application removes both the easing and the self-render.)
+   * Offsets are the GUI link offset, so tap hit-testing (which reads each badge's
+   * real drawn box) keeps working.
    */
   private declutterLabels(
     shown: { id: string; lbl: LabelControls; x: number; y: number; off: { x: number; y: number } }[],
   ): void {
     const scale = this.iconUserScale * this.iconZoomScale;
-    const minDist = (BADGE_DIAMETER_PX + 8) * scale; // desired centre-to-centre gap
-    const maxOff = 120 * scale; // never fling a badge miles from its device
+    const maxOff = 150 * scale; // never fling a label miles from its device
     const baseY = -LABEL_HEIGHT_PX / 2;
+    const GAP = 5 * scale; // breathing room between two labels' boxes
+
+    // Each label's collision box, in screen px, relative to its anchor point.
+    // Layout (unscaled, anchor at 0, y grows downward, container hangs ABOVE):
+    //   badge  → centre −56, half 20         (BADGE_DIAMETER 40, container 76 tall)
+    //   pill   → centre −24, half 9          (VALUE_CHIP_HEIGHT 18, under the badge)
+    // With a pill the box spans the badge top down to the pill bottom.
+    const boxes = shown.map((s) => {
+      const hasPill = s.lbl.valueWrap.isVisible;
+      const pillHalfW = hasPill ? (s.lbl.valueText.text.length * 6.2 + 16) / 2 : 0;
+      const halfW = Math.max(BADGE_DIAMETER_PX / 2, pillHalfW) * scale;
+      const halfH = (hasPill ? 30.5 : 20) * scale;
+      const cy = (hasPill ? -45.5 : -56) * scale; // box centre Y relative to anchor
+      return { halfW, halfH, cy };
+    });
 
     for (const s of shown) { s.off.x = 0; s.off.y = 0; }
-    for (let iter = 0; iter < 10; iter++) {
+    for (let iter = 0; iter < 12; iter++) {
       let moved = false;
       for (let i = 0; i < shown.length; i++) {
         for (let j = i + 1; j < shown.length; j++) {
-          const a = shown[i], b = shown[j];
-          let dx = (b.x + b.off.x) - (a.x + a.off.x);
-          let dy = (b.y + b.off.y) - (a.y + a.off.y);
-          let d = Math.hypot(dx, dy);
-          if (d >= minDist) continue;
-          if (d < 0.01) {
-            const ang = ((i * 727 + j * 131) % 360) * (Math.PI / 180);
-            dx = Math.cos(ang); dy = Math.sin(ang); d = 1;
+          const a = shown[i], b = shown[j], ba = boxes[i], bb = boxes[j];
+          const dx = (b.x + b.off.x) - (a.x + a.off.x);
+          const dy = (b.y + b.off.y + bb.cy) - (a.y + a.off.y + ba.cy);
+          const ox = ba.halfW + bb.halfW + GAP - Math.abs(dx); // x-overlap (>0 = overlapping)
+          const oy = ba.halfH + bb.halfH + GAP - Math.abs(dy); // y-overlap
+          if (ox <= 0 || oy <= 0) continue; // boxes clear on at least one axis
+          // Resolve along the axis of LEAST penetration (minimum translation).
+          if (ox < oy) {
+            const s2 = dx === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dx);
+            a.off.x -= (ox / 2) * s2; b.off.x += (ox / 2) * s2;
+          } else {
+            const s2 = dy === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dy);
+            a.off.y -= (oy / 2) * s2; b.off.y += (oy / 2) * s2;
           }
-          const push = (minDist - d) / 2;
-          const ux = dx / d, uy = dy / d;
-          a.off.x -= ux * push; a.off.y -= uy * push;
-          b.off.x += ux * push; b.off.y += uy * push;
           moved = true;
         }
       }
