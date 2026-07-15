@@ -14,6 +14,11 @@ export interface EntityMapping {
   label: string; // Human-readable name for UI panels
   room: string; // Room for grouping / teleport context
   category?: Category; // Map filter grouping; falls back to categoryForEntity() when unset
+  /** Hide this device from the 3D view entirely: no badge/label, no blue
+   *  highlight, not tappable — the mesh stays as plain geometry. For devices
+   *  modelled ahead of their Home Assistant integration (e.g. ceiling fans not
+   *  yet controllable). Toggled per-device in Advanced Settings. */
+  disabled?: boolean;
   /** For type "camera": the HA motion/occupancy binary_sensor that goes "on"
    *  when this camera detects motion. Drives the simulated detection beam
    *  (EntityVisuals). Not inferred from naming (camera integrations name

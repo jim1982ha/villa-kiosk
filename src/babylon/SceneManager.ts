@@ -1252,7 +1252,8 @@ export class SceneManager {
 
     if (
       this.loadedMeshes.length &&
-      (prev.highlightInteractive !== config.highlightInteractive ||
+      (structuralChanged || // a disabled/rebound entity must lose/gain its outline
+        prev.highlightInteractive !== config.highlightInteractive ||
         prev.hiddenCategories.join() !== config.hiddenCategories.join())
     ) {
       this.applyHighlight(this.loadedMeshes);

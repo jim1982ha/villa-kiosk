@@ -260,6 +260,9 @@ export function resolveMeshToMapping(
   // denies. A denied type resolves to null: no badge, no blue highlight, not
   // tappable — the mesh itself stays visible as plain geometry.
   if (mapping && deniedTypes.includes(mapping.type)) return null;
+  // Per-device disable (Advanced Settings): same effect as a denied type — the
+  // device drops out of every UI surface but the mesh stays as plain geometry.
+  if (mapping?.disabled) return null;
   return mapping;
 }
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.16.0
+
+- **Per-device show/hide.** Advanced Settings → the entity table now has a
+  **Shown** checkbox per device. Turn it off and that device drops out of the 3D
+  view entirely — no badge/label, no blue highlight, not tappable — while its
+  model stays as plain geometry. Ideal for devices modelled ahead of their Home
+  Assistant integration (e.g. ceiling fans not yet controllable). The device
+  stays listed in Advanced Settings so you can switch it back on. Applies live.
+
 ## 2.15.0
 
 - **Device categories now follow device TYPE + device_class, not per-entity.**

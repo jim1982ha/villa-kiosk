@@ -138,6 +138,7 @@ export default function ConfigEditor() {
         <table className="config-table">
           <thead>
             <tr>
+              <th>Shown</th>
               <th>Entity ID</th>
               <th>Type</th>
               <th>Category</th>
@@ -148,7 +149,16 @@ export default function ConfigEditor() {
           </thead>
           <tbody>
             {entries.map(([key, m]) => (
-              <tr key={key}>
+              <tr key={key} style={m.disabled ? { opacity: 0.5 } : undefined}>
+                <td data-label="Shown" style={{ textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={!m.disabled}
+                    onChange={(e) => patch(key, { disabled: !e.target.checked })}
+                    title="Show this device in the 3D view (badge, highlight, tap). Turn off for devices modelled but not yet integrated in Home Assistant."
+                    aria-label={`Show ${m.entityId} in the 3D view`}
+                  />
+                </td>
                 <td data-label="Entity ID" style={{ fontSize: 12, wordBreak: "break-all" }}>
                   {remapKey === key ? (
                     /* ── inline remap picker ── */
