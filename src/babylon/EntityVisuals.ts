@@ -162,18 +162,25 @@ interface LabelControls {
   category: Category;
 }
 
-/** A live state distilled to one of four visual kinds the badge colour-codes. */
-type BadgeKind = "on" | "off" | "alert" | "unavailable";
+/** A live state distilled to one of the visual kinds the badge colour-codes. */
+type BadgeKind = "on" | "off" | "alert" | "info" | "unavailable";
 
-// Modern badge palette — a dark "glass" disc with a state-coloured ring. A neutral
-// slate base plus a single bright accent per state reads cleanly on both the light
-// daytime scene and the dark overview backdrop (no more brown/gold).
+// Badge palette. An ACTIVE device (on / alert) fills the whole disc with its
+// state colour so it reads as clearly "live" at a glance — a coloured ring on a
+// dark disc wasn't punchy enough. Passive states (off / unavailable) and purely
+// informational sensors (info) keep the dark "glass" disc so they recede and let
+// the active devices pop. Whites/greys read on both the daytime scene and the
+// dark overview backdrop.
 const BADGE_BASE_FILL = "rgba(17,24,39,0.74)";
-const BADGE_STYLE: Record<BadgeKind, { ring: string; alpha: number; glow: string }> = {
-  on:          { ring: "#38bdf8",                 alpha: 1,   glow: "rgba(56,189,248,0.55)" },
-  off:         { ring: "rgba(148,163,184,0.55)",  alpha: 0.9, glow: "rgba(0,0,0,0.5)" },
-  alert:       { ring: "#fb7185",                 alpha: 1,   glow: "rgba(251,113,133,0.6)" },
-  unavailable: { ring: "rgba(148,163,184,0.4)",   alpha: 0.5, glow: "rgba(0,0,0,0.4)" },
+const BADGE_STYLE: Record<
+  BadgeKind,
+  { fill: string; ring: string; alpha: number; glow: string; glowBlur: number; glyphAlpha: number }
+> = {
+  on:          { fill: "rgba(14,165,233,0.95)", ring: "#e0f2fe",                alpha: 1,   glow: "rgba(56,189,248,0.85)", glowBlur: 16, glyphAlpha: 1 },
+  alert:       { fill: "rgba(244,63,94,0.95)",  ring: "#ffe4e6",                alpha: 1,   glow: "rgba(244,63,94,0.85)",  glowBlur: 16, glyphAlpha: 1 },
+  info:        { fill: BADGE_BASE_FILL,          ring: "rgba(56,189,248,0.9)",  alpha: 1,   glow: "rgba(0,0,0,0.5)",       glowBlur: 6,  glyphAlpha: 1 },
+  off:         { fill: BADGE_BASE_FILL,          ring: "rgba(148,163,184,0.5)", alpha: 0.9, glow: "rgba(0,0,0,0.5)",       glowBlur: 6,  glyphAlpha: 0.75 },
+  unavailable: { fill: "rgba(17,24,39,0.5)",     ring: "rgba(148,163,184,0.4)", alpha: 0.5, glow: "rgba(0,0,0,0.4)",       glowBlur: 6,  glyphAlpha: 0.55 },
 };
 
 /** Render an emoji/glyph to a square canvas and cache the data URL. Drawing a
@@ -257,6 +264,11 @@ export class EntityVisuals {
   /** Fullscreen GUI layer for state labels. */
   private labelLayer: AdvancedDynamicTexture | null = null;
   private labels = new Map<string, LabelControls>();
+  /** Screen-space nudge (px) applied per label to keep badges from stacking on
+   *  top of each other when their anchors project to the same point. Relaxed
+   *  every cullLabels pass and decayed back toward 0 when the crowding clears —
+   *  see the collision-resolution block in cullLabels(). */
+  private labelDeclutter = new Map<string, { x: number; y: number }>();
   /** Per-entity invisible anchor node for mesh-bound labels, positioned at the
    *  entity's actual bounding-box top-centre (elevation + height combined),
    *  computed once from real geometry — see buildLabelAnchors(). Replaces
@@ -1048,29 +1060,27 @@ export class EntityVisuals {
     if (!lbl) return;
     const kind = this.badgeKind(type, entity);
     const style = BADGE_STYLE[kind];
+    lbl.badge.background = style.fill; // fill the whole disc for active devices
     lbl.badge.color = style.ring;
     lbl.badge.alpha = style.alpha;
     lbl.badge.shadowColor = style.glow;
-    lbl.badge.shadowBlur = kind === "on" || kind === "alert" ? 10 : 6;
+    lbl.badge.shadowBlur = style.glowBlur;
     lbl.glyph.source = glyphDataUrl(this.iconFor(type, entity)); // honour live icon + device_class
-    lbl.glyph.alpha = kind === "unavailable" ? 0.6 : 1;
+    lbl.glyph.alpha = style.glyphAlpha;
 
     const value = this.compactValue(type, entity);
     lbl.valueText.text = value;
     lbl.valueWrap.isVisible = value.length > 0;
   }
 
-  /** Deliberately NOT a "declutter": every registered device's tag stays
-   *  visible all the time — that's the point of the "Show device state
-   *  labels" toggle. An earlier version greedily hid same-screen-cluster
-   *  badges to avoid overlap, but in a villa where several devices sit
-   *  within a couple of screen-pixels of each other at any reasonable
-   *  zoom, that reliably hid most non-priority tags no matter how the
-   *  camera moved — worse than the overlap it was trying to prevent. What
-   *  this still hides: an anchor that projects BEHIND the camera (z outside
-   *  [0,1], a genuinely invalid screen position), any entity whose
-   *  category is currently off in the HUD's category filter, and any entity
-   *  sitting on a floor the 1F/2F toggle has hidden. */
+  /** Decide which badges are visible, then DECLUTTER the visible ones so no two
+   *  stack on the exact same virtual position. Every registered device's tag
+   *  stays visible (that's the point of the "Show device state labels" toggle —
+   *  an earlier version that HID crowded badges hid most of them and was worse
+   *  than the overlap). Instead, overlapping badges are nudged apart in screen
+   *  space (a light force-relaxation) and spring back when the crowding clears.
+   *  Hidden regardless: anchors projecting behind the camera (z outside [0,1]),
+   *  categories filtered off in the HUD, and entities on a hidden floor. */
   private cullLabels(): void {
     if (!this.config.showEntityLabels || this.labels.size === 0) return;
     const cam = this.scene.activeCamera;
@@ -1080,7 +1090,10 @@ export class EntityVisuals {
     const tm = this.scene.getTransformMatrix();
     const hidden = this.config.hiddenCategories;
 
-    for (const lbl of this.labels.values()) {
+    // Visible badges + their projected anchor position, for the declutter pass.
+    const shown: { id: string; lbl: LabelControls; x: number; y: number; off: { x: number; y: number } }[] = [];
+
+    for (const [id, lbl] of this.labels) {
       if (hidden.includes(lbl.category)) {
         lbl.container.isVisible = false;
         continue;
@@ -1109,8 +1122,75 @@ export class EntityVisuals {
       // own contains() (see pickBadgeAt), so there is no stored screen
       // position to drift out of sync with what's actually drawn.
       const p = Vector3.Project(lbl.anchor.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
-      lbl.container.isVisible = p.z >= 0 && p.z <= 1;
+      const visible = p.z >= 0 && p.z <= 1;
+      lbl.container.isVisible = visible;
+      if (visible) {
+        const off = this.labelDeclutter.get(id) ?? { x: 0, y: 0 };
+        shown.push({ id, lbl, x: p.x, y: p.y, off });
+      }
     }
+
+    this.declutterLabels(shown);
+  }
+
+  /**
+   * Nudge overlapping badges apart so none share a virtual position. Each frame
+   * a stable TARGET layout is computed by relaxing from zero (a pure function of
+   * the current screen positions: pairs closer than a badge-diameter are pushed
+   * directly apart, splitting the correction; exactly-coincident anchors — a
+   * combined light+VMC fixture — get a deterministic angular split, no NaN). The
+   * applied offset then eases toward that target, so a crowded cluster fans out
+   * smoothly and springs back together as the camera separates the anchors. We
+   * only keep rendering while the offsets are still moving, so a settled layout
+   * (fanned-out or home) costs nothing and never jitters. Offsets are the GUI
+   * link offset, so tap hit-testing (which reads each badge's real drawn box)
+   * keeps working.
+   */
+  private declutterLabels(
+    shown: { id: string; lbl: LabelControls; x: number; y: number; off: { x: number; y: number } }[],
+  ): void {
+    const scale = this.iconUserScale * this.iconZoomScale;
+    const minDist = (BADGE_DIAMETER_PX + 8) * scale; // desired centre-to-centre gap
+    const maxOff = 120 * scale; // never fling a badge miles from its device
+    const baseY = -LABEL_HEIGHT_PX / 2;
+
+    // Stable target layout, relaxed from zero (independent of last frame).
+    const target = shown.map(() => ({ x: 0, y: 0 }));
+    for (let iter = 0; iter < 8; iter++) {
+      for (let i = 0; i < shown.length; i++) {
+        for (let j = i + 1; j < shown.length; j++) {
+          let dx = (shown[j].x + target[j].x) - (shown[i].x + target[i].x);
+          let dy = (shown[j].y + target[j].y) - (shown[i].y + target[i].y);
+          let d = Math.hypot(dx, dy);
+          if (d >= minDist) continue;
+          if (d < 0.01) {
+            const ang = ((i * 727 + j * 131) % 360) * (Math.PI / 180);
+            dx = Math.cos(ang); dy = Math.sin(ang); d = 1;
+          }
+          const push = (minDist - d) / 2;
+          const ux = dx / d, uy = dy / d;
+          target[i].x -= ux * push; target[i].y -= uy * push;
+          target[j].x += ux * push; target[j].y += uy * push;
+        }
+      }
+    }
+
+    // Ease each applied offset toward its target; keep rendering while moving.
+    let moving = false;
+    for (let k = 0; k < shown.length; k++) {
+      const t = target[k];
+      const len = Math.hypot(t.x, t.y);
+      if (len > maxOff) { t.x *= maxOff / len; t.y *= maxOff / len; }
+      const s = shown[k];
+      const nx = s.off.x + (t.x - s.off.x) * 0.3;
+      const ny = s.off.y + (t.y - s.off.y) * 0.3;
+      if (Math.abs(nx - s.off.x) + Math.abs(ny - s.off.y) > 0.4) moving = true;
+      s.off.x = nx; s.off.y = ny;
+      this.labelDeclutter.set(s.id, s.off);
+      s.lbl.container.linkOffsetXInPixels = nx;
+      s.lbl.container.linkOffsetYInPixels = baseY + ny;
+    }
+    if (moving) this.requestRender();
   }
 
   /**
@@ -1209,7 +1289,7 @@ export class EntityVisuals {
         return s.state === "closed" ? "off" : "on";
       }
       case "media_player":  return s.state === "playing" ? "on" : "off";
-      case "sensor":        return "on"; // sensors are informational; value carries meaning
+      case "sensor":        return "info"; // informational: neutral disc, value pill carries meaning
       default:              return s.state === "on" ? "on" : "off"; // light/fan/switch/input_boolean
     }
   }

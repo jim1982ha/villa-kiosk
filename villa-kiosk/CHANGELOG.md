@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.13.0
+
+- **Active devices now fill their whole badge with the state colour.** An "on"
+  device (blue) or an alerting one (red) fills the entire disc instead of just
+  tinting a thin ring, so a live device reads at a glance. Off devices and
+  informational sensors keep the dark "glass" disc so they recede and let the
+  active ones pop.
+- **Labels no longer stack on top of each other.** When several devices sit at
+  (nearly) the same point — e.g. a combined light + bathroom VMC fixture — their
+  badges are now nudged apart in screen space by a light force-relaxation and
+  spring back together as the camera separates them. Every label stays visible
+  (nothing is hidden), and taps still hit the badge where it's actually drawn.
+
 ## 2.12.1
 
 - **Blue "clickable" highlights are now contextual to the active floor.** The 2F
