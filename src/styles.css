@@ -482,6 +482,11 @@ button {
 .panel-header .title { display: flex; align-items: center; gap: 12px; }
 .panel-header .title h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; }
 .panel-header .room { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
+.panel-header .panel-entity-id {
+  margin-top: 3px; font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px; color: var(--text-dim);
+  max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); }
 
 .row-buttons { display: flex; gap: 10px; flex-wrap: wrap; }

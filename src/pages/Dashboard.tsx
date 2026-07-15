@@ -8,6 +8,7 @@ import RoomLabel from "@/components/hud/RoomLabel";
 import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
 import PanelRouter from "@/components/panels/PanelRouter";
+import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
 import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
@@ -31,6 +32,7 @@ export default function Dashboard() {
   // fallback only defends against a direct render in tests.
   const canControl = role != null && hasCapability(role, "controlEntities");
   const canOpenSettings = role != null && hasCapability(role, "openSettings");
+  const canEditConfig = role != null && hasCapability(role, "editConfig");
   const canManageModel = role != null && hasCapability(role, "manageModel");
   // Read inside the onCalibrated/onReady effect below (which intentionally
   // only depends on [manager], so its closure would otherwise see a stale
@@ -43,6 +45,10 @@ export default function Dashboard() {
   const [teleportOpen, setTeleportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [configEditorOpen, setConfigEditorOpen] = useState(false);
+  // When Advanced Settings is opened from a device panel's edit shortcut, this
+  // holds the entity_id to pre-filter the entity table on (null = opened from
+  // Settings, so "Back" returns to Settings rather than just closing).
+  const [configEditorFocus, setConfigEditorFocus] = useState<string | null>(null);
   const [room, setRoom] = useState<string | null>(null);
   const [currentFloor, setCurrentFloor] = useState(1);
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
@@ -304,14 +310,28 @@ export default function Dashboard() {
       )}
 
       {activePanel && (
-        <PanelRouter active={activePanel} onClose={() => setActivePanel(null)} pinContinuous={pinContinuous} />
+        <PanelActionsProvider
+          value={{
+            entityId: activePanel.entityId,
+            // Owner-only: jump straight to this device's row in Advanced Settings.
+            onEdit: canEditConfig
+              ? () => {
+                  setActivePanel(null);
+                  setConfigEditorFocus(activePanel.entityId);
+                  setConfigEditorOpen(true);
+                }
+              : undefined,
+          }}
+        >
+          <PanelRouter active={activePanel} onClose={() => setActivePanel(null)} pinContinuous={pinContinuous} />
+        </PanelActionsProvider>
       )}
 
       {settingsOpen && canOpenSettings && (
         <SettingsModal
           manager={manager}
           onClose={() => setSettingsOpen(false)}
-          onOpenConfigEditor={() => { setSettingsOpen(false); setConfigEditorOpen(true); }}
+          onOpenConfigEditor={() => { setSettingsOpen(false); setConfigEditorFocus(null); setConfigEditorOpen(true); }}
           onModelChanged={() => {
             // Refresh the scene in the BACKGROUND (remount the canvas) but keep
             // the Settings modal open — closing it on every upload felt abrupt.
@@ -326,7 +346,14 @@ export default function Dashboard() {
           it returns to Settings with no GLB reload; edits already applied live. */}
       {configEditorOpen && canOpenSettings && (
         <ConfigEditorModal
-          onBack={() => { setConfigEditorOpen(false); setSettingsOpen(true); }}
+          focusEntityId={configEditorFocus ?? undefined}
+          onBack={() => {
+            setConfigEditorOpen(false);
+            // Opened from Settings → return there; opened from a device panel
+            // (focus set) → just close back to the villa.
+            if (configEditorFocus === null) setSettingsOpen(true);
+            setConfigEditorFocus(null);
+          }}
         />
       )}
 

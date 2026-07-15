@@ -19,11 +19,13 @@ const TYPES: EntityType[] = [
   "assist_satellite",
 ];
 
-export default function ConfigEditor() {
+export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
   const { config, update } = useConfig();
   const { entities } = useHA();
   const [newId, setNewId] = useState<string | undefined>(undefined);
-  const [search, setSearch] = useState("");
+  // Seed the filter when opened from a device panel's edit shortcut, so that
+  // entity's row is shown immediately.
+  const [search, setSearch] = useState(initialSearch ?? "");
   // Remap: which row's entity ID is currently being edited, and what new ID was picked.
   const [remapKey, setRemapKey] = useState<string | null>(null);
   const [remapNewId, setRemapNewId] = useState<string | undefined>(undefined);

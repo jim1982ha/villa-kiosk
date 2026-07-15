@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.19.0
+
+- **Device panels now show the HA entity id** (e.g. `climate.gym_room`) under the
+  title, so it's clear exactly which Home Assistant entity a control drives.
+- **Quick-edit shortcut.** Owners get a pencil button in the panel header that
+  jumps straight to that device's row in Advanced Settings (the entity table,
+  pre-filtered to it) for fast edits — then Back returns to the villa. Guests /
+  facility profiles don't see the button (they can't edit config).
+
 ## 2.18.0
 
 - **Faster load — the villa appears before the heavy passes run.** The raycast-

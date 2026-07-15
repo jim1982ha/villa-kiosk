@@ -14,6 +14,9 @@ import BindingsTable from "./BindingsTable";
 interface Props {
   /** Return to the Settings modal this was opened from. */
   onBack: () => void;
+  /** When opened from a device panel's edit shortcut, pre-filter the entity
+   *  table to this entity_id so its row is right there. */
+  focusEntityId?: string;
 }
 
 /** Villa coordinates (drive sun tracking). Applies live on blur rather than
@@ -59,7 +62,7 @@ function VillaCoordinates() {
   );
 }
 
-export default function ConfigEditorModal({ onBack }: Props) {
+export default function ConfigEditorModal({ onBack, focusEntityId }: Props) {
   return (
     <div className="modal-backdrop" onClick={onBack}>
       <div
@@ -80,7 +83,7 @@ export default function ConfigEditorModal({ onBack }: Props) {
           <div className="settings-section-title" style={{ marginTop: 28 }}>
             Auto-detected entity settings
           </div>
-          <ConfigEditor />
+          <ConfigEditor initialSearch={focusEntityId} />
 
           <div className="settings-section-title" style={{ marginTop: 28 }}>
             Bound 3D objects

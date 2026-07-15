@@ -2,7 +2,8 @@
 // Shared bottom-sheet wrapper: backdrop, drag-to-dismiss handle, header.
 
 import { useRef, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { X, Pencil } from "lucide-react";
+import { usePanelActions } from "./PanelActionsContext";
 
 interface Props {
   title: string;
@@ -15,6 +16,7 @@ interface Props {
 export default function BasePanel({ title, room, icon, onClose, children }: Props) {
   const startY = useRef<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const { entityId, onEdit } = usePanelActions();
 
   return (
     <>
@@ -46,11 +48,24 @@ export default function BasePanel({ title, room, icon, onClose, children }: Prop
             <div>
               <h2>{title}</h2>
               {room && <div className="room">{room}</div>}
+              {entityId && <div className="panel-entity-id" title={entityId}>{entityId}</div>}
             </div>
           </div>
-          <button className="icon-btn" onClick={onClose}>
-            <X size={20} />
-          </button>
+          <div className="row" style={{ gap: 8 }}>
+            {onEdit && (
+              <button
+                className="icon-btn"
+                onClick={onEdit}
+                title="Edit this device in Advanced Settings"
+                aria-label="Edit this device in Advanced Settings"
+              >
+                <Pencil size={18} />
+              </button>
+            )}
+            <button className="icon-btn" onClick={onClose} aria-label="Close">
+              <X size={20} />
+            </button>
+          </div>
         </div>
         {children}
       </div>
