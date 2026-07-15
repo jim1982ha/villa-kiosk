@@ -182,8 +182,12 @@ const BADGE_STYLE: Record<
   // (a touch cooler/deeper than a switched-on device, and the glyph + value pill
   // still tell a thermometer from a light).
   info:        { fill: "rgba(37,99,235,0.92)",   ring: "#dbeafe",               alpha: 1,   glow: "rgba(59,130,246,0.6)",  glowBlur: 10, glyphAlpha: 1 },
-  off:         { fill: BADGE_BASE_FILL,          ring: "rgba(148,163,184,0.5)", alpha: 0.9, glow: "rgba(0,0,0,0.5)",       glowBlur: 6,  glyphAlpha: 0.7 },
-  unavailable: { fill: "rgba(17,24,39,0.5)",     ring: "rgba(148,163,184,0.4)", alpha: 0.5, glow: "rgba(0,0,0,0.4)",       glowBlur: 6,  glyphAlpha: 0.5 },
+  // OFF = a SOLID, fully-opaque dark disc with a clear glyph and a defined ring:
+  // reads as "here and reachable, just switched off". OFFLINE = a heavily GHOSTED
+  // disc (translucent fill, faint ring, faded glyph) so an unreachable device
+  // visibly recedes — the strong opacity gap is what tells the two apart.
+  off:         { fill: "rgba(30,41,59,0.95)",    ring: "rgba(148,163,184,0.75)", alpha: 1,    glow: "rgba(0,0,0,0.5)",  glowBlur: 6, glyphAlpha: 0.9 },
+  unavailable: { fill: "rgba(20,24,31,0.34)",    ring: "rgba(100,116,139,0.32)", alpha: 0.5,  glow: "rgba(0,0,0,0.2)",  glowBlur: 2, glyphAlpha: 0.7 },
 };
 
 /** Render an emoji/glyph to a square canvas and cache the data URL. Drawing a

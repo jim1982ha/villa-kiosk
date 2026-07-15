@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.13.2
+
+- **Offline devices are now clearly distinct from switched-off ones.** Both were
+  dark discs separated only by a small opacity gap, so they looked the same. A
+  switched-off device now shows a solid, fully-opaque disc with a clear glyph and
+  a defined ring ("here, just off"); an offline/unavailable device is heavily
+  ghosted — translucent disc, faint ring, faded glyph — so it visibly recedes.
+
 ## 2.13.1
 
 - **Fix: badges were shaking.** The declutter eased offsets toward the target
