@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.17.0
+
+- **Motion-glow drapes over the stairs.** A motion/occupancy sensor whose room is
+  a staircase now lights the actual steps: stepped rooms get a surface-hugging
+  glow mesh (sampled over the real geometry) instead of a flat patch that floated
+  at mid-step height. Flat rooms are unchanged (and pay nothing — the app only
+  does the extra sampling for rooms it detects as stepped).
+- **Ceiling fans spin when on.** A `fan.*` device whose 3D object is bound (e.g.
+  `fan.ceiling_fan_*`) now rotates while it's on, at a speed scaled by its fan
+  percentage. It spins about its own centre so the badge stays put, and only
+  turns while its floor is in view (to respect the on-demand render budget).
+  Hidden/disabled devices don't spin — so this lights up once your ceiling fans
+  are integrated in Home Assistant and switched on.
+
 ## 2.16.0
 
 - **Per-device show/hide.** Advanced Settings → the entity table now has a

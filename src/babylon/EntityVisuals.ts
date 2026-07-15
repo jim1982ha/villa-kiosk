@@ -151,6 +151,11 @@ const BADGE_DIAMETER_PX = 40;
 // a 60 Hz tablet and a 120 Hz phone.
 const PULSE_RAD_PER_SEC = 3.6;
 
+// Ceiling-fan spin: angular speed (rad/s) at full fan percentage. A whole-mesh
+// spin reads as "blades turning" at kiosk distance; ~1 rev/s is lively without
+// strobing. Scaled down by the fan's percentage (min 15%) when reported.
+const FAN_MAX_RAD_PER_SEC = 6.2;
+
 interface LabelControls {
   container: StackPanel;
   badge: Rectangle;
@@ -255,6 +260,11 @@ export class EntityVisuals {
   private byEntity = new Map<string, AbstractMesh[]>();
   private mapping = new Map<string, EntityMapping>();
   private pulsing = new Set<AbstractMesh>();
+  /** entity_id → angular speed (rad/s) for a fan currently spinning; and the
+   *  world-space vertical axis it spins about (its own bbox centre, which is
+   *  where the label anchor sits, so the spin never swings the badge). */
+  private spinningFans = new Map<string, number>();
+  private fanCentres = new Map<string, Vector3>();
   private pulseT = 0;
 
   // Real light sources for `light` entities. Keyed by MESH uniqueId (not entity
@@ -329,6 +339,7 @@ export class EntityVisuals {
     this.beams = new CameraBeams(scene);
     scene.registerBeforeRender(() => {
       this.animatePulse();
+      this.animateFans();
       this.cullLabels();
     });
   }
@@ -376,6 +387,8 @@ export class EntityVisuals {
     this.disposeLabelAnchors();
     this.beams.dispose();
     this.pulsing.clear();
+    this.spinningFans.clear();
+    this.fanCentres.clear();
     this.byEntity.clear();
     this.mapping.clear();
     this.shadowCasters = [];
@@ -764,7 +777,7 @@ export class EntityVisuals {
   /** Replace the calibrated room polygons (world space) — forwarded straight
    *  to RoomHighlight. Called by SceneManager after every plan→world re-fit
    *  (load + mirror-flip toggles), same trigger as the teleport grid. */
-  setRoomPolygons(polys: { name: string; pts: { x: number; z: number }[]; floorY?: number }[]): void {
+  setRoomPolygons(polys: { name: string; pts: { x: number; z: number }[]; floorY?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
     this.roomHighlight.setRooms(polys);
   }
 
@@ -867,6 +880,7 @@ export class EntityVisuals {
       ? new Set(meshes.map((m) => this.meshLights.get(m.uniqueId)).filter(Boolean)).size || 1
       : 1;
     for (const mesh of meshes) this.applyToMesh(mesh, map, entity, lightShare);
+    if (map.type === "fan") this.updateFanSpin(entity, meshes);
     if (map.type === "light") {
       this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
     }
@@ -1583,5 +1597,53 @@ export class EntityVisuals {
     for (const mesh of this.pulsing) this.emissiveOf(mesh)?.(col);
     this.beams.applyPulse(intensity);
     this.requestRender();
+  }
+
+  /** Start/stop a fan's spin from its on/off (+ percentage) state. */
+  private updateFanSpin(entity: HassEntity, meshes: AbstractMesh[]): void {
+    const id = entity.entity_id;
+    if (entity.state === "on") {
+      const pct = entity.attributes.percentage as number | undefined;
+      const frac = typeof pct === "number" ? Math.max(0.15, Math.min(1, pct / 100)) : 0.6;
+      if (!this.fanCentres.has(id)) this.fanCentres.set(id, this.spinCentre(meshes));
+      this.spinningFans.set(id, FAN_MAX_RAD_PER_SEC * frac);
+      this.requestRender(); // wake the loop so animateFans starts turning it
+    } else {
+      this.spinningFans.delete(id);
+    }
+  }
+
+  /** The vertical spin axis for a fan = its combined bounding-box centre (which
+   *  is also where the label anchor sits, so spinning never moves the badge). */
+  private spinCentre(meshes: AbstractMesh[]): Vector3 {
+    let min = new Vector3(Infinity, Infinity, Infinity);
+    let max = new Vector3(-Infinity, -Infinity, -Infinity);
+    for (const m of meshes) {
+      m.computeWorldMatrix(true);
+      const bb = m.getBoundingInfo().boundingBox;
+      min = Vector3.Minimize(min, bb.minimumWorld);
+      max = Vector3.Maximize(max, bb.maximumWorld);
+    }
+    return new Vector3((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2);
+  }
+
+  private animateFans(): void {
+    if (this.spinningFans.size === 0) return;
+    const dt = Math.min(this.scene.getEngine().getDeltaTime(), 100) / 1000;
+    let spun = false;
+    for (const [id, speed] of this.spinningFans) {
+      const meshes = this.byEntity.get(id);
+      const centre = this.fanCentres.get(id);
+      if (!meshes || !meshes.length || !centre) continue;
+      // Only spin (and keep rendering) while the fan's storey is being viewed —
+      // floors above the active one are hidden, so their fans needn't drive
+      // continuous frames. (Cumulative floors: <= active are visible.)
+      const floorIdx = (meshes[0].metadata as { floorIndex?: number } | null)?.floorIndex;
+      if (floorIdx !== undefined && floorIdx > this.activeFloor) continue;
+      const delta = speed * dt;
+      for (const m of meshes) m.rotateAround(centre, Vector3.Up(), delta);
+      spun = true;
+    }
+    if (spun) this.requestRender();
   }
 }

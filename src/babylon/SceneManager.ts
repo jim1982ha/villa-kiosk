@@ -32,7 +32,7 @@ import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
 import type { PlanWorldPair } from "@/utils/affineFit";
-import type { Pt2 } from "@/utils/geometry";
+import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { loadOverviewView, saveOverviewView } from "@/utils/storage";
@@ -601,6 +601,83 @@ export class SceneManager {
     return hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : 0;
   }
 
+  /**
+   * For a STEPPED/sloped room (a staircase), sample the real floor surface on a
+   * grid inside the polygon and return glow-mesh vertex data that HUGS the steps,
+   * so RoomHighlight can drape the red glow over the treads instead of floating a
+   * flat patch at the first-hit tread height. Returns null for flat rooms (caller
+   * keeps the cheap flat patch) or when the grid would be too large.
+   *
+   * Picking skips setEnabled(false) meshes and FloorManager hides other storeys,
+   * so this room's floor is force-shown for the probe then restored — the same
+   * trick estimateFloorY uses.
+   */
+  private buildRoomConform(pts: Pt2[], floor: number): { positions: number[]; indices: number[] } | null {
+    const meshes = this.floors.getFloorMeshes(floor);
+    if (meshes.length === 0) return null;
+
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of pts) {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
+    }
+    const STEP = 0.25;
+    const nx = Math.max(2, Math.ceil((maxX - minX) / STEP) + 1);
+    const nz = Math.max(2, Math.ceil((maxZ - minZ) / STEP) + 1);
+    if (nx * nz > 6000) return null; // safety cap → fall back to flat patch
+
+    const saved = meshes.map((m) => [m.isEnabled(false), m.isPickable] as const);
+    for (const m of meshes) { m.setEnabled(true); m.isPickable = true; }
+    const restore = () => meshes.forEach((m, i) => { m.setEnabled(saved[i][0]); m.isPickable = saved[i][1]; });
+
+    const xAt = (c: number) => Math.min(minX + c * STEP, maxX);
+    const zAt = (r: number) => Math.min(minZ + r * STEP, maxZ);
+    const probe = (x: number, z: number): number | null => {
+      const hit = this.scene.pickWithRay(
+        new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000), (m) => meshes.includes(m));
+      return hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : null;
+    };
+
+    // Cheap steppedness pre-check (~10 interior probes) so a big FLAT room never
+    // pays for a full-grid raycast just to discover it isn't stepped.
+    const quick: number[] = [];
+    for (let i = 1; i <= 3; i++) for (let j = 1; j <= 3; j++) {
+      const y = probe(minX + (maxX - minX) * i / 4, minZ + (maxZ - minZ) * j / 4);
+      if (y !== null) quick.push(y);
+    }
+    if (quick.length < 3 || Math.max(...quick) - Math.min(...quick) < 0.35) { restore(); return null; }
+
+    // Stepped → sample the full grid at the real surface height.
+    const H = new Array<number | null>(nx * nz).fill(null);
+    for (let r = 0; r < nz; r++) for (let c = 0; c < nx; c++) {
+      const x = xAt(c), z = zAt(r);
+      if (pointInPolygon(x, z, pts)) H[r * nx + c] = probe(x, z);
+    }
+    restore();
+
+    const OFFSET = 0.03; // lift off the treads so the glow doesn't z-fight
+    const positions: number[] = [];
+    const vmap = new Map<number, number>();
+    const vidx = (gi: number): number => {
+      let v = vmap.get(gi);
+      if (v === undefined) {
+        v = positions.length / 3;
+        positions.push(xAt(gi % nx), H[gi]! + OFFSET, zAt(Math.floor(gi / nx)));
+        vmap.set(gi, v);
+      }
+      return v;
+    };
+    const indices: number[] = [];
+    for (let r = 0; r < nz - 1; r++) for (let c = 0; c < nx - 1; c++) {
+      const a = r * nx + c, b = a + 1, d = a + nx, e = d + 1;
+      if (H[a] === null || H[b] === null || H[d] === null || H[e] === null) continue;
+      const va = vidx(a), vb = vidx(b), vd = vidx(d), ve = vidx(e);
+      // Two triangles, wound both ways so the glow reads from above and at a graze.
+      indices.push(va, vb, ve, va, ve, vd, ve, vb, va, vd, ve, va);
+    }
+    return indices.length ? { positions, indices } : null;
+  }
+
   private entityCalibration(): Record<string, { x: number; y: number }> {
     return this.config.sh3dEntities?.length
       ? Object.fromEntries(this.config.sh3dEntities.map((e) => [e.entityId, { x: e.x, y: e.y }]))
@@ -810,7 +887,7 @@ export class SceneManager {
     devLog(`[Villa] calibration: ${solution.strategy}`);
 
     // Transform each room polygon to model space; centroid → teleport point.
-    const worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number }> = [];
+    const worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number; conform?: { positions: number[]; indices: number[] } }> = [];
     const points: TeleportPoint[] = [];
     for (const room of rooms) {
       const pts = room.points.map((p) => planToWorld(p.x, p.y));
@@ -820,7 +897,10 @@ export class SceneManager {
       const c = polygonCentroid(room.points);
       const wc = planToWorld(c.x, c.y);
       const floorY = this.estimateFloorY(wc.x, wc.z, floor);
-      worldPolys.push({ name: room.name, pts, floorY });
+      // Stepped rooms (a staircase) get a surface-hugging glow mesh instead of a
+      // flat patch that would float at the first-hit tread height.
+      const conform = this.buildRoomConform(pts, floor) ?? undefined;
+      worldPolys.push({ name: room.name, pts, floorY, conform });
       points.push({
         name: room.name,
         floor,

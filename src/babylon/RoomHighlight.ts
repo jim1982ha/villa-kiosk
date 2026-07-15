@@ -172,14 +172,37 @@ export class RoomHighlight {
    *  shows on the ground floor": every room used to render at this same
    *  fixed ground-level Y regardless of its real storey.
    */
-  setRooms(polys: { name: string; pts: Pt2[]; floorY?: number }[]): void {
+  setRooms(polys: { name: string; pts: Pt2[]; floorY?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
     this.disposeMap(this.polyRooms);
     for (const room of polys) {
       const key = RoomHighlight.normalise(room.name);
-      const y = (room.floorY ?? 0) + FLOOR_Y_OFFSET;
-      const entry = this.buildMesh(key, room.pts, y);
+      // A stepped room (staircase) ships a surface-hugging vertex mesh from
+      // SceneManager.buildRoomConform; a flat room just gets its polygon patch.
+      const entry = room.conform
+        ? this.buildConformMesh(key, room.conform.positions, room.conform.indices)
+        : this.buildMesh(key, room.pts, (room.floorY ?? 0) + FLOOR_Y_OFFSET);
       if (entry) this.polyRooms.set(key, entry);
     }
+  }
+
+  /** Build a glow mesh directly from pre-sampled vertex data that already
+   *  follows the real surface (stair treads) — see SceneManager.buildRoomConform.
+   *  Same "glowing glass" material and marker exclusion as the flat polygon. */
+  private buildConformMesh(key: string, positions: number[], indices: number[]): RoomEntry | null {
+    if (positions.length < 9 || indices.length < 3) return null;
+    const normals: number[] = [];
+    VertexData.ComputeNormals(positions, indices, normals);
+    const mesh = new Mesh(`roomGlow_${key}`, this.scene);
+    const vd = new VertexData();
+    vd.positions = positions;
+    vd.indices = indices;
+    vd.normals = normals;
+    vd.applyToMesh(mesh);
+    const material = this.makeGlowMaterial(key, false);
+    mesh.material = material;
+    mesh.isPickable = false;
+    mesh.metadata = { isMarker: true };
+    return { mesh, material };
   }
 
   /** (Re)build a synthetic glow for each named TeleportMenu point that ISN'T
