@@ -897,9 +897,18 @@ export class SceneManager {
       const c = polygonCentroid(room.points);
       const wc = planToWorld(c.x, c.y);
       const floorY = this.estimateFloorY(wc.x, wc.z, floor);
-      // Stepped rooms (a staircase) get a surface-hugging glow mesh instead of a
-      // flat patch that would float at the first-hit tread height.
-      const conform = this.buildRoomConform(pts, floor) ?? undefined;
+      // Surface-hug the glow ONLY for staircase rooms (matched by name). The
+      // grid-probe raycasts the whole fused structure, so running it on every
+      // room — especially the big outdoor/terrain polygons, which vary in height
+      // and so false-positive as "stepped" — flooded load with tens of thousands
+      // of raycasts and hung "Loading the villa". Stairs are the only case a flat
+      // patch reads wrong, so scope it to them.
+      const isStairRoom = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i.test(room.name);
+      let conform: { positions: number[]; indices: number[] } | undefined;
+      if (isStairRoom) {
+        try { conform = this.buildRoomConform(pts, floor) ?? undefined; }
+        catch (err) { console.warn("[Villa] stair glow conform failed; using flat patch", err); }
+      }
       worldPolys.push({ name: room.name, pts, floorY, conform });
       points.push({
         name: room.name,

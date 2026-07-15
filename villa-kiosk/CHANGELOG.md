@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.17.1
+
+- **Fix: villa stuck on "Loading…".** 2.17.0's stair-conforming glow ran its
+  grid-probe (which raycasts the whole structure) on every room; the big outdoor
+  / terrain / pool polygons vary in height, so they false-positived as "stepped"
+  and each fired thousands of raycasts, hanging the load. The probe is now scoped
+  to staircase rooms only (matched by name), wrapped so it can never block load.
+
 ## 2.17.0
 
 - **Motion-glow drapes over the stairs.** A motion/occupancy sensor whose room is
