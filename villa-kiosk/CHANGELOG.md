@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.18.0
+
+- **Faster load — the villa appears before the heavy passes run.** The raycast-
+  heavy work (per-room floor probing + the stair-glow conform) and the cosmetic
+  passes (grass, blue highlights, room anchors) now run AFTER the first rendered
+  frame instead of blocking it. On a wall tablet that's several seconds sooner to
+  an interactive villa; rooms/teleport/glow pop in a moment later. Nothing is
+  lost — the Rooms grid adopts via the existing calibration hook when it lands.
+
 ## 2.17.1
 
 - **Fix: villa stuck on "Loading…".** 2.17.0's stair-conforming glow ran its

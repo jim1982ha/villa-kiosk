@@ -792,30 +792,36 @@ export class SceneManager {
         (m) => m.material?.name?.startsWith(BAKED_MATERIAL_PREFIX)));
     }
 
+    // --- Critical path: everything needed for a correct, navigable first paint.
     this.normalizeScale(result.meshes); // bring to metres BEFORE recentring
     this.recenterModel(result.meshes); // align to origin BEFORE indexing positions
     this.floors.indexFloors(result.meshes);
-    this.camera.indexTeleportAnchors(result.meshes);
-    this.pick.indexInteractiveMeshes(result.meshes);
-    this.visuals.indexMeshes(result.meshes);
-    this.applyStructure(result.meshes); // solid walls + collisions
-    if (this.config.grassGround !== false) {
-      applyGrassGround(this.scene, result.meshes, this.config.grassGroundHints ?? []); // grey terrain slab -> grass
-    }
-    this.applyHighlight(result.meshes); // blue glow on bound meshes (if enabled)
+    this.pick.indexInteractiveMeshes(result.meshes); // taps work immediately
+    this.visuals.indexMeshes(result.meshes); // entity badges/lights/state visuals
+    this.applyStructure(result.meshes); // solid walls + collisions + hidden ceilings
 
-    // Fit the plan->world transform from entity-named meshes and lay out room
-    // anchors / teleport points correctly for THIS model.
-    this.calibrateRooms(result.meshes);
-
-    // Spawn at the default first-person pose (foot of the staircase on the
-    // ground floor, else the main/living room). Keeps you inside the house even
-    // for models with big outdoor areas, where the bounding-box centre would land
-    // you outside on the garden.
+    // Spawn at the default first-person pose (foot of the staircase on the ground
+    // floor). Uses the stair GEOMETRY, so it doesn't need calibration to have run.
     this.camera.teleport(this.firstPersonSpawn(), true);
 
+    // The villa is correct and interactive now — reveal it.
     this.markReady();
     this.requestRender(1000);
+
+    // --- Deferred: raycast-heavy / cosmetic passes that need not block the first
+    // paint. Running them AFTER the first rendered frame is what stops "Loading
+    // the villa" (and, on a wall tablet, several seconds of blocked main thread)
+    // from waiting on the per-room floor raycasts + the stair-glow conform. The
+    // Dashboard adopts the rooms/teleport grid via onCalibrated when it lands.
+    this.scene.onAfterRenderObservable.addOnce(() => {
+      this.camera.indexTeleportAnchors(result.meshes);
+      if (this.config.grassGround !== false) {
+        applyGrassGround(this.scene, result.meshes, this.config.grassGroundHints ?? []);
+      }
+      this.applyHighlight(result.meshes); // blue glow on bound meshes (if enabled)
+      this.calibrateRooms(result.meshes); // plan→world fit + room glow (fires onCalibrated)
+      this.requestRender();
+    });
   }
 
   /**
