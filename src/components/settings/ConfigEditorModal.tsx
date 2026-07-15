@@ -67,13 +67,13 @@ export default function ConfigEditorModal({ onBack }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="settings-header">
-          <h2>Config Editor</h2>
+          <h2>Advanced Settings</h2>
         </div>
 
         <div className="settings-body">
           <div className="settings-section-title">Villa location</div>
           <p className="muted body-text" style={{ marginTop: 0, fontSize: 12 }}>
-            Drives sun position, day/night and shadows for this villa.
+            Drives sun position and day/night for this villa.
           </p>
           <VillaCoordinates />
 

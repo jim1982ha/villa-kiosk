@@ -191,7 +191,10 @@ button {
 .btn:disabled { opacity: 0.4; pointer-events: none; }
 
 .icon-btn {
-  width: 48px; height: 48px; border-radius: 50%;
+  /* Squircle (not a circle) so every standalone control — Settings, view toggle,
+     compass, anchor, (i), profile logout — matches the squircle buttons in the
+     top-bar groups and the left stack. */
+  width: 48px; height: 48px; border-radius: 14px;
   background: var(--bg-panel); backdrop-filter: blur(8px);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-primary);
@@ -639,8 +642,9 @@ input[type="range"]::-moz-range-thumb {
 @media (max-width: 560px) { .settings-body .icon-select { width: calc(50% - 5px); } }
 
 /* Villa Latitude/Longitude pair in the Config Editor. */
-.coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 460px; }
-.coord-grid label { margin-top: 0; }
+.coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 460px; margin-inline: auto; }
+.coord-grid label { margin-top: 0; text-align: center; }
+.coord-grid input { text-align: center; }
 
 /* Inline (i) info button + hover/focus tooltip (replaces the model info block). */
 .info-tip { position: relative; display: inline-flex; }
@@ -1036,17 +1040,28 @@ label.toggle span { user-select: none; line-height: 1.4; }
 
 /* Profile chip in the HUD (current role + switch-profile action). */
 .hud-profile {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12.5px; color: var(--text-secondary);
-  padding: 4px 8px; border-radius: 10px; background: var(--chip-bg);
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 48px; /* match the standalone icon buttons beside it */
+  padding: 0 6px 0 14px; /* room for the name on the left, snug on the button */
+  font-size: 13px; color: var(--text-secondary);
+  border-radius: 14px; background: var(--chip-bg);
   border: 1px solid var(--hairline); white-space: nowrap;
 }
+/* The logout button nests INSIDE the chip, so it's smaller than a standalone
+   icon button and squared to match. */
+.hud-profile .icon-btn {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: transparent; border: none; backdrop-filter: none;
+}
+.hud-profile .icon-btn:hover { background: var(--bg-input); }
 
 @media (max-width: 640px), (max-height: 560px) {
   .profile-title { font-size: 30px; }
   .profile-cards { gap: 12px; }
   .profile-card { min-height: 140px; flex-basis: 100%; max-width: 420px; }
   .pinpad-key { min-height: 54px; }
-  /* Hide the profile-name text on narrow screens; the icon button remains. */
+  /* Hide the profile-name text on narrow screens; the icon button remains.
+     Drop the (now empty) left padding so the chip stays square around the icon. */
   .hud-profile .hud-profile-name { display: none; }
+  .hud-profile { padding: 0 6px; }
 }

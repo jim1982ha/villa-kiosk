@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.15.0
+
+- **Device categories now follow device TYPE + device_class, not per-entity.**
+  Categories are derived from a device's kind (and, where it matters, its Home
+  Assistant `device_class`) at read time instead of being pinned onto each
+  entity, so re-organising the rules re-buckets every device automatically. New
+  grouping:
+  - Temperature + humidity **sensors** → **Comfort**
+  - Motion/presence **binary_sensors**, **cameras** and **locks** → **Access
+    Control**
+  - Enum (text-state) **sensors** → **Network**
+  A category you explicitly set in Advanced Settings is still respected.
+- **Consistent button shape.** The standalone controls (Settings, view toggle,
+  compass/rooms, default-view anchor, (i)) were circles while the top-bar groups
+  and left stack were squircles. They're all squircles now.
+- **Cleaner profile chip.** The Guest/Owner/Facility-Manager chip had an
+  oversized round logout button that made it look bulky; it's now a tidy squircle
+  chip matching the icon buttons' height, with a smaller nested logout button.
+- **Renamed "Config Editor" to "Advanced Settings"** (the footer button and the
+  modal title) — a clearer name for the villa coordinates / bindings / entity
+  metadata screen.
+- **Villa location fields are centred** in Advanced Settings, with their labels
+  and values centred too, so the Latitude/Longitude pair sits tidily.
+- Dropped the stale "shadows" mention from the villa-location description (sun
+  shadows were removed in 2.14.0).
+
 ## 2.14.3
 
 - **Consistent badge blue.** Live devices used two slightly different, partly

@@ -653,17 +653,17 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
 
         {/* The villa Latitude/Longitude, the old Rooms-mirror override, the
             backup buttons and the Inspector used to sit on this landing screen.
-            Coordinates + entity/binding editing now live in the Config Editor
+            Coordinates + entity/binding editing now live in Advanced Settings
             (footer button below); the rest were removed — keeping this screen a
             short, everyday list. */}
 
         </div>{/* end settings-body */}
 
         <div className="settings-footer">
-          {/* Config Editor opens as a modal over the live villa (no reload). */}
+          {/* Advanced Settings opens as a modal over the live villa (no reload). */}
           {can("editConfig") ? (
             <button className="btn ghost" onClick={onOpenConfigEditor}>
-              <Sliders size={18} /> Config Editor
+              <Sliders size={18} /> Advanced Settings
             </button>
           ) : <span />}
           <div className="row" style={{ gap: 12 }}>

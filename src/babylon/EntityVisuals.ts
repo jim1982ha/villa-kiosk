@@ -27,7 +27,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { DEFAULT_ENTITY_ICONS, DEFAULT_BINARY_SENSOR_ICONS, DEFAULT_SENSOR_ICONS } from "@/config/AppConfig";
 import { resolveMeshToMapping } from "@/config/EntityMap";
-import { categoryForEntity } from "@/config/EntityCategories";
+import { effectiveCategory } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
@@ -927,7 +927,8 @@ export class EntityVisuals {
    *  default (config/EntityCategories.ts) for entities that don't have one
    *  yet (see bindingUtils). */
   private categoryOf(entityId: string, type: EntityType): Category {
-    return this.config.entityMap[entityId]?.category ?? categoryForEntity(entityId, type);
+    const dc = this.lastState.get(entityId)?.attributes?.device_class as string | undefined;
+    return effectiveCategory(entityId, type, this.config.entityMap[entityId]?.category, dc);
   }
 
   /** Follow FloorManager's floor toggle — only the active floor's badges are
@@ -1064,6 +1065,11 @@ export class EntityVisuals {
   private updateLabel(entityId: string, type: EntityType, entity: HassEntity): void {
     const lbl = this.labels.get(entityId);
     if (!lbl) return;
+    // Re-resolve the filter category now that this state may carry the
+    // device_class (e.g. an enum sensor → Network) — cullLabels reads it live.
+    lbl.category = effectiveCategory(
+      entityId, type, this.config.entityMap[entityId]?.category,
+      entity.attributes.device_class as string | undefined);
     const kind = this.badgeKind(type, entity);
     const style = BADGE_STYLE[kind];
     lbl.badge.background = style.fill; // fill the whole disc for active devices

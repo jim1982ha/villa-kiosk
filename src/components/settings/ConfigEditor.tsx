@@ -9,7 +9,7 @@ import { Plus, Trash2, Pencil, Check, X, Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { createDefaultMapping } from "@/config/EntityMap";
-import { CATEGORY_ORDER, CATEGORY_LABELS, categoryForEntity } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory } from "@/config/EntityCategories";
 import EntityPicker from "./EntityPicker";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 
@@ -217,7 +217,7 @@ export default function ConfigEditor() {
                 </td>
                 <td data-label="Category">
                   <select
-                    value={m.category ?? categoryForEntity(m.entityId, m.type)}
+                    value={effectiveCategory(m.entityId, m.type, m.category, entities[m.entityId]?.attributes.device_class as string | undefined)}
                     onChange={(e) => patch(key, { category: e.target.value as Category })}
                     title="Which map filter group this device belongs to"
                   >

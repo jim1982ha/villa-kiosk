@@ -27,7 +27,7 @@ import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto, BAKED_MATERIAL_PREFIX } from "./ModelLoader";
 import { applyGrassGround } from "./GroundGrass";
 import { resolveMeshToMapping, inferTypeFromEntityId, normaliseMeshName } from "@/config/EntityMap";
-import { categoryForEntity } from "@/config/EntityCategories";
+import { effectiveCategory } from "@/config/EntityCategories";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
@@ -1118,7 +1118,7 @@ export class SceneManager {
       if (!mapping) continue;
       // Glow only for categories currently shown (HUD chips): a hidden
       // category's objects shouldn't advertise themselves as clickable.
-      const category = mapping.category ?? categoryForEntity(mapping.entityId, mapping.type);
+      const category = effectiveCategory(mapping.entityId, mapping.type, mapping.category);
       if (this.config.hiddenCategories.includes(category)) continue;
       if (!(m instanceof Mesh)) continue;
       const unit = axisWorldScale(m);

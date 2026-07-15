@@ -13,7 +13,6 @@
 // copy of this map stored in localStorage, so no code change is required.
 
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-import { categoryForEntity } from "./EntityCategories";
 
 export type { EntityMapping, EntityType };
 
@@ -191,16 +190,19 @@ export function createDefaultMapping(
     type,
     label: labelFromEntityId(entityId, opts.friendlyName),
     room: opts.room ?? "",
-    category: opts.category ?? categoryForEntity(entityId, type),
+    // Category is NOT pinned per entity — it's derived from device type +
+    // device_class at read time (see effectiveCategory / EntityCategories.ts).
+    // Only a value the user explicitly picks in the Config Editor is stored.
+    category: opts.category,
   };
 }
 
-/** Fill in a default category (see EntityCategories.ts) for a mapping that
- *  predates the category feature or was created via a path that skipped
- *  createDefaultMapping. A user-set category always wins — this is a no-op
- *  once one exists. */
+/** Passthrough kept for its call sites. Categories are no longer pinned onto a
+ *  mapping — they're derived from device type + device_class at read time (see
+ *  effectiveCategory / EntityCategories.ts), so a mapping's `category` is left
+ *  as-is: undefined for auto devices, set only when the user picked one. */
 function withCategory(m: EntityMapping): EntityMapping {
-  return m.category ? m : { ...m, category: categoryForEntity(m.entityId, m.type) };
+  return m;
 }
 
 /** Build a usable EntityMapping for an entity_id, falling back to inference. */

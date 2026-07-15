@@ -1,15 +1,14 @@
 // src/config/EntityCategories.ts
 //
 // Default category assignment for the map's category filter (HUD left
-// column) and the Config Editor's "Category" column. Edit the two tables
+// column) and the Config Editor's "Category" column. Edit the tables/rules
 // below to change the villa-wide defaults — no other code needs to change.
-// Both are re-applied every time the model/entities are (re)indexed, so
-// editing this file takes effect on the next app load / GLB refresh.
 //
-// A per-entity value the user set in the Config Editor ALWAYS wins over
-// these defaults (see `EntityMapping.category` in scene.types.ts) — this
-// file only supplies the starting point for entities that don't have an
-// explicit category yet.
+// A per-entity value the user set in the Config Editor ALWAYS wins over these
+// defaults — but a category that merely equals the LEGACY auto-default is
+// treated as "never customised" (see effectiveCategory), so re-organising the
+// defaults here re-buckets already-detected devices too, while a genuine user
+// choice is preserved.
 
 import type { Category, EntityType } from "@/types/scene.types";
 
@@ -27,29 +26,73 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   others: "Others",
 };
 
-/** Default category by device TYPE. Anything not listed here falls into
- *  "others". */
+/** Default category by device TYPE. Anything not listed here (and not caught by
+ *  a device_class rule below) falls into "others". */
 export const DEFAULT_CATEGORY_BY_TYPE: Partial<Record<EntityType, Category>> = {
   light: "light",
-  camera: "network",
+  camera: "access_control",
+  lock: "access_control",
   climate: "comfort",
   cover: "comfort",
   fan: "comfort",
   sensor: "energy",
 };
 
-/** Per-entity_id exceptions, checked BEFORE the type default above — for
- *  specific devices that shouldn't follow their domain's default. Example:
- *    "lock.living_room_aqara_smart_door_lock_0aa9_lock_mechanism": "access_control",
- *    "sensor.front_gate_motion": "access_control",
- */
+/** The PREVIOUS type defaults. Used only to recognise an auto-assigned (i.e.
+ *  never user-picked) category so a defaults re-org re-buckets it. Keep in sync
+ *  with whatever DEFAULT_CATEGORY_BY_TYPE + the `?? "others"` fallback used to
+ *  produce before the reorg. */
+const LEGACY_DEFAULT_CATEGORY_BY_TYPE: Partial<Record<EntityType, Category>> = {
+  light: "light", camera: "network", climate: "comfort",
+  cover: "comfort", fan: "comfort", sensor: "energy",
+};
+function legacyDefaultCategory(type: EntityType): Category {
+  return LEGACY_DEFAULT_CATEGORY_BY_TYPE[type] ?? "others";
+}
+
+/** Per-entity_id exceptions, checked BEFORE everything below — for specific
+ *  devices that shouldn't follow their domain's default. */
 export const CATEGORY_EXCEPTIONS: Partial<Record<string, Category>> = {
 };
 
-/** Resolve the DEFAULT category for an entity: exception > type default >
- *  "others". Used to seed a newly-detected/bound/marked entity's category;
- *  once the user edits it in the Config Editor, their choice is stored on
- *  the EntityMapping and this function is no longer consulted for it. */
-export function categoryForEntity(entityId: string, type: EntityType): Category {
-  return CATEGORY_EXCEPTIONS[entityId] ?? DEFAULT_CATEGORY_BY_TYPE[type] ?? "others";
+// device_class sets that redirect a generic domain to a specific category.
+const COMFORT_SENSOR_DC = new Set(["temperature", "humidity"]);
+const ACCESS_BINARY_DC = new Set(["motion", "presence", "occupancy", "moving"]);
+
+/** Resolve the DEFAULT category for an entity: exception > device_class rule >
+ *  entity_id hint > type default > "others". `deviceClass` (from the live HA
+ *  state) makes the sensor/binary_sensor splits precise; when it isn't known
+ *  yet the entity_id hints cover the common cases. */
+export function categoryForEntity(entityId: string, type: EntityType, deviceClass?: string): Category {
+  const exception = CATEGORY_EXCEPTIONS[entityId];
+  if (exception) return exception;
+
+  const dc = (deviceClass ?? "").toLowerCase();
+  const id = entityId.toLowerCase();
+
+  if (type === "sensor") {
+    // Temperature / humidity readings live with the comfort controls.
+    if (COMFORT_SENSOR_DC.has(dc) || /(^|[._])(temperature|temp|humidity|humid)([._]|$)/.test(id)) return "comfort";
+    // Enum (text-state) sensors — connectivity, status, mode … — read as network.
+    if (dc === "enum") return "network";
+  } else if (type === "binary_sensor") {
+    // Motion / presence detectors belong with access control.
+    if (ACCESS_BINARY_DC.has(dc) || /(^|[._])(motion|presence|occupancy|pir)([._]|$)/.test(id)) return "access_control";
+  }
+
+  return DEFAULT_CATEGORY_BY_TYPE[type] ?? "others";
+}
+
+/** The category to actually USE for an entity: a stored value the user picked
+ *  wins, but a stored value that merely equals the legacy auto-default is
+ *  ignored so the current defaults (above) apply — including retroactively to
+ *  already-detected devices whose category was auto-pinned. */
+export function effectiveCategory(
+  entityId: string,
+  type: EntityType,
+  storedCategory?: Category,
+  deviceClass?: string,
+): Category {
+  if (storedCategory && storedCategory !== legacyDefaultCategory(type)) return storedCategory;
+  return categoryForEntity(entityId, type, deviceClass);
 }
