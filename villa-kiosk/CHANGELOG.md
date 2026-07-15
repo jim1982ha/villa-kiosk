@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.13.1
+
+- **Fix: badges were shaking.** The declutter eased offsets toward the target
+  each frame and requested a render while "moving" — which kept the render loop
+  (and the overview camera's inertia) alive, nudging the projected positions and
+  keeping it "moving": a feedback loop. The layout is now a deterministic
+  function of the current positions, applied directly, so a static camera holds
+  the badges perfectly still (no easing, no self-triggered renders).
+- **Fix: sensor labels now fill too.** 2.13.0 filled on/alert devices but kept
+  sensors as a dark disc, so in a scene where the visible tags were mostly
+  sensors (power/temp/humidity) it looked unchanged. A sensor reporting a value
+  is "live", so it now gets a filled badge as well — only genuinely off /
+  unavailable devices stay dark.
+
 ## 2.13.0
 
 - **Active devices now fill their whole badge with the state colour.** An "on"

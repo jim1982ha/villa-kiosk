@@ -176,11 +176,14 @@ const BADGE_STYLE: Record<
   BadgeKind,
   { fill: string; ring: string; alpha: number; glow: string; glowBlur: number; glyphAlpha: number }
 > = {
-  on:          { fill: "rgba(14,165,233,0.95)", ring: "#e0f2fe",                alpha: 1,   glow: "rgba(56,189,248,0.85)", glowBlur: 16, glyphAlpha: 1 },
-  alert:       { fill: "rgba(244,63,94,0.95)",  ring: "#ffe4e6",                alpha: 1,   glow: "rgba(244,63,94,0.85)",  glowBlur: 16, glyphAlpha: 1 },
-  info:        { fill: BADGE_BASE_FILL,          ring: "rgba(56,189,248,0.9)",  alpha: 1,   glow: "rgba(0,0,0,0.5)",       glowBlur: 6,  glyphAlpha: 1 },
-  off:         { fill: BADGE_BASE_FILL,          ring: "rgba(148,163,184,0.5)", alpha: 0.9, glow: "rgba(0,0,0,0.5)",       glowBlur: 6,  glyphAlpha: 0.75 },
-  unavailable: { fill: "rgba(17,24,39,0.5)",     ring: "rgba(148,163,184,0.4)", alpha: 0.5, glow: "rgba(0,0,0,0.4)",       glowBlur: 6,  glyphAlpha: 0.55 },
+  on:          { fill: "rgba(14,165,233,0.96)", ring: "#e0f2fe",                alpha: 1,   glow: "rgba(56,189,248,0.85)", glowBlur: 16, glyphAlpha: 1 },
+  alert:       { fill: "rgba(244,63,94,0.96)",  ring: "#ffe4e6",                alpha: 1,   glow: "rgba(244,63,94,0.85)",  glowBlur: 16, glyphAlpha: 1 },
+  // A sensor reporting a value is "live" too — fill it so it reads as active
+  // (a touch cooler/deeper than a switched-on device, and the glyph + value pill
+  // still tell a thermometer from a light).
+  info:        { fill: "rgba(37,99,235,0.92)",   ring: "#dbeafe",               alpha: 1,   glow: "rgba(59,130,246,0.6)",  glowBlur: 10, glyphAlpha: 1 },
+  off:         { fill: BADGE_BASE_FILL,          ring: "rgba(148,163,184,0.5)", alpha: 0.9, glow: "rgba(0,0,0,0.5)",       glowBlur: 6,  glyphAlpha: 0.7 },
+  unavailable: { fill: "rgba(17,24,39,0.5)",     ring: "rgba(148,163,184,0.4)", alpha: 0.5, glow: "rgba(0,0,0,0.4)",       glowBlur: 6,  glyphAlpha: 0.5 },
 };
 
 /** Render an emoji/glyph to a square canvas and cache the data URL. Drawing a
@@ -264,11 +267,6 @@ export class EntityVisuals {
   /** Fullscreen GUI layer for state labels. */
   private labelLayer: AdvancedDynamicTexture | null = null;
   private labels = new Map<string, LabelControls>();
-  /** Screen-space nudge (px) applied per label to keep badges from stacking on
-   *  top of each other when their anchors project to the same point. Relaxed
-   *  every cullLabels pass and decayed back toward 0 when the crowding clears —
-   *  see the collision-resolution block in cullLabels(). */
-  private labelDeclutter = new Map<string, { x: number; y: number }>();
   /** Per-entity invisible anchor node for mesh-bound labels, positioned at the
    *  entity's actual bounding-box top-centre (elevation + height combined),
    *  computed once from real geometry — see buildLabelAnchors(). Replaces
@@ -1124,25 +1122,25 @@ export class EntityVisuals {
       const p = Vector3.Project(lbl.anchor.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
       const visible = p.z >= 0 && p.z <= 1;
       lbl.container.isVisible = visible;
-      if (visible) {
-        const off = this.labelDeclutter.get(id) ?? { x: 0, y: 0 };
-        shown.push({ id, lbl, x: p.x, y: p.y, off });
-      }
+      if (visible) shown.push({ id, lbl, x: p.x, y: p.y, off: { x: 0, y: 0 } });
     }
 
     this.declutterLabels(shown);
   }
 
   /**
-   * Nudge overlapping badges apart so none share a virtual position. Each frame
-   * a stable TARGET layout is computed by relaxing from zero (a pure function of
-   * the current screen positions: pairs closer than a badge-diameter are pushed
-   * directly apart, splitting the correction; exactly-coincident anchors — a
-   * combined light+VMC fixture — get a deterministic angular split, no NaN). The
-   * applied offset then eases toward that target, so a crowded cluster fans out
-   * smoothly and springs back together as the camera separates the anchors. We
-   * only keep rendering while the offsets are still moving, so a settled layout
-   * (fanned-out or home) costs nothing and never jitters. Offsets are the GUI
+   * Nudge overlapping badges apart so none share a virtual position. The layout
+   * is a DETERMINISTIC function of the current screen positions — relaxed from
+   * zero each frame (pairs closer than a badge-diameter are pushed directly
+   * apart, splitting the correction; exactly-coincident anchors — a combined
+   * light+VMC fixture — get a deterministic angular split, no NaN) — and applied
+   * DIRECTLY, not eased. That's deliberate: a static camera projects the same
+   * positions every frame, so the same offsets come out every frame and the
+   * badges sit perfectly still. (An earlier version eased toward the target and
+   * called requestRender while "moving"; that kept the render loop — and thus the
+   * overview camera's inertia — alive, which nudged the projections, which kept
+   * it "moving": a feedback loop that made the labels shake. Applying directly
+   * removes both the easing and the self-triggered render.) Offsets are the GUI
    * link offset, so tap hit-testing (which reads each badge's real drawn box)
    * keeps working.
    */
@@ -1154,13 +1152,14 @@ export class EntityVisuals {
     const maxOff = 120 * scale; // never fling a badge miles from its device
     const baseY = -LABEL_HEIGHT_PX / 2;
 
-    // Stable target layout, relaxed from zero (independent of last frame).
-    const target = shown.map(() => ({ x: 0, y: 0 }));
-    for (let iter = 0; iter < 8; iter++) {
+    for (const s of shown) { s.off.x = 0; s.off.y = 0; }
+    for (let iter = 0; iter < 10; iter++) {
+      let moved = false;
       for (let i = 0; i < shown.length; i++) {
         for (let j = i + 1; j < shown.length; j++) {
-          let dx = (shown[j].x + target[j].x) - (shown[i].x + target[i].x);
-          let dy = (shown[j].y + target[j].y) - (shown[i].y + target[i].y);
+          const a = shown[i], b = shown[j];
+          let dx = (b.x + b.off.x) - (a.x + a.off.x);
+          let dy = (b.y + b.off.y) - (a.y + a.off.y);
           let d = Math.hypot(dx, dy);
           if (d >= minDist) continue;
           if (d < 0.01) {
@@ -1169,28 +1168,20 @@ export class EntityVisuals {
           }
           const push = (minDist - d) / 2;
           const ux = dx / d, uy = dy / d;
-          target[i].x -= ux * push; target[i].y -= uy * push;
-          target[j].x += ux * push; target[j].y += uy * push;
+          a.off.x -= ux * push; a.off.y -= uy * push;
+          b.off.x += ux * push; b.off.y += uy * push;
+          moved = true;
         }
       }
+      if (!moved) break;
     }
 
-    // Ease each applied offset toward its target; keep rendering while moving.
-    let moving = false;
-    for (let k = 0; k < shown.length; k++) {
-      const t = target[k];
-      const len = Math.hypot(t.x, t.y);
-      if (len > maxOff) { t.x *= maxOff / len; t.y *= maxOff / len; }
-      const s = shown[k];
-      const nx = s.off.x + (t.x - s.off.x) * 0.3;
-      const ny = s.off.y + (t.y - s.off.y) * 0.3;
-      if (Math.abs(nx - s.off.x) + Math.abs(ny - s.off.y) > 0.4) moving = true;
-      s.off.x = nx; s.off.y = ny;
-      this.labelDeclutter.set(s.id, s.off);
-      s.lbl.container.linkOffsetXInPixels = nx;
-      s.lbl.container.linkOffsetYInPixels = baseY + ny;
+    for (const s of shown) {
+      const len = Math.hypot(s.off.x, s.off.y);
+      if (len > maxOff) { s.off.x *= maxOff / len; s.off.y *= maxOff / len; }
+      s.lbl.container.linkOffsetXInPixels = s.off.x;
+      s.lbl.container.linkOffsetYInPixels = baseY + s.off.y;
     }
-    if (moving) this.requestRender();
   }
 
   /**
