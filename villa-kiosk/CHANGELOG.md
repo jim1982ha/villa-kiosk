@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.14.1
+
+- **Tidier value pills.** The chip under a device badge was dumping raw state,
+  so readings crowded it ("6570.989W", "25.05°C"). Values are now formatted
+  exhaustively: numbers are rounded to a sensible precision with large
+  power/energy scaled to k-units ("6.6 kW", "25.1°C", "64%"); enum/text states
+  are tidied to Sentence case with underscores as spaces ("not_home" → "Not
+  home", "connected" → "Connected"); and anything still long is ellipsised so a
+  pill can never blow out.
+
 ## 2.14.0
 
 - **Uploading a model keeps Settings open.** A new GLB / room-data upload now

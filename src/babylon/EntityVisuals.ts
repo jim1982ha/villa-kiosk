@@ -1299,7 +1299,7 @@ export class EntityVisuals {
       }
       case "fan": {
         const p = s.attributes.percentage as number | undefined;
-        return s.state === "on" && p != null ? `${p}%` : "";
+        return s.state === "on" && p != null ? `${Math.round(p)}%` : "";
       }
       case "cover": {
         const pos = s.attributes.current_position as number | undefined;
@@ -1309,13 +1309,60 @@ export class EntityVisuals {
         const cur = s.attributes.current_temperature as number | undefined;
         return cur != null ? `${Math.round(cur)}°` : "";
       }
-      case "sensor": {
-        const unit = (s.attributes.unit_of_measurement as string | undefined) ?? "";
-        return `${s.state}${unit}`;
-      }
+      case "sensor":
+        return this.formatSensorValue(s);
       default:
         return "";
     }
+  }
+
+  /**
+   * Compact, readable value for the pill — exhaustive across the kinds of state
+   * HA reports, so nothing crowds the chip:
+   *   • Numbers → rounded to a sensible precision, with large power/energy scaled
+   *     to k-units (6570.989 W → "6.6 kW", 25.05 °C → "25.1°C").
+   *   • Enum / text states → tidied (underscores→spaces, Sentence case) so a raw
+   *     "not_home" reads "Not home", "connected" reads "Connected".
+   *   • Anything still long is ellipsised so the pill can never blow out.
+   */
+  private formatSensorValue(s: HassEntity): string {
+    const unit = ((s.attributes.unit_of_measurement as string | undefined) ?? "").trim();
+    const n = Number(s.state);
+
+    // ── Non-numeric (enum / status text) ──────────────────────────────────
+    if (s.state.trim() === "" || !Number.isFinite(n)) {
+      const words = String(s.state).replace(/_/g, " ").trim();
+      const pretty = words.charAt(0).toUpperCase() + words.slice(1);
+      return this.clampPill(pretty);
+    }
+
+    // ── Numeric ───────────────────────────────────────────────────────────
+    const abs = Math.abs(n);
+    const u = unit.toLowerCase();
+    // Round to `d` decimals and drop trailing zeros ("25.0"→"25", "6.60"→"6.6").
+    const trim = (v: number, d: number) => String(Number(v.toFixed(d)));
+
+    let out: string;
+    if (u === "w" && abs >= 1000) out = `${trim(n / 1000, 1)} kW`;
+    else if (u === "wh" && abs >= 1000) out = `${trim(n / 1000, 1)} kWh`;
+    else if (u === "va" && abs >= 1000) out = `${trim(n / 1000, 1)} kVA`;
+    else if (u === "%") out = `${Math.round(n)}%`;                        // percent hugs its sign
+    else if (u === "°c" || u === "°f" || u === "°") out = `${trim(n, 1)}${unit}`; // degrees hug too
+    // Units that read cleanest as whole numbers.
+    else if (u === "w" || u === "wh" || u === "va" || u === "lx" || u === "ppm" || u === "ppb")
+      out = unit ? `${Math.round(n)} ${unit}` : String(Math.round(n));
+    // Generic: whole numbers as-is, otherwise up to 1 decimal.
+    else {
+      const val = Number.isInteger(n) ? String(n) : trim(n, 1);
+      out = unit ? `${val} ${unit}` : val;
+    }
+    return this.clampPill(out);
+  }
+
+  /** Hard cap on pill text so an unexpectedly long value can never blow out the
+   *  chip; keeps every pill to a tidy, uniform footprint. */
+  private clampPill(text: string): string {
+    return text.length > 16 ? `${text.slice(0, 15)}…` : text;
   }
 
   // ---------------------------------------------------------------------------
