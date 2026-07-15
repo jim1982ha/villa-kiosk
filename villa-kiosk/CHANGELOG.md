@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.14.0
+
+- **Uploading a model keeps Settings open.** A new GLB / room-data upload now
+  refreshes the scene in the background without closing the Settings modal.
+- **Settings tidy-up.** The room-data upload buttons drop the `(.rooms.json)`
+  suffix and their descriptions now explain what the file is; the leftover
+  `.sh3d` references are gone.
+- **Removed the "Cast sun shadows" option.** It did nothing: the villa uses
+  baked lighting (shadows are already in the texture), so the sun shadow pass was
+  force-disabled and the toggle was a no-op. Removed the toggle and the whole
+  dead shadow subsystem (config fields, presets, ShadowGenerator).
+- **Grouped the camera settings.** "Eye height" + "Walk speed" now sit under a
+  **First-person view** heading, and "Natural scrolling" under an **Overview
+  (bird's-eye) view** heading, next to each other since they're the same domain.
+
 ## 2.13.2
 
 - **Offline devices are now clearly distinct from switched-off ones.** Both were

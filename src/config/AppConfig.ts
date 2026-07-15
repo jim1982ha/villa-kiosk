@@ -150,17 +150,9 @@ export interface RenderConfig {
   ssaoStrength: number;
   /** SSAO sample count — perf/quality trade-off (4/8/16/32). */
   ssaoSamples: number;
-  /** Cast directional shadows from the sun (heaviest effect). */
-  shadows: boolean;
-  /** Shadow map resolution (512/1024/2048). */
-  shadowMapSize: number;
-  /** Shadow strength 0..1 (0 = invisible, 1 = black). */
-  shadowDarkness: number;
-  /** Soft-shadow blur kernel size. */
-  shadowBlur: number;
   /** Soft bloom around anything emissive (lit fixtures, active lock/switch
    *  tints, alert pulses) — makes an "on" state read as glowing, not just a
-   *  brighter flat colour. Cheap relative to SSAO/shadows. */
+   *  brighter flat colour. Cheap relative to SSAO. */
   glow: boolean;
   /** GlowLayer.intensity — how strongly emissive things bloom. */
   glowIntensity: number;
@@ -173,9 +165,7 @@ export interface RenderConfig {
 
 /**
  * Concrete RenderConfig for each preset. These are the ONLY render looks the UI
- * offers now (item: "simplify to a preset + a few toggles"). `shadows` is a
- * separate user toggle layered on top, so every preset ships shadows off and the
- * UI preserves the user's shadow choice when they switch presets.
+ * offers now (item: "simplify to a preset + a few toggles").
  *
  * Day/night warmth of the fill light + IBL is handled live in SunController, so
  * these values are the *base* look; the night pass dims/warms them automatically.
@@ -183,24 +173,22 @@ export interface RenderConfig {
 export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
   // Fastest path for weak wall tablets: no AO, no IBL, gentle tone mapping.
   // Glow stays on (it's a single small blurred render target, cheap next to
-  // SSAO/shadows) since it's core to how an "on" device reads.
+  // SSAO) since it's core to how an "on" device reads.
   performance: {
     quality: "performance",
     toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.08,
     hemiIntensity: 0.55, sunIntensity: 1.0, ambientIntensity: 0.6,
     ibl: false, environmentIntensity: 0.6,
     ssao: false, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
-    shadows: false, shadowMapSize: 1024, shadowDarkness: 0.35, shadowBlur: 32,
     glow: true, glowIntensity: 0.8, nightDimming: 0.5,
   },
-  // The proven "safe win": subtle contact AO, no IBL/shadows.
+  // The proven "safe win": subtle contact AO, no IBL.
   balanced: {
     quality: "balanced",
     toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.1,
     hemiIntensity: 0.5, sunIntensity: 1.0, ambientIntensity: 0.6,
     ibl: false, environmentIntensity: 0.65,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
-    shadows: false, shadowMapSize: 1024, shadowDarkness: 0.35, shadowBlur: 32,
     glow: true, glowIntensity: 0.8, nightDimming: 0.5,
   },
   // Best look out of the box: AO + soft sky/ground IBL + higher-sample AO.
@@ -210,12 +198,11 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     hemiIntensity: 0.45, sunIntensity: 1.05, ambientIntensity: 0.6,
     ibl: true, environmentIntensity: 0.6,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.25, ssaoSamples: 16,
-    shadows: false, shadowMapSize: 2048, shadowDarkness: 0.4, shadowBlur: 32,
     glow: true, glowIntensity: 0.8, nightDimming: 0.5,
   },
 };
 
-/** Default look: best quality the app can show without the heaviest extra (shadows). */
+/** Default look: the best quality preset. */
 export const DEFAULT_RENDER: RenderConfig = RENDER_PRESETS.high;
 
 export interface AppConfig {
@@ -280,7 +267,7 @@ export interface AppConfig {
    * inverted. Matches the macOS/iOS "Natural Scrolling" system setting.
    */
   naturalScrolling: boolean;
-  /** Render-quality / look settings (tone mapping, AO, shadows, IBL, lights). */
+  /** Render-quality / look settings (tone mapping, AO, IBL, lights). */
   render: RenderConfig;
   /**
    * Extra substrings that mark a material/mesh as glass, merged into the built-in

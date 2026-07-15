@@ -219,7 +219,7 @@ export class SceneManager {
     // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
     // Created after both cameras exist so SSAO can attach to all of them; the
     // initial apply() pushes config.render onto the freshly-built scene.
-    this.renderFx = new RenderEnhancements(this.scene, this.lighting.sunLight);
+    this.renderFx = new RenderEnhancements(this.scene);
     this.renderFx.apply(this.deviceRenderConfig(opts.config.render));
     // renderFx.apply() sets the *base* IBL intensity and builds the env texture.
     // Re-run the sun pass now so SunController gets the final word on the values
@@ -561,14 +561,14 @@ export class SceneManager {
     return this.scene.getWorldExtends((m) => set.has(m));
   }
 
-  /** On iOS, strip the extra render targets (SSAO, IBL env, sun shadows, and
-   *  the GlowLayer — which allocates blur textures AND re-renders emissive
-   *  meshes to a second target every frame) before applying a render config.
-   *  They're the heaviest WebGL-memory consumers and the ones WKWebView is
-   *  least able to afford. Tone mapping + exposure stay. A no-op elsewhere. */
+  /** On iOS, strip the extra render targets (SSAO, IBL env, and the GlowLayer —
+   *  which allocates blur textures AND re-renders emissive meshes to a second
+   *  target every frame) before applying a render config. They're the heaviest
+   *  WebGL-memory consumers and the ones WKWebView is least able to afford. Tone
+   *  mapping + exposure stay. A no-op elsewhere. */
   private deviceRenderConfig(render: RenderConfig): RenderConfig {
     if (!this.isIOS) return render;
-    return { ...render, ssao: false, ibl: false, shadows: false, glow: false };
+    return { ...render, ssao: false, ibl: false, glow: false };
   }
 
   /**
@@ -726,7 +726,6 @@ export class SceneManager {
       applyGrassGround(this.scene, result.meshes, this.config.grassGroundHints ?? []); // grey terrain slab -> grass
     }
     this.applyHighlight(result.meshes); // blue glow on bound meshes (if enabled)
-    this.renderFx.registerMeshes(result.meshes); // shadow casters/receivers
 
     // Fit the plan->world transform from entity-named meshes and lay out room
     // anchors / teleport points correctly for THIS model.

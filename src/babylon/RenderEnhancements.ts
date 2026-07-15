@@ -8,20 +8,17 @@
 //   1. Tone mapping + exposure/contrast  — rolls off blown-out white highlights.
 //   2. Light rebalance (hemi intensity)  — less flat fill ⇒ directional contrast.
 //   3. SSAO2                             — darkens corners/contacts (depth).
-//   4. Directional shadows               — grounds furniture (heaviest).
-//   5. IBL (procedural gradient cube)    — soft sky/ground ambient for PBR.
-//   6. GlowLayer                         — bloom around emissive (lit/alert) meshes.
+//   4. IBL (procedural gradient cube)    — soft sky/ground ambient for PBR.
+//   5. GlowLayer                         — bloom around emissive (lit/alert) meshes.
 
 import {
   ImageProcessingConfiguration,
   SSAO2RenderingPipeline,
-  ShadowGenerator,
   RawCubeTexture,
   GlowLayer,
   Constants,
   Mesh,
   type Scene,
-  type DirectionalLight,
   type AbstractMesh,
 } from "@babylonjs/core";
 import type { RenderConfig } from "@/config/AppConfig";
@@ -33,45 +30,29 @@ const TONE_MAP: Record<string, number> = {
   khr_neutral: ImageProcessingConfiguration.TONEMAPPING_KHR_PBR_NEUTRAL,
 };
 
-// Meshes that must never cast/receive shadows or count as IBL surfaces:
-// floating markers, labels, halos and the placeholder pick spheres.
-const SKIP_MESH = /^(halo_|label_|teleport_|trigger_|collision_|__root__)/i;
-
 export class RenderEnhancements {
   private scene: Scene;
-  private sun: DirectionalLight;
 
   private ssao: SSAO2RenderingPipeline | null = null;
   private ssaoAttached = false;
-  private shadowGen: ShadowGenerator | null = null;
-  private shadowMapSize = 0; // tracks the size the generator was built with
   private env: RawCubeTexture | null = null;
   private glow: GlowLayer | null = null;
 
-  private meshes: AbstractMesh[] = [];
   private cfg: RenderConfig | null = null;
   private baked = false;
   private glowExcluded: Mesh[] = [];
 
-  constructor(scene: Scene, sun: DirectionalLight) {
+  constructor(scene: Scene) {
     this.scene = scene;
-    this.sun = sun;
-  }
-
-  /** Register the loaded model meshes (shadow casters/receivers). */
-  registerMeshes(meshes: AbstractMesh[]): void {
-    this.meshes = meshes;
-    if (this.cfg) this.applyShadows(this.cfg); // wire casters now that meshes exist
   }
 
   /**
    * Baked-lighting GLB loaded (see ModelLoader's BAKED_MATERIAL_PREFIX): the
    * structure's texture already contains real Cycles ambient occlusion, GI and
    * sun shadows. SSAO on top double-darkens every corner the bake already
-   * darkened, and the sun ShadowGenerator burns a whole render pass drawing
-   * shadows the unlit structure ignores anyway — both are forced off while a
-   * baked model is loaded, whatever the quality preset says. Tone mapping, IBL
-   * (entity meshes are still lit PBR) and GlowLayer stay user-controlled.
+   * darkened, so it's forced off while a baked model is loaded, whatever the
+   * quality preset says. Tone mapping, IBL (entity meshes are still lit PBR) and
+   * GlowLayer stay user-controlled.
    */
   setBakedMode(baked: boolean): void {
     if (this.baked === baked) return;
@@ -104,7 +85,6 @@ export class RenderEnhancements {
     // fight and the night fill flickers between values depending on call order.
     this.applyIBL(cfg);
     this.applySSAO(cfg);
-    this.applyShadows(cfg);
     this.applyGlow(cfg);
   }
 
@@ -152,44 +132,7 @@ export class RenderEnhancements {
     }
   }
 
-  // ── 4. Directional shadows ───────────────────────────────────────────────
-  private applyShadows(cfg: RenderConfig): void {
-    if (!cfg.shadows || this.baked) {
-      if (this.shadowGen) {
-        this.shadowGen.dispose();
-        this.shadowGen = null;
-        this.shadowMapSize = 0;
-        for (const m of this.meshes) m.receiveShadows = false;
-      }
-      return;
-    }
-
-    // Map size is fixed at creation — rebuild if the user changed it.
-    if (this.shadowGen && this.shadowMapSize !== cfg.shadowMapSize) {
-      this.shadowGen.dispose();
-      this.shadowGen = null;
-    }
-    if (!this.shadowGen) {
-      this.shadowGen = new ShadowGenerator(cfg.shadowMapSize, this.sun);
-      this.shadowGen.useBlurExponentialShadowMap = true;
-      this.shadowMapSize = cfg.shadowMapSize;
-    }
-    this.shadowGen.setDarkness(1 - cfg.shadowDarkness); // generator darkness is inverted
-    this.shadowGen.blurKernel = cfg.shadowBlur;
-
-    const shadowMap = this.shadowGen.getShadowMap();
-    if (shadowMap) {
-      shadowMap.renderList = [];
-      for (const m of this.meshes) {
-        if (!(m instanceof Mesh) || SKIP_MESH.test(m.name) || m.metadata?.isMarker) continue;
-        if ((m.getTotalVertices?.() ?? 0) === 0 || !m.isVisible) continue;
-        shadowMap.renderList.push(m);
-        m.receiveShadows = true;
-      }
-    }
-  }
-
-  // ── 5. IBL — procedural sky/ground gradient cube (offline, no asset) ──────
+  // ── 4. IBL — procedural sky/ground gradient cube (offline, no asset) ──────
   private applyIBL(cfg: RenderConfig): void {
     if (cfg.ibl) {
       if (!this.env) this.env = this.buildGradientEnv();
@@ -297,7 +240,6 @@ export class RenderEnhancements {
       this.ssao.dispose();
       this.ssao = null;
     }
-    if (this.shadowGen) { this.shadowGen.dispose(); this.shadowGen = null; }
     if (this.env) { this.env.dispose(); this.env = null; }
     if (this.glow) { this.glow.dispose(); this.glow = null; }
   }

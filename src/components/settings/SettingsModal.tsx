@@ -174,10 +174,9 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
     manager?.setRenderConfig(next);
   };
 
-  // Switching presets materialises a whole RenderConfig, but keeps the user's
-  // independent "shadows" choice (it's an opt-in extra layered on any preset).
+  // Switching presets materialises a whole RenderConfig.
   const applyPreset = (quality: QualityPreset) => {
-    applyRender({ ...RENDER_PRESETS[quality], shadows: render.shadows });
+    applyRender({ ...RENDER_PRESETS[quality] });
   };
 
   // Live-apply so you can feel/see the change while dragging the sliders.
@@ -288,32 +287,52 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
         )}
 
         {/* ── Visual & UI tuning ──────────────────────────────────────────
-            Movement feel, render quality and device icons. Available to any
+            Camera/movement, render quality and device icons. Available to any
             profile with "customizeAppearance" (guests included) — these are
             per-device comfort settings, not administration. */}
         {can("customizeAppearance") && (
         <>
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
-        <label className="toggle">
+        {/* ── Camera & movement ─────────────────────────────────────────────
+            The two view modes' comfort settings, side by side: how the
+            first-person walk-through feels, and how the bird's-eye view pans. */}
+        <h3 style={{ margin: 0, fontSize: 15 }}>First-person view</h3>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          How the walk-through camera feels. Both update live as you drag.
+        </p>
+        <div className="slider-pair" style={{ marginTop: 10 }}>
+          <div>
+            <label>Eye height · {eyeHeight.toFixed(2)} m</label>
+            <input
+              type="range" min={0.8} max={2.2} step={0.05} value={eyeHeight}
+              onChange={(e) => applyEyeHeight(Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <label>Walk speed · {walkSpeed.toFixed(1)}×</label>
+            <input
+              type="range" min={0.3} max={3} step={0.1} value={walkSpeed}
+              onChange={(e) => applyWalkSpeed(Number(e.target.value))}
+            />
+          </div>
+        </div>
+
+        <h3 style={{ margin: "18px 0 0", fontSize: 15 }}>Overview (bird&apos;s-eye) view</h3>
+        <label className="toggle" style={{ marginTop: 10 }}>
           <input
             type="checkbox" checked={config.naturalScrolling ?? true}
             onChange={(e) => update({ naturalScrolling: e.target.checked })}
           />
-          <span>Natural scrolling (overview mode)</span>
+          <span>Natural scrolling</span>
         </label>
-
-        {/* Wall collisions are always on now (you should never be able to walk
-            through a wall) — the toggle was removed. Eye height + Walk speed
-            moved below the device-icon section; "Highlight clickable objects"
-            and "Show device state labels" now live in the top bar. */}
 
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         {/* ── Render quality & look ────────────────────────────────────────
-            Simplified to a single quality preset plus two heavy opt-in extras
-            (shadows, live weather). The preset materialises a full render config;
-            day/night warmth is handled automatically in the scene. */}
+            Simplified to a single quality preset plus a few opt-in extras. The
+            preset materialises a full render config; day/night warmth is handled
+            automatically in the scene. */}
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <h3 style={{ margin: 0, fontSize: 15 }}>Render quality &amp; look</h3>
           <button
@@ -327,8 +346,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
         </div>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
           Pick a quality preset — higher looks better, lower runs lighter on weak
-          wall tablets. Shadows and live weather are the two heavy extras you can
-          mix in. Everything updates live and saves with your config.
+          wall tablets. Everything updates live and saves with your config.
         </p>
 
         <label style={{ marginTop: 12 }}>Quality preset</label>
@@ -352,12 +370,6 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
         </p>
 
         <label className="toggle" style={{ marginTop: 14 }}>
-          <input type="checkbox" checked={render.shadows}
-            onChange={(e) => applyRender({ shadows: e.target.checked })} />
-          <span>Cast sun shadows (more depth — heaviest)</span>
-        </label>
-
-        <label className="toggle" style={{ marginTop: 8 }}>
           <input type="checkbox" checked={config.weatherEffects}
             onChange={(e) => update({ weatherEffects: e.target.checked })} />
           <span>Live weather effects (rain when it's raining)</span>
@@ -491,23 +503,6 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
 
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
-        {/* Movement feel — eye height + walk speed, side by side. Both update live. */}
-        <div className="slider-pair">
-          <div>
-            <label>Eye height (walking) · {eyeHeight.toFixed(2)} m</label>
-            <input
-              type="range" min={0.8} max={2.2} step={0.05} value={eyeHeight}
-              onChange={(e) => applyEyeHeight(Number(e.target.value))}
-            />
-          </div>
-          <div>
-            <label>Walk speed · {walkSpeed.toFixed(1)}×</label>
-            <input
-              type="range" min={0.3} max={3} step={0.1} value={walkSpeed}
-              onChange={(e) => applyWalkSpeed(Number(e.target.value))}
-            />
-          </div>
-        </div>
         </>
         )}
 
@@ -527,7 +522,7 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
             <p className="muted body-text">Reading add-on configuration…</p>
           ) : addonCfg.model_path ? (
             /* Compact status line + (i) tooltip carrying the full model details
-               (path, size, mesh count, SHA-256, source, SH3D) on hover/focus. */
+               (path, size, mesh count, SHA-256, source, room data) on hover/focus. */
             <div className="row spread" style={{ marginTop: 4 }}>
               <span className="body-text" style={{ fontWeight: 600, fontSize: 13, color: "var(--status-on)" }}>
                 ✓ Central model active — all clients share the same view
@@ -598,12 +593,13 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
             </button>
             <button className="btn ghost" style={{ flex: 1 }} disabled={uploadBusy !== null}
               onClick={() => roomsUploadRef.current?.click()}>
-              <Upload size={15} /> {uploadBusy === "rooms" ? "Uploading…" : "Upload room data (.rooms.json)"}
+              <Upload size={15} /> {uploadBusy === "rooms" ? "Uploading…" : "Upload room data"}
             </button>
           </div>
           <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
             Each upload overwrites the current central file and reloads every kiosk on next open.
-            The tiny <code>.rooms.json</code> replaces the old full <code>.sh3d</code> upload.
+            Room data is the small <code>.rooms.json</code> the Blender pipeline emits next to the GLB —
+            it carries the room names, shapes and device positions used to label rooms and place devices.
           </p>
           {uploadMsg && (
             <div className={`test-result ${uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
@@ -635,9 +631,9 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
             </p>
 
             {/* Room-data sidecar upload — standalone mode only */}
-            <label style={{ marginTop: 16 }}>Room data (.rooms.json) — optional</label>
+            <label style={{ marginTop: 16 }}>Room data — optional</label>
             <button className="btn ghost" style={{ width: "100%" }} onClick={() => roomsRef.current?.click()}>
-              <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload room data (.rooms.json)"}
+              <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload room data"}
             </button>
             <input
               ref={roomsRef} type="file" accept=".json,application/json" style={{ display: "none" }}
@@ -647,8 +643,9 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
               }}
             />
             <p className="muted body-text" style={{ marginTop: 6 }}>
-              The compact room/entity file the Blender pipeline emits next to the GLB —
-              gives automatic room labels + calibration for any villa, no full .sh3d needed.
+              The small <code>.rooms.json</code> the Blender pipeline emits next to the GLB — it carries
+              the room names, shapes and device positions, giving automatic room labels + calibration
+              for any villa.
             </p>
             {roomsMsg && <div className="test-result ok">{roomsMsg}</div>}
           </>

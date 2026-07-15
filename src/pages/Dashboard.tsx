@@ -313,7 +313,10 @@ export default function Dashboard() {
           onClose={() => setSettingsOpen(false)}
           onOpenConfigEditor={() => { setSettingsOpen(false); setConfigEditorOpen(true); }}
           onModelChanged={() => {
-            setSettingsOpen(false);
+            // Refresh the scene in the BACKGROUND (remount the canvas) but keep
+            // the Settings modal open — closing it on every upload felt abrupt.
+            // The modal's live controls use `manager?.…` so the brief remount
+            // window (old manager torn down, new one not yet ready) is a safe no-op.
             setModelKey((k) => k + 1);
           }}
         />
