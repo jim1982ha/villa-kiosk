@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.14.3
+
+- **Consistent badge blue.** Live devices used two slightly different, partly
+  transparent blues (sensors were a deeper shade, and the translucency let the
+  background behind each badge tint it) — so the same "active" colour looked
+  different badge to badge. All live devices now share one fully-opaque blue, so
+  it reads identically over any surface; the glyph still distinguishes a sensor
+  from a light.
+- **Value pills have breathing room.** The chip's side padding was smaller than
+  its rounded-end radius, so the text crowded the edges. Padding now clears the
+  radius for a small, even margin on both sides.
+
 ## 2.14.2
 
 - **Value pills no longer tuck under a neighbouring badge.** The declutter used

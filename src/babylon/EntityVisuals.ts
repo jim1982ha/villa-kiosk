@@ -176,12 +176,14 @@ const BADGE_STYLE: Record<
   BadgeKind,
   { fill: string; ring: string; alpha: number; glow: string; glowBlur: number; glyphAlpha: number }
 > = {
-  on:          { fill: "rgba(14,165,233,0.96)", ring: "#e0f2fe",                alpha: 1,   glow: "rgba(56,189,248,0.85)", glowBlur: 16, glyphAlpha: 1 },
-  alert:       { fill: "rgba(244,63,94,0.96)",  ring: "#ffe4e6",                alpha: 1,   glow: "rgba(244,63,94,0.85)",  glowBlur: 16, glyphAlpha: 1 },
-  // A sensor reporting a value is "live" too — fill it so it reads as active
-  // (a touch cooler/deeper than a switched-on device, and the glyph + value pill
-  // still tell a thermometer from a light).
-  info:        { fill: "rgba(37,99,235,0.92)",   ring: "#dbeafe",               alpha: 1,   glow: "rgba(59,130,246,0.6)",  glowBlur: 10, glyphAlpha: 1 },
+  // One shared, FULLY OPAQUE blue for every live device — on-devices and
+  // sensors alike. Opaque so the badge reads the same colour over any background
+  // (a translucent fill let the floor/wood/grass behind it tint the blue, which
+  // looked inconsistent); shared so there's no "why is this one darker" — the
+  // glyph already tells a thermometer from a light.
+  on:          { fill: "rgb(14,165,233)",        ring: "#e0f2fe",               alpha: 1,   glow: "rgba(56,189,248,0.85)", glowBlur: 16, glyphAlpha: 1 },
+  alert:       { fill: "rgb(244,63,94)",         ring: "#ffe4e6",               alpha: 1,   glow: "rgba(244,63,94,0.85)",  glowBlur: 16, glyphAlpha: 1 },
+  info:        { fill: "rgb(14,165,233)",        ring: "#e0f2fe",               alpha: 1,   glow: "rgba(56,189,248,0.85)", glowBlur: 16, glyphAlpha: 1 },
   // OFF = a SOLID, fully-opaque dark disc with a clear glyph and a defined ring:
   // reads as "here and reachable, just switched off". OFFLINE = a heavily GHOSTED
   // disc (translucent fill, faint ring, faded glyph) so an unreachable device
@@ -1024,8 +1026,10 @@ export class EntityVisuals {
       valueWrap.cornerRadius = VALUE_CHIP_HEIGHT_PX / 2;
       valueWrap.thickness = 0;
       valueWrap.background = "rgba(15,23,42,0.85)";
-      valueWrap.paddingLeft = "6px";
-      valueWrap.paddingRight = "6px";
+      // Padding must clear the stadium's corner radius (VALUE_CHIP_HEIGHT/2) or
+      // the text crowds the rounded ends and reads as touching the edges.
+      valueWrap.paddingLeft = "10px";
+      valueWrap.paddingRight = "10px";
       valueWrap.shadowColor = "rgba(0,0,0,0.5)";
       valueWrap.shadowBlur = 4;
       valueWrap.isVisible = false;
@@ -1163,7 +1167,8 @@ export class EntityVisuals {
     // With a pill the box spans the badge top down to the pill bottom.
     const boxes = shown.map((s) => {
       const hasPill = s.lbl.valueWrap.isVisible;
-      const pillHalfW = hasPill ? (s.lbl.valueText.text.length * 6.2 + 16) / 2 : 0;
+      // ≈ text width (px/char at 11px Inter) + the pill's L/R padding (10+10).
+      const pillHalfW = hasPill ? (s.lbl.valueText.text.length * 6.2 + 24) / 2 : 0;
       const halfW = Math.max(BADGE_DIAMETER_PX / 2, pillHalfW) * scale;
       const halfH = (hasPill ? 30.5 : 20) * scale;
       const cy = (hasPill ? -45.5 : -56) * scale; // box centre Y relative to anchor
