@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.19.2
+
+- **Fix: only ceiling fans spin, and they spin IN PLACE.** Two bugs in the fan
+  animation: (1) it spun every `fan.*` entity, including bathroom VMC/exhaust
+  vents — now only devices named like `ceiling_fan` spin. (2) It orbited the fan
+  in a huge arc across the map: Babylon's `rotateAround` takes its pivot in the
+  mesh's parent-local space, but we passed a world-space centre, and the fan
+  meshes are parented to the recentred root — so the offset flung them around a
+  far point. The centre + axis are now converted to the parent frame, so a fan
+  spins about its own centre (and its badge, which sits on that axis, stays put).
+
 ## 2.19.1
 
 - **Badge size is now truly fixed.** Badges no longer grow/shrink with the

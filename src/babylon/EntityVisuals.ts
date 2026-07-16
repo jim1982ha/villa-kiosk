@@ -260,11 +260,12 @@ export class EntityVisuals {
   private byEntity = new Map<string, AbstractMesh[]>();
   private mapping = new Map<string, EntityMapping>();
   private pulsing = new Set<AbstractMesh>();
-  /** entity_id → angular speed (rad/s) for a fan currently spinning; and the
-   *  world-space vertical axis it spins about (its own bbox centre, which is
-   *  where the label anchor sits, so the spin never swings the badge). */
+  /** entity_id → angular speed (rad/s) for a CEILING fan currently spinning;
+   *  fanSpins holds its bbox centre + vertical axis in the fan meshes'
+   *  PARENT-LOCAL frame (what rotateAround needs), so it spins in place and the
+   *  on-axis label anchor doesn't swing. */
   private spinningFans = new Map<string, number>();
-  private fanCentres = new Map<string, Vector3>();
+  private fanSpins = new Map<string, { centre: Vector3; axis: Vector3 }>();
   private pulseT = 0;
 
   // Real light sources for `light` entities. Keyed by MESH uniqueId (not entity
@@ -388,7 +389,7 @@ export class EntityVisuals {
     this.beams.dispose();
     this.pulsing.clear();
     this.spinningFans.clear();
-    this.fanCentres.clear();
+    this.fanSpins.clear();
     this.byEntity.clear();
     this.mapping.clear();
     this.shadowCasters = [];
@@ -1599,13 +1600,15 @@ export class EntityVisuals {
     this.requestRender();
   }
 
-  /** Start/stop a fan's spin from its on/off (+ percentage) state. */
+  /** Start/stop a fan's spin from its on/off (+ percentage) state. Only true
+   *  CEILING fans spin — VMC/exhaust `fan.*` entities (bathroom vents) must not. */
   private updateFanSpin(entity: HassEntity, meshes: AbstractMesh[]): void {
     const id = entity.entity_id;
+    if (!/ceiling[_-]?fan/i.test(id)) return; // e.g. fan.ceiling_fan_* only
     if (entity.state === "on") {
       const pct = entity.attributes.percentage as number | undefined;
       const frac = typeof pct === "number" ? Math.max(0.15, Math.min(1, pct / 100)) : 0.6;
-      if (!this.fanCentres.has(id)) this.fanCentres.set(id, this.spinCentre(meshes));
+      if (!this.fanSpins.has(id)) this.fanSpins.set(id, this.computeFanSpin(meshes));
       this.spinningFans.set(id, FAN_MAX_RAD_PER_SEC * frac);
       this.requestRender(); // wake the loop so animateFans starts turning it
     } else {
@@ -1613,9 +1616,15 @@ export class EntityVisuals {
     }
   }
 
-  /** The vertical spin axis for a fan = its combined bounding-box centre (which
-   *  is also where the label anchor sits, so spinning never moves the badge). */
-  private spinCentre(meshes: AbstractMesh[]): Vector3 {
+  /**
+   * The fan's spin as `rotateAround` needs it. That API rotates about a point in
+   * the mesh's PARENT-LOCAL space (it subtracts `this.position`), NOT world space
+   * — the fan meshes are parented to the recentred/scaled __root__, so passing a
+   * world centre made them orbit a far point (the recenter offset) with a huge
+   * radius. So convert BOTH the world bbox centre and the world-up axis into the
+   * meshes' shared parent frame here (done once — the parent never moves).
+   */
+  private computeFanSpin(meshes: AbstractMesh[]): { centre: Vector3; axis: Vector3 } {
     let min = new Vector3(Infinity, Infinity, Infinity);
     let max = new Vector3(-Infinity, -Infinity, -Infinity);
     for (const m of meshes) {
@@ -1624,7 +1633,13 @@ export class EntityVisuals {
       min = Vector3.Minimize(min, bb.minimumWorld);
       max = Vector3.Maximize(max, bb.maximumWorld);
     }
-    return new Vector3((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2);
+    const worldCentre = new Vector3((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2);
+    const parent = meshes[0].parent as TransformNode | null;
+    if (!parent) return { centre: worldCentre, axis: Vector3.Up() };
+    const inv = Matrix.Invert(parent.getWorldMatrix());
+    const axis = Vector3.TransformNormal(Vector3.Up(), inv);
+    axis.normalize();
+    return { centre: Vector3.TransformCoordinates(worldCentre, inv), axis };
   }
 
   private animateFans(): void {
@@ -1633,15 +1648,18 @@ export class EntityVisuals {
     let spun = false;
     for (const [id, speed] of this.spinningFans) {
       const meshes = this.byEntity.get(id);
-      const centre = this.fanCentres.get(id);
-      if (!meshes || !meshes.length || !centre) continue;
+      const spin = this.fanSpins.get(id);
+      if (!meshes || !meshes.length || !spin) continue;
       // Only spin (and keep rendering) while the fan's storey is being viewed —
       // floors above the active one are hidden, so their fans needn't drive
       // continuous frames. (Cumulative floors: <= active are visible.)
       const floorIdx = (meshes[0].metadata as { floorIndex?: number } | null)?.floorIndex;
       if (floorIdx !== undefined && floorIdx > this.activeFloor) continue;
       const delta = speed * dt;
-      for (const m of meshes) m.rotateAround(centre, Vector3.Up(), delta);
+      // All the fan's meshes share one parent, so one parent-local centre/axis
+      // rotates them rigidly (in place). The label anchor sits on that axis, so
+      // it doesn't move.
+      for (const m of meshes) m.rotateAround(spin.centre, spin.axis, delta);
       spun = true;
     }
     if (spun) this.requestRender();
