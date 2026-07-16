@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.22.6
+
+- **Fix: ceiling fan pole/label still orbiting (2.22.5's fix wasn't enough).**
+  The real bug: `rotateAround` re-derives its pivot offset from the mesh's
+  CURRENT position on every call, and these fan meshes import with position
+  at the local origin while their real placement lives entirely in vertex
+  data — so ANY vertex-derived pivot orbits the whole mesh (pole AND, since
+  the label anchors to that same mesh, the label too) around it every frame,
+  no matter which point gets passed in. Rebuilt on Babylon's own pivot-point
+  mechanism instead (`setPivotPoint` + an absolute `rotationQuaternion`
+  assigned fresh every frame, never accumulated) — this cannot drift or
+  orbit, by construction, regardless of where the mesh's own position sits.
+- **Fan panel: speed is now 3(+) buttons, not a slider.** Matches Home
+  Assistant's own fan more-info card (Low/Medium/High, derived from
+  `percentage_step`) instead of a free-drag percentage slider, laid out as a
+  horizontal row rather than HA's vertical stack.
+
 ## 2.22.5
 
 - **Fix: ceiling fan mount/pole visibly orbiting while spinning.** Each

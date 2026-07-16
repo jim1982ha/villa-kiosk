@@ -16,7 +16,7 @@
 
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
-  Vector3, Matrix, TransformNode, Ray, VertexBuffer, Material, Mesh,
+  Vector3, Matrix, Quaternion, TransformNode, Ray, VertexBuffer, Material, Mesh,
   type AbstractMesh, type Scene,
 } from "@babylonjs/core";
 import {
@@ -283,12 +283,17 @@ export class EntityVisuals {
   private byEntity = new Map<string, AbstractMesh[]>();
   private mapping = new Map<string, EntityMapping>();
   private pulsing = new Set<AbstractMesh>();
-  /** entity_id → angular speed (rad/s) for a CEILING fan currently spinning;
-   *  fanSpins holds its bbox centre + vertical axis in the fan meshes'
-   *  PARENT-LOCAL frame (what rotateAround needs), so it spins in place and the
-   *  on-axis label anchor doesn't swing. */
+  /** entity_id → angular speed (rad/s) for a CEILING fan currently spinning. */
   private spinningFans = new Map<string, number>();
-  private fanSpins = new Map<string, { centre: Vector3; axis: Vector3 }>();
+  /** entity_id → total accumulated spin angle (radians, wrapped to 2π) — the
+   *  rotation is recomputed FRESH from this absolute angle every frame (never
+   *  accumulated incrementally), so there is no possible drift. */
+  private fanAngles = new Map<string, number>();
+  /** entity_id → per-mesh spin rig, set up once (lazily, on first "on") via
+   *  setupFanRig: each mesh gets a Babylon pivot point at its own true axle
+   *  (see setupFanRig) plus the local axis/base orientation animateFans needs
+   *  to spin it in place every frame. */
+  private fanRigs = new Map<string, { mesh: AbstractMesh; axisLocal: Vector3; baseRotation: Quaternion }[]>();
   private pulseT = 0;
 
   // Real light sources for `light` entities. Keyed by MESH uniqueId (not entity
@@ -405,7 +410,8 @@ export class EntityVisuals {
     this.beams.dispose();
     this.pulsing.clear();
     this.spinningFans.clear();
-    this.fanSpins.clear();
+    this.fanRigs.clear();
+    this.fanAngles.clear();
     this.byEntity.clear();
     this.mapping.clear();
     this.shadowCasters = [];
@@ -1657,7 +1663,7 @@ export class EntityVisuals {
     if (entity.state === "on") {
       const pct = entity.attributes.percentage as number | undefined;
       const frac = typeof pct === "number" ? Math.max(0.15, Math.min(1, pct / 100)) : 0.6;
-      if (!this.fanSpins.has(id)) this.fanSpins.set(id, this.computeFanSpin(meshes));
+      if (!this.fanRigs.has(id)) this.fanRigs.set(id, this.setupFanRig(meshes));
       this.spinningFans.set(id, FAN_MAX_RAD_PER_SEC * frac);
       this.requestRender(); // wake the loop so animateFans starts turning it
     } else {
@@ -1666,56 +1672,93 @@ export class EntityVisuals {
   }
 
   /**
-   * The fan's spin as `rotateAround` needs it. That API rotates about a point in
-   * the mesh's PARENT-LOCAL space (it subtracts `this.position`), NOT world space
-   * — the fan meshes are parented to the recentred/scaled __root__, so passing a
-   * world centre made them orbit a far point (the recenter offset) with a huge
-   * radius. So convert BOTH the world centre and the world-up axis into the
-   * meshes' shared parent frame here (done once — the parent never moves).
+   * Rig each of the fan's meshes to spin in place around its TRUE axle, using
+   * Babylon's own pivot-point mechanism instead of `rotateAround`.
    *
-   * The X/Z of that centre is NOT the whole-mesh bounding-box midpoint (see
-   * FAN_AXIS_TOP_SLICE) — that assumes the blade assembly is perfectly
-   * symmetric, which it usually isn't quite, and any offset there puts the
-   * pivot off the true axle, making the (rotationally symmetric) mount/pole
-   * visibly orbit in a small circle as the whole mesh spins. Instead, average
-   * the vertices in the TOP slice of the fixture (the ceiling mount/canopy —
-   * reliably round and centred exactly on the axle) for X/Z.
+   * `rotateAround` re-derives its pivot offset from the mesh's CURRENT
+   * `.position` on every single call (`point - this.position`) — so it only
+   * spins in place when the pivot passed in is *exactly* equal to that
+   * position. These fan meshes import with `.position` sitting at the
+   * PARENT-LOCAL origin (0,0,0) — the real placement is baked entirely into
+   * the vertex data, never into the transform — so ANY vertex-derived pivot
+   * (the true axle included) is nonzero there, and `rotateAround` orbits the
+   * whole mesh around it every frame: the pole, and anything (the label)
+   * anchored to that same mesh, sweep out a circle sized by exactly that
+   * offset. That's the actual bug — no amount of tuning WHICH point gets
+   * passed to `rotateAround` fixes it, only not using `rotateAround` does.
+   *
+   * The fix: `mesh.setPivotPoint(axle, LOCAL)` shifts what rotation orbits
+   * around WITHOUT moving `.position` at all — Babylon composes it as
+   * `Translate(-axle) · Rotate · Translate(+axle)` before the mesh's own
+   * position is added, so at any rotation this sandwich leaves `.position`
+   * (and therefore the mesh's absolute/world position, and any label linked
+   * to it) completely untouched; only the rotated GEOMETRY sweeps. Combined
+   * with assigning `rotationQuaternion` as an ABSOLUTE value every frame
+   * (animateFans) instead of accumulating like `rotateAround` does, there is
+   * no drift and no orbit, ever, regardless of where `.position` sits.
+   *
+   * The axle itself: average the vertices in the TOP slice of the fixture —
+   * along whichever LOCAL axis currently reads as world-vertical, see
+   * FAN_AXIS_TOP_SLICE — since the ceiling mount/canopy is reliably round and
+   * centred exactly on the true axle, unlike the whole fixture's bounding box
+   * (which assumes the blade assembly is perfectly symmetric; it usually
+   * isn't quite).
    */
-  private computeFanSpin(meshes: AbstractMesh[]): { centre: Vector3; axis: Vector3 } {
-    let min = new Vector3(Infinity, Infinity, Infinity);
-    let max = new Vector3(-Infinity, -Infinity, -Infinity);
-    for (const m of meshes) {
-      m.computeWorldMatrix(true);
-      const bb = m.getBoundingInfo().boundingBox;
-      min = Vector3.Minimize(min, bb.minimumWorld);
-      max = Vector3.Maximize(max, bb.maximumWorld);
-    }
-
-    const topThreshold = max.y - (max.y - min.y) * FAN_AXIS_TOP_SLICE;
-    let sumX = 0, sumZ = 0, sampled = 0;
+  private setupFanRig(
+    meshes: AbstractMesh[],
+  ): { mesh: AbstractMesh; axisLocal: Vector3; baseRotation: Quaternion }[] {
+    const rig: { mesh: AbstractMesh; axisLocal: Vector3; baseRotation: Quaternion }[] = [];
     for (const m of meshes) {
       const positions = m.getVerticesData(VertexBuffer.PositionKind);
-      if (!positions) continue;
-      const world = m.getWorldMatrix();
-      const p = Vector3.Zero();
-      for (let i = 0; i < positions.length; i += 3) {
-        p.set(positions[i], positions[i + 1], positions[i + 2]);
-        Vector3.TransformCoordinatesToRef(p, world, p);
-        if (p.y >= topThreshold) { sumX += p.x; sumZ += p.z; sampled++; }
-      }
-    }
-    // Fall back to the plain bbox midpoint if the top slice somehow caught
-    // too little geometry to average reliably (e.g. a sparse mount mesh).
-    const worldCentre = sampled >= 20
-      ? new Vector3(sumX / sampled, (min.y + max.y) / 2, sumZ / sampled)
-      : new Vector3((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2);
+      if (!positions || positions.length < 3) continue;
+      m.computeWorldMatrix(true);
 
-    const parent = meshes[0].parent as TransformNode | null;
-    if (!parent) return { centre: worldCentre, axis: Vector3.Up() };
-    const inv = Matrix.Invert(parent.getWorldMatrix());
-    const axis = Vector3.TransformNormal(Vector3.Up(), inv);
-    axis.normalize();
-    return { centre: Vector3.TransformCoordinates(worldCentre, inv), axis };
+      // Adopt a quaternion once (same one-time conversion TransformNode's own
+      // rotateAround does) so every later frame is a plain assignment.
+      if (!m.rotationQuaternion) {
+        m.rotationQuaternion = Quaternion.RotationYawPitchRoll(m.rotation.y, m.rotation.x, m.rotation.z);
+        m.rotation.setAll(0);
+      }
+      const baseRotation = m.rotationQuaternion.clone();
+
+      // The LOCAL (pre-rotation, pre-pivot) direction that currently reads as
+      // world-vertical — NOT necessarily local Y: these fixtures import with
+      // a baked axis-conversion rotation (SweetHome's Z-up -> glTF's Y-up),
+      // so the mesh's own un-rotated vertex data has "up" on a different
+      // axis. Deriving it (rather than assuming Y or Z) keeps this correct
+      // regardless of how any given model happens to be authored/exported.
+      const invWorld = Matrix.Invert(m.getWorldMatrix());
+      const axisLocal = Vector3.TransformNormal(Vector3.Up(), invWorld);
+      axisLocal.normalize();
+
+      // Project every vertex onto axisLocal to find the fixture's "height"
+      // range, then average the positions in its top slice — in the mesh's
+      // OWN local/object space, the same space getVerticesData returns, so
+      // no world-matrix round-trip is needed for this part.
+      const v = Vector3.Zero();
+      let hMin = Infinity, hMax = -Infinity;
+      for (let i = 0; i < positions.length; i += 3) {
+        v.set(positions[i], positions[i + 1], positions[i + 2]);
+        const h = Vector3.Dot(v, axisLocal);
+        if (h < hMin) hMin = h;
+        if (h > hMax) hMax = h;
+      }
+      const topThreshold = hMax - (hMax - hMin) * FAN_AXIS_TOP_SLICE;
+      const sum = Vector3.Zero();
+      let sampled = 0;
+      for (let i = 0; i < positions.length; i += 3) {
+        v.set(positions[i], positions[i + 1], positions[i + 2]);
+        if (Vector3.Dot(v, axisLocal) >= topThreshold) { sum.addInPlace(v); sampled++; }
+      }
+      // Fall back to the plain local bbox midpoint if the top slice somehow
+      // caught too little geometry to average reliably (e.g. a sparse mount).
+      const bb = m.getBoundingInfo().boundingBox;
+      const axleLocal = sampled >= 20 ? sum.scale(1 / sampled) : bb.minimum.add(bb.maximum).scale(0.5);
+
+      m.setPivotPoint(axleLocal);
+      rig.push({ mesh: m, axisLocal, baseRotation });
+    }
+    return rig;
   }
 
   private animateFans(): void {
@@ -1723,19 +1766,23 @@ export class EntityVisuals {
     const dt = Math.min(this.scene.getEngine().getDeltaTime(), 100) / 1000;
     let spun = false;
     for (const [id, speed] of this.spinningFans) {
-      const meshes = this.byEntity.get(id);
-      const spin = this.fanSpins.get(id);
-      if (!meshes || !meshes.length || !spin) continue;
+      const rig = this.fanRigs.get(id);
+      if (!rig || !rig.length) continue;
       // Only spin (and keep rendering) while the fan's storey is being viewed —
       // floors above the active one are hidden, so their fans needn't drive
       // continuous frames. (Cumulative floors: <= active are visible.)
-      const floorIdx = (meshes[0].metadata as { floorIndex?: number } | null)?.floorIndex;
+      const floorIdx = (rig[0].mesh.metadata as { floorIndex?: number } | null)?.floorIndex;
       if (floorIdx !== undefined && floorIdx > this.activeFloor) continue;
-      const delta = speed * dt;
-      // All the fan's meshes share one parent, so one parent-local centre/axis
-      // rotates them rigidly (in place). The label anchor sits on that axis, so
-      // it doesn't move.
-      for (const m of meshes) m.rotateAround(spin.centre, spin.axis, delta);
+
+      // The TOTAL angle, wrapped — every frame recomputes rotation fresh from
+      // this absolute value (never accumulated onto the mesh itself), so
+      // there is nothing for floating-point error to drift.
+      const angle = ((this.fanAngles.get(id) ?? 0) + speed * dt) % (Math.PI * 2);
+      this.fanAngles.set(id, angle);
+      for (const { mesh, axisLocal, baseRotation } of rig) {
+        const spin = Quaternion.RotationAxis(axisLocal, angle);
+        mesh.rotationQuaternion = baseRotation.multiply(spin);
+      }
       spun = true;
     }
     if (spun) this.requestRender();
