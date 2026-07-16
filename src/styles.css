@@ -638,17 +638,6 @@ input[type="range"]::-moz-range-thumb {
 .segmented-icons { flex: 0 0 auto; gap: 3px; padding: 3px; }
 .segmented-icons button { flex: 0 0 auto; width: 38px; min-height: 34px; gap: 0; }
 
-/* Device-icon picker cells — 3 across (was 2) so the category / binary-sensor /
-   sensor icon lists need far less vertical scrolling. The wider settings modal
-   (below) gives each cell room. Collapses to 2 across on narrow screens.
-   A comfortable gap keeps the emoji chip clearly separated from its label.
-   NOTE: scoped under .settings-body so it beats `.settings-body label`
-   (which otherwise forces display:block + a top margin on this <label>,
-   killing the flex gap — that was why the icon sat flush against its text). */
-.settings-body .icon-select { display: flex; align-items: center; gap: 12px; width: calc(33.333% - 7px); margin: 0; }
-.settings-body .icon-select > input { flex: 0 0 auto; }
-.settings-body .icon-select > span { min-width: 0; }
-@media (max-width: 560px) { .settings-body .icon-select { width: calc(50% - 5px); } }
 
 /* Villa Latitude/Longitude pair in the Config Editor. */
 .coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 460px; margin-inline: auto; }

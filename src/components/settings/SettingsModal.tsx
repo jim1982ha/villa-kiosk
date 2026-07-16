@@ -1,16 +1,16 @@
 // src/components/settings/SettingsModal.tsx
-// HA connection + token + model + appearance + device icons. A footer button
-// opens the full Config Editor (villa coordinates, entity metadata, bindings)
-// as a modal over the live villa.
+// HA connection + token + model + appearance. A footer button opens the full
+// Config Editor (villa coordinates, entity metadata, bindings) as a modal
+// over the live villa. Device badge icons are hardcoded, not editable here —
+// see babylon/badgeIcons.ts + badgeIconKeys.ts.
 
-import { useRef, useState, useEffect, useMemo } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Plug, Upload, FileText, Info, Sliders, Sun, Moon, Monitor } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, DEFAULT_ENTITY_ICONS, DEFAULT_BINARY_SENSOR_ICONS, DEFAULT_SENSOR_ICONS, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
-import type { EntityType } from "@/types/scene.types";
+import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
 import { testConnection, type TestResult } from "@/ha/testConnection";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { clearStoredModel, getModelMeta, fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type AddonConfig } from "@/utils/storage";
@@ -27,26 +27,10 @@ interface Props {
   onOpenConfigEditor: () => void;
 }
 
-/** Friendly category names for the per-type device-icon editor. */
-const ICON_CATEGORY_LABEL: Record<EntityType, string> = {
-  light: "Lights",
-  climate: "Climate",
-  lock: "Locks",
-  camera: "Cameras",
-  cover: "Covers / blinds",
-  fan: "Fans",
-  binary_sensor: "Binary sensors",
-  sensor: "Sensors",
-  media_player: "Media players",
-  switch: "Switches",
-  input_boolean: "Input booleans",
-  assist_satellite: "Assist satellites",
-};
-
 export default function SettingsModal({ manager, onClose, onModelChanged, onOpenConfigEditor }: Props) {
   const { config, update, replace } = useConfig();
   const { role } = useProfile();
-  const { connect, haConfig, entities } = useHA();
+  const { connect, haConfig } = useHA();
   // RBAC: which settings areas the active profile may use. Dashboard already
   // refuses to open this modal without "openSettings"; these narrow further.
   const can = (c: Capability) => role != null && hasCapability(role, c);
@@ -61,37 +45,6 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
     onClose();
   };
   const ingress = isIngress();
-
-  // Which binary_sensor device classes to offer icon overrides for: the
-  // classes of the sensors actually bound in this villa (read live from HA —
-  // device_class is a state attribute, not part of our config). Without a
-  // connection, fall back to every class the defaults table knows.
-  const binarySensorClasses = useMemo(() => {
-    const found = new Set<string>();
-    for (const [id, map] of Object.entries(config.entityMap ?? {})) {
-      if (map?.type !== "binary_sensor") continue;
-      const dc = entities[id]?.attributes?.device_class as string | undefined;
-      if (dc) found.add(dc);
-    }
-    return found.size
-      ? { detected: true, classes: [...found].sort() }
-      : { detected: false, classes: Object.keys(DEFAULT_BINARY_SENSOR_ICONS) };
-  }, [config.entityMap, entities]);
-
-  // Same idea as binarySensorClasses above, for the OTHER catch-all domain:
-  // a Shelly power meter, a temperature probe and a humidity probe are all
-  // "sensor" entities, told apart only by device_class.
-  const sensorClasses = useMemo(() => {
-    const found = new Set<string>();
-    for (const [id, map] of Object.entries(config.entityMap ?? {})) {
-      if (map?.type !== "sensor") continue;
-      const dc = entities[id]?.attributes?.device_class as string | undefined;
-      if (dc) found.add(dc);
-    }
-    return found.size
-      ? { detected: true, classes: [...found].sort() }
-      : { detected: false, classes: Object.keys(DEFAULT_SENSOR_ICONS) };
-  }, [config.entityMap, entities]);
 
   const roomsRef = useRef<HTMLInputElement>(null);
   const [roomsMsg, setRoomsMsg] = useState<string | null>(null);
@@ -410,93 +363,10 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
           </div>
         </div>
 
-        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
-
-        <h3 style={{ margin: 0, fontSize: 15 }}>Device state icons</h3>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          The in-scene badge for each device category. The icon shows the device
-          type; its ring colour shows the live state (gold = on, dim = off,
-          red = alert, faded = unreachable). Edit per category — paste any emoji.
-        </p>
-
         <p className="muted body-text" style={{ marginTop: 10, fontSize: 11 }}>
           Badge size — {(config.entityIconScale ?? 1.0).toFixed(2)}× — is set with
-          the +/- buttons next to the category filters in the top bar, not here.
+          the +/- buttons next to the category filters in the top bar.
         </p>
-
-        <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>
-          {(Object.keys(DEFAULT_ENTITY_ICONS) as EntityType[]).map((type) => (
-            <label key={type} className="icon-select">
-              <input
-                type="text"
-                value={config.entityIcons?.[type] ?? DEFAULT_ENTITY_ICONS[type]}
-                onChange={(e) => update({ entityIcons: { ...config.entityIcons, [type]: e.target.value } })}
-                style={{ width: 44, textAlign: "center", fontSize: 18, padding: "4px 0" }}
-                maxLength={4}
-                aria-label={`${ICON_CATEGORY_LABEL[type]} icon`}
-              />
-              <span className="body-text" style={{ fontSize: 12 }}>{ICON_CATEGORY_LABEL[type]}</span>
-            </label>
-          ))}
-        </div>
-        <h4 style={{ margin: "16px 0 0", fontSize: 13 }}>Binary sensors by device class</h4>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          "Binary sensor" is a catch-all — a water-leak sensor and a motion
-          sensor are both binary_sensor entities. Home Assistant tells them
-          apart via each entity&apos;s <code>device_class</code> attribute, so the
-          badge icon can too. {binarySensorClasses.detected
-            ? "These are the classes of your bound binary sensors:"
-            : "Connect to Home Assistant to list only your sensors' classes; until then, all known classes:"}
-        </p>
-        <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>
-          {binarySensorClasses.classes.map((dc) => (
-            <label key={dc} className="icon-select">
-              <input
-                type="text"
-                value={config.binarySensorIcons?.[dc] ?? DEFAULT_BINARY_SENSOR_ICONS[dc] ?? DEFAULT_ENTITY_ICONS.binary_sensor}
-                onChange={(e) => update({ binarySensorIcons: { ...config.binarySensorIcons, [dc]: e.target.value } })}
-                style={{ width: 44, textAlign: "center", fontSize: 18, padding: "4px 0" }}
-                maxLength={4}
-                aria-label={`${dc} binary sensor icon`}
-              />
-              <span className="body-text" style={{ fontSize: 12, textTransform: "capitalize" }}>{dc.replace(/_/g, " ")}</span>
-            </label>
-          ))}
-        </div>
-        <h4 style={{ margin: "16px 0 0", fontSize: 13 }}>Sensors by device class</h4>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          Same idea for the other catch-all domain — a power meter, a
-          temperature probe and a humidity probe are all sensor entities,
-          told apart by <code>device_class</code>. {sensorClasses.detected
-            ? "These are the classes of your bound sensors:"
-            : "Connect to Home Assistant to list only your sensors' classes; until then, all known classes:"}
-        </p>
-        <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>
-          {sensorClasses.classes.map((dc) => (
-            <label key={dc} className="icon-select">
-              <input
-                type="text"
-                value={config.sensorIcons?.[dc] ?? DEFAULT_SENSOR_ICONS[dc] ?? DEFAULT_ENTITY_ICONS.sensor}
-                onChange={(e) => update({ sensorIcons: { ...config.sensorIcons, [dc]: e.target.value } })}
-                style={{ width: 44, textAlign: "center", fontSize: 18, padding: "4px 0" }}
-                maxLength={4}
-                aria-label={`${dc} sensor icon`}
-              />
-              <span className="body-text" style={{ fontSize: 12, textTransform: "capitalize" }}>{dc.replace(/_/g, " ")}</span>
-            </label>
-          ))}
-        </div>
-        <button
-          className="btn ghost mt"
-          style={{ fontSize: 12 }}
-          onClick={() => update({
-            entityIcons: { ...DEFAULT_ENTITY_ICONS },
-            binarySensorIcons: { ...DEFAULT_BINARY_SENSOR_ICONS },
-            sensorIcons: { ...DEFAULT_SENSOR_ICONS },
-          })}
-        >
-          Reset icons to defaults
-        </button>
 
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 

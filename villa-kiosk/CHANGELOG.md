@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.23.0
+
+- **Redesigned device badges — hardcoded, no more per-user icon editing.**
+  Replaced the emoji-based, user-customisable badge icons with a fixed
+  design: a squircle background coloured by CATEGORY (one of 6 distinct
+  colours — comfort, light, network, energy, access control, others) with a
+  thick white line-art glyph for the device type / device_class (~35 icons,
+  vendored from lucide's own SVG data for pixel accuracy). The background no
+  longer recolours with live state — instead, an outline ring appears around
+  the badge while a device is on (amber) or in alert (red), the same colour
+  language as the red mesh outline a running climate device gets, just
+  applied to the 2D badge instead of the 3D asset.
+- Removed the "Device state icons" section from Settings (entityIcons /
+  binarySensorIcons / sensorIcons) — nothing left to edit; the whole system
+  is deleted from config, export/import, and the UI.
+
 ## 2.22.6
 
 - **Fix: ceiling fan pole/label still orbiting (2.22.5's fix wasn't enough).**

@@ -17,96 +17,6 @@ export const DEFAULT_MODEL_TRANSFORM: ModelTransform = {
   flipZ: false,
 };
 
-/**
- * Per-category glyph for the in-scene state badges. One icon per entity TYPE
- * (not per entity) — editable in Settings. The badge's RING/FILL colour encodes
- * the live state (on / off / alert / unreachable); the glyph stays the device
- * type so the scene reads at a glance without text clutter. Plain emoji so they
- * render in the Babylon GUI TextBlock on every platform with no icon font.
- */
-export const DEFAULT_ENTITY_ICONS: Record<EntityType, string> = {
-  light: "💡",
-  climate: "🌡️",
-  lock: "🔒",
-  camera: "📷",
-  cover: "🪟",
-  fan: "🌀",
-  binary_sensor: "🚨",
-  sensor: "📈",
-  media_player: "🎵",
-  switch: "🔌",
-  input_boolean: "🔘",
-  assist_satellite: "🎙️",
-};
-
-/**
- * binary_sensor is a catch-all HA domain — a water-leak sensor and a PIR
- * motion sensor are both "binary_sensor", so one per-type glyph can't tell
- * them apart. HA distinguishes them via the entity's `device_class` state
- * attribute (the same signal SensorPanel's wording uses, see
- * config/BinarySensorClasses.ts); this table gives each class its own badge
- * glyph. Resolution order for a binary_sensor badge: the user's per-class
- * override (config.binarySensorIcons) → this default → the generic
- * binary_sensor entry in entityIcons for entities with no device_class.
- */
-export const DEFAULT_BINARY_SENSOR_ICONS: Record<string, string> = {
-  moisture: "💧",
-  motion: "🚶",
-  moving: "🏃",
-  occupancy: "👁️",
-  presence: "🏠",
-  door: "🚪",
-  garage_door: "🚪",
-  window: "🪟",
-  opening: "🚪",
-  lock: "🔓",
-  smoke: "🔥",
-  gas: "💨",
-  carbon_monoxide: "💨",
-  vibration: "📳",
-  sound: "🔊",
-  light: "🔆",
-  battery: "🪫",
-  battery_charging: "🔋",
-  connectivity: "📶",
-  plug: "🔌",
-  power: "⚡",
-  running: "▶️",
-  safety: "⚠️",
-  problem: "⚠️",
-  tamper: "⚠️",
-  heat: "🌡️",
-  cold: "❄️",
-  update: "🔄",
-};
-
-/**
- * `sensor` is HA's other catch-all domain — a Shelly power meter, a
- * temperature probe and a humidity probe are all "sensor", so (like
- * binary_sensor above) one per-type glyph can't tell them apart. Keyed by
- * the entity's `device_class` state attribute, same resolution order as
- * DEFAULT_BINARY_SENSOR_ICONS: config.sensorIcons override → this default →
- * the generic sensor entry in entityIcons for a class not listed here.
- */
-export const DEFAULT_SENSOR_ICONS: Record<string, string> = {
-  temperature: "🌡️",
-  humidity: "💧",
-  power: "⚡",
-  energy: "🔋",
-  current: "⚡",
-  voltage: "⚡",
-  battery: "🪫",
-  illuminance: "☀️",
-  pressure: "📊",
-  gas: "💨",
-  carbon_dioxide: "💨",
-  volatile_organic_compounds: "💨",
-  pm25: "💨",
-  signal_strength: "📶",
-  timestamp: "🕐",
-  duration: "⏱️",
-};
-
 /** Tone-mapping operator applied to the whole scene (see RenderConfig). */
 export type ToneMappingMode = "none" | "standard" | "aces" | "khr_neutral";
 
@@ -274,18 +184,6 @@ export interface AppConfig {
    * Case-insensitive substring match; takes effect on the next model load.
    */
   extraGlassHints?: string[];
-  /** Per-category state-badge glyphs (see DEFAULT_ENTITY_ICONS). Editable in Settings. */
-  entityIcons: Record<EntityType, string>;
-  /** Per-device_class badge glyphs for binary_sensor entities (see
-   *  DEFAULT_BINARY_SENSOR_ICONS). Editable in Settings; a class missing here
-   *  falls back to the default table, then to entityIcons.binary_sensor. */
-  binarySensorIcons: Record<string, string>;
-  /** Per-device_class badge glyphs for sensor entities (see
-   *  DEFAULT_SENSOR_ICONS) — lets a power/temperature/humidity sensor each
-   *  show a distinct glyph instead of sharing the generic "sensor" one.
-   *  Editable in Settings; a class missing here falls back to the default
-   *  table, then to entityIcons.sensor. */
-  sensorIcons: Record<string, string>;
   /** Global size multiplier for the in-scene state-icon badges (1 = default).
    *  In the bird's-eye view this is further scaled by the zoom level. */
   entityIconScale: number;
@@ -339,9 +237,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   highlightInteractive: false,
   naturalScrolling: true,
   render: DEFAULT_RENDER,
-  entityIcons: { ...DEFAULT_ENTITY_ICONS },
-  binarySensorIcons: { ...DEFAULT_BINARY_SENSOR_ICONS },
-  sensorIcons: { ...DEFAULT_SENSOR_ICONS },
   // 1.5x at the default whole-villa overview packed badges too tightly for the
   // overlap-avoiding declutter to keep more than one per room visible (most
   // devices in a room fall within the same clash radius). 1.0x is the badge's
@@ -365,9 +260,6 @@ export function loadConfig(): AppConfig {
       alertThresholds: { ...DEFAULT_CONFIG.alertThresholds, ...(stored.alertThresholds ?? {}) },
       modelTransform: { ...DEFAULT_CONFIG.modelTransform, ...(stored.modelTransform ?? {}) },
       render: { ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) },
-      entityIcons: { ...DEFAULT_ENTITY_ICONS, ...(stored.entityIcons ?? {}) },
-      binarySensorIcons: { ...DEFAULT_BINARY_SENSOR_ICONS, ...(stored.binarySensorIcons ?? {}) },
-      sensorIcons: { ...DEFAULT_SENSOR_ICONS, ...(stored.sensorIcons ?? {}) },
       teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
     };
   } catch (err) {
@@ -415,9 +307,6 @@ export interface ConfigExportBundle {
   entityMap: Record<string, EntityMapping>;
   meshBindings: Record<string, string>;
   teleportPoints: TeleportPoint[];
-  entityIcons: Record<EntityType, string>;
-  binarySensorIcons: Record<string, string>;
-  sensorIcons: Record<string, string>;
   entityIconScale: number;
   deviceGroups: DeviceGroup[];
   eyeHeight: number;
@@ -435,9 +324,6 @@ export function buildConfigExport(config: AppConfig): ConfigExportBundle {
     entityMap: config.entityMap,
     meshBindings: config.meshBindings,
     teleportPoints: config.teleportPoints,
-    entityIcons: config.entityIcons,
-    binarySensorIcons: config.binarySensorIcons,
-    sensorIcons: config.sensorIcons,
     entityIconScale: config.entityIconScale,
     deviceGroups: config.deviceGroups,
     eyeHeight: config.eyeHeight,
@@ -460,9 +346,6 @@ export function parseConfigImport(raw: unknown): Partial<ConfigExportBundle> {
   if (b.entityMap && typeof b.entityMap === "object") patch.entityMap = b.entityMap as ConfigExportBundle["entityMap"];
   if (b.meshBindings && typeof b.meshBindings === "object") patch.meshBindings = b.meshBindings as ConfigExportBundle["meshBindings"];
   if (Array.isArray(b.teleportPoints)) patch.teleportPoints = b.teleportPoints as ConfigExportBundle["teleportPoints"];
-  if (b.entityIcons && typeof b.entityIcons === "object") patch.entityIcons = b.entityIcons as ConfigExportBundle["entityIcons"];
-  if (b.binarySensorIcons && typeof b.binarySensorIcons === "object") patch.binarySensorIcons = b.binarySensorIcons as ConfigExportBundle["binarySensorIcons"];
-  if (b.sensorIcons && typeof b.sensorIcons === "object") patch.sensorIcons = b.sensorIcons as ConfigExportBundle["sensorIcons"];
   if (typeof b.entityIconScale === "number") patch.entityIconScale = b.entityIconScale;
   if (Array.isArray(b.deviceGroups)) patch.deviceGroups = b.deviceGroups as ConfigExportBundle["deviceGroups"];
   if (typeof b.eyeHeight === "number") patch.eyeHeight = b.eyeHeight;

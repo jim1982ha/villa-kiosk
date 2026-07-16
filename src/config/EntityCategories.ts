@@ -26,6 +26,22 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   others: "Others",
 };
 
+/**
+ * Fixed background gradient per category for the in-scene state badges (see
+ * babylon/badgeIcons.ts) — every device in a category shares this squircle
+ * background regardless of its live state; only an outline ring (state) and
+ * the glyph (device type / device_class) vary. One colour per category, well
+ * distinct from its neighbours.
+ */
+export const CATEGORY_COLORS: Record<Category, { top: string; bottom: string }> = {
+  network:        { top: "#7FE0B4", bottom: "#2E9C6E" }, // mint -> emerald
+  others:         { top: "#EDF1F5", bottom: "#AEBBC9" }, // pale silver -> blue-grey
+  comfort:        { top: "#F5966A", bottom: "#DD5C34" }, // peach -> coral
+  access_control: { top: "#CB93EE", bottom: "#9450C9" }, // lilac -> violet
+  light:          { top: "#FFDA82", bottom: "#F0A93A" }, // gold -> amber
+  energy:         { top: "#7FCBF7", bottom: "#2E8FD6" }, // sky -> electric blue
+};
+
 /** Default category by device TYPE. Anything not listed here (and not caught by
  *  a device_class rule below) falls into "others". */
 export const DEFAULT_CATEGORY_BY_TYPE: Partial<Record<EntityType, Category>> = {

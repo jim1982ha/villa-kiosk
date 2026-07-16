@@ -25,7 +25,6 @@ import {
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-import { DEFAULT_ENTITY_ICONS, DEFAULT_BINARY_SENSOR_ICONS, DEFAULT_SENSOR_ICONS } from "@/config/AppConfig";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import { groupMemberIds } from "@/config/deviceGroups";
 import { effectiveCategory } from "@/config/EntityCategories";
@@ -34,6 +33,8 @@ import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { axisWorldScale } from "./meshUnits";
+import { badgeImageDataUrl, BADGE_CORNER_FRACTION } from "./badgeIcons";
+import { iconKeyFor } from "./badgeIconKeys";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 1.3;
@@ -190,89 +191,26 @@ interface LabelControls {
   category: Category;
 }
 
-/** A live state distilled to one of the visual kinds the badge colour-codes. */
+/** A live state distilled to one of the visual kinds the badge outline colour-codes. */
 type BadgeKind = "on" | "off" | "alert" | "info" | "unavailable";
 
-// Badge palette. An ACTIVE device (on / alert) fills the whole disc with its
-// state colour so it reads as clearly "live" at a glance — a coloured ring on a
-// dark disc wasn't punchy enough. Passive states (off / unavailable) and purely
-// informational sensors (info) keep the dark "glass" disc so they recede and let
-// the active devices pop. Whites/greys read on both the daytime scene and the
-// dark overview backdrop.
-const BADGE_BASE_FILL = "rgba(17,24,39,0.74)";
-const BADGE_STYLE: Record<
-  BadgeKind,
-  { fill: string; ring: string; alpha: number; glow: string; glowBlur: number; glyphAlpha: number }
-> = {
-  // One shared, FULLY OPAQUE blue for every live device — on-devices and
-  // sensors alike. Opaque so the badge reads the same colour over any background
-  // (a translucent fill let the floor/wood/grass behind it tint the blue, which
-  // looked inconsistent); shared so there's no "why is this one darker" — the
-  // glyph already tells a thermometer from a light.
-  on:          { fill: "rgb(14,165,233)",        ring: "#e0f2fe",               alpha: 1,   glow: "rgba(56,189,248,0.85)", glowBlur: 16, glyphAlpha: 1 },
-  alert:       { fill: "rgb(244,63,94)",         ring: "#ffe4e6",               alpha: 1,   glow: "rgba(244,63,94,0.85)",  glowBlur: 16, glyphAlpha: 1 },
-  info:        { fill: "rgb(14,165,233)",        ring: "#e0f2fe",               alpha: 1,   glow: "rgba(56,189,248,0.85)", glowBlur: 16, glyphAlpha: 1 },
-  // OFF = a SOLID, fully-opaque dark disc with a clear glyph and a defined ring:
-  // reads as "here and reachable, just switched off". OFFLINE = a heavily GHOSTED
-  // disc (translucent fill, faint ring, faded glyph) so an unreachable device
-  // visibly recedes — the strong opacity gap is what tells the two apart.
-  off:         { fill: "rgba(30,41,59,0.95)",    ring: "rgba(148,163,184,0.75)", alpha: 1,    glow: "rgba(0,0,0,0.5)",  glowBlur: 6, glyphAlpha: 0.9 },
-  unavailable: { fill: "rgba(20,24,31,0.34)",    ring: "rgba(100,116,139,0.32)", alpha: 0.5,  glow: "rgba(0,0,0,0.2)",  glowBlur: 2, glyphAlpha: 0.7 },
+// Badge outline palette. The squircle's own fill is now FIXED per category
+// (see config/EntityCategories.CATEGORY_COLORS + badgeIcons.ts) — it never
+// recolours with live state. State instead shows as a ring around the
+// squircle: amber = on/active, red = alert (mirrors the red mesh outline a
+// running climate device gets — see EntityVisuals.applyClimateOutline —
+// same signal, same colour language, applied to the 2D badge instead of the
+// 3D asset). Off and purely-informational sensors get no ring at all;
+// unavailable dims the whole badge instead (no ring makes sense for a device
+// that isn't reporting).
+const BADGE_RING: Record<BadgeKind, { color: string | null; alpha: number }> = {
+  on: { color: "#FBBF24", alpha: 1 },
+  alert: { color: "#F43F5E", alpha: 1 },
+  info: { color: null, alpha: 1 },
+  off: { color: null, alpha: 1 },
+  unavailable: { color: null, alpha: 0.5 },
 };
-
-/** Render an emoji/glyph to a square canvas and cache the data URL. Drawing a
- *  pre-centred bitmap and showing it through a GUI Image sidesteps Babylon
- *  TextBlock's alphabetic-baseline math entirely, but canvas's own
- *  `textBaseline: "middle"` isn't a fix by itself — it centres on the FONT's
- *  ascent/descent metrics, not the glyph's actual visible ink, and colour
- *  emoji glyphs routinely sit well off that metric centre (varies by glyph
- *  and platform). So: draw once, measure the real non-transparent pixel
- *  bounding box via getImageData, then redraw shifted so THAT box is
- *  centred — this is what actually guarantees a vertically/horizontally
- *  centred icon everywhere, no per-glyph hand-tuning. */
-const glyphCache = new Map<string, string>();
-function glyphDataUrl(glyph: string): string {
-  const cached = glyphCache.get(glyph);
-  if (cached !== undefined) return cached;
-  const px = 72;
-  const canvas = document.createElement("canvas");
-  canvas.width = px;
-  canvas.height = px;
-  const ctx = canvas.getContext("2d");
-  let url = "";
-  if (ctx) {
-    const font = `${Math.round(px * 0.72)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif`;
-    const draw = (dx: number, dy: number) => {
-      ctx.clearRect(0, 0, px, px);
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = font;
-      ctx.fillStyle = "#f8fafc";
-      ctx.fillText(glyph, px / 2 + dx, px / 2 + dy);
-    };
-    draw(0, 0);
-    const { data } = ctx.getImageData(0, 0, px, px);
-    let minX = px, minY = px, maxX = -1, maxY = -1;
-    for (let y = 0; y < px; y++) {
-      for (let x = 0; x < px; x++) {
-        if (data[(y * px + x) * 4 + 3] > 10) {
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-        }
-      }
-    }
-    if (maxX >= minX && maxY >= minY) {
-      const offX = px / 2 - (minX + maxX) / 2;
-      const offY = px / 2 - (minY + maxY) / 2;
-      draw(offX, offY);
-    }
-    url = canvas.toDataURL();
-  }
-  glyphCache.set(glyph, url);
-  return url;
-}
+const BADGE_RING_THICKNESS = 3;
 
 export class EntityVisuals {
   private scene: Scene;
@@ -379,25 +317,19 @@ export class EntityVisuals {
   }
 
   updateConfig(config: AppConfig): void {
-    const prevIcons = this.config.entityIcons;
-    const prevBsIcons = this.config.binarySensorIcons;
-    const prevSensorIcons = this.config.sensorIcons;
     const prevGroups = this.config.deviceGroups;
     this.config = config;
     // Entity-light wall occlusion is always-on: walls block lamp light out of
     // the box, so there is nothing to tear down here when config changes.
-    const iconsChanged = config.entityIcons !== prevIcons
-      || config.binarySensorIcons !== prevBsIcons
-      || config.sensorIcons !== prevSensorIcons;
     // Apply the user's size multiplier.
     if (typeof config.entityIconScale === "number" && config.entityIconScale !== this.iconUserScale) {
       this.iconUserScale = config.entityIconScale;
       this.applyIconScale();
     }
-    // Labels are always shown; rebuild when a per-category glyph changed, or a
-    // device group was created/edited (a member's badge must appear/disappear
-    // without needing a full re-index — see rebuildLabels' hiddenMembers).
-    if (iconsChanged || config.deviceGroups !== prevGroups) {
+    // Labels are always shown; rebuild when a device group is created/edited
+    // (a member's badge must appear/disappear without needing a full
+    // re-index — see rebuildLabels' hiddenMembers).
+    if (config.deviceGroups !== prevGroups) {
       this.rebuildLabels();
     }
   }
@@ -934,31 +866,6 @@ export class EntityVisuals {
   // State labels (BJS GUI fullscreen overlay)
   // ---------------------------------------------------------------------------
 
-  /** Resolve the per-category glyph (Settings override > built-in default).
-   *  binary_sensor is the one generic domain: when the entity's live state is
-   *  known, its `device_class` attribute (moisture, motion, door …) picks a
-   *  class-specific glyph so a leak sensor and a PIR stop sharing one icon.
-   *  Before the first state arrives — or with no device_class at all — the
-   *  per-type glyph applies; updateLabel refreshes the badge on every state
-   *  change, so the class glyph appears as soon as HA reports it. */
-  private iconFor(type: EntityType, entity?: HassEntity): string {
-    if (type === "binary_sensor") {
-      const dc = entity?.attributes?.device_class as string | undefined;
-      const icon = dc
-        ? this.config.binarySensorIcons?.[dc] ?? DEFAULT_BINARY_SENSOR_ICONS[dc]
-        : undefined;
-      if (icon) return icon;
-    }
-    if (type === "sensor") {
-      const dc = entity?.attributes?.device_class as string | undefined;
-      const icon = dc
-        ? this.config.sensorIcons?.[dc] ?? DEFAULT_SENSOR_ICONS[dc]
-        : undefined;
-      if (icon) return icon;
-    }
-    return this.config.entityIcons?.[type] ?? DEFAULT_ENTITY_ICONS[type] ?? "●";
-  }
-
   /** An entity's map-filter category: whatever the user set in the Config
    *  Editor (persisted on its EntityMapping), falling back to the type-based
    *  default (config/EntityCategories.ts) for entities that don't have one
@@ -1022,10 +929,12 @@ export class EntityVisuals {
 
     for (const { entityId, anchor, type } of sources) {
       const category = this.categoryOf(entityId, type);
-      // A compact column: a round "glass" icon badge over an optional value pill.
-      // The device TYPE reads from the (pixel-centred) glyph image, the STATE from
-      // the ring colour, and the value pill only appears for entities with a
-      // meaningful reading (%, °, sensor value). Children are top-aligned in a
+      // A compact column: a category-coloured squircle icon badge (see
+      // badgeIcons.ts) over an optional value pill. The device CATEGORY reads
+      // from the badge's fixed background colour, the device TYPE from its
+      // glyph, the STATE from an outline ring around it (see updateLabel),
+      // and the value pill only appears for entities with a meaningful
+      // reading (%, °, sensor value). Children are top-aligned in a
       // fixed-height panel so the badge never shifts when the pill shows/hides.
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
@@ -1041,13 +950,16 @@ export class EntityVisuals {
       // constant this used to be.
       container.linkOffsetYInPixels = -LABEL_HEIGHT_PX / 2;
 
+      // The squircle's fill is the composited category+glyph image below —
+      // this Rectangle is now just its outline (a ring shown only while the
+      // device is on/alert, see updateLabel) plus a drop shadow for depth
+      // against the 3D scene.
       const badge = new Rectangle(`lbl_badge_${entityId}`);
       badge.width = `${BADGE_DIAMETER_PX}px`;
       badge.height = `${BADGE_DIAMETER_PX}px`;
-      badge.cornerRadius = BADGE_DIAMETER_PX / 2; // = half of width/height -> a circle
-      badge.thickness = 2.5;
-      badge.background = BADGE_BASE_FILL;
-      badge.color = BADGE_STYLE.off.ring;
+      badge.cornerRadius = BADGE_DIAMETER_PX * BADGE_CORNER_FRACTION;
+      badge.thickness = 0;
+      badge.background = "transparent";
       badge.shadowColor = "rgba(0,0,0,0.55)";
       badge.shadowBlur = 6;
       badge.shadowOffsetY = 2;
@@ -1056,9 +968,9 @@ export class EntityVisuals {
       container.addControl(badge);
 
       const glyph = new Image(`lbl_glyph_${entityId}`,
-        glyphDataUrl(this.iconFor(type, this.lastState.get(entityId))));
-      glyph.width = "26px";
-      glyph.height = "26px";
+        badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId))));
+      glyph.width = `${BADGE_DIAMETER_PX}px`;
+      glyph.height = `${BADGE_DIAMETER_PX}px`;
       glyph.stretch = Image.STRETCH_UNIFORM;
       badge.addControl(glyph);
 
@@ -1113,14 +1025,14 @@ export class EntityVisuals {
       entityId, type, this.config.entityMap[entityId]?.category,
       entity.attributes.device_class as string | undefined);
     const kind = this.badgeKind(type, entity);
-    const style = BADGE_STYLE[kind];
-    lbl.badge.background = style.fill; // fill the whole disc for active devices
-    lbl.badge.color = style.ring;
-    lbl.badge.alpha = style.alpha;
-    lbl.badge.shadowColor = style.glow;
-    lbl.badge.shadowBlur = style.glowBlur;
-    lbl.glyph.source = glyphDataUrl(this.iconFor(type, entity)); // honour live icon + device_class
-    lbl.glyph.alpha = style.glyphAlpha;
+    const ring = BADGE_RING[kind];
+    // The squircle's own fill never changes — only this outline ring (state)
+    // and the glyph (device type / device_class, honouring live device_class
+    // for the two catch-all domains) do.
+    lbl.badge.thickness = ring.color ? BADGE_RING_THICKNESS : 0;
+    lbl.badge.color = ring.color ?? "transparent";
+    lbl.badge.alpha = ring.alpha;
+    lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKeyFor(type, entity));
 
     const value = this.compactValue(type, entity);
     lbl.valueText.text = value;
