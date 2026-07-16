@@ -24,18 +24,18 @@ export default function BasePanel({ title, room, icon, onClose, children }: Prop
   }, [onClose]);
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop panel-modal-backdrop" onClick={onClose}>
       <div className="modal panel-modal" onClick={(e) => e.stopPropagation()}>
         <div className="panel-header">
           <div className="title">
             {icon && <div className="panel-icon">{icon}</div>}
-            <div>
+            <div style={{ minWidth: 0 }}>
               <h2>{title}</h2>
               {room && <div className="room">{room}</div>}
               {entityId && <div className="panel-entity-id" title={entityId}>{entityId}</div>}
             </div>
           </div>
-          <div className="row" style={{ gap: 8 }}>
+          <div className="row panel-header-actions" style={{ gap: 8 }}>
             {onEdit && (
               <button
                 className="icon-btn"

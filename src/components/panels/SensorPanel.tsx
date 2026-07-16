@@ -9,6 +9,7 @@ import type { PanelProps } from "@/types/panel.types";
 import type { HistoryPoint } from "@/types/ha.types";
 import { useConfig } from "@/config/ConfigContext";
 import { fetchHistory } from "@/ha/HAHistoryAPI";
+import { isIngress } from "@/ha/ingress";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 
@@ -46,7 +47,10 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const binaryPillTone = level === "danger" ? "danger" : entity?.state === "on" ? "on" : "off";
 
   useEffect(() => {
-    if (isBinary || !config.haUrl || !config.haToken) return;
+    // Under Ingress the add-on's Supervisor proxy injects credentials
+    // server-side (see ha/ingress.ts) — haUrl/haToken are legitimately blank
+    // there, so only require them when NOT on Ingress.
+    if (isBinary || (!isIngress() && (!config.haUrl || !config.haToken))) return;
     let cancelled = false;
     fetchHistory(config.haUrl, config.haToken, mapping.entityId, 24)
       .then((h) => !cancelled && setHistory(h))

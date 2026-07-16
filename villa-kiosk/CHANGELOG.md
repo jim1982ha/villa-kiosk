@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.22.1
+
+- **Fix: device panel modal on phones.** It was inheriting the full-screen,
+  top-anchored sheet treatment meant for Settings, so it rendered off-center
+  with its Edit/Close buttons pushed out of view on a long device name. It's
+  now a small centered card on phones too, and the header buttons no longer
+  shrink or get clipped regardless of title length.
+- **Fix: sensor/device-group history graphs missing on Ingress.** The history
+  fetch required `haUrl`/`haToken` to be set, but those are legitimately
+  blank when the kiosk is opened through Home Assistant's Ingress (the
+  add-on's Supervisor proxy injects credentials server-side) — so the graph
+  silently never loaded on any Ingress-connected device (typically phones/
+  the HA app) even though it worked fine wherever a URL+token were configured.
+- **Reclaimed top-bar width on phones.** The villa name/connection-dot/clock
+  chip now collapses into a single dropdown button (mirroring the existing
+  right-side overflow menu) instead of staying visible as a chip, so the
+  category filter row is no longer cropped on narrow screens.
+
 ## 2.22.0
 
 - **Running climate devices get a red outline** on the map, same forward-pass

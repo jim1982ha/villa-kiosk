@@ -255,8 +255,13 @@ button {
    other HUD control) so the villa name reads clearly on ANY backdrop — the
    canvas behind it can be a bright sky, a dark night, or an empty void, and
    the name never washes out. */
+/* Grid item (top-bar left column) wrapping .hud-brand + its mobile stand-in
+   .hud-brand-overflow — hud-topbar's 3 columns are sized for exactly 3 direct
+   children, so both live inside this one wrapper (see hud-right below for
+   the same pattern on the right). */
+.hud-brand-zone { justify-self: start; display: flex; align-items: center; }
 .hud-brand {
-  justify-self: start; display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 10px;
   font-family: var(--font-display); font-size: 22px; font-weight: 500;
   background: var(--bg-panel); backdrop-filter: blur(8px);
   border: 1px solid var(--hairline); border-radius: 999px;
@@ -296,6 +301,17 @@ button {
 }
 .hud-menu-item svg { flex: 0 0 auto; color: var(--text-secondary); }
 .hud-menu-item:hover, .hud-menu-item:active { background: var(--bg-input); }
+/* Non-interactive rows (the brand dropdown's connection/clock lines) — no
+   pointer cursor or hover wash, they're display-only. */
+.hud-menu-item.hud-menu-static { cursor: default; }
+.hud-menu-item.hud-menu-static:hover, .hud-menu-item.hud-menu-static:active { background: transparent; }
+
+/* Mirrors .hud-overflow on the left: on phones the brand chip (villa name +
+   connection dot + clock) collapses into this single button + dropdown so
+   the category filter row keeps its width. Hidden on roomy screens; the
+   compact-bar media query below swaps the two (same as the right side). */
+.hud-brand-overflow { position: relative; display: none; }
+.hud-brand-overflow .hud-menu { left: 0; right: auto; }
 
 /* Scrollable variant of a .hud-group (the category filter): however many
    buttons the profile/config produces, the pill never wraps and never grows
@@ -465,15 +481,20 @@ button {
 .modal.panel-modal { max-width: 460px; overflow-y: auto; overscroll-behavior: contain; }
 .panel-body { padding-top: 4px; }
 .panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
-.panel-header .title { display: flex; align-items: center; gap: 12px; }
-.panel-header .title h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; }
+/* The title block shrinks/wraps (min-width:0 lets a long device name wrap
+   instead of forcing the row wider); the action buttons never shrink, so a
+   long title can never push Edit/Close out of view (see the mobile fix for
+   the underlying report — buttons vanished off-screen on a long name). */
+.panel-header .title { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
+.panel-header-actions { flex: 0 0 auto; }
+.panel-header .title h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; overflow-wrap: break-word; }
 .panel-header .room { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
 .panel-header .panel-entity-id {
   margin-top: 3px; font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px; color: var(--text-dim);
   max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); }
+.panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
 
 .row-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 .row-buttons.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
@@ -883,17 +904,17 @@ label.toggle span { user-select: none; line-height: 1.4; }
     padding-left: calc(10px + env(safe-area-inset-left, 0px));
     padding-right: calc(10px + env(safe-area-inset-right, 0px));
   }
-  /* Show only the home icon + status dot; the wordmark eats too much width. */
-  .hud-title { display: none; }
-  .hud-brand { gap: 7px; }
-  .hud-brand svg { width: 22px; height: 22px; }
-  /* Clock takes too much space — hide it; the phone already shows the time. */
-  .hud-clock { display: none; }
+  /* The whole brand chip (villa name, connection dot, clock) collapses into
+     the single hud-brand-overflow button — its dropdown carries all three —
+     so the category filter row gets that width back. */
+  .hud-brand { display: none; }
+  .hud-brand-overflow { display: block; }
   /* Tighter centre/right groups and smaller icon buttons. */
   .hud-center { gap: 4px; }
   .hud-right { gap: 6px; }
   .hud-center .icon-btn,
-  .hud-right .icon-btn { width: 32px; height: 32px; }
+  .hud-right .icon-btn,
+  .hud-brand-overflow .icon-btn { width: 32px; height: 32px; }
   /* Right side collapses to the single overflow-menu button; its dropdown
      hosts the view toggle, Settings and profile switch. */
   .hud-right-inline { display: none; }
@@ -937,6 +958,23 @@ label.toggle span { user-select: none; line-height: 1.4; }
     overflow-y: auto;
     padding: calc(20px + env(safe-area-inset-top, 0px)) 18px
              calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+  /* The device panel is short (a few rows + a small graph) and reads far
+     better as a small centered card than the full-screen top-anchored sheet
+     above — which is sized for Settings' long forms. Override back to a
+     centered dialog on phones too. */
+  .panel-modal-backdrop {
+    padding: 16px;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal.panel-modal {
+    width: 100%;
+    max-width: 420px;
+    max-height: 80dvh;
+    border-radius: 20px;
+    border: 1px solid var(--hairline-strong);
+    padding: 20px;
   }
 
   /* (Config table is card-styled at all widths now — see the base rules.) */

@@ -14,6 +14,7 @@ import DualSparkline from "./DualSparkline";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { fetchHistory } from "@/ha/HAHistoryAPI";
+import { isIngress } from "@/ha/ingress";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HistoryPoint } from "@/types/ha.types";
@@ -48,7 +49,10 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   const numericIds = numericRows.map((r) => r.id).join(",");
 
   useEffect(() => {
-    if (!config.haUrl || !config.haToken || !numericIds) return;
+    // Under Ingress the add-on's Supervisor proxy injects credentials
+    // server-side (see ha/ingress.ts) — haUrl/haToken are legitimately blank
+    // there, so only require them when NOT on Ingress.
+    if (!numericIds || (!isIngress() && (!config.haUrl || !config.haToken))) return;
     let cancelled = false;
     Promise.all(
       numericIds.split(",").map((id) =>
