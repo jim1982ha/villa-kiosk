@@ -167,6 +167,17 @@ const PULSE_RAD_PER_SEC = 3.6;
 // spin reads as "blades turning" at kiosk distance; ~1 rev/s is lively without
 // strobing. Scaled down by the fan's percentage (min 15%) when reported.
 const FAN_MAX_RAD_PER_SEC = 6.2;
+// A ceiling fan is exported as ONE fused mesh (mount + motor + blades all one
+// piece, one material — no separate "blade" sub-object to isolate), so the
+// whole thing has to spin together; see updateFanSpin/computeFanSpin. The top
+// fraction of its height (the ceiling mount/canopy) is reliably the one part
+// that's round and centred exactly on the true axle, so its own vertices —
+// not the whole mesh's bounding box — decide WHERE that axle sits. Get this
+// right and the mount+pole (rotationally symmetric) reads as motionless even
+// though it's technically rotating with the blades; get it wrong (the old
+// plain bbox-midpoint) and the pole visibly orbits in a small circle instead
+// of spinning in place.
+const FAN_AXIS_TOP_SLICE = 0.25;
 
 interface LabelControls {
   container: StackPanel;
@@ -1578,11 +1589,12 @@ export class EntityVisuals {
         break;
       }
 
-      case "fan": {
-        const on = state.state === "on";
-        setEmissive?.(on ? new Color3(0.1, 0.35, 0.4) : Color3.Black());
+      // No emissive tint for on/off — a spinning ceiling fan (see updateFanSpin)
+      // already reads as "on" by itself; a glow was redundant and, per product
+      // decision, unwanted.
+      case "fan":
+        setEmissive?.(Color3.Black());
         break;
-      }
 
       case "switch":
       case "media_player": {
@@ -1658,8 +1670,16 @@ export class EntityVisuals {
    * the mesh's PARENT-LOCAL space (it subtracts `this.position`), NOT world space
    * — the fan meshes are parented to the recentred/scaled __root__, so passing a
    * world centre made them orbit a far point (the recenter offset) with a huge
-   * radius. So convert BOTH the world bbox centre and the world-up axis into the
+   * radius. So convert BOTH the world centre and the world-up axis into the
    * meshes' shared parent frame here (done once — the parent never moves).
+   *
+   * The X/Z of that centre is NOT the whole-mesh bounding-box midpoint (see
+   * FAN_AXIS_TOP_SLICE) — that assumes the blade assembly is perfectly
+   * symmetric, which it usually isn't quite, and any offset there puts the
+   * pivot off the true axle, making the (rotationally symmetric) mount/pole
+   * visibly orbit in a small circle as the whole mesh spins. Instead, average
+   * the vertices in the TOP slice of the fixture (the ceiling mount/canopy —
+   * reliably round and centred exactly on the axle) for X/Z.
    */
   private computeFanSpin(meshes: AbstractMesh[]): { centre: Vector3; axis: Vector3 } {
     let min = new Vector3(Infinity, Infinity, Infinity);
@@ -1670,7 +1690,26 @@ export class EntityVisuals {
       min = Vector3.Minimize(min, bb.minimumWorld);
       max = Vector3.Maximize(max, bb.maximumWorld);
     }
-    const worldCentre = new Vector3((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2);
+
+    const topThreshold = max.y - (max.y - min.y) * FAN_AXIS_TOP_SLICE;
+    let sumX = 0, sumZ = 0, sampled = 0;
+    for (const m of meshes) {
+      const positions = m.getVerticesData(VertexBuffer.PositionKind);
+      if (!positions) continue;
+      const world = m.getWorldMatrix();
+      const p = Vector3.Zero();
+      for (let i = 0; i < positions.length; i += 3) {
+        p.set(positions[i], positions[i + 1], positions[i + 2]);
+        Vector3.TransformCoordinatesToRef(p, world, p);
+        if (p.y >= topThreshold) { sumX += p.x; sumZ += p.z; sampled++; }
+      }
+    }
+    // Fall back to the plain bbox midpoint if the top slice somehow caught
+    // too little geometry to average reliably (e.g. a sparse mount mesh).
+    const worldCentre = sampled >= 20
+      ? new Vector3(sumX / sampled, (min.y + max.y) / 2, sumZ / sampled)
+      : new Vector3((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2);
+
     const parent = meshes[0].parent as TransformNode | null;
     if (!parent) return { centre: worldCentre, axis: Vector3.Up() };
     const inv = Matrix.Invert(parent.getWorldMatrix());

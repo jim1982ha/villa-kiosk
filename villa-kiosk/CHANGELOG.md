@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.22.5
+
+- **Fix: ceiling fan mount/pole visibly orbiting while spinning.** Each
+  ceiling fan is exported as one fused mesh (mount + motor + blades, no
+  separate "blade" object to isolate), so the whole thing has to rotate
+  together — but the spin's pivot was the plain bounding-box midpoint, which
+  isn't quite on the true axle when the blade assembly isn't perfectly
+  symmetric. The pivot now comes from averaging the ceiling mount/canopy's
+  own vertices (the top slice of the fixture — reliably round and centred on
+  the real axle), so the mount/pole reads as motionless while the blades spin.
+- **Removed the fan's on/off glow.** `fan` entities no longer get an emissive
+  tint when on — the spin itself is the "on" cue now.
+- **Fan panel: added a Speed slider.** Fans that report a continuous speed
+  (`percentage`, separate from any named presets) now show a slider for it,
+  same pattern as the cover position slider — previously only preset-mode
+  buttons were exposed even though the service call already existed.
+
 ## 2.22.4
 
 - **Removed the fake grass repaint.** SweetHome 3D exports the terrain outside
