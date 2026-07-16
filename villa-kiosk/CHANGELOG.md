@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.22.3
+
+- **Lit rooms actually look lit now, especially at night.** A light's real
+  room-fill contribution was quite weak — turning it on mostly just bloomed
+  the fixture's own glow rather than brightening the room around it. Bumped
+  `MAX_LIGHT_INTENSITY` 0.85 → 1.3 and each fixture's `LIGHT_RANGE` 2.8m →
+  4m. If a light starts visibly bleeding into a neighbouring room (most
+  likely with multi-marker LED strips), that range is the first thing to
+  dial back.
+
 ## 2.22.2
 
 - **Fix: connection status still ate top-bar space on phones.** The previous

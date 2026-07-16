@@ -36,7 +36,7 @@ import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { axisWorldScale } from "./meshUnits";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
-const MAX_LIGHT_INTENSITY = 0.85;
+const MAX_LIGHT_INTENSITY = 1.3;
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
 // ceiling spots / LED strips export as small placeholder spheres; at the old
 // 0.18 they were almost invisible — especially the clustered ones (Bedroom 1
@@ -45,12 +45,15 @@ const MAX_LIGHT_INTENSITY = 0.85;
 // wired; applyToMesh still overrides this from live HA state (on = bright, off
 // = black).
 const LIGHT_BASELINE_GLOW = 0.5;
-// Room-scale reach for a fixture's PointLight. The old value (8 m) lit straight
-// through walls into the next room because point lights have no occlusion on
-// their own; the un-shadowed markers of a multi-marker strip rely on this tight
-// range to stay out of the adjacent room, while the entity's representative light
-// is wall-blocked by the per-entity shadow below.
-const LIGHT_RANGE = 2.8;
+// Room-scale reach for a fixture's PointLight. An early value (8 m) lit straight
+// through walls into the next room because point lights have no occlusion of
+// their own — only the entity's REPRESENTATIVE light is wall-blocked by the
+// per-entity shadow below; any extra un-shadowed markers of a multi-marker strip
+// rely purely on this range to stay out of the adjacent room. 4 m is a deliberate
+// middle ground (rooms were reading as barely lit at the old 2.8 m) — if a light
+// starts bleeding into a neighbouring room, especially at night, shrink this
+// back down rather than raising it further.
+const LIGHT_RANGE = 4;
 // A SweetHome "line light" (the Sweet Home Light plugin's linear LED strip) is
 // mounted flush against a ceiling/wall. A PointLight placed ON the strip sits
 // centimetres from that surface, so it prints a hard bright pool right there —
