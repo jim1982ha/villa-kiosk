@@ -254,6 +254,8 @@ export class EntityVisuals {
    *  PointLight is pointless there (the structure renders unlit) and what
    *  this fakes instead. Keyed the same way, one per fixture mesh. */
   private meshLightPools = new Map<number, LightPool>();
+  /** config.render.lightPoolIntensity, cached — see setLightPoolIntensity. */
+  private lightPoolStrength = 1;
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
    *  attached to that entity's representative light. Created lazily while the
    *  light is on; a 12-marker strip therefore costs a single shadow map, not 12. */
@@ -345,6 +347,35 @@ export class EntityVisuals {
     if (config.deviceGroups !== prevGroups) {
       this.rebuildLabels();
     }
+    if (typeof config.render?.lightPoolIntensity === "number") {
+      this.setLightPoolIntensity(config.render.lightPoolIntensity);
+    }
+  }
+
+  /** Settings' "Light effect strength" slider — mirrors setRenderConfig's
+   *  live-drag-preview pattern for the other render sliders (see
+   *  SceneManager.setRenderConfig), except this reaches a value EntityVisuals
+   *  owns rather than RenderEnhancements/SunController, so it's wired here
+   *  directly instead of through the render pipeline. Re-applies to every
+   *  currently-on pool immediately (using each entity's last known state) so
+   *  dragging the slider previews live on any light that's already on. */
+  setLightPoolIntensity(value: number): void {
+    if (value === this.lightPoolStrength) return;
+    this.lightPoolStrength = value;
+    for (const [entityId, map] of this.mapping) {
+      if (map.type !== "light") continue;
+      const state = this.lastState.get(entityId);
+      const meshes = this.byEntity.get(entityId);
+      if (!state || !meshes) continue;
+      const on = state.state === "on";
+      const colour = this.lightColour(state);
+      const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
+      for (const mesh of meshes) {
+        const pool = this.meshLightPools.get(mesh.uniqueId);
+        if (pool) pool.setState(on, colour, brightnessFrac * this.lightPoolStrength);
+      }
+    }
+    this.requestRender();
   }
 
   /** Build the reverse index entity_id -> meshes from the loaded GLB. */
@@ -1522,7 +1553,7 @@ export class EntityVisuals {
         }
         // Baked mode's counterpart to the light above — see LightPools.ts.
         const pool = this.meshLightPools.get(mesh.uniqueId);
-        if (pool) pool.setState(on, colour, brightnessFrac);
+        if (pool) pool.setState(on, colour, brightnessFrac * this.lightPoolStrength);
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;
       }

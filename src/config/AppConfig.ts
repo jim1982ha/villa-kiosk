@@ -71,6 +71,12 @@ export interface RenderConfig {
    *  enough that a lit fixture's own light clearly dominates the room, but
    *  never fully black (SunController floors it so rooms stay legible). */
   nightDimming: number;
+  /** Strength of the floor "light pool" a lit fixture casts in BAKED-lighting
+   *  villas (see babylon/LightPools.ts) — those villas' structure is exported
+   *  unlit, so a real dynamic light can never brighten the room; this is the
+   *  substitute. No effect in non-baked villas, which get a real PointLight
+   *  instead (see EntityVisuals.bakedMode). 1 = default. */
+  lightPoolIntensity: number;
 }
 
 /**
@@ -90,7 +96,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     hemiIntensity: 0.55, sunIntensity: 1.0, ambientIntensity: 0.6,
     ibl: false, environmentIntensity: 0.6,
     ssao: false, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
-    glow: true, glowIntensity: 0.8, nightDimming: 0.5,
+    glow: true, glowIntensity: 0.8, nightDimming: 0.5, lightPoolIntensity: 1.0,
   },
   // The proven "safe win": subtle contact AO, no IBL.
   balanced: {
@@ -99,7 +105,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     hemiIntensity: 0.5, sunIntensity: 1.0, ambientIntensity: 0.6,
     ibl: false, environmentIntensity: 0.65,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
-    glow: true, glowIntensity: 0.8, nightDimming: 0.5,
+    glow: true, glowIntensity: 0.8, nightDimming: 0.5, lightPoolIntensity: 1.0,
   },
   // Best look out of the box: AO + soft sky/ground IBL + higher-sample AO.
   high: {
@@ -108,7 +114,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     hemiIntensity: 0.45, sunIntensity: 1.05, ambientIntensity: 0.6,
     ibl: true, environmentIntensity: 0.6,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.25, ssaoSamples: 16,
-    glow: true, glowIntensity: 0.8, nightDimming: 0.5,
+    glow: true, glowIntensity: 0.8, nightDimming: 0.5, lightPoolIntensity: 1.0,
   },
 };
 

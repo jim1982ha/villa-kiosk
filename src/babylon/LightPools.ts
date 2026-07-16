@@ -76,13 +76,16 @@ export class LightPool {
     this.mesh.setEnabled(false);
   }
 
-  /** `intensityFrac` — 0..1ish, typically the light's brightness fraction;
-   *  scales the pool's overall opacity so a dimmed light casts a fainter pool. */
+  /** `intensityFrac` — the light's brightness fraction × the user's "Light
+   *  effect strength" setting, so a dimmed light casts a fainter pool and the
+   *  slider has real range. Not clamped to 1: in ADDITIVE blending a value
+   *  above 1 genuinely brightens/saturates the pool further rather than just
+   *  "more opaque", so the slider keeps working past that point. */
   setState(on: boolean, colour: Color3, intensityFrac: number): void {
     this.mesh.setEnabled(on);
     if (!on) return;
     this.material.emissiveColor = colour;
-    this.material.alpha = Math.max(0.15, Math.min(1, intensityFrac));
+    this.material.alpha = Math.max(0.15, Math.min(2, intensityFrac));
   }
 
   dispose(): void {

@@ -1256,6 +1256,9 @@ export class SceneManager {
     this.config = { ...this.config, render };
     this.renderFx.apply(this.deviceRenderConfig(render));
     this.sun.updateConfig(this.config);
+    // lightPoolIntensity is EntityVisuals' own value (see LightPools.ts), not
+    // part of the RenderEnhancements/SunController pipeline above.
+    this.visuals.setLightPoolIntensity(render.lightPoolIntensity ?? 1);
     this.requestRender();
   }
 

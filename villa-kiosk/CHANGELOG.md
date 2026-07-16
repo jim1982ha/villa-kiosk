@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.23.6
+
+- **"Glow strength" replaced with "Light effect strength".** The old slider
+  controlled GlowLayer bloom (fixed at a sensible default now, no longer
+  user-facing); the new one controls the power of the 2.23.5 floor light-pool
+  effect instead — the thing actually worth tuning when a light doesn't seem
+  to brighten its room enough. Live-previews while dragging, same as the
+  other render sliders.
+- **3D model upload moved into Advanced Settings.** "Upload central GLB" /
+  "Upload room data" (and the standalone-mode model uploader) were sitting on
+  the everyday Settings screen; they're an administration action, so they
+  now live in Advanced Settings alongside the rest of the Owner-only tools.
+
 ## 2.23.5
 
 - **Camera badge icon changed again — CCTV camera, not a webcam.** The
