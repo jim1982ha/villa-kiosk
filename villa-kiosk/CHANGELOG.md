@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.23.1
+
+- **Fix: ceiling fan (and its badge) disappearing when turned on, and never
+  coming back when turned off.** 2.22.6's `setPivotPoint`-based spin fixed
+  the orbiting mathematically, but the badge's on-screen position tracking
+  (Babylon GUI's `linkWithMesh`) projects the mesh's own *local*
+  bounding-sphere centre through its world matrix every frame — an
+  interaction with the pivot matrix that isn't verifiable without a browser,
+  and in practice broke both the mesh and its badge. Replaced with an
+  invisible pivot node the fan mesh is reparented under (`setParent`, a
+  mechanism already used throughout this app) — animateFans now only ever
+  rotates that pivot; the mesh's own transform, pivot matrix and bounding
+  info are never touched, so nothing reading the mesh directly (the badge
+  included) can be affected. Spin correctness (no orbit, no drift) verified
+  numerically before shipping.
+
 ## 2.23.0
 
 - **Redesigned device badges — hardcoded, no more per-user icon editing.**

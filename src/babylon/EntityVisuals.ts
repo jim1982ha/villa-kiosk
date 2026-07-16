@@ -228,10 +228,12 @@ export class EntityVisuals {
    *  accumulated incrementally), so there is no possible drift. */
   private fanAngles = new Map<string, number>();
   /** entity_id → per-mesh spin rig, set up once (lazily, on first "on") via
-   *  setupFanRig: each mesh gets a Babylon pivot point at its own true axle
-   *  (see setupFanRig) plus the local axis/base orientation animateFans needs
-   *  to spin it in place every frame. */
-  private fanRigs = new Map<string, { mesh: AbstractMesh; axisLocal: Vector3; baseRotation: Quaternion }[]>();
+   *  setupFanRig: `pivot` is an invisible TransformNode sitting at the mesh's
+   *  own true axle (see setupFanRig) that the mesh got REPARENTED under —
+   *  animateFans only ever rotates `pivot`, never the mesh's own transform,
+   *  so the mesh's local bounding info / pivot matrix (which the badge's
+   *  linkWithMesh tracking reads) stay exactly what they always were. */
+  private fanRigs = new Map<string, { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[]>();
   private pulseT = 0;
 
   // Real light sources for `light` entities. Keyed by MESH uniqueId (not entity
@@ -342,6 +344,7 @@ export class EntityVisuals {
     this.beams.dispose();
     this.pulsing.clear();
     this.spinningFans.clear();
+    for (const rig of this.fanRigs.values()) for (const r of rig) r.pivot.dispose();
     this.fanRigs.clear();
     this.fanAngles.clear();
     this.byEntity.clear();
@@ -1584,30 +1587,31 @@ export class EntityVisuals {
   }
 
   /**
-   * Rig each of the fan's meshes to spin in place around its TRUE axle, using
-   * Babylon's own pivot-point mechanism instead of `rotateAround`.
+   * Rig each of the fan's meshes to spin in place around its TRUE axle.
    *
-   * `rotateAround` re-derives its pivot offset from the mesh's CURRENT
-   * `.position` on every single call (`point - this.position`) — so it only
-   * spins in place when the pivot passed in is *exactly* equal to that
-   * position. These fan meshes import with `.position` sitting at the
-   * PARENT-LOCAL origin (0,0,0) — the real placement is baked entirely into
-   * the vertex data, never into the transform — so ANY vertex-derived pivot
-   * (the true axle included) is nonzero there, and `rotateAround` orbits the
-   * whole mesh around it every frame: the pole, and anything (the label)
-   * anchored to that same mesh, sweep out a circle sized by exactly that
-   * offset. That's the actual bug — no amount of tuning WHICH point gets
-   * passed to `rotateAround` fixes it, only not using `rotateAround` does.
+   * Two earlier approaches both broke on this exact mesh shape:
+   *  - `rotateAround` re-derives its pivot offset from the mesh's CURRENT
+   *    `.position` every call (`point - this.position`), so it only spins in
+   *    place when the pivot is *exactly* that position. These fan meshes
+   *    import with `.position` at the parent-local origin (0,0,0) — the real
+   *    placement is baked entirely into vertex data — so any vertex-derived
+   *    pivot orbited the whole mesh (and, since the label anchors to that
+   *    same mesh, the label with it).
+   *  - `mesh.setPivotPoint()` fixes the orbit mathematically (verified by
+   *    hand), but the badge's position tracking (Babylon GUI's
+   *    `linkWithMesh`) projects the mesh's *local* bounding-sphere centre
+   *    through `getWorldMatrix()` each frame — an interaction with the pivot
+   *    matrix I could not fully rule out without a browser, and empirically
+   *    it made the fan (mesh AND label) disappear on "on" and never return.
    *
-   * The fix: `mesh.setPivotPoint(axle, LOCAL)` shifts what rotation orbits
-   * around WITHOUT moving `.position` at all — Babylon composes it as
-   * `Translate(-axle) · Rotate · Translate(+axle)` before the mesh's own
-   * position is added, so at any rotation this sandwich leaves `.position`
-   * (and therefore the mesh's absolute/world position, and any label linked
-   * to it) completely untouched; only the rotated GEOMETRY sweeps. Combined
-   * with assigning `rotationQuaternion` as an ABSOLUTE value every frame
-   * (animateFans) instead of accumulating like `rotateAround` does, there is
-   * no drift and no orbit, ever, regardless of where `.position` sits.
+   * This version touches neither: an invisible `TransformNode` ("pivot") is
+   * planted at the mesh's true axle and the mesh is REPARENTED under it
+   * (`setParent` — a mechanism already used everywhere else in this app —
+   * adjusts the mesh's local position/rotation to compensate, so nothing
+   * visually moves at the moment of reparenting). Only `pivot.rotationQuaternion`
+   * is ever touched afterwards; the mesh's OWN transform, pivot matrix and
+   * bounding info stay exactly what they always were, so the badge (and
+   * everything else that reads the mesh directly) can't be affected.
    *
    * The axle itself: average the vertices in the TOP slice of the fixture —
    * along whichever LOCAL axis currently reads as world-vertical, see
@@ -1618,32 +1622,24 @@ export class EntityVisuals {
    */
   private setupFanRig(
     meshes: AbstractMesh[],
-  ): { mesh: AbstractMesh; axisLocal: Vector3; baseRotation: Quaternion }[] {
-    const rig: { mesh: AbstractMesh; axisLocal: Vector3; baseRotation: Quaternion }[] = [];
+  ): { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[] {
+    const rig: { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[] = [];
     for (const m of meshes) {
       const positions = m.getVerticesData(VertexBuffer.PositionKind);
       if (!positions || positions.length < 3) continue;
       m.computeWorldMatrix(true);
 
-      // Adopt a quaternion once (same one-time conversion TransformNode's own
-      // rotateAround does) so every later frame is a plain assignment.
-      if (!m.rotationQuaternion) {
-        m.rotationQuaternion = Quaternion.RotationYawPitchRoll(m.rotation.y, m.rotation.x, m.rotation.z);
-        m.rotation.setAll(0);
-      }
-      const baseRotation = m.rotationQuaternion.clone();
-
-      // The LOCAL (pre-rotation, pre-pivot) direction that currently reads as
+      // The LOCAL (pre-rotation) direction that currently reads as
       // world-vertical — NOT necessarily local Y: these fixtures import with
       // a baked axis-conversion rotation (SweetHome's Z-up -> glTF's Y-up),
       // so the mesh's own un-rotated vertex data has "up" on a different
       // axis. Deriving it (rather than assuming Y or Z) keeps this correct
       // regardless of how any given model happens to be authored/exported.
       const invWorld = Matrix.Invert(m.getWorldMatrix());
-      const axisLocal = Vector3.TransformNormal(Vector3.Up(), invWorld);
-      axisLocal.normalize();
+      const axisInMeshSpace = Vector3.TransformNormal(Vector3.Up(), invWorld);
+      axisInMeshSpace.normalize();
 
-      // Project every vertex onto axisLocal to find the fixture's "height"
+      // Project every vertex onto that axis to find the fixture's "height"
       // range, then average the positions in its top slice — in the mesh's
       // OWN local/object space, the same space getVerticesData returns, so
       // no world-matrix round-trip is needed for this part.
@@ -1651,7 +1647,7 @@ export class EntityVisuals {
       let hMin = Infinity, hMax = -Infinity;
       for (let i = 0; i < positions.length; i += 3) {
         v.set(positions[i], positions[i + 1], positions[i + 2]);
-        const h = Vector3.Dot(v, axisLocal);
+        const h = Vector3.Dot(v, axisInMeshSpace);
         if (h < hMin) hMin = h;
         if (h > hMax) hMax = h;
       }
@@ -1660,15 +1656,37 @@ export class EntityVisuals {
       let sampled = 0;
       for (let i = 0; i < positions.length; i += 3) {
         v.set(positions[i], positions[i + 1], positions[i + 2]);
-        if (Vector3.Dot(v, axisLocal) >= topThreshold) { sum.addInPlace(v); sampled++; }
+        if (Vector3.Dot(v, axisInMeshSpace) >= topThreshold) { sum.addInPlace(v); sampled++; }
       }
       // Fall back to the plain local bbox midpoint if the top slice somehow
       // caught too little geometry to average reliably (e.g. a sparse mount).
       const bb = m.getBoundingInfo().boundingBox;
       const axleLocal = sampled >= 20 ? sum.scale(1 / sampled) : bb.minimum.add(bb.maximum).scale(0.5);
+      if (!Number.isFinite(axleLocal.x) || !Number.isFinite(axleLocal.y) || !Number.isFinite(axleLocal.z)) continue;
 
-      m.setPivotPoint(axleLocal);
-      rig.push({ mesh: m, axisLocal, baseRotation });
+      const axleWorld = Vector3.TransformCoordinates(axleLocal, m.getWorldMatrix());
+      const parent = m.parent;
+      const parentWorld = parent?.getWorldMatrix?.();
+      const pivot = new TransformNode(`fanPivot_${m.uniqueId}`, this.scene);
+      pivot.parent = parent;
+      pivot.position = parentWorld
+        ? Vector3.TransformCoordinates(axleWorld, Matrix.Invert(parentWorld))
+        : axleWorld;
+
+      // Reparent the mesh under the pivot — setParent adjusts the mesh's own
+      // local position/rotation so its WORLD transform (and therefore its
+      // on-screen appearance) is unchanged by this move.
+      m.setParent(pivot);
+
+      // The axis the PIVOT itself rotates around, in ITS parent's local space
+      // (the shared original parent — pivot has no rotation of its own
+      // besides the spin animateFans applies, so this is just world-up
+      // projected through that parent's own orientation).
+      const axisLocal = parentWorld
+        ? Vector3.TransformNormal(Vector3.Up(), Matrix.Invert(parentWorld)).normalize()
+        : Vector3.Up();
+
+      rig.push({ mesh: m, pivot, axisLocal });
     }
     return rig;
   }
@@ -1687,13 +1705,12 @@ export class EntityVisuals {
       if (floorIdx !== undefined && floorIdx > this.activeFloor) continue;
 
       // The TOTAL angle, wrapped — every frame recomputes rotation fresh from
-      // this absolute value (never accumulated onto the mesh itself), so
-      // there is nothing for floating-point error to drift.
+      // this absolute value (never accumulated), so there is nothing for
+      // floating-point error to drift.
       const angle = ((this.fanAngles.get(id) ?? 0) + speed * dt) % (Math.PI * 2);
       this.fanAngles.set(id, angle);
-      for (const { mesh, axisLocal, baseRotation } of rig) {
-        const spin = Quaternion.RotationAxis(axisLocal, angle);
-        mesh.rotationQuaternion = baseRotation.multiply(spin);
+      for (const { pivot, axisLocal } of rig) {
+        pivot.rotationQuaternion = Quaternion.RotationAxis(axisLocal, angle);
       }
       spun = true;
     }
