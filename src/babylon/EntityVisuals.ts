@@ -1643,7 +1643,11 @@ export class EntityVisuals {
     if (entity.state === "on") {
       const pct = entity.attributes.percentage as number | undefined;
       const frac = typeof pct === "number" ? Math.max(0.15, Math.min(1, pct / 100)) : 0.6;
-      if (!this.fanRigs.has(id)) this.fanRigs.set(id, this.setupFanRig(meshes));
+      if (!this.fanRigs.has(id)) {
+        const rig = this.setupFanRig(meshes);
+        this.fanRigs.set(id, rig);
+        this.detachFanLabelAnchor(id, rig);
+      }
       this.spinningFans.set(id, FAN_MAX_RAD_PER_SEC * frac);
       this.requestRender(); // wake the loop so animateFans starts turning it
     } else {
@@ -1754,6 +1758,28 @@ export class EntityVisuals {
       rig.push({ mesh: m, pivot, axisLocal });
     }
     return rig;
+  }
+
+  /**
+   * The label anchor is parented to the entity's first mesh (see
+   * buildLabelAnchors — it inherits enabled/floor state that way), which is
+   * exactly why the badge was STILL orbiting after 2.23.1's mesh-pivot fix:
+   * `setupFanRig` reparents that same mesh under the spin `pivot`, so the
+   * anchor — a grandchild of `pivot` via the mesh — got dragged into the
+   * rotating subtree too, even though the mesh's own transform relative to
+   * its new parent never changes. Move it back OUT, onto the pivot's own
+   * (non-rotating) parent — `setParent` preserves its current world
+   * position, so the badge stays exactly where it already was, just no
+   * longer inside anything that spins.
+   */
+  private detachFanLabelAnchor(
+    entityId: string,
+    rig: { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[],
+  ): void {
+    const anchor = this.labelAnchors.get(entityId);
+    const primary = rig[0];
+    if (!anchor || !primary || anchor.parent !== primary.mesh) return;
+    anchor.setParent(primary.pivot.parent);
   }
 
   private animateFans(): void {

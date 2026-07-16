@@ -44,5 +44,3 @@ export function kelvinToRgb(kelvin: number): RGB {
 
 /** brightness 0-255 -> 0-100 % */
 export const brightnessToPct = (b: number): number => Math.round((b / 255) * 100);
-/** 0-100 % -> brightness 0-255 */
-export const pctToBrightness = (p: number): number => Math.round((p / 100) * 255);

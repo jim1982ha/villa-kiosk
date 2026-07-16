@@ -255,18 +255,32 @@ export default function BabylonCanvas({
   // config edits happen (binding an object, dropping a marker, changing a
   // label/type) — no model reload. Then repaint current states so freshly
   // (re)created meshes/markers show the right on/off appearance immediately.
+  // updateConfig() only actually tears down/rebuilds meshes' visuals when it
+  // detects a STRUCTURAL change (entityMap/meshBindings/sh3d); every other
+  // config edit (a render slider drag, a HUD toggle, "Light effect strength")
+  // fires this effect too but leaves existing visuals untouched. Repainting
+  // every known HA entity's state is only needed after a real rebuild — doing
+  // it unconditionally meant e.g. dragging a settings slider replayed the
+  // FULL entity list on every tick, and typing a device label in Advanced
+  // Settings (patch() on every keystroke) did the same per keystroke, which is
+  // what made the UI feel sluggish while interacting with it.
+  const repaintedOnceRef = useRef(false);
   useEffect(() => {
     const m = managerRef.current;
     if (!m) return;
-    m.updateConfig(sceneConfig);
+    const structuralChanged = m.updateConfig(sceneConfig);
     // Apply the weather master switch live: unchecking "Live weather effects"
     // must clear existing particles now (no HA event fires on a settings change),
-    // and re-checking it must re-apply the current weather immediately.
+    // and re-checking it must re-apply the current weather immediately. Cheap
+    // (id-prefix check only) so it can always run, unlike the full repaint below.
     m.weather.setEnabled(sceneConfig.weatherEffects);
-    Object.values(entities).forEach((e) => {
-      m.applyEntityState(e);
+    for (const e of Object.values(entities)) {
       if (e.entity_id.startsWith("weather.")) m.weather.setWeather(e.state);
-    });
+    }
+    if (structuralChanged || !repaintedOnceRef.current) {
+      repaintedOnceRef.current = true;
+      Object.values(entities).forEach((e) => m.applyEntityState(e));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneConfig]);
 

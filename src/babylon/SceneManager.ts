@@ -1262,7 +1262,10 @@ export class SceneManager {
     this.requestRender();
   }
 
-  updateConfig(config: AppConfig): void {
+  /** Returns true if this call did a structural mesh re-index (see
+   *  structuralChanged below) — the caller uses this to know whether entity
+   *  visuals were torn down and need repainting from their last known state. */
+  updateConfig(config: AppConfig): boolean {
     const prev = this.config;
     this.config = config;
 
@@ -1353,6 +1356,7 @@ export class SceneManager {
       this.applyHighlight(this.loadedMeshes);
     }
     this.requestRender();
+    return structuralChanged;
   }
 
   /** All entity mappings resolved from the last model load (for Config Editor auto-population). */

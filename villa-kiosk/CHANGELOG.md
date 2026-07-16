@@ -1,5 +1,44 @@
 # Changelog
 
+## 2.23.8
+
+- **File tree cleanup.** Deep-scanned the repo (outside `sources/`, which is
+  intentionally never touched) for unused/redundant files: removed macOS
+  `.DS_Store` junk, a stale `.claude/session-handoff.md` scratch file (session
+  notes from v2.20.0, long superseded by this changelog + git history), and a
+  stray `rootfs/usr/bin/__pycache__/*.pyc` — the latter wasn't excluded by
+  `.dockerignore`, so it was at risk of actually getting baked into the Docker
+  image via `COPY rootfs /`. Added `__pycache__/`/`*.pyc` to `.dockerignore`
+  to stop that from recurring, and dropped two stale `.dockerignore` entries
+  (`model-source`, `DEPLOYMENT.md`) for paths that no longer exist.
+- **`dist.zip` actually gitignored now.** It turns out `.gitignore`'s `dist`
+  rule only matched the build **directory**, not a `dist.zip` file — gitignore
+  doesn't do prefix matching. Added `dist.zip` explicitly.
+
+## 2.23.7
+
+- **Ceiling fan's badge label no longer spins with the blades.** The 2.23.1
+  fix (reparenting the fan mesh under a rotating pivot node) had a side
+  effect: the badge anchor was parented directly to that same mesh, so it
+  got dragged into the rotating subtree as a grandchild and spun along with
+  it. The anchor is now detached onto the pivot's own (non-rotating) parent
+  right after the fan rig is built, before it ever starts spinning.
+- **Faster response when editing devices in Advanced Settings.** Two
+  redundant-work sources made every config edit feel sluggish: (1) any
+  config change — including dragging a render slider — replayed every known
+  Home Assistant entity's full visual state, even though only a structural
+  edit (enabling/disabling or rebinding a device) actually needs that; now
+  gated on whether the scene really did a structural rebuild. (2) typing in
+  a device's Label field fired a full structural re-index on every
+  keystroke; it's now debounced so the re-index runs once after a pause (or
+  on blur) instead of once per character.
+- **Removed unused code found during an app-wide scan**: an unwired
+  "wall display" floating-label feature, two unused hooks
+  (`useHAEntities`, `useSceneReady`), and half a dozen dead exports
+  (`getMappingByEntityId`, `DEFAULT_SPAWN`, `pctToBrightness`, `isDaylight`,
+  `sh3dToBabylon`, `SceneReadyInfo`) that had no remaining callers anywhere
+  in the codebase.
+
 ## 2.23.6
 
 - **"Glow strength" replaced with "Light effect strength".** The old slider

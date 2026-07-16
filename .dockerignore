@@ -8,8 +8,11 @@ dist
 *.log
 .vite
 tsconfig.tsbuildinfo
-model-source
 villa-kiosk
 ADDON.md
-DEPLOYMENT.md
 MODEL_PIPELINE.md
+
+# Python bytecode (supervisor-proxy.py) — rootfs/ IS copied into the image, so
+# without this a stale local __pycache__/*.pyc would get baked in too.
+__pycache__/
+*.pyc

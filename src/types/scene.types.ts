@@ -68,8 +68,3 @@ export interface ModelTransform {
   flipX: boolean;
   flipZ: boolean;
 }
-
-export interface SceneReadyInfo {
-  meshNames: string[];
-  floorsDetected: number[];
-}

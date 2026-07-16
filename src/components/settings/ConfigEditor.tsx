@@ -4,7 +4,7 @@
 // a future model upload. Entities bound via tap mode are NOT shown here — they
 // appear (with inline settings) in the Bound 3D objects section below.
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Pencil, Check, X, Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -66,6 +66,29 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
 
   const patch = (key: string, change: Partial<EntityMapping>) =>
     update({ entityMap: { ...config.entityMap, [key]: { ...config.entityMap[key], ...change } } });
+
+  // The Label field commits on every keystroke via patch() -> a new entityMap
+  // reference -> a full SceneManager structural re-index (mesh classification +
+  // light/fan/badge rebuild), so typing a name used to trigger that whole pass
+  // per character and made the field feel laggy. Type into local state instantly
+  // and only patch() after a short pause (or on blur), so the heavy re-index
+  // runs once per edit instead of once per keystroke.
+  const [labelDrafts, setLabelDrafts] = useState<Record<string, string>>({});
+  const labelTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const commitLabel = (key: string, value: string) => {
+    clearTimeout(labelTimers.current[key]);
+    delete labelTimers.current[key];
+    patch(key, { label: value });
+    setLabelDrafts((prev) => {
+      const { [key]: _removed, ...rest } = prev;
+      return rest;
+    });
+  };
+  const draftLabel = (key: string, value: string) => {
+    setLabelDrafts((prev) => ({ ...prev, [key]: value }));
+    clearTimeout(labelTimers.current[key]);
+    labelTimers.current[key] = setTimeout(() => commitLabel(key, value), 500);
+  };
 
   const remove = (key: string) => {
     const next = { ...config.entityMap };
@@ -236,7 +259,13 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                     {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
                   </select>
                 </td>
-                <td data-label="Label"><input value={m.label} onChange={(e) => patch(key, { label: e.target.value })} /></td>
+                <td data-label="Label">
+                  <input
+                    value={labelDrafts[key] ?? m.label}
+                    onChange={(e) => draftLabel(key, e.target.value)}
+                    onBlur={(e) => commitLabel(key, e.target.value)}
+                  />
+                </td>
                 <td data-label="Room">
                   <select
                     value={m.room ?? ""}

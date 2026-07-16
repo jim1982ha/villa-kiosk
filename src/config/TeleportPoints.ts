@@ -4,10 +4,9 @@
 //
 // Derivation: SweetHome 3D plan coordinates are centimetres with Y pointing
 // "down" the plan. We recentre on the model centre (1206, 614 cm) and scale to
-// metres (x0.01) to produce Babylon world coordinates, matching `sh3dToBabylon`
-// in src/utils/sh3dTransform.ts. If the GLB is exported with different axes,
-// adjust DEFAULT_MODEL_TRANSFORM (or recalibrate live via the in-app "Set anchor
-// here" button — see TeleportMenu).
+// metres (x0.01) to produce Babylon world coordinates. If the GLB is exported
+// with different axes, adjust DEFAULT_MODEL_TRANSFORM (or recalibrate live via
+// the in-app "Set anchor here" button — see TeleportMenu).
 
 import type { TeleportPoint } from "@/types/scene.types";
 
@@ -30,7 +29,3 @@ export const TELEPORT_POINTS: TeleportPoint[] = [
   // --- Floor 2 (added once the 2nd floor is modelled in the same .sh3d) ---
   { name: "Floor 2 Landing", floor: 2, position: { x: 1.56, y: 4.2, z: -1.84 }, target: { x: 1.56, y: 4.1, z: 0.0 }, thumbnail: THUMB("f2_landing") },
 ];
-
-/** Where the camera starts on first load (centre of the living room, looking in). */
-export const DEFAULT_SPAWN: TeleportPoint =
-  TELEPORT_POINTS.find((p) => p.name === "Living Room") ?? TELEPORT_POINTS[0];

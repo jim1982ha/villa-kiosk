@@ -301,12 +301,3 @@ function resolveMeshUnchecked(
 
   return null;
 }
-
-/** Reverse lookup: entity_id -> [meshKey, mapping]. */
-export function getMappingByEntityId(
-  entityId: string,
-  map: Record<string, EntityMapping> = ENTITY_MAP,
-): [string, EntityMapping] | null {
-  const entry = Object.entries(map).find(([, v]) => v.entityId === entityId);
-  return entry ?? null;
-}

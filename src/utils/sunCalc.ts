@@ -52,8 +52,3 @@ export function getSunPosition(date: Date, lat: number, lng: number): SunPositio
   const altitude = Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
   return { azimuth, altitude };
 }
-
-/** True when the sun centre is above the horizon (matches HA sun.sun). */
-export function isDaylight(date: Date, lat: number, lng: number): boolean {
-  return getSunPosition(date, lat, lng).altitude > 0;
-}
