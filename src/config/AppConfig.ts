@@ -384,6 +384,82 @@ export function normaliseHaUrl(url: string): string {
   return u;
 }
 
+/**
+ * Portable config bundle for Owner backup/restore (Advanced Settings → Export
+ * / Import configuration). Deliberately narrower than the full AppConfig:
+ *  - covers exactly what the product spec calls "your configuration" — device
+ *    ↔ room bindings (entityMap + meshBindings, auto-detected AND manually
+ *    bound), room definitions (teleportPoints, incl. each room's saved
+ *    overviewPose), device icons, enabled/disabled devices (the entityMap
+ *    `disabled` flag) and every option in the First-person/Overview, Render
+ *    quality and Device-icon Settings sections.
+ *  - excludes haUrl/haToken (a bearer credential — never belongs in a
+ *    shareable file) and the per-device overview default framing (already
+ *    documented in SceneManager.saveOverviewDefault as intentionally
+ *    per-device, not synced/exported).
+ */
+export interface ConfigExportBundle {
+  version: 1;
+  exportedAt: string;
+  entityMap: Record<string, EntityMapping>;
+  meshBindings: Record<string, string>;
+  teleportPoints: TeleportPoint[];
+  entityIcons: Record<EntityType, string>;
+  binarySensorIcons: Record<string, string>;
+  sensorIcons: Record<string, string>;
+  entityIconScale: number;
+  eyeHeight: number;
+  walkSpeed: number;
+  naturalScrolling: boolean;
+  weatherEffects: boolean;
+  highlightInteractive: boolean;
+  render: RenderConfig;
+}
+
+export function buildConfigExport(config: AppConfig): ConfigExportBundle {
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    entityMap: config.entityMap,
+    meshBindings: config.meshBindings,
+    teleportPoints: config.teleportPoints,
+    entityIcons: config.entityIcons,
+    binarySensorIcons: config.binarySensorIcons,
+    sensorIcons: config.sensorIcons,
+    entityIconScale: config.entityIconScale,
+    eyeHeight: config.eyeHeight,
+    walkSpeed: config.walkSpeed,
+    naturalScrolling: config.naturalScrolling,
+    weatherEffects: config.weatherEffects,
+    highlightInteractive: config.highlightInteractive,
+    render: config.render,
+  };
+}
+
+/** Validate + narrow an arbitrary parsed JSON value down to the fields this
+ *  app version actually knows how to apply — a bundle exported by a future
+ *  version can carry fields we don't recognise yet without corrupting config. */
+export function parseConfigImport(raw: unknown): Partial<ConfigExportBundle> {
+  if (!raw || typeof raw !== "object") throw new Error("Not a valid configuration file.");
+  const b = raw as Record<string, unknown>;
+  if (typeof b.version !== "number") throw new Error("Not a Villa Kiosk configuration file.");
+  const patch: Partial<ConfigExportBundle> = {};
+  if (b.entityMap && typeof b.entityMap === "object") patch.entityMap = b.entityMap as ConfigExportBundle["entityMap"];
+  if (b.meshBindings && typeof b.meshBindings === "object") patch.meshBindings = b.meshBindings as ConfigExportBundle["meshBindings"];
+  if (Array.isArray(b.teleportPoints)) patch.teleportPoints = b.teleportPoints as ConfigExportBundle["teleportPoints"];
+  if (b.entityIcons && typeof b.entityIcons === "object") patch.entityIcons = b.entityIcons as ConfigExportBundle["entityIcons"];
+  if (b.binarySensorIcons && typeof b.binarySensorIcons === "object") patch.binarySensorIcons = b.binarySensorIcons as ConfigExportBundle["binarySensorIcons"];
+  if (b.sensorIcons && typeof b.sensorIcons === "object") patch.sensorIcons = b.sensorIcons as ConfigExportBundle["sensorIcons"];
+  if (typeof b.entityIconScale === "number") patch.entityIconScale = b.entityIconScale;
+  if (typeof b.eyeHeight === "number") patch.eyeHeight = b.eyeHeight;
+  if (typeof b.walkSpeed === "number") patch.walkSpeed = b.walkSpeed;
+  if (typeof b.naturalScrolling === "boolean") patch.naturalScrolling = b.naturalScrolling;
+  if (typeof b.weatherEffects === "boolean") patch.weatherEffects = b.weatherEffects;
+  if (typeof b.highlightInteractive === "boolean") patch.highlightInteractive = b.highlightInteractive;
+  if (b.render && typeof b.render === "object") patch.render = b.render as RenderConfig;
+  return patch;
+}
+
 /** Fallback title when neither a configured title nor the HA instance name exist. */
 export const DEFAULT_SITE_TITLE = "Villa Kiosk";
 

@@ -419,18 +419,9 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
           red = alert, faded = unreachable). Edit per category — paste any emoji.
         </p>
 
-        <label style={{ display: "block", marginTop: 10 }}>
-          Icon size — {(config.entityIconScale ?? 1.0).toFixed(1)}×
-        </label>
-        <input
-          type="range" min={0.6} max={3} step={0.1}
-          value={config.entityIconScale ?? 1.0}
-          onChange={(e) => update({ entityIconScale: Number(e.target.value) })}
-          style={{ width: "100%" }}
-        />
-        <p className="muted body-text" style={{ marginTop: 4, fontSize: 11 }}>
-          Sets the on-screen size of every badge. It stays fixed at this size in
-          both views, regardless of zoom.
+        <p className="muted body-text" style={{ marginTop: 10, fontSize: 11 }}>
+          Badge size — {(config.entityIconScale ?? 1.0).toFixed(2)}× — is set with
+          the +/- buttons next to the category filters in the top bar, not here.
         </p>
 
         <div className="row" style={{ flexWrap: "wrap", gap: 10, marginTop: 8 }}>

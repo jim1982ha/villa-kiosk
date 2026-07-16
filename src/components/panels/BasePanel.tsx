@@ -1,7 +1,8 @@
 // src/components/panels/BasePanel.tsx
-// Shared bottom-sheet wrapper: backdrop, drag-to-dismiss handle, header.
+// Shared modal wrapper for device panels: centered dialog (not a bottom
+// sheet), backdrop-dismiss + Escape, header with icon/title/room/entity id.
 
-import { useRef, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { X, Pencil } from "lucide-react";
 import { usePanelActions } from "./PanelActionsContext";
 
@@ -14,34 +15,17 @@ interface Props {
 }
 
 export default function BasePanel({ title, room, icon, onClose, children }: Props) {
-  const startY = useRef<number | null>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
   const { entityId, onEdit } = usePanelActions();
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <>
-      <div className="panel-backdrop" onClick={onClose} />
-      <div
-        className="panel"
-        ref={panelRef}
-        onPointerDown={(e) => {
-          // Only start a drag from the handle area (top 40px).
-          if (e.nativeEvent.offsetY < 40) startY.current = e.clientY;
-        }}
-        onPointerMove={(e) => {
-          if (startY.current === null || !panelRef.current) return;
-          const dy = Math.max(0, e.clientY - startY.current);
-          panelRef.current.style.transform = `translateY(${dy}px)`;
-        }}
-        onPointerUp={(e) => {
-          if (startY.current === null || !panelRef.current) return;
-          const dy = e.clientY - startY.current;
-          panelRef.current.style.transform = "";
-          startY.current = null;
-          if (dy > 110) onClose();
-        }}
-      >
-        <div className="panel-handle" />
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal panel-modal" onClick={(e) => e.stopPropagation()}>
         <div className="panel-header">
           <div className="title">
             {icon && <div className="panel-icon">{icon}</div>}
@@ -67,8 +51,8 @@ export default function BasePanel({ title, room, icon, onClose, children }: Prop
             </button>
           </div>
         </div>
-        {children}
+        <div className="panel-body">{children}</div>
       </div>
-    </>
+    </div>
   );
 }

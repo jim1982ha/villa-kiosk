@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.21.0
+
+- **Label size stepper.** New +/- buttons next to the category filters in the
+  top bar step the in-scene badge size by 0.25 per click, down to 0 (hidden).
+  Replaces the old "Icon size" slider in Settings.
+- **First-person / bird's-eye toggle moved** below the floor + Rooms stack on
+  the left, out of the top-right bar (and its mobile overflow-menu duplicate).
+- **Bottom-left nav buttons restacked** — the (i) navigation-tips button now
+  sits above the view-default (anchor) button instead of beside it.
+- **Device info panel is now a centered modal**, not a bottom sheet — matches
+  the look of Settings/Advanced Settings, with a cleaner header and its own
+  internal scroll for taller panels (climate, camera).
+- **Owner: export/import your configuration.** Advanced Settings has a new
+  "Backup & restore" section (Owner profile only) to export device↔room
+  bindings, room definitions (incl. saved viewports), device icons,
+  enabled/disabled devices and the First-person/Overview + Render quality +
+  Device-icon settings to a JSON file — and import it on another install to
+  reproduce the setup automatically.
+
 ## 2.20.0
 
 - **Left bar reworked.** Re-added the **1F / 2F floor toggle** and moved the

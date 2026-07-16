@@ -6,8 +6,11 @@
 // already applies to the live scene through ConfigContext.update(), so there is
 // nothing to reload on the way out.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Download, Upload } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
+import { useProfile } from "@/auth/ProfileContext";
+import { buildConfigExport, parseConfigImport } from "@/config/AppConfig";
 import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
 
@@ -62,7 +65,72 @@ function VillaCoordinates() {
   );
 }
 
+/**
+ * Owner-only backup/restore: bundles device↔room bindings, room definitions
+ * (incl. saved viewports), device icons, enabled/disabled devices and every
+ * First-person/Overview + Render quality + Device-icon Settings option into
+ * one JSON file — importable on another vanilla install to reproduce this
+ * villa's configuration exactly (see AppConfig.ConfigExportBundle for what's
+ * deliberately excluded, e.g. the HA connection token).
+ */
+function BackupRestore() {
+  const { config, update } = useConfig();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const exportConfig = () => {
+    const bundle = buildConfigExport(config);
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `villa-kiosk-config-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setMsg({ text: "Configuration exported.", ok: true });
+  };
+
+  const importConfig = async (file: File) => {
+    try {
+      const patch = parseConfigImport(JSON.parse(await file.text()));
+      if (!confirm(
+        "Import this configuration?\n\nThis replaces device↔room bindings, room definitions, device icons and the First-person/Overview, Render quality and Device-icon settings on THIS device with the values from the file.",
+      )) return;
+      update(patch);
+      setMsg({ text: "Configuration imported.", ok: true });
+    } catch (err) {
+      setMsg({ text: (err as Error).message, ok: false });
+    }
+  };
+
+  return (
+    <div>
+      <p className="muted body-text" style={{ marginTop: 0, fontSize: 12 }}>
+        Export everything you've configured on this villa — device↔room
+        bindings, rooms &amp; saved viewports, device icons, enabled/disabled
+        devices, and the First-person/Overview, Render quality and Device-icon
+        settings — into one file. Import it on another (vanilla) install of
+        this app to reproduce this setup automatically.
+      </p>
+      <div className="row" style={{ gap: 10, marginTop: 10 }}>
+        <button className="btn ghost" style={{ flex: 1 }} onClick={exportConfig}>
+          <Download size={15} /> Export configuration
+        </button>
+        <button className="btn ghost" style={{ flex: 1 }} onClick={() => fileRef.current?.click()}>
+          <Upload size={15} /> Import configuration
+        </button>
+        <input
+          ref={fileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) importConfig(f); e.target.value = ""; }}
+        />
+      </div>
+      {msg && <div className={`test-result ${msg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>{msg.text}</div>}
+    </div>
+  );
+}
+
 export default function ConfigEditorModal({ onBack, focusEntityId }: Props) {
+  const { role } = useProfile();
   return (
     <div className="modal-backdrop" onClick={onBack}>
       <div
@@ -89,6 +157,15 @@ export default function ConfigEditorModal({ onBack, focusEntityId }: Props) {
             Bound 3D objects
           </div>
           <BindingsTable />
+
+          {role === "owner" && (
+            <>
+              <div className="settings-section-title" style={{ marginTop: 28 }}>
+                Backup &amp; restore
+              </div>
+              <BackupRestore />
+            </>
+          )}
         </div>
 
         <div className="settings-footer" style={{ justifyContent: "flex-end" }}>

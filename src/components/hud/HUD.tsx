@@ -1,20 +1,22 @@
 // src/components/hud/HUD.tsx
 // Top bar layout (three zones):
 //   • Left   — villa brand (home icon + name + connection dot) + clock
-//   • Center — category filter (which device categories show their state tag)
-//   • Right  — Settings, then the first-person / overview view toggle
+//   • Center — category filter, then a label-size stepper (+/-)
+//   • Right  — Settings only
 // A left control column floats below the brand: the vertical floor toggle
-// (1F / 2F) plus the Rooms dial button. (Device state labels are always shown;
-// "Highlight clickable objects" moved to Settings.)
-// Bottom bar: first-person joystick, or (in overview) an (i) button that
-// toggles the navigation-tips card (hidden by default to keep the view clean).
+// (1F / 2F) + the Rooms dial button, then (below that stack) the
+// first-person / overview view toggle. (Device state labels are always
+// shown; "Highlight clickable objects" moved to Settings.)
+// Bottom bar: first-person joystick, or (in overview) the (i) navigation-tips
+// toggle above the view-default (Anchor) button (hidden by default to keep
+// the view clean).
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Home, Compass, Settings, Map,
   PersonStanding, Info, Anchor, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
-  EllipsisVertical,
+  EllipsisVertical, Minus, Plus,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -28,6 +30,12 @@ import VirtualJoystick from "./VirtualJoystick";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 
 type IconType = ComponentType<{ size?: number | string }>;
+
+// Label-size stepper (next to the category filter): each click moves
+// entityIconScale by this much, clamped to [0, LABEL_SCALE_MAX]. 0 = badges
+// hidden entirely (scale-to-zero, see EntityVisuals.applyIconScale).
+const LABEL_SCALE_STEP = 0.25;
+const LABEL_SCALE_MAX = 3;
 
 // Icons for the category-filter column — each toggles that category's state
 // tags on/off on the map. Chosen to read distinctly at a glance since there
@@ -283,6 +291,12 @@ export default function HUD({
         : [...config.hiddenCategories, cat],
     });
 
+  const labelScale = config.entityIconScale ?? 1;
+  const stepLabelScale = (delta: number) => {
+    const next = Math.min(LABEL_SCALE_MAX, Math.max(0, Math.round((labelScale + delta) * 4) / 4));
+    update({ entityIconScale: next });
+  };
+
   const overviewActive = viewMode === "overview";
 
   return (
@@ -338,11 +352,35 @@ export default function HUD({
               );
             })}
           </div>
+
+          {/* Label size: steps the in-scene badge scale by 0.25 per click,
+              down to 0 (hidden). Replaces the old Settings slider. */}
+          <div className="hud-group" role="toolbar" aria-label="Label size">
+            <button
+              className="icon-btn"
+              onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
+              disabled={labelScale <= 0}
+              title="Decrease label size"
+              aria-label="Decrease label size"
+            >
+              <Minus size={18} />
+            </button>
+            <button
+              className="icon-btn"
+              onClick={() => stepLabelScale(LABEL_SCALE_STEP)}
+              disabled={labelScale >= LABEL_SCALE_MAX}
+              title="Increase label size"
+              aria-label="Increase label size"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
         </div>
 
-        {/* Profile chip, Settings (when permitted), then the view toggle.
-            Rendered twice: inline on roomy screens, collapsed into a single
-            overflow-menu button on phones (CSS shows exactly one of the two). */}
+        {/* Profile chip, then Settings (when permitted). Rendered twice: inline
+            on roomy screens, collapsed into a single overflow-menu button on
+            phones (CSS shows exactly one of the two). The first-person/
+            bird's-eye toggle lives in the left column now (see hud-left-col). */}
         <div className="hud-right">
           <div className="hud-right-inline">
             {role && (
@@ -363,14 +401,6 @@ export default function HUD({
                 <Settings size={20} />
               </button>
             )}
-            <button
-              className={`icon-btn${overviewActive ? " active" : ""}`}
-              onClick={onToggleViewMode}
-              title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-              aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-            >
-              {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
-            </button>
           </div>
 
           <div className="hud-overflow" ref={menuRef}>
@@ -385,16 +415,8 @@ export default function HUD({
               <EllipsisVertical size={19} />
             </button>
             {menuOpen && (
-              <div className="hud-menu" role="menu" aria-label="View, settings and profile">
+              <div className="hud-menu" role="menu" aria-label="Settings and profile">
                 {role && <div className="hud-menu-header">Signed in as {ROLE_LABELS[role]}</div>}
-                <button
-                  role="menuitem"
-                  className="hud-menu-item"
-                  onClick={() => { setMenuOpen(false); onToggleViewMode(); }}
-                >
-                  {overviewActive ? <PersonStanding size={18} /> : <Map size={18} />}
-                  <span>{overviewActive ? "First-person view" : "Overview view"}</span>
-                </button>
                 {canOpenSettings && (
                   <button
                     role="menuitem"
@@ -453,6 +475,17 @@ export default function HUD({
             <Compass size={20} />
           </button>
         </div>
+
+        {/* First-person / bird's-eye view toggle — sits below the floor +
+            rooms stack, its own squircle. */}
+        <button
+          className={`icon-btn${overviewActive ? " active" : ""}`}
+          onClick={onToggleViewMode}
+          title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
+          aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
+        >
+          {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
+        </button>
       </div>
 
       <div className="bottom-bar">
@@ -475,6 +508,15 @@ export default function HUD({
             ) : null}
             <div className="overview-help-buttons">
               <button
+                className={`icon-btn${hintOpen ? " active" : ""}`}
+                onClick={() => setHintOpen((o) => !o)}
+                title="Navigation tips"
+                aria-label="Navigation tips"
+                aria-expanded={hintOpen}
+              >
+                <Info size={20} />
+              </button>
+              <button
                 className={`icon-btn${hasOverviewDefault ? " active" : ""}`}
                 onPointerDown={onViewBtnDown}
                 onPointerUp={cancelViewPress}
@@ -491,15 +533,6 @@ export default function HUD({
                 aria-pressed={hasOverviewDefault}
               >
                 <Anchor size={18} />
-              </button>
-              <button
-                className={`icon-btn${hintOpen ? " active" : ""}`}
-                onClick={() => setHintOpen((o) => !o)}
-                title="Navigation tips"
-                aria-label="Navigation tips"
-                aria-expanded={hintOpen}
-              >
-                <Info size={20} />
               </button>
             </div>
           </div>
