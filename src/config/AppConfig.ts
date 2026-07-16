@@ -245,8 +245,6 @@ export interface AppConfig {
    *  drive the camera motion-beam direction. */
   sh3dEntities?: { entityId: string; x: number; y: number; angle: number; pitch: number }[];
   renderOnDemand: boolean;
-  /** Show floating state labels above each bound device in the 3D scene. */
-  showEntityLabels: boolean;
   /** Categories currently hidden from the map's state-label overlay (HUD left
    *  column category filter). Empty = every category shown. See
    *  config/EntityCategories.ts for the category set + default assignment. */
@@ -327,7 +325,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   walkSpeed: 1,
   weatherEffects: false,
   renderOnDemand: true,
-  showEntityLabels: false,
   hiddenCategories: [],
   highlightInteractive: false,
   naturalScrolling: true,

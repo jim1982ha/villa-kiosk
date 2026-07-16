@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.20.0
+
+- **Left bar reworked.** Re-added the **1F / 2F floor toggle** and moved the
+  **Rooms** button into that same vertical stack.
+- **Device state labels are always shown** — the "Show device state labels"
+  button is gone (labels are on by default, no toggle needed).
+- **"Highlight clickable objects" moved to Settings** (a toggle in the render/
+  look section) and removed from the left bar.
+
 ## 2.19.2
 
 - **Fix: only ceiling fans spin, and they spin IN PLACE.** Two bugs in the fan

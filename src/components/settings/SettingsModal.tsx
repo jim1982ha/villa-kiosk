@@ -385,6 +385,12 @@ export default function SettingsModal({ manager, onClose, onModelChanged, onOpen
           <span>Glow around lit / active devices</span>
         </label>
 
+        <label className="toggle" style={{ marginTop: 8 }}>
+          <input type="checkbox" checked={config.highlightInteractive}
+            onChange={(e) => update({ highlightInteractive: e.target.checked })} />
+          <span>Highlight clickable objects (blue outline)</span>
+        </label>
+
         {/* Glow strength + Night dimming side by side. */}
         <div className="slider-pair">
           <div>

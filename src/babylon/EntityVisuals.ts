@@ -351,32 +351,23 @@ export class EntityVisuals {
   }
 
   updateConfig(config: AppConfig): void {
-    const prevLabels = this.config.showEntityLabels;
     const prevIcons = this.config.entityIcons;
     const prevBsIcons = this.config.binarySensorIcons;
     const prevSensorIcons = this.config.sensorIcons;
     this.config = config;
-    // Entity-light wall occlusion is always-on (independent of the global Shadows
-    // quality toggle, which drives the expensive sun shadows): walls block lamp
-    // light out of the box, so there is nothing to tear down here when the toggle
-    // changes.
+    // Entity-light wall occlusion is always-on: walls block lamp light out of
+    // the box, so there is nothing to tear down here when config changes.
     const iconsChanged = config.entityIcons !== prevIcons
       || config.binarySensorIcons !== prevBsIcons
       || config.sensorIcons !== prevSensorIcons;
-    // Apply the user's size multiplier (combined with the live zoom factor).
+    // Apply the user's size multiplier.
     if (typeof config.entityIconScale === "number" && config.entityIconScale !== this.iconUserScale) {
       this.iconUserScale = config.entityIconScale;
       this.applyIconScale();
     }
-    if (config.showEntityLabels !== prevLabels) {
-      if (config.showEntityLabels) {
-        this.rebuildLabels();
-      } else if (this.labelLayer) {
-        this.labelLayer.rootContainer.isVisible = false;
-      }
-    } else if (config.showEntityLabels && iconsChanged) {
-      // Per-category glyph edited in Settings while labels are shown — rebuild so
-      // the new icons take effect, then repaint from the last known states.
+    // Labels are always shown; rebuild only when a per-category glyph changed so
+    // the new icon takes effect (then repaint from the last known states).
+    if (iconsChanged) {
       this.rebuildLabels();
     }
   }
@@ -526,7 +517,7 @@ export class EntityVisuals {
 
     this.buildLabelAnchors();
     this.buildMotionToCameraIndex();
-    if (this.config.showEntityLabels) this.rebuildLabels();
+    this.rebuildLabels(); // labels are always shown
   }
 
   /** A rectangular LED cove (e.g. the dining-table or sofa-area perimeter) is
@@ -1109,7 +1100,7 @@ export class EntityVisuals {
    *  Hidden regardless: anchors projecting behind the camera (z outside [0,1]),
    *  categories filtered off in the HUD, and entities on a hidden floor. */
   private cullLabels(): void {
-    if (!this.config.showEntityLabels || this.labels.size === 0) return;
+    if (this.labels.size === 0) return;
     const cam = this.scene.activeCamera;
     if (!cam) return;
     const eng = this.scene.getEngine();
@@ -1255,8 +1246,8 @@ export class EntityVisuals {
    * what's on screen, at any scale, zoom, or DPI.
    */
   pickBadgeAt(clientX: number, clientY: number): string | null {
-    if (!this.config.showEntityLabels || this.labels.size === 0) {
-      tapDebug(`pickBadgeAt: no badges (labels=${this.labels.size} showLabels=${this.config.showEntityLabels})`);
+    if (this.labels.size === 0) {
+      tapDebug(`pickBadgeAt: no badges (labels=${this.labels.size})`);
       return null;
     }
     const eng = this.scene.getEngine();

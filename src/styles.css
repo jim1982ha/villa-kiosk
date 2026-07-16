@@ -358,11 +358,9 @@ button {
 
 /* Rooms dial button — vertically centred on the left edge so its long-press
    radial fans out symmetrically over the full height. */
-.rooms-dial-btn {
-  position: absolute; z-index: 21; pointer-events: auto;
-  left: calc(14px + env(safe-area-inset-left, 0px));
-  top: 50%; transform: translateY(-50%);
-}
+/* The Rooms dial button + the 1F/2F floor toggle now flow together in the
+   left-column .hud-stack (see HUD). "1F"/"2F" are text, not icons. */
+.hud-floor-btn { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
 
 /* Rooms dial popup: tappable floating chips on arcs beside the button (see
    RadialRoomMenu). The full-screen backdrop catches an outside tap to dismiss;

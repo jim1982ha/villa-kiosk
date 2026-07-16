@@ -3,16 +3,16 @@
 //   • Left   — villa brand (home icon + name + connection dot) + clock
 //   • Center — category filter (which device categories show their state tag)
 //   • Right  — Settings, then the first-person / overview view toggle
-// A left control column floats below the brand: the vertical floor switch
-// (1F / 2F / Rooms), then the display-toggle stack (highlight clickable
-// objects, show device state labels).
+// A left control column floats below the brand: the vertical floor toggle
+// (1F / 2F) plus the Rooms dial button. (Device state labels are always shown;
+// "Highlight clickable objects" moved to Settings.)
 // Bottom bar: first-person joystick, or (in overview) an (i) button that
 // toggles the navigation-tips card (hidden by default to keep the view clean).
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Home, Compass, Settings, Map,
-  PersonStanding, Sparkles, Tag, Info, Anchor, LogOut,
+  PersonStanding, Info, Anchor, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
   EllipsisVertical,
 } from "lucide-react";
@@ -276,8 +276,6 @@ export default function HUD({
   const connClass =
     connection === "connected" ? "online" : connection === "connecting" ? "connecting" : "offline";
 
-  const toggleHighlight = () => update({ highlightInteractive: !config.highlightInteractive });
-  const toggleLabels = () => update({ showEntityLabels: !config.showEntityLabels });
   const toggleCategory = (cat: Category) =>
     update({
       hiddenCategories: config.hiddenCategories.includes(cat)
@@ -423,44 +421,36 @@ export default function HUD({
         </div>
       </div>
 
-      {/* Rooms dial — vertically centred on the left edge so its long-press
-          radial fans out symmetrically over the whole height. Tap = full Rooms
-          list; long-press = floor→room quick nav (also the floor switcher, so
-          the old 1F/2F buttons were removed). */}
-      <button
-        ref={roomsBtnRef}
-        className={`icon-btn rooms-dial-btn${radial ? " active" : ""}`}
-        title="Rooms — tap for the quick floor/room dial, long-press to add/edit rooms"
-        aria-label="Rooms"
-        style={{ touchAction: "none" }}
-        onPointerDown={onRoomsPointerDown}
-        onPointerUp={onRoomsPointerUp}
-        onPointerCancel={() => { if (roomsLongTimer.current) clearTimeout(roomsLongTimer.current); }}
-        onContextMenu={(e) => e.preventDefault()}
-      >
-        <Compass size={20} />
-      </button>
-
-      {/* Left display-toggle stack (highlight clickable objects, show labels). */}
+      {/* Left column: the floor toggle (1F / 2F) plus the Rooms dial button.
+          Tapping a floor switches to it (and frames it in the bird's-eye); the
+          Rooms button taps to a quick floor/room dial, long-press for the full
+          Rooms list to add/edit. */}
       <div className="hud-left-col">
         <div className="hud-stack">
+          {availFloors.map((f) => (
+            <button
+              key={f}
+              className={`icon-btn hud-floor-btn${currentFloor === f ? " active" : ""}`}
+              onClick={() => onShowFloor(f)}
+              title={`Show floor ${f}`}
+              aria-label={`Show floor ${f}`}
+              aria-pressed={currentFloor === f}
+            >
+              {f}F
+            </button>
+          ))}
           <button
-            className={`icon-btn${config.highlightInteractive ? " active" : ""}`}
-            onClick={toggleHighlight}
-            title="Highlight clickable objects"
-            aria-label="Highlight clickable objects"
-            aria-pressed={config.highlightInteractive}
+            ref={roomsBtnRef}
+            className={`icon-btn rooms-dial-btn${radial ? " active" : ""}`}
+            title="Rooms — tap for the quick floor/room dial, long-press to add/edit rooms"
+            aria-label="Rooms"
+            style={{ touchAction: "none" }}
+            onPointerDown={onRoomsPointerDown}
+            onPointerUp={onRoomsPointerUp}
+            onPointerCancel={() => { if (roomsLongTimer.current) clearTimeout(roomsLongTimer.current); }}
+            onContextMenu={(e) => e.preventDefault()}
           >
-            <Sparkles size={18} />
-          </button>
-          <button
-            className={`icon-btn${config.showEntityLabels ? " active" : ""}`}
-            onClick={toggleLabels}
-            title="Show device state labels"
-            aria-label="Show device state labels"
-            aria-pressed={config.showEntityLabels}
-          >
-            <Tag size={18} />
+            <Compass size={20} />
           </button>
         </div>
       </div>
