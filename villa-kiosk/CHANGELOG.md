@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.23.9
+
+- **Fixed: ceiling fan asset permanently disappearing (and its badge jumping
+  to the edge of the screen) after using Advanced Settings.** Once a fan had
+  been spun at least once, disposing its old rotation pivot on the next
+  structural re-index (any Advanced Settings edit that touches the device
+  list) silently destroyed the fan mesh too — Babylon's `TransformNode.
+  dispose()` recurses into the whole descendant hierarchy by default, and the
+  fan mesh was a child of that pivot (reparented there so it could spin in
+  place). The badge then re-anchored itself to that now-dead mesh reference,
+  which is why it appeared to fly off to the side. The mesh is now moved back
+  onto the pivot's original parent before the pivot is disposed, so only the
+  (now childless) pivot goes away.
+
 ## 2.23.8
 
 - **File tree cleanup.** Deep-scanned the repo (outside `sources/`, which is

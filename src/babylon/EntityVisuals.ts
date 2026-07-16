@@ -386,7 +386,21 @@ export class EntityVisuals {
     this.beams.dispose();
     this.pulsing.clear();
     this.spinningFans.clear();
-    for (const rig of this.fanRigs.values()) for (const r of rig) r.pivot.dispose();
+    // TransformNode.dispose() with no args is RECURSIVE — it disposes the
+    // whole descendant hierarchy, not just the node itself. Each fan mesh is
+    // a child of its pivot (see setupFanRig's `m.setParent(pivot)`), so
+    // disposing the pivot outright silently destroyed the fan mesh forever
+    // on every structural re-index after the fan had ever been spun (any
+    // Advanced Settings edit that touches entityMap triggers one). The mesh
+    // must be moved back out onto the pivot's original parent FIRST — same
+    // world-preserving setParent() used to rig it — so only the now-childless
+    // pivot gets disposed.
+    for (const rig of this.fanRigs.values()) {
+      for (const r of rig) {
+        r.mesh.setParent(r.pivot.parent);
+        r.pivot.dispose();
+      }
+    }
     this.fanRigs.clear();
     this.fanAngles.clear();
     this.byEntity.clear();
