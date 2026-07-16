@@ -37,7 +37,7 @@ import { badgeImageDataUrl, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { iconKeyFor } from "./badgeIconKeys";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
-const MAX_LIGHT_INTENSITY = 2;
+const MAX_LIGHT_INTENSITY = 1.3;
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
 // ceiling spots / LED strips export as small placeholder spheres; at the old
 // 0.18 they were almost invisible — especially the clustered ones (Bedroom 1

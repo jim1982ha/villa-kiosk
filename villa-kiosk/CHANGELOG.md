@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.23.4
+
+### Changes
+- LIGHT_RANGE from 4 to 8
+
+---
+
+
 ## 2.23.3
 
 ### Changes
