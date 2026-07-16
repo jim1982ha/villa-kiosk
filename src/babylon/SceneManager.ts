@@ -25,7 +25,6 @@ import { EntityVisuals } from "./EntityVisuals";
 import { WeatherEffects } from "./WeatherEffects";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto, BAKED_MATERIAL_PREFIX } from "./ModelLoader";
-import { applyGrassGround } from "./GroundGrass";
 import { resolveMeshToMapping, inferTypeFromEntityId, normaliseMeshName } from "@/config/EntityMap";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { axisWorldScale } from "./meshUnits";
@@ -810,9 +809,6 @@ export class SceneManager {
     // Dashboard adopts the rooms/teleport grid via onCalibrated when it lands.
     this.scene.onAfterRenderObservable.addOnce(() => {
       this.camera.indexTeleportAnchors(result.meshes);
-      if (this.config.grassGround !== false) {
-        applyGrassGround(this.scene, result.meshes, this.config.grassGroundHints ?? []);
-      }
       this.applyHighlight(result.meshes); // blue glow on bound meshes (if enabled)
       this.calibrateRooms(result.meshes); // plan→world fit + room glow (fires onCalibrated)
       this.requestRender();

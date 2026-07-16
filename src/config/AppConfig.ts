@@ -274,19 +274,6 @@ export interface AppConfig {
    * Case-insensitive substring match; takes effect on the next model load.
    */
   extraGlassHints?: string[];
-  /**
-   * Repaint the bare grey terrain slab (the plinth SweetHome 3D exports outside the
-   * grass room) with a procedural grass texture. Default on; set false to disable.
-   */
-  grassGround?: boolean;
-  /**
-   * Explicit material/mesh substrings to grass, overriding auto-detection. Use when
-   * the grey terrain shares a material with something it shouldn't (auto-detect then
-   * either misses it or over-paints): tap the grey area to read its material name
-   * from the `[PickHandler] tapped mesh … material` console log, and name it here.
-   * Case-insensitive substring match; takes effect on the next model load.
-   */
-  grassGroundHints?: string[];
   /** Per-category state-badge glyphs (see DEFAULT_ENTITY_ICONS). Editable in Settings. */
   entityIcons: Record<EntityType, string>;
   /** Per-device_class badge glyphs for binary_sensor entities (see

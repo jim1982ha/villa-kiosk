@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.22.4
+
+- **Removed the fake grass repaint.** SweetHome 3D exports the terrain outside
+  any defined room as a bare grey slab; the app was repainting it green to
+  look like grass. That's gone — the slab now shows its real (grey) colour
+  instead of a synthetic one. `GroundGrass.ts` and the unused
+  `grassGround`/`grassGroundHints` config fields are removed.
+
 ## 2.22.3
 
 - **Lit rooms actually look lit now, especially at night.** A light's real
