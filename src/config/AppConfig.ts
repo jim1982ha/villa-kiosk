@@ -302,7 +302,30 @@ export interface AppConfig {
   /** Global size multiplier for the in-scene state-icon badges (1 = default).
    *  In the bird's-eye view this is further scaled by the zoom level. */
   entityIconScale: number;
+  /** Manually-grouped entities that are really one physical device (e.g. a
+   *  combo sensor exposing separate `_temperature`/`_humidity` entities).
+   *  Only `primaryEntityId` gets a badge/mesh presence on the map; every
+   *  `memberEntityIds` entity is folded into that badge's detail view
+   *  instead (see components/panels/DeviceGroupPanel). Editable in Advanced
+   *  Settings. */
+  deviceGroups: DeviceGroup[];
   onboarded: boolean;
+}
+
+/** See AppConfig.deviceGroups. */
+export interface DeviceGroup {
+  /** Stable id for the group — NOT necessarily an entity_id (survives a
+   *  primary being remapped). */
+  id: string;
+  /** The entity whose badge/mesh represents this device on the map. */
+  primaryEntityId: string;
+  /** Other entities folded into the primary's detail view. Each may or may
+   *  not have its own entityMap entry / mesh binding — grouping only affects
+   *  which badge is shown and which panel opens, not how they're bound. */
+  memberEntityIds: string[];
+  /** Optional label override for the detail view's header (defaults to the
+   *  primary's own label). */
+  label?: string;
 }
 
 const env = import.meta.env;
@@ -337,6 +360,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   // devices in a room fall within the same clash radius). 1.0x is the badge's
   // native (unscaled) size — still user-adjustable via the Settings slider.
   entityIconScale: 1.0,
+  deviceGroups: [],
   onboarded: false,
 };
 
@@ -408,6 +432,7 @@ export interface ConfigExportBundle {
   binarySensorIcons: Record<string, string>;
   sensorIcons: Record<string, string>;
   entityIconScale: number;
+  deviceGroups: DeviceGroup[];
   eyeHeight: number;
   walkSpeed: number;
   naturalScrolling: boolean;
@@ -427,6 +452,7 @@ export function buildConfigExport(config: AppConfig): ConfigExportBundle {
     binarySensorIcons: config.binarySensorIcons,
     sensorIcons: config.sensorIcons,
     entityIconScale: config.entityIconScale,
+    deviceGroups: config.deviceGroups,
     eyeHeight: config.eyeHeight,
     walkSpeed: config.walkSpeed,
     naturalScrolling: config.naturalScrolling,
@@ -451,6 +477,7 @@ export function parseConfigImport(raw: unknown): Partial<ConfigExportBundle> {
   if (b.binarySensorIcons && typeof b.binarySensorIcons === "object") patch.binarySensorIcons = b.binarySensorIcons as ConfigExportBundle["binarySensorIcons"];
   if (b.sensorIcons && typeof b.sensorIcons === "object") patch.sensorIcons = b.sensorIcons as ConfigExportBundle["sensorIcons"];
   if (typeof b.entityIconScale === "number") patch.entityIconScale = b.entityIconScale;
+  if (Array.isArray(b.deviceGroups)) patch.deviceGroups = b.deviceGroups as ConfigExportBundle["deviceGroups"];
   if (typeof b.eyeHeight === "number") patch.eyeHeight = b.eyeHeight;
   if (typeof b.walkSpeed === "number") patch.walkSpeed = b.walkSpeed;
   if (typeof b.naturalScrolling === "boolean") patch.naturalScrolling = b.naturalScrolling;

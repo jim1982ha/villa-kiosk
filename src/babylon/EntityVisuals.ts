@@ -16,7 +16,7 @@
 
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
-  Vector3, Matrix, TransformNode, Ray, VertexBuffer, Material,
+  Vector3, Matrix, TransformNode, Ray, VertexBuffer, Material, Mesh,
   type AbstractMesh, type Scene,
 } from "@babylonjs/core";
 import {
@@ -27,6 +27,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { DEFAULT_ENTITY_ICONS, DEFAULT_BINARY_SENSOR_ICONS, DEFAULT_SENSOR_ICONS } from "@/config/AppConfig";
 import { resolveMeshToMapping } from "@/config/EntityMap";
+import { groupMemberIds } from "@/config/deviceGroups";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { tapDebug } from "@/utils/tapDebug";
@@ -131,6 +132,14 @@ const STRIP_JOINT_EXTENSION = 0.02; // metres (2 cm) past each modelled endpoint
 // ONE per light ENTITY (the markers of a strip are clustered, so a single occluder
 // covers them) and only while the light is on, so an idle/off light costs nothing.
 const LIGHT_SHADOW_SIZE = 256;
+// Climate-running outline: same forward-pass outline+overlay technique as the
+// blue "clickable" highlight (see SceneManager.applyHighlight for why — a
+// Mesh.renderOutline/renderOverlay pair, not an EffectLayer, so it can't
+// corrupt the GlowLayer). Always on while the thermostat is running,
+// independent of the "highlight clickable objects" preference — this is a
+// live status signal, not a discoverability hint.
+const CLIMATE_ON_COLOR = new Color3(0.9, 0.2, 0.2);
+const CLIMATE_OUTLINE_WORLD_WIDTH = 0.04; // metres, matches the blue outline's rim
 // World-space clearance added above a mesh-bound entity's bounding-box top when
 // placing its state-label anchor, so the badge floats just clear of the
 // geometry instead of sitting flush on it.
@@ -354,6 +363,7 @@ export class EntityVisuals {
     const prevIcons = this.config.entityIcons;
     const prevBsIcons = this.config.binarySensorIcons;
     const prevSensorIcons = this.config.sensorIcons;
+    const prevGroups = this.config.deviceGroups;
     this.config = config;
     // Entity-light wall occlusion is always-on: walls block lamp light out of
     // the box, so there is nothing to tear down here when config changes.
@@ -365,9 +375,10 @@ export class EntityVisuals {
       this.iconUserScale = config.entityIconScale;
       this.applyIconScale();
     }
-    // Labels are always shown; rebuild only when a per-category glyph changed so
-    // the new icon takes effect (then repaint from the last known states).
-    if (iconsChanged) {
+    // Labels are always shown; rebuild when a per-category glyph changed, or a
+    // device group was created/edited (a member's badge must appear/disappear
+    // without needing a full re-index — see rebuildLabels' hiddenMembers).
+    if (iconsChanged || config.deviceGroups !== prevGroups) {
       this.rebuildLabels();
     }
   }
@@ -974,10 +985,15 @@ export class EntityVisuals {
     this.labelLayer.rootContainer.isVisible = true;
 
     // Every mesh-bound entity feeds the same badge pipeline, anchored at its
-    // own bounding-box top (see buildLabelAnchors).
+    // own bounding-box top (see buildLabelAnchors) — except an entity folded
+    // into a device group as a non-primary member (config.deviceGroups):
+    // its reading lives in the primary's detail view instead (see
+    // DeviceGroupPanel), so it gets no badge of its own.
+    const hiddenMembers = groupMemberIds(this.config.deviceGroups);
     const sources: { entityId: string; anchor: TransformNode; type: EntityType }[] = [];
     for (const [entityId, meshes] of this.byEntity) {
       if (!meshes.length) continue;
+      if (hiddenMembers.has(entityId)) continue;
       const map = this.mapping.get(entityId);
       if (!map) continue;
       const anchor = this.labelAnchors.get(entityId) ?? meshes[0];
@@ -1409,6 +1425,27 @@ export class EntityVisuals {
     return null;
   }
 
+  /** Red outline + translucent overlay while a climate device is running
+   *  (state !== "off"), cleared otherwise — see CLIMATE_ON_COLOR. */
+  private applyClimateOutline(mesh: AbstractMesh, on: boolean): void {
+    if (!(mesh instanceof Mesh)) return;
+    if (!on) {
+      if (mesh.renderOutline || mesh.renderOverlay) {
+        mesh.renderOutline = false;
+        mesh.renderOverlay = false;
+      }
+      return;
+    }
+    const unit = axisWorldScale(mesh);
+    const localScale = unit.x || unit.y || unit.z || 1;
+    mesh.outlineColor = CLIMATE_ON_COLOR;
+    mesh.outlineWidth = CLIMATE_OUTLINE_WORLD_WIDTH / localScale;
+    mesh.renderOutline = true;
+    mesh.overlayColor = CLIMATE_ON_COLOR;
+    mesh.overlayAlpha = 0.3;
+    mesh.renderOverlay = true;
+  }
+
   private diffuseOf(mesh: AbstractMesh): ((c: Color3) => void) | null {
     const mat = mesh.material as Material | null;
     if (!mat) return null;
@@ -1569,9 +1606,15 @@ export class EntityVisuals {
       // nearby entity instead — see compute_group_instance_map) stayed at
       // that baked-in glow forever, reading as "lit like a light fixture".
       case "sensor":
-      case "climate":
         setEmissive?.(Color3.Black());
         break;
+
+      case "climate": {
+        setEmissive?.(Color3.Black());
+        const running = state.state !== "off" && state.state !== "unavailable" && state.state !== "unknown";
+        this.applyClimateOutline(mesh, running);
+        break;
+      }
 
       default:
         break;

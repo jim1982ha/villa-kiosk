@@ -13,6 +13,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { buildConfigExport, parseConfigImport } from "@/config/AppConfig";
 import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
+import GroupedDevices from "./GroupedDevices";
 
 interface Props {
   /** Return to the Settings modal this was opened from. */
@@ -65,19 +66,18 @@ function VillaCoordinates() {
   );
 }
 
-/**
- * Owner-only backup/restore: bundles device↔room bindings, room definitions
- * (incl. saved viewports), device icons, enabled/disabled devices and every
- * First-person/Overview + Render quality + Device-icon Settings option into
- * one JSON file — importable on another vanilla install to reproduce this
- * villa's configuration exactly (see AppConfig.ConfigExportBundle for what's
- * deliberately excluded, e.g. the HA connection token).
- */
-function BackupRestore() {
+export default function ConfigEditorModal({ onBack, focusEntityId }: Props) {
   const { config, update } = useConfig();
+  const { role } = useProfile();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [backupMsg, setBackupMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
+  // Owner-only backup/restore: bundles device↔room bindings, room definitions
+  // (incl. saved viewports), device icons, enabled/disabled devices and every
+  // First-person/Overview + Render quality + Device-icon Settings option into
+  // one JSON file — importable on another vanilla install to reproduce this
+  // villa's configuration exactly (see AppConfig.ConfigExportBundle for what's
+  // deliberately excluded, e.g. the HA connection token).
   const exportConfig = () => {
     const bundle = buildConfigExport(config);
     const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
@@ -87,7 +87,7 @@ function BackupRestore() {
     a.download = `villa-kiosk-config-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    setMsg({ text: "Configuration exported.", ok: true });
+    setBackupMsg({ text: "Configuration exported.", ok: true });
   };
 
   const importConfig = async (file: File) => {
@@ -97,40 +97,12 @@ function BackupRestore() {
         "Import this configuration?\n\nThis replaces device↔room bindings, room definitions, device icons and the First-person/Overview, Render quality and Device-icon settings on THIS device with the values from the file.",
       )) return;
       update(patch);
-      setMsg({ text: "Configuration imported.", ok: true });
+      setBackupMsg({ text: "Configuration imported.", ok: true });
     } catch (err) {
-      setMsg({ text: (err as Error).message, ok: false });
+      setBackupMsg({ text: (err as Error).message, ok: false });
     }
   };
 
-  return (
-    <div>
-      <p className="muted body-text" style={{ marginTop: 0, fontSize: 12 }}>
-        Export everything you've configured on this villa — device↔room
-        bindings, rooms &amp; saved viewports, device icons, enabled/disabled
-        devices, and the First-person/Overview, Render quality and Device-icon
-        settings — into one file. Import it on another (vanilla) install of
-        this app to reproduce this setup automatically.
-      </p>
-      <div className="row" style={{ gap: 10, marginTop: 10 }}>
-        <button className="btn ghost" style={{ flex: 1 }} onClick={exportConfig}>
-          <Download size={15} /> Export configuration
-        </button>
-        <button className="btn ghost" style={{ flex: 1 }} onClick={() => fileRef.current?.click()}>
-          <Upload size={15} /> Import configuration
-        </button>
-        <input
-          ref={fileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) importConfig(f); e.target.value = ""; }}
-        />
-      </div>
-      {msg && <div className={`test-result ${msg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>{msg.text}</div>}
-    </div>
-  );
-}
-
-export default function ConfigEditorModal({ onBack, focusEntityId }: Props) {
-  const { role } = useProfile();
   return (
     <div className="modal-backdrop" onClick={onBack}>
       <div
@@ -139,9 +111,32 @@ export default function ConfigEditorModal({ onBack, focusEntityId }: Props) {
       >
         <div className="settings-header">
           <h2>Advanced Settings</h2>
+          {/* Export/import a full backup of this villa's configuration —
+              Owner only, icon-only (same treatment as the theme selector in
+              the Settings header). */}
+          {role === "owner" && (
+            <div className="segmented segmented-icons" role="group" aria-label="Backup & restore">
+              <button onClick={exportConfig} title="Export configuration" aria-label="Export configuration">
+                <Download size={17} />
+              </button>
+              <button onClick={() => fileRef.current?.click()} title="Import configuration" aria-label="Import configuration">
+                <Upload size={17} />
+              </button>
+              <input
+                ref={fileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) importConfig(f); e.target.value = ""; }}
+              />
+            </div>
+          )}
         </div>
 
         <div className="settings-body">
+          {backupMsg && (
+            <div className={`test-result ${backupMsg.ok ? "ok" : "fail"}`} style={{ marginBottom: 16 }}>
+              {backupMsg.text}
+            </div>
+          )}
+
           <div className="settings-section-title">Villa location</div>
           <p className="muted body-text" style={{ marginTop: 0, fontSize: 12 }}>
             Drives sun position and day/night for this villa.
@@ -158,18 +153,14 @@ export default function ConfigEditorModal({ onBack, focusEntityId }: Props) {
           </div>
           <BindingsTable />
 
-          {role === "owner" && (
-            <>
-              <div className="settings-section-title" style={{ marginTop: 28 }}>
-                Backup &amp; restore
-              </div>
-              <BackupRestore />
-            </>
-          )}
+          <div className="settings-section-title" style={{ marginTop: 28 }}>
+            Grouped devices
+          </div>
+          <GroupedDevices />
         </div>
 
         <div className="settings-footer" style={{ justifyContent: "flex-end" }}>
-          <button className="btn primary" onClick={onBack}>Done</button>
+          <button className="btn primary" onClick={onBack}>Close</button>
         </div>
       </div>
     </div>

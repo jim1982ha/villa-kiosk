@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.22.0
+
+- **Running climate devices get a red outline** on the map, same forward-pass
+  outline+overlay technique as the blue "clickable" highlight — always on
+  while the thermostat is running, independent of the "highlight clickable
+  objects" preference.
+- **Export/import moved to the Advanced Settings header** — icon-only,
+  top-right, same treatment as the theme selector in Settings (Owner only).
+- **Advanced Settings' "Done" button renamed to "Close".**
+- **Device grouping.** Fold several HA entities that are really one physical
+  device (e.g. a combo sensor exposing separate temperature + humidity
+  entities) into a single map badge — new "Grouped devices" section in
+  Advanced Settings, with one-click suggestions for temperature/humidity
+  pairs detected from entity_id naming. Only the group's primary entity keeps
+  a badge on the map; tapping it opens a combined detail view with every
+  member's current value and a 24h history graph (dual-axis when there are
+  exactly two numeric series).
+
 ## 2.21.0
 
 - **Label size stepper.** New +/- buttons next to the category filters in the

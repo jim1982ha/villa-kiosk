@@ -3,6 +3,8 @@
 
 import type { ActivePanel } from "@/types/panel.types";
 import { useHAEntity } from "@/hooks/useHAEntity";
+import { useConfig } from "@/config/ConfigContext";
+import { groupForPrimary } from "@/config/deviceGroups";
 import LightPanel from "./LightPanel";
 import ACPanel from "./ACPanel";
 import LockPanel from "./LockPanel";
@@ -13,6 +15,7 @@ import FanPanel from "./FanPanel";
 import SwitchPanel from "./SwitchPanel";
 import MediaPanel from "./MediaPanel";
 import GenericPanel from "./GenericPanel";
+import DeviceGroupPanel from "./DeviceGroupPanel";
 
 interface Props {
   active: ActivePanel;
@@ -22,7 +25,16 @@ interface Props {
 
 export default function PanelRouter({ active, onClose, pinContinuous }: Props) {
   const entity = useHAEntity(active.entityId);
+  const { config } = useConfig();
   const props = { entity, mapping: active.mapping, onClose };
+
+  // An entity that's the PRIMARY of a device group opens the combined view
+  // (current values + history for every grouped entity) instead of its own
+  // type-based panel — see config/deviceGroups.ts.
+  const group = groupForPrimary(config.deviceGroups, active.entityId);
+  if (group) {
+    return <DeviceGroupPanel group={group} primaryMapping={active.mapping} onClose={onClose} />;
+  }
 
   switch (active.mapping.type) {
     case "light":

@@ -1206,6 +1206,11 @@ export class SceneManager {
         m.name, this.config.entityMap, this.config.meshBindings, this.config.deniedTypes,
       );
       if (!mapping) continue;
+      // Climate meshes get their own always-on RED outline while running
+      // (EntityVisuals.applyToMesh) — a live status signal, not a "this is
+      // clickable" hint, so it must never fight this blue treatment for the
+      // same mesh's outline/overlay properties.
+      if (mapping.type === "climate") continue;
       // Glow only for categories currently shown (HUD chips): a hidden
       // category's objects shouldn't advertise themselves as clickable.
       const category = effectiveCategory(mapping.entityId, mapping.type, mapping.category);
