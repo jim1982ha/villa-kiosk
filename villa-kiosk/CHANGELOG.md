@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.23.2
+
+- **Category filter buttons now double as a colour legend.** Each button in
+  the top-bar category row lights up in its own category's colour when
+  active (matching the map badges) instead of a uniform blue, so it's clear
+  at a glance which colour means which category.
+- **Camera badge icon changed to a webcam glyph** — more fitting than the
+  traditional camera-body icon for a fixed security/monitoring camera.
+
 ## 2.23.1
 
 - **Fix: ceiling fan (and its badge) disappearing when turned on, and never

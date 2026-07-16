@@ -25,9 +25,11 @@ export const ICON_NODES: Record<string, readonly IconPrimitive[]> = {
     ["rect", { width: "18", height: "11", x: "3", y: "11", rx: "2", ry: "2" }],
     ["path", { d: "M7 11V7a5 5 0 0 1 10 0v4" }],
   ],
-  camera: [
-    ["path", { d: "M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z" }],
-    ["circle", { cx: "12", cy: "13", r: "3" }],
+  webcam: [
+    ["circle", { cx: "12", cy: "10", r: "8" }],
+    ["circle", { cx: "12", cy: "10", r: "3" }],
+    ["path", { d: "M7 22h10" }],
+    ["path", { d: "M12 22v-4" }],
   ],
   blinds: [
     ["path", { d: "M3 3h18" }],
