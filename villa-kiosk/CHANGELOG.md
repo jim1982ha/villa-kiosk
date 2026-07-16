@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.23.3
+
+### Changes
+- MAX_LIGHT_INTENSITY from 1.3 to 2
+
+---
+
+
 ## 2.23.2
 
 - **Category filter buttons now double as a colour legend.** Each button in
