@@ -1,6 +1,8 @@
 // src/components/panels/BasePanel.tsx
 // Shared modal wrapper for device panels: centered dialog (not a bottom
 // sheet), backdrop-dismiss + Escape, header with icon/title/room/entity id.
+// Edit/Close live in a FOOTER (not the header) so a long device name always
+// gets the header's full width instead of fighting two buttons for room.
 
 import { useEffect, type ReactNode } from "react";
 import { X, Pencil } from "lucide-react";
@@ -35,23 +37,18 @@ export default function BasePanel({ title, room, icon, onClose, children }: Prop
               {entityId && <div className="panel-entity-id" title={entityId}>{entityId}</div>}
             </div>
           </div>
-          <div className="row panel-header-actions" style={{ gap: 8 }}>
-            {onEdit && (
-              <button
-                className="icon-btn"
-                onClick={onEdit}
-                title="Edit this device in Advanced Settings"
-                aria-label="Edit this device in Advanced Settings"
-              >
-                <Pencil size={18} />
-              </button>
-            )}
-            <button className="icon-btn" onClick={onClose} aria-label="Close">
-              <X size={20} />
-            </button>
-          </div>
         </div>
         <div className="panel-body">{children}</div>
+        <div className="panel-footer">
+          {onEdit && (
+            <button className="btn ghost" onClick={onEdit}>
+              <Pencil size={16} /> Edit
+            </button>
+          )}
+          <button className="btn primary" onClick={onClose}>
+            <X size={16} /> Close
+          </button>
+        </div>
       </div>
     </div>
   );

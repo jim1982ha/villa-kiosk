@@ -1,8 +1,9 @@
 // src/components/hud/HUD.tsx
 // Top bar layout (three zones):
 //   • Left   — villa brand (home icon + name + connection dot) + clock; on a
-//              phone this collapses into one dropdown button (hud-brand-overflow)
-//              so the category row keeps its width
+//              phone this is hidden entirely (connection status moves into
+//              the right-side overflow menu instead — see hud-overflow) so
+//              the category row keeps its width
 //   • Center — category filter, then a label-size stepper (+/-)
 //   • Right  — Settings only
 // A left control column floats below the brand: the vertical floor toggle
@@ -249,25 +250,6 @@ export default function HUD({
     };
   }, [menuOpen]);
 
-  // Same idea, mirrored on the left: on narrow screens the brand chip (villa
-  // name + connection dot + clock) collapses into a single dropdown button so
-  // the category filter row gets its width back (see .hud-brand-overflow).
-  const [brandMenuOpen, setBrandMenuOpen] = useState(false);
-  const brandMenuRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!brandMenuOpen) return;
-    const onDown = (e: PointerEvent) => {
-      if (brandMenuRef.current && !brandMenuRef.current.contains(e.target as Node)) setBrandMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setBrandMenuOpen(false); };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [brandMenuOpen]);
-
   // Tap = jump to this device's saved default view; long-press / right-click
   // = (re)define it as the current framing (same tap-vs-hold convention as
   // the Rooms menu's re-anchor gesture and the in-scene badge gestures). A
@@ -332,59 +314,22 @@ export default function HUD({
       />
 
       <div className="hud-topbar">
-        {/* Grid item #1 (left column) — always exactly ONE of these two
-            renders visibly, CSS-swapped at the compact-bar breakpoint, same
-            pattern as hud-right below (hud-right-inline / hud-overflow). Both
-            must live inside one wrapper: hud-topbar's 3 columns are sized for
-            exactly 3 direct children. */}
-        <div className="hud-brand-zone">
-          <div className="hud-brand">
-            <Home size={22} />
-            <span className="hud-title">{title}</span>
-            <span
-              className={`conn-dot ${connClass}`}
-              title={`Connection: ${connection}`}
-              role="img"
-              aria-label={`Connection: ${connection}`}
-            >
-              <span className="dot" />
-            </span>
-            {/* Time sits right next to the villa name + connection dot. */}
-            <span className="hud-clock">{clock}</span>
-          </div>
-
-          {/* Mobile-only stand-in for the brand chip above: a single squircle
-              showing just the connection dot, opening a dropdown with the
-              villa name, full connection text and the clock — frees the
-              category filter row's width on a phone. */}
-          <div className="hud-brand-overflow" ref={brandMenuRef}>
-            <button
-              className={`icon-btn${brandMenuOpen ? " active" : ""}`}
-              onClick={() => setBrandMenuOpen((o) => !o)}
-              title={title}
-              aria-label={`${title} — connection: ${connection}`}
-              aria-haspopup="menu"
-              aria-expanded={brandMenuOpen}
-            >
-              <span className={`conn-dot ${connClass}`} role="img" aria-hidden="true">
-                <span className="dot" />
-              </span>
-            </button>
-            {brandMenuOpen && (
-              <div className="hud-menu" role="menu" aria-label="Villa status">
-                <div className="hud-menu-header">{title}</div>
-                <div className="hud-menu-item hud-menu-static">
-                  <span className={`conn-dot ${connClass}`} role="img" aria-hidden="true">
-                    <span className="dot" />
-                  </span>
-                  <span>Connection: {connection}</span>
-                </div>
-                <div className="hud-menu-item hud-menu-static">
-                  <span>{clock}</span>
-                </div>
-              </div>
-            )}
-          </div>
+        {/* Hidden entirely on a phone (see .hud-brand mobile rule) — its
+            connection status moves into the right-side overflow menu below
+            instead of keeping any standalone button/space in the top bar. */}
+        <div className="hud-brand">
+          <Home size={22} />
+          <span className="hud-title">{title}</span>
+          <span
+            className={`conn-dot ${connClass}`}
+            title={`Connection: ${connection}`}
+            role="img"
+            aria-label={`Connection: ${connection}`}
+          >
+            <span className="dot" />
+          </span>
+          {/* Time sits right next to the villa name + connection dot. */}
+          <span className="hud-clock">{clock}</span>
         </div>
 
         {/* Category filter: which device categories show their state tag on
@@ -478,6 +423,14 @@ export default function HUD({
             {menuOpen && (
               <div className="hud-menu" role="menu" aria-label="Settings and profile">
                 {role && <div className="hud-menu-header">Signed in as {ROLE_LABELS[role]}</div>}
+                {/* Connection status — lives ONLY here on a phone (no standalone
+                    top-bar button/space; see .hud-brand's mobile rule). */}
+                <div className="hud-menu-item hud-menu-static">
+                  <span className={`conn-dot ${connClass}`} role="img" aria-hidden="true">
+                    <span className="dot" />
+                  </span>
+                  <span>Connection: {connection}</span>
+                </div>
                 {canOpenSettings && (
                   <button
                     role="menuitem"

@@ -255,13 +255,8 @@ button {
    other HUD control) so the villa name reads clearly on ANY backdrop — the
    canvas behind it can be a bright sky, a dark night, or an empty void, and
    the name never washes out. */
-/* Grid item (top-bar left column) wrapping .hud-brand + its mobile stand-in
-   .hud-brand-overflow — hud-topbar's 3 columns are sized for exactly 3 direct
-   children, so both live inside this one wrapper (see hud-right below for
-   the same pattern on the right). */
-.hud-brand-zone { justify-self: start; display: flex; align-items: center; }
 .hud-brand {
-  display: flex; align-items: center; gap: 10px;
+  justify-self: start; display: flex; align-items: center; gap: 10px;
   font-family: var(--font-display); font-size: 22px; font-weight: 500;
   background: var(--bg-panel); backdrop-filter: blur(8px);
   border: 1px solid var(--hairline); border-radius: 999px;
@@ -301,17 +296,10 @@ button {
 }
 .hud-menu-item svg { flex: 0 0 auto; color: var(--text-secondary); }
 .hud-menu-item:hover, .hud-menu-item:active { background: var(--bg-input); }
-/* Non-interactive rows (the brand dropdown's connection/clock lines) — no
+/* Non-interactive rows (the right menu's connection-status line) — no
    pointer cursor or hover wash, they're display-only. */
 .hud-menu-item.hud-menu-static { cursor: default; }
 .hud-menu-item.hud-menu-static:hover, .hud-menu-item.hud-menu-static:active { background: transparent; }
-
-/* Mirrors .hud-overflow on the left: on phones the brand chip (villa name +
-   connection dot + clock) collapses into this single button + dropdown so
-   the category filter row keeps its width. Hidden on roomy screens; the
-   compact-bar media query below swaps the two (same as the right side). */
-.hud-brand-overflow { position: relative; display: none; }
-.hud-brand-overflow .hud-menu { left: 0; right: auto; }
 
 /* Scrollable variant of a .hud-group (the category filter): however many
    buttons the profile/config produces, the pill never wraps and never grows
@@ -480,13 +468,12 @@ button {
    preset/high climate or camera-motion panel comfortably fits). */
 .modal.panel-modal { max-width: 460px; overflow-y: auto; overscroll-behavior: contain; }
 .panel-body { padding-top: 4px; }
-.panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
-/* The title block shrinks/wraps (min-width:0 lets a long device name wrap
-   instead of forcing the row wider); the action buttons never shrink, so a
-   long title can never push Edit/Close out of view (see the mobile fix for
-   the underlying report — buttons vanished off-screen on a long name). */
+/* Edit/Close live in .panel-footer, not here (see BasePanel) — the header is
+   ONLY the icon/title/room/entity-id, so a long device name always gets the
+   full row width to wrap into instead of fighting two buttons for room
+   (the bug report this fixes: the buttons got pushed off-screen). */
+.panel-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
 .panel-header .title { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
-.panel-header-actions { flex: 0 0 auto; }
 .panel-header .title h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; overflow-wrap: break-word; }
 .panel-header .room { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
 .panel-header .panel-entity-id {
@@ -495,6 +482,16 @@ button {
   max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
+/* Same treatment as .settings-footer (Cancel/Save) — text-labelled buttons,
+   right-aligned, separated by a hairline. Unlike .settings-footer this sits
+   INSIDE the modal's own padding (.panel-modal has no separate header/body/
+   footer padding of their own, see .modal:not(.settings-modal)), so it's
+   inset like the rest of the content rather than bleeding to the card edge. */
+.panel-footer {
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  margin-top: 20px; padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
 
 .row-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 .row-buttons.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
@@ -903,18 +900,21 @@ label.toggle span { user-select: none; line-height: 1.4; }
     gap: 6px;
     padding-left: calc(10px + env(safe-area-inset-left, 0px));
     padding-right: calc(10px + env(safe-area-inset-right, 0px));
+    /* The left column is empty on a phone (.hud-brand below) — give it (and
+       the small right overflow button) only the width their content needs,
+       instead of the desktop's symmetric 1fr/1fr, so the category row
+       (centre) gets ALL the reclaimed space, not just half of it. */
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
   }
-  /* The whole brand chip (villa name, connection dot, clock) collapses into
-     the single hud-brand-overflow button — its dropdown carries all three —
-     so the category filter row gets that width back. */
+  /* The whole brand chip (villa name, connection dot, clock) is hidden on a
+     phone — no standalone stand-in button either; connection status moves
+     into the right-side overflow menu's dropdown instead (see hud-menu). */
   .hud-brand { display: none; }
-  .hud-brand-overflow { display: block; }
   /* Tighter centre/right groups and smaller icon buttons. */
   .hud-center { gap: 4px; }
   .hud-right { gap: 6px; }
   .hud-center .icon-btn,
-  .hud-right .icon-btn,
-  .hud-brand-overflow .icon-btn { width: 32px; height: 32px; }
+  .hud-right .icon-btn { width: 32px; height: 32px; }
   /* Right side collapses to the single overflow-menu button; its dropdown
      hosts the view toggle, Settings and profile switch. */
   .hud-right-inline { display: none; }

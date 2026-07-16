@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.22.2
+
+- **Fix: connection status still ate top-bar space on phones.** The previous
+  fix collapsed it into its own small button, but that's still a button —
+  it's now folded entirely into the existing right-side "⋮" menu instead, so
+  the top bar spends nothing on it and the category filter row gets that
+  width back too (not just half of it, from the old symmetric left/right
+  column split).
+- **Fix: device panel header cramped on phones.** Edit/Close moved out of the
+  header into a footer row (text-labelled buttons, same look as Settings'
+  Cancel/Save), so a long device name always gets the full header width to
+  wrap into instead of squeezing against the buttons.
+
 ## 2.22.1
 
 - **Fix: device panel modal on phones.** It was inheriting the full-screen,
