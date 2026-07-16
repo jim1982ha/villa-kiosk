@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.23.5
+
+- **Camera badge icon changed again — CCTV camera, not a webcam.** The
+  webcam glyph from 2.23.2 wasn't quite right either; swapped for lucide's
+  `cctv` icon (an angular wall-mounted security camera), which matches a
+  fixed monitoring camera much better.
+- **Rooms actually get brighter when a light turns on, in baked-lighting
+  villas.** `LIGHT_RANGE`/`MAX_LIGHT_INTENSITY` (which 2.23.3/2.23.4 tried
+  tuning) turned out to control a real dynamic `PointLight` that this villa
+  never creates in the first place — its walls/floor/ceiling are exported
+  **unlit** (baked lightmap materials), so they ignore every dynamic light
+  by design; those two constants were dead code here regardless of value.
+  Added a different mechanism for baked villas: a soft, warm, additive
+  "light pool" on the floor under each fixture — sized from the light's
+  range, coloured/dimmed from its live brightness and colour, visible only
+  while on. It brightens the floor around it rather than trying to light
+  geometry that's architecturally immune to it.
+
 ## 2.23.4
 
 ### Changes

@@ -33,6 +33,7 @@ import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { axisWorldScale } from "./meshUnits";
+import { LightPool } from "./LightPools";
 import { badgeImageDataUrl, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { iconKeyFor } from "./badgeIconKeys";
 
@@ -55,6 +56,12 @@ const LIGHT_BASELINE_GLOW = 0.5;
 // starts bleeding into a neighbouring room, especially at night, shrink this
 // back down rather than raising it further.
 const LIGHT_RANGE = 4;
+// Floor-pool radius for BAKED-mode lights (see LightPools.ts) — a separate
+// knob from LIGHT_RANGE above, which only matters for the real PointLight
+// non-baked villas get (baked structure is unlit and can't be reached by a
+// PointLight at all, at any range/intensity — that's the whole reason the
+// pool trick exists).
+const LIGHT_POOL_RADIUS = 1.8;
 // A SweetHome "line light" (the Sweet Home Light plugin's linear LED strip) is
 // mounted flush against a ceiling/wall. A PointLight placed ON the strip sits
 // centimetres from that surface, so it prints a hard bright pool right there —
@@ -243,6 +250,10 @@ export class EntityVisuals {
   // more: materials cap simultaneous lights (ModelLoader), and every light past
   // the cap is silently dropped, which reads as patchy/arbitrary illumination.
   private meshLights = new Map<number, PointLight>();
+  /** Baked-mode counterpart to meshLights — see LightPools.ts for why a real
+   *  PointLight is pointless there (the structure renders unlit) and what
+   *  this fakes instead. Keyed the same way, one per fixture mesh. */
+  private meshLightPools = new Map<number, LightPool>();
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
    *  attached to that entity's representative light. Created lazily while the
    *  light is on; a 12-marker strip therefore costs a single shadow map, not 12. */
@@ -473,6 +484,24 @@ export class EntityVisuals {
           // light count the first frame has to compile shaders for.
           light.setEnabled(false);
           this.meshLights.set(m.uniqueId, light);
+        } else {
+          // Baked mode: the structure can't be lit at runtime (see the
+          // comment above), so fake it with a floor-level glow pool instead
+          // — see LightPools.ts. Same floor-finding raycast as the strip-drop
+          // case above (scene-wide predicate, not a pre-built list: at this
+          // point in the load every mesh is already in the scene even
+          // though this loop hasn't reached all of them yet).
+          const bb = m.getBoundingInfo().boundingBox;
+          const fixturePos = bb.centerWorld.clone();
+          const ray = new Ray(fixturePos, Vector3.Down(), 8);
+          const hit = this.scene.pickWithRay(ray, (candidate) =>
+            candidate !== m && candidate.getTotalVertices() > 0 &&
+            !/^(halo_|label_|marker)/i.test(candidate.name));
+          const floorPos = hit?.hit && hit.pickedPoint
+            ? new Vector3(fixturePos.x, hit.pickedPoint.y + 0.02, fixturePos.z)
+            : new Vector3(fixturePos.x, fixturePos.y - 1, fixturePos.z);
+          const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}`, floorPos, LIGHT_POOL_RADIUS);
+          this.meshLightPools.set(m.uniqueId, pool);
         }
       }
     }
@@ -688,6 +717,8 @@ export class EntityVisuals {
     const seen = new Set<PointLight>();
     this.meshLights.forEach((l) => { if (!seen.has(l)) { seen.add(l); l.dispose(); } });
     this.meshLights.clear();
+    this.meshLightPools.forEach((p) => p.dispose());
+    this.meshLightPools.clear();
   }
 
   /** World-space bounding box spanning ALL of an entity's meshes merged (e.g.
@@ -1489,6 +1520,9 @@ export class EntityVisuals {
           // so only lights that are actually on add per-pixel cost.
           light.setEnabled(on);
         }
+        // Baked mode's counterpart to the light above — see LightPools.ts.
+        const pool = this.meshLightPools.get(mesh.uniqueId);
+        if (pool) pool.setState(on, colour, brightnessFrac);
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;
       }

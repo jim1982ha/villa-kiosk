@@ -14,7 +14,7 @@ export const TYPE_ICON_KEY: Record<EntityType, string> = {
   light: "lightbulb",
   climate: "thermometer",
   lock: "lock",
-  camera: "webcam",
+  camera: "cctv",
   cover: "blinds",
   fan: "fan",
   binary_sensor: "activity",
