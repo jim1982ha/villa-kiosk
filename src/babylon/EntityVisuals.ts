@@ -362,6 +362,20 @@ export class EntityVisuals {
   setLightPoolIntensity(value: number): void {
     if (value === this.lightPoolStrength) return;
     this.lightPoolStrength = value;
+    this.forEachLightPoolState((pool, on, colour, brightnessFrac) =>
+      pool.setState(on, colour, brightnessFrac * this.lightPoolStrength));
+    this.requestRender();
+  }
+
+  /** Every light entity's pool, resolved to its floor-and-state-correct on/off
+   *  + colour + brightness right now — shared by anything that needs to
+   *  resync ALL pools at once (a floor change, the "Light effect strength"
+   *  slider) rather than just the one entity apply() is currently handling.
+   *  `on` already folds in the fixture mesh's live enabled state, so a light
+   *  left on behind a now-hidden floor comes back off instead of staying lit. */
+  private forEachLightPoolState(
+    fn: (pool: LightPool, on: boolean, colour: Color3, brightnessFrac: number) => void,
+  ): void {
     for (const [entityId, map] of this.mapping) {
       if (map.type !== "light") continue;
       const state = this.lastState.get(entityId);
@@ -372,10 +386,9 @@ export class EntityVisuals {
       const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
       for (const mesh of meshes) {
         const pool = this.meshLightPools.get(mesh.uniqueId);
-        if (pool) pool.setState(on, colour, brightnessFrac * this.lightPoolStrength);
+        if (pool) fn(pool, on && mesh.isEnabled(), colour, brightnessFrac);
       }
     }
-    this.requestRender();
   }
 
   /** Build the reverse index entity_id -> meshes from the loaded GLB. */
@@ -952,11 +965,26 @@ export class EntityVisuals {
   }
 
   /** Follow FloorManager's floor toggle — only the active floor's badges are
-   *  drawn (see cullLabels). Called by SceneManager on every floor change. */
+   *  drawn (see cullLabels). Called by SceneManager on every floor change,
+   *  AFTER FloorManager has already re-applied mesh.setEnabled() per floor. */
   setActiveFloor(floor: number): void {
     if (floor === this.activeFloor) return;
     this.activeFloor = floor;
+    this.resyncLightPoolsToFloor();
     this.requestRender();
+  }
+
+  /** A baked-villa light's floor "pool" (see LightPools.ts) is a freestanding
+   *  decal mesh that FloorManager never indexes or toggles — unlike the
+   *  fixture mesh itself, it doesn't automatically vanish when its floor is
+   *  hidden. Without this, a 2F light left on stayed visible (floating,
+   *  unoccluded) while viewing 1F. Re-derive each pool's on/off state from
+   *  its fixture mesh's CURRENT enabled state (already floor-correct by the
+   *  time this runs) whenever the active floor changes. */
+  private resyncLightPoolsToFloor(): void {
+    if (this.meshLightPools.size === 0) return;
+    this.forEachLightPoolState((pool, on, colour, brightnessFrac) =>
+      pool.setState(on, colour, brightnessFrac * this.lightPoolStrength));
   }
 
   /** Live bird's-eye zoom factor (1 = default fit). Driven per-frame by
@@ -1572,8 +1600,12 @@ export class EntityVisuals {
           light.setEnabled(on);
         }
         // Baked mode's counterpart to the light above — see LightPools.ts.
+        // `mesh.isEnabled()` folds in FloorManager's floor toggle: a fixture
+        // on a currently-hidden floor must not light its pool even if the HA
+        // entity itself is "on" (see resyncLightPoolsToFloor for the other
+        // direction — a floor SWITCH with no entity-state change).
         const pool = this.meshLightPools.get(mesh.uniqueId);
-        if (pool) pool.setState(on, colour, brightnessFrac * this.lightPoolStrength);
+        if (pool) pool.setState(on && mesh.isEnabled(), colour, brightnessFrac * this.lightPoolStrength);
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;
       }

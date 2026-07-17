@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.23.12
+
+- **Fixed: a light left on upstairs stayed visibly lit (floating,
+  unoccluded) even while viewing the floor below.** In baked-lighting
+  villas, a lit fixture's floor "pool" glow (`LightPools.ts`) is a
+  freestanding decal mesh created at runtime — unlike the fixture itself,
+  `FloorManager` never indexed or toggled it per floor. Each pool's on/off
+  state is now derived from its fixture mesh's live enabled state (which
+  FloorManager keeps floor-correct), re-synced on every floor switch, HA
+  state change, and "Light effect strength" slider move.
+
 ## 2.23.11
 
 - **Fixed: 2F ceiling fan's badge showing on 1F too.** A side effect of
