@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.23.18
+
+- **Fixed: HLS camera streams that connected successfully were getting
+  killed moments later by the app's own code.** Confirmed in the field —
+  the diagnostic log showed `HLS playing` immediately followed by `HLS
+  failed: Video element error`. The cleanup effect was unconditionally
+  calling `video.load()` even when hls.js was managing the element; hls.js's
+  `destroy()` already detaches its MediaSource cleanly, and the extra manual
+  `load()` on top of that fires a native `<video>` error purely from that
+  teardown, which was then misread as a real playback failure and
+  permanently dropped to MJPEG/snapshot. Also stopped treating a native
+  `<video>` error as fatal at all while hls.js is in control — it reports
+  its own errors through a separate, more reliable channel, and a native
+  error surfacing during hls.js-driven playback can just be its own internal
+  recovery churn. Native HLS (Safari/iOS) is unaffected — it still clears
+  its own `src` on cleanup, since there's no hls.js instance managing it.
+
 ## 2.23.17
 
 - **Camera watchdogs made much more generous (HLS 4s → 15s, MJPEG 1s →

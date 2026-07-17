@@ -229,10 +229,24 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
       cancelled = true;
       clearTimeout(watchdog);
       video.removeEventListener("playing", onPlaying);
-      hlsInstanceRef.current?.destroy();
-      hlsInstanceRef.current = null;
-      video.removeAttribute("src");
-      video.load();
+      if (hlsInstanceRef.current) {
+        // hls.js owns the MediaSource/SourceBuffers it attached — destroy()
+        // already detaches and tears them down cleanly. Also calling
+        // video.removeAttribute("src") + video.load() ourselves on TOP of
+        // that (as this used to do unconditionally) fires a native <video>
+        // `error` event purely from OUR OWN teardown — confirmed in the
+        // field: a stream that had already reached "playing" got yanked out
+        // from under itself this way, misread as a real playback failure,
+        // and permanently fell back to MJPEG/snapshot even though HLS had
+        // been working. Let hls.js's own destroy() be the only teardown here.
+        hlsInstanceRef.current.destroy();
+        hlsInstanceRef.current = null;
+      } else {
+        // Native HLS (Safari/iOS) — we set video.src ourselves, so we're
+        // responsible for clearing it too.
+        video.removeAttribute("src");
+        video.load();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, mapping.entityId, connected]);
@@ -295,7 +309,17 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           autoPlay
           muted
           playsInline
-          onError={() => fallBackToStream("Video element error")}
+          onError={() => {
+            // hls.js drives this element and reports its OWN errors via
+            // Hls.Events.ERROR (see the setup effect) — that's the
+            // authoritative fatal/non-fatal signal while it's in control.
+            // A native <video> `error` event on top of that is either
+            // hls.js's own internal recovery churn or our own teardown
+            // (see the cleanup above), not a real failure — only treat it
+            // as fatal on the native-HLS (Safari) path, where there's no
+            // other error channel at all.
+            if (!hlsInstanceRef.current) fallBackToStream("Video element error");
+          }}
         />
       );
     }
