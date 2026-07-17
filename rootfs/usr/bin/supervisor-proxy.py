@@ -51,6 +51,11 @@ SUPERVISOR = "supervisor"
 TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
 
+# The full set of options config.yaml's schema currently recognises. Kept
+# separate from the schema itself so this can compare against it — see
+# _cleanup_stale_options below.
+KNOWN_OPTION_KEYS = {"model_path", "guest_pin", "owner_pin", "ops_pin"}
+
 # HA www folder, mounted read-WRITE via the homeassistant_config:rw map. nginx
 # serves it at /model/<path>; the upload handler below writes into it.
 WWW_ROOT = "/homeassistant/www"
@@ -153,6 +158,56 @@ def _read_options() -> dict:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
+
+
+async def _cleanup_stale_options(session: ClientSession) -> None:
+    """Self-heal an add-on options key left over from a dropped schema field.
+
+    Supervisor persists the add-on's raw configured options independently of
+    config.yaml's current schema — a field removed from the schema (e.g. the
+    old `sh3d_path` option, replaced by `model_path` back when central-model
+    hosting was added) stays in that stored config forever, on every install
+    that had ever set it, unless something explicitly clears it. Supervisor
+    re-validates the stored config against the CURRENT schema on basically
+    every poll/reload cycle, so an orphaned key logs a
+    "does not exist in the schema" warning continuously — and that kind of
+    persistent validation error is a known way for Supervisor/Core to lose
+    sync on the add-on's state (e.g. the Update button not registering as
+    clickable until a full HA restart forces a clean reload).
+
+    Fetch our own stored options and, if any key isn't in the current
+    schema, write back only the known-good ones — using the exact same
+    Supervisor endpoint the Configuration tab's Save button uses. Runs once
+    at every startup; a no-op once nothing stale remains. Best-effort: never
+    let this block or fail startup — an API shape mismatch on some future
+    Supervisor version should degrade to "warning keeps appearing", not
+    "add-on won't start".
+    """
+    try:
+        async with session.get(
+            f"http://{SUPERVISOR}/addons/self/info", headers=AUTH,
+        ) as resp:
+            if resp.status != 200:
+                return
+            body = await resp.json()
+        options = (body.get("data") or {}).get("options") or {}
+        stale = sorted(set(options) - KNOWN_OPTION_KEYS)
+        if not stale:
+            return
+        cleaned = {k: v for k, v in options.items() if k in KNOWN_OPTION_KEYS}
+        async with session.post(
+            f"http://{SUPERVISOR}/addons/self/options", headers=AUTH,
+            json={"options": cleaned},
+        ) as resp:
+            if resp.status == 200:
+                print(f"[supervisor-proxy] cleared stale option key(s): {stale}", flush=True)
+            else:
+                print(
+                    f"[supervisor-proxy] stale option key(s) {stale} found but "
+                    f"clearing them failed (HTTP {resp.status})", flush=True,
+                )
+    except Exception as err:  # noqa: BLE001 — best-effort, must never block startup
+        print(f"[supervisor-proxy] stale-option cleanup skipped: {err}", flush=True)
 
 
 def _rooms_rel(model_rel: str) -> str:
@@ -510,6 +565,7 @@ def main() -> None:
 
     async def on_start(a: web.Application) -> None:
         a["session"] = ClientSession(timeout=ClientTimeout(total=None))
+        await _cleanup_stale_options(a["session"])
 
     async def on_cleanup(a: web.Application) -> None:
         await a["session"].close()

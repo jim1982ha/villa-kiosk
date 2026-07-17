@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.23.21
+
+- **Self-heal a stale `sh3d_path` add-on option left over from before
+  central-model hosting.** That field was dropped from `config.yaml`'s
+  schema (replaced by `model_path`), but Supervisor persists an add-on's
+  raw configured options independently of the current schema — any install
+  that had ever set `sh3d_path` kept it forever, and Supervisor
+  re-validates against the current schema on basically every poll/reload
+  cycle, logging `Option 'sh3d_path' does not exist in the schema`
+  continuously. That kind of persistent validation error is a known way
+  for Supervisor/Core to lose sync on the add-on's state (e.g. the Update
+  button not registering as clickable until a full HA restart). The add-on
+  now checks its own stored options against the current schema on every
+  startup and writes back only the known-good keys if it finds anything
+  stale — self-heals on the next add-on restart/update, no manual options
+  edit needed.
+
 ## 2.23.20
 
 - **Found the actual root cause of the recurring "HLS playing" → "HLS
