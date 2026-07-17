@@ -168,24 +168,49 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
 
         const url = await cameraHlsUrl(ws, config.haUrl, mapping.entityId);
         if (cancelled) return;
+        // The URL HA (and our ingress/standalone resolution) actually
+        // produced — the single most useful line for spotting a wrong path
+        // vs. a stream that connects fine but never starts playing.
+        logTransition(`HLS url: ${url}`);
 
         if (canNative) {
           // Safari/iOS speaks HLS natively (hardware-accelerated) — prefer it
           // over hls.js's MediaSource-based playback where both are available.
           video.src = url;
+          void video.play().catch(() => {}); // autoplay may need the user's first tap; not an error
         } else {
           const hls = new Hls({ lowLatencyMode: true });
           hlsInstanceRef.current = hls;
+          let loggedNonFatal = false;
           hls.on(Hls.Events.ERROR, (_evt, data) => {
             if (data.fatal) {
               devLog("[Camera] hls.js fatal error, falling back to MJPEG:", data);
               fallBackToStream(`HLS error (${data.details})`);
+            } else if (!loggedNonFatal) {
+              // Only the FIRST one — hls.js retries these automatically (and
+              // often silently recovers), but if the stream is stuck
+              // retrying the SAME thing for the whole watchdog window, this
+              // is exactly what reveals why (e.g. a 404 on the segment URL
+              // means the proxy path is wrong; a CORS/network error means
+              // something else entirely).
+              loggedNonFatal = true;
+              const status = data.response?.code;
+              logTransition(
+                `HLS warning: ${data.details}${status ? ` (HTTP ${status})` : ""}` +
+                (data.url ? ` — ${data.url}` : ""),
+              );
             }
+          });
+          // Wait for the manifest before calling play() — calling it
+          // immediately after attachMedia (before hls.js has anything
+          // buffered) is a known source of autoplay getting silently
+          // dropped instead of resuming once data actually arrives.
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            void video.play().catch(() => {});
           });
           hls.loadSource(url);
           hls.attachMedia(video);
         }
-        void video.play().catch(() => {}); // autoplay may need the user's first tap; not an error
       } catch (err) {
         if (!cancelled) {
           devLog("[Camera] HLS unavailable for this entity, falling back to MJPEG:", err);

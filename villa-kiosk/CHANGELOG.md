@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.23.16
+
+- **Camera diagnostic: added the exact HLS URL + first hls.js warning to
+  the trace.** Testing showed both HLS and MJPEG hanging completely
+  silently (no error, just nothing arriving before their timeouts) — only
+  snapshot polling ever got data. The log now shows the exact URL asked for
+  (`HLS url: ...`, the single most useful line for spotting a wrong path)
+  and, if hls.js is stuck retrying the same recoverable error for the whole
+  watchdog window, its first warning with the failing URL and HTTP status.
+- **Fixed a real secondary bug**: `video.play()` was being called
+  immediately after attaching the HLS stream, before hls.js had parsed
+  anything — moved to fire after the manifest is actually parsed (the
+  correct hls.js pattern), since calling it too early can silently swallow
+  playback instead of resuming once data arrives.
+
 ## 2.23.15
 
 - **Camera diagnostic now shows the full transition trace, not just the
