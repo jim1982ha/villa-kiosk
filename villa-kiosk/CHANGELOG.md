@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.23.13
+
+- **Per-light intensity override.** Light entity cards in Advanced Settings
+  (both "Auto-detected entity settings" and "Bound 3D objects") now have a
+  -100%..+100% slider that multiplies on top of that light's live Home
+  Assistant brightness and the global "Light effect strength" setting — lets
+  one fixture be tuned brighter or dimmer than its dimmer level alone would
+  produce, without touching every other light. Dragging is debounced the
+  same way the Label field is, so it doesn't trigger a full re-index per
+  pixel of drag.
+- **Camera streams now try HLS first, before falling back to MJPEG then
+  still-image polling.** This app only ever used MJPEG (`camera_proxy_stream`)
+  — HA's own frontend prefers HLS for any camera that supports the stream
+  pipeline (most modern RTSP/ONVIF cameras do), since MJPEG makes HA
+  continuously re-decode and re-encode every frame as a JPEG server-side.
+  That mismatch is the likely cause of camera feeds looking laggier here
+  than in the HA UI for the same camera. Added via `hls.js`, lazy-loaded
+  only when a camera panel actually opens so it doesn't affect the app's
+  normal startup bundle; falls straight through to the existing MJPEG/
+  snapshot chain on any failure, so this can't regress cameras that don't
+  support HLS.
+
 ## 2.23.12
 
 - **Fixed: a light left on upstairs stayed visibly lit (floating,

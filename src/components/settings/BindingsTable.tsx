@@ -3,7 +3,7 @@
 // change which entity the object controls AND edit its display metadata
 // (type, label, room, requires-confirmation) — all in one place.
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Unlink, ChevronDown, ChevronRight, Link2 } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import { useConfig } from "@/config/ConfigContext";
@@ -53,6 +53,28 @@ export default function BindingsTable() {
         [entityId]: { ...config.entityMap[entityId], ...change },
       },
     });
+  };
+
+  // Dragging a range input fires onChange continuously (React normalises it
+  // to the native `input` event) — commit straight to patchMeta() on every
+  // tick would trigger a full structural re-index per pixel of drag. Draft
+  // locally, commit on release or after a short pause if release is missed
+  // (same pattern as ConfigEditor's Label field / intensity slider).
+  const [intensityDrafts, setIntensityDrafts] = useState<Record<string, number>>({});
+  const intensityTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const commitIntensity = (entityId: string, ratio: number) => {
+    clearTimeout(intensityTimers.current[entityId]);
+    delete intensityTimers.current[entityId];
+    patchMeta(entityId, { lightIntensityRatio: ratio });
+    setIntensityDrafts((prev) => {
+      const { [entityId]: _removed, ...rest } = prev;
+      return rest;
+    });
+  };
+  const draftIntensity = (entityId: string, ratio: number) => {
+    setIntensityDrafts((prev) => ({ ...prev, [entityId]: ratio }));
+    clearTimeout(intensityTimers.current[entityId]);
+    intensityTimers.current[entityId] = setTimeout(() => commitIntensity(entityId, ratio), 500);
   };
 
   return (
@@ -160,6 +182,27 @@ export default function BindingsTable() {
                   title="Room name — must match a Rooms-menu name exactly for motion-glow/teleport to find it"
                   list="bindings-room-names"
                 />
+                {meta.type === "light" && (() => {
+                  const ratio = intensityDrafts[entityId] ?? meta.lightIntensityRatio ?? 0;
+                  const pct = Math.round(ratio * 100);
+                  return (
+                    <div className="row" style={{ flex: "1 1 220px", minWidth: 180, gap: 8 }}>
+                      <input
+                        type="range" min={-100} max={100} step={5}
+                        value={pct}
+                        onChange={(e) => draftIntensity(entityId, Number(e.target.value) / 100)}
+                        onMouseUp={(e) => commitIntensity(entityId, Number((e.target as HTMLInputElement).value) / 100)}
+                        onTouchEnd={(e) => commitIntensity(entityId, Number((e.target as HTMLInputElement).value) / 100)}
+                        style={{ flex: 1 }}
+                        title="Per-light brightness override on top of this light's live Home Assistant brightness and the global Light effect strength setting. 0% = no change."
+                        aria-label={`Intensity override for ${entityId}`}
+                      />
+                      <span className="muted" style={{ fontSize: 12, minWidth: 36, textAlign: "right" }}>
+                        {pct > 0 ? "+" : ""}{pct}%
+                      </span>
+                    </div>
+                  );
+                })()}
                 {meta.type === "camera" && (
                   <div style={{ flex: "1 1 220px", minWidth: 180 }}>
                     <EntityPicker

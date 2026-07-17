@@ -62,6 +62,12 @@ const LIGHT_RANGE = 4;
 // PointLight at all, at any range/intensity — that's the whole reason the
 // pool trick exists).
 const LIGHT_POOL_RADIUS = 1.8;
+/** Clamp a per-light intensity override (Advanced Settings, -100%..+100%,
+ *  stored as -1..1) to a safe range — a stale/hand-edited config value
+ *  outside that range must not blow the fixture out or invert it. */
+function clampRatio(ratio: number | undefined): number {
+  return Math.max(-1, Math.min(1, ratio ?? 0));
+}
 // A SweetHome "line light" (the Sweet Home Light plugin's linear LED strip) is
 // mounted flush against a ceiling/wall. A PointLight placed ON the strip sits
 // centimetres from that surface, so it prints a hard bright pool right there —
@@ -384,9 +390,10 @@ export class EntityVisuals {
       const on = state.state === "on";
       const colour = this.lightColour(state);
       const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
+      const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
       for (const mesh of meshes) {
         const pool = this.meshLightPools.get(mesh.uniqueId);
-        if (pool) fn(pool, on && mesh.isEnabled(), colour, brightnessFrac);
+        if (pool) fn(pool, on && mesh.isEnabled(), colour, effectiveFrac);
       }
     }
   }
@@ -1562,9 +1569,16 @@ export class EntityVisuals {
         const on = state.state === "on";
         const colour = this.lightColour(state);
         const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
+        // Per-light override (Advanced Settings, -100%..+100%): a ratio applied
+        // ON TOP of the entity's live brightness, so one fixture can be tuned
+        // brighter/dimmer than its HA dimmer level alone would produce — e.g. a
+        // light whose SweetHome placement reads darker than the others —
+        // without touching the global "Light effect strength" slider that
+        // affects every light. 0 = no change; -100% = off; +100% = double.
+        const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
 
         // 1) The fixture mesh glows.
-        setEmissive?.(on ? colour.scale(brightnessFrac) : Color3.Black());
+        setEmissive?.(on ? colour.scale(effectiveFrac) : Color3.Black());
 
         // An artificially-inflated LED strip bar is only meant to be seen
         // while it IS the light — off, it goes window-glass transparent
@@ -1594,7 +1608,7 @@ export class EntityVisuals {
         const light = this.meshLights.get(mesh.uniqueId);
         if (light) {
           light.diffuse = colour;
-          light.intensity = on ? (MAX_LIGHT_INTENSITY * brightnessFrac) / lightShare : 0;
+          light.intensity = on ? (MAX_LIGHT_INTENSITY * effectiveFrac) / lightShare : 0;
           // Drop the light out of (or back into) shaders entirely with its state,
           // so only lights that are actually on add per-pixel cost.
           light.setEnabled(on);
@@ -1605,7 +1619,7 @@ export class EntityVisuals {
         // entity itself is "on" (see resyncLightPoolsToFloor for the other
         // direction — a floor SWITCH with no entity-state change).
         const pool = this.meshLightPools.get(mesh.uniqueId);
-        if (pool) pool.setState(on && mesh.isEnabled(), colour, brightnessFrac * this.lightPoolStrength);
+        if (pool) pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;
       }

@@ -105,6 +105,28 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     labelTimers.current[key] = setTimeout(() => commitLabel(key, value), 500);
   };
 
+  // Same story as the Label field: dragging a range input fires onChange
+  // continuously (React normalises it to the native `input` event, not
+  // `change`), so committing straight to patch() on every tick would trigger
+  // a full re-index per pixel of drag. Draft locally, commit on release
+  // (mouseup/touchend) or after a short pause if release is missed.
+  const [intensityDrafts, setIntensityDrafts] = useState<Record<string, number>>({});
+  const intensityTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const commitIntensity = (key: string, ratio: number) => {
+    clearTimeout(intensityTimers.current[key]);
+    delete intensityTimers.current[key];
+    patch(key, { lightIntensityRatio: ratio });
+    setIntensityDrafts((prev) => {
+      const { [key]: _removed, ...rest } = prev;
+      return rest;
+    });
+  };
+  const draftIntensity = (key: string, ratio: number) => {
+    setIntensityDrafts((prev) => ({ ...prev, [key]: ratio }));
+    clearTimeout(intensityTimers.current[key]);
+    intensityTimers.current[key] = setTimeout(() => commitIntensity(key, ratio), 500);
+  };
+
   const remove = (key: string) => {
     const next = { ...config.entityMap };
     delete next[key];
@@ -319,6 +341,29 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                         {roomNames.map((n) => <option key={n} value={n}>{n}</option>)}
                       </select>
                     </td>
+                    {m.type === "light" && (() => {
+                      const ratio = intensityDrafts[key] ?? m.lightIntensityRatio ?? 0;
+                      const pct = Math.round(ratio * 100);
+                      return (
+                        <td data-label="Intensity">
+                          <div className="row" style={{ gap: 8, width: "100%" }}>
+                            <input
+                              type="range" min={-100} max={100} step={5}
+                              value={pct}
+                              onChange={(e) => draftIntensity(key, Number(e.target.value) / 100)}
+                              onMouseUp={(e) => commitIntensity(key, Number((e.target as HTMLInputElement).value) / 100)}
+                              onTouchEnd={(e) => commitIntensity(key, Number((e.target as HTMLInputElement).value) / 100)}
+                              style={{ flex: 1 }}
+                              title="Per-light brightness override on top of this light's live Home Assistant brightness and the global Light effect strength setting. 0% = no change."
+                              aria-label={`Intensity override for ${m.entityId}`}
+                            />
+                            <span className="muted" style={{ fontSize: 12, minWidth: 40, textAlign: "right" }}>
+                              {pct > 0 ? "+" : ""}{pct}%
+                            </span>
+                          </div>
+                        </td>
+                      );
+                    })()}
                     <td data-label="Motion sensor" style={{ minWidth: 180 }}>
                       {m.type === "camera" ? (
                         <EntityPicker

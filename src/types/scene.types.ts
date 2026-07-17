@@ -24,6 +24,14 @@ export interface EntityMapping {
    *  (EntityVisuals). Not inferred from naming (camera integrations name
    *  these too inconsistently) — set once per camera in the Config Editor. */
   motionEntityId?: string;
+  /** For type "light": a per-fixture override, -1..1 (Advanced Settings shows
+   *  it as a -100%..+100% slider), applied ON TOP of the entity's live HA
+   *  brightness and the global "Light effect strength" setting — 0 = no
+   *  change, -1 = fully off, +1 = double. Lets one light be tuned brighter or
+   *  dimmer than its HA dimmer level alone would produce (e.g. a fixture
+   *  whose room reads darker than the others) without affecting every other
+   *  light (see EntityVisuals' effectiveFrac). */
+  lightIntensityRatio?: number;
 }
 
 export interface Vec3 {
