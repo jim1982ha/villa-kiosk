@@ -64,20 +64,25 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   // TEMPORARY diagnostics (see CHANGELOG): a plain <video>/<img> gives no way
   // to tell which tier actually ended up active, or why it fell back, from
   // the kiosk screen itself — this makes that visible without needing
-  // devtools on the tablet. `frameReady` also drives a loading spinner so an
-  // empty <video> element mid-HLS-setup doesn't read as "broken".
-  const [statusNote, setStatusNote] = useState<string | null>(null);
+  // devtools on the tablet. A running LOG (not just the latest line) because
+  // the tiers can fall through fast enough (HLS -> MJPEG -> snapshot in
+  // under a couple seconds) that a single overwritten status line never
+  // gets read before the next fallback replaces it. `frameReady` drives a
+  // loading spinner so an empty <video> element mid-HLS-setup doesn't read
+  // as "broken".
+  const [diagLog, setDiagLog] = useState<string[]>([]);
   const [frameReady, setFrameReady] = useState(false);
+  const logTransition = (line: string) => setDiagLog((prev) => [...prev, line]);
 
   const fallBackToStream = (reason: string) => {
     streamLoaded.current = false;
-    setStatusNote(reason);
+    logTransition(`HLS failed: ${reason}`);
     setFrameReady(false);
     setMode("stream");
   };
   const fallBackToSnapshot = (reason: string) => {
     snapErrors.current = 0;
-    setStatusNote(reason);
+    logTransition(`MJPEG failed: ${reason}`);
     setFrameReady(false);
     setMode("snapshot");
   };
@@ -86,6 +91,13 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     const unpin = pinContinuous?.();
     return () => unpin?.();
   }, [pinContinuous]);
+
+  // Log the moment a tier actually starts painting real frames, so the trace
+  // shows not just failures but which tier (if any) ended up working.
+  useEffect(() => {
+    if (frameReady) logTransition(`${mode.toUpperCase()} playing`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frameReady]);
 
   // Keep the button icon in sync if the user leaves fullscreen via the Esc key
   // or the OS gesture rather than our button.
@@ -112,7 +124,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   // Start over (try HLS again, from the top) whenever the target camera changes.
   useEffect(() => {
     setMode("hls");
-    setStatusNote(null);
+    setDiagLog([]);
     setFrameReady(false);
     snapErrors.current = 0;
     streamLoaded.current = false;
@@ -233,7 +245,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   const onSnapshotError = () => {
     snapErrors.current += 1;
     if (snapErrors.current >= SNAPSHOT_MAX_ERRORS) {
-      setStatusNote("Snapshot failed repeatedly");
+      logTransition("Snapshot failed repeatedly");
       setMode("failed");
     }
   };
@@ -320,12 +332,15 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
       )}
 
       {/* TEMPORARY diagnostics while tuning the stream pipeline (see
-          CHANGELOG) — shows which tier ended up active and why, so this is
-          reportable straight off the kiosk screen without devtools. Safe to
-          remove once HLS is confirmed working reliably. */}
+          CHANGELOG) — the full transition trace (not just the latest line),
+          since tiers can fall through fast enough that a single overwritten
+          status line never gets read. Reportable straight off the kiosk
+          screen without devtools. Safe to remove once HLS is confirmed
+          working reliably. */}
       {connected && (
         <div className="camera-diag">
-          {mode.toUpperCase()}{statusNote ? ` — ${statusNote}` : ""}
+          <div>Now: {mode.toUpperCase()}</div>
+          {diagLog.map((line, i) => <div key={i}>{line}</div>)}
         </div>
       )}
     </div>

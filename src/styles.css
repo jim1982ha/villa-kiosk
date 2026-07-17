@@ -521,14 +521,18 @@ input[type="range"]::-moz-range-thumb {
 .camera-fullscreen .close { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(24px + env(safe-area-inset-right, 0px)); }
 .camera-fullscreen .fs-btn { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(72px + env(safe-area-inset-right, 0px)); }
 .camera-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-/* Temporary stream-tier diagnostic (see CameraPanel) — small and out of the
-   way of the label/controls, but readable without devtools. */
+/* Temporary stream-tier diagnostic (see CameraPanel) — the full transition
+   trace, small and out of the way of the label/controls, but readable
+   without devtools. */
 .camera-diag {
   position: absolute; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%;
   transform: translateX(-50%);
-  background: rgba(0,0,0,0.5); color: rgba(255,255,255,0.7);
-  font-size: 11px; letter-spacing: 0.03em; padding: 4px 12px; border-radius: 999px;
+  max-width: min(80vw, 480px);
+  background: rgba(0,0,0,0.6); color: rgba(255,255,255,0.75);
+  font-size: 11px; line-height: 1.5; letter-spacing: 0.02em;
+  padding: 8px 14px; border-radius: 12px;
 }
+.camera-diag div:first-child { color: #fff; font-weight: 600; margin-bottom: 2px; }
 
 /* --- Teleport menu --- */
 .teleport-grid {

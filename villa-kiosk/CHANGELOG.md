@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.23.15
+
+- **Camera diagnostic now shows the full transition trace, not just the
+  latest overwritten line.** The tiers can fall through fast enough (HLS →
+  MJPEG → snapshot in under a couple seconds) that a single status line
+  never got read before the next fallback replaced it — confirmed by
+  testing, where the actual HLS failure reason flashed by unseen. It's now
+  an accumulating log for the life of the panel, plus a line each time a
+  tier actually starts painting real frames.
+
 ## 2.23.14
 
 - **Camera panel: fixed the "broken feed" look during stream setup.** An
