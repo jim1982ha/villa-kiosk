@@ -7,17 +7,16 @@
 //   • Center — category filter, then a label-size stepper (+/-)
 //   • Right  — Settings only
 // A left control column floats below the brand: the vertical floor toggle
-// (1F / 2F) + the Rooms dial button, then (below that stack) the
-// first-person / overview view toggle. (Device state labels are always
-// shown; "Highlight clickable objects" moved to Settings.)
-// Bottom bar: first-person joystick, or (in overview) the (i) navigation-tips
-// toggle above the view-default (Anchor) button (hidden by default to keep
-// the view clean).
+// (1F / 2F) + the Rooms dial button. (Device state labels are always shown;
+// "Highlight clickable objects" moved to Settings.)
+// Bottom bar: bottom-left always shows the first-person/bird's-eye view
+// toggle, with the view-default (Anchor) button right below it while in
+// overview; bottom-right shows the first-person movement joystick.
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Home, Compass, Settings, Map,
-  PersonStanding, Info, Anchor, LogOut,
+  PersonStanding, Anchor, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
   EllipsisVertical, Minus, Plus,
 } from "lucide-react";
@@ -104,7 +103,6 @@ export default function HUD({
   const clock = useClock();
   const title = resolveSiteTitle(config, haConfig?.location_name);
   const floors = [1, 2];
-  const [hintOpen, setHintOpen] = useState(false);
 
   // ── Rooms dial: SINGLE TAP opens the radial floor/room quick-nav (a tapped
   // popup, not a hold-and-slide); LONG-PRESS opens the full Rooms list for
@@ -468,7 +466,9 @@ export default function HUD({
       {/* Left column: the floor toggle (1F / 2F) plus the Rooms dial button.
           Tapping a floor switches to it (and frames it in the bird's-eye); the
           Rooms button taps to a quick floor/room dial, long-press for the full
-          Rooms list to add/edit. */}
+          Rooms list to add/edit. The first-person/bird's-eye toggle now lives
+          in the bottom-left stack (see bottom-bar), directly above the
+          view-default button it controls access to. */}
       <div className="hud-left-col">
         <div className="hud-stack">
           {availFloors.map((f) => (
@@ -497,47 +497,32 @@ export default function HUD({
             <Compass size={20} />
           </button>
         </div>
-
-        {/* First-person / bird's-eye view toggle — sits below the floor +
-            rooms stack, its own squircle. */}
-        <button
-          className={`icon-btn${overviewActive ? " active" : ""}`}
-          onClick={onToggleViewMode}
-          title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-          aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-        >
-          {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
-        </button>
       </div>
 
       <div className="bottom-bar">
-        {viewMode === "first-person" ? (
-          <VirtualJoystick onMove={onMove} />
-        ) : (
-          <div className="overview-help">
-            {viewFlash ? (
-              <div className="overview-hint">
-                {viewFlash === "applied"
-                  ? "Jumped to this device's default view."
-                  : viewFlash === "saved"
-                    ? "Default view updated for this device — it'll open here every reload."
-                    : "No default view saved yet — long-press (or right-click) to set one."}
-              </div>
-            ) : hintOpen ? (
-              <div className="overview-hint">
-                Bird's-eye · drag or two-finger slide to pan · pinch/wheel to zoom · Shift+drag to rotate &amp; tilt · tap an object
-              </div>
-            ) : null}
-            <div className="overview-help-buttons">
-              <button
-                className={`icon-btn${hintOpen ? " active" : ""}`}
-                onClick={() => setHintOpen((o) => !o)}
-                title="Navigation tips"
-                aria-label="Navigation tips"
-                aria-expanded={hintOpen}
-              >
-                <Info size={20} />
-              </button>
+        {/* Bottom-left, always present: first-person/bird's-eye toggle on
+            top, then (overview only) the view-default (Anchor) button right
+            below it. */}
+        <div className="overview-help">
+          {viewFlash && (
+            <div className="overview-hint">
+              {viewFlash === "applied"
+                ? "Jumped to this device's default view."
+                : viewFlash === "saved"
+                  ? "Default view updated for this device — it'll open here every reload."
+                  : "No default view saved yet — long-press (or right-click) to set one."}
+            </div>
+          )}
+          <div className="overview-help-buttons">
+            <button
+              className={`icon-btn${overviewActive ? " active" : ""}`}
+              onClick={onToggleViewMode}
+              title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
+              aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
+            >
+              {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
+            </button>
+            {viewMode === "overview" && (
               <button
                 className={`icon-btn${hasOverviewDefault ? " active" : ""}`}
                 onPointerDown={onViewBtnDown}
@@ -556,9 +541,12 @@ export default function HUD({
               >
                 <Anchor size={18} />
               </button>
-            </div>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* Bottom-right: the first-person movement joystick. */}
+        {viewMode === "first-person" && <VirtualJoystick onMove={onMove} />}
       </div>
     </>
   );

@@ -406,15 +406,14 @@ button {
 
 .bottom-bar {
   position: absolute; bottom: 0; left: 0; right: 0; height: 96px;
-  display: flex; align-items: flex-end; justify-content: flex-start;
+  display: flex; align-items: flex-end; justify-content: space-between;
   padding: 16px 20px; z-index: 20; pointer-events: none;
 }
 .bottom-bar > * { pointer-events: auto; }
 
-/* Overview-mode navigation tips: hidden by default, revealed by the (i) button.
-   Shares the row with the "fix default view" button next to it. */
+/* Bottom-left view controls: the first-person/bird's-eye toggle, and (only in
+   overview) the "jump to default view" button right below it. */
 .overview-help { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
-/* Info (nav tips) stacks above the Anchor (view-default) button, not beside it. */
 .overview-help-buttons { display: flex; flex-direction: column; gap: 8px; }
 .overview-hint {
   max-width: min(60vw, 460px);
@@ -871,25 +870,33 @@ label.toggle span { user-select: none; line-height: 1.4; }
     gap: 6px;
     padding-left: calc(10px + env(safe-area-inset-left, 0px));
     padding-right: calc(10px + env(safe-area-inset-right, 0px));
-    /* The left column is empty on a phone (.hud-brand below) — give it (and
-       the small right overflow button) only the width their content needs,
-       instead of the desktop's symmetric 1fr/1fr, so the category row
-       (centre) gets ALL the reclaimed space, not just half of it. */
-    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+    /* .hud-brand (the left column) is hidden on a phone — drop it from the
+       track list entirely instead of reserving an empty auto column for it.
+       With only 2 real columns left, the category row's left edge and the
+       overflow button's right edge both land flush on the topbar's own
+       (symmetric) padding, with nothing else in between throwing them out
+       of balance. */
+    grid-template-columns: minmax(0, 1fr) auto;
   }
   /* The whole brand chip (villa name, connection dot, clock) is hidden on a
      phone — no standalone stand-in button either; connection status moves
      into the right-side overflow menu's dropdown instead (see hud-menu). */
   .hud-brand { display: none; }
-  /* Tighter centre/right groups and smaller icon buttons. */
-  .hud-center { gap: 4px; }
+  /* Tighter centre/right groups and smaller icon buttons. Left-aligned
+     (not centered) now that it's the first real column — see the
+     grid-template-columns comment above. */
+  .hud-center { justify-self: start; gap: 4px; }
   .hud-right { gap: 6px; }
   .hud-center .icon-btn,
   .hud-right .icon-btn { width: 32px; height: 32px; }
   /* Right side collapses to the single overflow-menu button; its dropdown
-     hosts the view toggle, Settings and profile switch. */
+     hosts the view toggle, Settings and profile switch. Matches the
+     grouped buttons' corner radius (not the larger standalone .icon-btn
+     radius, which looked like a circle at this smaller size) so it reads
+     as the same squircle shape as its neighbours. */
   .hud-right-inline { display: none; }
   .hud-overflow { display: block; }
+  .hud-overflow .icon-btn { border-radius: 10px; }
   /* Left control stack: slightly narrower icon buttons to save width. */
   .hud-stack .icon-btn { width: 36px; }
 

@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.23.11
+
+- **Fixed: 2F ceiling fan's badge showing on 1F too.** A side effect of
+  2.23.7's fan-label fix: `cullLabels()` decided a badge's floor visibility
+  by reading `floorIndex`/enabled-state off the badge anchor's OWN parent —
+  correct for every normal entity (its anchor is parented straight to its
+  mesh), but the fan's anchor is deliberately detached onto its spin pivot's
+  non-rotating parent (a shared container FloorManager never touches, so it
+  reads as "always enabled, no floor"). Floor culling now reads straight off
+  the entity's bound mesh instead, which FloorManager always keeps correct.
+- **Top bar: the ⋮ overflow button on mobile now matches the other squircle
+  buttons.** It was falling back to the larger standalone button's corner
+  radius at a smaller size, reading as a near-circle next to the flatter
+  zoom/category buttons. Also fixed the mobile top bar's left/right padding,
+  which weren't actually symmetric despite equal CSS padding values — the
+  hidden brand chip was still reserving its own empty grid column on the
+  left with nothing mirroring it on the right; removed that column.
+- **Removed the (i) navigation-tips button** (bottom-left, both mobile and
+  desktop) — redundant.
+- **Bottom-left now always shows the first-person/bird's-eye toggle**, with
+  the "jump to default view" button directly below it while in overview
+  (previously the toggle lived in a separate column higher up the screen).
+- **The first-person movement joystick moved to the bottom-right** of the
+  screen, freeing up the bottom-left for the view controls above.
+
 ## 2.23.10
 
 - **Removed "Live weather effects" (rain).** Deleted `WeatherEffects.ts` and

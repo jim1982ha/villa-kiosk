@@ -1140,19 +1140,28 @@ export class EntityVisuals {
         lbl.container.isVisible = false;
         continue;
       }
-      // Anchor disabled = its mesh is on a hidden floor (FloorManager's
-      // 1F/2F toggle) — the badge must vanish with the device.
-      if (!lbl.anchor.isEnabled()) {
+      // The badge must vanish with its device when FloorManager hides that
+      // floor. Read enabled-state/floorIndex from the entity's actual bound
+      // mesh (byEntity), not the anchor's OWN parent chain: most anchors are
+      // parented straight to their mesh (see buildLabelAnchors) so the two
+      // agree, but a fan's anchor is deliberately detached onto its spin
+      // pivot's non-rotating parent (see detachFanLabelAnchor) so the badge
+      // doesn't spin with the blades — that parent is a shared container
+      // FloorManager never touches, so it's always "enabled" with no
+      // floorIndex of its own. Reading the anchor's parent for THAT case
+      // silently stopped culling the fan's badge on the other floor.
+      const mesh = this.byEntity.get(id)?.[0];
+      const enabled = mesh ? mesh.isEnabled() : lbl.anchor.isEnabled();
+      if (!enabled) {
         lbl.container.isVisible = false;
         continue;
       }
       // Floors below the active one stay RENDERED (2.9.8 cumulative floors:
       // the 2F view keeps the 1F shell underneath), but their badges are GUI
       // overlay and would draw straight through the 2F slab — show only the
-      // active floor's badges. The floorIndex is stamped by FloorManager on
-      // the entity mesh; the anchor is either that mesh or a TransformNode
-      // parented to it.
-      const floorIdx = (lbl.anchor.metadata as { floorIndex?: number } | null)?.floorIndex
+      // active floor's badges.
+      const floorIdx = (mesh?.metadata as { floorIndex?: number } | null)?.floorIndex
+        ?? (lbl.anchor.metadata as { floorIndex?: number } | null)?.floorIndex
         ?? (lbl.anchor.parent?.metadata as { floorIndex?: number } | null)?.floorIndex;
       if (floorIdx !== undefined && floorIdx !== this.activeFloor) {
         lbl.container.isVisible = false;
@@ -1782,6 +1791,12 @@ export class EntityVisuals {
    * (non-rotating) parent — `setParent` preserves its current world
    * position, so the badge stays exactly where it already was, just no
    * longer inside anything that spins.
+   *
+   * This intentionally breaks the anchor's OWN parent chain as a source of
+   * floor enabled-state/floorIndex (the pivot's parent is a shared container
+   * FloorManager never touches) — cullLabels() compensates by reading those
+   * straight off the entity's bound mesh instead of the anchor's parent, so
+   * the fan's badge still correctly disappears on the other floor.
    */
   private detachFanLabelAnchor(
     entityId: string,
