@@ -65,16 +65,21 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   const hlsLoaded = useRef(false);
   const hlsVideoRef = useRef<HTMLVideoElement>(null);
   const hlsInstanceRef = useRef<Hls | null>(null);
-  // Whether hls.js (not native Safari HLS) is the player for the CURRENT
-  // attempt — set once when that choice is made, left alone by cleanup/
-  // teardown. Deliberately NOT the same thing as "hlsInstanceRef.current is
-  // set": that ref gets nulled out during cleanup, but the native <video>
-  // `error` event it can trigger (both hls.js's own destroy() and our prior
-  // manual video.load() do this) fires ASYNCHRONOUSLY — by the time it
-  // actually arrives, the ref is already null, so checking the ref itself
-  // raced and didn't work (confirmed in the field: 2.23.18 still misfired).
-  // This ref answers the actually-relevant question — "is hls.js this
-  // attempt's player" — for its entire lifetime, unaffected by that race.
+  // Whether hls.js (not native Safari HLS) drives this <video> element.
+  // Deliberately NOT the same thing as "hlsInstanceRef.current is set": that
+  // ref gets nulled out during cleanup, but the native <video> `error` event
+  // it can trigger (both hls.js's own destroy() and our prior manual
+  // video.load() do this) fires ASYNCHRONOUSLY — by the time it actually
+  // arrives, the ref is already null, so checking the ref itself raced and
+  // didn't work (confirmed in the field: 2.23.18 still misfired). And
+  // unlike hlsLoaded/usingHlsJsRef used to be, this is intentionally NEVER
+  // reset back to false once set — which browser/path a device uses doesn't
+  // change within a session, so resetting it at the top of every attempt
+  // only reopened the SAME race via a different door (confirmed in the
+  // field again: 2.23.20's reset-per-attempt version still misfired, in the
+  // real gap between that reset and the hls.js branch re-setting it true,
+  // which spans two awaited async calls). Once true, stays true for this
+  // component's whole lifetime — see the setup effect.
   const usingHlsJsRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const [isFs, setIsFs] = useState(false);
@@ -179,8 +184,19 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     if (!video) return;
     let cancelled = false;
     hlsLoaded.current = false;
-    usingHlsJsRef.current = false;
-
+    // NOT reset to false here (2.23.20 did this, and it's exactly what let
+    // this bug slip through the guard even with the fix in place — confirmed
+    // in the field: the diagnostic log showed the native error firing, THEN
+    // the effect's own cleanup, proving the guard failed to protect it).
+    // Resetting at the top of every attempt reopens a real window: this line
+    // ran synchronously, but the two `await`s below (dynamic import, then
+    // the websocket round-trip) mean usingHlsJsRef.current sat at `false`
+    // for a real stretch of wall-clock time before the hls.js branch could
+    // set it back — long enough for a native error to land in that gap and
+    // get misread as fatal. Which HLS path a given browser uses (native
+    // Safari vs hls.js) never changes within a session, so once this is
+    // set true it should just STAY true for the component's whole lifetime
+    // — there's nothing to reset.
     const watchdog = setTimeout(() => {
       if (!hlsLoaded.current) fallBackToStream("HLS timed out (no frame)");
     }, HLS_WATCHDOG_MS);

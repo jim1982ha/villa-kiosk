@@ -578,7 +578,24 @@ def main() -> None:
     app.router.add_post("/auth/verify", auth_verify_handler)
     app.router.add_get("/core/websocket", ws_handler)
     app.router.add_route("*", "/core/api/{path:.*}", rest_handler)
-    web.run_app(app, host="127.0.0.1", port=8100, print=None)
+    # aiohttp's own shutdown_timeout defaults to 60s: on SIGTERM it waits that
+    # long for in-flight connections to finish naturally before exiting. The
+    # kiosk keeps a long-lived proxied websocket open continuously (see
+    # ws_handler) that will never close on its own during a stop, and neither
+    # Supervisor's outer stop timeout nor s6-overlay's own per-service grace
+    # period before it escalates to SIGKILL are anywhere near 60s — so
+    # something up that chain was sending SIGKILL (exit 137, seen in the
+    # field) long before aiohttp's own graceful window ever elapsed.
+    # `init: false` in config.yaml means s6-overlay owns PID 1 and forwards
+    # SIGTERM straight to this process (the run script already `exec`s into
+    # it, so there's no shell in the way either) — the slow shutdown was
+    # entirely aiohttp's own default, not a signal-delivery problem. A short
+    # timeout here — comfortably under both of those outer grace periods —
+    # lets aiohttp actually exit promptly: the open websocket/streaming
+    # handlers get cancelled (CancelledError propagates cleanly through
+    # their async for/with blocks, closing the upstream connection) instead
+    # of waited-out.
+    web.run_app(app, host="127.0.0.1", port=8100, print=None, shutdown_timeout=3.0)
 
 
 if __name__ == "__main__":

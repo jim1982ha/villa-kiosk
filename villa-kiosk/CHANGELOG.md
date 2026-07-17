@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.23.22
+
+- **Fixed the actual HLS teardown race this time (hopefully) — the field
+  log finally showed the real order.** The diagnostic showed the native
+  video error firing BEFORE the effect's own teardown log, proving the
+  2.23.20 theory had cause and effect backwards: the error wasn't caused by
+  a stray reconnect tearing anything down, it was a genuine native error
+  slipping through the `usingHlsJsRef` guard from 2.23.19. Found why: that
+  ref was being reset to `false` at the START of every attempt, then only
+  set back to `true` after TWO awaited async calls (a dynamic import, then
+  a websocket round-trip) — a real window where a native error could land
+  ungated. Since which HLS path a browser uses never changes within a
+  session, there was never a reason to reset it in the first place — once
+  set true, it now stays true for the component's whole lifetime.
+- **Fixed add-on shutdowns getting SIGKILLed (exit 137) instead of exiting
+  cleanly on stop/restart/update.** `aiohttp.web.run_app()`'s own
+  `shutdown_timeout` defaults to 60 seconds — on SIGTERM it waits that long
+  for in-flight connections (including the kiosk's long-lived proxied
+  websocket to HA Core, which never closes on its own during a stop) to
+  finish naturally before exiting, far past Supervisor's and s6-overlay's
+  own much shorter grace periods before they escalate to SIGKILL. Set it to
+  3 seconds — comfortably under both — so the add-on can actually exit
+  promptly on its own instead of needing to be force-killed every time.
+
 ## 2.23.21
 
 - **Self-heal a stale `sh3d_path` add-on option left over from before
