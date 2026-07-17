@@ -65,6 +65,17 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   const hlsLoaded = useRef(false);
   const hlsVideoRef = useRef<HTMLVideoElement>(null);
   const hlsInstanceRef = useRef<Hls | null>(null);
+  // Whether hls.js (not native Safari HLS) is the player for the CURRENT
+  // attempt — set once when that choice is made, left alone by cleanup/
+  // teardown. Deliberately NOT the same thing as "hlsInstanceRef.current is
+  // set": that ref gets nulled out during cleanup, but the native <video>
+  // `error` event it can trigger (both hls.js's own destroy() and our prior
+  // manual video.load() do this) fires ASYNCHRONOUSLY — by the time it
+  // actually arrives, the ref is already null, so checking the ref itself
+  // raced and didn't work (confirmed in the field: 2.23.18 still misfired).
+  // This ref answers the actually-relevant question — "is hls.js this
+  // attempt's player" — for its entire lifetime, unaffected by that race.
+  const usingHlsJsRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const [isFs, setIsFs] = useState(false);
   // TEMPORARY diagnostics (see CHANGELOG): a plain <video>/<img> gives no way
@@ -151,6 +162,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     if (!video) return;
     let cancelled = false;
     hlsLoaded.current = false;
+    usingHlsJsRef.current = false;
 
     const watchdog = setTimeout(() => {
       if (!hlsLoaded.current) fallBackToStream("HLS timed out (no frame)");
@@ -185,6 +197,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           video.src = url;
           void video.play().catch(() => {}); // autoplay may need the user's first tap; not an error
         } else {
+          usingHlsJsRef.current = true;
           const hls = new Hls({ lowLatencyMode: true });
           hlsInstanceRef.current = hls;
           let loggedNonFatal = false;
@@ -314,11 +327,15 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
             // Hls.Events.ERROR (see the setup effect) — that's the
             // authoritative fatal/non-fatal signal while it's in control.
             // A native <video> `error` event on top of that is either
-            // hls.js's own internal recovery churn or our own teardown
-            // (see the cleanup above), not a real failure — only treat it
-            // as fatal on the native-HLS (Safari) path, where there's no
-            // other error channel at all.
-            if (!hlsInstanceRef.current) fallBackToStream("Video element error");
+            // hls.js's own internal recovery churn or our own teardown (both
+            // hls.js's destroy() and our old manual video.load() trigger
+            // one), not a real failure — only treat it as fatal on the
+            // native-HLS (Safari) path, where there's no other error signal
+            // at all. usingHlsJsRef (not hlsInstanceRef, which cleanup nulls
+            // out before this fires — confirmed in the field, that race is
+            // exactly why 2.23.18's fix still misfired) stays true for this
+            // whole attempt regardless of teardown timing.
+            if (!usingHlsJsRef.current) fallBackToStream("Video element error");
           }}
         />
       );

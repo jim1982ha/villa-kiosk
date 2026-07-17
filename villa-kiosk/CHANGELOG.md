@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.23.19
+
+- **Fixed: 2.23.18's fix for the same bug still misfired.** Confirmed in
+  the field — the exact same `HLS playing` → `HLS failed: Video element
+  error` sequence recurred. The guard added in 2.23.18 checked
+  `hlsInstanceRef.current`, but that ref gets nulled out *during* cleanup
+  while the native `<video>` error it triggers (both hls.js's own
+  `destroy()` and the old manual `video.load()` cause one) only fires
+  *afterward*, asynchronously — by the time it arrives the ref was already
+  gone, so the guard never actually protected anything. Replaced it with a
+  dedicated ref that records "is hls.js this attempt's player" once, for
+  that attempt's entire lifetime, untouched by cleanup/teardown timing —
+  so it can't lose the race the way a ref that teardown itself clears can.
+
 ## 2.23.18
 
 - **Fixed: HLS camera streams that connected successfully were getting
