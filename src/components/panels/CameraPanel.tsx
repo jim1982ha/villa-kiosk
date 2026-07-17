@@ -210,14 +210,25 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
         // never open a camera panel at all, so this shouldn't cost first paint.
         const { default: Hls } = await import("hls.js");
         if (cancelled) return;
-        const canNative = video.canPlayType("application/vnd.apple.mpegurl") !== "";
         const canHlsJs = Hls.isSupported();
+        // NB: canPlayType("application/vnd.apple.mpegurl") is NOT a reliable
+        // "can actually play HLS" signal — Chrome/Chromium returns a truthy
+        // "maybe" for it but then can't demux the playlist at all, failing
+        // with DEMUXER_ERROR_COULD_NOT_PARSE (confirmed in the field: THIS
+        // is the bug every prior fix missed — the old code preferred this
+        // false-positive native path, so hls.js never actually ran and none
+        // of the hls.js-side fixes could change anything). Only trust native
+        // HLS as a FALLBACK for when hls.js's MediaSource path isn't
+        // available — i.e. real Safari/iOS, which has genuine hardware HLS
+        // and (historically) no MSE. This is the canonical hls.js selection
+        // order: hls.js first, native only when hls.js can't run.
+        const canNative =
+          !canHlsJs && video.canPlayType("application/vnd.apple.mpegurl") !== "";
         // Which branch this attempt takes decides everything downstream —
         // logging it unconditionally (not just on failure) removes any doubt
-        // about which path actually ran, after several fixes in a row failed
-        // to change a byte-identical failure log.
-        logTransition(`HLS capability: native=${canNative} hlsJs=${canHlsJs}`);
-        if (!canNative && !canHlsJs) {
+        // about which path actually ran.
+        logTransition(`HLS capability: hlsJs=${canHlsJs} native=${canNative}`);
+        if (!canHlsJs && !canNative) {
           fallBackToStream("HLS unsupported in this browser");
           return;
         }
@@ -230,8 +241,8 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
         logTransition(`HLS url: ${url}`);
 
         if (canNative) {
-          // Safari/iOS speaks HLS natively (hardware-accelerated) — prefer it
-          // over hls.js's MediaSource-based playback where both are available.
+          // Real native HLS (Safari/iOS) — hardware-accelerated, and the
+          // only option here since hls.js can't run (see canNative above).
           video.src = url;
           void video.play().catch(() => {}); // autoplay may need the user's first tap; not an error
         } else {

@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.23.25
+
+- **ROOT CAUSE of the camera lag found and fixed — the stream was never
+  using hls.js at all.** The 2.23.24 diagnostics were conclusive:
+  `HLS capability: native=true hlsJs=true`, then on Chrome
+  `mediaError=4/DEMUXER_ERROR_COULD_NOT_PARSE`. Chrome's
+  `video.canPlayType("application/vnd.apple.mpegurl")` returns a truthy
+  "maybe" but Chrome **cannot** actually play HLS natively — and the old
+  code preferred that false-positive native path, so it set `video.src`
+  directly and hls.js never ran. That's why none of the previous
+  hls.js-side fixes changed anything: they were fixing code that was never
+  executing on these browsers. Desktop Safari hit the same thing (native
+  path, silent timeout) — native HLS is unreliable through the
+  Ingress→Supervisor→tunnel proxy chain (almost certainly a `Content-Type`
+  the native player rejects), which is exactly why pasting the raw URL into
+  a tab worked while in-app playback didn't. Flipped to the canonical
+  hls.js selection order: **use hls.js whenever `Hls.isSupported()`**, and
+  fall back to native HLS only when it can't run (real iOS Safari, no MSE).
+  hls.js fetches the playlist/segments over XHR and feeds MediaSource
+  itself, ignoring Content-Type — the same approach Home Assistant's own
+  frontend uses, which is why it works there. This should finally make the
+  camera feed smooth on Chrome and desktop Safari.
+
 ## 2.23.24
 
 - **Camera diagnostic: confirmed 2.23.23 IS the running build, and the
