@@ -39,13 +39,19 @@ const SNAPSHOT_MAX_ERRORS = 3;
 // up on it. A camera that doesn't actually serve an MJPEG stream (most
 // RTSP/ONVIF/HLS cameras) leaves HA's camera_proxy_stream connection open
 // without ever sending a frame — the <img> then fires neither load nor error,
-// so without this watchdog we'd sit on a blank view forever.
-const STREAM_WATCHDOG_MS = 1000;
-// Same idea for HLS: asking HA for a stream URL, letting hls.js fetch the
-// playlist + first segment, and getting a decoded frame on screen all take a
-// bit longer than a raw MJPEG connection — give it more room before assuming
-// this camera doesn't support the stream pipeline and dropping to MJPEG.
-const HLS_WATCHDOG_MS = 4000;
+// so without this watchdog we'd sit on a blank view forever. Generous: seen
+// in the field going through an external tunnel (Ingress -> Supervisor ->
+// Core -> tunnel), where the extra hops add real latency on top of whatever
+// HA itself takes to start decoding the camera's feed.
+const STREAM_WATCHDOG_MS = 6000;
+// Same idea for HLS, but longer still: on the FIRST request for a given
+// camera, HA has to spin up its own FFmpeg-based stream worker before it can
+// serve even the master playlist — hls.js got literally zero response (not
+// even a fast error) within the old 4s window in testing over a tunneled
+// connection, which reads as "still starting up", not "broken". If this
+// still isn't enough, the fallback chain means nothing breaks either way —
+// it just takes longer to give up and drop to MJPEG/snapshot.
+const HLS_WATCHDOG_MS = 15000;
 
 export default function CameraPanel({ entity, mapping, onClose, pinContinuous }: Props) {
   const { connected, ws } = useHA();

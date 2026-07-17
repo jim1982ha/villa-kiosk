@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.23.17
+
+- **Camera watchdogs made much more generous (HLS 4s → 15s, MJPEG 1s →
+  6s).** Diagnostic screenshots across three different cameras all showed
+  the identical pattern: a correctly-formed, unique HLS URL each time, then
+  complete silence — not even a fast error — for the whole old 4-second
+  window. That reads as "still starting up" (HA has to spin up an FFmpeg
+  stream worker on the first request for a camera, and this setup routes
+  through an external tunnel on top of the usual Ingress → Supervisor →
+  Core hops) rather than "broken". Safe either way — the same MJPEG/
+  snapshot fallback chain still applies if it's still not enough.
+
 ## 2.23.16
 
 - **Camera diagnostic: added the exact HLS URL + first hls.js warning to
