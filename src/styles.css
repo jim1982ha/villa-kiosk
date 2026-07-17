@@ -342,24 +342,6 @@ button {
 .conn-dot.connecting .dot { background: var(--status-warning); animation: pulse 1s infinite; }
 .conn-dot.offline .dot { background: var(--status-danger); box-shadow: 0 0 8px var(--status-danger); }
 
-/* Vertical floor switch, floating below the brand icon (1F / 2F). */
-.floor-switch-v {
-  position: absolute; z-index: 21;
-  top: calc(52px + env(safe-area-inset-top, 0px) + 8px);
-  left: calc(14px + env(safe-area-inset-left, 0px));
-  display: flex; flex-direction: column; gap: 4px;
-  background: var(--bg-panel); backdrop-filter: blur(8px);
-  border-radius: 12px; padding: 4px; pointer-events: auto;
-  border: 1px solid var(--hairline);
-}
-.floor-switch-v button {
-  width: 40px; height: 36px; border-radius: 9px;
-  font-size: 13px; font-weight: 600; color: var(--text-secondary);
-  display: flex; align-items: center; justify-content: center;
-}
-.floor-switch-v button.active { background: var(--accent); color: var(--text-on-accent); }
-.floor-switch-v button:disabled { opacity: 0.35; }
-
 /* Rooms dial button — vertically centred on the left edge so its long-press
    radial fans out symmetrically over the full height. */
 /* The Rooms dial button + the 1F/2F floor toggle now flow together in the
@@ -399,8 +381,6 @@ button {
   display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
 .hud-left-col > * { pointer-events: auto; }
-/* The floor switch, when inside the column, is statically flowed (not absolute). */
-.hud-left-col .floor-switch-v { position: static; top: auto; left: auto; }
 
 .room-label {
   position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
@@ -528,10 +508,6 @@ input[type="range"]::-moz-range-thumb {
 .status-pill.off { background: var(--bg-input); color: var(--text-secondary); }
 .status-pill.danger { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }
 
-.glow-dot { width: 12px; height: 12px; border-radius: 50%; }
-.glow-dot.on { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
-.glow-dot.off { background: var(--status-off); }
-
 /* --- Temperature control --- */
 .temp-display { text-align: center; margin: 12px 0 20px; }
 .temp-display .big { font-size: 64px; font-weight: 200; }
@@ -606,8 +582,6 @@ input[type="range"]::-moz-range-thumb {
 /* The Config Editor holds full-width entity/binding cards — give it the most
    room the viewport allows. */
 .config-editor-modal { max-width: 780px; }
-.config-editor-modal .config-topbar { display: flex; align-items: center; gap: 16px; }
-.config-editor-modal .config-topbar h2 { margin: 0; }
 /* Header is a row: title left, the icon-only theme selector right. */
 .settings-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px 16px; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
 /* Two sliders (or coordinate fields) side by side; stacks on narrow screens. */
@@ -639,10 +613,10 @@ input[type="range"]::-moz-range-thumb {
 .segmented-icons button { flex: 0 0 auto; width: 38px; min-height: 34px; gap: 0; }
 
 
-/* Villa Latitude/Longitude pair in the Config Editor. */
-.coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 460px; margin-inline: auto; }
-.coord-grid label { margin-top: 0; text-align: center; }
-.coord-grid input { text-align: center; }
+/* Villa Latitude/Longitude pair in the Config Editor — full modal width,
+   left-aligned like every other field. */
+.coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.coord-grid label { margin-top: 0; }
 
 /* Inline (i) info button + hover/focus tooltip (replaces the model info block). */
 .info-tip { position: relative; display: inline-flex; }
@@ -783,10 +757,18 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .entity-id-actions .icon-btn { width: 30px; height: 30px; }
 .icon-btn-danger:hover { color: var(--status-danger); }
 
-/* Config Editor full-page header (Back + title on one line, no wrap on mobile). */
-.config-topbar { display: flex; align-items: center; gap: 16px; max-width: 1000px; margin: 0 auto; }
-.config-topbar h2 { margin: 0; }
-.config-topbar .btn.ghost { flex: 0 0 auto; white-space: nowrap; }
+/* Collapsed-by-default device card header: Shown checkbox + entity id/remap
+   row + expand chevron, all on one line. */
+.config-table td.device-card-header { justify-content: flex-start; gap: 10px; padding-top: 4px; }
+.entity-id-toggle { cursor: pointer; border-radius: 8px; }
+.entity-id-toggle:hover { color: var(--text-primary); }
+.entity-id-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Redirect-entity picker: one line (field + Apply + Cancel) on desktop,
+   wraps to its own line as a pair on narrow screens. */
+.remap-row { display: flex; align-items: flex-start; gap: 8px; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
+.remap-picker { flex: 1 1 220px; min-width: 160px; }
+.remap-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 
 /* Confirm checkboxes in the entity table — match the toggle style */
 .config-table input[type="checkbox"] {
@@ -908,8 +890,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
      hosts the view toggle, Settings and profile switch. */
   .hud-right-inline { display: none; }
   .hud-overflow { display: block; }
-  /* Smaller floating floor switch on a phone. */
-  .floor-switch-v button { width: 36px; height: 32px; font-size: 12px; }
   /* Left control stack: slightly narrower icon buttons to save width. */
   .hud-stack .icon-btn { width: 36px; }
 
@@ -967,11 +947,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
   }
 
   /* (Config table is card-styled at all widths now — see the base rules.) */
-
-  /* Config Editor full-page header: keep Back + title on one tidy line. */
-  .config-topbar { gap: 10px; }
-  .config-topbar .btn.ghost { padding: 8px 12px; font-size: 13px; }
-  .config-topbar h2 { font-size: 18px; white-space: nowrap; }
 
   /* Room badge: smaller display type so longer names stay on one centred line. */
   .room-label { top: 58px; padding: 7px 18px; }

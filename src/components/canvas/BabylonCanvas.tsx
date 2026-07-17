@@ -269,14 +269,6 @@ export default function BabylonCanvas({
     const m = managerRef.current;
     if (!m) return;
     const structuralChanged = m.updateConfig(sceneConfig);
-    // Apply the weather master switch live: unchecking "Live weather effects"
-    // must clear existing particles now (no HA event fires on a settings change),
-    // and re-checking it must re-apply the current weather immediately. Cheap
-    // (id-prefix check only) so it can always run, unlike the full repaint below.
-    m.weather.setEnabled(sceneConfig.weatherEffects);
-    for (const e of Object.values(entities)) {
-      if (e.entity_id.startsWith("weather.")) m.weather.setWeather(e.state);
-    }
     if (structuralChanged || !repaintedOnceRef.current) {
       repaintedOnceRef.current = true;
       Object.values(entities).forEach((e) => m.applyEntityState(e));
@@ -291,10 +283,6 @@ export default function BabylonCanvas({
       if (!m) return;
       m.applyEntityState(entity); // real-mesh visuals + floating markers
       if (entity.entity_id === "sun.sun") m.sun.applyHaSunState(entity.state);
-      // Always forward weather states; WeatherEffects gates on the master switch
-      // internally (set via the [config] effect), avoiding a stale-closure read
-      // of config.weatherEffects here.
-      if (entity.entity_id.startsWith("weather.")) m.weather.setWeather(entity.state);
     });
     return off;
   }, [subscribeAll]);

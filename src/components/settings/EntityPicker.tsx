@@ -77,10 +77,9 @@ export default function EntityPicker({
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
-      <div className="row" style={{ gap: 8 }}>
-        <Search size={16} className="muted" />
+      <div className="config-search" style={{ marginBottom: 0 }}>
+        <Search size={16} />
         <input
-          style={{ flex: 1, padding: 10, borderRadius: 8, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
           placeholder={selectedLabel ?? placeholder ?? "Search entities…"}
           value={query}
           onFocus={() => setOpen(true)}

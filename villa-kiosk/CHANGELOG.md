@@ -1,5 +1,48 @@
 # Changelog
 
+## 2.23.10
+
+- **Removed "Live weather effects" (rain).** Deleted `WeatherEffects.ts` and
+  every call site — the feature and its Settings toggle are gone.
+- **Removed "Glow around lit/active devices."** It was genuinely wired to a
+  real `GlowLayer`, but this villa's baked structure is entirely excluded
+  from it (to avoid a scene-wide bloom halo), so it only ever affected small
+  fixture meshes at a faint 0.8 intensity — invisible in practice. Removed
+  `GlowLayer` and all `render.glow`/`glowIntensity` plumbing.
+- **Quality preset accuracy.** The Performance/Balanced/High presets do
+  apply correctly, but for a baked-lighting villa SSAO — the preset system's
+  biggest advertised difference — is unconditionally forced off, so Balanced
+  and High look nearly identical here. The dropdown now shows an accurate
+  note instead of falsely promising "adds contact shadows (AO)."
+- **Settings reorganised**: "Highlight clickable objects" moved to the top
+  of Render quality & look and renamed "Show blue glow around clickable
+  devices"; Render quality & look now sits before First-person view; in
+  Advanced Settings, 3D model source now sits before Auto-detected entity
+  settings. Villa latitude/longitude fields are full width instead of a
+  narrow centred pair. Settings modal section titles now match Advanced
+  Settings' style.
+- **Fixed the real cause of Advanced Settings feeling laggy on every
+  edit**: `ConfigContext` was JSON.stringify-ing and synchronously writing
+  the *entire* config (including the full entity map) to localStorage
+  **inside** the React state updater, blocking commit/paint before a
+  checkbox could even visually flip. Persistence now happens in an effect,
+  after paint — checkboxes should toggle instantly now.
+- **Auto-detected entity cards are collapsed by default** (entity ID + Show
+  toggle + chevron on one line) instead of a full 6-field card per device —
+  there can be a lot of them. The "redirect to a different entity" Apply/
+  Cancel controls now sit on the same line as the field on desktop and wrap
+  naturally on narrow screens.
+- **Search icons moved inside their text fields** ("New entity ID…",
+  "Search entities…", "Add another entity to this device…", "Search or
+  type entity id…") to match the existing entity-filter box style — all
+  four route through the one `EntityPicker` component, so a single fix
+  covered all of them.
+- **CSS cleanup**: removed three confirmed-dead style blocks no longer
+  referenced anywhere (checked against dynamic `className` construction,
+  not just literal text) — `.config-topbar` (leftover from the old
+  full-page Config Editor), `.floor-switch-v` (superseded by
+  `.hud-floor-btn`), `.glow-dot`.
+
 ## 2.23.9
 
 - **Fixed: ceiling fan asset permanently disappearing (and its badge jumping

@@ -60,12 +60,6 @@ export interface RenderConfig {
   ssaoStrength: number;
   /** SSAO sample count — perf/quality trade-off (4/8/16/32). */
   ssaoSamples: number;
-  /** Soft bloom around anything emissive (lit fixtures, active lock/switch
-   *  tints, alert pulses) — makes an "on" state read as glowing, not just a
-   *  brighter flat colour. Cheap relative to SSAO. */
-  glow: boolean;
-  /** GlowLayer.intensity — how strongly emissive things bloom. */
-  glowIntensity: number;
   /** How much EXTRA dimming (beyond the base day/night look) is applied at
    *  night, 0..1. 0 = the mild dim this app always had; 1 = maximum — dim
    *  enough that a lit fixture's own light clearly dominates the room, but
@@ -88,15 +82,13 @@ export interface RenderConfig {
  */
 export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
   // Fastest path for weak wall tablets: no AO, no IBL, gentle tone mapping.
-  // Glow stays on (it's a single small blurred render target, cheap next to
-  // SSAO) since it's core to how an "on" device reads.
   performance: {
     quality: "performance",
     toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.08,
     hemiIntensity: 0.55, sunIntensity: 1.0, ambientIntensity: 0.6,
     ibl: false, environmentIntensity: 0.6,
     ssao: false, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
-    glow: true, glowIntensity: 0.8, nightDimming: 0.5, lightPoolIntensity: 1.0,
+    nightDimming: 0.5, lightPoolIntensity: 1.0,
   },
   // The proven "safe win": subtle contact AO, no IBL.
   balanced: {
@@ -105,7 +97,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     hemiIntensity: 0.5, sunIntensity: 1.0, ambientIntensity: 0.6,
     ibl: false, environmentIntensity: 0.65,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
-    glow: true, glowIntensity: 0.8, nightDimming: 0.5, lightPoolIntensity: 1.0,
+    nightDimming: 0.5, lightPoolIntensity: 1.0,
   },
   // Best look out of the box: AO + soft sky/ground IBL + higher-sample AO.
   high: {
@@ -114,7 +106,7 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
     hemiIntensity: 0.45, sunIntensity: 1.05, ambientIntensity: 0.6,
     ibl: true, environmentIntensity: 0.6,
     ssao: true, ssaoRadius: 6, ssaoStrength: 0.25, ssaoSamples: 16,
-    glow: true, glowIntensity: 0.8, nightDimming: 0.5, lightPoolIntensity: 1.0,
+    nightDimming: 0.5, lightPoolIntensity: 1.0,
   },
 };
 
@@ -150,8 +142,6 @@ export interface AppConfig {
   eyeHeight: number;
   /** Walk-speed multiplier (1.0 = default). Configurable in Settings. */
   walkSpeed: number;
-  /** Rain/weather particle effects (off by default — can look noisy). */
-  weatherEffects: boolean;
   /** Room polygons from the pipeline's .rooms.json sidecar (auto room names, any
    *  villa). `floor` is the 1-based storey the room's SweetHome level resolves to
    *  (see sh3dParser.ts) — defaults to 1 for older stored configs. */
@@ -237,7 +227,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   modelTransform: DEFAULT_MODEL_TRANSFORM,
   eyeHeight: 1.7,
   walkSpeed: 1,
-  weatherEffects: false,
   renderOnDemand: true,
   hiddenCategories: [],
   highlightInteractive: false,
@@ -318,7 +307,6 @@ export interface ConfigExportBundle {
   eyeHeight: number;
   walkSpeed: number;
   naturalScrolling: boolean;
-  weatherEffects: boolean;
   highlightInteractive: boolean;
   render: RenderConfig;
 }
@@ -335,7 +323,6 @@ export function buildConfigExport(config: AppConfig): ConfigExportBundle {
     eyeHeight: config.eyeHeight,
     walkSpeed: config.walkSpeed,
     naturalScrolling: config.naturalScrolling,
-    weatherEffects: config.weatherEffects,
     highlightInteractive: config.highlightInteractive,
     render: config.render,
   };
@@ -357,7 +344,6 @@ export function parseConfigImport(raw: unknown): Partial<ConfigExportBundle> {
   if (typeof b.eyeHeight === "number") patch.eyeHeight = b.eyeHeight;
   if (typeof b.walkSpeed === "number") patch.walkSpeed = b.walkSpeed;
   if (typeof b.naturalScrolling === "boolean") patch.naturalScrolling = b.naturalScrolling;
-  if (typeof b.weatherEffects === "boolean") patch.weatherEffects = b.weatherEffects;
   if (typeof b.highlightInteractive === "boolean") patch.highlightInteractive = b.highlightInteractive;
   if (b.render && typeof b.render === "object") patch.render = b.render as RenderConfig;
   return patch;

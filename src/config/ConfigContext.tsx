@@ -19,15 +19,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
 
   const update = useCallback((patch: Partial<AppConfig>) => {
-    setConfig((prev) => {
-      const next = { ...prev, ...patch };
-      saveConfig(next);
-      return next;
-    });
+    setConfig((prev) => ({ ...prev, ...patch }));
   }, []);
 
   const replace = useCallback((next: AppConfig) => {
-    saveConfig(next);
     setConfig(next);
   }, []);
 
@@ -35,6 +30,19 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     resetConfig();
     setConfig(loadConfig());
   }, []);
+
+  // Persist to localStorage in an effect, AFTER React commits + the browser
+  // paints — not inside the state updater above. JSON.stringify + a
+  // synchronous localStorage.setItem of the full config (entityMap,
+  // meshBindings, teleportPoints, sh3dRooms — all of which grow with a
+  // villa's device count) used to run INSIDE setConfig's updater, blocking
+  // React's commit on every single edit: clicking a device's "Show" checkbox
+  // in Advanced Settings visibly lagged before the checkbox itself flipped.
+  // Saving here instead means the checkbox paints first; persistence follows
+  // a moment later, imperceptibly.
+  useEffect(() => {
+    saveConfig(config);
+  }, [config]);
 
   // Reflect the chosen theme onto the document root so the CSS variable blocks
   // (`:root[data-theme="dark"]` / `"auto"`) take effect. "auto" defers to the OS

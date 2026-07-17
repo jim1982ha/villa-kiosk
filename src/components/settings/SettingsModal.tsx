@@ -171,46 +171,11 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         )}
 
         {/* ── Visual & UI tuning ──────────────────────────────────────────
-            Camera/movement, render quality and device icons. Available to any
+            Render quality, camera/movement and device icons. Available to any
             profile with "customizeAppearance" (guests included) — these are
             per-device comfort settings, not administration. */}
         {can("customizeAppearance") && (
         <>
-        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
-
-        {/* ── Camera & movement ─────────────────────────────────────────────
-            The two view modes' comfort settings, side by side: how the
-            first-person walk-through feels, and how the bird's-eye view pans. */}
-        <h3 style={{ margin: 0, fontSize: 15 }}>First-person view</h3>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          How the walk-through camera feels. Both update live as you drag.
-        </p>
-        <div className="slider-pair" style={{ marginTop: 10 }}>
-          <div>
-            <label>Eye height · {eyeHeight.toFixed(2)} m</label>
-            <input
-              type="range" min={0.8} max={2.2} step={0.05} value={eyeHeight}
-              onChange={(e) => applyEyeHeight(Number(e.target.value))}
-            />
-          </div>
-          <div>
-            <label>Walk speed · {walkSpeed.toFixed(1)}×</label>
-            <input
-              type="range" min={0.3} max={3} step={0.1} value={walkSpeed}
-              onChange={(e) => applyWalkSpeed(Number(e.target.value))}
-            />
-          </div>
-        </div>
-
-        <h3 style={{ margin: "18px 0 0", fontSize: 15 }}>Overview (bird&apos;s-eye) view</h3>
-        <label className="toggle" style={{ marginTop: 10 }}>
-          <input
-            type="checkbox" checked={config.naturalScrolling ?? true}
-            onChange={(e) => update({ naturalScrolling: e.target.checked })}
-          />
-          <span>Natural scrolling</span>
-        </label>
-
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         {/* ── Render quality & look ────────────────────────────────────────
@@ -218,7 +183,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             preset materialises a full render config; day/night warmth is handled
             automatically in the scene. */}
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ margin: 0, fontSize: 15 }}>Render quality &amp; look</h3>
+          <div className="settings-section-title" style={{ margin: 0 }}>Render quality &amp; look</div>
           <button
             className="btn ghost"
             style={{ padding: "4px 10px", fontSize: 12 }}
@@ -233,7 +198,13 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           wall tablets. Everything updates live and saves with your config.
         </p>
 
-        <label style={{ marginTop: 12 }}>Quality preset</label>
+        <label className="toggle" style={{ marginTop: 12 }}>
+          <input type="checkbox" checked={config.highlightInteractive}
+            onChange={(e) => update({ highlightInteractive: e.target.checked })} />
+          <span>Show blue glow around clickable devices</span>
+        </label>
+
+        <label style={{ marginTop: 14 }}>Quality preset</label>
         <select
           value={render.quality ?? DEFAULT_RENDER.quality}
           onChange={(e) => applyPreset(e.target.value as QualityPreset)}
@@ -243,6 +214,14 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           <option value="balanced">Balanced — adds contact shadows (AO)</option>
           <option value="high">High — best look (recommended)</option>
         </select>
+        {(manager?.renderFx.isBaked() ?? false) && (
+          <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+            This villa's model uses baked lighting, so contact shadows are
+            already painted into its textures — contact shadows (AO) stay off
+            for Balanced and High alike here; High still adds soft sky/ground
+            ambient on top.
+          </p>
+        )}
 
         <label style={{ marginTop: 14 }}>Brightness · {render.exposure.toFixed(2)}×</label>
         <input
@@ -252,28 +231,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
           Overall scene exposure. Raise it if the villa looks a little dark; updates live.
         </p>
-
-        <label className="toggle" style={{ marginTop: 14 }}>
-          <input type="checkbox" checked={config.weatherEffects}
-            onChange={(e) => update({ weatherEffects: e.target.checked })} />
-          <span>Live weather effects (rain when it's raining)</span>
-        </label>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          Mirrors your Home Assistant weather entity: rain shows when it's raining,
-          nothing in clear/sunny/cloudy weather.
-        </p>
-
-        <label className="toggle" style={{ marginTop: 8 }}>
-          <input type="checkbox" checked={render.glow}
-            onChange={(e) => applyRender({ glow: e.target.checked })} />
-          <span>Glow around lit / active devices</span>
-        </label>
-
-        <label className="toggle" style={{ marginTop: 8 }}>
-          <input type="checkbox" checked={config.highlightInteractive}
-            onChange={(e) => update({ highlightInteractive: e.target.checked })} />
-          <span>Highlight clickable objects (blue outline)</span>
-        </label>
 
         {/* Light effect strength + Night dimming side by side. Light effect
             strength controls the floor "light pool" a fixture casts when on
@@ -304,16 +261,43 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
 
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
+        {/* ── Camera & movement ─────────────────────────────────────────────
+            The two view modes' comfort settings, side by side: how the
+            first-person walk-through feels, and how the bird's-eye view pans. */}
+        <div className="settings-section-title" style={{ margin: 0 }}>First-person view</div>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          How the walk-through camera feels. Both update live as you drag.
+        </p>
+        <div className="slider-pair" style={{ marginTop: 10 }}>
+          <div>
+            <label>Eye height · {eyeHeight.toFixed(2)} m</label>
+            <input
+              type="range" min={0.8} max={2.2} step={0.05} value={eyeHeight}
+              onChange={(e) => applyEyeHeight(Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <label>Walk speed · {walkSpeed.toFixed(1)}×</label>
+            <input
+              type="range" min={0.3} max={3} step={0.1} value={walkSpeed}
+              onChange={(e) => applyWalkSpeed(Number(e.target.value))}
+            />
+          </div>
+        </div>
+
+        <div className="settings-section-title" style={{ margin: "18px 0 0" }}>Overview (bird&apos;s-eye) view</div>
+        <label className="toggle" style={{ marginTop: 10 }}>
+          <input
+            type="checkbox" checked={config.naturalScrolling ?? true}
+            onChange={(e) => update({ naturalScrolling: e.target.checked })}
+          />
+          <span>Natural scrolling</span>
+        </label>
+
+        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
+
         </>
         )}
-
-        {/* The villa Latitude/Longitude, the old Rooms-mirror override, the
-            backup buttons, the Inspector and the 3D model source (GLB / room
-            data upload) used to sit on this landing screen. Coordinates,
-            entity/binding editing and model upload now live in Advanced
-            Settings (footer button below); the rest were removed — keeping
-            this screen a short, everyday list.
-            short, everyday list. */}
 
         </div>{/* end settings-body */}
 

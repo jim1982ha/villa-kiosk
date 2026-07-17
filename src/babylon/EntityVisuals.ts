@@ -67,8 +67,8 @@ const LIGHT_POOL_RADIUS = 1.8;
 // centimetres from that surface, so it prints a hard bright pool right there —
 // and sampling several lights along the strip (tried in v2.4.72) just prints a
 // CHAIN of pools, reading as separate bulbs instead of a line. The continuous
-// "LED line" look must come from the strip mesh's own emissive + GlowLayer
-// bloom (view-independent), NOT from dynamic lights. The dynamic light's only
+// "LED line" look must come from the strip mesh's own emissive colour
+// (view-independent), NOT from dynamic lights. The dynamic light's only
 // job is the soft ambient wash on the room, so for elongated strips we push it
 // DOWN toward the floor, well clear of the mounting surface, where its pool is
 // wide and soft instead of a tight hotspot.
@@ -103,9 +103,9 @@ const MIN_STRIP_THICKNESS = 0.06; // metres (6 cm) — still reads as a slim cov
 // STRIP_OFF_VISIBILITY below, not from the colour; the colour's only job is
 // to blend with the ceiling around it for whatever alpha remains.
 const LED_HOUSING_COLOR = new Color3(0.8, 0.79, 0.77);
-// The inflated ~6cm bar is sized for the ON state, where the emissive core +
-// GlowLayer halo need several on-screen pixels to read as one continuous
-// line. When the light is OFF that same bar is just dead geometry, and no
+// The inflated ~6cm bar is sized for the ON state, where the emissive core
+// needs several on-screen pixels to read as one continuous line. When the
+// light is OFF that same bar is just dead geometry, and no
 // base colour can make a 6cm slab at ceiling height look like the ~1cm
 // recessed channel it really is. So the OFF state turns the strip
 // see-through — the SAME technique as window glass (ModelLoader): material
@@ -127,8 +127,8 @@ const STRIP_OFF_ALPHA = 0.25; // slightly clearer than window glass (0.38)
 // corners — confirmed straight from the .sh3d source coordinates (not a
 // camera-angle or occlusion effect): the sofa rectangle's top-right corner
 // has the top piece ending at y≈654.05 while the right piece only starts at
-// y≈654.84, a real ~0.8cm gap baked into the model. GlowLayer has nothing
-// emissive to bloom from in that gap, so it reads as a hard, camera-angle-
+// y≈654.84, a real ~0.8cm gap baked into the model. There's no emissive
+// geometry in that gap, so it reads as a hard, camera-angle-
 // INDEPENDENT "cut" in the line — easy to mistake for the nearby furniture
 // blocking it, when nothing is actually occluding anything. Stretch every
 // strip mesh belonging to a multi-piece light entity past its own modelled
@@ -145,10 +145,10 @@ const STRIP_JOINT_EXTENSION = 0.02; // metres (2 cm) past each modelled endpoint
 const LIGHT_SHADOW_SIZE = 256;
 // Climate-running outline: same forward-pass outline+overlay technique as the
 // blue "clickable" highlight (see SceneManager.applyHighlight for why — a
-// Mesh.renderOutline/renderOverlay pair, not an EffectLayer, so it can't
-// corrupt the GlowLayer). Always on while the thermostat is running,
-// independent of the "highlight clickable objects" preference — this is a
-// live status signal, not a discoverability hint.
+// Mesh.renderOutline/renderOverlay pair, not a screen-space EffectLayer).
+// Always on while the thermostat is running, independent of the "highlight
+// clickable objects" preference — this is a live status signal, not a
+// discoverability hint.
 const CLIMATE_ON_COLOR = new Color3(0.9, 0.2, 0.2);
 const CLIMATE_OUTLINE_WORLD_WIDTH = 0.04; // metres, matches the blue outline's rim
 // World-space clearance added above a mesh-bound entity's bounding-box top when
@@ -289,7 +289,7 @@ export class EntityVisuals {
    *  structure's texture, and the structure is unlit, so a runtime PointLight
    *  can't brighten it anyway; per-entity lights and their cube shadow maps
    *  would be pure cost with no visible effect. Skipped entirely in baked
-   *  mode. Emissive glow + GlowLayer feedback is KEPT — that's surface glow
+   *  mode. The fixture's own emissive glow is KEPT — that's surface glow
    *  on the fixture itself (the on/off signal the user reads), not light
    *  transport. */
   private bakedMode = false;
@@ -562,12 +562,9 @@ export class EntityVisuals {
 
   /** A rectangular LED cove (e.g. the dining-table or sofa-area perimeter) is
    *  modelled as SEVERAL separate elongated strip meshes — one per side — so
-   *  the per-mesh loop above gives it one PointLight per side: 4 hotspots
-   *  instead of one even wash. GlowLayer's bloom blends those into something
-   *  that reads fine from a distance, but up close (or with the blur
-   *  relatively small vs. the strip's on-screen size) they separate into the
-   *  distinct light "pools" the user does not want ("I want to keep seeing a
-   *  light line, not separate light bulbs"). When EVERY mesh of a light
+   *  the per-mesh loop above gives it one PointLight per side: 4 distinct
+   *  light "pools" instead of one even wash ("I want to keep seeing a light
+   *  line, not separate light bulbs"). When EVERY mesh of a light
    *  entity is an elongated strip, merge their individual PointLights into
    *  ONE shared light at the merged bounding box's centre — one soft,
    *  even room-fill instead of N hotspots. Genuinely separate fixtures under

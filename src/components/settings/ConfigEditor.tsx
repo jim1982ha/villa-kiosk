@@ -5,7 +5,7 @@
 // appear (with inline settings) in the Bound 3D objects section below.
 
 import { useMemo, useRef, useState } from "react";
-import { Plus, Trash2, Pencil, Check, X, Search } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, Search, ChevronDown, ChevronRight } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { createDefaultMapping } from "@/config/EntityMap";
@@ -29,6 +29,21 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   // Remap: which row's entity ID is currently being edited, and what new ID was picked.
   const [remapKey, setRemapKey] = useState<string | null>(null);
   const [remapNewId, setRemapNewId] = useState<string | undefined>(undefined);
+
+  // Cards are collapsed by default (there can be a LOT of auto-detected
+  // entities — no one wants to scroll past every field of every device just
+  // to reach the next one). A card opened via a device panel's edit shortcut
+  // starts expanded, since the whole point of that shortcut is to land right
+  // on its fields.
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
+    () => new Set(initialSearch ? [initialSearch] : []),
+  );
+  const toggleExpanded = (key: string) =>
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
 
   // Only show entities that are NOT already handled by a mesh binding.
   const boundEntityIds = useMemo(
@@ -173,9 +188,12 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
             </tr>
           </thead>
           <tbody>
-            {entries.map(([key, m]) => (
+            {entries.map(([key, m]) => {
+              const expanded = expandedKeys.has(key);
+              const editing = remapKey === key;
+              return (
               <tr key={key} style={m.disabled ? { opacity: 0.5 } : undefined}>
-                <td data-label="Shown" style={{ textAlign: "center" }}>
+                <td data-label="" className="device-card-header">
                   <input
                     type="checkbox"
                     checked={!m.disabled}
@@ -183,22 +201,22 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                     title="Show this device in the 3D view (badge, highlight, tap). Turn off for devices modelled but not yet integrated in Home Assistant."
                     aria-label={`Show ${m.entityId} in the 3D view`}
                   />
-                </td>
-                <td data-label="Entity ID" style={{ fontSize: 12, wordBreak: "break-all" }}>
-                  {remapKey === key ? (
-                    /* ── inline remap picker ── */
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 200 }}>
-                      <EntityPicker
-                        value={remapNewId}
-                        onChange={setRemapNewId}
-                        allowCustom
-                        hideCurrentLabel
-                        placeholder="New entity ID…"
-                      />
-                      <div style={{ display: "flex", gap: 6 }}>
+                  {editing ? (
+                    /* ── inline remap picker — one line on desktop, wraps on mobile ── */
+                    <div className="remap-row">
+                      <div className="remap-picker">
+                        <EntityPicker
+                          value={remapNewId}
+                          onChange={setRemapNewId}
+                          allowCustom
+                          hideCurrentLabel
+                          placeholder="New entity ID…"
+                        />
+                      </div>
+                      <div className="remap-actions">
                         <button
                           className="btn primary"
-                          style={{ flex: 1, padding: "5px 8px", fontSize: 12 }}
+                          style={{ padding: "5px 8px", fontSize: 12 }}
                           disabled={!remapNewId || remapNewId === key}
                           onClick={() => {
                             if (remapNewId) remapEntity(key, remapNewId);
@@ -210,93 +228,115 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                         </button>
                         <button
                           className="btn ghost"
-                          style={{ flex: 1, padding: "5px 8px", fontSize: 12 }}
+                          style={{ padding: "5px 8px", fontSize: 12 }}
                           onClick={() => { setRemapKey(null); setRemapNewId(undefined); }}
                         >
                           <X size={13} /> Cancel
                         </button>
                       </div>
-                      <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>
-                        Mesh stays, entity ID changes — no model rebuild needed.
-                      </span>
                     </div>
                   ) : (
-                    <span className="entity-id-display" title="Use the pencil to redirect this mesh to a different entity ID">
+                    <div
+                      className="entity-id-display entity-id-toggle"
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={expanded}
+                      title="Click to expand — use the pencil to redirect this mesh to a different entity ID"
+                      onClick={() => toggleExpanded(key)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpanded(key); }
+                      }}
+                    >
                       <span className="entity-id-text">{m.entityId}</span>
                       <span className="entity-id-actions">
                         <button
                           className="icon-btn"
                           title="Redirect this 3D mesh to a different entity ID"
-                          onClick={() => { setRemapKey(key); setRemapNewId(undefined); }}
+                          onClick={(e) => { e.stopPropagation(); setRemapKey(key); setRemapNewId(undefined); }}
                         >
                           <Pencil size={14} />
                         </button>
                         <button
                           className="icon-btn icon-btn-danger"
                           title="Remove this entity"
-                          onClick={() => remove(key)}
+                          onClick={(e) => { e.stopPropagation(); remove(key); }}
                         >
                           <Trash2 size={15} />
                         </button>
                       </span>
+                      {expanded ? <ChevronDown size={16} className="muted" /> : <ChevronRight size={16} className="muted" />}
+                    </div>
+                  )}
+                </td>
+
+                {editing && (
+                  <td data-label="">
+                    <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>
+                      Mesh stays, entity ID changes — no model rebuild needed.
                     </span>
-                  )}
-                </td>
-                <td data-label="Type">
-                  <select
-                    value={m.type}
-                    onChange={(e) => patch(key, { type: e.target.value as EntityType })}
-                  >
-                    {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </td>
-                <td data-label="Category">
-                  <select
-                    value={effectiveCategory(m.entityId, m.type, m.category, entities[m.entityId]?.attributes.device_class as string | undefined)}
-                    onChange={(e) => patch(key, { category: e.target.value as Category })}
-                    title="Which map filter group this device belongs to"
-                  >
-                    {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-                  </select>
-                </td>
-                <td data-label="Label">
-                  <input
-                    value={labelDrafts[key] ?? m.label}
-                    onChange={(e) => draftLabel(key, e.target.value)}
-                    onBlur={(e) => commitLabel(key, e.target.value)}
-                  />
-                </td>
-                <td data-label="Room">
-                  <select
-                    value={m.room ?? ""}
-                    onChange={(e) => patch(key, { room: e.target.value })}
-                    title="Room this device is in — used for motion-glow and teleport. Pick from the villa's detected rooms."
-                  >
-                    <option value="">— none —</option>
-                    {/* Keep the current value selectable even if it's not (or
-                        no longer) a known room, so editing never silently drops
-                        an existing binding. */}
-                    {m.room && !roomNames.includes(m.room) && (
-                      <option value={m.room}>{m.room} (custom)</option>
-                    )}
-                    {roomNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </td>
-                <td data-label="Motion sensor" style={{ minWidth: 180 }}>
-                  {m.type === "camera" ? (
-                    <EntityPicker
-                      value={m.motionEntityId}
-                      onChange={(id) => patch(key, { motionEntityId: id })}
-                      domains={["binary_sensor"]}
-                      allowCustom
-                      hideCurrentLabel
-                    />
-                  ) : (
-                    <span className="muted" style={{ fontSize: 12 }}>—</span>
-                  )}
-                </td>
+                  </td>
+                )}
+
+                {expanded && !editing && (
+                  <>
+                    <td data-label="Type">
+                      <select
+                        value={m.type}
+                        onChange={(e) => patch(key, { type: e.target.value as EntityType })}
+                      >
+                        {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </td>
+                    <td data-label="Category">
+                      <select
+                        value={effectiveCategory(m.entityId, m.type, m.category, entities[m.entityId]?.attributes.device_class as string | undefined)}
+                        onChange={(e) => patch(key, { category: e.target.value as Category })}
+                        title="Which map filter group this device belongs to"
+                      >
+                        {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
+                      </select>
+                    </td>
+                    <td data-label="Label">
+                      <input
+                        value={labelDrafts[key] ?? m.label}
+                        onChange={(e) => draftLabel(key, e.target.value)}
+                        onBlur={(e) => commitLabel(key, e.target.value)}
+                      />
+                    </td>
+                    <td data-label="Room">
+                      <select
+                        value={m.room ?? ""}
+                        onChange={(e) => patch(key, { room: e.target.value })}
+                        title="Room this device is in — used for motion-glow and teleport. Pick from the villa's detected rooms."
+                      >
+                        <option value="">— none —</option>
+                        {/* Keep the current value selectable even if it's not (or
+                            no longer) a known room, so editing never silently drops
+                            an existing binding. */}
+                        {m.room && !roomNames.includes(m.room) && (
+                          <option value={m.room}>{m.room} (custom)</option>
+                        )}
+                        {roomNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </td>
+                    <td data-label="Motion sensor" style={{ minWidth: 180 }}>
+                      {m.type === "camera" ? (
+                        <EntityPicker
+                          value={m.motionEntityId}
+                          onChange={(id) => patch(key, { motionEntityId: id })}
+                          domains={["binary_sensor"]}
+                          allowCustom
+                          hideCurrentLabel
+                        />
+                      ) : (
+                        <span className="muted" style={{ fontSize: 12 }}>—</span>
+                      )}
+                    </td>
+                  </>
+                )}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       )}

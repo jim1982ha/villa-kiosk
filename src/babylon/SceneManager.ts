@@ -22,9 +22,8 @@ import { SkyDome } from "./SkyDome";
 import { FloorManager } from "./FloorManager";
 import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
-import { WeatherEffects } from "./WeatherEffects";
 import { RenderEnhancements } from "./RenderEnhancements";
-import { loadModelInto, BAKED_MATERIAL_PREFIX } from "./ModelLoader";
+import { loadModelInto } from "./ModelLoader";
 import { resolveMeshToMapping, inferTypeFromEntityId, normaliseMeshName } from "@/config/EntityMap";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { axisWorldScale } from "./meshUnits";
@@ -62,7 +61,6 @@ export class SceneManager {
   readonly floors: FloorManager;
   readonly pick: PickHandler;
   readonly visuals: EntityVisuals;
-  readonly weather: WeatherEffects;
   readonly renderFx: RenderEnhancements;
 
   private config: AppConfig;
@@ -146,7 +144,6 @@ export class SceneManager {
     this.sun = new SunController(this.scene, this.lighting, this.hemi, opts.config, this.sky);
     this.sun.setRenderHook(() => this.requestRender());
     this.visuals = new EntityVisuals(this.scene, opts.config, () => this.requestRender());
-    this.weather = new WeatherEffects(this.scene, () => this.requestRender());
 
     // A tap/long-press checks state-badge hit-testing FIRST, falling through
     // to PickHandler's 3D raycast only when no badge was hit. Badges resolve
@@ -555,14 +552,13 @@ export class SceneManager {
     return this.scene.getWorldExtends((m) => set.has(m));
   }
 
-  /** On iOS, strip the extra render targets (SSAO, IBL env, and the GlowLayer —
-   *  which allocates blur textures AND re-renders emissive meshes to a second
-   *  target every frame) before applying a render config. They're the heaviest
-   *  WebGL-memory consumers and the ones WKWebView is least able to afford. Tone
-   *  mapping + exposure stay. A no-op elsewhere. */
+  /** On iOS, strip the extra render targets (SSAO and the IBL env, the
+   *  heaviest WebGL-memory consumers and the ones WKWebView is least able to
+   *  afford) before applying a render config. Tone mapping + exposure stay.
+   *  A no-op elsewhere. */
   private deviceRenderConfig(render: RenderConfig): RenderConfig {
     if (!this.isIOS) return render;
-    return { ...render, ssao: false, ibl: false, glow: false };
+    return { ...render, ssao: false, ibl: false };
   }
 
   /**
@@ -778,13 +774,6 @@ export class SceneManager {
     this.visuals.setBakedMode(result.baked);
     this.renderFx.setBakedMode(result.baked);
     this.sun.setBakedMode(result.baked, result.nightBlend, result.glassDim);
-    if (result.baked) {
-      // The baked structure must never bloom: with a night atlas its material
-      // carries a full-villa emissive texture (the crossfade mechanism), which
-      // the GlowLayer would otherwise smear into a scene-wide white halo.
-      this.renderFx.excludeFromGlow(result.meshes.filter(
-        (m) => m.material?.name?.startsWith(BAKED_MATERIAL_PREFIX)));
-    }
 
     // --- Critical path: everything needed for a correct, navigable first paint.
     this.normalizeScale(result.meshes); // bring to metres BEFORE recentring
@@ -1139,20 +1128,19 @@ export class SceneManager {
    * Mark every mesh bound to an entity with a blue outline so it reads as
    * clickable. Toggled by config.highlightInteractive.
    *
-   * This used to be a Babylon HighlightLayer (a screen-space glow effect).
-   * HighlightLayer and GlowLayer (used for lit fixtures' emissive glow, see
-   * RenderEnhancements) are both post-process "EffectLayer"s that render the
-   * whole scene into their own off-screen buffer and composite back via a
-   * shared stencil test — Babylon has a long-standing, only partially fixed
-   * limitation where two simultaneously-active EffectLayers corrupt each
-   * other's output exactly where their affected meshes overlap on screen
-   * (BabylonJS/Babylon.js#4463). That's why an LED strip printed broken/cut
-   * segments specifically where it passed near/behind a highlighted curtain
-   * or TV, and why turning highlighting off made it render as a clean line.
-   * `renderOutline` is a per-mesh property drawn in the NORMAL forward pass
-   * (an extruded backface silhouette, depth-tested against the whole scene
-   * like any other mesh) rather than a competing screen-space effect layer,
-   * so it cannot corrupt GlowLayer's output no matter what overlaps it.
+   * This used to be a Babylon HighlightLayer (a screen-space glow effect) —
+   * a post-process "EffectLayer" that renders the whole scene into its own
+   * off-screen buffer and composites back via a stencil test. Babylon has a
+   * long-standing, only partially fixed limitation where two simultaneously-
+   * active EffectLayers corrupt each other's output exactly where their
+   * affected meshes overlap on screen (BabylonJS/Babylon.js#4463), which
+   * this app hit back when it also ran a GlowLayer for lit fixtures: an LED
+   * strip printed broken/cut segments specifically where it passed near/
+   * behind a highlighted curtain or TV. `renderOutline` is a per-mesh
+   * property drawn in the NORMAL forward pass (an extruded backface
+   * silhouette, depth-tested against the whole scene like any other mesh)
+   * rather than a competing screen-space effect layer, so it can't corrupt —
+   * or be corrupted by — any other EffectLayer this app ever adds.
    *
    * `outlineWidth` is a LOCAL-space offset — Babylon's outline shader adds
    * `normal * outlineWidth` to the vertex position BEFORE the world-matrix
@@ -1172,8 +1160,8 @@ export class SceneManager {
    * That's why "the blue glow" seemed gone even with the width bug fixed. So
    * each clickable mesh ALSO gets `renderOverlay`: a translucent blue tint
    * over the whole object, rendered by the same forward-pass component as the
-   * outline (Rendering/outlineRenderer — NOT an EffectLayer, so it cannot
-   * corrupt the GlowLayer either). The full-surface tint stays obvious at any
+   * outline (Rendering/outlineRenderer — NOT an EffectLayer). The full-surface
+   * tint stays obvious at any
    * zoom level; the outline adds the crisp rim when close.
    */
   private applyHighlight(meshes: AbstractMesh[]): void {

@@ -367,6 +367,15 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           </p>
           <VillaCoordinates />
 
+          {role === "owner" && (
+            <>
+              <div className="settings-section-title" style={{ marginTop: 28 }}>
+                3D model source
+              </div>
+              <ModelSource onModelChanged={onModelChanged} />
+            </>
+          )}
+
           <div className="settings-section-title" style={{ marginTop: 28 }}>
             Auto-detected entity settings
           </div>
@@ -381,15 +390,6 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
             Grouped devices
           </div>
           <GroupedDevices />
-
-          {role === "owner" && (
-            <>
-              <div className="settings-section-title" style={{ marginTop: 28 }}>
-                3D model source
-              </div>
-              <ModelSource onModelChanged={onModelChanged} />
-            </>
-          )}
         </div>
 
         <div className="settings-footer" style={{ justifyContent: "flex-end" }}>

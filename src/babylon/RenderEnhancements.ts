@@ -9,17 +9,13 @@
 //   2. Light rebalance (hemi intensity)  — less flat fill ⇒ directional contrast.
 //   3. SSAO2                             — darkens corners/contacts (depth).
 //   4. IBL (procedural gradient cube)    — soft sky/ground ambient for PBR.
-//   5. GlowLayer                         — bloom around emissive (lit/alert) meshes.
 
 import {
   ImageProcessingConfiguration,
   SSAO2RenderingPipeline,
   RawCubeTexture,
-  GlowLayer,
   Constants,
-  Mesh,
   type Scene,
-  type AbstractMesh,
 } from "@babylonjs/core";
 import type { RenderConfig } from "@/config/AppConfig";
 import { devLog } from "@/utils/devLog";
@@ -36,11 +32,9 @@ export class RenderEnhancements {
   private ssao: SSAO2RenderingPipeline | null = null;
   private ssaoAttached = false;
   private env: RawCubeTexture | null = null;
-  private glow: GlowLayer | null = null;
 
   private cfg: RenderConfig | null = null;
   private baked = false;
-  private glowExcluded: Mesh[] = [];
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -51,8 +45,8 @@ export class RenderEnhancements {
    * structure's texture already contains real Cycles ambient occlusion, GI and
    * sun shadows. SSAO on top double-darkens every corner the bake already
    * darkened, so it's forced off while a baked model is loaded, whatever the
-   * quality preset says. Tone mapping, IBL (entity meshes are still lit PBR) and
-   * GlowLayer stay user-controlled.
+   * quality preset says. Tone mapping and IBL (entity meshes are still lit
+   * PBR) stay user-controlled.
    */
   setBakedMode(baked: boolean): void {
     if (this.baked === baked) return;
@@ -60,20 +54,11 @@ export class RenderEnhancements {
     if (this.cfg) this.apply(this.cfg);
   }
 
-  /**
-   * Keep these meshes out of the GlowLayer's emissive pass. Needed for the
-   * dual-atlas baked structure: its night image rides in the material's
-   * EMISSIVE slot (that's how the day/night crossfade works, see ModelLoader),
-   * and without this the GlowLayer blooms the ENTIRE villa after sunset like
-   * one giant lit fixture — a scene-wide washed-out white halo. Stored, not
-   * just applied: the GlowLayer is created lazily in applyGlow, possibly
-   * after the model loads, so the exclusion must survive (re)creation.
-   */
-  excludeFromGlow(meshes: AbstractMesh[]): void {
-    this.glowExcluded = meshes.filter((m): m is Mesh => m instanceof Mesh);
-    if (this.glow) {
-      for (const m of this.glowExcluded) this.glow.addExcludedMesh(m);
-    }
+  /** Whether SSAO is currently forced off by a baked-lighting model — see
+   *  setBakedMode. Lets the Settings UI describe the Quality preset options
+   *  accurately instead of promising an AO effect that won't actually apply. */
+  isBaked(): boolean {
+    return this.baked;
   }
 
   /** Apply the full render config. Idempotent — safe to call on every change. */
@@ -85,7 +70,6 @@ export class RenderEnhancements {
     // fight and the night fill flickers between values depending on call order.
     this.applyIBL(cfg);
     this.applySSAO(cfg);
-    this.applyGlow(cfg);
   }
 
   // ── 1. Tone mapping + exposure / contrast ────────────────────────────────
@@ -208,29 +192,6 @@ export class RenderEnhancements {
     return tex;
   }
 
-  // ── 6. GlowLayer — bloom around anything emissive ────────────────────────
-  // A lit fixture, an active lock/switch tint or a triggered binary_sensor pulse
-  // all work by setting a mesh's emissive colour — flat and easy to miss on a
-  // small fixture mesh at a distance. GlowLayer adds a soft halo around any
-  // emissive surface for free (it reads material.emissiveColor directly), so
-  // every one of those existing "on" states gets more visible with no change
-  // to EntityVisuals' own colour logic.
-  private applyGlow(cfg: RenderConfig): void {
-    if (cfg.glow) {
-      if (!this.glow) {
-        this.glow = new GlowLayer("villaGlow", this.scene, {
-          mainTextureRatio: 0.5, // half-res blur target — glow is inherently soft, doesn't need full-res
-          blurKernelSize: 32,
-        });
-        for (const m of this.glowExcluded) this.glow.addExcludedMesh(m);
-      }
-      this.glow.isEnabled = true;
-      this.glow.intensity = cfg.glowIntensity;
-    } else if (this.glow) {
-      this.glow.isEnabled = false;
-    }
-  }
-
   dispose(): void {
     if (this.ssao) {
       if (this.ssaoAttached) {
@@ -241,6 +202,5 @@ export class RenderEnhancements {
       this.ssao = null;
     }
     if (this.env) { this.env.dispose(); this.env = null; }
-    if (this.glow) { this.glow.dispose(); this.glow = null; }
   }
 }
