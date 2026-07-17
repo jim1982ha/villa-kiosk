@@ -155,9 +155,26 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   // hits a fatal error, or the video never actually starts playing within
   // the watchdog window — falls straight through to the MJPEG tier, exactly
   // as if HLS had never been attempted.
+  //
+  // Deliberately NOT keyed on `connected`: this used to be a dependency, so
+  // ANY websocket blip (a brief reconnect over the tunnel — common, and
+  // harmless to everything else) tore down and rebuilt this whole effect.
+  // On Chrome (confirmed in the field) that's the hls.js path, and the
+  // rebuild raced with 2.23.19's own "is hls.js this attempt's player"
+  // guard: cleanup destroys the OLD hls.js instance, but the NEW effect
+  // invocation resets that guard back to its default BEFORE it has picked
+  // a path again (that requires an async dynamic import + websocket call
+  // first) — so a stale, asynchronous native <video> error from the OLD
+  // instance's own teardown can land in that narrow window and get misread
+  // as fatal, killing a stream that was actually still healthy. That's the
+  // actual root cause of "HLS playing" being immediately followed by "HLS
+  // failed: Video element error". The websocket is only needed for the
+  // ONE-TIME camera/stream call below — cameraHlsUrl's own sendMessage()
+  // already rejects cleanly (caught below, falls to MJPEG) if it isn't
+  // connected at that moment, so there's nothing to gain from also tearing
+  // down and rebuilding this whole effect on every later blip.
   useEffect(() => {
     if (mode !== "hls") return;
-    if (!connected) return;
     const video = hlsVideoRef.current;
     if (!video) return;
     let cancelled = false;
@@ -239,6 +256,11 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     })();
 
     return () => {
+      // Diagnostic safety net: if this ever fires while the stream was
+      // already healthy, something OTHER than the connected-flicker theory
+      // above is tearing it down — this line is the tell, so the next field
+      // report shows it plainly instead of leaving us to re-guess again.
+      if (hlsLoaded.current) logTransition("HLS: torn down while playing (effect cleanup)");
       cancelled = true;
       clearTimeout(watchdog);
       video.removeEventListener("playing", onPlaying);
@@ -262,7 +284,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, mapping.entityId, connected]);
+  }, [mode, mapping.entityId]);
 
   // Stream watchdog: if the MJPEG <img> hasn't painted a frame within the window,
   // assume the camera doesn't serve MJPEG and drop to snapshot polling. This is

@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.23.20
+
+- **Found the actual root cause of the recurring "HLS playing" → "HLS
+  failed: Video element error" bug.** The HLS setup effect was keyed on the
+  HA websocket's live `connected` state; any brief reconnect blip (harmless
+  to everything else) tore down and rebuilt the whole effect — including
+  resetting the "is hls.js this attempt's player" guard added in 2.23.19
+  back to its default BEFORE the new attempt had picked a path again. A
+  stale, asynchronous error from the previous hls.js instance's own
+  teardown could then land in that narrow window and get misread as a
+  fatal native-video error, killing a stream that was actually still
+  healthy. Removed `connected` as a dependency: the websocket is only
+  needed for the one-time stream-URL request, which already fails
+  gracefully and falls back on its own if it isn't connected at that
+  moment — there was no reason to also tear down an already-playing stream
+  over a later blip. Also added a diagnostic line that fires if a
+  teardown-while-healthy ever happens again, so the next report is
+  conclusive either way.
+
 ## 2.23.19
 
 - **Fixed: 2.23.18's fix for the same bug still misfired.** Confirmed in
