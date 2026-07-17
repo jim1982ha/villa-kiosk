@@ -212,6 +212,11 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
         if (cancelled) return;
         const canNative = video.canPlayType("application/vnd.apple.mpegurl") !== "";
         const canHlsJs = Hls.isSupported();
+        // Which branch this attempt takes decides everything downstream —
+        // logging it unconditionally (not just on failure) removes any doubt
+        // about which path actually ran, after several fixes in a row failed
+        // to change a byte-identical failure log.
+        logTransition(`HLS capability: native=${canNative} hlsJs=${canHlsJs}`);
         if (!canNative && !canHlsJs) {
           fallBackToStream("HLS unsupported in this browser");
           return;
@@ -360,7 +365,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           autoPlay
           muted
           playsInline
-          onError={() => {
+          onError={(e) => {
             // hls.js drives this element and reports its OWN errors via
             // Hls.Events.ERROR (see the setup effect) — that's the
             // authoritative fatal/non-fatal signal while it's in control.
@@ -373,6 +378,18 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
             // out before this fires — confirmed in the field, that race is
             // exactly why 2.23.18's fix still misfired) stays true for this
             // whole attempt regardless of teardown timing.
+            //
+            // Several fixes targeting this guard have shipped without
+            // changing the failure log at all, so log the FULL decision
+            // state unconditionally instead of guessing again — the native
+            // MediaError code (1=ABORTED, 2=NETWORK, 3=DECODE,
+            // 4=SRC_NOT_SUPPORTED) says what kind of error this actually is,
+            // which nothing so far has captured.
+            const err = e.currentTarget.error;
+            logTransition(
+              `Video error event: usingHlsJs=${usingHlsJsRef.current} ` +
+              `mediaError=${err ? `${err.code}/${err.message || "(no message)"}` : "none"}`,
+            );
             if (!usingHlsJsRef.current) fallBackToStream("Video element error");
           }}
         />

@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.23.24
+
+- **Camera diagnostic: confirmed 2.23.23 IS the running build, and the
+  failure is still identical — so this round adds no behaviour change,
+  only more precise instrumentation.** By the current code, `usingHlsJsRef`
+  must already be `true` by the time playback starts, and nothing resets
+  it afterward, so the guard should already prevent this. Since it
+  evidently doesn't, guessing a sixth fix isn't the right move — the log
+  now shows, unconditionally, which capability branch was actually taken
+  (`HLS capability: native=... hlsJs=...`) and the exact decision state at
+  the moment of any video error (`usingHlsJs=...`, plus the native
+  MediaError code/message, which nothing so far has captured). The next
+  report should make the actual mechanism unambiguous.
+
 ## 2.23.23
 
 - **Camera diagnostic now shows exactly which app build is running.** After
