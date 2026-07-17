@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.23.23
+
+- **Camera diagnostic now shows exactly which app build is running.** After
+  four fix attempts in a row produced byte-identical failure logs — despite
+  2.23.22 changing the actual guard logic in a way that should make the
+  reported failure structurally impossible once playback starts — the most
+  likely explanation is that the fix isn't reaching the browser at all,
+  possibly tied to the same Supervisor-sync issue behind the `sh3d_path`
+  warning (2.23.21) where the Update button doesn't reliably register. The
+  diagnostic's first line now reads "App X.Y.Z · Now: ...", baked in at
+  build time from package.json, so the next report will show at a glance
+  whether the running build is current — before spending more time
+  theorizing about app logic that may not even be deployed yet.
+
 ## 2.23.22
 
 - **Fixed the actual HLS teardown race this time (hopefully) — the field

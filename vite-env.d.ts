@@ -21,3 +21,9 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** package.json's version, baked in at build time — see vite.config.ts's
+ *  `define`. Used to prove which build is actually running (e.g. in
+ *  CameraPanel's diagnostic log), so "still broken after the fix shipped"
+ *  reports can rule a stale/undeployed build in or out at a glance. */
+declare const __APP_VERSION__: string;

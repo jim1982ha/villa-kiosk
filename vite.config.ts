@@ -26,6 +26,14 @@ import { fileURLToPath, URL } from "node:url";
 const CERT_KEY = "./certs/key.pem";
 const CERT_CRT = "./certs/cert.pem";
 
+// Baked into the bundle at build time so the running app can report exactly
+// which version it is — see __APP_VERSION__ usage in CameraPanel's diagnostic
+// log. Read directly from package.json rather than trusting a separately
+// maintained constant, so it can never drift from the actual release being
+// built (the same source of truth villa-kiosk's own release convention
+// already bumps in lockstep with config.yaml on every push).
+const pkg = JSON.parse(fs.readFileSync("./package.json", "utf-8")) as { version: string };
+
 export default defineConfig(({ command }) => {
   const serving = command === "serve";
   const haveTrustedCert =
@@ -45,6 +53,9 @@ export default defineConfig(({ command }) => {
 
   return {
     base: "./",
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version),
+    },
     plugins: [
       react(),
       // Only fall back to a self-signed cert when no trusted cert is provided.

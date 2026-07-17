@@ -449,7 +449,11 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           working reliably. */}
       {connected && (
         <div className="camera-diag">
-          <div>Now: {mode.toUpperCase()}</div>
+          {/* Proves which build is actually running, at a glance — several
+              fixes in a row have produced byte-identical failure logs, and
+              this is the fastest way to rule "the fix never actually got
+              deployed" in or out before spending more time theorizing. */}
+          <div>App {__APP_VERSION__} · Now: {mode.toUpperCase()}</div>
           {diagLog.map((line, i) => <div key={i}>{line}</div>)}
         </div>
       )}
