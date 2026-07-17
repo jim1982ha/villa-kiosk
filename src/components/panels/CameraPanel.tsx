@@ -61,13 +61,24 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   const hlsInstanceRef = useRef<Hls | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [isFs, setIsFs] = useState(false);
+  // TEMPORARY diagnostics (see CHANGELOG): a plain <video>/<img> gives no way
+  // to tell which tier actually ended up active, or why it fell back, from
+  // the kiosk screen itself — this makes that visible without needing
+  // devtools on the tablet. `frameReady` also drives a loading spinner so an
+  // empty <video> element mid-HLS-setup doesn't read as "broken".
+  const [statusNote, setStatusNote] = useState<string | null>(null);
+  const [frameReady, setFrameReady] = useState(false);
 
-  const fallBackToStream = () => {
+  const fallBackToStream = (reason: string) => {
     streamLoaded.current = false;
+    setStatusNote(reason);
+    setFrameReady(false);
     setMode("stream");
   };
-  const fallBackToSnapshot = () => {
+  const fallBackToSnapshot = (reason: string) => {
     snapErrors.current = 0;
+    setStatusNote(reason);
+    setFrameReady(false);
     setMode("snapshot");
   };
 
@@ -101,6 +112,8 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   // Start over (try HLS again, from the top) whenever the target camera changes.
   useEffect(() => {
     setMode("hls");
+    setStatusNote(null);
+    setFrameReady(false);
     snapErrors.current = 0;
     streamLoaded.current = false;
     hlsLoaded.current = false;
@@ -122,10 +135,10 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     hlsLoaded.current = false;
 
     const watchdog = setTimeout(() => {
-      if (!hlsLoaded.current) fallBackToStream();
+      if (!hlsLoaded.current) fallBackToStream("HLS timed out (no frame)");
     }, HLS_WATCHDOG_MS);
 
-    const onPlaying = () => { hlsLoaded.current = true; };
+    const onPlaying = () => { hlsLoaded.current = true; setFrameReady(true); };
     video.addEventListener("playing", onPlaying);
 
     (async () => {
@@ -137,7 +150,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
         const canNative = video.canPlayType("application/vnd.apple.mpegurl") !== "";
         const canHlsJs = Hls.isSupported();
         if (!canNative && !canHlsJs) {
-          fallBackToStream(); // no HLS capability at all in this browser
+          fallBackToStream("HLS unsupported in this browser");
           return;
         }
 
@@ -154,7 +167,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           hls.on(Hls.Events.ERROR, (_evt, data) => {
             if (data.fatal) {
               devLog("[Camera] hls.js fatal error, falling back to MJPEG:", data);
-              fallBackToStream();
+              fallBackToStream(`HLS error (${data.details})`);
             }
           });
           hls.loadSource(url);
@@ -164,7 +177,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
       } catch (err) {
         if (!cancelled) {
           devLog("[Camera] HLS unavailable for this entity, falling back to MJPEG:", err);
-          fallBackToStream();
+          fallBackToStream(`HLS unavailable (${(err as Error).message})`);
         }
       }
     })();
@@ -188,7 +201,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     if (mode !== "stream") return;
     streamLoaded.current = false;
     const id = setTimeout(() => {
-      if (!streamLoaded.current) fallBackToSnapshot();
+      if (!streamLoaded.current) fallBackToSnapshot("MJPEG timed out (no frame)");
     }, STREAM_WATCHDOG_MS);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -219,7 +232,10 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
 
   const onSnapshotError = () => {
     snapErrors.current += 1;
-    if (snapErrors.current >= SNAPSHOT_MAX_ERRORS) setMode("failed");
+    if (snapErrors.current >= SNAPSHOT_MAX_ERRORS) {
+      setStatusNote("Snapshot failed repeatedly");
+      setMode("failed");
+    }
   };
 
   const renderView = () => {
@@ -236,7 +252,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           autoPlay
           muted
           playsInline
-          onError={fallBackToStream}
+          onError={() => fallBackToStream("Video element error")}
         />
       );
     }
@@ -250,8 +266,8 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
         <img
           src={streamUrl}
           alt={mapping.label}
-          onLoad={() => { streamLoaded.current = true; }}
-          onError={fallBackToSnapshot}
+          onLoad={() => { streamLoaded.current = true; setFrameReady(true); }}
+          onError={() => fallBackToSnapshot("MJPEG error")}
         />
       );
     }
@@ -265,6 +281,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
         onError={onSnapshotError}
         onLoad={() => {
           snapErrors.current = 0;
+          setFrameReady(true);
         }}
       />
     );
@@ -293,6 +310,24 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
       </button>
 
       {renderView()}
+
+      {/* An empty <video>/<img> mid-setup reads as "broken" rather than
+          "loading" — cover it with a spinner until a real frame arrives. */}
+      {connected && mode !== "failed" && !frameReady && (
+        <div className="camera-loading">
+          <div className="spinner" />
+        </div>
+      )}
+
+      {/* TEMPORARY diagnostics while tuning the stream pipeline (see
+          CHANGELOG) — shows which tier ended up active and why, so this is
+          reportable straight off the kiosk screen without devtools. Safe to
+          remove once HLS is confirmed working reliably. */}
+      {connected && (
+        <div className="camera-diag">
+          {mode.toUpperCase()}{statusNote ? ` — ${statusNote}` : ""}
+        </div>
+      )}
     </div>
   );
 }

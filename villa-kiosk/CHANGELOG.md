@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.23.14
+
+- **Camera panel: fixed the "broken feed" look during stream setup.** An
+  empty `<video>` element with no source yet (the first couple seconds
+  while HLS connects) rendered as a blank/broken frame — now covered by a
+  loading spinner until a real frame actually arrives, on any tier.
+- **Added a temporary on-screen diagnostic** at the bottom of the camera
+  view showing which tier ended up active (HLS / MJPEG / snapshot) and, if
+  it fell back, why — readable straight off the kiosk screen, no devtools
+  needed. Meant to pin down why camera feeds still felt laggy after 2.23.13;
+  will be removed once that's confirmed fixed.
+
 ## 2.23.13
 
 - **Per-light intensity override.** Light entity cards in Advanced Settings
