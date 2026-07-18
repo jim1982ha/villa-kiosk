@@ -168,7 +168,11 @@ verify the mapping before running Blender.
 The render look can be tuned **either here (baked into the GLB) or live in the app**
 (Settings → *Render quality* — see [README](README.md)). The same dials exist in
 both places so you can iterate at runtime, then bake the winners into the GLB.
-All flags are optional and default to the original behaviour:
+All flags are optional and default to the original behaviour. **This table is not
+exhaustive** — the script (`sources/blender_pipeline.py`, outside this repo, never
+committed) has grown many more flags over time (baked lighting modes, day/night
+atlases, vegetation decimation, glass detection, and more); run it with `--help`
+for the full, current list rather than relying solely on this table:
 
 | Flag | Effect | Example |
 |---|---|---|
@@ -202,7 +206,12 @@ Done!  14 mesh(es) in the GLB:
 
 ### Step B-3 — Upload to the kiosk
 
-Settings → 3D model → Upload `.glb` → pick the output file.
+**Add-on**: Advanced Settings → *3D model source* → **Upload central GLB**
+(and **Upload room data** for the `.rooms.json` sidecar this script also
+emits) — every kiosk then loads that same central file automatically, no
+per-device upload. **Standalone**: if a central model isn't already
+detected automatically (see the add-on note above), Advanced Settings → *3D
+model source* has a per-browser uploader instead.
 
 That's it. The kiosk resolves entity IDs directly from mesh names:
 - Tapping the door lock panel → lock control panel (unlock/lock)
@@ -417,10 +426,10 @@ Skip straight to export.
 
 ## Step 9 — Load it into the kiosk
 
-- Onboarding wizard **step 2**, or
-- **Settings → 3D model → Upload .glb**.
-
-It's stored in the browser (IndexedDB), so it survives refreshes — you upload once.
-Then wire it up by tapping: **Settings → Bind 3D objects** and/or **Drop control markers**.
+**Advanced Settings → 3D model source** — add-on mode: **Upload central GLB**,
+served to every kiosk automatically. Standalone: same screen falls back to a
+per-browser uploader (IndexedDB) if no central model is already configured.
+Then wire it up by tapping: **Advanced Settings → Bound 3D objects** and/or
+**Drop control markers**.
 
 > If the teleport anchors land in the wrong spot after import, walk to the correct position in each room and **long-press the room card** (Rooms panel) to recalibrate live. No rebuild needed.

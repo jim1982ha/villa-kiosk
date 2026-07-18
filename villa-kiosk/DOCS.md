@@ -14,17 +14,26 @@ right in the HA sidebar through Ingress.
 
 ## First run
 
-Onboarding runs once in the browser. **No URL and no token to enter** — as an
-add-on the kiosk connects to Home Assistant automatically (see *How it connects*):
+There's no onboarding at all — **no URL, no token, nothing to enter or click
+through**. As an add-on the kiosk connects to Home Assistant automatically
+(see *How it connects*) and the villa's location silently adopts your Home
+Assistant instance's own coordinates.
 
-1. **Upload model** — pick your villa `.glb`. Stored in the browser (IndexedDB).
-2. **Room names** *(optional)* — Settings → upload the SweetHome `.sh3d` to label
-   rooms automatically.
-3. **Location** — pre-filled from your Home Assistant instance; adjust if needed.
+The one thing every kiosk needs is a 3D model, set up **once, centrally**, not
+per device:
 
-> Config and the uploaded model live in the **browser**, per device. To copy a
-> set-up device to another, use **Settings → Export backup** then **Import
-> backup** on the other device.
+1. Export your villa's SweetHome 3D plan to a `.glb` (+ its `.rooms.json`
+   room-data sidecar) — see [MODEL_PIPELINE.md](../MODEL_PIPELINE.md).
+2. **Advanced Settings → 3D model source → Upload central GLB** (and
+   **Upload room data**). This writes the files into Home Assistant's own
+   `www/` folder via the add-on — no SSH/Samba needed.
+3. Every kiosk that opens the add-on afterward loads that same file
+   automatically. Re-uploading later reloads every open kiosk on its next open.
+
+> Per-device settings (device↔room bindings, room viewpoints, device icons,
+> render/UI preferences) live in that device's own browser. To copy a
+> configured device's setup to another, use **Advanced Settings → Export
+> Configuration** then **Import Configuration** on the other device.
 
 ## How it connects
 

@@ -22,7 +22,7 @@ Built with **React + TypeScript + Babylon.js**.
 | **Render quality** | Live, per-effect look controls (Settings → *Render quality*): tone mapping, exposure/contrast, light balance, ambient occlusion, sun shadows, environment lighting — tune for quality or tablet performance with no rebuild. |
 | **On-demand rendering** | The GPU idles when nothing moves — essential for a 24/7 tablet. |
 | **Runtime config** | Map meshes → entities, calibrate teleport points, set thresholds — all in-app, no code edits. |
-| **PWA + backup** | Installable, works briefly offline, export/import full config (+ model) as a ZIP. |
+| **PWA + backup** | Installable, works briefly offline, export/import a JSON config backup (device↔room bindings, room viewpoints, device icons, render/UI settings — deliberately not the model or HA credentials) from Advanced Settings. |
 
 ---
 
@@ -93,16 +93,20 @@ https://<HA_HOST>:8123/local/villa-kiosk/
 > If `config/www` didn't exist before, create it and restart HA once so it starts
 > serving `/local/`. Re-deploying a new version = copy the fresh `dist/` over the
 > old folder (replace all files; the hashed `assets/*` filenames change per build).
+> If you instead zip `dist/` and unzip it *into* `villa-kiosk/` (rather than
+> extracting its contents directly), you'll get an extra `dist/` segment in the
+> path (`config/www/villa-kiosk/dist/index.html`) — both work identically, the
+> app doesn't care which; just be consistent about which URL you bookmark.
 
 #### Installing as a PWA (the "Install" button)
 
 The browser only offers **Install** when the app is served from a **secure origin
-with a _trusted_ certificate** — so the `/local/villa-kiosk/` path reached over HA's
-real HTTPS (e.g. your DuckDNS / Let's Encrypt URL) is what shows the button on both
-laptop and phone:
+with a _trusted_ certificate** — so the `/local/villa-kiosk/` path reached over a
+real, trusted HTTPS domain in front of HA (a Dynamic DNS + Let's Encrypt setup, a
+Cloudflare Tunnel, etc.) is what shows the button on both laptop and phone:
 
 ```
-https://thelyshouse.duckdns.org/local/villa-kiosk/   ← installable
+https://<your-trusted-ha-domain>/local/villa-kiosk/   ← installable
 ```
 
 Two things that will **hide** the Install button:
@@ -155,7 +159,7 @@ Two things that will **hide** the Install button:
 | Walks through walls | The GLB needs solid wall meshes or `collision_*` boxes — see MODEL_PIPELINE.md. |
 | Teleport lands wrong | Recalibrate: Rooms → walk to the correct spot → long-press the room card. |
 | Inspector won't open | It's a large lazy chunk; first open needs network. Re-deploy after `npm run build`. |
-| Mixed content error | Keep the kiosk and HA both on `http` on the LAN, or put HA behind a proper TLS proxy and use `https` for both. |
+| Mixed content error | Keep the kiosk and HA both on `http` on the LAN, or put HA behind a proper TLS proxy and use `https` for both — a Cloudflare Tunnel (with Home Assistant's own login as the actual gate) is a common, well-supported way to get a trusted cert without exposing any port. |
 
 ---
 
@@ -168,7 +172,7 @@ npm run build       # production build
 npm run typecheck   # type-check without building
 ```
 
-On first run, the onboarding wizard asks for your HA URL + token (dev mode) or auto-connects (add-on). Then upload your `.glb` and confirm your location.
+On first run, the onboarding wizard is a single screen asking for your HA URL + token (standalone) — the URL field prefills a guess (`ha-<this page's own hostname>`, matching a split-subdomain Cloudflare Tunnel setup) — or nothing at all, auto-connecting immediately (add-on, via the Ingress Supervisor proxy). The 3D model auto-loads from the add-on's centrally-configured GLB with no upload step (see *Works with any villa* below for the rare case nothing central is configured), and the villa's location silently adopts the connected HA instance's own lat/lng.
 
 ---
 
@@ -176,13 +180,13 @@ On first run, the onboarding wizard asks for your HA URL + token (dev mode) or a
 
 The app is not tied to any specific villa. The only required input is a `.glb` model. To wire up a new villa:
 
-1. **Import the GLB** (onboarding or Settings → 3D model).
+1. **Import the GLB** (Advanced Settings → *3D model source*).
 2. Wire it up — two ways, mix freely:
-   - **Bind real objects** (Settings → *Bind 3D objects*): tap a lamp/curtain mesh, pick the live HA entity.
-   - **Drop control markers** (Settings → *Drop control markers*): for fused models or entities not yet in HA — tap any spot, a floating control is placed and linked to an entity_id (activates automatically when the entity appears).
+   - **Bind real objects** (Advanced Settings → *Bound 3D objects*): tap a lamp/curtain mesh, pick the live HA entity.
+   - **Drop control markers**: for fused models or entities not yet in HA — tap any spot, a floating control is placed and linked to an entity_id (activates automatically when the entity appears).
 3. Done — controls, panels and visual feedback work immediately.
 
-Entity names change? Re-point the binding in the app or Config Editor. No rebuild needed.
+Entity names change? Re-point the binding in Advanced Settings. No rebuild needed.
 
 > **Prerequisite:** a `.glb` of the villa. If you have a SweetHome 3D `.sh3d`, see [MODEL_PIPELINE.md](./MODEL_PIPELINE.md). If you already have a GLB, skip straight to import + bind.
 
@@ -211,7 +215,7 @@ src/
 ├── ha/           # Home Assistant: WebSocket, state store, service calls, history, cameras
 ├── config/       # AppConfig, EntityMap, TeleportPoints, thresholds (persisted to localStorage)
 ├── components/   # React UI: canvas, HUD, panels, teleport, settings, onboarding
-├── pages/        # Dashboard (main) + Config editor
+├── pages/        # Dashboard (the only route — Advanced Settings is a modal over it, not a separate page)
 ├── hooks/        # useHAEntity, useHAEntities, useSceneReady
 ├── types/        # Shared TS types
 └── utils/        # colour, sun, storage, backup, transforms
@@ -223,9 +227,9 @@ The 3D scene never re-renders from React — HA state changes are pushed imperat
 
 ## Runtime configuration
 
-- **Settings** (gear icon): title, location, model upload, backup/restore, Inspector. HA URL/token shown only in standalone mode.
+- **Settings** (gear icon): title, render quality, first-person/overview feel, device icon size, theme. HA URL/token shown only in standalone mode.
+- **Advanced Settings** (Settings' footer → *Advanced Settings*, a modal over the live dashboard, not a page reload): villa location, 3D model source (add-on: central GLB/room-data upload; standalone: reads the same central model automatically if one exists, else a per-browser uploader), per-device configuration backup/restore, auto-detected entity settings (map any `entity_id` to a panel type + label + room, mark entities requiring confirmation), bound 3D objects, grouped devices.
 - **Render quality** (Settings → *Render quality &amp; look*): independently toggle/tune tone mapping (Khronos Neutral / ACES / Standard), exposure, contrast, fill + key + ambient light balance, ambient occlusion (SSAO), sun shadows and environment lighting (IBL). All apply live and persist with your config; start with tone mapping + lower **Fill light** to cure a washed-out render. The same knobs can be baked into the GLB via the [Blender pipeline](MODEL_PIPELINE.md) flags.
-- **Config editor** (`/config`): map any `entity_id` to a panel type + label + room, mark entities requiring confirmation, edit alert thresholds.
 - **Teleport calibration**: open **Rooms**, then right-click / long-press any room card to save your current spot as that room's anchor.
 
 ---

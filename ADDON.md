@@ -39,9 +39,11 @@ That's it — every later push to `main` republishes the current `version`.
 3. The **Villa Kiosk** add-on now appears in the store. Open it → **Install**
    (a quick image pull — no compiling).
 4. Enable **Start on boot** + **Watchdog**, then **Start**.
-5. Click **Villa Kiosk** in the sidebar (or *Open Web UI*) and complete the
-   one-time onboarding (upload `.glb`, confirm location). **No URL or token** —
-   the add-on connects to HA automatically through the Supervisor proxy.
+5. Click **Villa Kiosk** in the sidebar (or *Open Web UI*) — it connects
+   automatically through the Supervisor proxy with **no URL or token to enter**,
+   and no onboarding screens at all. Upload your villa's `.glb` (and its
+   `.rooms.json` room-data sidecar) once from **Advanced Settings → 3D model
+   source** — every client then loads that same central file automatically.
 
 ---
 
