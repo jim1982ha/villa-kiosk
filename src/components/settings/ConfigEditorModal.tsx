@@ -81,12 +81,131 @@ function VillaCoordinates() {
  * per-browser upload instead. Moved here (out of the everyday Settings
  * screen) since it's an administration action, not a everyday preference.
  */
+/** (i) tooltip carrying the full central-model details (path, size, mesh
+ *  count, SHA-256, source, latest plan) on hover/focus. Shared between
+ *  Ingress (add-on) mode and a standalone build that auto-detected the same
+ *  central model on HA's own /local/ route — see storage.ts's
+ *  probeStandaloneCentralModel. `editable` is false in the latter case: there's
+ *  no supervisor-proxy to accept an upload from a standalone page, so the
+ *  hint below points at the add-on's own Advanced Settings instead. */
+function CentralModelInfo({
+  addonCfg, loadedModel, editable,
+}: {
+  addonCfg: AddonConfig;
+  loadedModel: ReturnType<typeof getLoadedModelInfo>;
+  editable: boolean;
+}) {
+  return (
+    <div className="row" style={{ marginTop: 4 }}>
+      <span className="info-tip">
+        <button type="button" className="info-btn" aria-label="Model details">
+          <Info size={16} />
+        </button>
+        <div className="info-pop" role="tooltip">
+          <div className="row">
+            <span>Latest SH3D plan</span>
+            <span>
+              {addonCfg.rooms_upload?.original_name ? (
+                <>
+                  <code>{addonCfg.rooms_upload.original_name}</code>
+                  {addonCfg.rooms_upload.uploaded_at &&
+                    ` · ${new Date(addonCfg.rooms_upload.uploaded_at).toLocaleString()}`}
+                </>
+              ) : "—"}
+            </span>
+          </div>
+          <div className="row"><span>GLB</span><span><code>www/{addonCfg.model_path}</code></span></div>
+          {/* Every central upload overwrites the file AT model_path, so the
+              served name above never changes — show what was actually
+              uploaded or the panel reads as "wrong file". */}
+          {addonCfg.model_upload?.original_name && (
+            <div className="row">
+              <span>Uploaded</span>
+              <span>
+                <code>{addonCfg.model_upload.original_name}</code>
+                {addonCfg.model_upload.uploaded_at &&
+                  ` · ${new Date(addonCfg.model_upload.uploaded_at).toLocaleString()}`}
+              </span>
+            </div>
+          )}
+          {loadedModel && (
+            <>
+              <div className="row"><span>Loaded</span><span>{(loadedModel.bytes / 1_000_000).toFixed(2)} MB · {loadedModel.meshCount} meshes</span></div>
+              {loadedModel.sha256 && (
+                <div className="row"><span>SHA-256</span><span><code>{loadedModel.sha256}</code></span></div>
+              )}
+              <div className="row"><span>From</span><span><code>{loadedModel.url}</code></span></div>
+            </>
+          )}
+          <div style={{ marginTop: 8, color: "var(--text-dim)" }}>
+            {editable ? (
+              <>
+                Served from the add-on's <code>model_path</code> (relative to <code>www/</code>) — an
+                upload overwrites the file at that path, so the GLB name above stays the same
+                whatever file you pick ("Uploaded" shows the file it came from). The room-data
+                sidecar (<code>.rooms.json</code>, emitted next to the GLB by the Blender pipeline)
+                lives alongside it. Set <code>model_path</code> under Settings → Add-ons → Villa
+                Kiosk → Configuration. Verify on disk: <code>shasum -a 256 {addonCfg.model_path.split("/").pop()}</code>
+              </>
+            ) : (
+              <>
+                Auto-detected from HA's own <code>www/</code> folder — this standalone copy loads the
+                exact same central model the Villa Kiosk add-on manages, with no separate upload of
+                its own. To replace it, upload a new GLB/room-data file from the add-on's Advanced
+                Settings (Settings → Add-ons → Villa Kiosk → Open Web UI); this device picks it up
+                automatically on next open.
+              </>
+            )}
+          </div>
+        </div>
+      </span>
+    </div>
+  );
+}
+
 function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
   const { config, update } = useConfig();
   const ingress = isIngress();
 
   const roomsRef = useRef<HTMLInputElement>(null);
   const [roomsMsg, setRoomsMsg] = useState<string | null>(null);
+
+  // Owner-only backup/restore: bundles device↔room bindings, room definitions
+  // (incl. saved viewports), device icons, enabled/disabled devices and every
+  // First-person/Overview + Render quality + Device-icon Settings option into
+  // one JSON file — importable on another vanilla install to reproduce this
+  // villa's configuration exactly (see AppConfig.ConfigExportBundle for what's
+  // deliberately excluded, e.g. the HA connection token, and the model/room
+  // plan geometry, which is central/model-specific — see "Upload room data"
+  // below, kept as a separate mechanism since it auto-syncs to every kiosk in
+  // the villa, unlike this per-device file).
+  const configFileRef = useRef<HTMLInputElement>(null);
+  const [backupMsg, setBackupMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const exportConfig = () => {
+    const bundle = buildConfigExport(config);
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `villa-kiosk-config-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setBackupMsg({ text: "Configuration exported.", ok: true });
+  };
+
+  const importConfig = async (file: File) => {
+    try {
+      const patch = parseConfigImport(JSON.parse(await file.text()));
+      if (!confirm(
+        "Import this configuration?\n\nThis replaces device↔room bindings, room definitions, device icons and the First-person/Overview, Render quality and Device-icon settings on THIS device with the values from the file.",
+      )) return;
+      update(patch);
+      setBackupMsg({ text: "Configuration imported.", ok: true });
+    } catch (err) {
+      setBackupMsg({ text: (err as Error).message, ok: false });
+    }
+  };
 
   // Adopt a room-data sidecar (<model>.rooms.json emitted by the Blender
   // pipeline) — the tiny replacement for uploading the full .sh3d.
@@ -157,52 +276,7 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
         {addonCfg === null ? (
           <p className="muted body-text">Reading add-on configuration…</p>
         ) : addonCfg.model_path ? (
-          /* Compact status line + (i) tooltip carrying the full model details
-             (path, size, mesh count, SHA-256, source, room data) on hover/focus. */
-          <div className="row spread" style={{ marginTop: 4 }}>
-            <span className="body-text" style={{ fontWeight: 600, fontSize: 13, color: "var(--status-on)" }}>
-              ✓ Central model active — all clients share the same view
-            </span>
-            <span className="info-tip">
-              <button type="button" className="info-btn" aria-label="Model details">
-                <Info size={16} />
-              </button>
-              <div className="info-pop" role="tooltip">
-                <div className="row"><span>GLB</span><span><code>www/{addonCfg.model_path}</code></span></div>
-                {/* Every central upload overwrites the file AT model_path, so
-                    the served name above never changes — show what was
-                    actually uploaded or the panel reads as "wrong file". */}
-                {addonCfg.model_upload?.original_name && (
-                  <div className="row">
-                    <span>Uploaded</span>
-                    <span>
-                      <code>{addonCfg.model_upload.original_name}</code>
-                      {addonCfg.model_upload.uploaded_at &&
-                        ` · ${new Date(addonCfg.model_upload.uploaded_at).toLocaleString()}`}
-                    </span>
-                  </div>
-                )}
-                {loadedModel && (
-                  <>
-                    <div className="row"><span>Loaded</span><span>{(loadedModel.bytes / 1_000_000).toFixed(2)} MB · {loadedModel.meshCount} meshes</span></div>
-                    {loadedModel.sha256 && (
-                      <div className="row"><span>SHA-256</span><span><code>{loadedModel.sha256}</code></span></div>
-                    )}
-                    <div className="row"><span>From</span><span><code>{loadedModel.url}</code></span></div>
-                  </>
-                )}
-                <div className="row"><span>Room data</span><span>{addonCfg.rooms_upload?.original_name ? <code>{addonCfg.rooms_upload.original_name}</code> : <code>{addonCfg.model_path.replace(/\.glb$/i, ".rooms.json").split("/").pop()}</code>}</span></div>
-                <div style={{ marginTop: 8, color: "var(--text-dim)" }}>
-                  Served from the add-on's <code>model_path</code> (relative to <code>www/</code>) — an
-                  upload overwrites the file at that path, so the GLB name above stays the same
-                  whatever file you pick ("Uploaded" shows the file it came from). The room-data
-                  sidecar (<code>.rooms.json</code>, emitted next to the GLB by the Blender pipeline)
-                  lives alongside it. Set <code>model_path</code> under Settings → Add-ons → Villa
-                  Kiosk → Configuration. Verify on disk: <code>shasum -a 256 {addonCfg.model_path.split("/").pop()}</code>
-                </div>
-              </div>
-            </span>
-          </div>
+          <CentralModelInfo addonCfg={addonCfg} loadedModel={loadedModel} editable />
         ) : (
           <div style={{ background: "color-mix(in srgb, var(--status-warning) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--status-warning) 40%, transparent)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
             <div style={{ fontWeight: 600, fontSize: 13, color: "var(--status-warning)", marginBottom: 6 }}>
@@ -222,68 +296,118 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
           onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCentral(f, "glb"); e.target.value = ""; }} />
         <input ref={roomsUploadRef} type="file" accept=".json,application/json" style={{ display: "none" }}
           onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCentral(f, "rooms"); e.target.value = ""; }} />
-        <div className="row" style={{ gap: 10, marginTop: 12 }}>
-          <button className="btn ghost" style={{ flex: 1 }} disabled={uploadBusy !== null}
+        <input ref={configFileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) importConfig(f); e.target.value = ""; }} />
+        <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+          <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
             onClick={() => glbUploadRef.current?.click()}>
             <Upload size={15} /> {uploadBusy === "glb" ? "Uploading…" : "Upload central GLB"}
           </button>
-          <button className="btn ghost" style={{ flex: 1 }} disabled={uploadBusy !== null}
+          <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
             onClick={() => roomsUploadRef.current?.click()}>
             <Upload size={15} /> {uploadBusy === "rooms" ? "Uploading…" : "Upload room data"}
+          </button>
+          <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} onClick={() => configFileRef.current?.click()}>
+            <Upload size={15} /> Import Configuration
+          </button>
+          <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} onClick={exportConfig}>
+            <Download size={15} /> Export Configuration
           </button>
         </div>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
           Each upload overwrites the current central file and reloads every kiosk on next open.
           Room data is the small <code>.rooms.json</code> the Blender pipeline emits next to the GLB —
           it carries the room names, shapes and device positions used to label rooms and place devices.
+          Import/Export Configuration is a per-device backup of your device↔room bindings, room
+          viewpoints, device icons and Settings preferences.
         </p>
         {uploadMsg && (
           <div className={`test-result ${uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
             {uploadMsg.text}
           </div>
         )}
+        {backupMsg && (
+          <div className={`test-result ${backupMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
+            {backupMsg.text}
+          </div>
+        )}
         </>
       ) : (
         <>
-          <label>3D model</label>
-          <ModelUploader onUploaded={() => { setModelMeta(getModelMeta()); onModelChanged(); }} />
-          {modelMeta && (
-            <button
-              className="btn ghost mt"
-              style={{ width: "100%", color: "var(--status-danger)" }}
-              onClick={async () => {
-                if (!confirm("Remove the stored 3D model?\n\nThe model is saved in this browser only — it is not part of the add-on data and must be re-uploaded after clearing.")) return;
-                await clearStoredModel();
-                setModelMeta(null);
-                onModelChanged();
-              }}
-            >
-              Clear stored model ({modelMeta.name})
-            </button>
-          )}
-          <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-            Tip: when deployed as a Home Assistant add-on, configure <strong>model_path</strong> in the
-            add-on options to serve one shared model to all clients — no per-device upload needed.
-          </p>
+          {addonCfg === null ? (
+            <p className="muted body-text">Checking for a central model…</p>
+          ) : addonCfg.model_path ? (
+            // A central model was auto-detected on HA's own /local/ static
+            // route (the Villa Kiosk add-on is installed and has one
+            // configured) — load and manage it the SAME way the add-on does,
+            // instead of a separate per-browser upload. See
+            // storage.ts's probeStandaloneCentralModel.
+            <CentralModelInfo addonCfg={addonCfg} loadedModel={loadedModel} editable={false} />
+          ) : (
+            <>
+              <label>3D model</label>
+              <ModelUploader onUploaded={() => { setModelMeta(getModelMeta()); onModelChanged(); }} />
+              {modelMeta && (
+                <button
+                  className="btn ghost mt"
+                  style={{ width: "100%", color: "var(--status-danger)" }}
+                  onClick={async () => {
+                    if (!confirm("Remove the stored 3D model?\n\nThe model is saved in this browser only — it is not part of the add-on data and must be re-uploaded after clearing.")) return;
+                    await clearStoredModel();
+                    setModelMeta(null);
+                    onModelChanged();
+                  }}
+                >
+                  Clear stored model ({modelMeta.name})
+                </button>
+              )}
+              <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+                Tip: when the Villa Kiosk add-on is installed with a central model configured, this
+                page loads that same model automatically — no per-device upload needed.
+              </p>
 
-          {/* Room-data sidecar upload — standalone mode only */}
-          <label style={{ marginTop: 16 }}>Room data — optional</label>
-          <button className="btn ghost" style={{ width: "100%" }} onClick={() => roomsRef.current?.click()}>
-            <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload room data"}
-          </button>
-          <input
-            ref={roomsRef} type="file" accept=".json,application/json" style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) loadRoomData(f);
-            }}
-          />
-          <p className="muted body-text" style={{ marginTop: 6 }}>
-            The small <code>.rooms.json</code> the Blender pipeline emits next to the GLB — it carries
-            the room names, shapes and device positions, giving automatic room labels + calibration
-            for any villa.
+              {/* Room-data sidecar upload — standalone mode only */}
+              <label style={{ marginTop: 16 }}>Room data — optional</label>
+              <button className="btn ghost" style={{ width: "100%" }} onClick={() => roomsRef.current?.click()}>
+                <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload room data"}
+              </button>
+              <input
+                ref={roomsRef} type="file" accept=".json,application/json" style={{ display: "none" }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) loadRoomData(f);
+                }}
+              />
+              <p className="muted body-text" style={{ marginTop: 6 }}>
+                The small <code>.rooms.json</code> the Blender pipeline emits next to the GLB — it carries
+                the room names, shapes and device positions, giving automatic room labels + calibration
+                for any villa.
+              </p>
+              {roomsMsg && <div className="test-result ok">{roomsMsg}</div>}
+            </>
+          )}
+
+          {/* Per-device backup/restore — Owner only (see exportConfig/importConfig above). */}
+          <label style={{ marginTop: 16 }}>Configuration backup — optional</label>
+          <input ref={configFileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) importConfig(f); e.target.value = ""; }} />
+          <div className="row" style={{ gap: 10 }}>
+            <button className="btn ghost" style={{ flex: 1 }} onClick={() => configFileRef.current?.click()}>
+              <Upload size={15} /> Import Configuration
+            </button>
+            <button className="btn ghost" style={{ flex: 1 }} onClick={exportConfig}>
+              <Download size={15} /> Export Configuration
+            </button>
+          </div>
+          <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+            A per-device backup of your device↔room bindings, room viewpoints, device icons and
+            Settings preferences.
           </p>
-          {roomsMsg && <div className="test-result ok">{roomsMsg}</div>}
+          {backupMsg && (
+            <div className={`test-result ${backupMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
+              {backupMsg.text}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -291,41 +415,7 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
 }
 
 export default function ConfigEditorModal({ onBack, focusEntityId, onModelChanged }: Props) {
-  const { config, update } = useConfig();
   const { role } = useProfile();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [backupMsg, setBackupMsg] = useState<{ text: string; ok: boolean } | null>(null);
-
-  // Owner-only backup/restore: bundles device↔room bindings, room definitions
-  // (incl. saved viewports), device icons, enabled/disabled devices and every
-  // First-person/Overview + Render quality + Device-icon Settings option into
-  // one JSON file — importable on another vanilla install to reproduce this
-  // villa's configuration exactly (see AppConfig.ConfigExportBundle for what's
-  // deliberately excluded, e.g. the HA connection token).
-  const exportConfig = () => {
-    const bundle = buildConfigExport(config);
-    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `villa-kiosk-config-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setBackupMsg({ text: "Configuration exported.", ok: true });
-  };
-
-  const importConfig = async (file: File) => {
-    try {
-      const patch = parseConfigImport(JSON.parse(await file.text()));
-      if (!confirm(
-        "Import this configuration?\n\nThis replaces device↔room bindings, room definitions, device icons and the First-person/Overview, Render quality and Device-icon settings on THIS device with the values from the file.",
-      )) return;
-      update(patch);
-      setBackupMsg({ text: "Configuration imported.", ok: true });
-    } catch (err) {
-      setBackupMsg({ text: (err as Error).message, ok: false });
-    }
-  };
 
   return (
     <div className="modal-backdrop" onClick={onBack}>
@@ -335,32 +425,9 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
       >
         <div className="settings-header">
           <h2>Advanced Settings</h2>
-          {/* Export/import a full backup of this villa's configuration —
-              Owner only, icon-only (same treatment as the theme selector in
-              the Settings header). */}
-          {role === "owner" && (
-            <div className="segmented segmented-icons" role="group" aria-label="Backup & restore">
-              <button onClick={exportConfig} title="Export configuration" aria-label="Export configuration">
-                <Download size={17} />
-              </button>
-              <button onClick={() => fileRef.current?.click()} title="Import configuration" aria-label="Import configuration">
-                <Upload size={17} />
-              </button>
-              <input
-                ref={fileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) importConfig(f); e.target.value = ""; }}
-              />
-            </div>
-          )}
         </div>
 
         <div className="settings-body">
-          {backupMsg && (
-            <div className={`test-result ${backupMsg.ok ? "ok" : "fail"}`} style={{ marginBottom: 16 }}>
-              {backupMsg.text}
-            </div>
-          )}
-
           <div className="settings-section-title">Villa location</div>
           <p className="muted body-text" style={{ marginTop: 0, fontSize: 12 }}>
             Drives sun position and day/night for this villa.

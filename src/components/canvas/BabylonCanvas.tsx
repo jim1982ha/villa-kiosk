@@ -120,8 +120,10 @@ export default function BabylonCanvas({
         let loadedSource = "(per-browser IndexedDB upload)";
 
         if (addonCfg.model_path) {
-          // ── Add-on mode: ONLY use the centrally configured model. ──────────
-          // No IndexedDB fallback — if the admin set model_path, that is the
+          // ── Central mode: ONLY use the centrally configured model. ─────────
+          // No IndexedDB fallback — once a central model is found (via the
+          // add-on's own config under Ingress, or by probing HA's /local/
+          // static route otherwise — see fetchAddonConfig), that is the
           // authoritative source and per-browser uploads are irrelevant.
           // Version-stamped URL → the service worker serves it from cache on
           // repeat opens (cache-first), so only the first load hits the network.
@@ -131,8 +133,10 @@ export default function BabylonCanvas({
           if (!resp.ok) {
             setAddonError(true);
             throw new Error(
-              `Central model not found at /model/${addonCfg.model_path} (HTTP ${resp.status}).\n` +
-              `Check the add-on configuration: Settings → Add-ons → Villa Kiosk → Configuration.`,
+              `Central model not found at ${modelUrl} (HTTP ${resp.status}).\n` +
+              (isIngress()
+                ? "Check the add-on configuration: Settings → Add-ons → Villa Kiosk → Configuration."
+                : "Re-upload it from the Villa Kiosk add-on's Advanced Settings."),
             );
           }
           data = await readWithProgress(resp, (f) => { if (!cancelled) setProgress(f); });

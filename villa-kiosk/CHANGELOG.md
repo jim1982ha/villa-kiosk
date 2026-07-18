@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.23.28
+
+- **Standalone (dist copied into HA's own `www/` folder) now auto-loads the
+  SAME central GLB the add-on manages, instead of needing its own per-browser
+  upload.** The add-on's `/model/` route is just an nginx alias onto the same
+  `www/` folder HA itself serves at `/local/` — so a standalone build probes
+  `/local/villa-kiosk/villa.glb` directly and, if found, loads and manages it
+  exactly like the add-on does (same info tooltip, same background room-data
+  sync), with per-browser upload only offered as a fallback when no central
+  model is found. The onboarding wizard's "3D model" step picks this up
+  automatically (it already keyed off the same central-model check) and skips
+  straight past the upload step, matching the add-on's onboarding UX.
+- **Advanced Settings: model/configuration actions consolidated onto one
+  row.** Import/Export Configuration moved out of the header and next to
+  Upload central GLB/room data, both now labelled instead of icon-only.
+  Removed the redundant "✓ Central model active — all clients share the same
+  view" line (the (i) tooltip already says as much). The (i) tooltip now
+  leads with the latest SH3D plan's name and upload date/time.
+  (`.rooms.json` generation itself was deliberately kept, not folded into
+  Import/Export Configuration — it's live room-polygon/entity-calibration
+  data that auto-syncs to every kiosk in the background, unlike the
+  per-device preference backup those buttons carry.)
+
 ## 2.23.27
 
 - **Instant snapshot preview while HLS sets up, so the first open of a camera

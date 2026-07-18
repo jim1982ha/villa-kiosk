@@ -1,7 +1,7 @@
 // src/utils/storage.ts
 // IndexedDB helper for the (large) GLB model, plus tiny localStorage helpers.
 
-import { ingressPath } from "@/ha/ingress";
+import { ingressPath, isIngress } from "@/ha/ingress";
 
 const DB_NAME = "villa-kiosk-db";
 const STORE = "models";
@@ -118,6 +118,16 @@ export interface AddonConfig {
   rooms_upload?: { original_name: string; uploaded_at: string } | null;
 }
 
+/**
+ * The conventional default path the add-on writes an "Upload central GLB" to
+ * when its `model_path` option is left empty (mirrors MANAGED_PATH["glb"] in
+ * rootfs/usr/bin/supervisor-proxy.py — keep the two in sync). Also used to
+ * probe for a central model from OUTSIDE the add-on (see
+ * probeStandaloneCentralModel below), since an admin who set a custom
+ * model_path isn't discoverable that way — only the managed default is.
+ */
+export const MANAGED_MODEL_PATH = "villa-kiosk/villa.glb";
+
 /** The room-data sidecar URL that sits next to the central GLB (model_path
  *  with its .glb swapped for .rooms.json). The pipeline emits it; the app
  *  reads it instead of the old multi-hundred-MB .sh3d. */
@@ -135,7 +145,13 @@ export function roomsPathFor(modelPath: string): string {
  * Ingress, its path contains "/api/"). Falls back to the plain URL on any error.
  */
 export async function versionedModelUrl(relPath: string): Promise<string> {
-  const url = ingressPath(`model/${relPath}`);
+  // Under Ingress the add-on's own nginx serves central files at /model/ (see
+  // rootfs/etc/nginx/nginx.conf — an alias onto the HA www folder). Outside
+  // Ingress there's no such route, but that alias means the exact same file
+  // is also reachable at HA's own plain /local/ static path (this build
+  // copied into HA's www folder, opened directly rather than through the
+  // add-on) — see probeStandaloneCentralModel.
+  const url = isIngress() ? ingressPath(`model/${relPath}`) : `/local/${relPath}`;
   try {
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 3000);
@@ -230,9 +246,58 @@ export async function uploadCentralModel(
   return result;
 }
 
-/** Fetch the add-on options from the supervisor-proxy. Cached after first call. */
+/** Best-effort read of an upload-provenance sidecar (see
+ *  supervisor-proxy.py's _write_upload_sidecar) directly off HA's own static
+ *  file server — used by probeStandaloneCentralModel, which has no
+ *  supervisor-proxy to ask. */
+async function fetchUploadMeta(relPath: string): Promise<{ original_name: string; uploaded_at: string } | null> {
+  try {
+    const resp = await fetch(`/local/${relPath}.upload.json`);
+    if (!resp.ok) return null;
+    return await resp.json() as { original_name: string; uploaded_at: string };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Outside Ingress there's no supervisor-proxy to serve /addon-config, but the
+ * add-on's /model/ route is just an alias onto the same HA www folder HA
+ * itself serves at /local/ (see nginx.conf) — so a central model uploaded
+ * through the add-on is reachable directly, byte-for-byte, from a standalone
+ * copy of this build placed in that same www folder and opened via HA's own
+ * /local/ route. Probing the conventional managed default path (not an
+ * arbitrary admin-set model_path, which lives in Supervisor's add-on options
+ * and isn't readable outside Ingress) lets standalone auto-load the SAME
+ * model the add-on manages instead of needing its own per-browser upload —
+ * one shared source of truth instead of two competing ones.
+ */
+async function probeStandaloneCentralModel(): Promise<AddonConfig> {
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 3000);
+    const resp = await fetch(`/local/${MANAGED_MODEL_PATH}`, { method: "HEAD", signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!resp.ok) return { model_path: "" };
+  } catch {
+    return { model_path: "" }; // dev server, or no central model uploaded yet
+  }
+  const [model_upload, rooms_upload] = await Promise.all([
+    fetchUploadMeta(MANAGED_MODEL_PATH),
+    fetchUploadMeta(roomsPathFor(MANAGED_MODEL_PATH)),
+  ]);
+  return { model_path: MANAGED_MODEL_PATH, model_upload, rooms_upload };
+}
+
+/** Fetch the add-on options from the supervisor-proxy (Ingress), or probe for
+ *  a central model directly (standalone — see probeStandaloneCentralModel).
+ *  Cached after first call. */
 export async function fetchAddonConfig(): Promise<AddonConfig> {
   if (_addonConfigCache) return _addonConfigCache;
+  if (!isIngress()) {
+    _addonConfigCache = await probeStandaloneCentralModel();
+    return _addonConfigCache;
+  }
   try {
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 3000);
@@ -241,7 +306,7 @@ export async function fetchAddonConfig(): Promise<AddonConfig> {
     if (!resp.ok) throw new Error(`${resp.status}`);
     _addonConfigCache = await resp.json() as AddonConfig;
   } catch {
-    // Not in an add-on context (dev mode) or add-on not yet configured.
+    // Add-on not yet configured.
     _addonConfigCache = { model_path: "" };
   }
   return _addonConfigCache;
