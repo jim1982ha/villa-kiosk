@@ -196,36 +196,35 @@ function ModelActionsRow({
   onConfigFile: (file: File) => void;
   onExport: () => void;
 }) {
-  const disabledTitle = canUploadCentrally
-    ? undefined
-    : "Upload from the Villa Kiosk add-on's Advanced Settings instead — a standalone page has no backend to write the central file";
   return (
     <>
-      <input ref={glbUploadRef} type="file" accept=".glb,model/gltf-binary" style={{ display: "none" }}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) onGlbFile(f); e.target.value = ""; }} />
-      <input ref={roomsUploadRef} type="file" accept=".json,application/json" style={{ display: "none" }}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) onRoomsFile(f); e.target.value = ""; }} />
+      {/* GLB/room-data upload only exists where there's a backend to accept
+          it (Ingress) — a standalone page has none, so these two buttons are
+          left out entirely there rather than shown disabled: a permanently
+          non-functional button reads as broken, not as an explained state. */}
+      {canUploadCentrally && (
+        <>
+          <input ref={glbUploadRef} type="file" accept=".glb,model/gltf-binary" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onGlbFile(f); e.target.value = ""; }} />
+          <input ref={roomsUploadRef} type="file" accept=".json,application/json" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onRoomsFile(f); e.target.value = ""; }} />
+        </>
+      )}
       <input ref={configFileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onConfigFile(f); e.target.value = ""; }} />
       <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-        {/* title on a disabled <button> never shows: .btn:disabled sets
-            pointer-events: none, which also blocks the hover that would
-            trigger the native tooltip — wrap in a plain span (not disabled)
-            so the explanation is actually reachable. */}
-        <span style={{ flex: 1, minWidth: 160 }} title={disabledTitle}>
-          <button className="btn ghost" style={{ width: "100%" }}
-            disabled={!canUploadCentrally || uploadBusy !== null}
-            onClick={() => glbUploadRef.current?.click()}>
-            <Upload size={15} /> {uploadBusy === "glb" ? "Uploading…" : "Upload central GLB"}
-          </button>
-        </span>
-        <span style={{ flex: 1, minWidth: 160 }} title={disabledTitle}>
-          <button className="btn ghost" style={{ width: "100%" }}
-            disabled={!canUploadCentrally || uploadBusy !== null}
-            onClick={() => roomsUploadRef.current?.click()}>
-            <Upload size={15} /> {uploadBusy === "rooms" ? "Uploading…" : "Upload room data"}
-          </button>
-        </span>
+        {canUploadCentrally && (
+          <>
+            <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
+              onClick={() => glbUploadRef.current?.click()}>
+              <Upload size={15} /> {uploadBusy === "glb" ? "Uploading…" : "Upload central GLB"}
+            </button>
+            <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
+              onClick={() => roomsUploadRef.current?.click()}>
+              <Upload size={15} /> {uploadBusy === "rooms" ? "Uploading…" : "Upload room data"}
+            </button>
+          </>
+        )}
         <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} onClick={() => configFileRef.current?.click()}>
           <Upload size={15} /> Import Configuration
         </button>
@@ -235,9 +234,9 @@ function ModelActionsRow({
       </div>
       <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
         {canUploadCentrally
-          ? "Each upload overwrites the current central file and reloads every kiosk on next open. "
-          : "Upload central GLB/room data from the add-on's Advanced Settings — this standalone page can only read them, not write them. "}
-        Room data is the small <code>.rooms.json</code> the Blender pipeline emits next to the GLB —
+          ? "Each upload overwrites the current central file and reloads every kiosk on next open. Room data is the small "
+          : "Upload a central GLB/room data from the Villa Kiosk add-on's Advanced Settings instead — a standalone page has no backend to write them. Room data is the small "}
+        <code>.rooms.json</code> the Blender pipeline emits next to the GLB —
         it carries the room names, shapes and device positions used to label rooms and place devices.
         Import/Export Configuration is a per-device backup of your device↔room bindings, room
         viewpoints, device icons and Settings preferences.

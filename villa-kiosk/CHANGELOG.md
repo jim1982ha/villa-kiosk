@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.23.36
+
+- **Standalone no longer shows "Upload central GLB"/"Upload room data" at
+  all.** They were disabled-with-explanation there (no backend to accept an
+  upload from a static page), but a permanently non-functional button reads
+  as broken rather than as an intentionally-explained state — confirmed via
+  fresh-tab load-time testing that the earlier ~25s numbers were a Home
+  Assistant Ingress-panel-navigation artifact, not a real bug, so this is
+  purely a UI streamlining pass. Import/Export Configuration stay, since
+  those work identically everywhere.
+
 ## 2.23.35
 
 - Widened the model (i) tooltip 50% (340px → 510px cap) — confirmed
