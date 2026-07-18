@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.23.39
+
+- **Fixed: a device badge next to another closely-mounted fixture (e.g. a
+  ceiling fan and its own temperature sensor) looked like it shrank when it
+  lost its value pill (fan turned off).** Root cause, confirmed from two
+  same-camera-position screenshots: the anti-overlap "declutter" pass only
+  reserved pill-sized collision clearance around a badge while it *currently*
+  had a pill showing — the moment the fan's pill disappeared (turned off),
+  its collision box shrank, so it got pushed apart from its neighbour less
+  than before and ended up nearly overlapping it, reading as "got smaller."
+  Clearance is now reserved for any entity type that can *ever* show a pill
+  (light/fan/cover/climate/sensor), regardless of whether it has one at this
+  exact moment — so two such fixtures keep the same spacing no matter which
+  one currently has a reading to display.
+
 ## 2.23.38
 
 - **Onboarding (standalone): the HA URL/token fields were pre-filled from

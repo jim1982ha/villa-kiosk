@@ -172,6 +172,13 @@ const VALUE_CHIP_HEIGHT_PX = 18;
 // basis for pickBadgeAt()'s nearest-centre hit-testing.
 const BADGE_DIAMETER_PX = 40;
 
+// Entity types compactValue() can EVER return non-empty text for — must stay
+// in sync with that switch. Used by declutterLabels to reserve pill-sized
+// clearance around these regardless of whether the current state actually
+// has a pill showing (see the long comment there for why "capable of" beats
+// "currently has one" for collision-box sizing).
+const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climate", "sensor"]);
+
 // Pulse animation speed in radians per second (was 0.06 per frame at ~60 fps).
 // Advanced by real elapsed time so the alert pulse breathes at the same rate on
 // a 60 Hz tablet and a 120 Hz phone.
@@ -1270,11 +1277,25 @@ export class EntityVisuals {
     // With a pill the box spans the badge top down to the pill bottom.
     const boxes = shown.map((s) => {
       const hasPill = s.lbl.valueWrap.isVisible;
-      // ≈ text width (px/char at 11px Inter) + the pill's L/R padding (10+10).
+      // Reserve the WITH-PILL footprint (halfH/cy) for any type that can EVER
+      // grow one (see compactValue) even while it currently has none — not
+      // just when hasPill is true right now. Two fixtures mounted close
+      // together in the model (e.g. a ceiling fan + its own temperature
+      // sensor) sit fine when both are pill-less, but the moment the fan
+      // (pill-capable) turns off and drops its pill, ITS box shrank while the
+      // sensor's didn't, so they got pushed apart less than before and ended
+      // up nearly touching/overlapping — reading as "the badge got smaller"
+      // when it was really "got less clearance from its neighbour". Sizing
+      // the box off pill-CAPABILITY instead of current visibility keeps the
+      // same spacing regardless of which of a pair happens to have a reading
+      // at this exact moment. Only the WIDTH still adapts to the actual pill
+      // text when one is shown (a wide value still needs proportionally more
+      // horizontal room than a narrow one).
+      const pillCapable = PILL_CAPABLE_TYPES.has(s.lbl.type);
       const pillHalfW = hasPill ? (s.lbl.valueText.text.length * 6.2 + 24) / 2 : 0;
       const halfW = Math.max(BADGE_DIAMETER_PX / 2, pillHalfW) * scale;
-      const halfH = (hasPill ? 30.5 : 20) * scale;
-      const cy = (hasPill ? -45.5 : -56) * scale; // box centre Y relative to anchor
+      const halfH = (pillCapable ? 30.5 : 20) * scale;
+      const cy = (pillCapable ? -45.5 : -56) * scale; // box centre Y relative to anchor
       return { halfW, halfH, cy };
     });
 
