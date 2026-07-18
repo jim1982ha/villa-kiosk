@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.23.32
+
+- **Fixed: the model (i) tooltip overflowed off the left edge of the
+  screen.** After 2.23.28 moved the (i) button to sit alone at the left of
+  its row (dropping the green status line it used to pair with), the
+  popover's `right: 0` anchor — a leftover from when the button sat at the
+  right end of a spread row — pushed the whole 340px popover off-screen to
+  the left. Now anchored `left: 0` (opens rightward, toward the available
+  space) instead.
+- **Standalone's 3D-model UI now shares the SAME row of actions as the
+  add-on's, in every case, not just when a central model is already
+  found.** Previously standalone had its own, differently-labelled
+  "Configuration backup" section instead of the add-on's combined
+  Upload/Import/Export row; now it's the exact same `ModelActionsRow` in
+  all three states (central model found, ingress-with-none-yet, and
+  standalone-with-nothing-central), with only "Upload central GLB"/"Upload
+  room data" disabled (with an explanatory tooltip) where there's no
+  backend to accept them. One shared component instead of parallel,
+  drifting copies.
+- **Added the running app version to the Advanced Settings footer**
+  (bottom-left), baked in at build time from `package.json` — the same
+  mechanism briefly used for camera-bug diagnostics in 2.23.26 and removed
+  afterward, reinstated here as a permanent, always-visible feature instead
+  of temporary scaffolding.
+
 ## 2.23.31
 
 - **Fixed: standalone (dist copied into HA's own `www/` folder) didn't

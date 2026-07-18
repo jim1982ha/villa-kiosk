@@ -26,6 +26,12 @@ import { fileURLToPath, URL } from "node:url";
 const CERT_KEY = "./certs/key.pem";
 const CERT_CRT = "./certs/cert.pem";
 
+// Bake the running version into the bundle (Advanced Settings footer) so a
+// kiosk's Settings screen can show which build is actually deployed, without
+// a separate network call. package.json/villa-kiosk/config.yaml are already
+// bumped together per this repo's release convention, so this always matches.
+const pkgVersion = (JSON.parse(fs.readFileSync("./package.json", "utf-8")) as { version: string }).version;
+
 export default defineConfig(({ command }) => {
   const serving = command === "serve";
   const haveTrustedCert =
@@ -45,6 +51,9 @@ export default defineConfig(({ command }) => {
 
   return {
     base: "./",
+    define: {
+      __APP_VERSION__: JSON.stringify(pkgVersion),
+    },
     plugins: [
       react(),
       // Only fall back to a self-signed cert when no trusted cert is provided.

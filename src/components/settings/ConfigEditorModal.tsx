@@ -6,7 +6,7 @@
 // already applies to the live scene through ConfigContext.update(), so there is
 // nothing to reload on the way out.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Download, Upload, FileText, Info } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -167,6 +167,82 @@ function CentralModelInfo({
   );
 }
 
+/**
+ * The GLB/room-data/configuration upload-and-backup row + its explanatory
+ * copy + result messages — shared by BOTH "a central model already exists"
+ * and "ingress with no central model yet" (the two cases that both need this
+ * exact row; only whether the central-upload buttons are enabled differs).
+ * Kept as one component so standalone and Ingress can't drift apart here.
+ */
+function ModelActionsRow({
+  canUploadCentrally, uploadBusy, uploadMsg, backupMsg,
+  glbUploadRef, roomsUploadRef, configFileRef,
+  onGlbFile, onRoomsFile, onConfigFile, onExport,
+}: {
+  canUploadCentrally: boolean;
+  uploadBusy: "glb" | "rooms" | null;
+  uploadMsg: { text: string; ok: boolean } | null;
+  backupMsg: { text: string; ok: boolean } | null;
+  glbUploadRef: RefObject<HTMLInputElement>;
+  roomsUploadRef: RefObject<HTMLInputElement>;
+  configFileRef: RefObject<HTMLInputElement>;
+  onGlbFile: (file: File) => void;
+  onRoomsFile: (file: File) => void;
+  onConfigFile: (file: File) => void;
+  onExport: () => void;
+}) {
+  const disabledTitle = canUploadCentrally
+    ? undefined
+    : "Upload from the Villa Kiosk add-on's Advanced Settings instead — a standalone page has no backend to write the central file";
+  return (
+    <>
+      <input ref={glbUploadRef} type="file" accept=".glb,model/gltf-binary" style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onGlbFile(f); e.target.value = ""; }} />
+      <input ref={roomsUploadRef} type="file" accept=".json,application/json" style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onRoomsFile(f); e.target.value = ""; }} />
+      <input ref={configFileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onConfigFile(f); e.target.value = ""; }} />
+      <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+        <button className="btn ghost" style={{ flex: 1, minWidth: 160 }}
+          disabled={!canUploadCentrally || uploadBusy !== null} title={disabledTitle}
+          onClick={() => glbUploadRef.current?.click()}>
+          <Upload size={15} /> {uploadBusy === "glb" ? "Uploading…" : "Upload central GLB"}
+        </button>
+        <button className="btn ghost" style={{ flex: 1, minWidth: 160 }}
+          disabled={!canUploadCentrally || uploadBusy !== null} title={disabledTitle}
+          onClick={() => roomsUploadRef.current?.click()}>
+          <Upload size={15} /> {uploadBusy === "rooms" ? "Uploading…" : "Upload room data"}
+        </button>
+        <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} onClick={() => configFileRef.current?.click()}>
+          <Upload size={15} /> Import Configuration
+        </button>
+        <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} onClick={onExport}>
+          <Download size={15} /> Export Configuration
+        </button>
+      </div>
+      <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+        {canUploadCentrally
+          ? "Each upload overwrites the current central file and reloads every kiosk on next open. "
+          : "Upload central GLB/room data from the add-on's Advanced Settings — this standalone page can only read them, not write them. "}
+        Room data is the small <code>.rooms.json</code> the Blender pipeline emits next to the GLB —
+        it carries the room names, shapes and device positions used to label rooms and place devices.
+        Import/Export Configuration is a per-device backup of your device↔room bindings, room
+        viewpoints, device icons and Settings preferences.
+      </p>
+      {uploadMsg && (
+        <div className={`test-result ${uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
+          {uploadMsg.text}
+        </div>
+      )}
+      {backupMsg && (
+        <div className={`test-result ${backupMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
+          {backupMsg.text}
+        </div>
+      )}
+    </>
+  );
+}
+
 function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
   const { config, update } = useConfig();
   const ingress = isIngress();
@@ -273,15 +349,36 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
   };
   const loadedModel = getLoadedModelInfo();
 
+  // Not just "which section to show" — genuinely different capabilities:
+  // Ingress always has a supervisor-proxy to accept an upload; standalone
+  // only ever has one once a central model already exists somewhere for it
+  // to READ (there's no backend behind a plain www/ page to write one).
+  const canUploadCentrally = ingress;
+
   return (
     <div>
-      {ingress ? (
+      {addonCfg === null ? (
+        <p className="muted body-text">
+          {ingress ? "Reading add-on configuration…" : "Checking for a central model…"}
+        </p>
+      ) : addonCfg.model_path ? (
+        // Central model found — via the add-on's own config under Ingress, or
+        // by reading its public manifest otherwise (see storage.ts's
+        // probeStandaloneCentralModel). ONE shared UI either way; the only
+        // difference is that a standalone page can't accept an upload itself
+        // (no supervisor-proxy behind it), so those two buttons are disabled
+        // there with a pointer at where to do it instead.
         <>
-        {addonCfg === null ? (
-          <p className="muted body-text">Reading add-on configuration…</p>
-        ) : addonCfg.model_path ? (
-          <CentralModelInfo addonCfg={addonCfg} loadedModel={loadedModel} editable />
-        ) : (
+          <CentralModelInfo addonCfg={addonCfg} loadedModel={loadedModel} editable={canUploadCentrally} />
+          <ModelActionsRow
+            canUploadCentrally={canUploadCentrally} uploadBusy={uploadBusy} uploadMsg={uploadMsg} backupMsg={backupMsg}
+            glbUploadRef={glbUploadRef} roomsUploadRef={roomsUploadRef} configFileRef={configFileRef}
+            onGlbFile={(f) => uploadCentral(f, "glb")} onRoomsFile={(f) => uploadCentral(f, "rooms")}
+            onConfigFile={importConfig} onExport={exportConfig}
+          />
+        </>
+      ) : ingress ? (
+        <>
           <div style={{ background: "color-mix(in srgb, var(--status-warning) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--status-warning) 40%, transparent)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
             <div style={{ fontWeight: 600, fontSize: 13, color: "var(--status-warning)", marginBottom: 6 }}>
               ⚠ No central model yet
@@ -292,126 +389,69 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
               No SSH/Samba needed.
             </p>
           </div>
-        )}
-
-        {/* Central upload — writes straight into the HA www folder via the
-            add-on, overwriting the current central files. */}
-        <input ref={glbUploadRef} type="file" accept=".glb,model/gltf-binary" style={{ display: "none" }}
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCentral(f, "glb"); e.target.value = ""; }} />
-        <input ref={roomsUploadRef} type="file" accept=".json,application/json" style={{ display: "none" }}
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCentral(f, "rooms"); e.target.value = ""; }} />
-        <input ref={configFileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) importConfig(f); e.target.value = ""; }} />
-        <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-          <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
-            onClick={() => glbUploadRef.current?.click()}>
-            <Upload size={15} /> {uploadBusy === "glb" ? "Uploading…" : "Upload central GLB"}
-          </button>
-          <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
-            onClick={() => roomsUploadRef.current?.click()}>
-            <Upload size={15} /> {uploadBusy === "rooms" ? "Uploading…" : "Upload room data"}
-          </button>
-          <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} onClick={() => configFileRef.current?.click()}>
-            <Upload size={15} /> Import Configuration
-          </button>
-          <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} onClick={exportConfig}>
-            <Download size={15} /> Export Configuration
-          </button>
-        </div>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          Each upload overwrites the current central file and reloads every kiosk on next open.
-          Room data is the small <code>.rooms.json</code> the Blender pipeline emits next to the GLB —
-          it carries the room names, shapes and device positions used to label rooms and place devices.
-          Import/Export Configuration is a per-device backup of your device↔room bindings, room
-          viewpoints, device icons and Settings preferences.
-        </p>
-        {uploadMsg && (
-          <div className={`test-result ${uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
-            {uploadMsg.text}
-          </div>
-        )}
-        {backupMsg && (
-          <div className={`test-result ${backupMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
-            {backupMsg.text}
-          </div>
-        )}
+          <ModelActionsRow
+            canUploadCentrally uploadBusy={uploadBusy} uploadMsg={uploadMsg} backupMsg={backupMsg}
+            glbUploadRef={glbUploadRef} roomsUploadRef={roomsUploadRef} configFileRef={configFileRef}
+            onGlbFile={(f) => uploadCentral(f, "glb")} onRoomsFile={(f) => uploadCentral(f, "rooms")}
+            onConfigFile={importConfig} onExport={exportConfig}
+          />
         </>
       ) : (
+        // Standalone with no central model to read yet AND nothing to upload
+        // one to (that only exists via the add-on) — the only genuinely
+        // different case: fall back to a real, functional per-browser upload
+        // (IndexedDB), plus its own room-data variant.
         <>
-          {addonCfg === null ? (
-            <p className="muted body-text">Checking for a central model…</p>
-          ) : addonCfg.model_path ? (
-            // A central model was auto-detected on HA's own /local/ static
-            // route (the Villa Kiosk add-on is installed and has one
-            // configured) — load and manage it the SAME way the add-on does,
-            // instead of a separate per-browser upload. See
-            // storage.ts's probeStandaloneCentralModel.
-            <CentralModelInfo addonCfg={addonCfg} loadedModel={loadedModel} editable={false} />
-          ) : (
-            <>
-              <label>3D model</label>
-              <ModelUploader onUploaded={() => { setModelMeta(getModelMeta()); onModelChanged(); }} />
-              {modelMeta && (
-                <button
-                  className="btn ghost mt"
-                  style={{ width: "100%", color: "var(--status-danger)" }}
-                  onClick={async () => {
-                    if (!confirm("Remove the stored 3D model?\n\nThe model is saved in this browser only — it is not part of the add-on data and must be re-uploaded after clearing.")) return;
-                    await clearStoredModel();
-                    setModelMeta(null);
-                    onModelChanged();
-                  }}
-                >
-                  Clear stored model ({modelMeta.name})
-                </button>
-              )}
-              <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-                Tip: when the Villa Kiosk add-on is installed with a central model configured, this
-                page loads that same model automatically — no per-device upload needed.
-              </p>
-
-              {/* Room-data sidecar upload — standalone mode only */}
-              <label style={{ marginTop: 16 }}>Room data — optional</label>
-              <button className="btn ghost" style={{ width: "100%" }} onClick={() => roomsRef.current?.click()}>
-                <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload room data"}
-              </button>
-              <input
-                ref={roomsRef} type="file" accept=".json,application/json" style={{ display: "none" }}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) loadRoomData(f);
-                }}
-              />
-              <p className="muted body-text" style={{ marginTop: 6 }}>
-                The small <code>.rooms.json</code> the Blender pipeline emits next to the GLB — it carries
-                the room names, shapes and device positions, giving automatic room labels + calibration
-                for any villa.
-              </p>
-              {roomsMsg && <div className="test-result ok">{roomsMsg}</div>}
-            </>
+          <label>3D model</label>
+          <ModelUploader onUploaded={() => { setModelMeta(getModelMeta()); onModelChanged(); }} />
+          {modelMeta && (
+            <button
+              className="btn ghost mt"
+              style={{ width: "100%", color: "var(--status-danger)" }}
+              onClick={async () => {
+                if (!confirm("Remove the stored 3D model?\n\nThe model is saved in this browser only — it is not part of the add-on data and must be re-uploaded after clearing.")) return;
+                await clearStoredModel();
+                setModelMeta(null);
+                onModelChanged();
+              }}
+            >
+              Clear stored model ({modelMeta.name})
+            </button>
           )}
-
-          {/* Per-device backup/restore — Owner only (see exportConfig/importConfig above). */}
-          <label style={{ marginTop: 16 }}>Configuration backup — optional</label>
-          <input ref={configFileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) importConfig(f); e.target.value = ""; }} />
-          <div className="row" style={{ gap: 10 }}>
-            <button className="btn ghost" style={{ flex: 1 }} onClick={() => configFileRef.current?.click()}>
-              <Upload size={15} /> Import Configuration
-            </button>
-            <button className="btn ghost" style={{ flex: 1 }} onClick={exportConfig}>
-              <Download size={15} /> Export Configuration
-            </button>
-          </div>
           <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-            A per-device backup of your device↔room bindings, room viewpoints, device icons and
-            Settings preferences.
+            Tip: when the Villa Kiosk add-on is installed with a central model configured, this
+            page loads that same model automatically — no per-device upload needed.
           </p>
-          {backupMsg && (
-            <div className={`test-result ${backupMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
-              {backupMsg.text}
-            </div>
-          )}
+
+          {/* Room-data sidecar upload — standalone mode only */}
+          <label style={{ marginTop: 16 }}>Room data — optional</label>
+          <button className="btn ghost" style={{ width: "100%" }} onClick={() => roomsRef.current?.click()}>
+            <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload room data"}
+          </button>
+          <input
+            ref={roomsRef} type="file" accept=".json,application/json" style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) loadRoomData(f);
+            }}
+          />
+          <p className="muted body-text" style={{ marginTop: 6 }}>
+            The small <code>.rooms.json</code> the Blender pipeline emits next to the GLB — it carries
+            the room names, shapes and device positions, giving automatic room labels + calibration
+            for any villa.
+          </p>
+          {roomsMsg && <div className="test-result ok">{roomsMsg}</div>}
+
+          {/* Same shared row as the two central-model cases above (see
+              ModelActionsRow) — GLB/room-data uploads disabled here too
+              (nothing central exists yet to write one from a standalone
+              page), Import/Export Configuration work the same everywhere. */}
+          <ModelActionsRow
+            canUploadCentrally={false} uploadBusy={uploadBusy} uploadMsg={uploadMsg} backupMsg={backupMsg}
+            glbUploadRef={glbUploadRef} roomsUploadRef={roomsUploadRef} configFileRef={configFileRef}
+            onGlbFile={(f) => uploadCentral(f, "glb")} onRoomsFile={(f) => uploadCentral(f, "rooms")}
+            onConfigFile={importConfig} onExport={exportConfig}
+          />
         </>
       )}
     </div>
@@ -463,7 +503,8 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           <GroupedDevices />
         </div>
 
-        <div className="settings-footer" style={{ justifyContent: "flex-end" }}>
+        <div className="settings-footer" style={{ justifyContent: "space-between" }}>
+          <span className="muted body-text" style={{ fontSize: 12 }}>v{__APP_VERSION__}</span>
           <button className="btn primary" onClick={onBack}>Close</button>
         </div>
       </div>
