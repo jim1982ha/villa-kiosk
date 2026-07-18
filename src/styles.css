@@ -523,7 +523,10 @@ input[type="range"]::-moz-range-thumb {
 .camera-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 /* Wraps the HLS <video> together with its instant snapshot preview so the two
    overlap regardless of the video's own (pre-metadata) intrinsic size. */
-.camera-hls-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+/* pointer-events: none — this spans the WHOLE panel (inset: 0), including
+   over the label/close/fullscreen buttons rendered before it; without this
+   it silently eats their clicks even though nothing is painted there. */
+.camera-hls-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .camera-hls-wrap .camera-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 
 /* --- Teleport menu --- */

@@ -51,11 +51,16 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
 
-  // Central 3D model files (GLB/SH3D): cache-first in the persistent model cache.
-  // Checked BEFORE the /api/ exclusion below because, behind Ingress, the model
-  // is served under /api/hassio_ingress/<token>/model/… — without this branch it
-  // matched the "never cache" rule and was re-downloaded on every single open.
-  if (url.pathname.includes("/model/") && !url.pathname.includes("camera_proxy")) {
+  // Central 3D model files (GLB/room-data sidecar): cache-first in the
+  // persistent model cache. Checked BEFORE the /api/ exclusion below because,
+  // behind Ingress, the model is served under
+  // /api/hassio_ingress/<token>/model/… — without this branch it matched the
+  // "never cache" rule and was re-downloaded on every single open. Matched by
+  // extension (not just the "/model/" path) so a standalone build's central
+  // model — served at HA's own /local/ static route, see storage.ts's
+  // probeStandaloneCentralModel — gets the same treatment, not just Ingress's.
+  const isModelFile = url.pathname.endsWith(".glb") || url.pathname.endsWith(".rooms.json");
+  if (isModelFile && !url.pathname.includes("camera_proxy")) {
     event.respondWith(modelCacheFirst(req, url));
     return;
   }

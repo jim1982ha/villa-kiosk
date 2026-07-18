@@ -135,6 +135,17 @@ export function roomsPathFor(modelPath: string): string {
   return modelPath.replace(/\.glb$/i, ".rooms.json");
 }
 
+// versionedModelUrl's HEAD probe (below) is the only way to detect a replaced
+// file, but it's a real network round-trip on every open — over a remote
+// tunnel (DuckDNS, Nabu Casa) a transient slow/dropped HEAD would otherwise
+// fall back to the BARE url, which the service worker's model cache has
+// never seen (every previous successful load was cached under a `?v=`
+// key) — forcing a full re-download of a many-MB GLB for what's often just
+// one flaky request. Remembering the last tag that worked means a failed
+// probe still resolves to the SAME versioned URL as last time, so the model
+// cache still hits.
+const LAST_MODEL_TAG_PREFIX = "villa-kiosk:model-tag:";
+
 /**
  * Resolve a central model file (GLB/SH3D) to a version-stamped URL so the
  * service worker can cache it aggressively (cache-first) yet still pick up a
@@ -142,7 +153,9 @@ export function roomsPathFor(modelPath: string): string {
  * append it as `?v=`; when the admin swaps the model the tag changes, the URL
  * changes, and the SW downloads the new bytes exactly once. Without this the
  * 34 MB GLB was re-downloaded on every open (the SW skipped it because, behind
- * Ingress, its path contains "/api/"). Falls back to the plain URL on any error.
+ * Ingress, its path contains "/api/"). If the live probe fails, falls back to
+ * the last tag that worked (see LAST_MODEL_TAG_PREFIX) rather than an
+ * unversioned URL, so a flaky probe doesn't force a fresh download.
  */
 export async function versionedModelUrl(relPath: string): Promise<string> {
   // Under Ingress the add-on's own nginx serves central files at /model/ (see
@@ -152,6 +165,7 @@ export async function versionedModelUrl(relPath: string): Promise<string> {
   // copied into HA's www folder, opened directly rather than through the
   // add-on) — see probeStandaloneCentralModel.
   const url = isIngress() ? ingressPath(`model/${relPath}`) : `/local/${relPath}`;
+  const tagKey = LAST_MODEL_TAG_PREFIX + relPath;
   try {
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 3000);
@@ -162,11 +176,19 @@ export async function versionedModelUrl(relPath: string): Promise<string> {
         resp.headers.get("ETag") ||
         resp.headers.get("Last-Modified") ||
         resp.headers.get("Content-Length");
-      if (tag) return `${url}?v=${encodeURIComponent(tag.replace(/"/g, ""))}`;
+      if (tag) {
+        const clean = tag.replace(/"/g, "");
+        try { localStorage.setItem(tagKey, clean); } catch { /* storage full/disabled */ }
+        return `${url}?v=${encodeURIComponent(clean)}`;
+      }
     }
   } catch {
-    // Offline, or HEAD unsupported — fall back to the unversioned URL.
+    // Offline, HEAD unsupported, or the probe timed out/dropped.
   }
+  try {
+    const lastTag = localStorage.getItem(tagKey);
+    if (lastTag) return `${url}?v=${encodeURIComponent(lastTag)}`;
+  } catch { /* storage disabled */ }
   return url;
 }
 

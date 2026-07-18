@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.23.29
+
+- **Fixed: camera panel's close/fullscreen buttons weren't clickable while an
+  HLS feed was showing.** 2.23.27's instant-snapshot-preview overlay
+  (`.camera-hls-wrap`) spans the whole panel (`inset: 0`) and, unlike the
+  loading spinner it sits next to, was never given `pointer-events: none` —
+  so it silently ate clicks over the buttons in the top-right corner even
+  though nothing was painted there.
+- **Model reload speed: closed two real gaps in the GLB/room-data caching.**
+  The bytes are meant to be cache-first (service worker, see `sw.js`) so a
+  repeat app open shouldn't re-download a many-MB GLB at all — but 2.23.28's
+  standalone `/local/` path was never added to the service worker's
+  model-cache matcher (it only recognized Ingress's `/model/` prefix), so a
+  standalone build silently fell back to a much weaker cache strategy.
+  Separately, `versionedModelUrl`'s freshness check (a HEAD request every
+  open, to detect a replaced file) previously fell back to a bare,
+  never-cached URL on ANY hiccup (slow tunnel, dropped request) — forcing a
+  full re-download for what's often a single flaky request. It now
+  remembers the last tag that worked and reuses it when the live probe
+  fails, so a transient hiccup no longer defeats the cache. Note: this only
+  addresses the network transfer — Babylon still has to parse the GLB and
+  build the scene/GPU resources on every fresh page load, which is CPU-bound
+  and unrelated to caching.
+
 ## 2.23.28
 
 - **Standalone (dist copied into HA's own `www/` folder) now auto-loads the
