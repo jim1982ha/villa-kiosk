@@ -12,6 +12,17 @@ export interface LoadedModelInfo {
   sha256: string;
   /** Number of distinct named, vertex-bearing meshes after import. */
   meshCount: number;
+  /**
+   * How long getting the bytes took (network fetch, or the IndexedDB read in
+   * standalone/dev mode) vs. how long Babylon then took to parse them into a
+   * scene (decode geometry, build materials, upload GPU buffers). A fast
+   * fetch (a service-worker cache hit is normally well under a second) with a
+   * still-slow overall load means the cost is the parse, not the network —
+   * see this app's caching docs in storage.ts/sw.js, which can only ever
+   * speed up the fetch half.
+   */
+  fetchMs: number;
+  parseMs: number;
 }
 
 let _info: LoadedModelInfo | null = null;

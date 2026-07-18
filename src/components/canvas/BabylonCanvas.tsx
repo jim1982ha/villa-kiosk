@@ -118,6 +118,7 @@ export default function BabylonCanvas({
         let data: ArrayBuffer | null = null;
         let fromAddon = false;
         let loadedSource = "(per-browser IndexedDB upload)";
+        const tFetchStart = performance.now();
 
         if (addonCfg.model_path) {
           // ── Central mode: ONLY use the centrally configured model. ─────────
@@ -159,8 +160,10 @@ export default function BabylonCanvas({
           setStatus("no-model");
           return;
         }
+        const tFetchDone = performance.now();
         await manager.loadModel(data);
         if (cancelled) return;
+        const tParseDone = performance.now();
 
         // Fingerprint the GLB that actually loaded, so Settings can prove which
         // file is in use without needing to toggle an entity. Compare against
@@ -171,6 +174,8 @@ export default function BabylonCanvas({
           bytes: data.byteLength,
           sha256: await sha256Hex(data),
           meshCount: meshNames.length,
+          fetchMs: Math.round(tFetchDone - tFetchStart),
+          parseMs: Math.round(tParseDone - tFetchDone),
         });
 
         // Expose mesh names for the binding UI.

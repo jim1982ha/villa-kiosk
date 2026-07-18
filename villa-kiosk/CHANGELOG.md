@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.23.30
+
+- **Added a fetch-vs-parse load-time breakdown to the model (i) tooltip**
+  (Advanced Settings → 3D model source), to tell apart "still re-downloading
+  the GLB" from "Babylon is just slow to parse/build the scene" — the still
+  reproducing "I see the spinner every time I reopen" report needs this to
+  diagnose further, since `devLog` (used for earlier debugging arcs) is
+  compiled out of production builds and useless on a real deployed add-on.
+
 ## 2.23.29
 
 - **Fixed: camera panel's close/fullscreen buttons weren't clickable while an

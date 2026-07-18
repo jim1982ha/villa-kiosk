@@ -131,6 +131,10 @@ function CentralModelInfo({
           {loadedModel && (
             <>
               <div className="row"><span>Loaded</span><span>{(loadedModel.bytes / 1_000_000).toFixed(2)} MB · {loadedModel.meshCount} meshes</span></div>
+              {/* Fetch = getting the bytes (network or cache); Parse = Babylon
+                  building the scene from them. A fast fetch with a still-slow
+                  overall load points at the parse, not the network/caching. */}
+              <div className="row"><span>Load time</span><span>fetch {loadedModel.fetchMs}ms · parse {loadedModel.parseMs}ms</span></div>
               {loadedModel.sha256 && (
                 <div className="row"><span>SHA-256</span><span><code>{loadedModel.sha256}</code></span></div>
               )}
