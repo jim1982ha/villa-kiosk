@@ -3,9 +3,12 @@
 //
 // Three tiers, tried in order, each falling through to the next on failure:
 //  1. HLS — the same "stream" pipeline Home Assistant's own frontend prefers
-//     for any camera that supports it (see HACameraProxy.cameraHlsUrl for why
-//     this is usually the smoothest option, and often the ONLY thing that
-//     matches how the camera looks in the HA UI itself).
+//     for any camera that supports it (see HACameraProxy.cameraHlsUrl). Played
+//     via hls.js whenever it's supported (which fetches the playlist/segments
+//     over XHR and feeds MediaSource itself, so it works through the
+//     Ingress/proxy chain where the native <video> HLS player chokes on the
+//     Content-Type); native HLS is used only as a fallback for browsers
+//     without MSE (real iOS Safari).
 //  2. MJPEG (camera_proxy_stream) — for cameras without stream support, or
 //     wherever HLS setup/playback fails for any reason.
 //  3. Still-image polling (camera_proxy) — works for essentially any camera,
@@ -46,11 +49,9 @@ const SNAPSHOT_MAX_ERRORS = 3;
 const STREAM_WATCHDOG_MS = 6000;
 // Same idea for HLS, but longer still: on the FIRST request for a given
 // camera, HA has to spin up its own FFmpeg-based stream worker before it can
-// serve even the master playlist — hls.js got literally zero response (not
-// even a fast error) within the old 4s window in testing over a tunneled
-// connection, which reads as "still starting up", not "broken". If this
-// still isn't enough, the fallback chain means nothing breaks either way —
-// it just takes longer to give up and drop to MJPEG/snapshot.
+// serve even the master playlist, and the extra hops over a tunnel add
+// latency on top. If this still isn't enough, the fallback chain means
+// nothing breaks either way — it just takes longer to drop to MJPEG/snapshot.
 const HLS_WATCHDOG_MS = 15000;
 
 export default function CameraPanel({ entity, mapping, onClose, pinContinuous }: Props) {
@@ -65,46 +66,30 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   const hlsLoaded = useRef(false);
   const hlsVideoRef = useRef<HTMLVideoElement>(null);
   const hlsInstanceRef = useRef<Hls | null>(null);
-  // Whether hls.js (not native Safari HLS) drives this <video> element.
-  // Deliberately NOT the same thing as "hlsInstanceRef.current is set": that
-  // ref gets nulled out during cleanup, but the native <video> `error` event
-  // it can trigger (both hls.js's own destroy() and our prior manual
-  // video.load() do this) fires ASYNCHRONOUSLY — by the time it actually
-  // arrives, the ref is already null, so checking the ref itself raced and
-  // didn't work (confirmed in the field: 2.23.18 still misfired). And
-  // unlike hlsLoaded/usingHlsJsRef used to be, this is intentionally NEVER
-  // reset back to false once set — which browser/path a device uses doesn't
-  // change within a session, so resetting it at the top of every attempt
-  // only reopened the SAME race via a different door (confirmed in the
-  // field again: 2.23.20's reset-per-attempt version still misfired, in the
-  // real gap between that reset and the hls.js branch re-setting it true,
-  // which spans two awaited async calls). Once true, stays true for this
-  // component's whole lifetime — see the setup effect.
+  // Whether hls.js (not native HLS) drives this <video> element. Deliberately
+  // NOT the same thing as "hlsInstanceRef.current is set": that ref gets nulled
+  // out during cleanup, but the native <video> `error` event it can trigger
+  // (hls.js's own destroy() does this) fires asynchronously — by the time it
+  // arrives the ref is already null. This ref answers "is hls.js this
+  // element's player" and is never reset once set (a browser's HLS path
+  // doesn't change within a session), so the onError guard can rely on it
+  // regardless of teardown timing.
   const usingHlsJsRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const [isFs, setIsFs] = useState(false);
-  // TEMPORARY diagnostics (see CHANGELOG): a plain <video>/<img> gives no way
-  // to tell which tier actually ended up active, or why it fell back, from
-  // the kiosk screen itself — this makes that visible without needing
-  // devtools on the tablet. A running LOG (not just the latest line) because
-  // the tiers can fall through fast enough (HLS -> MJPEG -> snapshot in
-  // under a couple seconds) that a single overwritten status line never
-  // gets read before the next fallback replaces it. `frameReady` drives a
-  // loading spinner so an empty <video> element mid-HLS-setup doesn't read
-  // as "broken".
-  const [diagLog, setDiagLog] = useState<string[]>([]);
+  // Whether the current tier has painted a real frame yet — drives the loading
+  // spinner so an empty <video>/<img> mid-setup reads as "loading", not "broken".
   const [frameReady, setFrameReady] = useState(false);
-  const logTransition = (line: string) => setDiagLog((prev) => [...prev, line]);
 
   const fallBackToStream = (reason: string) => {
+    devLog("[Camera] HLS unavailable, falling back to MJPEG:", reason);
     streamLoaded.current = false;
-    logTransition(`HLS failed: ${reason}`);
     setFrameReady(false);
     setMode("stream");
   };
   const fallBackToSnapshot = (reason: string) => {
+    devLog("[Camera] MJPEG unavailable, falling back to snapshot:", reason);
     snapErrors.current = 0;
-    logTransition(`MJPEG failed: ${reason}`);
     setFrameReady(false);
     setMode("snapshot");
   };
@@ -113,13 +98,6 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     const unpin = pinContinuous?.();
     return () => unpin?.();
   }, [pinContinuous]);
-
-  // Log the moment a tier actually starts painting real frames, so the trace
-  // shows not just failures but which tier (if any) ended up working.
-  useEffect(() => {
-    if (frameReady) logTransition(`${mode.toUpperCase()} playing`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frameReady]);
 
   // Keep the button icon in sync if the user leaves fullscreen via the Esc key
   // or the OS gesture rather than our button.
@@ -146,59 +124,33 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   // Start over (try HLS again, from the top) whenever the target camera changes.
   useEffect(() => {
     setMode("hls");
-    setDiagLog([]);
     setFrameReady(false);
     snapErrors.current = 0;
     streamLoaded.current = false;
     hlsLoaded.current = false;
   }, [mapping.entityId]);
 
-  // HLS setup: ask HA for a stream URL (camera/stream over the websocket),
-  // then hand it to hls.js (or the <video> element directly on Safari/iOS,
-  // which speaks HLS natively). Anything going wrong here — the camera
-  // doesn't support the stream pipeline, the websocket call fails, hls.js
-  // hits a fatal error, or the video never actually starts playing within
-  // the watchdog window — falls straight through to the MJPEG tier, exactly
-  // as if HLS had never been attempted.
+  // HLS setup: ask HA for a stream URL (camera/stream over the websocket), then
+  // play it with hls.js (preferred whenever supported) or the native <video>
+  // element (fallback for browsers without MSE — real iOS Safari). Anything
+  // going wrong — the camera doesn't support the stream pipeline, the websocket
+  // call fails, hls.js hits a fatal error, or the video never starts playing
+  // within the watchdog window — falls straight through to the MJPEG tier.
   //
-  // Deliberately NOT keyed on `connected`: this used to be a dependency, so
-  // ANY websocket blip (a brief reconnect over the tunnel — common, and
-  // harmless to everything else) tore down and rebuilt this whole effect.
-  // On Chrome (confirmed in the field) that's the hls.js path, and the
-  // rebuild raced with 2.23.19's own "is hls.js this attempt's player"
-  // guard: cleanup destroys the OLD hls.js instance, but the NEW effect
-  // invocation resets that guard back to its default BEFORE it has picked
-  // a path again (that requires an async dynamic import + websocket call
-  // first) — so a stale, asynchronous native <video> error from the OLD
-  // instance's own teardown can land in that narrow window and get misread
-  // as fatal, killing a stream that was actually still healthy. That's the
-  // actual root cause of "HLS playing" being immediately followed by "HLS
-  // failed: Video element error". The websocket is only needed for the
-  // ONE-TIME camera/stream call below — cameraHlsUrl's own sendMessage()
-  // already rejects cleanly (caught below, falls to MJPEG) if it isn't
-  // connected at that moment, so there's nothing to gain from also tearing
-  // down and rebuilding this whole effect on every later blip.
+  // Deliberately NOT keyed on `connected`: any brief websocket blip (a
+  // reconnect over the tunnel, harmless to everything else) would otherwise
+  // tear down and rebuild this whole effect, interrupting a healthy stream.
+  // The websocket is only needed for the one-time camera/stream call below,
+  // which rejects cleanly (caught, falls to MJPEG) if it isn't connected then.
   useEffect(() => {
     if (mode !== "hls") return;
     const video = hlsVideoRef.current;
     if (!video) return;
     let cancelled = false;
     hlsLoaded.current = false;
-    // NOT reset to false here (2.23.20 did this, and it's exactly what let
-    // this bug slip through the guard even with the fix in place — confirmed
-    // in the field: the diagnostic log showed the native error firing, THEN
-    // the effect's own cleanup, proving the guard failed to protect it).
-    // Resetting at the top of every attempt reopens a real window: this line
-    // ran synchronously, but the two `await`s below (dynamic import, then
-    // the websocket round-trip) mean usingHlsJsRef.current sat at `false`
-    // for a real stretch of wall-clock time before the hls.js branch could
-    // set it back — long enough for a native error to land in that gap and
-    // get misread as fatal. Which HLS path a given browser uses (native
-    // Safari vs hls.js) never changes within a session, so once this is
-    // set true it should just STAY true for the component's whole lifetime
-    // — there's nothing to reset.
+
     const watchdog = setTimeout(() => {
-      if (!hlsLoaded.current) fallBackToStream("HLS timed out (no frame)");
+      if (!hlsLoaded.current) fallBackToStream("no frame within watchdog window");
     }, HLS_WATCHDOG_MS);
 
     const onPlaying = () => { hlsLoaded.current = true; setFrameReady(true); };
@@ -211,23 +163,14 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
         const { default: Hls } = await import("hls.js");
         if (cancelled) return;
         const canHlsJs = Hls.isSupported();
-        // NB: canPlayType("application/vnd.apple.mpegurl") is NOT a reliable
-        // "can actually play HLS" signal — Chrome/Chromium returns a truthy
-        // "maybe" for it but then can't demux the playlist at all, failing
-        // with DEMUXER_ERROR_COULD_NOT_PARSE (confirmed in the field: THIS
-        // is the bug every prior fix missed — the old code preferred this
-        // false-positive native path, so hls.js never actually ran and none
-        // of the hls.js-side fixes could change anything). Only trust native
-        // HLS as a FALLBACK for when hls.js's MediaSource path isn't
-        // available — i.e. real Safari/iOS, which has genuine hardware HLS
-        // and (historically) no MSE. This is the canonical hls.js selection
-        // order: hls.js first, native only when hls.js can't run.
+        // canPlayType("application/vnd.apple.mpegurl") is NOT a reliable "can
+        // actually play HLS" signal — Chrome/Chromium returns a truthy "maybe"
+        // but then can't demux the playlist (DEMUXER_ERROR_COULD_NOT_PARSE).
+        // So native HLS is only trusted as a fallback for when hls.js's
+        // MediaSource path isn't available (real iOS Safari). hls.js first,
+        // native only when hls.js can't run.
         const canNative =
           !canHlsJs && video.canPlayType("application/vnd.apple.mpegurl") !== "";
-        // Which branch this attempt takes decides everything downstream —
-        // logging it unconditionally (not just on failure) removes any doubt
-        // about which path actually ran.
-        logTransition(`HLS capability: hlsJs=${canHlsJs} native=${canNative}`);
         if (!canHlsJs && !canNative) {
           fallBackToStream("HLS unsupported in this browser");
           return;
@@ -235,44 +178,27 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
 
         const url = await cameraHlsUrl(ws, config.haUrl, mapping.entityId);
         if (cancelled) return;
-        // The URL HA (and our ingress/standalone resolution) actually
-        // produced — the single most useful line for spotting a wrong path
-        // vs. a stream that connects fine but never starts playing.
-        logTransition(`HLS url: ${url}`);
 
         if (canNative) {
-          // Real native HLS (Safari/iOS) — hardware-accelerated, and the
-          // only option here since hls.js can't run (see canNative above).
+          // Native HLS (iOS Safari) — hardware-accelerated, and the only
+          // option here since hls.js can't run.
           video.src = url;
           void video.play().catch(() => {}); // autoplay may need the user's first tap; not an error
         } else {
           usingHlsJsRef.current = true;
           const hls = new Hls({ lowLatencyMode: true });
           hlsInstanceRef.current = hls;
-          let loggedNonFatal = false;
           hls.on(Hls.Events.ERROR, (_evt, data) => {
+            // Non-fatal errors (e.g. a transient bufferStalledError) are
+            // retried and recovered by hls.js on its own — only a fatal one
+            // means the stream can't continue, so only that drops to MJPEG.
             if (data.fatal) {
-              devLog("[Camera] hls.js fatal error, falling back to MJPEG:", data);
-              fallBackToStream(`HLS error (${data.details})`);
-            } else if (!loggedNonFatal) {
-              // Only the FIRST one — hls.js retries these automatically (and
-              // often silently recovers), but if the stream is stuck
-              // retrying the SAME thing for the whole watchdog window, this
-              // is exactly what reveals why (e.g. a 404 on the segment URL
-              // means the proxy path is wrong; a CORS/network error means
-              // something else entirely).
-              loggedNonFatal = true;
-              const status = data.response?.code;
-              logTransition(
-                `HLS warning: ${data.details}${status ? ` (HTTP ${status})` : ""}` +
-                (data.url ? ` — ${data.url}` : ""),
-              );
+              fallBackToStream(`hls.js fatal error: ${data.details}`);
             }
           });
           // Wait for the manifest before calling play() — calling it
           // immediately after attachMedia (before hls.js has anything
-          // buffered) is a known source of autoplay getting silently
-          // dropped instead of resuming once data actually arrives.
+          // buffered) is a known source of autoplay getting silently dropped.
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
             void video.play().catch(() => {});
           });
@@ -280,37 +206,25 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           hls.attachMedia(video);
         }
       } catch (err) {
-        if (!cancelled) {
-          devLog("[Camera] HLS unavailable for this entity, falling back to MJPEG:", err);
-          fallBackToStream(`HLS unavailable (${(err as Error).message})`);
-        }
+        if (!cancelled) fallBackToStream(`stream URL request failed: ${(err as Error).message}`);
       }
     })();
 
     return () => {
-      // Diagnostic safety net: if this ever fires while the stream was
-      // already healthy, something OTHER than the connected-flicker theory
-      // above is tearing it down — this line is the tell, so the next field
-      // report shows it plainly instead of leaving us to re-guess again.
-      if (hlsLoaded.current) logTransition("HLS: torn down while playing (effect cleanup)");
       cancelled = true;
       clearTimeout(watchdog);
       video.removeEventListener("playing", onPlaying);
       if (hlsInstanceRef.current) {
         // hls.js owns the MediaSource/SourceBuffers it attached — destroy()
-        // already detaches and tears them down cleanly. Also calling
-        // video.removeAttribute("src") + video.load() ourselves on TOP of
-        // that (as this used to do unconditionally) fires a native <video>
-        // `error` event purely from OUR OWN teardown — confirmed in the
-        // field: a stream that had already reached "playing" got yanked out
-        // from under itself this way, misread as a real playback failure,
-        // and permanently fell back to MJPEG/snapshot even though HLS had
-        // been working. Let hls.js's own destroy() be the only teardown here.
+        // detaches and tears them down cleanly. Doing our own
+        // removeAttribute("src") + load() on top of that fires a spurious
+        // native <video> error from our own teardown, so let destroy() be the
+        // only teardown on this path.
         hlsInstanceRef.current.destroy();
         hlsInstanceRef.current = null;
+        usingHlsJsRef.current = false;
       } else {
-        // Native HLS (Safari/iOS) — we set video.src ourselves, so we're
-        // responsible for clearing it too.
+        // Native HLS — we set video.src ourselves, so we clear it too.
         video.removeAttribute("src");
         video.load();
       }
@@ -325,7 +239,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     if (mode !== "stream") return;
     streamLoaded.current = false;
     const id = setTimeout(() => {
-      if (!streamLoaded.current) fallBackToSnapshot("MJPEG timed out (no frame)");
+      if (!streamLoaded.current) fallBackToSnapshot("no frame within watchdog window");
     }, STREAM_WATCHDOG_MS);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -356,10 +270,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
 
   const onSnapshotError = () => {
     snapErrors.current += 1;
-    if (snapErrors.current >= SNAPSHOT_MAX_ERRORS) {
-      logTransition("Snapshot failed repeatedly");
-      setMode("failed");
-    }
+    if (snapErrors.current >= SNAPSHOT_MAX_ERRORS) setMode("failed");
   };
 
   const renderView = () => {
@@ -368,7 +279,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
 
     if (mode === "hls") {
       // No src set here — the HLS setup effect drives this element directly
-      // (hls.js attachMedia, or a native .src on Safari/iOS), and doesn't
+      // (hls.js attachMedia, or a native .src on iOS Safari), and doesn't
       // need camAccessToken/haveCreds at all (auth rides the websocket).
       return (
         <video
@@ -376,32 +287,14 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           autoPlay
           muted
           playsInline
-          onError={(e) => {
-            // hls.js drives this element and reports its OWN errors via
-            // Hls.Events.ERROR (see the setup effect) — that's the
-            // authoritative fatal/non-fatal signal while it's in control.
-            // A native <video> `error` event on top of that is either
-            // hls.js's own internal recovery churn or our own teardown (both
-            // hls.js's destroy() and our old manual video.load() trigger
-            // one), not a real failure — only treat it as fatal on the
-            // native-HLS (Safari) path, where there's no other error signal
-            // at all. usingHlsJsRef (not hlsInstanceRef, which cleanup nulls
-            // out before this fires — confirmed in the field, that race is
-            // exactly why 2.23.18's fix still misfired) stays true for this
-            // whole attempt regardless of teardown timing.
-            //
-            // Several fixes targeting this guard have shipped without
-            // changing the failure log at all, so log the FULL decision
-            // state unconditionally instead of guessing again — the native
-            // MediaError code (1=ABORTED, 2=NETWORK, 3=DECODE,
-            // 4=SRC_NOT_SUPPORTED) says what kind of error this actually is,
-            // which nothing so far has captured.
-            const err = e.currentTarget.error;
-            logTransition(
-              `Video error event: usingHlsJs=${usingHlsJsRef.current} ` +
-              `mediaError=${err ? `${err.code}/${err.message || "(no message)"}` : "none"}`,
-            );
-            if (!usingHlsJsRef.current) fallBackToStream("Video element error");
+          onError={() => {
+            // hls.js reports its OWN errors via Hls.Events.ERROR (see the
+            // setup effect) — that's the authoritative signal while it's in
+            // control, so a native <video> error on top of it (its internal
+            // recovery churn, or our own teardown) is not a real failure.
+            // Only treat a native error as fatal on the native-HLS path,
+            // where there's no other error signal.
+            if (!usingHlsJsRef.current) fallBackToStream("native video element error");
           }}
         />
       );
@@ -417,7 +310,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           src={streamUrl}
           alt={mapping.label}
           onLoad={() => { streamLoaded.current = true; setFrameReady(true); }}
-          onError={() => fallBackToSnapshot("MJPEG error")}
+          onError={() => fallBackToSnapshot("MJPEG image error")}
         />
       );
     }
@@ -466,23 +359,6 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
       {connected && mode !== "failed" && !frameReady && (
         <div className="camera-loading">
           <div className="spinner" />
-        </div>
-      )}
-
-      {/* TEMPORARY diagnostics while tuning the stream pipeline (see
-          CHANGELOG) — the full transition trace (not just the latest line),
-          since tiers can fall through fast enough that a single overwritten
-          status line never gets read. Reportable straight off the kiosk
-          screen without devtools. Safe to remove once HLS is confirmed
-          working reliably. */}
-      {connected && (
-        <div className="camera-diag">
-          {/* Proves which build is actually running, at a glance — several
-              fixes in a row have produced byte-identical failure logs, and
-              this is the fastest way to rule "the fix never actually got
-              deployed" in or out before spending more time theorizing. */}
-          <div>App {__APP_VERSION__} · Now: {mode.toUpperCase()}</div>
-          {diagLog.map((line, i) => <div key={i}>{line}</div>)}
         </div>
       )}
     </div>

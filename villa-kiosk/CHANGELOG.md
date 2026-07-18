@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.23.26
+
+- **Camera HLS streaming confirmed working — removed the temporary
+  diagnostics and finalized.** Field-confirmed smooth on Chrome and desktop
+  Safari via hls.js after 2.23.25's fix. Stripped the on-screen stream-tier
+  diagnostic overlay, the transition-log state, and the build-version stamp
+  (`__APP_VERSION__` in vite config) that were added to hunt the root cause.
+  The three-tier fallback (HLS → MJPEG → snapshot), the loading spinner, and
+  the hls.js-driven fallback all stay; failure reasons now go to `devLog`
+  (visible only with the `?debug` flag) instead of an on-screen overlay.
+
 ## 2.23.25
 
 - **ROOT CAUSE of the camera lag found and fixed — the stream was never
