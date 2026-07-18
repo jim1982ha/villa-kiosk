@@ -80,6 +80,15 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   // Whether the current tier has painted a real frame yet — drives the loading
   // spinner so an empty <video>/<img> mid-setup reads as "loading", not "broken".
   const [frameReady, setFrameReady] = useState(false);
+  // Whether the instant snapshot preview (see below) has a frame to show.
+  // HLS setup can take several seconds on a camera's first open (HA has to
+  // spin up its own FFmpeg stream worker) — showing a spinner for all of that
+  // reads as "slow"/"broken" even though it's working as intended. Overlaying
+  // an immediately-available snapshot, refreshed every SNAPSHOT_INTERVAL_MS
+  // until HLS actually starts playing, gives the user something live-ish to
+  // look at with no visible transition once the real video takes over (it's
+  // already decoding underneath by the time the overlay disappears).
+  const [previewReady, setPreviewReady] = useState(false);
 
   const fallBackToStream = (reason: string) => {
     devLog("[Camera] HLS unavailable, falling back to MJPEG:", reason);
@@ -125,6 +134,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   useEffect(() => {
     setMode("hls");
     setFrameReady(false);
+    setPreviewReady(false);
     snapErrors.current = 0;
     streamLoaded.current = false;
     hlsLoaded.current = false;
@@ -245,12 +255,15 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, mapping.entityId]);
 
-  // Once we've fallen back to snapshots, re-fetch on an interval for liveness.
+  // Refresh the cache-busted snapshot URL on an interval for liveness — either
+  // because we've fallen back to snapshot polling as the real tier, or because
+  // it's standing in as the instant preview while HLS is still setting up (see
+  // previewReady). Stops the moment HLS actually starts playing.
   useEffect(() => {
-    if (mode !== "snapshot") return;
+    if (mode !== "snapshot" && !(mode === "hls" && !frameReady)) return;
     const id = setInterval(() => setTick((t) => t + 1), SNAPSHOT_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [mode]);
+  }, [mode, frameReady]);
 
   // Standalone (non-Ingress) camera URLs must carry the CAMERA'S OWN signed
   // token (its `access_token` attribute), not the long-lived token — see
@@ -282,21 +295,38 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
       // (hls.js attachMedia, or a native .src on iOS Safari), and doesn't
       // need camAccessToken/haveCreds at all (auth rides the websocket).
       return (
-        <video
-          ref={hlsVideoRef}
-          autoPlay
-          muted
-          playsInline
-          onError={() => {
-            // hls.js reports its OWN errors via Hls.Events.ERROR (see the
-            // setup effect) — that's the authoritative signal while it's in
-            // control, so a native <video> error on top of it (its internal
-            // recovery churn, or our own teardown) is not a real failure.
-            // Only treat a native error as fatal on the native-HLS path,
-            // where there's no other error signal.
-            if (!usingHlsJsRef.current) fallBackToStream("native video element error");
-          }}
-        />
+        <div className="camera-hls-wrap">
+          <video
+            ref={hlsVideoRef}
+            autoPlay
+            muted
+            playsInline
+            onError={() => {
+              // hls.js reports its OWN errors via Hls.Events.ERROR (see the
+              // setup effect) — that's the authoritative signal while it's in
+              // control, so a native <video> error on top of it (its internal
+              // recovery churn, or our own teardown) is not a real failure.
+              // Only treat a native error as fatal on the native-HLS path,
+              // where there's no other error signal.
+              if (!usingHlsJsRef.current) fallBackToStream("native video element error");
+            }}
+          />
+          {/* Instant stand-in while HLS is still setting up (HA has to spin up
+              its own FFmpeg worker on first open, which can take several
+              seconds) — snapshot polling is already near-instant, so this
+              covers the gap. Disappears the moment the video paints its own
+              first frame (frameReady), by which point it's already decoding
+              underneath, so the swap is invisible. */}
+          {!frameReady && haveCreds && (
+            <img
+              className="camera-preview"
+              src={snapshotUrl}
+              alt=""
+              onLoad={() => setPreviewReady(true)}
+              onError={() => setPreviewReady(false)}
+            />
+          )}
+        </div>
       );
     }
 
@@ -355,12 +385,17 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
       {renderView()}
 
       {/* An empty <video>/<img> mid-setup reads as "broken" rather than
-          "loading" — cover it with a spinner until a real frame arrives. */}
-      {connected && mode !== "failed" && !frameReady && (
-        <div className="camera-loading">
-          <div className="spinner" />
-        </div>
-      )}
+          "loading" — cover it with a spinner until a real frame arrives.
+          Skipped on the hls tier once the instant snapshot preview is up:
+          that already reads as "live", not "loading". */}
+      {connected &&
+        mode !== "failed" &&
+        !frameReady &&
+        !(mode === "hls" && previewReady) && (
+          <div className="camera-loading">
+            <div className="spinner" />
+          </div>
+        )}
     </div>
   );
 }

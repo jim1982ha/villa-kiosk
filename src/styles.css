@@ -521,6 +521,10 @@ input[type="range"]::-moz-range-thumb {
 .camera-fullscreen .close { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(24px + env(safe-area-inset-right, 0px)); }
 .camera-fullscreen .fs-btn { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(72px + env(safe-area-inset-right, 0px)); }
 .camera-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+/* Wraps the HLS <video> together with its instant snapshot preview so the two
+   overlap regardless of the video's own (pre-metadata) intrinsic size. */
+.camera-hls-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.camera-hls-wrap .camera-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 
 /* --- Teleport menu --- */
 .teleport-grid {

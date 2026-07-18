@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.23.27
+
+- **Instant snapshot preview while HLS sets up, so the first open of a camera
+  doesn't sit on a bare loading spinner.** HA has to spin up its own FFmpeg
+  stream worker on a camera's first HLS request each session, which can take
+  several seconds — long enough to read as "slow" even though it's working
+  as intended (subsequent opens of the same camera reuse the worker and are
+  fast). The `hls` tier now overlays the near-instant snapshot image (already
+  polled every 800ms) on top of the `<video>` element until it paints its own
+  first frame, then the overlay disappears with no visible transition since
+  the video is already decoding underneath by that point. Scoped to the HLS
+  tier only; MJPEG/snapshot fallback behavior is unchanged.
+
 ## 2.23.26
 
 - **Camera HLS streaming confirmed working — removed the temporary
