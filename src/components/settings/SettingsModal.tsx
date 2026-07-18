@@ -142,15 +142,15 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://homeassistant.local:8123" />
 
             <label>Long-lived access token</label>
-            <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="eyJhbGciOi…" />
-          </>
-        )}
-
-        {!ingress && can("editConfig") && (
-          <>
-            <button className="btn ghost mt" style={{ width: "100%" }} onClick={runTest} disabled={testing}>
-              <Plug size={18} /> {testing ? "Testing…" : "Test connection"}
-            </button>
+            <div className="row" style={{ gap: 10 }}>
+              <input
+                type="password" value={token} onChange={(e) => setToken(e.target.value)}
+                placeholder="eyJhbGciOi…" style={{ flex: 1 }}
+              />
+              <button className="btn ghost" style={{ flexShrink: 0 }} onClick={runTest} disabled={testing}>
+                <Plug size={18} /> {testing ? "Testing…" : "Test connection"}
+              </button>
+            </div>
             {result && (
               <div className={`test-result ${result.ok ? "ok" : "fail"}`} style={{ whiteSpace: "pre-line" }}>
                 {result.message}
@@ -193,10 +193,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             Reset look
           </button>
         </div>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          Pick a quality preset — higher looks better, lower runs lighter on weak
-          wall tablets. Everything updates live and saves with your config.
-        </p>
 
         <label className="toggle" style={{ marginTop: 12 }}>
           <input type="checkbox" checked={config.highlightInteractive}
@@ -265,9 +261,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             The two view modes' comfort settings, side by side: how the
             first-person walk-through feels, and how the bird's-eye view pans. */}
         <div className="settings-section-title" style={{ margin: 0 }}>First-person view</div>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-          How the walk-through camera feels. Both update live as you drag.
-        </p>
         <div className="slider-pair" style={{ marginTop: 10 }}>
           <div>
             <label>Eye height · {eyeHeight.toFixed(2)} m</label>

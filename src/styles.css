@@ -915,10 +915,19 @@ label.toggle span { user-select: none; line-height: 1.4; }
      hosts the view toggle, Settings and profile switch. Matches the
      grouped buttons' corner radius (not the larger standalone .icon-btn
      radius, which looked like a circle at this smaller size) so it reads
-     as the same squircle shape as its neighbours. */
+     as the same squircle shape as its neighbours.
+     Explicit width/height here too (not just the .hud-right .icon-btn rule
+     above): same specificity (2 classes) as .hud-group .icon-btn's own
+     38px rule declared earlier in the file, and equal-specificity ties go
+     to whichever is LATER in source order — which one of those two rules
+     that is isn't reliable to reason about across future edits, and in
+     practice this button was landing at 48px (the unscoped base .icon-btn
+     size) instead of the intended 32px, reading as a visibly taller button
+     than its neighbours. .hud-right .hud-overflow .icon-btn (3 classes) is
+     unambiguously more specific than either, so it always wins. */
   .hud-right-inline { display: none; }
   .hud-overflow { display: block; }
-  .hud-overflow .icon-btn { border-radius: 10px; }
+  .hud-right .hud-overflow .icon-btn { width: 32px; height: 32px; border-radius: 10px; }
   /* Left control stack: slightly narrower icon buttons to save width. */
   .hud-stack .icon-btn { width: 36px; }
 

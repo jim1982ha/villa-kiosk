@@ -166,7 +166,7 @@ export default function GroupedDevices() {
             />
           </div>
           <button
-            className="btn primary" onClick={() => newPrimary && createGroup(newPrimary)}
+            className="btn ghost" onClick={() => newPrimary && createGroup(newPrimary)}
             disabled={!newPrimary} style={{ flexShrink: 0 }}
           >
             <Plus size={18} /> Create

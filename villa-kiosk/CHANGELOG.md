@@ -1,5 +1,35 @@
 # Changelog
 
+## 2.23.38
+
+- **Onboarding (standalone): the HA URL/token fields were pre-filled from
+  the local `.env` used to build the app** — including, on this machine, a
+  real long-lived token, which meant every standalone build shipped it
+  baked into the client JS. Cleared `VITE_HA_TOKEN` (token is meant to be
+  entered per-device, never baked in) and pointed `VITE_HA_URL` at the
+  villa's actual domain.
+- **Settings (standalone): "Test connection" now sits on the same line as
+  the token field**, instead of as its own full-width button below.
+- **Settings: removed two redundant description paragraphs** ("Pick a
+  quality preset…" under Render quality, "How the walk-through camera
+  feels…" under First-person view) — both restated what the controls right
+  below them already make obvious.
+- **Advanced Settings reshuffle:**
+  - The model (i) icon now sits inline with the "3D model source" title
+    instead of on its own row underneath.
+  - "Bound 3D objects" moved below "Grouped devices".
+  - The villa-location description moved below the latitude/longitude
+    fields instead of above them.
+  - The device-group "+ Create" button restyled to match the other ghost
+    buttons (was solid accent) — same size/position.
+- **Fixed: the HUD's mobile overflow ("⋮") button rendered at 48px instead
+  of the intended 32px**, taller than every other top-bar button next to
+  it. `.hud-right .icon-btn { width: 32px; height: 32px; }` and
+  `.hud-group .icon-btn { width: 38px; ... }` are equal-specificity (2
+  classes each) and source order between them isn't something to keep
+  relying on across edits — added an unambiguous, higher-specificity
+  `.hud-right .hud-overflow .icon-btn` rule so it can't regress again.
+
 ## 2.23.37
 
 - **Memory-leak / GPU-context audit + fixes — the real cause of the growing

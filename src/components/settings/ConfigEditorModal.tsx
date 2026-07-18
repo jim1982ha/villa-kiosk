@@ -96,12 +96,11 @@ function CentralModelInfo({
   editable: boolean;
 }) {
   return (
-    <div className="row" style={{ marginTop: 4 }}>
-      <span className="info-tip">
-        <button type="button" className="info-btn" aria-label="Model details">
-          <Info size={16} />
-        </button>
-        <div className="info-pop" role="tooltip">
+    <span className="info-tip">
+      <button type="button" className="info-btn" aria-label="Model details">
+        <Info size={16} />
+      </button>
+      <div className="info-pop" role="tooltip">
           <div className="row">
             <span>Latest SH3D plan</span>
             <span>
@@ -166,9 +165,8 @@ function CentralModelInfo({
               </>
             )}
           </div>
-        </div>
-      </span>
-    </div>
+      </div>
+    </span>
   );
 }
 
@@ -369,6 +367,14 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
 
   return (
     <div>
+      {/* (i) sits inline with the title (not on its own row below) — only
+          meaningful once a central model exists, so it's conditional here. */}
+      <div className="row" style={{ gap: 8, alignItems: "center", marginTop: 28 }}>
+        <div className="settings-section-title" style={{ margin: 0 }}>3D model source</div>
+        {addonCfg?.model_path && (
+          <CentralModelInfo addonCfg={addonCfg} loadedModel={loadedModel} editable={canUploadCentrally} />
+        )}
+      </div>
       {addonCfg === null ? (
         <p className="muted body-text">
           {ingress ? "Reading add-on configuration…" : "Checking for a central model…"}
@@ -381,7 +387,6 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
         // (no supervisor-proxy behind it), so those two buttons are disabled
         // there with a pointer at where to do it instead.
         <>
-          <CentralModelInfo addonCfg={addonCfg} loadedModel={loadedModel} editable={canUploadCentrally} />
           <ModelActionsRow
             canUploadCentrally={canUploadCentrally} uploadBusy={uploadBusy} uploadMsg={uploadMsg} backupMsg={backupMsg}
             glbUploadRef={glbUploadRef} roomsUploadRef={roomsUploadRef} configFileRef={configFileRef}
@@ -485,19 +490,12 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
 
         <div className="settings-body">
           <div className="settings-section-title">Villa location</div>
-          <p className="muted body-text" style={{ marginTop: 0, fontSize: 12 }}>
+          <VillaCoordinates />
+          <p className="muted body-text" style={{ marginTop: 6, fontSize: 12 }}>
             Drives sun position and day/night for this villa.
           </p>
-          <VillaCoordinates />
 
-          {role === "owner" && (
-            <>
-              <div className="settings-section-title" style={{ marginTop: 28 }}>
-                3D model source
-              </div>
-              <ModelSource onModelChanged={onModelChanged} />
-            </>
-          )}
+          {role === "owner" && <ModelSource onModelChanged={onModelChanged} />}
 
           <div className="settings-section-title" style={{ marginTop: 28 }}>
             Auto-detected entity settings
@@ -505,14 +503,14 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           <ConfigEditor initialSearch={focusEntityId} />
 
           <div className="settings-section-title" style={{ marginTop: 28 }}>
-            Bound 3D objects
-          </div>
-          <BindingsTable />
-
-          <div className="settings-section-title" style={{ marginTop: 28 }}>
             Grouped devices
           </div>
           <GroupedDevices />
+
+          <div className="settings-section-title" style={{ marginTop: 28 }}>
+            Bound 3D objects
+          </div>
+          <BindingsTable />
         </div>
 
         <div className="settings-footer" style={{ justifyContent: "space-between" }}>
