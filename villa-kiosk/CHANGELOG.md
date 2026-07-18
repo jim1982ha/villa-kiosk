@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.23.33
+
+- **Fixed: the model (i) tooltip still overflowed, now off the TOP of the
+  screen.** 2.23.32 fixed the left/right overflow, but the tooltip has grown
+  to 7+ rows plus a paragraph — tall enough that opening upward from a
+  button positioned low in the panel pushed its earliest rows (including
+  the new "Load time" one) above the top of the viewport, with nowhere to
+  go and no way to reach them. It's now capped at `min(60vh, 420px)` and
+  scrolls internally, so every row is always reachable.
+- **Fixed: the disabled "Upload central GLB"/"Upload room data" buttons in
+  standalone had no visible explanation.** Their `title` tooltip never
+  actually showed — `.btn:disabled` sets `pointer-events: none`, which also
+  blocks the hover needed to trigger it. Wrapped in a plain (non-disabled)
+  span instead, so hovering the greyed-out button now shows why it's
+  disabled there.
+
 ## 2.23.32
 
 - **Fixed: the model (i) tooltip overflowed off the left edge of the

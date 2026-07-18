@@ -203,16 +203,24 @@ function ModelActionsRow({
       <input ref={configFileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onConfigFile(f); e.target.value = ""; }} />
       <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-        <button className="btn ghost" style={{ flex: 1, minWidth: 160 }}
-          disabled={!canUploadCentrally || uploadBusy !== null} title={disabledTitle}
-          onClick={() => glbUploadRef.current?.click()}>
-          <Upload size={15} /> {uploadBusy === "glb" ? "Uploading…" : "Upload central GLB"}
-        </button>
-        <button className="btn ghost" style={{ flex: 1, minWidth: 160 }}
-          disabled={!canUploadCentrally || uploadBusy !== null} title={disabledTitle}
-          onClick={() => roomsUploadRef.current?.click()}>
-          <Upload size={15} /> {uploadBusy === "rooms" ? "Uploading…" : "Upload room data"}
-        </button>
+        {/* title on a disabled <button> never shows: .btn:disabled sets
+            pointer-events: none, which also blocks the hover that would
+            trigger the native tooltip — wrap in a plain span (not disabled)
+            so the explanation is actually reachable. */}
+        <span style={{ flex: 1, minWidth: 160 }} title={disabledTitle}>
+          <button className="btn ghost" style={{ width: "100%" }}
+            disabled={!canUploadCentrally || uploadBusy !== null}
+            onClick={() => glbUploadRef.current?.click()}>
+            <Upload size={15} /> {uploadBusy === "glb" ? "Uploading…" : "Upload central GLB"}
+          </button>
+        </span>
+        <span style={{ flex: 1, minWidth: 160 }} title={disabledTitle}>
+          <button className="btn ghost" style={{ width: "100%" }}
+            disabled={!canUploadCentrally || uploadBusy !== null}
+            onClick={() => roomsUploadRef.current?.click()}>
+            <Upload size={15} /> {uploadBusy === "rooms" ? "Uploading…" : "Upload room data"}
+          </button>
+        </span>
         <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} onClick={() => configFileRef.current?.click()}>
           <Upload size={15} /> Import Configuration
         </button>
