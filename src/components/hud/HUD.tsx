@@ -386,13 +386,67 @@ export default function HUD({
             >
               <Plus size={18} />
             </button>
+
+            {/* Overflow menu (phones only — see .hud-overflow's default
+                display:none/mobile display:block): nested INSIDE this same
+                pill as Minus/Plus rather than off in its own .hud-right
+                section, so on a phone it reads as one continuous group of
+                buttons instead of a visually mismatched standalone button.
+                aria-haspopup/expanded + the outside-click ref stay on this
+                specific button/wrapper regardless of where it sits in the
+                layout. */}
+            <div className="hud-overflow" ref={menuRef}>
+              <button
+                className={`icon-btn${menuOpen ? " active" : ""}`}
+                onClick={() => setMenuOpen((o) => !o)}
+                title="Menu"
+                aria-label="Menu"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                <EllipsisVertical size={19} />
+              </button>
+              {menuOpen && (
+                <div className="hud-menu" role="menu" aria-label="Settings and profile">
+                  {role && <div className="hud-menu-header">Signed in as {ROLE_LABELS[role]}</div>}
+                  {/* Connection status — lives ONLY here on a phone (no standalone
+                      top-bar button/space; see .hud-brand's mobile rule). */}
+                  <div className="hud-menu-item hud-menu-static">
+                    <span className={`conn-dot ${connClass}`} role="img" aria-hidden="true">
+                      <span className="dot" />
+                    </span>
+                    <span>Connection: {connection}</span>
+                  </div>
+                  {canOpenSettings && (
+                    <button
+                      role="menuitem"
+                      className="hud-menu-item"
+                      onClick={() => { setMenuOpen(false); onOpenSettings(); }}
+                    >
+                      <Settings size={18} />
+                      <span>Settings</span>
+                    </button>
+                  )}
+                  {role && (
+                    <button
+                      role="menuitem"
+                      className="hud-menu-item"
+                      onClick={() => { setMenuOpen(false); beginSwitch(); }}
+                    >
+                      <LogOut size={18} />
+                      <span>Switch profile</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Profile chip, then Settings (when permitted). Rendered twice: inline
-            on roomy screens, collapsed into a single overflow-menu button on
-            phones (CSS shows exactly one of the two). The first-person/
-            bird's-eye toggle lives in the left column now (see hud-left-col). */}
+        {/* Profile chip, then Settings (when permitted) — roomy screens only;
+            a phone collapses these into the overflow menu above instead (see
+            .hud-right-inline's mobile display:none). The first-person/bird's-
+            eye toggle lives in the left column now (see hud-left-col). */}
         <div className="hud-right">
           <div className="hud-right-inline">
             {role && (
@@ -412,52 +466,6 @@ export default function HUD({
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
                 <Settings size={20} />
               </button>
-            )}
-          </div>
-
-          <div className="hud-overflow" ref={menuRef}>
-            <button
-              className={`icon-btn${menuOpen ? " active" : ""}`}
-              onClick={() => setMenuOpen((o) => !o)}
-              title="Menu"
-              aria-label="Menu"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-            >
-              <EllipsisVertical size={19} />
-            </button>
-            {menuOpen && (
-              <div className="hud-menu" role="menu" aria-label="Settings and profile">
-                {role && <div className="hud-menu-header">Signed in as {ROLE_LABELS[role]}</div>}
-                {/* Connection status — lives ONLY here on a phone (no standalone
-                    top-bar button/space; see .hud-brand's mobile rule). */}
-                <div className="hud-menu-item hud-menu-static">
-                  <span className={`conn-dot ${connClass}`} role="img" aria-hidden="true">
-                    <span className="dot" />
-                  </span>
-                  <span>Connection: {connection}</span>
-                </div>
-                {canOpenSettings && (
-                  <button
-                    role="menuitem"
-                    className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); onOpenSettings(); }}
-                  >
-                    <Settings size={18} />
-                    <span>Settings</span>
-                  </button>
-                )}
-                {role && (
-                  <button
-                    role="menuitem"
-                    className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); beginSwitch(); }}
-                  >
-                    <LogOut size={18} />
-                    <span>Switch profile</span>
-                  </button>
-                )}
-              </div>
             )}
           </div>
         </div>

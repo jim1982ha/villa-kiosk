@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.23.40
+
+- **Mobile top bar: the overflow (⋮) menu button now lives inside the same
+  pill as the label-size −/+ buttons**, instead of standing alone in its own
+  section — reads as one continuous button group. That combined group (not
+  the category filter row next to it) now sits flush against the right edge
+  of the screen, matching where the standalone ⋮ button used to be.
+
 ## 2.23.39
 
 - **Fixed: a device badge next to another closely-mounted fixture (e.g. a
