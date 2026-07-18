@@ -161,7 +161,7 @@ export default function BabylonCanvas({
           return;
         }
         const tFetchDone = performance.now();
-        await manager.loadModel(data);
+        const { importMs, postMs } = await manager.loadModel(data);
         if (cancelled) return;
         const tParseDone = performance.now();
 
@@ -176,6 +176,8 @@ export default function BabylonCanvas({
           meshCount: meshNames.length,
           fetchMs: Math.round(tFetchDone - tFetchStart),
           parseMs: Math.round(tParseDone - tFetchDone),
+          importMs: Math.round(importMs),
+          postMs: Math.round(postMs),
         });
 
         // Expose mesh names for the binding UI.

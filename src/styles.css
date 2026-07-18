@@ -635,31 +635,35 @@ input[type="range"]::-moz-range-thumb {
 }
 .info-tip > .info-btn:hover { color: var(--accent); }
 .info-tip .info-pop {
-  /* Open UPWARD (the (i) sits low in the model-source section, near the modal
-     footer) so the popover stays inside the scrollable body instead of being
-     clipped by it / hidden behind the footer. z-index above the footer.
+  /* Open DOWNWARD. The (i) button sits near the TOP of the "3D model source"
+     section (right after the heading) with the rest of the scrollable modal
+     body below it — opening upward (the old rule, written when the button
+     used to sit low in the section near the footer — stale after later
+     restructuring) anchored the box's BOTTOM edge above the button and grew
+     it toward the top of the BROWSER WINDOW itself. max-height alone can't
+     fix that: once content is taller than the room actually available above
+     the button, part of the box renders above y=0 of the viewport, which is
+     a hard clip no scroll container can reveal. Downward has the entire rest
+     of .settings-body's scrollable area to grow into instead.
      Anchored from the LEFT (opens rightward): the (i) button sits at the
      LEFT edge of its row, so right: 0 (opening leftward) pushed the whole
      popover off the left edge of the modal/viewport.
      max-height + overflow-y: auto — this popover has grown to 7+ rows plus a
-     paragraph, tall enough that opening upward from a button low in the panel
-     pushed its TOP (the earliest rows, e.g. "Load time") past the top of the
-     viewport with nowhere to go and no way to reach it. Capping the height and
-     scrolling internally means every row stays reachable regardless of how
-     little room there is above the button. */
-  position: absolute; z-index: 90; bottom: calc(100% + 8px); left: 0;
+     paragraph; capping the height and scrolling internally means every row
+     stays reachable even if a future addition makes it taller still. */
+  position: absolute; z-index: 90; top: calc(100% + 8px); left: 0;
   width: min(340px, 78vw); max-height: min(60vh, 420px); overflow-y: auto;
   padding: 12px 14px;
   background: var(--bg-overlay); backdrop-filter: blur(12px);
   border: 1px solid var(--hairline-strong); border-radius: 12px;
   box-shadow: 0 10px 32px var(--shadow);
   font-size: 12.5px; line-height: 1.5; color: var(--text-secondary);
-  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  opacity: 0; visibility: hidden; transform: translateY(4px);
   transition: opacity 0.14s, transform 0.14s, visibility 0.14s;
   text-align: left; white-space: normal;
 }
 .info-tip:hover .info-pop,
-.info-tip:focus-within .info-pop { opacity: 1; visibility: visible; transform: translateY(4px); }
+.info-tip:focus-within .info-pop { opacity: 1; visibility: visible; transform: translateY(0); }
 .info-pop .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
 .info-pop .row span:first-child { color: var(--text-dim); flex: 0 0 auto; }
 .info-pop .row span:last-child { color: var(--text-primary); word-break: break-all; text-align: right; }

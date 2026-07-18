@@ -23,6 +23,15 @@ export interface LoadedModelInfo {
    */
   fetchMs: number;
   parseMs: number;
+  /** parseMs split in two: Babylon's own SceneLoader.ImportMeshAsync (parse
+   *  glTF, decompress Draco geometry, decode every texture, upload to GPU)
+   *  vs. this app's own post-processing (mesh indexing, structure/collision
+   *  setup). Almost all of parseMs is normally importMs — a many-texture GLB
+   *  (see ModelLoader.ts's lightmap mode, which keeps every original tiled
+   *  texture rather than one atlas) makes Babylon's own decode/upload work
+   *  the dominant cost, not this app's JS. */
+  importMs: number;
+  postMs: number;
 }
 
 let _info: LoadedModelInfo | null = null;

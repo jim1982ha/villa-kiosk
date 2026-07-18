@@ -755,9 +755,15 @@ export class SceneManager {
     meshes.forEach((m) => m.computeWorldMatrix(true));
   }
 
-  /** Load the GLB (from ArrayBuffer in IndexedDB or an uploaded File). */
-  async loadModel(data: ArrayBuffer): Promise<void> {
+  /**
+   * Load the GLB (from ArrayBuffer in IndexedDB or an uploaded File). Returns
+   * a timing breakdown (see modelInfo.ts's LoadedModelInfo) so a slow load
+   * can be attributed to Babylon's own import (parse/decode/GPU-upload,
+   * inside loadModelInto) vs. this method's own post-processing below.
+   */
+  async loadModel(data: ArrayBuffer): Promise<{ importMs: number; postMs: number }> {
     const result = await loadModelInto(this.scene, data, this.config.extraGlassHints ?? []);
+    const tPostStart = performance.now();
     this.loadedMeshes = result.meshes;
 
     // Baked-lighting GLB (blender_pipeline --bake): the structure carries its
@@ -790,6 +796,7 @@ export class SceneManager {
     // The villa is correct and interactive now — reveal it.
     this.markReady();
     this.requestRender(1000);
+    const postMs = performance.now() - tPostStart;
 
     // --- Deferred: raycast-heavy / cosmetic passes that need not block the first
     // paint. Running them AFTER the first rendered frame is what stops "Loading
@@ -802,6 +809,8 @@ export class SceneManager {
       this.calibrateRooms(result.meshes); // plan→world fit + room glow (fires onCalibrated)
       this.requestRender();
     });
+
+    return { importMs: result.importMs, postMs };
   }
 
   /**

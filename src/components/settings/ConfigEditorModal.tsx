@@ -135,6 +135,11 @@ function CentralModelInfo({
                   building the scene from them. A fast fetch with a still-slow
                   overall load points at the parse, not the network/caching. */}
               <div className="row"><span>Load time</span><span>fetch {loadedModel.fetchMs}ms · parse {loadedModel.parseMs}ms</span></div>
+              {/* Parse split further: import = Babylon's own SceneLoader call
+                  (glTF parse, Draco decode, texture decode + GPU upload) vs.
+                  post = this app's own mesh-indexing/structure setup after
+                  that. Almost all of parse is normally import. */}
+              <div className="row"><span>&nbsp;&nbsp;↳ parse split</span><span>import {loadedModel.importMs}ms · post {loadedModel.postMs}ms</span></div>
               {loadedModel.sha256 && (
                 <div className="row"><span>SHA-256</span><span><code>{loadedModel.sha256}</code></span></div>
               )}

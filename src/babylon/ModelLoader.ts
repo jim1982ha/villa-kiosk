@@ -52,6 +52,14 @@ export interface LoadResult {
    * of the villa instead of staying day-bright white panels after dark.
    */
   glassDim?: (t: number) => void;
+  /**
+   * Time SceneLoader.ImportMeshAsync itself took (ms) — Babylon parsing the
+   * glTF, decompressing Draco geometry, decoding every texture and uploading
+   * it all to the GPU. Split out from the rest of loadModel's post-processing
+   * (mesh indexing, structure/collision setup) so a slow load can be
+   * attributed to the right half — see the (i) tooltip's "Load time" row.
+   */
+  importMs: number;
 }
 
 // A GLB produced by blender_pipeline.py --bake names its lit-structure material
@@ -165,7 +173,9 @@ export async function loadModelInto(
   const blob = new Blob([data], { type: "model/gltf-binary" });
   const url = URL.createObjectURL(blob);
   try {
+    const tImportStart = performance.now();
     const result = await SceneLoader.ImportMeshAsync("", "", url, scene, undefined, ".glb");
+    const importMs = performance.now() - tImportStart;
     const glassMats = new Set<string>();
     // Material OBJECT refs (a Set — one material is shared by many meshes) so
     // glassDim below can re-drive their colours every day/night tick.
@@ -454,7 +464,7 @@ export async function loadModelInto(
           }
         }
       : undefined;
-    return { meshes: result.meshes, baked, lightmapped, nightBlend, glassDim };
+    return { meshes: result.meshes, baked, lightmapped, nightBlend, glassDim, importMs };
   } finally {
     URL.revokeObjectURL(url);
   }

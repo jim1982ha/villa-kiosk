@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.23.34
+
+- **Fixed: the model (i) tooltip's real bug — it opened the wrong direction,
+  not just the wrong size.** `max-height` alone can't rescue a popover
+  anchored `bottom: calc(100% + 8px)` above a button that sits near the TOP
+  of the panel with little room above it — part of the box still renders
+  above the browser viewport's own top edge, which no CSS overflow rule can
+  reveal (it isn't the modal clipping it; it's off the physical screen).
+  Flipped to open downward (`top: calc(100% + 8px)`), into the rest of the
+  scrollable modal body where there's actually room.
+- **Split "Load time" into import vs. post-processing**, to find out what
+  the ~29s parse time (reported identically in both add-on and standalone —
+  confirming it's not a caching issue) is actually spent on: Babylon's own
+  `SceneLoader.ImportMeshAsync` (glTF parse, Draco decode, every texture
+  decoded + uploaded to the GPU) vs. this app's own post-import mesh
+  indexing/structure setup. Expect nearly all of it to be `import` — a
+  lightmap-mode GLB keeps every original tiled texture instead of one atlas,
+  so texture decode/upload is the likely dominant cost, not app JS.
+
 ## 2.23.33
 
 - **Fixed: the model (i) tooltip still overflowed, now off the TOP of the
