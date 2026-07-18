@@ -119,14 +119,15 @@ export interface AddonConfig {
 }
 
 /**
- * The conventional default path the add-on writes an "Upload central GLB" to
- * when its `model_path` option is left empty (mirrors MANAGED_PATH["glb"] in
- * rootfs/usr/bin/supervisor-proxy.py — keep the two in sync). Also used to
- * probe for a central model from OUTSIDE the add-on (see
- * probeStandaloneCentralModel below), since an admin who set a custom
- * model_path isn't discoverable that way — only the managed default is.
+ * Mirrors PUBLIC_MANIFEST_REL in rootfs/usr/bin/supervisor-proxy.py — keep
+ * the two in sync. A plain static JSON file the add-on (re)writes there
+ * whenever its effective model paths could have changed (startup, a
+ * completed upload) — a mirror of what /addon-config reports, but reachable
+ * over plain HTTP (HA's own /local/ static route) with no Supervisor API
+ * access, so probeStandaloneCentralModel below can learn the REAL
+ * model_path (including a custom one, not just a conventional default).
  */
-export const MANAGED_MODEL_PATH = "villa-kiosk/villa.glb";
+const PUBLIC_MANIFEST_REL = "villa-kiosk/addon-config.json";
 
 /** The room-data sidecar URL that sits next to the central GLB (model_path
  *  with its .glb swapped for .rooms.json). The pipeline emits it; the app
@@ -268,47 +269,29 @@ export async function uploadCentralModel(
   return result;
 }
 
-/** Best-effort read of an upload-provenance sidecar (see
- *  supervisor-proxy.py's _write_upload_sidecar) directly off HA's own static
- *  file server — used by probeStandaloneCentralModel, which has no
- *  supervisor-proxy to ask. */
-async function fetchUploadMeta(relPath: string): Promise<{ original_name: string; uploaded_at: string } | null> {
-  try {
-    const resp = await fetch(`/local/${relPath}.upload.json`);
-    if (!resp.ok) return null;
-    return await resp.json() as { original_name: string; uploaded_at: string };
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Outside Ingress there's no supervisor-proxy to serve /addon-config, but the
- * add-on's /model/ route is just an alias onto the same HA www folder HA
- * itself serves at /local/ (see nginx.conf) — so a central model uploaded
- * through the add-on is reachable directly, byte-for-byte, from a standalone
- * copy of this build placed in that same www folder and opened via HA's own
- * /local/ route. Probing the conventional managed default path (not an
- * arbitrary admin-set model_path, which lives in Supervisor's add-on options
- * and isn't readable outside Ingress) lets standalone auto-load the SAME
- * model the add-on manages instead of needing its own per-browser upload —
- * one shared source of truth instead of two competing ones.
+ * add-on now mirrors that exact JSON into a plain static file inside the same
+ * www folder it manages (see supervisor-proxy.py's _write_public_manifest) —
+ * reachable at HA's own /local/ static route, no Supervisor API needed. This
+ * is how a standalone copy of this build (placed in that same www folder,
+ * opened via /local/ instead of through the add-on) learns the REAL
+ * model_path — including a custom one the admin set, not just a guessed
+ * conventional default — so it auto-loads the SAME model the add-on manages
+ * instead of needing its own per-browser upload: one shared source of truth
+ * instead of two competing ones.
  */
 async function probeStandaloneCentralModel(): Promise<AddonConfig> {
   try {
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 3000);
-    const resp = await fetch(`/local/${MANAGED_MODEL_PATH}`, { method: "HEAD", signal: ctrl.signal });
+    const resp = await fetch(`/local/${PUBLIC_MANIFEST_REL}`, { signal: ctrl.signal });
     clearTimeout(tid);
     if (!resp.ok) return { model_path: "" };
+    return await resp.json() as AddonConfig;
   } catch {
-    return { model_path: "" }; // dev server, or no central model uploaded yet
+    return { model_path: "" }; // dev server, older add-on, or nothing configured yet
   }
-  const [model_upload, rooms_upload] = await Promise.all([
-    fetchUploadMeta(MANAGED_MODEL_PATH),
-    fetchUploadMeta(roomsPathFor(MANAGED_MODEL_PATH)),
-  ]);
-  return { model_path: MANAGED_MODEL_PATH, model_upload, rooms_upload };
 }
 
 /** Fetch the add-on options from the supervisor-proxy (Ingress), or probe for

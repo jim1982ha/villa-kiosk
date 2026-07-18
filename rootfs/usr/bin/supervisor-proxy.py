@@ -17,6 +17,12 @@ It also serves local helper routes (no Supervisor token involved):
        (GLB) or its room-data sidecar (.rooms.json) under /config/www (atomic
        overwrite), so the kiosk can be re-skinned from its own Settings UI
        instead of SSH/Samba.
+       Every write also refreshes PUBLIC_MANIFEST_REL (www/villa-kiosk/
+       addon-config.json) — a plain static mirror of /addon-config's JSON, so
+       a STANDALONE build (this app's dist/ copied into HA's own www/ folder,
+       opened via HA's own /local/ route rather than through Ingress) can
+       learn the real model_path — including a custom one — over plain HTTP,
+       with no Supervisor API access needed.
   GET  /auth/roles    -> which kiosk profiles require a passcode (booleans only).
   POST /auth/verify   -> server-side profile passcode check. The configured PINs
        (guest_pin/owner_pin/ops_pin add-on options) never leave this process:
@@ -267,6 +273,35 @@ def _effective_paths() -> dict:
     }
 
 
+# Where _write_public_manifest below mirrors _effective_paths(), so a
+# STANDALONE build (this app's dist/ copied into HA's own www/ folder, opened
+# via HA's own /local/ route instead of through Ingress) can learn the real
+# model_path — including a custom one, not just the MANAGED_PATH default —
+# without any Supervisor API access. A fixed, well-known location regardless
+# of what model_path itself is set to, so standalone always knows where to
+# look for it.
+PUBLIC_MANIFEST_REL = "villa-kiosk/addon-config.json"
+
+
+def _write_public_manifest() -> None:
+    """Mirror _effective_paths() into a plain static file inside the www
+    folder this add-on already serves, so it's readable over plain HTTP (HA's
+    own /local/ route) with no Ingress/Supervisor-token dance — see
+    PUBLIC_MANIFEST_REL. Call after anything that can change the effective
+    paths (startup, a completed upload). Best-effort: must never raise, since
+    every caller is on a path that already succeeded at something real."""
+    try:
+        dest = os.path.join(WWW_ROOT, PUBLIC_MANIFEST_REL)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        tmp = dest + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(_effective_paths(), f)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, dest)
+    except OSError as err:
+        print(f"[supervisor-proxy] public manifest write skipped: {err}", flush=True)
+
+
 def _resolve_upload_target(kind: str) -> str:
     """Absolute, traversal-checked destination path for an upload of this kind.
 
@@ -508,6 +543,7 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
         raise
 
     _write_upload_sidecar(request, dest)
+    _write_public_manifest()
     rel = os.path.relpath(dest, os.path.realpath(WWW_ROOT))
     return web.json_response({"path": rel, "size": offset + n})
 
@@ -556,6 +592,7 @@ async def model_upload_handler(request: web.Request) -> web.Response:
         raise
 
     _write_upload_sidecar(request, dest)
+    _write_public_manifest()
     rel = os.path.relpath(dest, os.path.realpath(WWW_ROOT))
     return web.json_response({"path": rel, "size": total})
 
@@ -566,6 +603,7 @@ def main() -> None:
     async def on_start(a: web.Application) -> None:
         a["session"] = ClientSession(timeout=ClientTimeout(total=None))
         await _cleanup_stale_options(a["session"])
+        _write_public_manifest()
 
     async def on_cleanup(a: web.Application) -> None:
         await a["session"].close()

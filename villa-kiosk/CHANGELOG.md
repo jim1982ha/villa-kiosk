@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.23.31
+
+- **Fixed: standalone (dist copied into HA's own `www/` folder) didn't
+  auto-detect a central model with a custom `model_path`.** 2.23.28's
+  auto-detection only ever probed the conventional default path
+  (`villa-kiosk/villa.glb`), so an add-on configured with a custom-named GLB
+  (the common case — the Blender pipeline names files after the bake, e.g.
+  `villa_2F_4096_bake-....glb`) was invisible to it, silently falling back to
+  the old per-browser upload UI. The add-on now mirrors its real effective
+  config into a small static JSON file inside the same `www/` folder it
+  already serves (`villa-kiosk/addon-config.json`, refreshed on startup and
+  after every upload) — standalone reads that directly over plain HTTP
+  instead of guessing a path, so it picks up the actual configured model
+  (whatever it's named) exactly like the add-on's own `/addon-config` route
+  does.
+
 ## 2.23.30
 
 - **Added a fetch-vs-parse load-time breakdown to the model (i) tooltip**
