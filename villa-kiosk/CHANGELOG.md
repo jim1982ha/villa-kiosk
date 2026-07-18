@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.23.35
+
+- Widened the model (i) tooltip 50% (340px → 510px cap) — confirmed
+  rendering correctly (right direction, right position) after 2.23.34's fix;
+  the extra width is just breathing room for its long `From`/SHA-256 rows.
+
 ## 2.23.34
 
 - **Fixed: the model (i) tooltip's real bug — it opened the wrong direction,
