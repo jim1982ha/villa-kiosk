@@ -669,10 +669,6 @@ input[type="range"]::-moz-range-thumb {
 .info-pop .row span:last-child { color: var(--text-primary); word-break: break-all; text-align: right; }
 .info-pop code { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; }
 
-.wizard-steps { display: flex; gap: 6px; margin-bottom: 22px; }
-.wizard-steps .step { flex: 1; height: 4px; border-radius: 999px; background: var(--bg-input); }
-.wizard-steps .step.done { background: var(--accent); }
-
 .test-result { margin-top: 12px; padding: 10px 14px; border-radius: 10px; font-size: 14px; }
 .test-result.ok { background: color-mix(in srgb, var(--status-on) 18%, transparent); color: var(--status-on); }
 .test-result.fail { background: color-mix(in srgb, var(--status-danger) 18%, transparent); color: var(--status-danger); }

@@ -1,21 +1,50 @@
 // src/components/onboarding/OnboardingWizard.tsx
-// First-run setup: HA connection -> upload model -> location -> done.
-// When served as a Home Assistant add-on (Ingress), the connection is automatic
-// via the same-origin Supervisor proxy (token injected server-side), so the
-// "Connect Home Assistant" step is skipped entirely.
+// First-run setup: HA connection, single screen. When served as a Home
+// Assistant add-on (Ingress), the connection is automatic via the same-origin
+// Supervisor proxy (token injected server-side), so there's nothing to ask —
+// this just waits for that connection and finishes on its own.
+//
+// The 3D model and villa-location steps this used to have were dropped: the
+// model is handled entirely by BabylonCanvas (auto-detects the add-on's
+// central model the same way in both modes — see storage.ts's
+// probeStandaloneCentralModel — and falls back to its own inline uploader if
+// none is found, with no onboarding involvement either way), and the
+// location silently adopts the connected HA instance's own lat/lng once
+// available, with no confirmation screen needed.
 
 import { useEffect, useState } from "react";
-import { Home, Plug, ArrowRight, MapPin, CheckCircle2 } from "lucide-react";
+import { Home, Plug, ArrowRight } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { normaliseHaUrl, resolveSiteTitle } from "@/config/AppConfig";
 import { isIngress, ingressHaUrl } from "@/ha/ingress";
 import { testConnection, type TestResult } from "@/ha/testConnection";
-import { getModelMeta, fetchAddonConfig } from "@/utils/storage";
-import ModelUploader from "@/components/settings/ModelUploader";
 
 interface Props {
   onComplete: () => void;
+}
+
+/**
+ * Best-effort guess at this villa's HA URL from the page's OWN address: this
+ * app's own Cloudflare Tunnel convention (see the runbook this was built
+ * against) puts Home Assistant at "ha-<same-hostname>" alongside wherever the
+ * kiosk itself is served — e.g. the kiosk at
+ * "https://villa.example.com/local/villa-kiosk/dist/index.html" implies HA is
+ * at "https://ha-villa.example.com". Deliberately skipped for a bare LAN IP /
+ * "localhost" (common for the wall-mounted-tablet LAN-direct setup — see
+ * project conventions): there's no "ha-" sibling to guess there, so the field
+ * is just left for the user to type their own local address.
+ */
+function deriveHaUrl(): string {
+  try {
+    const { protocol, hostname } = window.location;
+    const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
+    if (isIp || hostname === "localhost" || !hostname.includes(".")) return "";
+    if (hostname.startsWith("ha-")) return `${protocol}//${hostname}`;
+    return `${protocol}//ha-${hostname}`;
+  } catch {
+    return "";
+  }
 }
 
 export default function OnboardingWizard({ onComplete }: Props) {
@@ -23,135 +52,98 @@ export default function OnboardingWizard({ onComplete }: Props) {
   const { connect, connected, haConfig } = useHA();
 
   const ingress = isIngress();
-  const [step, setStep] = useState(0);
-  const [url, setUrl] = useState(ingress ? ingressHaUrl() : config.haUrl);
+  const [url, setUrl] = useState(ingress ? ingressHaUrl() : (config.haUrl || deriveHaUrl()));
   const [token, setToken] = useState(config.haToken);
-  const [lat, setLat] = useState(String(config.latitude));
-  const [lng, setLng] = useState(String(config.longitude));
-  const [testing, setTesting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
-  const [hasModel, setHasModel] = useState(() => !!getModelMeta());
-  // When the add-on has a central model_path configured, the kiosk loads that
-  // GLB from /model/ for every client — no per-browser upload is needed, so the
-  // upload step must not block onboarding. (Empty in standalone/dev mode.)
-  const [centralModel, setCentralModel] = useState<string | null>(null);
-  const modelReady = hasModel || !!centralModel;
+  // Set once we're ready to finish and are just giving haConfig a brief
+  // window to arrive (see the effect below) so sun position starts accurate
+  // instead of at the DEFAULT_CONFIG placeholder.
+  const [finishing, setFinishing] = useState(false);
 
   const title = resolveSiteTitle(config, haConfig?.location_name);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchAddonConfig().then((cfg) => {
-      if (!cancelled && cfg.model_path) setCentralModel(cfg.model_path);
-    });
-    return () => { cancelled = true; };
-  }, []);
-
   // As an add-on the kiosk reaches HA through the same-origin Supervisor proxy,
-  // which injects the token server-side — so we connect token-less and skip the
-  // whole "Connect Home Assistant" step. (The URL/token args are placeholders.)
+  // which injects the token server-side — so we connect token-less and never
+  // show any fields at all. (The URL/token args are placeholders.)
   useEffect(() => {
-    if (!ingress || connected) return;
+    if (!ingress) return;
     const haUrl = ingressHaUrl();
     update({ haUrl });
     connect(haUrl, "").catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ingress]);
 
-  // Auto-fill the map coordinates from the HA instance once we're connected, so
-  // the Location step is pre-confirmed rather than manually entered.
-  useEffect(() => {
-    if (haConfig) {
-      setLat(String(haConfig.latitude));
-      setLng(String(haConfig.longitude));
-    }
-  }, [haConfig]);
-
-  const totalSteps = 5;
-
-  const runTest = async () => {
-    setTesting(true);
-    setResult(null);
-    const r = await testConnection(normaliseHaUrl(url), token);
-    setResult(r);
-    setTesting(false);
-    if (r.ok) {
-      update({ haUrl: normaliseHaUrl(url), haToken: token });
-      connect(normaliseHaUrl(url), token).catch(() => {});
-    }
-  };
-
-  const finish = () => {
+  const finish = (lat?: number, lng?: number) => {
     update({
       haUrl: normaliseHaUrl(url),
       haToken: token,
-      latitude: Number(lat),
-      longitude: Number(lng),
+      ...(lat != null && lng != null ? { latitude: lat, longitude: lng } : {}),
       onboarded: true,
     });
     onComplete();
   };
 
-  // From Welcome, skip the Connect step when we're already connected (add-on).
-  const startStep = connected ? 2 : 1;
-  const canLeaveConnect = connected || !!result?.ok;
+  // Once connected (either mode), haConfig (villa location + instance name)
+  // arrives asynchronously a moment later — give it a short window before
+  // finishing rather than a dedicated confirmation screen; whichever comes
+  // first (haConfig lands, or the timeout) completes onboarding.
+  useEffect(() => {
+    if (!connected) return;
+    setFinishing(true);
+    if (haConfig) {
+      finish(haConfig.latitude, haConfig.longitude);
+      return;
+    }
+    const t = setTimeout(() => finish(), 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, haConfig]);
+
+  const runConnect = async () => {
+    setConnecting(true);
+    setResult(null);
+    const r = await testConnection(normaliseHaUrl(url), token);
+    setResult(r);
+    setConnecting(false);
+    if (r.ok) {
+      update({ haUrl: normaliseHaUrl(url), haToken: token });
+      connect(normaliseHaUrl(url), token).catch(() => {});
+      // The `connected` effect above takes it from here once the real
+      // connection (not this throwaway test socket) comes up.
+    }
+  };
 
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <div className="wizard-steps">
-          {Array.from({ length: totalSteps }).map((_, i) => (
-            <div key={i} className={`step ${i <= step ? "done" : ""}`} />
-          ))}
-        </div>
+        <h2><Home size={24} /> Welcome to {title}</h2>
 
-        {step === 0 && (
+        {ingress || finishing ? (
+          <p className="sub">
+            {finishing ? "Connected — finishing setup…" : "Connecting to Home Assistant…"}
+          </p>
+        ) : (
           <>
-            <h2><Home size={24} /> Welcome to {title}</h2>
-            <p className="sub">
-              Your interactive 3D villa dashboard.{" "}
-              {connected
-                ? "Connected to Home Assistant automatically."
-                : ingress
-                  ? "Connecting to Home Assistant…"
-                  : "Let's connect it to Home Assistant."}
-            </p>
-            <div className="modal-actions">
-              <button
-                className="btn primary"
-                onClick={() => setStep(startStep)}
-                disabled={ingress && !connected}
-              >
-                Get started <ArrowRight size={18} />
-              </button>
-            </div>
-          </>
-        )}
+            <p className="sub">Connect this device to your villa's Home Assistant.</p>
 
-        {step === 1 && (
-          <>
-            <h2>Connect Home Assistant</h2>
-            <p className="sub">
-              {ingress
-                ? "Your HA address is detected automatically — just paste a long-lived access token (Profile → Security → Long-lived tokens)."
-                : "Enter your HA URL and a long-lived access token (Profile → Security → Long-lived tokens)."}
-            </p>
-            <label>URL</label>
+            <label>Home Assistant URL</label>
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="http://homeassistant.local:8123"
-              readOnly={ingress}
+              placeholder="https://ha-yourvilla.example.com"
             />
-            <label>Token</label>
-            <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="eyJhbGciOi…" />
-            <button className="btn ghost mt" style={{ width: "100%" }} onClick={runTest} disabled={testing}>
-              <Plug size={18} /> {testing ? "Testing…" : "Test connection"}
-            </button>
-            {result && (
-              <div className={`test-result ${result.ok ? "ok" : "fail"}`} style={{ whiteSpace: "pre-line" }}>
+
+            <label>Long-lived access token</label>
+            <input
+              type="password" value={token} onChange={(e) => setToken(e.target.value)}
+              placeholder="eyJhbGciOi… (Profile → Security → Long-lived access tokens)"
+            />
+
+            {result && !result.ok && (
+              <div className="test-result fail" style={{ whiteSpace: "pre-line" }}>
                 {result.message}
-                {!result.ok && result.trustUrl && (
+                {result.trustUrl && (
                   <a
                     href={result.trustUrl}
                     target="_blank"
@@ -164,70 +156,14 @@ export default function OnboardingWizard({ onComplete }: Props) {
                 )}
               </div>
             )}
-            <div className="modal-actions">
-              <button className="btn ghost" onClick={() => setStep(0)}>Back</button>
-              <button className="btn primary" onClick={() => setStep(2)} disabled={!canLeaveConnect}>Next <ArrowRight size={18} /></button>
-            </div>
-          </>
-        )}
 
-        {step === 2 && (
-          <>
-            <h2>3D model</h2>
-            {centralModel ? (
-              <p className="sub">
-                This kiosk loads the model configured in the add-on:{" "}
-                <strong>{centralModel}</strong>. Every client uses the same file —
-                no upload needed. You'll bind objects to Home Assistant entities
-                by tapping them.
-              </p>
-            ) : (
-              <>
-                <p className="sub">
-                  The kiosk needs a <strong>.glb</strong> file (glTF Binary). Export it from
-                  SweetHome 3D → Blender, or use any GLB of your villa. After loading,
-                  you'll bind objects to Home Assistant entities by tapping them.
-                </p>
-                <ModelUploader onUploaded={() => setHasModel(true)} />
-              </>
-            )}
             <div className="modal-actions">
-              <button className="btn ghost" onClick={() => setStep(connected ? 0 : 1)}>Back</button>
-              <button className="btn primary" onClick={() => setStep(3)} disabled={!modelReady}>Next <ArrowRight size={18} /></button>
-            </div>
-          </>
-        )}
-
-        {step === 3 && (
-          <>
-            <h2><MapPin size={22} /> Location</h2>
-            <p className="sub">
-              Used for realistic sun position.{" "}
-              {haConfig ? "Pre-filled from your Home Assistant instance." : "Pre-filled — adjust if needed."}
-            </p>
-            <div className="row" style={{ gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <label>Latitude</label>
-                <input value={lat} onChange={(e) => setLat(e.target.value)} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label>Longitude</label>
-                <input value={lng} onChange={(e) => setLng(e.target.value)} />
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn ghost" onClick={() => setStep(2)}>Back</button>
-              <button className="btn primary" onClick={() => setStep(4)}>Next <ArrowRight size={18} /></button>
-            </div>
-          </>
-        )}
-
-        {step === 4 && (
-          <>
-            <h2><CheckCircle2 size={24} /> Ready</h2>
-            <p className="sub">Everything is set. Walk through your villa and tap objects to control them.</p>
-            <div className="modal-actions">
-              <button className="btn primary" onClick={finish}>Open Dashboard <ArrowRight size={18} /></button>
+              <button
+                className="btn primary" onClick={runConnect}
+                disabled={connecting || !url || !token}
+              >
+                <Plug size={18} /> {connecting ? "Connecting…" : "Connect"} <ArrowRight size={18} />
+              </button>
             </div>
           </>
         )}

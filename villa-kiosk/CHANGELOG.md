@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.23.42
+
+- **Onboarding collapsed from 4 steps to 1.** The "3D model" and "Location"
+  steps were pure information/confirmation with nothing to actually enter —
+  the model has auto-detected the add-on's central GLB/room-data with no
+  upload needed since 2.23.28 (confirmed unchanged; BabylonCanvas already
+  handles this independently of onboarding, including its own inline
+  uploader for the rare case nothing central is found), and the location
+  silently adopts the connected HA instance's own lat/lng a moment after
+  connecting, with no confirmation screen needed. Onboarding is now just:
+  Home Assistant URL + long-lived token, one screen, one button. Add-on
+  (Ingress) mode shows no fields at all, same as before — it still connects
+  automatically.
+- **The HA URL field now prefills a real guess** instead of starting blank:
+  it derives `ha-<this page's own hostname>` from the page's own address —
+  matching the split-subdomain Cloudflare Tunnel convention this app's own
+  docs/runbook uses (kiosk at the bare domain, HA at the same domain with an
+  `ha-` prefix) — e.g. opening the kiosk at
+  `.../local/villa-kiosk/dist/index.html` on `villa.example.com` prefills
+  `https://ha-villa.example.com`. Skipped for a bare LAN IP or `localhost`
+  (no `ha-` sibling to guess there), left blank as before.
+
 ## 2.23.41
 
 - **Security: removed the env-configurable HA URL/token default entirely.**
