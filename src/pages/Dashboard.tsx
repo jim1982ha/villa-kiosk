@@ -11,12 +11,10 @@ import PanelRouter from "@/components/panels/PanelRouter";
 import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
-import OnboardingWizard from "@/components/onboarding/OnboardingWizard";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { isIngress, ingressHaUrl } from "@/ha/ingress";
 import { mappingForEntityId } from "@/config/EntityMap";
 import { isQuickToggle } from "@/utils/quickAction";
 import { HAServices } from "@/ha/HAServiceCalls";
@@ -27,13 +25,12 @@ import type { TeleportPoint } from "@/types/scene.types";
 export default function Dashboard() {
   const { config, update } = useConfig();
   const { role } = useProfile();
-  const { connect, entities, ws } = useHA();
+  const { connect, entities, ws, haConfig } = useHA();
   // ProfileGate guarantees a signed-in role before this page mounts; the
   // fallback only defends against a direct render in tests.
   const canControl = role != null && hasCapability(role, "controlEntities");
   const canOpenSettings = role != null && hasCapability(role, "openSettings");
   const canEditConfig = role != null && hasCapability(role, "editConfig");
-  const canManageModel = role != null && hasCapability(role, "manageModel");
   // Read inside the onCalibrated/onReady effect below (which intentionally
   // only depends on [manager], so its closure would otherwise see a stale
   // config.teleportPoints from whenever that effect last ran).
@@ -52,7 +49,6 @@ export default function Dashboard() {
   const [room, setRoom] = useState<string | null>(null);
   const [currentFloor, setCurrentFloor] = useState(1);
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
-  const [showOnboarding, setShowOnboarding] = useState(!config.onboarded);
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
   // Starts "overview" to match the actual landing view (see the one-shot
   // effect below): the HUD reads this to decide joystick vs. overview-help
@@ -68,17 +64,24 @@ export default function Dashboard() {
   // swaps the manager but the saved device pose is still valid to show.
   const [hasOverviewDefault, setHasOverviewDefault] = useState(false);
 
-  // Auto-connect on load / refresh. As an add-on we reach HA through the
-  // same-origin Supervisor proxy (token injected server-side), so no credentials
-  // are needed. Otherwise reconnect from the URL + token saved in localStorage.
+  // Auto-connect on load / refresh. We always reach HA through the same-origin
+  // Supervisor proxy (token injected server-side), so no credentials are needed.
   useEffect(() => {
-    if (isIngress()) {
-      connect(ingressHaUrl(), "").catch(() => {});
-    } else if (config.haUrl && config.haToken) {
-      connect(config.haUrl, config.haToken).catch(() => {});
+    connect().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Adopt the connected HA instance's own location for sun tracking, once, when
+  // it arrives — replaces the old onboarding step that used to confirm it.
+  const adoptedLocationRef = useRef(false);
+  useEffect(() => {
+    if (adoptedLocationRef.current || !haConfig) return;
+    adoptedLocationRef.current = true;
+    if (typeof haConfig.latitude === "number" && typeof haConfig.longitude === "number") {
+      update({ latitude: haConfig.latitude, longitude: haConfig.longitude });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.haUrl, config.haToken]);
+  }, [haConfig]);
 
   // Real-sun fallback: if HA has no sun.sun entity, refresh lighting hourly.
   useEffect(() => {
@@ -352,15 +355,6 @@ export default function Dashboard() {
             // this modal open — closing it on every upload felt abrupt. The
             // modal's live controls use `manager?.…` so the brief remount
             // window (old manager torn down, new one not yet ready) is a safe no-op.
-            setModelKey((k) => k + 1);
-          }}
-        />
-      )}
-
-      {showOnboarding && canManageModel && (
-        <OnboardingWizard
-          onComplete={() => {
-            setShowOnboarding(false);
             setModelKey((k) => k + 1);
           }}
         />

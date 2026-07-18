@@ -114,13 +114,10 @@ export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
 export const DEFAULT_RENDER: RenderConfig = RENDER_PRESETS.high;
 
 export interface AppConfig {
-  haUrl: string;
-  haToken: string;
-  haPort: number;
   /**
-   * Dashboard title shown in the HUD, onboarding and document title. Left empty
-   * by default so it auto-resolves to the Home Assistant instance name
-   * (`location_name` from HA's config); falls back to "Villa Kiosk".
+   * Dashboard title shown in the HUD and document title. Left empty by default
+   * so it auto-resolves to the Home Assistant instance name (`location_name`
+   * from HA's config); falls back to "Villa Kiosk".
    */
   siteTitle: string;
   latitude: number;
@@ -190,7 +187,6 @@ export interface AppConfig {
    *  instead (see components/panels/DeviceGroupPanel). Editable in Advanced
    *  Settings. */
   deviceGroups: DeviceGroup[];
-  onboarded: boolean;
 }
 
 /** See AppConfig.deviceGroups. */
@@ -212,15 +208,6 @@ export interface DeviceGroup {
 const env = import.meta.env;
 
 export const DEFAULT_CONFIG: AppConfig = {
-  // Deliberately NOT env-configurable (unlike VITE_LAT/VITE_LNG below): a
-  // build-time HA URL/token default gets baked as plain text into the
-  // compiled JS bundle — for a standalone deploy that's a public static
-  // file, so a baked-in long-lived token is a real credential leak to
-  // anyone who can fetch it, not just a convenience shortcut. Always
-  // entered once per device via the Onboarding wizard instead.
-  haUrl: "",
-  haToken: "",
-  haPort: 8123,
   siteTitle: "",
   latitude: env.VITE_LAT ? Number(env.VITE_LAT) : -8.3405,
   longitude: env.VITE_LNG ? Number(env.VITE_LNG) : 115.092,
@@ -244,7 +231,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   // native (unscaled) size — still user-adjustable via the Settings slider.
   entityIconScale: 1.0,
   deviceGroups: [],
-  onboarded: false,
 };
 
 /** Load config, deep-merging stored values over defaults (forward-compatible). */
@@ -281,13 +267,6 @@ export function resetConfig(): void {
   localStorage.removeItem(CONFIG_KEY);
 }
 
-/** Normalise a base URL the user typed (strip trailing slash, ensure scheme). */
-export function normaliseHaUrl(url: string): string {
-  let u = url.trim().replace(/\/+$/, "");
-  if (u && !/^https?:\/\//i.test(u)) u = "http://" + u;
-  return u;
-}
-
 /**
  * Portable config bundle for Owner backup/restore (Advanced Settings → Export
  * / Import configuration). Deliberately narrower than the full AppConfig:
@@ -297,10 +276,10 @@ export function normaliseHaUrl(url: string): string {
  *    overviewPose), device icons, enabled/disabled devices (the entityMap
  *    `disabled` flag) and every option in the First-person/Overview, Render
  *    quality and Device-icon Settings sections.
- *  - excludes haUrl/haToken (a bearer credential — never belongs in a
- *    shareable file) and the per-device overview default framing (already
- *    documented in SceneManager.saveOverviewDefault as intentionally
- *    per-device, not synced/exported).
+ *  - excludes the per-device overview default framing (already documented in
+ *    SceneManager.saveOverviewDefault as intentionally per-device, not
+ *    synced/exported). There are no HA credentials to exclude anymore — the
+ *    kiosk reaches HA token-less through the add-on's Supervisor proxy.
  */
 export interface ConfigExportBundle {
   version: 1;

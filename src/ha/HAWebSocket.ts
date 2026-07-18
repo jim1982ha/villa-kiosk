@@ -3,7 +3,7 @@
 // exponential-backoff reconnect with re-subscription. (3Dash-informed patterns.)
 
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
-import { isIngress, ingressWsUrl } from "./ingress";
+import { ingressWsUrl } from "./ingress";
 
 type Resolver = (result: unknown) => void;
 type Rejecter = (err: Error) => void;
@@ -20,7 +20,6 @@ export class HAWebSocket {
   private ws: WebSocket | null = null;
   private messageId = 1;
   private url = "";
-  private token = "";
   private pending = new Map<number, { resolve: Resolver; reject: Rejecter; timer?: ReturnType<typeof setTimeout> }>();
   private subscriptions = new Map<number, PendingSubscription>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -80,22 +79,16 @@ export class HAWebSocket {
     }
   }
 
-  /** Build a ws(s):// URL from an http(s):// base. */
-  private wsUrl(httpUrl: string): string {
-    // As an add-on, route through the same-origin Supervisor proxy, which adds
-    // the SUPERVISOR_TOKEN server-side — so the URL/token args are irrelevant.
-    if (isIngress()) return ingressWsUrl();
-    const u = httpUrl.replace(/^http/i, "ws").replace(/\/+$/, "");
-    return `${u}/api/websocket`;
-  }
-
-  connect(url: string, token: string): Promise<void> {
-    // Ignore duplicate connects to the same target while already up/connecting
-    // (e.g. React StrictMode double-invoke) to avoid racing sockets.
+  connect(): Promise<void> {
+    // Always route through the same-origin Supervisor proxy, which adds the
+    // SUPERVISOR_TOKEN server-side — so we authenticate token-less (the in-band
+    // auth message below sends an empty token the proxy rewrites). Ignore
+    // duplicate connects while already up/connecting (e.g. React StrictMode
+    // double-invoke) to avoid racing sockets.
+    const url = ingressWsUrl();
     if (
       (this.state === "connected" || this.state === "connecting" || this.state === "authenticating") &&
-      this.url === url &&
-      this.token === token
+      this.url === url
     ) {
       return Promise.resolve();
     }
@@ -105,7 +98,6 @@ export class HAWebSocket {
       this.ws = null;
     }
     this.url = url;
-    this.token = token;
     this.manuallyClosed = false;
     return this.openSocket();
   }
@@ -125,7 +117,7 @@ export class HAWebSocket {
       };
 
       try {
-        this.ws = new WebSocket(this.wsUrl(this.url));
+        this.ws = new WebSocket(this.url);
       } catch (err) {
         finish(() => reject(err as Error));
         this.scheduleReconnect();
@@ -150,7 +142,9 @@ export class HAWebSocket {
           case "auth_required":
             this.setState("authenticating");
             if (socket.readyState === WebSocket.OPEN) {
-              socket.send(JSON.stringify({ type: "auth", access_token: this.token }));
+              // Empty token on purpose: the Supervisor proxy rewrites the auth
+              // message's access_token to the real SUPERVISOR_TOKEN server-side.
+              socket.send(JSON.stringify({ type: "auth", access_token: "" }));
             }
             break;
           case "auth_ok":
@@ -161,8 +155,10 @@ export class HAWebSocket {
             finish(() => resolve());
             break;
           case "auth_invalid":
-            this.manuallyClosed = true; // bad token: do not loop forever
-            finish(() => reject(new Error(msg.message ?? "Authentication failed — check your token.")));
+            // Should not happen — the proxy injects a valid Supervisor token.
+            // If it does (e.g. proxy misconfigured), don't loop forever.
+            this.manuallyClosed = true;
+            finish(() => reject(new Error(msg.message ?? "Home Assistant rejected the add-on's authentication.")));
             this.ws?.close();
             break;
           case "result":

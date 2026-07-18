@@ -1,18 +1,19 @@
 // src/components/settings/SettingsModal.tsx
-// HA connection + token + appearance. A footer button opens the full Config
+// Appearance + render/movement tuning. A footer button opens the full Config
 // Editor (villa coordinates, entity metadata, bindings, 3D model source) as
 // a modal over the live villa. Device badge icons are hardcoded, not
 // editable here — see babylon/badgeIcons.ts + badgeIconKeys.ts.
+//
+// There's no HA URL/token here anymore: the kiosk always reaches Home Assistant
+// token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
 import { useRef, useState } from "react";
-import { Plug, Sliders, Sun, Moon, Monitor } from "lucide-react";
+import { Sliders, Sun, Moon, Monitor } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { normaliseHaUrl, DEFAULT_SITE_TITLE, DEFAULT_RENDER, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
-import { testConnection, type TestResult } from "@/ha/testConnection";
-import { isIngress } from "@/ha/ingress";
+import { DEFAULT_SITE_TITLE, DEFAULT_RENDER, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
 import type { SceneManager } from "@/babylon/SceneManager";
 
 interface Props {
@@ -25,7 +26,7 @@ interface Props {
 export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: Props) {
   const { config, update, replace } = useConfig();
   const { role } = useProfile();
-  const { connect, haConfig } = useHA();
+  const { haConfig } = useHA();
   // RBAC: which settings areas the active profile may use. Dashboard already
   // refuses to open this modal without "openSettings"; these narrow further.
   const can = (c: Capability) => role != null && hasCapability(role, c);
@@ -39,16 +40,11 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
     manager?.updateConfig(initialConfigRef.current);
     onClose();
   };
-  const ingress = isIngress();
 
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);
-  const [url, setUrl] = useState(config.haUrl);
-  const [token, setToken] = useState(config.haToken);
   const [eyeHeight, setEyeHeight] = useState(config.eyeHeight ?? 1.7);
   const [walkSpeed, setWalkSpeed] = useState(config.walkSpeed ?? 1);
   const [render, setRender] = useState<RenderConfig>(config.render ?? DEFAULT_RENDER);
-  const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState<TestResult | null>(null);
 
   // Live-apply render tuning straight to the scene while dragging, so the user
   // can iterate on look/perf without saving + reloading.
@@ -74,22 +70,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   };
 
   const save = () => {
-    const cleanUrl = normaliseHaUrl(url);
-    update({ siteTitle: siteTitle.trim(), haUrl: cleanUrl, haToken: token, eyeHeight, walkSpeed, render });
-    // Only bounce the websocket when the connection details actually changed —
-    // profiles that can't edit them (guests saving a theme tweak) keep the
-    // live connection untouched.
-    if (!ingress && (cleanUrl !== config.haUrl || token !== config.haToken)) {
-      connect(cleanUrl, token).catch(() => {});
-    }
+    update({ siteTitle: siteTitle.trim(), eyeHeight, walkSpeed, render });
     onClose();
-  };
-
-  const runTest = async () => {
-    setTesting(true);
-    setResult(null);
-    setResult(await testConnection(normaliseHaUrl(url), token));
-    setTesting(false);
   };
 
   return (
@@ -133,40 +115,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               onChange={(e) => setSiteTitle(e.target.value)}
               placeholder={haConfig?.location_name || DEFAULT_SITE_TITLE}
             />
-          </>
-        )}
-
-        {!ingress && can("editConfig") && (
-          <>
-            <label>Home Assistant URL</label>
-            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://homeassistant.local:8123" />
-
-            <label>Long-lived access token</label>
-            <div className="row" style={{ gap: 10 }}>
-              <input
-                type="password" value={token} onChange={(e) => setToken(e.target.value)}
-                placeholder="eyJhbGciOi…" style={{ flex: 1 }}
-              />
-              <button className="btn ghost" style={{ flexShrink: 0 }} onClick={runTest} disabled={testing}>
-                <Plug size={18} /> {testing ? "Testing…" : "Test connection"}
-              </button>
-            </div>
-            {result && (
-              <div className={`test-result ${result.ok ? "ok" : "fail"}`} style={{ whiteSpace: "pre-line" }}>
-                {result.message}
-                {!result.ok && result.trustUrl && (
-                  <a
-                    href={result.trustUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn ghost mt"
-                    style={{ width: "100%", display: "inline-flex", justifyContent: "center" }}
-                  >
-                    Open {result.trustUrl} to trust its certificate
-                  </a>
-                )}
-              </div>
-            )}
           </>
         )}
 

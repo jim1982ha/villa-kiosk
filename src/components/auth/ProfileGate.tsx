@@ -9,7 +9,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useProfile } from "@/auth/ProfileContext";
 import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/roles";
-import { getPinVerifier } from "@/auth/PinVerifier";
+import { pinRequired as fetchPinRequired, verify, openSession } from "@/auth/PinVerifier";
 import PinPad from "./PinPad";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
@@ -30,8 +30,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (role && !switching) return; // already signed in and not switching, nothing to fetch
     let cancelled = false;
-    getPinVerifier()
-      .pinRequired()
+    fetchPinRequired()
       .then((req) => { if (!cancelled) setPinRequired(req); })
       .catch(() => {
         if (!cancelled) {
@@ -55,7 +54,15 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   const choose = (r: Role) => {
     setGateError(null);
     if (pinRequired && !pinRequired[r]) {
-      login(r); // un-gated profile: one tap and in
+      // Un-gated profile: one tap and in — but still establish a server session
+      // first, so direct/Cloudflare access is authorized (the cookie, not this
+      // click, is what unlocks /core and /model).
+      openSession(r)
+        .then((res) => {
+          if (res.ok) login(r);
+          else setGateError("Couldn't start a session — please try again.");
+        })
+        .catch(() => setGateError("Couldn't reach the kiosk service — please try again."));
     } else {
       setPending(r);
     }
@@ -70,7 +77,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
         <div className="auth-screen">
           <PinPad
             roleLabel={ROLE_LABELS[pending]}
-            onSubmit={(pin) => getPinVerifier().verify(pending, pin)}
+            onSubmit={(pin) => verify(pending, pin)}
             onAccepted={() => { login(pending); setPending(null); }}
             onBack={() => setPending(null)}
           />

@@ -1,30 +1,26 @@
 // src/ha/ingress.ts
-// Helpers for when the kiosk is served through a Home Assistant add-on (Ingress).
+// URL helpers for reaching the add-on's own backend (nginx + supervisor-proxy).
 //
-// As an add-on we never ask for a Home Assistant URL or a long-lived token: the
-// app is same-origin as HA, and it reaches Core through the add-on's built-in
-// Supervisor proxy (see rootfs/usr/bin/supervisor-proxy.py). That proxy injects
-// the add-on's SUPERVISOR_TOKEN server-side, so the browser stays token-less:
-//   WS   -> <ingress base>/core/websocket
-//   REST -> <ingress base>/core/api/...
+// The kiosk is ALWAYS served by the add-on, reached two ways:
+//   * HA sidebar (Ingress): the page lives under "/api/hassio_ingress/<token>/",
+//     and every backend path must be resolved relative to that base.
+//   * Its own hostname (direct/Cloudflare): the page lives at "/", so the same
+//     paths resolve against root.
+// Either way we never ask for a Home Assistant URL or a long-lived token: the
+// app is same-origin as its backend and reaches Core through the add-on's
+// Supervisor proxy (see rootfs/usr/bin/supervisor-proxy.py), which injects the
+// add-on's SUPERVISOR_TOKEN server-side so the browser stays token-less:
+//   WS   -> <base>/core/websocket
+//   REST -> <base>/core/api/...
+// ingressBasePath() collapses to "/" off Ingress, so a single set of helpers
+// serves both modes.
 
-/** True when served behind HA Ingress (i.e. installed and opened as an add-on). */
-export function isIngress(): boolean {
-  return window.location.pathname.includes("/api/hassio_ingress/");
-}
-
-/** The Ingress base path, e.g. "/api/hassio_ingress/<token>/" (trailing slash). */
+/** The base path to resolve backend routes against: the Ingress prefix
+ *  ("/api/hassio_ingress/<token>/") in the sidebar, or "/" on the direct
+ *  hostname. */
 export function ingressBasePath(): string {
   const m = window.location.pathname.match(/^(.*\/api\/hassio_ingress\/[^/]+\/)/);
   return m ? m[1] : "/";
-}
-
-/**
- * Under Ingress the app is SAME ORIGIN as the Home Assistant instance, so the HA
- * URL is simply our own origin — no need to ask the user to type it.
- */
-export function ingressHaUrl(): string {
-  return window.location.origin;
 }
 
 /** WebSocket endpoint of the add-on's Supervisor proxy (token injected server-side). */
@@ -39,10 +35,10 @@ export function ingressApiBase(): string {
 
 /**
  * Resolve a path served by THIS add-on's nginx (e.g. "addon-config",
- * "model/foo.glb") against the Ingress base. A leading-slash absolute path would
- * hit the Home Assistant origin root instead — which, behind an external
- * DuckDNS / Nabu Casa URL, never reaches the add-on and 404s. In standalone/dev
- * (`ingressBasePath()` === "/") this is just the original "/<rel>".
+ * "model/foo.glb") against the base above. A leading-slash absolute path would
+ * hit the origin root instead — which, behind the Ingress prefix, never reaches
+ * the add-on and 404s. On the direct hostname (`ingressBasePath()` === "/")
+ * this is just "/<rel>".
  */
 export function ingressPath(rel: string): string {
   return `${ingressBasePath()}${rel.replace(/^\/+/, "")}`;

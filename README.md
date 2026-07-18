@@ -37,95 +37,65 @@ Built with **React + TypeScript + Babylon.js**.
 
 ---
 
-## Run as a Home Assistant add-on (recommended)
+## Run as a Home Assistant add-on
 
-On **HA OS or Supervised**, the cleanest path is the **Ingress add-on**: sidebar entry, HA-managed auth, no exposed port, no token, auto-restart. Full install instructions: **[ADDON.md](./ADDON.md)**.
+The kiosk runs **only** as a Home Assistant add-on (requires **HA OS** or
+**Supervised** — the Supervisor provides the token-less Core proxy and the
+private storage the app depends on). One add-on, reachable two ways from the
+same build. Full install instructions: **[ADDON.md](./ADDON.md)**.
 
-> Requires HA OS or Supervised. On Core/Container installs, use the standalone deploy below.
+- **In the HA sidebar (Ingress):** sidebar entry, HA-managed auth, nothing to
+  enter. This is the zero-setup path.
+- **On the add-on's own hostname (direct / Cloudflare):** the add-on also
+  publishes host port **8099**, so you can point a Cloudflare Tunnel (or any
+  reverse proxy) at `http://<HA-host-ip>:8099` and open the kiosk on its own
+  URL, with none of the HA UI around it, and **install it as a PWA**.
 
----
+### Access outside the sidebar, securely
 
-## Standalone deployment (Core / Container / dev)
+Because port 8099 is internet-reachable once you map it, the add-on
+authenticates itself — the client-side profile screen alone is not the gate:
 
-### 1. Prerequisites
+- A profile passcode (`guest_pin` / `owner_pin` / `ops_pin` in the add-on
+  options, verified server-side) mints a **signed, httpOnly session cookie**.
+- Home-Assistant control (`/core`) and the villa floor plan (`/model`) refuse
+  any direct request without that cookie. Sidebar (Ingress) requests are exempt
+  — HA already authenticated them, and nginx tags them from the real gateway IP
+  so the flag can't be forged.
+- Set at least one passcode before mapping the port, and put **Cloudflare
+  Access** (or equivalent) in front of the hostname for defence-in-depth.
 
-| You need | Notes |
-|---|---|
-| Node.js 18+ | `node -v` |
-| A Home Assistant instance | Any install type |
-| A way to copy files into HA `/config/www` | Samba share, Studio Code Server, the File editor add-on, or scp — whatever you already use |
-| The villa `.glb` model | exported per [MODEL_PIPELINE.md](./MODEL_PIPELINE.md) |
-| A tablet | Samsung Tab S8+ or better for smooth rendering |
+To keep the kiosk sidebar-only, just leave port 8099 unmapped in the add-on's
+**Network** panel.
 
-### 2. Build
+### Installing as a PWA (the "Install" button)
 
-```bash
-npm install
-npm run build       # type-check + Vite → dist/
-```
-
-> `dev`, `build` and `preview` auto-run **`npm run clean`** first (removes `dist/`,
-> the Vite dep cache `node_modules/.vite`, and `tsconfig.tsbuildinfo`), so every run
-> starts from a clean slate — no stale artifacts in dev or prod. Run `npm run clean`
-> on its own any time. (Cost: the first dev request re-prebundles deps, ~a few seconds.)
-
-### 3. Copy the build to Home Assistant (manual)
-
-`npm run build` produces a self-contained **`dist/`** folder. Copy the **contents
-of `dist/`** into `config/www/villa-kiosk/` on your HA instance, using whatever
-file access you already have — there is no deploy script, do it by hand:
-
-- **Samba share** add-on → open `\\<HA_HOST>\config\www\` and drop the files in a
-  `villa-kiosk` folder.
-- **Studio Code Server** / **File editor** add-on → upload into `/config/www/villa-kiosk/`.
-- **scp** (if you run an SSH add-on):
-  ```bash
-  scp -r dist/. root@<HA_HOST>:/config/www/villa-kiosk/
-  ```
-
-The result must be `config/www/villa-kiosk/index.html` (+ `assets/`, `sw.js`, …).
-HA serves `config/www/` at `/local/`, so the app is then at:
-
-```
-https://<HA_HOST>:8123/local/villa-kiosk/
-```
-
-> If `config/www` didn't exist before, create it and restart HA once so it starts
-> serving `/local/`. Re-deploying a new version = copy the fresh `dist/` over the
-> old folder (replace all files; the hashed `assets/*` filenames change per build).
-> If you instead zip `dist/` and unzip it *into* `villa-kiosk/` (rather than
-> extracting its contents directly), you'll get an extra `dist/` segment in the
-> path (`config/www/villa-kiosk/dist/index.html`) — both work identically, the
-> app doesn't care which; just be consistent about which URL you bookmark.
-
-#### Installing as a PWA (the "Install" button)
-
-The browser only offers **Install** when the app is served from a **secure origin
-with a _trusted_ certificate** — so the `/local/villa-kiosk/` path reached over a
-real, trusted HTTPS domain in front of HA (a Dynamic DNS + Let's Encrypt setup, a
-Cloudflare Tunnel, etc.) is what shows the button on both laptop and phone:
-
-```
-https://<your-trusted-ha-domain>/local/villa-kiosk/   ← installable
-```
+The browser only offers **Install** on a **secure origin with a _trusted_
+certificate** — i.e. the add-on's hostname reached over real HTTPS (a Cloudflare
+Tunnel gives you this for free). Served at `/`, the PWA gets a clean root scope.
 
 Two things that will **hide** the Install button:
 
 - **Plain `http://`, or HTTPS with a self-signed/untrusted cert** → not a secure
-  origin, no service worker, no install. (`npm run dev` uses a self-signed cert by
-  default; drop a trusted `mkcert` cert in `./certs/` to test install locally.)
-- **The Ingress add-on** (`/api/hassio_ingress/…`) → the service worker is
+  origin, no service worker, no install.
+- **The Ingress sidebar path** (`/api/hassio_ingress/…`) → the service worker is
   disabled there on purpose (the session path rotates), so there is **no install
-  button via the sidebar**. Use the `/local/` HTTPS URL above for an installable PWA.
+  button via the sidebar**. Use the add-on's own hostname for an installable PWA.
 
-### 4. Get a Home Assistant token (standalone only)
+### Building it yourself (dev)
 
-1. HA → your profile → **Security** tab → **Long-lived access tokens** → **Create token**.
-2. Paste it into the kiosk's onboarding / Settings.
+```bash
+npm install
+npm run build       # type-check + Vite → dist/  (baked into the add-on image)
+```
 
-> The token is stored in `localStorage` on the tablet — acceptable for a local-only LAN kiosk.
+> `dev`, `build` and `preview` auto-run **`npm run clean`** first (removes `dist/`,
+> the Vite dep cache `node_modules/.vite`, and `tsconfig.tsbuildinfo`), so every run
+> starts from a clean slate. For `npm run dev` against a real Home Assistant, set
+> `VITE_DEV_PROXY` (see `.env.example`) to a running add-on's hostname so Vite
+> forwards the backend routes (`/core`, `/auth`, `/model`, …) to it.
 
-### 5. Tablet kiosk mode
+### Tablet kiosk mode
 
 **iOS — Guided Access**
 
@@ -138,7 +108,7 @@ Two things that will **hide** the Install button:
 
 | Setting | Value |
 |---|---|
-| Start URL | `https://<HA_HOST>:8123/local/villa-kiosk/` |
+| Start URL | the add-on's own hostname, e.g. `https://kiosk.your-domain.com/` (via Cloudflare Tunnel → `http://<HA-host-ip>:8099`) |
 | Prevent sleep / keep screen on | ON |
 | Auto-reload on error | ON (30 s) |
 | Hide navigation/status bar | ON |
@@ -149,17 +119,18 @@ Two things that will **hide** the Install button:
 
 **Android — free alternative:** Chrome → ⋮ → Add to Home screen, then enable the longest screen timeout and pin the app (Settings → Security → App pinning).
 
-### 6. Troubleshooting
+### Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| Blank page / 404 at `/local/...` | Ensure files are in `/config/www/villa-kiosk/` and you restarted HA after first creating `www`. |
-| "Connection failed" in onboarding | Check URL (include `http://` and `:8123`), token validity, and that the tablet is on the same LAN. |
-| Camera panel black | Browser must allow the http camera proxy; verify `camera.*` entity works in HA; check token. |
+| Can't reach the kiosk on its own hostname | Check the Cloudflare Tunnel host points at `http://<HA-host-ip>:8099` and port 8099 is mapped in the add-on's **Network** panel. |
+| Signed in but the villa/HA controls don't load | The session cookie isn't reaching the origin — direct access must be **HTTPS** (the cookie is `Secure`); confirm you're on `https://` and not plain LAN `http://`. |
+| PIN pad rejects every code / no session | Set the matching `guest_pin`/`owner_pin`/`ops_pin` in the add-on options (4 digits), then reload. |
+| Camera panel black | Verify the `camera.*` entity works in HA; frames route through the add-on proxy (no token needed). |
 | Walks through walls | The GLB needs solid wall meshes or `collision_*` boxes — see MODEL_PIPELINE.md. |
 | Teleport lands wrong | Recalibrate: Rooms → walk to the correct spot → long-press the room card. |
-| Inspector won't open | It's a large lazy chunk; first open needs network. Re-deploy after `npm run build`. |
-| Mixed content error | Keep the kiosk and HA both on `http` on the LAN, or put HA behind a proper TLS proxy and use `https` for both — a Cloudflare Tunnel (with Home Assistant's own login as the actual gate) is a common, well-supported way to get a trusted cert without exposing any port. |
+| Inspector won't open | It's a large lazy chunk; first open needs network. Rebuild + reinstall the add-on. |
+| No install button | Only the add-on's own HTTPS hostname is installable — the Ingress sidebar path never is (service worker disabled there by design). |
 
 ---
 
@@ -172,7 +143,7 @@ npm run build       # production build
 npm run typecheck   # type-check without building
 ```
 
-On first run, the onboarding wizard is a single screen asking for your HA URL + token (standalone) — the URL field prefills a guess (`ha-<this page's own hostname>`, matching a split-subdomain Cloudflare Tunnel setup) — or nothing at all, auto-connecting immediately (add-on, via the Ingress Supervisor proxy). The 3D model auto-loads from the add-on's centrally-configured GLB with no upload step (see *Works with any villa* below for the rare case nothing central is configured), and the villa's location silently adopts the connected HA instance's own lat/lng.
+There's no connection onboarding: the kiosk always reaches Home Assistant token-less through the add-on's Supervisor proxy, so it connects automatically. The only gate is the **profile passcode** (server-verified, and the basis for the session cookie on direct access). The 3D model auto-loads from the add-on's central `/data` store (see *Works with any villa* below for the first-run upload), and the villa's location silently adopts the connected HA instance's own lat/lng. For `npm run dev` against a real HA, set `VITE_DEV_PROXY` (see `.env.example`).
 
 ---
 
@@ -214,7 +185,7 @@ src/
 ├── babylon/      # ALL Babylon code (no React): scene, camera, lighting, picking, floors…
 ├── ha/           # Home Assistant: WebSocket, state store, service calls, history, cameras
 ├── config/       # AppConfig, EntityMap, TeleportPoints, thresholds (persisted to localStorage)
-├── components/   # React UI: canvas, HUD, panels, teleport, settings, onboarding
+├── components/   # React UI: canvas, HUD, panels, teleport, settings, auth (profile gate)
 ├── pages/        # Dashboard (the only route — Advanced Settings is a modal over it, not a separate page)
 ├── hooks/        # useHAEntity, useHAEntities, useSceneReady
 ├── types/        # Shared TS types
@@ -227,8 +198,8 @@ The 3D scene never re-renders from React — HA state changes are pushed imperat
 
 ## Runtime configuration
 
-- **Settings** (gear icon): title, render quality, first-person/overview feel, device icon size, theme. HA URL/token shown only in standalone mode.
-- **Advanced Settings** (Settings' footer → *Advanced Settings*, a modal over the live dashboard, not a page reload): villa location, 3D model source (add-on: central GLB/room-data upload; standalone: reads the same central model automatically if one exists, else a per-browser uploader), per-device configuration backup/restore, auto-detected entity settings (map any `entity_id` to a panel type + label + room, mark entities requiring confirmation), bound 3D objects, grouped devices.
+- **Settings** (gear icon): title, render quality, first-person/overview feel, device icon size, theme. No HA URL/token — the connection is automatic through the add-on proxy.
+- **Advanced Settings** (Settings' footer → *Advanced Settings*, a modal over the live dashboard, not a page reload): 3D model source (upload the central GLB/room-data straight into the add-on's `/data` store), per-device configuration backup/restore, auto-detected entity settings (map any `entity_id` to a panel type + label + room, mark entities requiring confirmation), bound 3D objects, grouped devices.
 - **Render quality** (Settings → *Render quality &amp; look*): independently toggle/tune tone mapping (Khronos Neutral / ACES / Standard), exposure, contrast, fill + key + ambient light balance, ambient occlusion (SSAO), sun shadows and environment lighting (IBL). All apply live and persist with your config; start with tone mapping + lower **Fill light** to cure a washed-out render. The same knobs can be baked into the GLB via the [Blender pipeline](MODEL_PIPELINE.md) flags.
 - **Teleport calibration**: open **Rooms**, then right-click / long-press any room card to save your current spot as that room's anchor.
 

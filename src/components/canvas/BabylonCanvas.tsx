@@ -10,7 +10,6 @@ import { filterConfigForRole, hasCapability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel, versionedModelUrl, roomsPathFor } from "@/utils/storage";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
-import { isIngress } from "@/ha/ingress";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
 import ModelUploader from "@/components/settings/ModelUploader";
@@ -121,10 +120,9 @@ export default function BabylonCanvas({
         const tFetchStart = performance.now();
 
         if (addonCfg.model_path) {
-          // ── Central mode: ONLY use the centrally configured model. ─────────
-          // No IndexedDB fallback — once a central model is found (via the
-          // add-on's own config under Ingress, or by probing HA's /local/
-          // static route otherwise — see fetchAddonConfig), that is the
+          // ── Central mode: ONLY use the add-on's centrally-stored model. ────
+          // No IndexedDB fallback — once a central model exists (uploaded into
+          // the add-on's /data store, reported by /addon-config), that is the
           // authoritative source and per-browser uploads are irrelevant.
           // Version-stamped URL → the service worker serves it from cache on
           // repeat opens (cache-first), so only the first load hits the network.
@@ -135,9 +133,7 @@ export default function BabylonCanvas({
             setAddonError(true);
             throw new Error(
               `Central model not found at ${modelUrl} (HTTP ${resp.status}).\n` +
-              (isIngress()
-                ? "Check the add-on configuration: Settings → Add-ons → Villa Kiosk → Configuration."
-                : "Re-upload it from the Villa Kiosk add-on's Advanced Settings."),
+              "Re-upload it from Settings → Advanced Settings (Owner profile).",
             );
           }
           data = await readWithProgress(resp, (f) => { if (!cancelled) setProgress(f); });
@@ -315,12 +311,6 @@ export default function BabylonCanvas({
           {!canManageModel ? (
             <div className="muted body-text">
               Ask the owner to set up the villa's 3D model.
-            </div>
-          ) : isIngress() ? (
-            <div className="muted body-text" style={{ whiteSpace: "pre-line" }}>
-              Set <strong>model_path</strong> in the add-on configuration
-              (Settings → Add-ons → Villa Kiosk → Configuration) to the GLB in
-              your <code>/config/www/</code> folder.
             </div>
           ) : (
             <>

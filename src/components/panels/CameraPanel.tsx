@@ -22,8 +22,6 @@ import type Hls from "hls.js";
 import { X, VideoOff, Maximize2, Minimize2 } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
-import { useConfig } from "@/config/ConfigContext";
-import { isIngress } from "@/ha/ingress";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
 import { devLog } from "@/utils/devLog";
 
@@ -56,7 +54,6 @@ const HLS_WATCHDOG_MS = 15000;
 
 export default function CameraPanel({ entity, mapping, onClose, pinContinuous }: Props) {
   const { connected, ws } = useHA();
-  const { config } = useConfig();
   const [mode, setMode] = useState<Mode>("hls");
   const [tick, setTick] = useState(0);
   const snapErrors = useRef(0);
@@ -186,7 +183,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           return;
         }
 
-        const url = await cameraHlsUrl(ws, config.haUrl, mapping.entityId);
+        const url = await cameraHlsUrl(ws, mapping.entityId);
         if (cancelled) return;
 
         if (canNative) {
@@ -265,15 +262,10 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     return () => clearInterval(id);
   }, [mode, frameReady]);
 
-  // Standalone (non-Ingress) camera URLs must carry the CAMERA'S OWN signed
-  // token (its `access_token` attribute), not the long-lived token — see
-  // HACameraProxy. It rides on the live entity and HA rotates it, so reading it
-  // here each render keeps the URL valid.
-  const camAccessToken =
-    typeof entity?.attributes.access_token === "string" ? entity.attributes.access_token : "";
-  const haveCreds = isIngress() || Boolean(config.haUrl && camAccessToken);
-  const streamUrl = haveCreds ? cameraStreamUrl(config.haUrl, camAccessToken, mapping.entityId) : "";
-  const snapshotBase = haveCreds ? cameraSnapshotUrl(config.haUrl, camAccessToken, mapping.entityId) : "";
+  // Camera frames route through the add-on's Supervisor proxy, which injects
+  // real auth server-side — so the URLs carry no token at all (see HACameraProxy).
+  const streamUrl = cameraStreamUrl(mapping.entityId);
+  const snapshotBase = cameraSnapshotUrl(mapping.entityId);
   // Cache-bust each poll so the browser actually re-requests the frame.
   const snapshotUrl = snapshotBase
     ? `${snapshotBase}${snapshotBase.includes("?") ? "&" : "?"}_=${tick}`
@@ -292,8 +284,8 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
 
     if (mode === "hls") {
       // No src set here — the HLS setup effect drives this element directly
-      // (hls.js attachMedia, or a native .src on iOS Safari), and doesn't
-      // need camAccessToken/haveCreds at all (auth rides the websocket).
+      // (hls.js attachMedia, or a native .src on iOS Safari); auth rides the
+      // websocket / same-origin proxy.
       return (
         <div className="camera-hls-wrap">
           <video
@@ -317,7 +309,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
               covers the gap. Disappears the moment the video paints its own
               first frame (frameReady), by which point it's already decoding
               underneath, so the swap is invisible. */}
-          {!frameReady && haveCreds && (
+          {!frameReady && (
             <img
               className="camera-preview"
               src={snapshotUrl}
@@ -329,8 +321,6 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
         </div>
       );
     }
-
-    if (!haveCreds) return <Unavailable label="Camera stream unavailable." />;
 
     if (mode === "stream") {
       // MJPEG attempt — on error (or the watchdog timing out on a silent stream),

@@ -81,9 +81,31 @@ export default defineConfig(({ command }) => {
       host: true,
       port: 5173,
       // Allow access through a reverse proxy / any external host (dev only).
-      // The production build is static files served by Home Assistant, so this
-      // only affects `npm run dev`.
+      // The production build is static files served by the add-on's nginx, so
+      // this only affects `npm run dev`.
       allowedHosts: true,
+      // The app now ALWAYS talks to the add-on backend (proxy-injected token,
+      // server-verified PINs, session cookie, /model, /addon-config) — there's
+      // no standalone/token path left. So for `npm run dev` to reach a real HA,
+      // forward those backend routes to a running add-on instance. Point
+      // VITE_DEV_PROXY at the add-on's own hostname/port (e.g.
+      // http://homeassistant.local:8099) in your .env. Without it, dev serves
+      // the UI shell but backend calls 404 (fine for pure visual work).
+      ...(process.env.VITE_DEV_PROXY
+        ? {
+            proxy: Object.fromEntries(
+              ["/core", "/auth", "/addon-config", "/model", "/model-upload"].map((p) => [
+                p,
+                {
+                  target: process.env.VITE_DEV_PROXY,
+                  changeOrigin: true,
+                  ws: p === "/core",
+                  secure: false,
+                },
+              ]),
+            ),
+          }
+        : {}),
       // A trusted cert (mkcert) lets Chrome register the SW; basic-ssl can't.
       ...(haveTrustedCert
         ? { https: { key: fs.readFileSync(CERT_KEY), cert: fs.readFileSync(CERT_CRT) } }

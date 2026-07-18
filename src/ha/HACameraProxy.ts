@@ -1,23 +1,18 @@
 // src/ha/HACameraProxy.ts
-// Build the authenticated camera stream URL for an <img> MJPEG takeover.
+// Build the camera stream URL for an <img> MJPEG takeover.
 //
-// HA's /api/camera_proxy[_stream] can't be reached from an <img> with the
-// long-lived token: that token only authenticates via the Authorization header
-// or a session cookie, neither of which an <img> can send. What these endpoints
-// DO accept as a ?token= query param is the camera entity's own rotating signed
-// token, exposed as its `access_token` attribute (HA refreshes it and pushes it
-// over the websocket, so the value we read from the live entity stays valid).
-// Under Ingress we instead hit the add-on's Supervisor proxy, which injects real
-// auth server-side — so the URL carries no token at all and `camAccessToken` is
-// ignored.
+// The kiosk always reaches HA through the add-on's Supervisor proxy, which
+// injects real auth server-side — so camera URLs route through the proxy's
+// same-origin `/core/api/...` path and carry no token at all. (Before the
+// single-mode refactor there was also a standalone branch that appended the
+// camera entity's own rotating `access_token` as a ?token= query param; that's
+// gone now that every deployment is proxy-backed.)
 
-import { isIngress, ingressApiBase } from "./ingress";
+import { ingressApiBase } from "./ingress";
 import type { HAWebSocket } from "./HAWebSocket";
 
-export function cameraStreamUrl(haUrl: string, camAccessToken: string, entityId: string): string {
-  if (isIngress()) return `${ingressApiBase()}/camera_proxy_stream/${entityId}`;
-  const base = haUrl.replace(/\/+$/, "");
-  return `${base}/api/camera_proxy_stream/${entityId}?token=${encodeURIComponent(camAccessToken)}`;
+export function cameraStreamUrl(entityId: string): string {
+  return `${ingressApiBase()}/camera_proxy_stream/${entityId}`;
 }
 
 /**
@@ -25,13 +20,10 @@ export function cameraStreamUrl(haUrl: string, camAccessToken: string, entityId:
  * stream isn't available: `camera_proxy_stream` only works for cameras that
  * implement an MJPEG stream, but `camera_proxy` returns the latest frame for
  * essentially every camera (RTSP/ONVIF/HLS included), so polling it gives a
- * live view that works wherever the camera works in HA. Same token rules as
- * cameraStreamUrl — the entity's `access_token`, not the long-lived token.
+ * live view that works wherever the camera works in HA.
  */
-export function cameraSnapshotUrl(haUrl: string, camAccessToken: string, entityId: string): string {
-  if (isIngress()) return `${ingressApiBase()}/camera_proxy/${entityId}`;
-  const base = haUrl.replace(/\/+$/, "");
-  return `${base}/api/camera_proxy/${entityId}?token=${encodeURIComponent(camAccessToken)}`;
+export function cameraSnapshotUrl(entityId: string): string {
+  return `${ingressApiBase()}/camera_proxy/${entityId}`;
 }
 
 /**
@@ -46,22 +38,19 @@ export function cameraSnapshotUrl(haUrl: string, camAccessToken: string, entityI
  *
  * Asks HA over the websocket (`camera/stream`) for a fresh stream URL — HA
  * returns a path already rooted at `/api/...` (e.g.
- * `/api/hls/<token>/master_playlist.m3u8`), NOT relative to the entity like
- * the other two helpers here, so the two branches below resolve it
- * differently: standalone just needs the HA origin prepended, while Ingress
- * routes it through the add-on's `/core/api/...` proxy the same way every
- * other REST call here does (see ingressApiBase) — which means stripping the
- * leading `/api` HA already included before appending it.
+ * `/api/hls/<token>/master_playlist.m3u8`), which we route through the add-on's
+ * `/core/api/...` proxy the same way every other REST call here does (see
+ * ingressApiBase) — stripping the leading `/api` HA already included before
+ * appending it.
  *
  * Throws if the camera doesn't support the stream pipeline (not every camera
  * does) or the websocket call otherwise fails — callers should catch this and
  * fall back to the MJPEG/snapshot path, exactly as if HLS were never tried.
  */
-export async function cameraHlsUrl(ws: HAWebSocket, haUrl: string, entityId: string): Promise<string> {
+export async function cameraHlsUrl(ws: HAWebSocket, entityId: string): Promise<string> {
   const { url } = await ws.sendMessage<{ url: string }>("camera/stream", {
     entity_id: entityId,
     format: "hls",
   });
-  if (isIngress()) return `${ingressApiBase()}${url.replace(/^\/api/, "")}`;
-  return `${haUrl.replace(/\/+$/, "")}${url}`;
+  return `${ingressApiBase()}${url.replace(/^\/api/, "")}`;
 }

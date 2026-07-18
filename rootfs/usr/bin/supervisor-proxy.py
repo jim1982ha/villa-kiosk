@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Token-injecting Supervisor proxy for the Villa Kiosk add-on.
 
-The browser (served behind Ingress) makes same-origin, *token-less* requests to
-this service. We add the add-on's SUPERVISOR_TOKEN server-side and forward to the
-Supervisor's Home Assistant Core proxy, so no Home Assistant long-lived token is
-ever needed and the powerful Supervisor token never reaches the browser.
+The browser makes same-origin, *token-less* requests to this service — whether
+the kiosk is opened through the HA sidebar (Ingress) OR directly on the add-on's
+own hostname (e.g. via a Cloudflare Tunnel to the exposed port). We add the
+add-on's SUPERVISOR_TOKEN server-side and forward to the Supervisor's Home
+Assistant Core proxy, so no Home Assistant long-lived token is ever needed and
+the powerful Supervisor token never reaches the browser.
 
   REST : /core/api/...    -> http://supervisor/core/api/...    (+ Bearer header)
   WS   : /core/websocket  -> ws://supervisor/core/websocket    (+ Bearer header,
@@ -14,22 +16,33 @@ ever needed and the powerful Supervisor token never reaches the browser.
 It also serves local helper routes (no Supervisor token involved):
   GET  /addon-config  -> the non-sensitive model paths for the frontend.
   POST /model-upload?kind=glb|rooms -> writes the body to the central model file
-       (GLB) or its room-data sidecar (.rooms.json) under /config/www (atomic
-       overwrite), so the kiosk can be re-skinned from its own Settings UI
-       instead of SSH/Samba.
-       Every write also refreshes PUBLIC_MANIFEST_REL (www/villa-kiosk/
-       addon-config.json) — a plain static mirror of /addon-config's JSON, so
-       a STANDALONE build (this app's dist/ copied into HA's own www/ folder,
-       opened via HA's own /local/ route rather than through Ingress) can
-       learn the real model_path — including a custom one — over plain HTTP,
-       with no Supervisor API access needed.
+       (GLB) or its room-data sidecar (.rooms.json) under the add-on's own
+       persistent /data volume (atomic overwrite), so the kiosk can be re-skinned
+       from its own Settings UI instead of SSH/Samba.
   GET  /auth/roles    -> which kiosk profiles require a passcode (booleans only).
   POST /auth/verify   -> server-side profile passcode check. The configured PINs
        (guest_pin/owner_pin/ops_pin add-on options) never leave this process:
        the frontend submits {role, pin} and gets back only an ok/locked verdict.
-       Comparison is constant-time; repeated failures rate-limit the role.
+       Comparison is constant-time; repeated failures rate-limit the role. On
+       success it SETS a signed session cookie (see below).
+  GET  /auth/check    -> nginx auth_request backend: 200 when the caller holds a
+       valid session (or arrives via Ingress), 401 otherwise. Gates /model/.
 
-Runs on 127.0.0.1:8100; nginx proxies the Ingress `/core/` paths to it.
+Access control (why this proxy authenticates at all):
+  The Supervisor token this process injects grants full Home Assistant API
+  access. Under Ingress that's safe because HA has already authenticated the
+  user and nginx only accepts the Ingress gateway. But the add-on's port is now
+  ALSO exposed directly (for Cloudflare/LAN access without the HA UI), so an
+  unauthenticated request reaching /core/ would otherwise get that full access.
+  Therefore every sensitive endpoint (/core/*, /model/*, /model-upload,
+  /addon-config) requires a valid session:
+    * Ingress-sourced requests are trusted (HA already authed them) — nginx
+      tags them with `X-VK-Ingress: 1` based on the real gateway source IP,
+      a header the client cannot forge because nginx overwrites it.
+    * Direct requests must carry a `vk_session` cookie, an HMAC-signed token
+      minted by /auth/verify once the profile passcode checks out. So the
+      client-side profile gate is now backed by a real server-side session:
+      no cookie -> no HA access, no floor-plan download.
 
 Security notes:
   * Request smuggling (aiohttp CVE-2025-53643) affects only aiohttp's *pure
@@ -39,14 +52,16 @@ Security notes:
   * `rest_handler` strips the client's `Transfer-Encoding`/`Content-Length`
     (see HOP_BY_HOP) and lets aiohttp re-frame the forwarded body, so a client
     cannot desync nginx and Core via conflicting framing headers.
-  * nginx only accepts the HA Ingress gateway (172.30.32.2); this service binds
-    to loopback only and is never directly reachable.
+  * This service binds to loopback only and is never directly reachable; nginx
+    is the only thing in front of it.
 """
 import asyncio
+import hashlib
 import hmac
 import json
 import os
 import re
+import secrets
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -59,17 +74,107 @@ AUTH = {"Authorization": f"Bearer {TOKEN}"}
 
 # The full set of options config.yaml's schema currently recognises. Kept
 # separate from the schema itself so this can compare against it — see
-# _cleanup_stale_options below.
-KNOWN_OPTION_KEYS = {"model_path", "guest_pin", "owner_pin", "ops_pin"}
+# _cleanup_stale_options below. (model_path was dropped when central models
+# moved into the add-on's own /data volume; leaving it here would make the
+# self-heal below wrongly preserve a now-unknown key.)
+KNOWN_OPTION_KEYS = {"guest_pin", "owner_pin", "ops_pin"}
 
-# HA www folder, mounted read-WRITE via the homeassistant_config:rw map. nginx
-# serves it at /model/<path>; the upload handler below writes into it.
-WWW_ROOT = "/homeassistant/www"
-# Where an uploaded file lands when the admin hasn't set an explicit
-# model_path — a managed location the add-on owns. addon_config_handler
-# reports these as the effective paths once the files exist, so an uploaded model
+# The add-on's OWN persistent volume (Supervisor gives every add-on /data and
+# preserves it across restarts/updates). Central model files live here now —
+# NOT in the HA config's www folder — so the add-on no longer needs write
+# access to /config and nothing sensitive is exposed on HA's unauthenticated
+# /local/ static route. nginx serves it at /model/<path> (session-gated); the
+# upload handler below writes into it.
+DATA_ROOT = "/data/www"
+# The single managed location an uploaded model lands at. addon_config_handler
+# reports it as the effective path once the file exists, so an uploaded model
 # lights up for every client with no Supervisor API call or add-on restart.
-MANAGED_PATH = {"glb": "villa-kiosk/villa.glb"}
+MANAGED_PATH = {"glb": "villa.glb"}
+
+# ── Session auth ─────────────────────────────────────────────────────────────
+SESSION_COOKIE = "vk_session"
+SESSION_SECRET_FILE = "/data/.session_secret"
+SESSION_TTL = 30 * 24 * 3600  # 30 days — a kiosk stays "logged in" a long time.
+_session_secret_cache: bytes | None = None
+
+
+def _session_secret() -> bytes:
+    """The per-install HMAC key for session tokens, persisted in /data so it
+    survives restarts (existing sessions stay valid across an add-on update).
+    Created once, 0600, on first use."""
+    global _session_secret_cache
+    if _session_secret_cache is not None:
+        return _session_secret_cache
+    try:
+        with open(SESSION_SECRET_FILE, "rb") as f:
+            existing = f.read().strip()
+        if len(existing) >= 32:
+            _session_secret_cache = existing
+            return existing
+    except OSError:
+        pass
+    fresh = secrets.token_hex(32).encode()
+    try:
+        with open(SESSION_SECRET_FILE, "wb") as f:
+            f.write(fresh)
+        os.chmod(SESSION_SECRET_FILE, 0o600)
+    except OSError as err:  # /data unwritable is fatal-ish, but degrade to
+        # a process-lifetime secret rather than crashing (sessions then reset
+        # on restart, which just means re-entering the PIN).
+        print(f"[supervisor-proxy] could not persist session secret: {err}", flush=True)
+    _session_secret_cache = fresh
+    return fresh
+
+
+def _sign_session(role: str, exp: int) -> str:
+    return hmac.new(_session_secret(), f"{role}.{exp}".encode(), hashlib.sha256).hexdigest()
+
+
+def _make_session_token(role: str) -> str:
+    exp = int(time.time()) + SESSION_TTL
+    return f"{role}.{exp}.{_sign_session(role, exp)}"
+
+
+def _session_role(token: str | None) -> str | None:
+    """The role a session token proves, or None if malformed/expired/forged."""
+    if not token:
+        return None
+    try:
+        role, exp_s, sig = token.split(".")
+        exp = int(exp_s)
+    except (ValueError, AttributeError):
+        return None
+    if role not in AUTH_ROLES or exp < int(time.time()):
+        return None
+    if not hmac.compare_digest(sig, _sign_session(role, exp)):
+        return None
+    return role
+
+
+def _is_ingress(request: web.Request) -> bool:
+    """True when nginx tagged this as coming from the HA Ingress gateway. nginx
+    sets X-VK-Ingress from the real source IP and overwrites any client-supplied
+    value, so this cannot be forged from the outside."""
+    return request.headers.get("X-VK-Ingress") == "1"
+
+
+def _authorized(request: web.Request) -> bool:
+    """Whether the caller may reach a sensitive endpoint: trusted via Ingress,
+    or carrying a valid session cookie."""
+    if _is_ingress(request):
+        return True
+    return _session_role(request.cookies.get(SESSION_COOKIE)) is not None
+
+
+def _set_session_cookie(resp: web.Response, role: str) -> None:
+    resp.set_cookie(
+        SESSION_COOKIE, _make_session_token(role),
+        max_age=SESSION_TTL, httponly=True, samesite="Lax", secure=True, path="/",
+    )
+
+
+def _unauthorized() -> web.Response:
+    return web.json_response({"error": "unauthorized"}, status=401)
 # Safety cap on a single upload (the GLB is the big one, ~tens of MB).
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 # Leading bytes the upload must start with for its declared kind: a binary
@@ -91,8 +196,12 @@ HOP_BY_HOP = {
 }
 
 
-async def ws_handler(request: web.Request) -> web.WebSocketResponse:
+async def ws_handler(request: web.Request):
     """Bridge the browser websocket to Core, injecting the Supervisor token."""
+    if not _authorized(request):
+        # Cookies ARE sent on a same-origin WS handshake, so an unauthenticated
+        # direct caller is rejected before any socket to Core is opened.
+        return _unauthorized()
     client = web.WebSocketResponse(heartbeat=30)
     await client.prepare(request)
 
@@ -136,6 +245,8 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
 
 async def rest_handler(request: web.Request) -> web.StreamResponse:
     """Relay a REST call to Core, adding the Supervisor Bearer token."""
+    if not _authorized(request):
+        return _unauthorized()
     session: ClientSession = request.app["session"]
     tail = request.match_info.get("path", "")
     url = f"http://{SUPERVISOR}/core/api/{tail}"
@@ -171,9 +282,9 @@ async def _cleanup_stale_options(session: ClientSession) -> None:
 
     Supervisor persists the add-on's raw configured options independently of
     config.yaml's current schema — a field removed from the schema (e.g. the
-    old `sh3d_path` option, replaced by `model_path` back when central-model
-    hosting was added) stays in that stored config forever, on every install
-    that had ever set it, unless something explicitly clears it. Supervisor
+    old `sh3d_path`, or `model_path` once central models moved into the add-on's
+    own /data volume) stays in that stored config forever, on every install that
+    had ever set it, unless something explicitly clears it. Supervisor
     re-validates the stored config against the CURRENT schema on basically
     every poll/reload cycle, so an orphaned key logs a
     "does not exist in the schema" warning continuously — and that kind of
@@ -230,7 +341,7 @@ def _upload_meta(rel: str) -> dict | None:
     if not rel:
         return None
     try:
-        with open(os.path.join(WWW_ROOT, rel) + ".upload.json", encoding="utf-8") as f:
+        with open(os.path.join(DATA_ROOT, rel) + ".upload.json", encoding="utf-8") as f:
             meta = json.load(f)
         if isinstance(meta, dict):
             return {
@@ -245,88 +356,59 @@ def _upload_meta(rel: str) -> dict | None:
 def _effective_paths() -> dict:
     """The model path the frontend should use, plus upload provenance.
 
-    An explicit model_path option wins (back-compat with files placed manually
-    via SSH/Samba). Otherwise, if a managed upload exists on disk, report that —
-    so a UI upload is picked up with no option edit or restart.
+    There's now a single managed location (MANAGED_PATH) inside the add-on's
+    /data volume — the model is uploaded through the kiosk's own Settings UI,
+    never placed manually. Report it once the file exists; otherwise "" so the
+    frontend shows its inline uploader.
 
     model_upload / rooms_upload carry the ORIGINAL browser-side filename + time
-    recorded by the upload handler. A central upload overwrites the file AT the
-    configured path, so the served name never changes (e.g. always
-    TheLysHouse_1F.glb) no matter what file was picked — which read as "the info
-    panel is wrong" until the panel could show what was actually uploaded. The
-    room-data sidecar (.rooms.json) is derived from model_path, not separately
-    configurable. None = placed manually (SSH/Samba), or uploaded before this
-    existed.
+    recorded by the upload handler. A central upload overwrites the managed file
+    in place, so the served name never changes (always villa.glb) no matter what
+    file was picked — which read as "the info panel is wrong" until the panel
+    could show what was actually uploaded. The room-data sidecar (.rooms.json)
+    is derived from the GLB path, not separately configurable.
     """
-    opts = _read_options()
-    explicit = (opts.get("model_path") or "").strip()
-    if explicit:
-        model_rel = explicit
-    elif os.path.exists(os.path.join(WWW_ROOT, MANAGED_PATH["glb"])):
-        model_rel = MANAGED_PATH["glb"]
-    else:
-        model_rel = ""
+    model_rel = MANAGED_PATH["glb"] if os.path.exists(
+        os.path.join(DATA_ROOT, MANAGED_PATH["glb"])) else ""
     return {
         "model_path": model_rel,
-        "model_upload": _upload_meta(model_rel),
+        "model_upload": _upload_meta(model_rel) if model_rel else None,
         "rooms_upload": _upload_meta(_rooms_rel(model_rel)) if model_rel else None,
     }
-
-
-# Where _write_public_manifest below mirrors _effective_paths(), so a
-# STANDALONE build (this app's dist/ copied into HA's own www/ folder, opened
-# via HA's own /local/ route instead of through Ingress) can learn the real
-# model_path — including a custom one, not just the MANAGED_PATH default —
-# without any Supervisor API access. A fixed, well-known location regardless
-# of what model_path itself is set to, so standalone always knows where to
-# look for it.
-PUBLIC_MANIFEST_REL = "villa-kiosk/addon-config.json"
-
-
-def _write_public_manifest() -> None:
-    """Mirror _effective_paths() into a plain static file inside the www
-    folder this add-on already serves, so it's readable over plain HTTP (HA's
-    own /local/ route) with no Ingress/Supervisor-token dance — see
-    PUBLIC_MANIFEST_REL. Call after anything that can change the effective
-    paths (startup, a completed upload). Best-effort: must never raise, since
-    every caller is on a path that already succeeded at something real."""
-    try:
-        dest = os.path.join(WWW_ROOT, PUBLIC_MANIFEST_REL)
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        tmp = dest + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(_effective_paths(), f)
-        os.chmod(tmp, 0o644)
-        os.replace(tmp, dest)
-    except OSError as err:
-        print(f"[supervisor-proxy] public manifest write skipped: {err}", flush=True)
 
 
 def _resolve_upload_target(kind: str) -> str:
     """Absolute, traversal-checked destination path for an upload of this kind.
 
-    The GLB writes to the configured model_path (or the managed default); the
-    room-data sidecar is derived from that GLB path (<model>.rooms.json), so both
-    files always sit together no matter where the admin points model_path.
-    Raises ValueError if the resolved path escapes the www root.
+    The GLB writes to the single managed location; the room-data sidecar is
+    derived from it (<model>.rooms.json), so both files always sit together.
+    Raises ValueError if the resolved path escapes the data root.
     """
-    model_rel = (_read_options().get("model_path") or "").strip() or MANAGED_PATH["glb"]
-    rel = model_rel if kind == "glb" else _rooms_rel(model_rel)
-    root = os.path.realpath(WWW_ROOT)
+    rel = MANAGED_PATH["glb"] if kind == "glb" else _rooms_rel(MANAGED_PATH["glb"])
+    root = os.path.realpath(DATA_ROOT)
     dest = os.path.realpath(os.path.join(root, rel))
     if dest != root and not dest.startswith(root + os.sep):
-        raise ValueError("resolved path escapes the www root")
+        raise ValueError("resolved path escapes the data root")
     return dest
 
 
 async def addon_config_handler(request: web.Request) -> web.Response:
-    """Expose the non-sensitive add-on options (model paths) to the frontend.
+    """Expose the non-sensitive model paths to the frontend (session-gated).
 
-    The full /data/options.json is never forwarded — only the two model-path
-    fields are returned, so options with credentials (the profile PINs) stay
+    The full /data/options.json is never forwarded — only the model-path fields
+    are returned, so options with credentials (the profile PINs) stay
     server-side.
     """
+    if not _authorized(request):
+        return _unauthorized()
     return web.json_response(_effective_paths())
+
+
+async def auth_check_handler(request: web.Request) -> web.Response:
+    """nginx auth_request backend for the static /model/ route: 200 when the
+    caller is authorized (valid session cookie, or trusted Ingress), else 401.
+    Body is intentionally empty — nginx only reads the status."""
+    return web.Response(status=200 if _authorized(request) else 401)
 
 
 # ── Profile passcode verification ────────────────────────────────────────────
@@ -375,18 +457,34 @@ async def auth_roles_handler(request: web.Request) -> web.Response:
 
 
 async def auth_verify_handler(request: web.Request) -> web.Response:
-    """Constant-time, rate-limited check of a submitted profile passcode."""
+    """Establish a session for a profile.
+
+    Constant-time, rate-limited check of a submitted passcode for PIN-gated
+    profiles; for an un-PIN'd profile (no passcode configured) `pin` may be
+    omitted and the session is granted directly. On success a signed session
+    cookie is set — that cookie, not the client-side profile UI, is what
+    actually authorizes /core, /model and uploads on the directly-exposed port.
+    """
     try:
         body = await request.json()
     except (ValueError, UnicodeDecodeError):
         return web.json_response({"error": "invalid JSON body"}, status=400)
     role = body.get("role")
     pin = body.get("pin")
-    # Whitelist validation: role must be one of the three known profiles and
-    # the pin exactly four digits — anything else is rejected before any
-    # comparison or counter is touched.
+    # Whitelist validation: role must be one of the three known profiles.
     if role not in AUTH_ROLES:
         return web.json_response({"error": "unknown role"}, status=400)
+
+    configured = _configured_pin(role)
+    if not configured:
+        # Un-PIN'd profile: grant a session without touching the rate limiter
+        # or requiring a pin. (A pin sent anyway is simply ignored.)
+        resp = web.json_response({"ok": True})
+        _set_session_cookie(resp, role)
+        return resp
+
+    # PIN-gated profile: the pin must be exactly four digits — anything else is
+    # rejected before any comparison or counter is touched.
     if not isinstance(pin, str) or not PIN_RE.fullmatch(pin):
         return web.json_response({"error": "pin must be 4 digits"}, status=400)
 
@@ -396,18 +494,17 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
             {"ok": False, "locked": True, "retryAfter": retry_after}, status=429,
         )
 
-    configured = _configured_pin(role)
-    # An unconfigured role needs no PIN — the frontend normally skips the pad
-    # (see /auth/roles), but accept a direct verify too so the two endpoints
-    # can never disagree.
-    ok = not configured or hmac.compare_digest(pin, configured)
+    ok = hmac.compare_digest(pin, configured)
     st = _auth_failures[role]
     if ok:
         st["count"] = 0
     else:
         st["count"] += 1
         st["last"] = time.monotonic()
-    return web.json_response({"ok": ok})
+    resp = web.json_response({"ok": ok})
+    if ok:
+        _set_session_cookie(resp, role)
+    return resp
 
 
 async def _stream_upload_body(request: web.Request, out, kind: str,
@@ -543,8 +640,7 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
         raise
 
     _write_upload_sidecar(request, dest)
-    _write_public_manifest()
-    rel = os.path.relpath(dest, os.path.realpath(WWW_ROOT))
+    rel = os.path.relpath(dest, os.path.realpath(DATA_ROOT))
     return web.json_response({"path": rel, "size": offset + n})
 
 
@@ -557,6 +653,8 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     With upload_id/offset/last query params the body is one piece of a chunked
     upload instead (files above HA Ingress's ~16 MB per-request cap).
     """
+    if not _authorized(request):
+        return _unauthorized()
     kind = request.query.get("kind", "")
     if kind not in ("glb", "rooms"):
         return web.json_response({"error": "kind must be 'glb' or 'rooms'"}, status=400)
@@ -592,8 +690,7 @@ async def model_upload_handler(request: web.Request) -> web.Response:
         raise
 
     _write_upload_sidecar(request, dest)
-    _write_public_manifest()
-    rel = os.path.relpath(dest, os.path.realpath(WWW_ROOT))
+    rel = os.path.relpath(dest, os.path.realpath(DATA_ROOT))
     return web.json_response({"path": rel, "size": total})
 
 
@@ -602,8 +699,9 @@ def main() -> None:
 
     async def on_start(a: web.Application) -> None:
         a["session"] = ClientSession(timeout=ClientTimeout(total=None))
+        os.makedirs(DATA_ROOT, exist_ok=True)
+        _session_secret()  # create the signing key on first boot
         await _cleanup_stale_options(a["session"])
-        _write_public_manifest()
 
     async def on_cleanup(a: web.Application) -> None:
         await a["session"].close()
@@ -614,6 +712,7 @@ def main() -> None:
     app.router.add_post("/model-upload", model_upload_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
     app.router.add_post("/auth/verify", auth_verify_handler)
+    app.router.add_get("/auth/check", auth_check_handler)
     app.router.add_get("/core/websocket", ws_handler)
     app.router.add_route("*", "/core/api/{path:.*}", rest_handler)
     # aiohttp's own shutdown_timeout defaults to 60s: on SIGTERM it waits that

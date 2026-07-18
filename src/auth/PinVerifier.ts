@@ -1,14 +1,14 @@
 // src/auth/PinVerifier.ts
-// Passcode verification behind an interface, so the UI depends on the
-// abstraction and not on WHERE the PINs live (Dependency Inversion):
-//   - Add-on / Ingress: the supervisor-proxy holds the PINs (add-on options)
-//     and verifies server-side — secrets never reach the browser.
-//   - Standalone / dev: PINs come from VITE_*_PIN env vars. Vite bakes env
-//     values into the client bundle, so standalone PINs are a courtesy gate
-//     for a trusted kiosk device, not a security boundary — the add-on path
-//     is the secure one.
+// Passcode verification + session establishment against the add-on backend.
+//
+// The kiosk is always served by the add-on (HA sidebar OR its own hostname), so
+// the PINs live in the add-on options and are verified server-side by the
+// supervisor-proxy — they never reach the browser. A successful check (or an
+// un-PIN'd profile's openSession) mints an httpOnly session cookie server-side;
+// that cookie, not this client-side UI, is what actually authorizes /core and
+// /model on the directly-exposed port.
 
-import { ingressPath, isIngress } from "@/ha/ingress";
+import { ingressPath } from "@/ha/ingress";
 import { ROLE_ORDER, type Role } from "./roles";
 
 export interface VerifyResult {
@@ -17,90 +17,40 @@ export interface VerifyResult {
   retryAfter?: number;
 }
 
-export interface PinVerifier {
-  /** Which roles are gated behind a PIN at all. */
-  pinRequired(): Promise<Record<Role, boolean>>;
-  verify(role: Role, pin: string): Promise<VerifyResult>;
-}
-
 const PIN_SHAPE = /^[0-9]{4}$/;
 
-class IngressPinVerifier implements PinVerifier {
-  async pinRequired(): Promise<Record<Role, boolean>> {
-    const resp = await fetch(ingressPath("auth/roles"));
-    if (!resp.ok) throw new Error(`auth service unavailable (HTTP ${resp.status})`);
-    const data = (await resp.json()) as { roles?: Record<string, { pinRequired?: boolean }> };
-    const out = {} as Record<Role, boolean>;
-    for (const r of ROLE_ORDER) out[r] = Boolean(data.roles?.[r]?.pinRequired);
-    return out;
-  }
-
-  async verify(role: Role, pin: string): Promise<VerifyResult> {
-    if (!PIN_SHAPE.test(pin)) return { ok: false };
-    const resp = await fetch(ingressPath("auth/verify"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, pin }),
-    });
-    if (resp.status === 429) {
-      const data = (await resp.json().catch(() => ({}))) as { retryAfter?: number };
-      return { ok: false, retryAfter: data.retryAfter ?? 60 };
-    }
-    if (!resp.ok) throw new Error(`auth service unavailable (HTTP ${resp.status})`);
-    const data = (await resp.json()) as { ok?: boolean };
-    return { ok: Boolean(data.ok) };
-  }
+/** Which roles are gated behind a PIN at all. */
+export async function pinRequired(): Promise<Record<Role, boolean>> {
+  const resp = await fetch(ingressPath("auth/roles"));
+  if (!resp.ok) throw new Error(`auth service unavailable (HTTP ${resp.status})`);
+  const data = (await resp.json()) as { roles?: Record<string, { pinRequired?: boolean }> };
+  const out = {} as Record<Role, boolean>;
+  for (const r of ROLE_ORDER) out[r] = Boolean(data.roles?.[r]?.pinRequired);
+  return out;
 }
 
-class EnvPinVerifier implements PinVerifier {
-  // Same rate-limit shape as the server (5 fails → 5-minute cooldown) so the
-  // two modes behave identically; state is per-page-load, bounded to 3 roles.
-  private failures: Record<Role, { count: number; last: number }> = {
-    guest: { count: 0, last: 0 }, owner: { count: 0, last: 0 }, ops: { count: 0, last: 0 },
-  };
-  private static MAX_FAILURES = 5;
-  private static LOCKOUT_MS = 300_000;
-
-  private configured(role: Role): string {
-    const env = import.meta.env;
-    const raw = String(
-      (role === "guest" ? env.VITE_GUEST_PIN : role === "owner" ? env.VITE_OWNER_PIN : env.VITE_OPS_PIN) ?? "",
-    ).trim();
-    return PIN_SHAPE.test(raw) ? raw : "";
-  }
-
-  async pinRequired(): Promise<Record<Role, boolean>> {
-    return {
-      guest: Boolean(this.configured("guest")),
-      owner: Boolean(this.configured("owner")),
-      ops: Boolean(this.configured("ops")),
-    };
-  }
-
-  async verify(role: Role, pin: string): Promise<VerifyResult> {
-    if (!PIN_SHAPE.test(pin)) return { ok: false };
-    const st = this.failures[role];
-    if (st.count >= EnvPinVerifier.MAX_FAILURES) {
-      const remaining = EnvPinVerifier.LOCKOUT_MS - (Date.now() - st.last);
-      if (remaining > 0) return { ok: false, retryAfter: Math.ceil(remaining / 1000) };
-      st.count = 0;
-    }
-    const configured = this.configured(role);
-    const ok = !configured || pin === configured;
-    if (ok) {
-      st.count = 0;
-    } else {
-      st.count += 1;
-      st.last = Date.now();
-    }
-    return { ok };
-  }
+/** Check a PIN-gated profile's passcode; sets the session cookie on success. */
+export async function verify(role: Role, pin: string): Promise<VerifyResult> {
+  if (!PIN_SHAPE.test(pin)) return { ok: false };
+  return postVerify({ role, pin });
 }
 
-let _verifier: PinVerifier | null = null;
+/** Establish a session for an un-PIN'd profile (no passcode configured). */
+export async function openSession(role: Role): Promise<VerifyResult> {
+  return postVerify({ role });
+}
 
-/** The verifier for the current runtime (add-on vs standalone). Singleton. */
-export function getPinVerifier(): PinVerifier {
-  if (!_verifier) _verifier = isIngress() ? new IngressPinVerifier() : new EnvPinVerifier();
-  return _verifier;
+async function postVerify(body: { role: Role; pin?: string }): Promise<VerifyResult> {
+  const resp = await fetch(ingressPath("auth/verify"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (resp.status === 429) {
+    const data = (await resp.json().catch(() => ({}))) as { retryAfter?: number };
+    return { ok: false, retryAfter: data.retryAfter ?? 60 };
+  }
+  if (!resp.ok) throw new Error(`auth service unavailable (HTTP ${resp.status})`);
+  const data = (await resp.json()) as { ok?: boolean };
+  return { ok: Boolean(data.ok) };
 }

@@ -1,5 +1,42 @@
 # Changelog
 
+## 2.24.0
+
+- **One app, two front doors — with real auth on both.** The kiosk is now a
+  single build served entirely by the add-on, reachable in the HA sidebar
+  (Ingress) **and** directly on the add-on's own host port 8099 (e.g. via a
+  Cloudflare Tunnel) as a full-screen installable PWA. The separate "standalone"
+  deployment (copying `dist/` into HA's `www/` and opening it via `/local/`) is
+  gone, along with all the two-mode branching (`isIngress()`), the
+  Home-Assistant-URL/long-lived-token onboarding screen, and the env-baked
+  `VITE_*_PIN` courtesy gate.
+- **Security: the Supervisor proxy now authenticates every sensitive request.**
+  Previously the proxy handed out `SUPERVISOR_TOKEN`-level Home Assistant access
+  to anything that reached `/core/`, safe only because nginx refused everything
+  but the Ingress gateway. Exposing the port directly made the client-side-only
+  profile PIN insufficient, so a correct passcode (verified server-side) now
+  mints a **signed, httpOnly session cookie**, and `/core`, `/model`,
+  `/model-upload` and `/addon-config` refuse any direct request without it.
+  Requests arriving through Ingress stay exempt (HA already authenticated them),
+  identified by a source-IP-derived `X-VK-Ingress` header nginx sets and the
+  client cannot forge. Static model files are gated via an nginx `auth_request`.
+- **The 3D model moved into the add-on's own `/data` volume.** It's no longer
+  written to HA's `www/` folder and is never exposed on HA's unauthenticated
+  `/local/` static route. The `model_path` option is removed (nothing to
+  configure — upload once from **Advanced Settings** on the Owner profile), and
+  the add-on **no longer requests write access to your HA config directory**
+  (`homeassistant_config:rw` map dropped).
+- **PWA installs at `/`** on the direct hostname (cleaner service-worker scope
+  than the old nested `/local/villa-kiosk/dist/` path); the sidebar path still
+  skips the service worker as before.
+
+### After updating
+
+Set at least one profile passcode in the add-on options before mapping port
+8099, add a Cloudflare Tunnel host pointing at `http://<HA-host-ip>:8099` (drop
+the old Worker redirect to `/local/...`), and re-upload your GLB + `.rooms.json`
+once from Advanced Settings so they land in the new `/data` store.
+
 ## 2.23.42
 
 - **Onboarding collapsed from 4 steps to 1.** The "3D model" and "Location"

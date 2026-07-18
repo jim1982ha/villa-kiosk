@@ -1,7 +1,7 @@
 // src/utils/storage.ts
 // IndexedDB helper for the (large) GLB model, plus tiny localStorage helpers.
 
-import { ingressPath, isIngress } from "@/ha/ingress";
+import { ingressPath } from "@/ha/ingress";
 
 const DB_NAME = "villa-kiosk-db";
 const STORE = "models";
@@ -100,12 +100,13 @@ export function loadOverviewView(): OverviewViewSnapshot | null {
 }
 
 // ── Add-on central configuration ────────────────────────────────────────────
-// When model_path is set in the HA add-on options page, all clients load the
-// 3D model from the add-on's /model/ endpoint (backed by HA's www folder)
-// instead of each client uploading their own copy to IndexedDB.
+// The 3D model is uploaded once through the kiosk's Settings and stored in the
+// add-on's private /data volume; all clients load it from the add-on's /model/
+// endpoint (session-gated). A per-browser IndexedDB upload is only the fallback
+// before any central model exists.
 
 export interface AddonConfig {
-  /** Path relative to /config/www/, e.g. "villa-kiosk/villa.glb". Empty = not configured. */
+  /** Served path under /model/, e.g. "villa.glb". Empty = none uploaded yet. */
   model_path: string;
   /**
    * Provenance of the file currently AT model_path: a central upload
@@ -117,17 +118,6 @@ export interface AddonConfig {
   /** Same provenance for the room-data sidecar (<model>.rooms.json). */
   rooms_upload?: { original_name: string; uploaded_at: string } | null;
 }
-
-/**
- * Mirrors PUBLIC_MANIFEST_REL in rootfs/usr/bin/supervisor-proxy.py — keep
- * the two in sync. A plain static JSON file the add-on (re)writes there
- * whenever its effective model paths could have changed (startup, a
- * completed upload) — a mirror of what /addon-config reports, but reachable
- * over plain HTTP (HA's own /local/ static route) with no Supervisor API
- * access, so probeStandaloneCentralModel below can learn the REAL
- * model_path (including a custom one, not just a conventional default).
- */
-const PUBLIC_MANIFEST_REL = "villa-kiosk/addon-config.json";
 
 /** The room-data sidecar URL that sits next to the central GLB (model_path
  *  with its .glb swapped for .rooms.json). The pipeline emits it; the app
@@ -159,13 +149,10 @@ const LAST_MODEL_TAG_PREFIX = "villa-kiosk:model-tag:";
  * unversioned URL, so a flaky probe doesn't force a fresh download.
  */
 export async function versionedModelUrl(relPath: string): Promise<string> {
-  // Under Ingress the add-on's own nginx serves central files at /model/ (see
-  // rootfs/etc/nginx/nginx.conf — an alias onto the HA www folder). Outside
-  // Ingress there's no such route, but that alias means the exact same file
-  // is also reachable at HA's own plain /local/ static path (this build
-  // copied into HA's www folder, opened directly rather than through the
-  // add-on) — see probeStandaloneCentralModel.
-  const url = isIngress() ? ingressPath(`model/${relPath}`) : `/local/${relPath}`;
+  // The add-on's nginx serves central files at /model/ (an alias onto the
+  // add-on's /data volume, session-gated). Resolved against the base path so it
+  // works both in the sidebar (Ingress prefix) and on the direct hostname.
+  const url = ingressPath(`model/${relPath}`);
   const tagKey = LAST_MODEL_TAG_PREFIX + relPath;
   try {
     const ctrl = new AbortController();
@@ -229,13 +216,12 @@ async function postUploadRequest(
 }
 
 /**
- * Upload a central model file (GLB or SH3D) to the add-on, which writes it into
- * the HA www folder (overwriting the previous one). Only meaningful in add-on
- * (Ingress) mode; the supervisor-proxy backs the /model-upload endpoint.
- * Returns the resolved www-relative path. Invalidates the addon-config cache so
- * a freshly-uploaded managed default is picked up on the next fetch.
- * Takes a Blob so a caller can upload a re-packaged Blob if needed.
- * Requires add-on ≥ 2.9.6 for files above ~12 MB (chunked protocol).
+ * Upload a central model file (GLB or room-data sidecar) to the add-on, which
+ * writes it into its own /data store (overwriting the previous one) via the
+ * supervisor-proxy's /model-upload endpoint. Returns the resolved path.
+ * Invalidates the addon-config cache so the freshly-uploaded model is picked up
+ * on the next fetch. Takes a Blob so a caller can upload a re-packaged Blob if
+ * needed. Files above ~12 MB go up via the chunked protocol.
  */
 export async function uploadCentralModel(
   file: Blob,
@@ -269,40 +255,11 @@ export async function uploadCentralModel(
   return result;
 }
 
-/**
- * Outside Ingress there's no supervisor-proxy to serve /addon-config, but the
- * add-on now mirrors that exact JSON into a plain static file inside the same
- * www folder it manages (see supervisor-proxy.py's _write_public_manifest) —
- * reachable at HA's own /local/ static route, no Supervisor API needed. This
- * is how a standalone copy of this build (placed in that same www folder,
- * opened via /local/ instead of through the add-on) learns the REAL
- * model_path — including a custom one the admin set, not just a guessed
- * conventional default — so it auto-loads the SAME model the add-on manages
- * instead of needing its own per-browser upload: one shared source of truth
- * instead of two competing ones.
- */
-async function probeStandaloneCentralModel(): Promise<AddonConfig> {
-  try {
-    const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 3000);
-    const resp = await fetch(`/local/${PUBLIC_MANIFEST_REL}`, { signal: ctrl.signal });
-    clearTimeout(tid);
-    if (!resp.ok) return { model_path: "" };
-    return await resp.json() as AddonConfig;
-  } catch {
-    return { model_path: "" }; // dev server, older add-on, or nothing configured yet
-  }
-}
-
-/** Fetch the add-on options from the supervisor-proxy (Ingress), or probe for
- *  a central model directly (standalone — see probeStandaloneCentralModel).
- *  Cached after first call. */
+/** Fetch the effective model paths from the supervisor-proxy (/addon-config).
+ *  Cached after first call. Runs after login, so the session cookie carries the
+ *  authorization; a 401/failure just means "no central model yet". */
 export async function fetchAddonConfig(): Promise<AddonConfig> {
   if (_addonConfigCache) return _addonConfigCache;
-  if (!isIngress()) {
-    _addonConfigCache = await probeStandaloneCentralModel();
-    return _addonConfigCache;
-  }
   try {
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 3000);
@@ -311,7 +268,7 @@ export async function fetchAddonConfig(): Promise<AddonConfig> {
     if (!resp.ok) throw new Error(`${resp.status}`);
     _addonConfigCache = await resp.json() as AddonConfig;
   } catch {
-    // Add-on not yet configured.
+    // No model uploaded yet, or the service is briefly unreachable.
     _addonConfigCache = { model_path: "" };
   }
   return _addonConfigCache;

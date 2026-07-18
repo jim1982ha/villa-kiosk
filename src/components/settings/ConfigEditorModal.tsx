@@ -7,18 +7,16 @@
 // nothing to reload on the way out.
 
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Download, Upload, FileText, Info } from "lucide-react";
+import { Download, Upload, Info } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { buildConfigExport, parseConfigImport } from "@/config/AppConfig";
 import { parseRoomData } from "@/utils/sh3dParser";
-import { clearStoredModel, getModelMeta, fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type AddonConfig } from "@/utils/storage";
+import { fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type AddonConfig } from "@/utils/storage";
 import { getLoadedModelInfo } from "@/utils/modelInfo";
-import { isIngress } from "@/ha/ingress";
 import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
 import GroupedDevices from "./GroupedDevices";
-import ModelUploader from "./ModelUploader";
 
 interface Props {
   /** Return to the Settings modal this was opened from. */
@@ -74,20 +72,14 @@ function VillaCoordinates() {
 }
 
 /**
- * 3D model source — Owner only. Add-on (Ingress) mode: the model is managed
- * centrally via the add-on configuration page, uploaded here straight into
- * the HA www folder via the supervisor-proxy (no SSH/Samba needed); we only
- * display which files are in use otherwise. Standalone/dev mode keeps a
- * per-browser upload instead. Moved here (out of the everyday Settings
- * screen) since it's an administration action, not a everyday preference.
+ * 3D model source — Owner only. The model is uploaded here straight into the
+ * add-on's own /data store via the supervisor-proxy (no SSH/Samba, no path to
+ * configure); every client then loads it from there. Moved here (out of the
+ * everyday Settings screen) since it's an administration action, not a
+ * preference.
  */
 /** (i) tooltip carrying the full central-model details (path, size, mesh
- *  count, SHA-256, source, latest plan) on hover/focus. Shared between
- *  Ingress (add-on) mode and a standalone build that auto-detected the same
- *  central model on HA's own /local/ route — see storage.ts's
- *  probeStandaloneCentralModel. `editable` is false in the latter case: there's
- *  no supervisor-proxy to accept an upload from a standalone page, so the
- *  hint below points at the add-on's own Advanced Settings instead. */
+ *  count, SHA-256, source, latest plan) on hover/focus. */
 function CentralModelInfo({
   addonCfg, loadedModel, editable,
 }: {
@@ -113,10 +105,10 @@ function CentralModelInfo({
               ) : "—"}
             </span>
           </div>
-          <div className="row"><span>GLB</span><span><code>www/{addonCfg.model_path}</code></span></div>
-          {/* Every central upload overwrites the file AT model_path, so the
-              served name above never changes — show what was actually
-              uploaded or the panel reads as "wrong file". */}
+          <div className="row"><span>GLB</span><span><code>{addonCfg.model_path}</code></span></div>
+          {/* Every central upload overwrites the managed file, so the served
+              name above never changes — show what was actually uploaded or the
+              panel reads as "wrong file". */}
           {addonCfg.model_upload?.original_name && (
             <div className="row">
               <span>Uploaded</span>
@@ -148,20 +140,17 @@ function CentralModelInfo({
           <div style={{ marginTop: 8, color: "var(--text-dim)" }}>
             {editable ? (
               <>
-                Served from the add-on's <code>model_path</code> (relative to <code>www/</code>) — an
-                upload overwrites the file at that path, so the GLB name above stays the same
+                Stored in the add-on's own <code>/data</code> volume and served to every client from
+                there — an upload overwrites the managed file, so the GLB name above stays the same
                 whatever file you pick ("Uploaded" shows the file it came from). The room-data
                 sidecar (<code>.rooms.json</code>, emitted next to the GLB by the Blender pipeline)
-                lives alongside it. Set <code>model_path</code> under Settings → Add-ons → Villa
-                Kiosk → Configuration. Verify on disk: <code>shasum -a 256 {addonCfg.model_path.split("/").pop()}</code>
+                lives alongside it. Upload both below; there's no path to configure.
               </>
             ) : (
               <>
-                Auto-detected from HA's own <code>www/</code> folder — this standalone copy loads the
-                exact same central model the Villa Kiosk add-on manages, with no separate upload of
-                its own. To replace it, upload a new GLB/room-data file from the add-on's Advanced
-                Settings (Settings → Add-ons → Villa Kiosk → Open Web UI); this device picks it up
-                automatically on next open.
+                Loaded from the add-on's central store — every client (sidebar or direct hostname)
+                loads the same model. To replace it, upload a new GLB/room-data file from Advanced
+                Settings on the Owner profile; other devices pick it up automatically on next open.
               </>
             )}
           </div>
@@ -255,10 +244,6 @@ function ModelActionsRow({
 
 function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
   const { config, update } = useConfig();
-  const ingress = isIngress();
-
-  const roomsRef = useRef<HTMLInputElement>(null);
-  const [roomsMsg, setRoomsMsg] = useState<string | null>(null);
 
   // Owner-only backup/restore: bundles device↔room bindings, room definitions
   // (incl. saved viewports), device icons, enabled/disabled devices and every
@@ -298,7 +283,7 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
   };
 
   // Adopt a room-data sidecar (<model>.rooms.json emitted by the Blender
-  // pipeline) — the tiny replacement for uploading the full .sh3d.
+  // pipeline) into this running client immediately after a central upload.
   const applyRoomData = (text: string) => {
     const { rooms, entities } = parseRoomData(text);
     update({
@@ -309,24 +294,13 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
       // menu shows ONLY what this file defines. The scene re-calibrates on reload.
       teleportPoints: [],
     });
-    return `Loaded ${rooms.length} rooms${entities.length ? ` + ${entities.length} calibration points` : ""}. Reloading…`;
   };
 
-  const loadRoomData = async (file: File) => {
-    try {
-      setRoomsMsg(applyRoomData(await file.text()));
-      setTimeout(() => onModelChanged(), 600); // remount to re-fit room labels
-    } catch (err) {
-      setRoomsMsg((err as Error).message);
-    }
-  };
-
-  const [modelMeta, setModelMeta] = useState(() => getModelMeta());
   const [addonCfg, setAddonCfg] = useState<AddonConfig | null>(null);
   useEffect(() => { fetchAddonConfig().then(setAddonCfg); }, []);
 
-  // Central upload (Ingress / add-on mode): push a GLB or the room-data sidecar
-  // straight to the HA www folder via the supervisor-proxy, no SSH/Samba needed.
+  // Central upload: push a GLB or the room-data sidecar straight into the
+  // add-on's /data store via the supervisor-proxy, no SSH/Samba needed.
   const glbUploadRef = useRef<HTMLInputElement>(null);
   const roomsUploadRef = useRef<HTMLInputElement>(null);
   const [uploadBusy, setUploadBusy] = useState<null | "glb" | "rooms">(null);
@@ -349,7 +323,7 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
       clearAddonConfigCache();
       setAddonCfg(await fetchAddonConfig());
       const mb = size / 1_000_000;
-      setUploadMsg({ text: `Uploaded ${mb < 1 ? `${(size / 1000).toFixed(0)} KB` : `${mb.toFixed(1)} MB`} → www/${path}. Reloading…`, ok: true });
+      setUploadMsg({ text: `Uploaded ${mb < 1 ? `${(size / 1000).toFixed(0)} KB` : `${mb.toFixed(1)} MB`} → ${path}. Reloading…`, ok: true });
       setTimeout(() => onModelChanged(), 600); // remount to load the new central model
     } catch (err) {
       setUploadMsg({ text: (err as Error).message, ok: false });
@@ -359,12 +333,6 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
   };
   const loadedModel = getLoadedModelInfo();
 
-  // Not just "which section to show" — genuinely different capabilities:
-  // Ingress always has a supervisor-proxy to accept an upload; standalone
-  // only ever has one once a central model already exists somewhere for it
-  // to READ (there's no backend behind a plain www/ page to write one).
-  const canUploadCentrally = ingress;
-
   return (
     <div>
       {/* (i) sits inline with the title (not on its own row below) — only
@@ -372,99 +340,30 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
       <div className="row" style={{ gap: 8, alignItems: "center", marginTop: 28 }}>
         <div className="settings-section-title" style={{ margin: 0 }}>3D model source</div>
         {addonCfg?.model_path && (
-          <CentralModelInfo addonCfg={addonCfg} loadedModel={loadedModel} editable={canUploadCentrally} />
+          <CentralModelInfo addonCfg={addonCfg} loadedModel={loadedModel} editable />
         )}
       </div>
       {addonCfg === null ? (
-        <p className="muted body-text">
-          {ingress ? "Reading add-on configuration…" : "Checking for a central model…"}
-        </p>
-      ) : addonCfg.model_path ? (
-        // Central model found — via the add-on's own config under Ingress, or
-        // by reading its public manifest otherwise (see storage.ts's
-        // probeStandaloneCentralModel). ONE shared UI either way; the only
-        // difference is that a standalone page can't accept an upload itself
-        // (no supervisor-proxy behind it), so those two buttons are disabled
-        // there with a pointer at where to do it instead.
+        <p className="muted body-text">Reading the central model…</p>
+      ) : (
+        // The kiosk is always backed by the add-on, so an upload always lands in
+        // the add-on's /data store and reaches every client. When nothing's been
+        // uploaded yet, prompt for it; otherwise just show the upload/backup row.
         <>
-          <ModelActionsRow
-            canUploadCentrally={canUploadCentrally} uploadBusy={uploadBusy} uploadMsg={uploadMsg} backupMsg={backupMsg}
-            glbUploadRef={glbUploadRef} roomsUploadRef={roomsUploadRef} configFileRef={configFileRef}
-            onGlbFile={(f) => uploadCentral(f, "glb")} onRoomsFile={(f) => uploadCentral(f, "rooms")}
-            onConfigFile={importConfig} onExport={exportConfig}
-          />
-        </>
-      ) : ingress ? (
-        <>
-          <div style={{ background: "color-mix(in srgb, var(--status-warning) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--status-warning) 40%, transparent)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: "var(--status-warning)", marginBottom: 6 }}>
-              ⚠ No central model yet
+          {!addonCfg.model_path && (
+            <div style={{ background: "color-mix(in srgb, var(--status-warning) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--status-warning) 40%, transparent)", borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "var(--status-warning)", marginBottom: 6 }}>
+                ⚠ No central model yet
+              </div>
+              <p className="muted body-text" style={{ fontSize: 12, margin: 0 }}>
+                Upload your <code>.glb</code> and its <code>.rooms.json</code> (both emitted by the
+                Blender pipeline) below — stored in the add-on so every kiosk loads them
+                automatically. No SSH/Samba needed.
+              </p>
             </div>
-            <p className="muted body-text" style={{ fontSize: 12, margin: 0 }}>
-              Upload your <code>.glb</code> and its <code>.rooms.json</code> (both emitted by the
-              Blender pipeline) below — stored centrally so every kiosk loads them automatically.
-              No SSH/Samba needed.
-            </p>
-          </div>
+          )}
           <ModelActionsRow
             canUploadCentrally uploadBusy={uploadBusy} uploadMsg={uploadMsg} backupMsg={backupMsg}
-            glbUploadRef={glbUploadRef} roomsUploadRef={roomsUploadRef} configFileRef={configFileRef}
-            onGlbFile={(f) => uploadCentral(f, "glb")} onRoomsFile={(f) => uploadCentral(f, "rooms")}
-            onConfigFile={importConfig} onExport={exportConfig}
-          />
-        </>
-      ) : (
-        // Standalone with no central model to read yet AND nothing to upload
-        // one to (that only exists via the add-on) — the only genuinely
-        // different case: fall back to a real, functional per-browser upload
-        // (IndexedDB), plus its own room-data variant.
-        <>
-          <label>3D model</label>
-          <ModelUploader onUploaded={() => { setModelMeta(getModelMeta()); onModelChanged(); }} />
-          {modelMeta && (
-            <button
-              className="btn ghost mt"
-              style={{ width: "100%", color: "var(--status-danger)" }}
-              onClick={async () => {
-                if (!confirm("Remove the stored 3D model?\n\nThe model is saved in this browser only — it is not part of the add-on data and must be re-uploaded after clearing.")) return;
-                await clearStoredModel();
-                setModelMeta(null);
-                onModelChanged();
-              }}
-            >
-              Clear stored model ({modelMeta.name})
-            </button>
-          )}
-          <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-            Tip: when the Villa Kiosk add-on is installed with a central model configured, this
-            page loads that same model automatically — no per-device upload needed.
-          </p>
-
-          {/* Room-data sidecar upload — standalone mode only */}
-          <label style={{ marginTop: 16 }}>Room data — optional</label>
-          <button className="btn ghost" style={{ width: "100%" }} onClick={() => roomsRef.current?.click()}>
-            <FileText size={18} /> {config.sh3dRooms?.length ? `Loaded — ${config.sh3dRooms.length} rooms (replace)` : "Upload room data"}
-          </button>
-          <input
-            ref={roomsRef} type="file" accept=".json,application/json" style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) loadRoomData(f);
-            }}
-          />
-          <p className="muted body-text" style={{ marginTop: 6 }}>
-            The small <code>.rooms.json</code> the Blender pipeline emits next to the GLB — it carries
-            the room names, shapes and device positions, giving automatic room labels + calibration
-            for any villa.
-          </p>
-          {roomsMsg && <div className="test-result ok">{roomsMsg}</div>}
-
-          {/* Same shared row as the two central-model cases above (see
-              ModelActionsRow) — GLB/room-data uploads disabled here too
-              (nothing central exists yet to write one from a standalone
-              page), Import/Export Configuration work the same everywhere. */}
-          <ModelActionsRow
-            canUploadCentrally={false} uploadBusy={uploadBusy} uploadMsg={uploadMsg} backupMsg={backupMsg}
             glbUploadRef={glbUploadRef} roomsUploadRef={roomsUploadRef} configFileRef={configFileRef}
             onGlbFile={(f) => uploadCentral(f, "glb")} onRoomsFile={(f) => uploadCentral(f, "rooms")}
             onConfigFile={importConfig} onExport={exportConfig}

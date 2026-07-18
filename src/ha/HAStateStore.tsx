@@ -32,7 +32,8 @@ interface HAStateContextType {
   /** Subscribe to *every* state change (used to drive the scene + alerts). */
   subscribeAll: (cb: (entity: HassEntity) => void) => () => void;
   callService: (domain: string, service: string, data?: Record<string, unknown>, target?: HassServiceTarget) => Promise<void>;
-  connect: (url: string, token: string) => Promise<void>;
+  /** Open the token-less connection to HA through the add-on's Supervisor proxy. */
+  connect: () => Promise<void>;
   lastError: string | null;
   /** Most recent failed service call (tap did nothing) — shown as a toast.
    *  Wrapped in an object so firing the SAME error twice still re-triggers. */
@@ -91,10 +92,10 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   }, [ws, notify]);
 
   const connect = useCallback(
-    async (url: string, token: string) => {
+    async () => {
       setLastError(null);
       try {
-        await ws.connect(url, token);
+        await ws.connect();
         await ws.subscribeEvents("state_changed", (event) => {
           const { data } = event as StateChangedEvent;
           if (!data?.new_state) return;
