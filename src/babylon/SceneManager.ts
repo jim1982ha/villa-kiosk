@@ -24,6 +24,7 @@ import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
+import { resetLightPoolTextureCache } from "./LightPools";
 import { resolveMeshToMapping, inferTypeFromEntityId, normaliseMeshName } from "@/config/EntityMap";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { axisWorldScale } from "./meshUnits";
@@ -240,7 +241,26 @@ export class SceneManager {
       this.requestRender(2000);
     });
     document.addEventListener("visibilitychange", this.handleVisibility);
+    // Safety net for the case React cleanup CANNOT cover: when Home Assistant
+    // re-navigates the Ingress iframe (sidebar away-and-back), the old
+    // document is discarded WITHOUT React unmounting — so dispose() never
+    // runs, and this scene's WebGL context (tens of MB of decoded textures +
+    // geometry on the GPU) lingers until GC. Chrome caps live WebGL contexts
+    // (~16) and thrashes as they pile up, which is what ballooned model
+    // texture-upload ("import") time on repeat opens. `pagehide` fires exactly
+    // when a document is being discarded/frozen — dispose here so the GPU
+    // context is released immediately instead of waiting for GC.
+    window.addEventListener("pagehide", this.handlePageHide);
   }
+
+  private handlePageHide = (e: PageTransitionEvent) => {
+    // `persisted` = the document is going into the bfcache and may be RESTORED
+    // intact — disposing then would leave a dead canvas on return. Only tear
+    // down on a true discard (persisted === false), which is the iframe-
+    // navigation / tab-close case we actually need to release the GPU for.
+    // (A WebGL-heavy page is rarely bfcache-eligible anyway, but be safe.)
+    if (!e.persisted) this.dispose();
+  };
 
   private startRenderLoop() {
     this.engine.runRenderLoop(() => {
@@ -1361,15 +1381,50 @@ export class SceneManager {
     return this.visuals.getDetectedMappings();
   }
 
+  private disposed = false;
+
   dispose(): void {
+    // Idempotent: both React unmount AND the pagehide safety net can call
+    // this, and pagehide can even fire mid-unmount — a double dispose()
+    // otherwise double-frees Babylon resources (throws) or, worse, tears down
+    // a freshly-created NEXT scene if calls interleave.
+    if (this.disposed) return;
+    this.disposed = true;
+
     window.removeEventListener("resize", this.handleResize);
     document.removeEventListener("visibilitychange", this.handleVisibility);
+    window.removeEventListener("pagehide", this.handlePageHide);
     this.engine.stopRenderLoop(); // stop first — no frames render during teardown
+
+    // Subsystems own DOM listeners / timers / GUI textures that scene.dispose()
+    // does not necessarily reclaim — dispose each explicitly. (visuals holds a
+    // fullscreen GUI AdvancedDynamicTexture + per-entity lights/shadow maps;
+    // camera/overview hold canvas pointer/key listeners.)
     this.renderFx.dispose();
     this.sky.dispose();
     this.camera.dispose();
     this.overview.dispose();
+    this.visuals.dispose();
+
+    // Drop the module-level LightPools gradient cache so it can't hand the
+    // NEXT scene a texture belonging to this now-disposed one (the getScene()
+    // guard already regenerates, but this also frees the reference for GC).
+    resetLightPoolTextureCache();
+
     this.scene.dispose();
+
+    // engine.dispose() disposes GPU buffers, but the browser can still hold the
+    // WebGL context itself alive (counting against Chrome's ~16-context cap)
+    // until GC. Explicitly force the driver to release it NOW so repeated
+    // iframe reloads don't accumulate live contexts and thrash GPU memory.
+    // `_gl` is Babylon-internal but the only handle to the raw context; grab it
+    // BEFORE dispose() (which nulls Babylon's own references).
+    const gl = (this.engine as unknown as { _gl?: WebGLRenderingContext })._gl;
     this.engine.dispose();
+    try {
+      gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    } catch {
+      // Best-effort — some contexts refuse the extension; not fatal.
+    }
   }
 }

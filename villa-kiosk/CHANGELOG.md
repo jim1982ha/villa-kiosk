@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.23.37
+
+- **Memory-leak / GPU-context audit + fixes — the real cause of the growing
+  reload time when switching HA sidebar panels back and forth.** When Home
+  Assistant re-navigates the Ingress iframe, the old document is discarded
+  WITHOUT React unmounting, so `SceneManager.dispose()` never ran and each
+  visit's WebGL context (tens of MB of decoded textures + geometry on the
+  GPU) lingered until GC. Chrome caps live WebGL contexts (~16) and thrashes
+  as they accumulate — which is what ballooned model texture-upload
+  ("import") time on repeat opens (5s → 22s → 25s). Fixes:
+  - Dispose the Babylon engine on `pagehide` (fires when a document is
+    discarded, unlike React unmount) — and explicitly force
+    `WEBGL_lose_context` so the driver frees GPU memory immediately rather
+    than waiting for GC. Guarded against bfcache restores (`persisted`).
+  - Made `SceneManager.dispose()` idempotent (pagehide + React unmount can
+    both fire) and exhaustive: it now also disposes `EntityVisuals` (which
+    owns a fullscreen GUI texture + per-entity lights/shadow maps and
+    previously had NO dispose() and was never torn down) and clears the
+    module-level `LightPools` gradient-texture cache.
+  - Fixed `HAWebSocket` leaking its `visibilitychange`/`online` document/
+    window listeners (anonymous, never removed); `disconnect()` now removes
+    them and rejects pending calls, and `HAStateProvider` disconnects the
+    socket on unmount (previously the socket, its reconnect/heartbeat timers
+    and those listeners were never cleaned up).
+
 ## 2.23.36
 
 - **Standalone no longer shows "Upload central GLB"/"Upload room data" at

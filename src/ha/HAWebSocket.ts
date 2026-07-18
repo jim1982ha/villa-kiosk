@@ -34,18 +34,22 @@ export class HAWebSocket {
   /** Every failed service call is reported here (panels fire-and-forget). */
   onServiceError: (err: Error) => void = () => {};
 
+  // Stored so disconnect() can remove them — anonymous inline handlers would
+  // leak (and keep this whole client, its socket and timers, reachable) if
+  // the provider that owns this ever unmounts.
+  private onVisibility = () => { if (!document.hidden) this.checkHealth(); };
+  private onOnline = () => this.checkHealth();
+
   constructor() {
     // A phone that slept or roamed Wi-Fi kills the TCP socket without firing
     // onclose for minutes — the app still says "connected" but every tap goes
     // into a black hole. Waking the tab / regaining network is the moment to
     // health-check and, if needed, reconnect NOW instead of on backoff delay.
     if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) this.checkHealth();
-      });
+      document.addEventListener("visibilitychange", this.onVisibility);
     }
     if (typeof window !== "undefined") {
-      window.addEventListener("online", () => this.checkHealth());
+      window.addEventListener("online", this.onOnline);
     }
   }
 
@@ -338,6 +342,13 @@ export class HAWebSocket {
     }
     this.ws?.close();
     this.ws = null;
+    this.rejectAllPending(new Error("Disconnected"));
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this.onVisibility);
+    }
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.onOnline);
+    }
     this.setState("disconnected");
   }
 }

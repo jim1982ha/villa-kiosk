@@ -825,6 +825,29 @@ export class EntityVisuals {
     this.labelAnchors.clear();
   }
 
+  /** Full teardown for scene disposal. scene.dispose() reclaims most of what
+   *  this owns (meshes, lights, the GUI texture as a scene texture), but the
+   *  fullscreen AdvancedDynamicTexture holds its OWN 2D canvas + backing WebGL
+   *  texture that is safest disposed explicitly, and the sub-controllers
+   *  (beams, roomHighlight) have their own dispose(). Called by
+   *  SceneManager.dispose(); safe to run before scene.dispose(). */
+  dispose(): void {
+    this.disposeLights();
+    this.disposeLabelAnchors();
+    this.beams.dispose();
+    this.roomHighlight.dispose();
+    for (const rig of this.fanRigs.values()) {
+      for (const r of rig) r.pivot.dispose();
+    }
+    this.fanRigs.clear();
+    this.pulsing.clear();
+    this.spinningFans.clear();
+    this.labels.clear();
+    this.lastState.clear();
+    this.labelLayer?.dispose();
+    this.labelLayer = null;
+  }
+
   /** Replace the calibrated room polygons (world space) — forwarded straight
    *  to RoomHighlight. Called by SceneManager after every plan→world re-fit
    *  (load + mirror-flip toggles), same trigger as the teleport grid. */

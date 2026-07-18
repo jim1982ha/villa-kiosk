@@ -75,6 +75,12 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     };
   }, [ws]);
 
+  // Fully tear the socket down if this provider ever unmounts (it lives at the
+  // app root, so normally only on a real teardown) — closes the socket and
+  // clears its reconnect/heartbeat timers + the document/window listeners its
+  // constructor registered, none of which React can reclaim on its own.
+  useEffect(() => () => ws.disconnect(), [ws]);
+
   const hydrate = useCallback(async () => {
     const all = await ws.getStates();
     const map: Record<string, HassEntity> = {};

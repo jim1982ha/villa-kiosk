@@ -44,6 +44,15 @@ function poolTexture(scene: Scene): DynamicTexture {
   return tex;
 }
 
+/** Drop the module-level gradient cache. The texture object itself belongs to
+ *  a Scene and is freed by that scene's dispose(); this just clears the stale
+ *  module reference so it can't outlive its scene (holding a disposed texture
+ *  alive) and so the next scene regenerates cleanly. Call from
+ *  SceneManager.dispose(). */
+export function resetLightPoolTextureCache(): void {
+  sharedTexture = null;
+}
+
 export class LightPool {
   readonly mesh: Mesh;
   private material: StandardMaterial;
