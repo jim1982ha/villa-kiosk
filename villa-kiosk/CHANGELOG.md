@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.23.41
+
+- **Security: removed the env-configurable HA URL/token default entirely.**
+  A build-time `VITE_HA_URL`/`VITE_HA_TOKEN` default gets baked as plain
+  text into the compiled JS bundle — for a standalone deploy that's a
+  public static file, so a real long-lived token ending up there is a live
+  credential leak to anyone who can fetch it (confirmed in the field: a
+  Cloudflare-tunneled instance with no auth in front of `/local/` had its
+  token sitting in plain text in the deployed bundle). `haUrl`/`haToken`/
+  `haPort` are now always empty defaults, entered once per physical device
+  via the Onboarding wizard only — never baked into a build again. Deleted
+  the local `.env` that had these set, and stripped the mechanism from
+  `AppConfig.ts`/`vite-env.d.ts`/`.env.example`. Villa GPS
+  (`VITE_LAT`/`VITE_LNG`) and standalone profile-PIN env vars are unrelated
+  (non-secret / already documented as a courtesy gate) and unchanged.
+
 ## 2.23.40
 
 - **Mobile top bar: the overflow (⋮) menu button now lives inside the same

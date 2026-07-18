@@ -212,9 +212,15 @@ export interface DeviceGroup {
 const env = import.meta.env;
 
 export const DEFAULT_CONFIG: AppConfig = {
-  haUrl: env.VITE_HA_URL ?? "",
-  haToken: env.VITE_HA_TOKEN ?? "",
-  haPort: env.VITE_HA_PORT ? Number(env.VITE_HA_PORT) : 8123,
+  // Deliberately NOT env-configurable (unlike VITE_LAT/VITE_LNG below): a
+  // build-time HA URL/token default gets baked as plain text into the
+  // compiled JS bundle — for a standalone deploy that's a public static
+  // file, so a baked-in long-lived token is a real credential leak to
+  // anyone who can fetch it, not just a convenience shortcut. Always
+  // entered once per device via the Onboarding wizard instead.
+  haUrl: "",
+  haToken: "",
+  haPort: 8123,
   siteTitle: "",
   latitude: env.VITE_LAT ? Number(env.VITE_LAT) : -8.3405,
   longitude: env.VITE_LNG ? Number(env.VITE_LNG) : 115.092,
