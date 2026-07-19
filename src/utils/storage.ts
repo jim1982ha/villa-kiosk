@@ -256,8 +256,16 @@ export async function uploadCentralModel(
 }
 
 /** Fetch the effective model paths from the supervisor-proxy (/addon-config).
- *  Cached after first call. Runs after login, so the session cookie carries the
- *  authorization; a 401/failure just means "no central model yet". */
+ *  Cached after first SUCCESSFUL call (see below for why a failure isn't
+ *  cached). Runs after login, so the session cookie carries the authorization;
+ *  a 401/failure just means "no central model yet" — OR, since v2.28.0's
+ *  background model prefetch (see utils/modelPrefetch.ts) calls this from the
+ *  profile-select screen, BEFORE login on the direct/Cloudflare-gated
+ *  deployment, where /addon-config is genuinely unauthorized (401) until a
+ *  session cookie exists. Caching that early 401 as "no model" would
+ *  permanently poison the REAL post-login call in BabylonCanvas — a model
+ *  that actually exists would show "no model" for the rest of the session.
+ *  Only a genuine 200 (even one reporting an empty model_path) is cached. */
 export async function fetchAddonConfig(): Promise<AddonConfig> {
   if (_addonConfigCache) return _addonConfigCache;
   try {
@@ -266,10 +274,12 @@ export async function fetchAddonConfig(): Promise<AddonConfig> {
     const resp = await fetch(ingressPath("addon-config"), { signal: ctrl.signal });
     clearTimeout(tid);
     if (!resp.ok) throw new Error(`${resp.status}`);
-    _addonConfigCache = await resp.json() as AddonConfig;
+    const cfg = await resp.json() as AddonConfig;
+    _addonConfigCache = cfg;
+    return cfg;
   } catch {
-    // No model uploaded yet, or the service is briefly unreachable.
-    _addonConfigCache = { model_path: "" };
+    // Not authorized yet, no model uploaded, or the service is briefly
+    // unreachable — NOT cached, so the next call (e.g. after login) retries.
+    return { model_path: "" };
   }
-  return _addonConfigCache;
 }

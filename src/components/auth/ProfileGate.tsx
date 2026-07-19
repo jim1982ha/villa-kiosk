@@ -10,6 +10,7 @@ import { resolveSiteTitle } from "@/config/AppConfig";
 import { useProfile } from "@/auth/ProfileContext";
 import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/roles";
 import { pinRequired as fetchPinRequired, verify, openSession } from "@/auth/PinVerifier";
+import { startModelPrefetch } from "@/utils/modelPrefetch";
 import PinPad from "./PinPad";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
@@ -24,6 +25,24 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<Role | null>(null);
   const [pinRequired, setPinRequired] = useState<Record<Role, boolean> | null>(null);
   const [gateError, setGateError] = useState<string | null>(null);
+
+  // Kick off the (large) central GLB's background download as early as
+  // possible, right when the gate screen first appears — a plain fetch(), no
+  // DOM/scene work, so it can't cause any jank here. Under HA Ingress this
+  // succeeds immediately (Ingress-sourced requests are auto-trusted) and
+  // gives the model a real head start before any profile is even picked. On
+  // the direct/Cloudflare-gated deployment /model/ requires a session cookie
+  // that doesn't exist yet, so this attempt fails harmlessly and retries
+  // right when a profile is actually authorized (see choose() and the PinPad
+  // onAccepted below) — the earliest that deployment can legally start it.
+  // Skipped when already signed in (a returning session, `role` restored
+  // from sessionStorage) — `children` mounts immediately below and
+  // BabylonCanvas's own load effect already covers that case; starting a
+  // second, redundant fetch of the exact same URL here would just race it.
+  // See utils/modelPrefetch.ts.
+  useEffect(() => {
+    if (!role || switching) startModelPrefetch();
+  }, [role, switching]);
 
   // Which profiles are gated — fetched once per visit to the select screen.
   // Until the answer arrives we assume every profile needs a PIN (fail closed).
@@ -59,8 +78,12 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
       // click, is what unlocks /core and /model).
       openSession(r)
         .then((res) => {
-          if (res.ok) login(r);
-          else setGateError("Couldn't start a session — please try again.");
+          if (res.ok) {
+            // Session cookie now exists — retry the prefetch in case the
+            // earlier mount-time attempt (before any cookie existed) failed.
+            startModelPrefetch();
+            login(r);
+          } else setGateError("Couldn't start a session — please try again.");
         })
         .catch(() => setGateError("Couldn't reach the kiosk service — please try again."));
     } else {
@@ -78,7 +101,13 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
           <PinPad
             roleLabel={ROLE_LABELS[pending]}
             onSubmit={(pin) => verify(pending, pin)}
-            onAccepted={() => { login(pending); setPending(null); }}
+            onAccepted={() => {
+              // Correct PIN just minted the session cookie — retry the
+              // prefetch (the mount-time attempt had no cookie to use yet).
+              startModelPrefetch();
+              login(pending);
+              setPending(null);
+            }}
             onBack={() => setPending(null)}
           />
         </div>

@@ -9,6 +9,8 @@ import { useProfile } from "@/auth/ProfileContext";
 import { filterConfigForRole, hasCapability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel, versionedModelUrl, roomsPathFor } from "@/utils/storage";
+import { claimPrefetch } from "@/utils/modelPrefetch";
+import { readWithProgress } from "@/utils/fetchProgress";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
@@ -19,35 +21,6 @@ import {
   noteLoadSuccess, clearCrashLoop, noteContextLoss, captureError, buildReport,
 } from "@/utils/diagnostics";
 import type { EntityMapping } from "@/types/scene.types";
-
-/**
- * Read a fetch Response to an ArrayBuffer while reporting download progress
- * (0..1). Used for the large central GLB so the loading overlay shows real
- * progress instead of an indeterminate spinner. Falls back to a plain
- * arrayBuffer() read when the stream or Content-Length isn't available (e.g. a
- * service-worker cache hit with no length header).
- */
-async function readWithProgress(
-  resp: Response,
-  onProgress: (frac: number) => void,
-): Promise<ArrayBuffer> {
-  const total = Number(resp.headers.get("Content-Length")) || 0;
-  if (!resp.body || !total) return resp.arrayBuffer();
-  const reader = resp.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    received += value.length;
-    onProgress(Math.min(1, received / total));
-  }
-  const out = new Uint8Array(received);
-  let off = 0;
-  for (const c of chunks) { out.set(c, off); off += c.length; }
-  return out.buffer;
-}
 
 interface Props {
   onManager: (m: SceneManager | null) => void;
@@ -190,16 +163,35 @@ export default function BabylonCanvas({
           noteLoadPhase("fetch-model");
           const modelUrl = await versionedModelUrl(addonCfg.model_path);
           loadedSource = modelUrl;
-          const resp = await fetch(modelUrl);
-          if (!resp.ok) {
-            setAddonError(true);
-            loadErrorCode = `MODEL_FETCH_HTTP_${resp.status}`;
-            throw new Error(
-              `Central model not found at ${modelUrl} (HTTP ${resp.status}).\n` +
-              "Re-upload it from Settings → Advanced Settings (Owner profile).",
-            );
+          // ProfileGate started downloading this exact URL in the background
+          // as soon as the profile-select/PIN screen appeared (see
+          // utils/modelPrefetch.ts) — reuse it instead of fetching again from
+          // scratch. Falls back to a normal fetch below if nothing matches
+          // (prefetch never started, targeted a different/stale URL, or
+          // failed) so behaviour is identical to before whenever it can't help.
+          const claimed = claimPrefetch(modelUrl);
+          if (claimed) {
+            const unsubscribe = claimed.onProgress((f) => { if (!cancelled) setProgress(f); });
+            try {
+              data = await claimed.promise;
+            } catch {
+              data = null; // prefetch failed — fall through to a normal fetch
+            } finally {
+              unsubscribe();
+            }
           }
-          data = await readWithProgress(resp, (f) => { if (!cancelled) setProgress(f); });
+          if (!data) {
+            const resp = await fetch(modelUrl);
+            if (!resp.ok) {
+              setAddonError(true);
+              loadErrorCode = `MODEL_FETCH_HTTP_${resp.status}`;
+              throw new Error(
+                `Central model not found at ${modelUrl} (HTTP ${resp.status}).\n` +
+                "Re-upload it from Settings → Advanced Settings (Owner profile).",
+              );
+            }
+            data = await readWithProgress(resp, (f) => { if (!cancelled) setProgress(f); });
+          }
           noteModel({ bytes: data.byteLength });
           fromAddon = true;
         } else {

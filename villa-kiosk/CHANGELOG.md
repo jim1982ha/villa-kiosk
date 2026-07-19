@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.28.0
+
+- **The central GLB now starts downloading in the background as soon as the
+  profile-select screen ("Who's using the kiosk?") appears**, instead of only
+  after the PIN is entered — cutting into the "Villa Loading" spinner's wait
+  by however much of the download finishes during profile pick + PIN entry.
+  Purely a background `fetch()` (`src/utils/modelPrefetch.ts`); no scene/DOM
+  work happens until after login, so the gate screen itself stays exactly as
+  responsive as before.
+  - Under HA Ingress, `/model/` is auto-trusted (no session needed), so this
+    starts at the very first frame, before any profile is even picked.
+  - On the direct/Cloudflare-gated deployment, `/model/` requires a session
+    cookie that doesn't exist yet at that point — the early attempt fails
+    harmlessly and automatically retries at the earliest moment it's legally
+    possible: right when a profile is confirmed (an un-PIN'd profile's tap,
+    or a correct PIN), in parallel with — not sequentially after — the
+    Dashboard/BabylonCanvas mount that would otherwise fetch it.
+  - BabylonCanvas's real load path (`claimPrefetch`) reuses the in-flight or
+    completed background download when the URL matches, and transparently
+    falls back to a normal fetch whenever it doesn't (nothing prefetched yet,
+    prefetch failed, or the model was replaced in between) — behaviour is
+    identical to before whenever the prefetch can't help.
+  - Fixed a latent caching bug surfaced while building this:
+    `fetchAddonConfig()` used to cache ANY failure (including a 401 from
+    calling it before login) as "no model exists," which would have
+    permanently broken the real post-login call for the rest of the session.
+    Now only a genuine 200 response is cached.
+
 ## 2.27.1
 
 - **The "active/alert" red still looked visually different between the badge
