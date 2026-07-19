@@ -1540,7 +1540,9 @@ export class EntityVisuals {
     mesh.outlineWidth = CLIMATE_OUTLINE_WORLD_WIDTH / localScale;
     mesh.renderOutline = true;
     mesh.overlayColor = CLIMATE_ON_COLOR;
-    mesh.overlayAlpha = 0.3;
+    // 0.3 blended so faintly with the device's own (often light-coloured)
+    // material that it read as pale pink rather than red — see colors.ts.
+    mesh.overlayAlpha = 0.55;
     mesh.renderOverlay = true;
   }
 

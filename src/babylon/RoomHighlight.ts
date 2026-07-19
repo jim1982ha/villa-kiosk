@@ -27,8 +27,13 @@ import { ALERT_RED } from "./colors";
 // Same red as a running climate device's mesh outline / the badge alert ring
 // — see colors.ts. Was its own slightly-off Color3 before.
 const GLOW_COLOR = ALERT_RED;
-const BASE_ALPHA = 0.28;
-const PULSE_ALPHA = 0.5;
+// The alert ring on a badge is a flat, fully-opaque 2D stroke — it always
+// reads as a vivid, saturated red. This glow is a translucent 3D overlay
+// blended with the floor beneath it, so it can never look pixel-identical,
+// but it should still clearly read as RED rather than a pale wash. 0.28/0.5
+// (still used further below) made the glow visibly duller than intended.
+const BASE_ALPHA = 0.5;
+const PULSE_ALPHA = 0.75;
 // Sits just above the recentred floor (y≈0 after SceneManager.recenterModel)
 // so it doesn't z-fight with the actual floor mesh underneath it.
 const FLOOR_Y_OFFSET = 0.02;
@@ -83,7 +88,12 @@ export class RoomHighlight {
   private makeGlowMaterial(key: string, isDecal: boolean): StandardMaterial {
     const material = new StandardMaterial(`roomGlowMat_${key}`, this.scene);
     material.disableLighting = true;
-    material.emissiveColor = GLOW_COLOR.scale(BASE_ALPHA);
+    // Full-intensity emissive colour — translucency comes ONLY from
+    // material.alpha (animate()), not from also dimming the colour itself.
+    // Scaling emissiveColor by BASE_ALPHA on top of the alpha blend was a
+    // double dilution that made the glow read as a dull, washed-out red
+    // instead of the same red as the climate outline / badge alert ring.
+    material.emissiveColor = GLOW_COLOR;
     material.alpha = 0;
     material.backFaceCulling = false;
     if (isDecal) material.zOffset = -2;

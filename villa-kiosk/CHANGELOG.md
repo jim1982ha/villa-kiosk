@@ -1,5 +1,39 @@
 # Changelog
 
+## 2.27.1
+
+- **The "active/alert" red still looked visually different between the badge
+  ring and the climate/room-glow overlays**, even after 2.27.0 unified the
+  underlying colour constant. Root cause: the badge ring is a flat, fully-
+  opaque 2D stroke, while the climate outline and room-presence glow are
+  translucent 3D overlays blended with the surface beneath — same RGB value,
+  very different rendered result (a pale wash instead of a clear red).
+  RoomHighlight also had a second, compounding issue: its glow colour was
+  scaled down to the same fraction used for its alpha blend (double
+  dilution), on top of that translucency. Fixed by keeping the emissive
+  colour at full intensity (translucency now comes only from
+  `material.alpha`) and raising both the climate overlay's alpha (0.3 → 0.55)
+  and the room glow's alpha range (0.28–0.5 → 0.5–0.75), so both now clearly
+  read as red instead of pink.
+- **Service worker now precaches the app's heavy content-hashed chunks**
+  (Babylon engine, Draco decoder, HLS, app JS/CSS — ~7MB) at install time,
+  in the background, instead of only reactively on first fetch. A new Vite
+  plugin (`assetManifestPlugin` in `vite.config.ts`) emits
+  `dist/asset-manifest.json` listing every `/assets/` file; `public/sw.js`'s
+  install handler fetches it and warms the cache before the new service
+  worker takes over. Previously, whichever kiosk open happened to be first
+  after a deploy that changed one of those chunks paid its full download
+  cost live, in the loading spinner — now that cost is absorbed in the
+  background while the OLD version is still serving. (Investigated after a
+  report that v2.27.0 felt slower to load; confirmed that release's actual
+  code changes couldn't explain it — the Babylon/Draco chunk was
+  byte-identical before and after — but this was a real, separate
+  inefficiency worth fixing regardless.)
+- **Reminder for the Guest Bathroom elevation fix (2.27.0):** that fix lives
+  in the model pipeline script, not the app — it only takes effect after
+  re-running the pipeline export and re-uploading the regenerated
+  `rooms.json` (Advanced Settings → 3D model source → Upload room data).
+
 ## 2.27.0
 
 - **Unified the "active/alert" red.** A room's presence-glow, a running

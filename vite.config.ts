@@ -1,8 +1,37 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import fs from "node:fs";
+import path from "node:path";
 import { fileURLToPath, URL } from "node:url";
+
+// Lists every emitted /assets/ file (content-hashed JS/CSS/wasm — the Babylon
+// engine chunk, Draco decoder, HLS chunk, app shell) into dist/asset-manifest.json
+// so the service worker can PRECACHE them all at install time (in the
+// background, while the previous version is still serving) instead of only
+// ever caching reactively on first fetch. Without this, a deploy that changes
+// one of those chunks pays its full download cost live, in the loading
+// spinner, on whichever open happens to be the first after the update — see
+// public/sw.js's install handler, which fetches this file.
+function assetManifestPlugin(): Plugin {
+  return {
+    name: "villa-kiosk-asset-manifest",
+    apply: "build",
+    writeBundle(options) {
+      const outDir = options.dir ?? "dist";
+      const assetsDir = path.join(outDir, "assets");
+      if (!fs.existsSync(assetsDir)) return;
+      const assets = fs
+        .readdirSync(assetsDir)
+        .filter((f) => !f.endsWith(".map"))
+        .map((f) => `assets/${f}`);
+      fs.writeFileSync(
+        path.join(outDir, "asset-manifest.json"),
+        JSON.stringify({ assets }),
+      );
+    },
+  };
+}
 
 // PWA install + service-worker registration require a SECURE CONTEXT (https:// or
 // localhost). Opening the dev server from another device by its LAN IP over plain
@@ -56,6 +85,7 @@ export default defineConfig(({ command }) => {
     },
     plugins: [
       react(),
+      assetManifestPlugin(),
       // Only fall back to a self-signed cert when no trusted cert is provided.
       ...(serving && !haveTrustedCert ? [basicSsl()] : []),
     ],

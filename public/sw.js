@@ -12,7 +12,7 @@
  *  - Everything else (HA WebSocket is not HTTP; camera proxy, REST history):
  *    network-only — we never want to serve a stale camera frame or sensor value.
  */
-const CACHE = "villa-kiosk-v5";
+const CACHE = "villa-kiosk-v6";
 // The big central 3D model (GLB/SH3D, tens of MB) lives in its OWN cache that
 // survives app updates — it rarely changes and re-downloading it on every open
 // is the main load-time cost. Version-stamped URLs (?v=<etag>) invalidate it.
@@ -24,9 +24,35 @@ const MODEL_CACHE = "villa-kiosk-model-v1";
 // ./index.html for the same reason.
 const SHELL = ["./index.html", "./manifest.json"];
 
+// Warm the big content-hashed chunks (Babylon engine, Draco decoder, HLS,
+// app JS/CSS) into the cache DURING install — while the OLD service worker is
+// still the one actually serving the page — instead of only ever caching them
+// reactively on first fetch. Without this, whichever open happens to be the
+// first AFTER a deploy that changed one of those chunks pays its full
+// download cost live, right in the loading spinner. asset-manifest.json is
+// generated at build time (see vite.config.ts's assetManifestPlugin) listing
+// every file Vite emitted under /assets/. Best-effort: if the manifest fetch
+// fails for any reason (offline install, dev server with no build), fall back
+// to precaching just the shell — never blocks install entirely.
+async function precacheAssets(cache) {
+  try {
+    const res = await fetch("./asset-manifest.json", { cache: "no-store" });
+    if (!res.ok) return;
+    const { assets } = await res.json();
+    if (Array.isArray(assets) && assets.length) {
+      await cache.addAll(assets.map((a) => `./${a}`));
+    }
+  } catch {
+    // Best-effort — SHELL precache above is enough to install successfully.
+  }
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()),
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(SHELL).then(() => precacheAssets(cache)))
+      .then(() => self.skipWaiting()),
   );
 });
 
