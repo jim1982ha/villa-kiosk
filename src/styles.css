@@ -136,8 +136,21 @@ html,
 body,
 #root {
   margin: 0;
+  /* 100% depends on the initial containing block resolving to the TRUE
+     viewport — on iOS Safari/WKWebView (including the HA Companion App's
+     Ingress webview) that can end up wrong/stale (a well-documented iOS
+     quirk, historically tied to the address-bar-hide animation baking in a
+     shorter height that a non-scrolling, overflow:hidden page like this one
+     never gets a chance to correct), leaving dead black space above/below
+     the app's own background — reported as black letterboxing on iPhone.
+     100dvh is the dynamic-viewport-height unit iOS added specifically for
+     this: it tracks the ACTUAL visible viewport live. Kept as a second
+     declaration (not a replacement) so browsers that don't understand dvh
+     just ignore it and keep the 100% fallback. */
   height: 100%;
+  height: 100dvh;
   width: 100%;
+  width: 100dvw;
   overflow: hidden;
   background: var(--bg-base);
   color: var(--text-primary);
@@ -1015,6 +1028,23 @@ label.toggle span { user-select: none; line-height: 1.4; }
   font-family: var(--font-ui);
   padding: 24px; overflow-y: auto;
 }
+
+/* Ingress-only escape hatch, positioned relative to .auth-screen itself (not
+   the narrower .profile-select/.pinpad cards) so it's reachable from BOTH the
+   profile-select screen and the PIN pad, and stays put across either. Safe-
+   area-aware — see ha/ingress.ts's exitToHomeAssistant() docstring for why
+   this exists (a reliable, gesture-independent way out on environments where
+   a native back-swipe can be swallowed by the kiosk's own touch handling). */
+.auth-exit-btn {
+  position: absolute;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  right: calc(14px + env(safe-area-inset-right, 0px));
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-secondary); font-size: 14px; padding: 8px;
+  min-height: var(--touch-min);
+}
+.auth-exit-btn:hover, .auth-exit-btn:focus-visible { color: var(--text-primary); }
 
 .profile-select { width: min(920px, 100%); text-align: center; }
 .profile-title { font-family: var(--font-display); font-size: 40px; margin: 0 0 6px; }

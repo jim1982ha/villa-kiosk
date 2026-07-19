@@ -43,3 +43,36 @@ export function ingressApiBase(): string {
 export function ingressPath(rel: string): string {
   return `${ingressBasePath()}${rel.replace(/^\/+/, "")}`;
 }
+
+/** True when running as HA's Ingress iframe (the sidebar panel), not the
+ *  direct hostname / installed PWA. */
+export function isIngress(): boolean {
+  return ingressBasePath() !== "/";
+}
+
+/**
+ * Escape the Ingress iframe back to Home Assistant's own UI. HA renders an
+ * Ingress panel as a same-origin iframe inside its own frontend, so
+ * `window.top` is reachable; navigating it takes the whole app back to HA
+ * instead of just this iframe's content.
+ *
+ * Exists because the kiosk's 3D view needs `touch-action: none` edge-to-edge
+ * for its own pan/orbit/pinch gestures (see styles.css), which on iOS
+ * Safari/WKWebView can also swallow the system edge-swipe-back gesture some
+ * environments would otherwise offer to leave the panel — a reported
+ * "can't get back to Home Assistant" dead end on iPhone. This button is a
+ * guaranteed way out that doesn't depend on any native gesture working.
+ *
+ * No-op off Ingress (there's no HA UI to return to on the direct hostname /
+ * installed PWA — callers should hide the control entirely there, see
+ * isIngress()).
+ */
+export function exitToHomeAssistant(): void {
+  try {
+    if (window.top && window.top !== window.self) {
+      window.top.location.href = "/";
+    }
+  } catch {
+    // Cross-origin or otherwise inaccessible — nothing we can do from here.
+  }
+}

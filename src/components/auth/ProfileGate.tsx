@@ -4,7 +4,7 @@
 // without a configured PIN signs in with a single tap.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { UserRound, KeyRound, Wrench } from "lucide-react";
+import { UserRound, KeyRound, Wrench, DoorOpen } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useProfile } from "@/auth/ProfileContext";
@@ -12,6 +12,7 @@ import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/ro
 import { pinRequired as fetchPinRequired, verify, openSession } from "@/auth/PinVerifier";
 import { startModelPrefetch, onPrefetchAvailable } from "@/utils/modelPrefetch";
 import { isIOS } from "@/utils/diagnostics";
+import { isIngress, exitToHomeAssistant } from "@/ha/ingress";
 import PinPad from "./PinPad";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
@@ -136,6 +137,11 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
       <>
         {showChildrenEarly && children}
         <div className="auth-screen">
+          {isIngress() && (
+            <button className="auth-exit-btn" onClick={exitToHomeAssistant} aria-label="Exit to Home Assistant">
+              <DoorOpen size={18} /> Exit to Home Assistant
+            </button>
+          )}
           <PinPad
             roleLabel={ROLE_LABELS[pending]}
             onSubmit={(pin) => verify(pending, pin)}
@@ -157,6 +163,11 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
     <>
       {showChildrenEarly && children}
       <div className="auth-screen">
+        {isIngress() && (
+          <button className="auth-exit-btn" onClick={exitToHomeAssistant} aria-label="Exit to Home Assistant">
+            <DoorOpen size={18} /> Exit to Home Assistant
+          </button>
+        )}
         <div className="profile-select">
           <h1 className="profile-title">{resolveSiteTitle(config)}</h1>
           <p className="profile-sub">Who's using the kiosk?</p>

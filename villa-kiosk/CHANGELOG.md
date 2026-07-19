@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.30.0
+
+- **Fixed "can't get back to Home Assistant" on iPhone**, reported alongside
+  black letterboxing (bars above/below the app) and a visibly stretched
+  villa render — three symptoms of the same underlying cause on the HA
+  Companion App's iOS Ingress webview:
+  - **Added a guaranteed way out**: a new "Exit to Home Assistant" control
+    (`src/ha/ingress.ts`'s `exitToHomeAssistant()`) navigates `window.top`
+    back to HA's own UI — reachable from the profile-select screen, the PIN
+    pad, AND the in-app HUD menu (mobile overflow + desktop), shown only
+    under Ingress (there's nothing to "exit" to on the direct hostname/PWA).
+    Doesn't depend on any native swipe gesture working at all.
+  - **Likely root cause of why no gesture worked**: the kiosk's 3D view
+    needs `touch-action: none` edge-to-edge for its own pan/orbit/pinch
+    controls, which can also swallow whatever back-navigation gesture the
+    embedding environment would otherwise offer — this is why an explicit
+    in-app button, not a CSS tweak, is the reliable fix.
+  - **Letterboxing**: `html`/`body`/`#root`'s `height: 100%` can resolve
+    against a stale/wrong containing-block size on iOS Safari/WKWebView (a
+    well-documented quirk, historically tied to address-bar-hide animations
+    — and this app's `overflow: hidden` layout never gets the scroll event
+    that normally lets the OS correct it). Added `100dvh`/`100dvw` (dynamic
+    viewport units) as a second declaration alongside the `100%` fallback.
+  - **Stretched render**: if the WebView's own container resizes without
+    firing a `window` "resize" event (plausible in an embedded/native
+    context), Babylon's render buffer can go stale relative to the canvas's
+    actual CSS box, stretching the frame to fit. `SceneManager` now also
+    watches the canvas element directly via `ResizeObserver`, which reacts
+    to the element's own box changing regardless of whether `window` ever
+    fires anything — a strictly more reliable signal than the existing
+    `window resize` listener for this class of embedding-container resize.
+
 ## 2.29.1
 
 - **Fixed a real regression v2.29.0 introduced on iOS.** A field report: a

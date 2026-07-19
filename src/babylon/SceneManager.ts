@@ -70,6 +70,7 @@ export class SceneManager {
    *  memory-hungry render targets (SSAO/IBL/sun shadows) that overrun iOS's
    *  low WebGL memory ceiling and crash-loop the loader (see the constructor). */
   private isIOS = false;
+  private resizeObserver: ResizeObserver | null = null;
   private ready = false;
   private readyCallbacks = new Set<() => void>();
   private calibrateCallbacks = new Set<() => void>();
@@ -225,6 +226,22 @@ export class SceneManager {
 
     this.startRenderLoop();
     window.addEventListener("resize", this.handleResize);
+    // Belt-and-suspenders alongside the window "resize" listener above: some
+    // embedding contexts (reported: the HA Companion App's iOS Ingress
+    // WebView) can resize the CANVAS'S OWN box — e.g. settling into its
+    // final on-screen bounds after first paint — without ever firing a
+    // window-level "resize" event, leaving Babylon's internal render buffer
+    // sized for a stale aspect ratio while the CSS box has already moved on.
+    // Since the buffer and the box then disagree, the rendered frame gets
+    // squished/stretched to fit — reported as "the villa image is all
+    // stretched" on iPhone, alongside black bars where the WebView's real
+    // bounds turned out shorter than expected. ResizeObserver watches the
+    // canvas ELEMENT directly, independent of whether window ever fires
+    // anything, so it catches this class of resize too.
+    if (typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(() => this.handleResize());
+      this.resizeObserver.observe(canvas);
+    }
 
     // Long-running-kiosk robustness. A wall tablet / WebView can LOSE the WebGL
     // context (GPU reset, memory pressure, the app being backgrounded). Babylon
@@ -1392,6 +1409,7 @@ export class SceneManager {
     this.disposed = true;
 
     window.removeEventListener("resize", this.handleResize);
+    this.resizeObserver?.disconnect();
     document.removeEventListener("visibilitychange", this.handleVisibility);
     window.removeEventListener("pagehide", this.handlePageHide);
     this.engine.stopRenderLoop(); // stop first — no frames render during teardown
