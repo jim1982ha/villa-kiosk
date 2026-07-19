@@ -197,10 +197,12 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         </p>
 
         {/* Light effect strength + Night dimming side by side. Light effect
-            strength controls the floor "light pool" a fixture casts when on
-            (see babylon/LightPools.ts) — the visible substitute for real room
-            lighting in baked-lighting villas, where a real dynamic light can
-            never brighten the (unlit) structure regardless of range/intensity. */}
+            strength scales a lit fixture's room illumination in BOTH villa
+            flavours (2.31.0): the floor "light pool" decal in baked-lighting
+            villas (see babylon/LightPools.ts — their unlit structure can't
+            be brightened by a real light), and the real dynamic PointLight's
+            intensity in non-baked villas (where it silently did nothing
+            before). */}
         <div className="slider-pair">
           <div>
             <label>Light effect strength · {render.lightPoolIntensity.toFixed(1)}×</label>

@@ -27,6 +27,7 @@ import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
 import { resolveMeshToMapping, inferTypeFromEntityId, normaliseMeshName } from "@/config/EntityMap";
 import { effectiveCategory } from "@/config/EntityCategories";
+import { isIOS as detectIOS } from "@/utils/diagnostics";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
@@ -111,9 +112,7 @@ export class SceneManager {
     // catches a device that genuinely can't take it. On modern iPadOS the
     // UA says "MacIntel" (desktop-class browsing) — the maxTouchPoints
     // check is what actually catches those.
-    const ua = navigator.userAgent;
-    const isIOS = /iP(hone|od|ad)/.test(ua)
-      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const isIOS = detectIOS();
     this.isIOS = isIOS;
     this.engine = new Engine(canvas, true, {
       preserveDrawingBuffer: false,

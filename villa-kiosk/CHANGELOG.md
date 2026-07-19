@@ -1,5 +1,48 @@
 # Changelog
 
+## 2.32.0
+
+Full-codebase audit: redundancy, memory-leak, and security passes, with
+every finding fixed in this release.
+
+- **Security — dependencies (CVE/GHSA):** `npm audit` reported 2
+  vulnerabilities: Vite ≤6.4.2 path traversal in optimized-deps `.map`
+  handling (GHSA-4w7w-66w2-5vf9, HIGH) and esbuild ≤0.24.2 dev-server
+  request exposure (GHSA-67mh-4wv8-2f99, moderate) — both dev-server-scoped
+  (production is a static nginx build), fixed anyway by upgrading Vite 5 →
+  8 (+ @vitejs/plugin-react 5, @vitejs/plugin-basic-ssl 2). Audit is now
+  clean (0 vulnerabilities). Vite 8's rolldown bundler required the
+  function form of `manualChunks`; the service-worker asset manifest,
+  production build (10× faster: ~3s), and dev server were all re-verified.
+- **Security — hardening:** nginx `server_tokens off` (stop advertising
+  the server version on the public port, CWE-200) and a `Permissions-Policy`
+  header denying camera/microphone/geolocation/payment/usb outright (the
+  kiosk uses none of them — HA camera streams are plain HTTP, not
+  getUserMedia). A full CSP was evaluated and deliberately deferred with an
+  in-file rationale (blob: Draco workers + WASM + React style attributes +
+  Google Fonts make a blind CSP too likely to brick the fielded kiosk).
+- **Security — reviewed clean:** no XSS sinks (no dangerouslySetInnerHTML/
+  innerHTML/eval anywhere in src), no shell/exec in the Python proxy,
+  upload path traversal guarded (realpath + prefix check), strict chunk-ID
+  validation + magic-byte checks on uploads, uploads NOT exposed by
+  `public_model_access`, constant-time PIN/session comparisons,
+  crypto-random session secret, httpOnly/Secure/SameSite cookie, per-role
+  rate limiting, hop-by-hop header stripping.
+- **Memory-leak audit:** every addEventListener/setInterval/setTimeout
+  pairing verified (the only unpaired listeners are deliberate
+  page-lifetime globals: SW registration, global error capture); Babylon
+  disposal chain re-verified end-to-end incl. the pagehide safety net; the
+  suspected Babylon GUI linked-controls leak was disproved against the
+  installed library source (removeControl does unlink). One real fix:
+  `modelPrefetch` kept a stale multi-MB GLB ArrayBuffer pinned for the
+  whole session when the model was replaced between prefetch and login —
+  the entry is now dropped on claim mismatch so it garbage-collects.
+- **Redundancy:** no unreferenced modules and no dead exports found (an
+  import-graph scan of all of src/); deduplicated the iOS detection in
+  SceneManager onto utils/diagnostics' isIOS(); removed a stray local
+  `__pycache__`; corrected a stale comment claiming "Light effect
+  strength" was baked-only (it drives dynamic lights too since 2.31.0).
+
 ## 2.31.0
 
 - **iPhone render quality restored to the same tier as Android/desktop** —

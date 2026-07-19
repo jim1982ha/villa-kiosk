@@ -100,9 +100,11 @@ export default defineConfig(({ command }) => {
       chunkSizeWarningLimit: 2000,
       rollupOptions: {
         output: {
-          manualChunks: {
-            // Babylon is large — split it so the React shell can paint first.
-            babylon: ["@babylonjs/core", "@babylonjs/loaders", "@babylonjs/materials", "@babylonjs/gui"],
+          // Babylon is large — split it so the React shell can paint first.
+          // Function form: Vite 8's rolldown bundler dropped the object form
+          // ("manualChunks is not a function" build error).
+          manualChunks(id: string) {
+            if (id.includes("node_modules/@babylonjs/")) return "babylon";
           },
         },
       },

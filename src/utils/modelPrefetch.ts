@@ -123,9 +123,14 @@ export function claimPrefetch(url: string): {
   promise: Promise<ArrayBuffer>;
   onProgress: (fn: ProgressListener) => () => void;
 } | null {
-  if (!entry || entry.url !== url) return null;
+  if (!entry) return null;
   const e = entry;
-  entry = null; // one-shot
+  // One-shot EITHER way: on a URL mismatch (the model was replaced between
+  // prefetch and login, so this entry can never match again — versioned
+  // URLs only move forward) keeping it would pin the downloaded multi-MB
+  // ArrayBuffer for the rest of the session. Drop our reference so it GCs.
+  entry = null;
+  if (e.url !== url) return null;
   return {
     promise: e.promise,
     onProgress: (fn) => {
