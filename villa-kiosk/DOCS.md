@@ -68,3 +68,10 @@ panel.
 - Ingress fronts the *UI*; Core access uses the Supervisor proxy (`homeassistant_api`).
 - The 3D model lives in the add-on's private `/data` volume — the add-on no
   longer needs write access to your HA config folder.
+- The kiosk **auto-reloads once a day, around 04:00 local device time**, if
+  idle (no panel/settings open, no interaction in the last 5 minutes) — a
+  safety net against slow long-running memory drift, common in any
+  browser tab running a complex WebGL scene for days/weeks unattended. It
+  silently retries every minute within that hour until it's actually idle,
+  and skips entirely on a day it never finds a safe moment. No re-login is
+  needed afterward (the signed-in profile survives the reload).

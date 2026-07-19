@@ -18,6 +18,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId } from "@/config/EntityMap";
 import { isQuickToggle } from "@/utils/quickAction";
 import { HAServices } from "@/ha/HAServiceCalls";
+import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
@@ -63,6 +64,32 @@ export default function Dashboard() {
   // save/clear, without polling. Re-derived per manager since a model reload
   // swaps the manager but the saved device pose is still valid to show.
   const [hasOverviewDefault, setHasOverviewDefault] = useState(false);
+
+  // Once-a-day auto-reload safety net (see utils/autoReload.ts) against a slow
+  // background memory drift — only fires during its quiet overnight hour AND
+  // when nothing's open AND no one's touched the kiosk recently, so it never
+  // interrupts real use. Read via refs (not React deps) because the check runs
+  // on a plain setInterval outside the render cycle; the refs just mirror
+  // whatever's most recently rendered.
+  const modalOpenRef = useRef(false);
+  useEffect(() => {
+    modalOpenRef.current = !!activePanel || teleportOpen || settingsOpen || configEditorOpen;
+  }, [activePanel, teleportOpen, settingsOpen, configEditorOpen]);
+  const lastInteractionRef = useRef(Date.now());
+  useEffect(() => {
+    const mark = () => { lastInteractionRef.current = Date.now(); };
+    document.addEventListener("pointerdown", mark);
+    document.addEventListener("keydown", mark);
+    document.addEventListener("wheel", mark, { passive: true });
+    return () => {
+      document.removeEventListener("pointerdown", mark);
+      document.removeEventListener("keydown", mark);
+      document.removeEventListener("wheel", mark);
+    };
+  }, []);
+  useEffect(() => installDailyAutoReload(() =>
+    !modalOpenRef.current && Date.now() - lastInteractionRef.current > 5 * 60_000,
+  ), []);
 
   // Auto-connect on load / refresh. We always reach HA through the same-origin
   // Supervisor proxy (token injected server-side), so no credentials are needed.

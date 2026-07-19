@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.26.4
+
+- **Daily auto-reload safety net** (`src/utils/autoReload.ts`) against a slow
+  background memory drift measured on a real kiosk: ~700-800MB baseline
+  (expected — a heavy 3D scene) plus a genuine but modest ~37MB/hour drift on
+  top of normal GC sawtooth, confirmed via a lightweight `performance.memory`
+  poll over ~2 idle hours (a full DevTools heap snapshot at that size crashed
+  the tab outright, so this used the cheaper diagnostic instead). Rather than
+  keep chasing the exact allocation site on a fielded device, the kiosk now
+  reloads itself once a day, around 04:00 local device time, but only when
+  idle — no panel/settings open, no interaction in the last 5 minutes;
+  otherwise it retries each minute within that hour and simply skips the day
+  if it never finds a safe moment. No re-login needed afterward (the profile
+  role lives in sessionStorage, which survives a same-tab reload).
+
 ## 2.26.3
 
 - **Fixed the real cause of a badge (and its icon) showing stale/default
