@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.26.0
+
+- **Device panel redesign.** The header/footer and every panel's "Last 24
+  hours" section were reworked together:
+  - The footer **Close** button is gone; every panel now has a plain **X** in
+    the top-right of the header instead (Escape and backdrop-tap still close
+    it too). The footer, when a profile can edit config, is just **Edit**,
+    right-aligned.
+  - A long device name no longer wraps onto a second line — it truncates with
+    an ellipsis, same as the entity id already did below it.
+  - Removed the small "N entities grouped as one device…" / "Updated …" /
+    "Running for …" footnotes — the freed space goes to a taller, more
+    readable graph (all "Last 24 hours" graphs are ~30% taller).
+  - **Every panel now shows a "Last 24 hours" history graph**, not just
+    numeric sensors: Light, Fan, Switch, Lock and Cover previously had none at
+    all — they now get a coloured **state timeline** (a new `StateTimeline`
+    component) showing exactly when the device was on/off, locked/unlocked,
+    open/closed, etc. The generic fallback panel (used for entity types with
+    no dedicated panel) gets one too, colour-coded per distinct state with a
+    legend. (Out of scope for now: Climate and Media Player, which already
+    show several live attributes and would need a genuinely different kind of
+    graph — current vs. target temperature, mode changes, playback state —
+    to be useful rather than just tall.)
+  - **Fixed a real bug this surfaced**: a plain `sensor` whose state is text,
+    not a number (e.g. a network device reporting "connected"/"disconnected"),
+    always showed "Not enough history yet" — `fetchHistory` silently drops
+    every point that doesn't parse as a number, even though Home Assistant
+    held real history for it. Such a sensor now takes the same raw
+    state-history path as the new StateTimeline (see `fetchStateHistory`),
+    which keeps text states instead of numeric-parsing them, and renders a
+    timeline colour-coded per distinct state instead of an always-empty line
+    graph.
+
 ## 2.25.1
 
 - **No more "rendered but frozen" gap after loading a model.** The central

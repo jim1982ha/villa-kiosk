@@ -1,11 +1,15 @@
 // src/components/panels/FanPanel.tsx
+import { useEffect, useState } from "react";
 import { Fan } from "lucide-react";
 import BasePanel from "./BasePanel";
 import PowerToggle from "./PowerToggle";
+import StateTimeline from "./StateTimeline";
 import type { PanelProps } from "@/types/panel.types";
+import type { StateHistoryPoint } from "@/types/ha.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { formatRuntime } from "@/utils/time";
+import { fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { onOffColor } from "@/utils/stateColors";
 
 // Named labels for the common discrete-speed-count cases (matches how HA's
 // own more-info dialog reads a fan with a small, fixed number of steps —
@@ -22,7 +26,13 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
   const on = entity?.state === "on";
   const presets = (entity?.attributes.preset_modes ?? []) as string[];
   const currentPreset = entity?.attributes.preset_mode;
-  const runtime = entity ? formatRuntime(entity.last_changed) : "";
+  const [history, setHistory] = useState<StateHistoryPoint[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchStateHistory(mapping.entityId, 24).then((h) => !cancelled && setHistory(h)).catch(() => {});
+    return () => { cancelled = true; };
+  }, [mapping.entityId]);
 
   // Continuous speed, exposed as discrete steps (same idea as HA's own fan
   // more-info card) rather than a free-drag slider — a separate control from
@@ -80,7 +90,10 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      {on && <p className="muted body-text mt">Running for {runtime}</p>}
+      <div className="field">
+        <label className="entity-label">Last 24 hours</label>
+        <StateTimeline data={history} colorFor={onOffColor} />
+      </div>
     </BasePanel>
   );
 }

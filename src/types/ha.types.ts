@@ -86,3 +86,11 @@ export interface HistoryPoint {
   t: number; // epoch ms
   v: number; // numeric value
 }
+
+/** A single state-change point (for StateTimeline) — the RAW state string, no
+ *  numeric parsing, so it also works for on/off, enum and free-text sensors
+ *  (e.g. an access point's "connected"/"disconnected"). */
+export interface StateHistoryPoint {
+  t: number; // epoch ms
+  state: string;
+}

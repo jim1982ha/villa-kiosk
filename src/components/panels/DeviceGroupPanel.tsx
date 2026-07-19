@@ -101,10 +101,6 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
           </div>
         ))
       )}
-
-      <p className="muted body-text mt">
-        {ids.length} entities grouped as one device — edit in Advanced Settings.
-      </p>
     </BasePanel>
   );
 }

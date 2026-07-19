@@ -1,12 +1,16 @@
 // src/components/panels/LightPanel.tsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Lightbulb } from "lucide-react";
 import BasePanel from "./BasePanel";
 import PowerToggle from "./PowerToggle";
+import StateTimeline from "./StateTimeline";
 import type { PanelProps } from "@/types/panel.types";
+import type { StateHistoryPoint } from "@/types/ha.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
+import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { brightnessToPct } from "@/utils/colorUtils";
+import { onOffColor } from "@/utils/stateColors";
 
 export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
@@ -17,6 +21,13 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
 
   const [brightness, setBrightness] = useState(entity?.attributes.brightness ?? 255);
   const [kelvin, setKelvin] = useState(entity?.attributes.color_temp_kelvin ?? 4000);
+  const [history, setHistory] = useState<StateHistoryPoint[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchStateHistory(mapping.entityId, 24).then((h) => !cancelled && setHistory(h)).catch(() => {});
+    return () => { cancelled = true; };
+  }, [mapping.entityId]);
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Lightbulb size={22} />} onClose={onClose}>
@@ -47,9 +58,10 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      {!supportsBrightness && (
-        <p className="muted body-text mt">This light supports on/off only.</p>
-      )}
+      <div className="field">
+        <label className="entity-label">Last 24 hours</label>
+        <StateTimeline data={history} colorFor={onOffColor} />
+      </div>
     </BasePanel>
   );
 }

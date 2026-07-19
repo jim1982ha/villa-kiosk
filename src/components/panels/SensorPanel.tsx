@@ -1,16 +1,21 @@
 // src/components/panels/SensorPanel.tsx
 // Numeric sensors + binary_sensor presentation (contextual per device_class).
+// A THIRD case lives here too: a "sensor" whose state is text/enum, not a
+// number (e.g. an access point reporting "connected"/"disconnected") — see
+// isEnum below.
 
 import { useEffect, useState } from "react";
 import { Activity, AlertTriangle } from "lucide-react";
 import BasePanel from "./BasePanel";
 import Sparkline from "./Sparkline";
+import StateTimeline from "./StateTimeline";
 import type { PanelProps } from "@/types/panel.types";
-import type { HistoryPoint } from "@/types/ha.types";
+import type { HistoryPoint, StateHistoryPoint } from "@/types/ha.types";
 import { useConfig } from "@/config/ConfigContext";
-import { fetchHistory } from "@/ha/HAHistoryAPI";
+import { fetchHistory, fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
+import { binarySensorColor, paletteColorFor } from "@/utils/stateColors";
 
 const LEVEL_COLOR: Record<AlertLevel, string> = {
   normal: "var(--status-on)",
@@ -21,9 +26,18 @@ const LEVEL_COLOR: Record<AlertLevel, string> = {
 export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const { config } = useConfig();
   const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [stateHistory, setStateHistory] = useState<StateHistoryPoint[]>([]);
 
   const isBinary = mapping.type === "binary_sensor";
   const numeric = Number(entity?.state);
+  // A plain "sensor" whose current state doesn't parse as a number is a
+  // text/enum sensor (connectivity status, a weather condition string, …) —
+  // fetchHistory's numeric-only filter would silently drop every point for
+  // one of these (that's why a device like an access point's "connected" /
+  // "disconnected" state used to show "Not enough history yet" despite HA
+  // holding real history for it), so it gets the raw state-history path below
+  // instead of the numeric Sparkline one.
+  const isEnum = !isBinary && entity != null && !Number.isFinite(numeric);
   const unit = entity?.attributes.unit_of_measurement ?? "";
   const threshold = config.alertThresholds[mapping.entityId];
   // What this SPECIFIC binary_sensor reports — a leak sensor, a motion PIR, a
@@ -47,46 +61,66 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
 
   useEffect(() => {
     // History is fetched token-less through the add-on's Supervisor proxy.
-    if (isBinary) return;
     let cancelled = false;
-    fetchHistory(mapping.entityId, 24)
-      .then((h) => !cancelled && setHistory(h))
-      .catch(() => {});
+    if (isBinary || isEnum) {
+      fetchStateHistory(mapping.entityId, 24)
+        .then((h) => !cancelled && setStateHistory(h))
+        .catch(() => {});
+    } else {
+      fetchHistory(mapping.entityId, 24)
+        .then((h) => !cancelled && setHistory(h))
+        .catch(() => {});
+    }
     return () => {
       cancelled = true;
     };
-  }, [mapping.entityId, isBinary]);
+  }, [mapping.entityId, isBinary, isEnum]);
 
   const BinaryIcon = classInfo.icon;
   const icon = isBinary ? <BinaryIcon size={22} /> : <Activity size={22} />;
+  const enumPalette = isEnum ? paletteColorFor(stateHistory.map((p) => p.state)) : undefined;
+  const enumDistinctStates = isEnum ? [...new Set(stateHistory.map((p) => p.state))] : [];
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={icon} onClose={onClose}>
       {isBinary ? (
-        <div className="center" style={{ padding: "12px 0 6px" }}>
-          <div className={`status-pill ${binaryPillTone}`} style={{ fontSize: 20, padding: "14px 24px" }}>
-            {level === "danger" ? <AlertTriangle size={22} /> : <BinaryIcon size={22} />}
-            {level === "danger" ? binaryStateText.toUpperCase() : binaryStateText}
-          </div>
-        </div>
-      ) : (
         <>
-          <div className="center" style={{ margin: "6px 0 18px" }}>
-            <span className="value-large" style={{ color: LEVEL_COLOR[level] }}>
-              {Number.isFinite(numeric) ? numeric : entity?.state ?? "--"}
-            </span>{" "}
-            <span className="value-unit">{unit}</span>
+          <div className="center" style={{ padding: "12px 0 6px" }}>
+            <div className={`status-pill ${binaryPillTone}`} style={{ fontSize: 20, padding: "14px 24px" }}>
+              {level === "danger" ? <AlertTriangle size={22} /> : <BinaryIcon size={22} />}
+              {level === "danger" ? binaryStateText.toUpperCase() : binaryStateText}
+            </div>
           </div>
           <div className="field">
             <label className="entity-label">Last 24 hours</label>
-            <Sparkline data={history} color={LEVEL_COLOR[level]} />
+            <StateTimeline
+              data={stateHistory}
+              colorFor={(s) => binarySensorColor(s, alertState)}
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="center" style={{ margin: "6px 0 18px" }}>
+            <span className="value-large" style={{ color: isEnum ? "var(--text-primary)" : LEVEL_COLOR[level] }}>
+              {isEnum ? (entity?.state ?? "--") : Number.isFinite(numeric) ? numeric : entity?.state ?? "--"}
+            </span>{" "}
+            {!isEnum && <span className="value-unit">{unit}</span>}
+          </div>
+          <div className="field">
+            <label className="entity-label">Last 24 hours</label>
+            {isEnum ? (
+              <StateTimeline
+                data={stateHistory}
+                colorFor={enumPalette!}
+                legend={enumDistinctStates.map((s) => ({ state: s, color: enumPalette!(s) }))}
+              />
+            ) : (
+              <Sparkline data={history} color={LEVEL_COLOR[level]} />
+            )}
           </div>
         </>
       )}
-
-      <p className="muted body-text mt">
-        Updated {entity ? new Date(entity.last_updated).toLocaleTimeString() : "—"}
-      </p>
     </BasePanel>
   );
 }
