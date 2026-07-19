@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.30.2
+
+- **Restores early scene preload (v2.29.0's approach, reverted in v2.30.1)
+  as an explicit, informed trade-off** — the villa again starts loading
+  (and decoding) as soon as the profile-select screen appears, on every
+  platform except iOS (still excluded there for the separate, unrelated
+  memory-ceiling crash risk — see the iPhone crash-loop investigation).
+  This is a deliberate compromise, not a full fix: genuinely eliminating
+  ALL main-thread blocking during that decode would require moving the
+  entire Babylon rendering layer into a Web Worker via `OffscreenCanvas` —
+  checked Babylon's actual support for this (Draco decode already runs in
+  a Worker by default; the rest — glTF parse, GPU upload, Scene graph
+  construction — does not, and this app's `src/babylon/` layer directly
+  and synchronously manipulates the Scene from dozens of files) — a large,
+  separate rewrite, not attempted here.
+  - **What actually shrinks the freeze**: `SceneManager.loadModel` now
+    yields the main thread (`await` a `requestAnimationFrame`) between its
+    major top-level steps — after mesh cleanup/indexing, before
+    `indexMeshes`, and again before `applyStructure` — instead of running
+    the whole sequence as one unbroken block. Each individual step
+    (especially `indexMeshes`, the single heaviest one) is still a solid
+    synchronous stretch — this narrows the LONGEST uninterrupted freeze,
+    it does not remove blocking entirely. Expect the profile-select/PIN
+    screen to still stutter or briefly pause during a preload — for less
+    total time and less continuously than v2.29.0, but not zero.
+  - Added a disposal guard (`this.disposed` check after each yield) so a
+    very fast unmount mid-preload can't operate on already-torn-down
+    meshes.
+  - `ProfileGate.tsx`: `modelPreloadable`/`showChildrenEarly` restored;
+    `modelPrefetch.ts`: `onPrefetchAvailable` restored.
+
 ## 2.30.1
 
 - **Reverted v2.29.0's early scene preload — it was freezing clicks on the

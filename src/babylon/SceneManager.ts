@@ -792,14 +792,37 @@ export class SceneManager {
     meshes.forEach((m) => m.computeWorldMatrix(true));
   }
 
+  /** Give the browser one animation-frame's worth of room to process pending
+   *  input (a tap, a click) before the next heavy synchronous step below.
+   *  Doesn't make any INDIVIDUAL step non-blocking — glTF parse/GPU-upload
+   *  (inside loadModelInto) and indexMeshes/applyStructure's own per-mesh
+   *  loops are each still one uninterrupted synchronous stretch — it only
+   *  shrinks the LONGEST unbroken stretch by breaking loadModel's top-level
+   *  sequence into several. See loadModel's docstring for the full context;
+   *  this is a deliberate, partial mitigation, not a fix. */
+  private yieldFrame(): Promise<void> {
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  }
+
   /**
    * Load the GLB (from ArrayBuffer in IndexedDB or an uploaded File). Returns
    * a timing breakdown (see modelInfo.ts's LoadedModelInfo) so a slow load
    * can be attributed to Babylon's own import (parse/decode/GPU-upload,
    * inside loadModelInto) vs. this method's own post-processing below.
+   *
+   * Yields the main thread (see yieldFrame) between the major steps below —
+   * a villa can genuinely be requested to preload BEFORE login (see
+   * ProfileGate's modelPreloadable), and this whole sequence is otherwise one
+   * continuous multi-second synchronous block that would freeze that screen's
+   * clicks for its full duration. This does NOT make any single step
+   * non-blocking (indexMeshes especially is still one long uninterrupted
+   * call) — genuinely eliminating that needs moving Babylon into a Web
+   * Worker, a separate, much larger undertaking. This only shortens the
+   * longest unbroken freeze and gives input a few more chances to land.
    */
   async loadModel(data: ArrayBuffer): Promise<{ importMs: number; postMs: number }> {
     const result = await loadModelInto(this.scene, data, this.config.extraGlassHints ?? []);
+    if (this.disposed) return { importMs: result.importMs, postMs: 0 }; // unmounted mid-load
     const tPostStart = performance.now();
     this.loadedMeshes = result.meshes;
 
@@ -823,7 +846,13 @@ export class SceneManager {
     this.recenterModel(result.meshes); // align to origin BEFORE indexing positions
     this.floors.indexFloors(result.meshes);
     this.pick.indexInteractiveMeshes(result.meshes); // taps work immediately
-    this.visuals.indexMeshes(result.meshes); // entity badges/lights/state visuals
+
+    await this.yieldFrame();
+    if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
+    this.visuals.indexMeshes(result.meshes); // entity badges/lights/state visuals — the single heaviest step
+
+    await this.yieldFrame();
+    if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
     this.applyStructure(result.meshes); // solid walls + collisions + hidden ceilings
 
     // Spawn at the default first-person pose (foot of the staircase on the ground

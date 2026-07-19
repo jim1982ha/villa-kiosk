@@ -10,7 +10,8 @@ import { resolveSiteTitle } from "@/config/AppConfig";
 import { useProfile } from "@/auth/ProfileContext";
 import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/roles";
 import { pinRequired as fetchPinRequired, verify, openSession } from "@/auth/PinVerifier";
-import { startModelPrefetch } from "@/utils/modelPrefetch";
+import { startModelPrefetch, onPrefetchAvailable } from "@/utils/modelPrefetch";
+import { isIOS } from "@/utils/diagnostics";
 import { isIngress, exitToHomeAssistant } from "@/ha/ingress";
 import PinPad from "./PinPad";
 
@@ -29,15 +30,8 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
 
   // Kick off the (large) central GLB's background BYTE download as early as
   // possible, right when the gate screen first appears — a plain fetch(), no
-  // DOM/scene/decode work, so it genuinely can't cause any jank here (unlike
-  // v2.29.0's since-reverted early SCENE mount — see git history/CHANGELOG:
-  // that started the actual Babylon decode this early too, which is
-  // synchronous, main-thread-blocking work that froze clicks on this very
-  // screen for the several seconds it ran — exactly what this comment used
-  // to promise wouldn't happen. Fetching bytes has no such cost; only
-  // DECODING them does, and that now waits for login like it always did
-  // before v2.29.0, so this screen stays genuinely, always clickable). Under
-  // HA Ingress this succeeds immediately (Ingress-sourced requests are
+  // DOM/scene/decode work, so it genuinely can't cause any jank on its own.
+  // Under HA Ingress this succeeds immediately (Ingress-sourced requests are
   // auto-trusted) and gives the model a real head start on the download
   // before any profile is even picked. On the direct/Cloudflare-gated
   // deployment /model/ requires a session cookie that doesn't exist yet, so
@@ -50,6 +44,37 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   // exact same URL here would just race it. See utils/modelPrefetch.ts.
   useEffect(() => {
     if (!role || switching) startModelPrefetch();
+  }, [role, switching]);
+
+  // Flips true once startModelPrefetch above has CONFIRMED /model/ is
+  // reachable right now — at that point it's safe to mount `children` (the
+  // real Babylon scene) BEFORE login, so the multi-second Draco-decode +
+  // mesh-indexing pass also runs while the user is still on this screen.
+  //
+  // THIS IS AN INFORMED, EXPLICIT TRADE-OFF, not a "solved" problem: that
+  // decode is largely synchronous, main-thread-blocking work. v2.29.0 did
+  // this and froze clicks on this screen for the whole decode; v2.30.1
+  // reverted it for exactly that reason. v2.30.2 restores it at the user's
+  // explicit request after being told the only way to make pre-login decode
+  // GENUINELY non-blocking is moving the whole Babylon layer into a Web
+  // Worker via OffscreenCanvas — a large separate rewrite, not attempted
+  // here. What v2.30.2 actually ships instead: SceneManager.loadModel now
+  // yields the main thread between its major top-level steps (see its own
+  // comments), which shrinks the longest uninterrupted freeze but does NOT
+  // eliminate it — expect this screen to still stutter/pause during a
+  // preload, just for less time and less continuously than before.
+  //
+  // EXCLUDES iOS entirely, for an unrelated reason: iOS Safari/WebView has a
+  // known, real per-tab memory ceiling that a heavy villa's Draco decode +
+  // GPU upload can exceed (see diagnostics.ts's crash-loop guard). Loading
+  // early there would retrigger that crash automatically on every reload,
+  // before the user even reaches the PIN screen. iOS always loads only
+  // after login, regardless of this trade-off.
+  const [modelPreloadable, setModelPreloadable] = useState(false);
+  useEffect(() => {
+    if (role && !switching) return; // already rendering children unconditionally below
+    if (isIOS()) return;
+    return onPrefetchAvailable(() => setModelPreloadable(true));
   }, [role, switching]);
 
   // Which profiles are gated — fetched once per visit to the select screen.
@@ -75,17 +100,18 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   // beginSwitch docstring for why: unmounting `children` here would force a
   // full GLB re-fetch + re-parse just to show a PIN pad. `.auth-screen` is a
   // fixed, opaque full-viewport layer (styles.css), so it fully covers the
-  // scene beneath exactly like any other modal.
-  //
-  // v2.29.0 briefly also mounted `children` early on a FIRST (not-yet-
-  // logged-in) visit, to start the Babylon decode before login — reverted in
-  // v2.30.1: that decode is synchronous, main-thread-blocking work (several
-  // seconds), and mounting it here froze clicks on THIS very screen for that
-  // whole time. `children`/BabylonCanvas now only ever mounts after a real
-  // session exists (login, or an in-progress switch), so this screen stays
-  // reliably interactive. See utils/modelPrefetch.ts for what's still safe
-  // to start early (byte-level fetch only, never decode/scene work).
+  // scene beneath exactly like any other modal. The SAME reasoning now also
+  // applies to a first-ever (not-yet-logged-in) visit once modelPreloadable
+  // is true — see that state's own comment for the trade-off this involves.
+  // sceneConfig (BabylonCanvas) stays unfiltered while `role` is still null
+  // and reactively re-filters the instant login sets it, so nothing
+  // role-restricted is ever exposed by loading early; the opaque overlay
+  // below means none of it is visible before login regardless.
   const isSwitch = !!role && switching;
+  // Distinct from isSwitch: only isSwitch means there's a session to fall
+  // back to (drives the Cancel button below) — modelPreloadable alone (a
+  // first-ever, not-yet-logged-in visit) has nothing to cancel back to.
+  const showChildrenEarly = isSwitch || modelPreloadable;
 
   const choose = (r: Role) => {
     setGateError(null);
@@ -113,7 +139,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   if (pending) {
     return (
       <>
-        {isSwitch && children}
+        {showChildrenEarly && children}
         <div className="auth-screen">
           {isIngress() && (
             <button className="auth-exit-btn" onClick={exitToHomeAssistant} aria-label="Exit to Home Assistant">
@@ -139,7 +165,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {isSwitch && children}
+      {showChildrenEarly && children}
       <div className="auth-screen">
         {isIngress() && (
           <button className="auth-exit-btn" onClick={exitToHomeAssistant} aria-label="Exit to Home Assistant">
