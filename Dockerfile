@@ -2,6 +2,13 @@
 # nginx on the HA base image (s6-overlay v3 supervises nginx; Ingress fronts it).
 # CI passes the per-arch base via BUILD_FROM; the default keeps a plain
 # `docker build` working for local testing.
+#
+# Both this default and node:24-alpine below are floating tags, not pinned
+# digests — a deliberate choice, not an oversight: it means every build picks
+# up HA's/Node's current security patches automatically, at the cost of
+# builds not being byte-for-byte reproducible (a `latest` update could
+# silently change what ships). Revisit only if that trade-off stops being
+# the right one for this project.
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest
 
 # ---- build the static SPA -------------------------------------------------

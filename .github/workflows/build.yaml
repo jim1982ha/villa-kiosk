@@ -70,6 +70,9 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           provenance: false
+          # Floating tag, not a pinned digest — deliberate, see Dockerfile's
+          # BUILD_FROM comment: automatic HA base-image security patches over
+          # byte-for-byte reproducible builds.
           build-args: |
             BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base:latest
           tags: |
