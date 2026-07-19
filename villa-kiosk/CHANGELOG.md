@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.26.2
+
+- **Real-sun fallback effect no longer re-runs on every entity in the house.**
+  It depended on the whole `entities` map, which gets a new object reference
+  on every single `state_changed` event anywhere in HA (see HAStateStore's
+  setEntities) — so an effect meant to check `sun.sun` once and otherwise
+  refresh hourly was actually tearing down and recreating its interval on
+  every unrelated sensor update. Now depends on `entities["sun.sun"]`
+  specifically. Found while investigating a reported >1GB, still-growing tab
+  memory footprint — a real inefficiency, not confirmed as the full
+  explanation; investigation continues.
+
 ## 2.26.1
 
 - **`.dockerignore`: exclude `sources/`** — the model-pipeline working

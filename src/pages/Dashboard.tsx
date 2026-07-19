@@ -84,9 +84,14 @@ export default function Dashboard() {
   }, [haConfig]);
 
   // Real-sun fallback: if HA has no sun.sun entity, refresh lighting hourly.
+  // Depend on sun.sun SPECIFICALLY, not the whole `entities` map — `entities`
+  // gets a new reference on every single state_changed event for ANY entity
+  // in the house (see HAStateStore's setEntities), so depending on it here
+  // re-ran this effect (and tore down/recreated the interval) on every
+  // unrelated sensor update instead of only when sun.sun itself changes.
+  const haSun = entities["sun.sun"];
   useEffect(() => {
     if (!manager) return;
-    const haSun = entities["sun.sun"];
     if (haSun) {
       manager.sun.applyHaSunState(haSun.state);
       return;
@@ -94,7 +99,7 @@ export default function Dashboard() {
     manager.sun.applyRealSun();
     const t = setInterval(() => manager.sun.applyRealSun(), 1000 * 60 * 15);
     return () => clearInterval(t);
-  }, [manager, entities]);
+  }, [manager, haSun]);
 
   const onEntityPicked = useCallback(
     (entityId: string) => {
