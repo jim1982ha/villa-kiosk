@@ -27,11 +27,11 @@ export default function Dashboard() {
   const { config, update } = useConfig();
   const { role } = useProfile();
   const { connect, entities, ws, haConfig } = useHA();
-  // ProfileGate no longer guarantees a signed-in role before this page mounts
-  // (v2.29.0's early scene preload can mount it pre-login — see
-  // ProfileGate's modelPreloadable) — `role` is genuinely null until then,
-  // so every capability check below must (and does) treat that as "nothing
-  // allowed," same as an unrecognised role would.
+  // ProfileGate guarantees a signed-in role before this page mounts (v2.29.0
+  // briefly mounted it pre-login for an early scene preload; reverted in
+  // v2.30.1 — that decode is main-thread-blocking work and running it before
+  // login froze the profile-select/PIN screen). `role != null` is defensive
+  // only against a direct render in tests, not a real runtime state here.
   const canControl = role != null && hasCapability(role, "controlEntities");
   const canOpenSettings = role != null && hasCapability(role, "openSettings");
   const canEditConfig = role != null && hasCapability(role, "editConfig");

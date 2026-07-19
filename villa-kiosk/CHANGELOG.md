@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.30.1
+
+- **Reverted v2.29.0's early scene preload — it was freezing clicks on the
+  profile-select/PIN screen**, the exact thing it was explicitly required
+  not to do. Root cause: starting the model DOWNLOAD early (v2.28.0) is
+  genuinely free — a plain background `fetch()` costs nothing while in
+  flight. But v2.29.0 went further and started the actual Babylon scene
+  DECODE early too (Draco decompression, GPU upload, this app's own
+  mesh-indexing pass — the same 4.5-6.4 SECONDS measured in the v2.28.0/
+  v2.29.0 investigation). That decode is synchronous, main-thread-blocking
+  JavaScript — moving it earlier didn't make it non-blocking, it just moved
+  *when* the freeze happened, from the (non-interactive) "Loading the
+  villa" spinner to the (interactive) profile-select/PIN screen, freezing
+  every click there for the full duration.
+  - `src/components/auth/ProfileGate.tsx`: `children` (the real Babylon
+    scene) once again only mounts after a real session exists (login, or an
+    in-progress profile switch) — never before, on any platform. The
+    byte-level prefetch (`src/utils/modelPrefetch.ts`, v2.28.0) is
+    unchanged and still starts at the profile-select screen — it has no
+    blocking cost, unlike scene/decode work.
+  - `src/pages/Dashboard.tsx`: comment corrected back to reflect that
+    `role` is genuinely always set when this page mounts again.
+  - The `public_model_access` add-on option (v2.29.0) and its byte-level
+    early-fetch benefit under the gated deployment are UNCHANGED and still
+    work — only their bigger justification (early full-scene decode) no
+    longer applies, so the option is now a much smaller optimization than
+    originally advertised (saves a fetch that was already only 58-183ms).
+    Left enabled as-is since it's still opt-in, still narrow, and still a
+    real (if modest) win — worth reconsidering only if you'd rather not
+    carry that trade-off for the smaller remaining benefit.
+
 ## 2.30.0
 
 - **Fixed "can't get back to Home Assistant" on iPhone**, reported alongside

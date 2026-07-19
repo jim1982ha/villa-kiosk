@@ -10,8 +10,7 @@ import { resolveSiteTitle } from "@/config/AppConfig";
 import { useProfile } from "@/auth/ProfileContext";
 import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/roles";
 import { pinRequired as fetchPinRequired, verify, openSession } from "@/auth/PinVerifier";
-import { startModelPrefetch, onPrefetchAvailable } from "@/utils/modelPrefetch";
-import { isIOS } from "@/utils/diagnostics";
+import { startModelPrefetch } from "@/utils/modelPrefetch";
 import { isIngress, exitToHomeAssistant } from "@/ha/ingress";
 import PinPad from "./PinPad";
 
@@ -28,47 +27,29 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   const [pinRequired, setPinRequired] = useState<Record<Role, boolean> | null>(null);
   const [gateError, setGateError] = useState<string | null>(null);
 
-  // Kick off the (large) central GLB's background download as early as
+  // Kick off the (large) central GLB's background BYTE download as early as
   // possible, right when the gate screen first appears — a plain fetch(), no
-  // DOM/scene work, so it can't cause any jank here. Under HA Ingress this
-  // succeeds immediately (Ingress-sourced requests are auto-trusted) and
-  // gives the model a real head start before any profile is even picked. On
-  // the direct/Cloudflare-gated deployment /model/ requires a session cookie
-  // that doesn't exist yet, so this attempt fails harmlessly and retries
-  // right when a profile is actually authorized (see choose() and the PinPad
-  // onAccepted below) — the earliest that deployment can legally start it.
-  // Skipped when already signed in (a returning session, `role` restored
-  // from sessionStorage) — `children` mounts immediately below and
-  // BabylonCanvas's own load effect already covers that case; starting a
-  // second, redundant fetch of the exact same URL here would just race it.
-  // See utils/modelPrefetch.ts.
+  // DOM/scene/decode work, so it genuinely can't cause any jank here (unlike
+  // v2.29.0's since-reverted early SCENE mount — see git history/CHANGELOG:
+  // that started the actual Babylon decode this early too, which is
+  // synchronous, main-thread-blocking work that froze clicks on this very
+  // screen for the several seconds it ran — exactly what this comment used
+  // to promise wouldn't happen. Fetching bytes has no such cost; only
+  // DECODING them does, and that now waits for login like it always did
+  // before v2.29.0, so this screen stays genuinely, always clickable). Under
+  // HA Ingress this succeeds immediately (Ingress-sourced requests are
+  // auto-trusted) and gives the model a real head start on the download
+  // before any profile is even picked. On the direct/Cloudflare-gated
+  // deployment /model/ requires a session cookie that doesn't exist yet, so
+  // this attempt fails harmlessly and retries right when a profile is
+  // actually authorized (see choose() and the PinPad onAccepted below) — the
+  // earliest that deployment can legally start it. Skipped when already
+  // signed in (a returning session, `role` restored from sessionStorage) —
+  // `children` mounts immediately below and BabylonCanvas's own load effect
+  // already covers that case; starting a second, redundant fetch of the
+  // exact same URL here would just race it. See utils/modelPrefetch.ts.
   useEffect(() => {
     if (!role || switching) startModelPrefetch();
-  }, [role, switching]);
-
-  // Flips true once startModelPrefetch above has CONFIRMED /model/ is
-  // reachable right now (Ingress, or public_model_access on) — at that point
-  // it's safe to mount `children` (the real Babylon scene) BEFORE login, so
-  // the multi-second Draco-decode + mesh-indexing pass also runs while the
-  // user is still on this screen, not just the network fetch. Stays false
-  // (children mount only after login, today's behaviour) whenever /model/
-  // needs a session that doesn't exist yet — see modelPrefetch.ts.
-  //
-  // EXCLUDES iOS entirely. iOS Safari/WebView has a known, real per-tab
-  // memory ceiling that a heavy villa's Draco decode + GPU upload can exceed
-  // — see diagnostics.ts's crash-loop guard, built for exactly this. Before
-  // this early-preload feature, that crash only happened after a deliberate
-  // login; mounting the scene here would instead trigger it the instant the
-  // profile-select screen appears, with no user action at all, and (worse)
-  // have it retry automatically on every reload before the user ever reaches
-  // the PIN screen. iOS keeps the pre-2.29.0 behaviour: load only after
-  // login, so a crash-prone villa fails the same way it always did, not
-  // sooner or more aggressively.
-  const [modelPreloadable, setModelPreloadable] = useState(false);
-  useEffect(() => {
-    if (role && !switching) return; // already rendering children unconditionally below
-    if (isIOS()) return;
-    return onPrefetchAvailable(() => setModelPreloadable(true));
   }, [role, switching]);
 
   // Which profiles are gated — fetched once per visit to the select screen.
@@ -94,20 +75,17 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   // beginSwitch docstring for why: unmounting `children` here would force a
   // full GLB re-fetch + re-parse just to show a PIN pad. `.auth-screen` is a
   // fixed, opaque full-viewport layer (styles.css), so it fully covers the
-  // scene beneath exactly like any other modal. The SAME reasoning now also
-  // applies to a first-ever (not-yet-logged-in) visit once modelPreloadable
-  // is true: mount `children` early so BabylonCanvas starts decoding the
-  // villa right away — sceneConfig (see BabylonCanvas) is unfiltered while
-  // `role` is still null and reactively re-filters the instant login sets
-  // it, so nothing role-restricted is ever exposed by loading early; the
-  // opaque overlay below means none of this is even visible until login
-  // anyway. `role != null` guards throughout Dashboard/BabylonCanvas already
-  // treat "no role yet" as "nothing interactive," same as this screen itself.
+  // scene beneath exactly like any other modal.
+  //
+  // v2.29.0 briefly also mounted `children` early on a FIRST (not-yet-
+  // logged-in) visit, to start the Babylon decode before login — reverted in
+  // v2.30.1: that decode is synchronous, main-thread-blocking work (several
+  // seconds), and mounting it here froze clicks on THIS very screen for that
+  // whole time. `children`/BabylonCanvas now only ever mounts after a real
+  // session exists (login, or an in-progress switch), so this screen stays
+  // reliably interactive. See utils/modelPrefetch.ts for what's still safe
+  // to start early (byte-level fetch only, never decode/scene work).
   const isSwitch = !!role && switching;
-  // Distinct from isSwitch: only isSwitch means there's a session to fall
-  // back to (drives the Cancel button below) — modelPreloadable alone (a
-  // first-ever, not-yet-logged-in visit) has nothing to cancel back to.
-  const showChildrenEarly = isSwitch || modelPreloadable;
 
   const choose = (r: Role) => {
     setGateError(null);
@@ -135,7 +113,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   if (pending) {
     return (
       <>
-        {showChildrenEarly && children}
+        {isSwitch && children}
         <div className="auth-screen">
           {isIngress() && (
             <button className="auth-exit-btn" onClick={exitToHomeAssistant} aria-label="Exit to Home Assistant">
@@ -161,7 +139,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {showChildrenEarly && children}
+      {isSwitch && children}
       <div className="auth-screen">
         {isIngress() && (
           <button className="auth-exit-btn" onClick={exitToHomeAssistant} aria-label="Exit to Home Assistant">
