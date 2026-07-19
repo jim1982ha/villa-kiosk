@@ -15,6 +15,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { fetchHistory, fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
+import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
 import { binarySensorColor, paletteColorFor } from "@/utils/stateColors";
 
 const LEVEL_COLOR: Record<AlertLevel, string> = {
@@ -77,7 +78,16 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   }, [mapping.entityId, isBinary, isEnum]);
 
   const BinaryIcon = classInfo.icon;
-  const icon = isBinary ? <BinaryIcon size={22} /> : <Activity size={22} />;
+  // Same resolution the 3D badge uses (babylon/badgeIconKeys.ts) — device_class,
+  // falling back to unit_of_measurement for sensors that don't report one — so
+  // the panel that opens from tapping a badge never shows a different glyph
+  // than the badge itself. Activity is the generic fallback either couldn't
+  // resolve (matches the badge's own TYPE_ICON_KEY.sensor default territory).
+  const sensorClass = !isBinary
+    ? effectiveSensorClass(entity?.attributes.device_class as string | undefined, unit)
+    : undefined;
+  const SensorIcon = (sensorClass && SENSOR_CLASS_ICON[sensorClass]) || Activity;
+  const icon = isBinary ? <BinaryIcon size={22} /> : <SensorIcon size={22} />;
   const enumPalette = isEnum ? paletteColorFor(stateHistory.map((p) => p.state)) : undefined;
   const enumDistinctStates = isEnum ? [...new Set(stateHistory.map((p) => p.state))] : [];
 

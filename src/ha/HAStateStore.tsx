@@ -22,6 +22,23 @@ export interface HAConfig {
 
 interface HAStateContextType {
   entities: Record<string, HassEntity>;
+  /**
+   * Imperative, ALWAYS-current read of `entities` — for the rare caller that
+   * needs the latest snapshot at some later moment rather than reacting to
+   * every change. `entities` itself is fine for normal rendering, but a
+   * one-shot effect with an empty (or otherwise stable) dependency array
+   * closes over whatever `entities` WAS at the render that effect was created
+   * from — typically `{}`, since the initial HA hydrate is an async
+   * round-trip that hasn't resolved yet at mount. That's exactly the bug this
+   * fixed: BabylonCanvas's "paint the villa with whatever's already known"
+   * step ran once, using a permanently-empty entities snapshot, so every
+   * badge/mesh sat at its default visual until HA happened to send THAT
+   * specific entity's next live state_changed event — invisible for a
+   * frequently-updating entity, but leaving a slow-to-report one (a BLE
+   * weather station reporting every 10–20 min, say) showing stale/default
+   * state — including its icon — for a long time after the villa loaded.
+   */
+  getEntitiesSnapshot: () => Record<string, HassEntity>;
   connection: ConnectionState;
   connected: boolean;
   /** HA instance config (location + name), fetched on connect. Null until then. */
@@ -52,7 +69,18 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   if (!wsRef.current) wsRef.current = new HAWebSocket();
   const ws = wsRef.current;
 
-  const [entities, setEntities] = useState<Record<string, HassEntity>>({});
+  const [entities, setEntitiesState] = useState<Record<string, HassEntity>>({});
+  // Mirrors `entities` synchronously (no extra render/effect lag) so
+  // getEntitiesSnapshot() below is never stale — see its docstring.
+  const entitiesRef = useRef<Record<string, HassEntity>>({});
+  const setEntities = useCallback((next: Record<string, HassEntity> | ((prev: Record<string, HassEntity>) => Record<string, HassEntity>)) => {
+    setEntitiesState((prev) => {
+      const value = typeof next === "function" ? next(prev) : next;
+      entitiesRef.current = value;
+      return value;
+    });
+  }, []);
+  const getEntitiesSnapshot = useCallback(() => entitiesRef.current, []);
   const [connection, setConnection] = useState<ConnectionState>("disconnected");
   const [haConfig, setHaConfig] = useState<HAConfig | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -147,6 +175,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const value = useMemo<HAStateContextType>(
     () => ({
       entities,
+      getEntitiesSnapshot,
       connection,
       connected: connection === "connected",
       haConfig,
@@ -158,7 +187,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       lastError,
       serviceError,
     }),
-    [entities, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
+    [entities, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
   );
 
   return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;

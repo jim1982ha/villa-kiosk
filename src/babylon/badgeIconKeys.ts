@@ -3,10 +3,15 @@
 // badgeIcons.ts for the rest of the design: fixed category background,
 // thick white line art, no per-user customisation). binary_sensor keys
 // mirror config/BinarySensorClasses.ts's own icon choices (used for the
-// device panel) so a device_class reads the same glyph in both places.
+// device panel) so a device_class reads the same glyph in both places. Plain
+// sensor keys mirror config/SensorClasses.ts's SENSOR_CLASS_ICON the same way
+// — both resolve through that module's effectiveSensorClass() first, so a
+// sensor with no device_class (inferred from its unit instead) still agrees
+// between its 3D badge and its panel.
 
 import type { EntityType } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
+import { effectiveSensorClass } from "@/config/SensorClasses";
 
 /** One glyph per entity TYPE — the fallback for binary_sensor/sensor when no
  *  (or an unrecognised) device_class is reported. */
@@ -85,8 +90,10 @@ export function iconKeyFor(type: EntityType, entity?: HassEntity): string {
     const key = BINARY_SENSOR_ICON_KEY[dc];
     if (key) return key;
   }
-  if (type === "sensor" && dc) {
-    const key = SENSOR_ICON_KEY[dc];
+  if (type === "sensor") {
+    const unit = entity?.attributes?.unit_of_measurement as string | undefined;
+    const effectiveClass = effectiveSensorClass(dc, unit);
+    const key = effectiveClass ? SENSOR_ICON_KEY[effectiveClass] : undefined;
     if (key) return key;
   }
   return TYPE_ICON_KEY[type] ?? "gauge";

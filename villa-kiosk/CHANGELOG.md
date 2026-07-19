@@ -1,5 +1,39 @@
 # Changelog
 
+## 2.26.3
+
+- **Fixed the real cause of a badge (and its icon) showing stale/default
+  state after a fresh load.** BabylonCanvas's "paint the villa with whatever
+  HA state is already known" step ran once, right after the model finished
+  loading — but it read `entities` from a React effect with an empty (or
+  otherwise narrow) dependency array, so it was permanently closed over
+  whatever `entities` WAS at that effect's creation — almost always still
+  `{}`, since HA's initial hydrate is an async round-trip that hasn't
+  resolved yet at that point. Every badge/mesh therefore only ever got its
+  first correct paint whenever HA happened to send THAT specific entity's
+  next live `state_changed` event: instant for a frequently-updating entity,
+  but left a slow-to-report one (e.g. a sensor that only updates every
+  10–20 minutes) showing default/wrong visuals — including a generic icon
+  instead of its real one — for a long time after the villa loaded. Root-
+  caused with the user's own Home Assistant entity data (both compared
+  sensors reported identical `device_class`/`unit_of_measurement`, ruling
+  out an earlier device_class-based theory). Fixed by giving `useHA()` an
+  imperative `getEntitiesSnapshot()` that's always current (backed by a ref
+  kept in sync alongside the reactive `entities` state), and using it at
+  both of BabylonCanvas's replay-all-known-entities call sites instead of
+  the closed-over value. Scanned every other `entities` consumer in the app;
+  this pattern was isolated to these two Babylon/React imperative-boundary
+  call sites, nowhere else.
+- **Sensor icon fallback for entities with no `device_class`** (a separate,
+  smaller hardening — NOT the cause of the bug above, whose two sensors both
+  had `device_class` set correctly): a plain `sensor` entity that omits
+  `device_class` (some template/BLE/MQTT-bridged integrations do) now infers
+  one from `unit_of_measurement` where that's unambiguous (°C/°F →
+  temperature, W/kW → power, etc.) instead of always falling back to a
+  generic gauge icon. The device panel's header icon for a plain sensor now
+  resolves the same way (previously hardcoded to a generic icon regardless
+  of type), so the badge and the panel it opens always agree.
+
 ## 2.26.2
 
 - **Real-sun fallback effect no longer re-runs on every entity in the house.**

@@ -66,7 +66,7 @@ export default function BabylonCanvas({
   const managerRef = useRef<SceneManager | null>(null);
   const { config, update } = useConfig();
   const { role } = useProfile();
-  const { subscribeAll, entities } = useHA();
+  const { subscribeAll, getEntitiesSnapshot } = useHA();
   // What the SCENE is allowed to show for the active profile: role-denied
   // categories folded into the hidden set, denied entities stripped from the
   // entity map. The stored config stays complete (auto-detect below still
@@ -259,8 +259,13 @@ export default function BabylonCanvas({
             update({ entityMap: { ...current.entityMap, ...additions } });
           }
         }
-        // Paint the current entity states immediately (meshes + markers).
-        Object.values(entities).forEach((e) => manager.applyEntityState(e));
+        // Paint the current entity states immediately (meshes + markers). Read
+        // a live snapshot, NOT the `entities` destructured above — this effect
+        // has an empty dependency array (a one-shot "create the scene" run),
+        // so `entities` would be frozen at whatever it was at MOUNT (almost
+        // always still {}, since HA's initial hydrate is an async round-trip
+        // that hasn't resolved yet) — see getEntitiesSnapshot's docstring.
+        Object.values(getEntitiesSnapshot()).forEach((e) => manager.applyEntityState(e));
 
         // Sync central room names + calibration from the compact
         // "<model>.rooms.json" sidecar (the Blender pipeline emits it next to
@@ -370,7 +375,11 @@ export default function BabylonCanvas({
     const structuralChanged = m.updateConfig(sceneConfig);
     if (structuralChanged || !repaintedOnceRef.current) {
       repaintedOnceRef.current = true;
-      Object.values(entities).forEach((e) => m.applyEntityState(e));
+      // Live snapshot, not a closed-over `entities` — see getEntitiesSnapshot's
+      // docstring; this effect's dep array ([sceneConfig]) doesn't include
+      // `entities`, so the instance React actually runs can be one whose
+      // closure captured a stale (often still-empty) entities value.
+      Object.values(getEntitiesSnapshot()).forEach((e) => m.applyEntityState(e));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneConfig]);
