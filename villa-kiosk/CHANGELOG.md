@@ -1,5 +1,45 @@
 # Changelog
 
+## 2.31.0
+
+- **iPhone render quality restored to the same tier as Android/desktop** —
+  MSAA on, up-to-2×-CSS supersampled rendering. iPhone's old
+  maximum-aggression tier (no antialiasing, rendering BELOW CSS resolution)
+  existed to dodge its per-tab WebGL memory ceiling, and its single-sample
+  minification of high-frequency tile textures was also the source of the
+  reported rainbow speckle noise around lit floors (clean on Android,
+  speckled on iPhone, same GLB). The pipeline's v2.9.0 micro-UV collapse
+  halved the decoded model (~321MB → ~170MB measured), which is what paid
+  for this: field-confirmed the fixed GLB now loads on the previously
+  crash-looping iPhone. iOS keeps the "default" power preference and the
+  SSAO/IBL trim as insurance, and the crash-loop guard remains.
+- **"Light effect strength" (Settings) now works on non-baked villas too**:
+  it scales the real dynamic PointLight a lit fixture casts, not only the
+  baked-mode floor pools — it was a silent no-op on a non-baked GLB before.
+  Live slider drag previews on dynamic lights as well (new
+  `resyncDynamicLightIntensities`). The per-light Intensity slider
+  (Advanced Settings) already reached dynamic lights and is unchanged.
+- **New "Invert day/night" toggle** in Settings, on the Brightness row
+  (right side), shown only when the loaded villa uses baked lighting:
+  forces the opposite of the automatic sun-driven look (preview the night
+  render at noon, or lift the villa back to daylight after dark). Honoured
+  in both sun-position and HA `sun.sun` driven modes; quality presets don't
+  reset it; persists with Save like the other render settings.
+- **Advanced Settings no longer scrolls horizontally on phones**: the (i)
+  model-details tooltip's anchored popover could overflow the modal's right
+  edge on narrow screens, dragging a horizontal scrollbar in with it. The
+  settings body now clamps horizontal overflow, and on phones the popover
+  is pinned to the viewport (full width minus margins, vertically centred)
+  so tapping the (i) always shows the whole card on screen.
+- **(Model pipeline, not in this repo — v2.9.1)** Fixed a v2.9.0 refactor
+  bug that silently disabled the upper-storey vegetation veto (a NameError
+  in `_parse_all_furniture` was swallowed as "level veto skipped"), which
+  let 2F roof-planter hedges chain through palm bounding-boxes into the
+  always-visible `Structure_Exterior` group — the "bushes on the 1F view"
+  report on the freshly-baked GLB. Re-run the pipeline (now prints v2.9.1)
+  and re-upload to fix; the 1024 bake's vertex/memory wins are confirmed
+  (47.1MB → 17.94MB, 5.61M → 2.67M verts).
+
 ## 2.30.3
 
 - **iPad no longer renders blurry/pixelated.** iPad was lumped into the same

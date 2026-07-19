@@ -371,15 +371,48 @@ export class EntityVisuals {
    *  live-drag-preview pattern for the other render sliders (see
    *  SceneManager.setRenderConfig), except this reaches a value EntityVisuals
    *  owns rather than RenderEnhancements/SunController, so it's wired here
-   *  directly instead of through the render pipeline. Re-applies to every
-   *  currently-on pool immediately (using each entity's last known state) so
-   *  dragging the slider previews live on any light that's already on. */
+   *  directly instead of through the render pipeline. Re-applies immediately
+   *  (using each entity's last known state) to every currently-on light —
+   *  BOTH kinds: baked-mode decal pools AND the real PointLights a non-baked
+   *  GLB illuminates its rooms with (the slider used to only reach the
+   *  pools, making it a silent no-op on a non-baked model) — so dragging
+   *  the slider previews live on any light that's already on. */
   setLightPoolIntensity(value: number): void {
     if (value === this.lightPoolStrength) return;
     this.lightPoolStrength = value;
     this.forEachLightPoolState((pool, on, colour, brightnessFrac) =>
       pool.setState(on, colour, brightnessFrac * this.lightPoolStrength));
+    this.resyncDynamicLightIntensities();
     this.requestRender();
+  }
+
+  /** Re-derive every dynamic PointLight's intensity from its entity's last
+   *  known state — the non-baked counterpart of forEachLightPoolState's pool
+   *  resync, for when a GLOBAL factor (lightPoolStrength) changes without
+   *  any entity state change. Mirrors applyToMesh's light branch exactly
+   *  (same effectiveFrac/lightShare formula) so a slider drag and the next
+   *  real state_changed event land on identical values. */
+  private resyncDynamicLightIntensities(): void {
+    if (this.meshLights.size === 0) return; // baked mode: no dynamic lights
+    for (const [entityId, map] of this.mapping) {
+      if (map.type !== "light") continue;
+      const state = this.lastState.get(entityId);
+      const meshes = this.byEntity.get(entityId);
+      if (!state || !meshes) continue;
+      const on = state.state === "on";
+      const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
+      const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
+      const lightShare =
+        new Set(meshes.map((m) => this.meshLights.get(m.uniqueId)).filter(Boolean)).size || 1;
+      for (const mesh of meshes) {
+        const light = this.meshLights.get(mesh.uniqueId);
+        if (light) {
+          light.intensity = on
+            ? (MAX_LIGHT_INTENSITY * effectiveFrac * this.lightPoolStrength) / lightShare
+            : 0;
+        }
+      }
+    }
   }
 
   /** Every light entity's pool, resolved to its floor-and-state-correct on/off
@@ -1656,7 +1689,13 @@ export class EntityVisuals {
         const light = this.meshLights.get(mesh.uniqueId);
         if (light) {
           light.diffuse = colour;
-          light.intensity = on ? (MAX_LIGHT_INTENSITY * effectiveFrac) / lightShare : 0;
+          // lightPoolStrength (Settings' global "Light effect strength")
+          // scales the DYNAMIC light too, not just baked-mode pools — before
+          // this, the slider was a silent no-op on a non-baked GLB, where
+          // room illumination comes from these real PointLights.
+          light.intensity = on
+            ? (MAX_LIGHT_INTENSITY * effectiveFrac * this.lightPoolStrength) / lightShare
+            : 0;
           // Drop the light out of (or back into) shaders entirely with its state,
           // so only lights that are actually on add per-pixel cost.
           light.setEnabled(on);

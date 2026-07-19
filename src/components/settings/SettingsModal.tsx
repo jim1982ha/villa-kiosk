@@ -167,7 +167,27 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           </p>
         )}
 
-        <label style={{ marginTop: 14 }}>Brightness · {render.exposure.toFixed(2)}×</label>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 14 }}>
+          <label style={{ margin: 0 }}>Brightness · {render.exposure.toFixed(2)}×</label>
+          {/* Baked villas only: their day/night is a dramatic pre-rendered
+              atlas crossfade driven by the real sun — this forces the
+              OPPOSITE look on demand (preview the night render at noon, or
+              lift a villa back to daylight after dark). Live-applies through
+              the same render path as the sliders (manager.setRenderConfig →
+              SunController), so it previews instantly and persists with Save
+              like everything else here. Hidden for non-baked villas, whose
+              day/night is just a lighting dim — not worth a dedicated toggle. */}
+          {(manager?.renderFx.isBaked() ?? false) && (
+            <label className="toggle" style={{ margin: 0, fontSize: 13, whiteSpace: "nowrap" }}>
+              <input
+                type="checkbox"
+                checked={!!render.dayNightInvert}
+                onChange={(e) => applyRender({ dayNightInvert: e.target.checked })}
+              />
+              <span>Invert day/night</span>
+            </label>
+          )}
+        </div>
         <input
           type="range" min={0.6} max={2} step={0.05} value={render.exposure}
           onChange={(e) => applyRender({ exposure: Number(e.target.value) })}

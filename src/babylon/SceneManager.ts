@@ -94,50 +94,36 @@ export class SceneManager {
     this.config = opts.config;
 
     // iOS Safari / the HA companion app's WKWebView enforces a hard, low ceiling
-    // on total WebGL memory (framebuffers + render targets + geometry). The
-    // villa's decoded geometry is already tens of MB; on top of that a DPR-3
-    // iPhone rendered here at 2× supersampling (hardwareScaling 0.5) with 4×
-    // MSAA and every post-process render target, which overran that ceiling —
-    // iOS then kills the web content and the app reloads the page, looping
-    // forever on the "Loading the villa" spinner (reported: fine on desktop +
-    // Android, crash-loops only on iPhone; smaller BAKE sizes don't help
-    // because bake size only shrinks the light atlas, not the geometry or the
-    // framebuffer). So on iPHONE: no MSAA, default power preference (high-
-    // performance can make WKWebView refuse or drop the context), and render at
-    // ~device-native resolution instead of 2× — a big cut in GPU memory that
-    // keeps it under the ceiling.
-    //
-    // iPad is deliberately a MIDDLE tier, not lumped in with iPhone anymore:
-    // treating the two identically made the same GLB render visibly blurry/
-    // aliased on an iPad next to a crisp MacBook (reported with side-by-side
-    // screenshots) — an iPad has several times an iPhone's per-tab headroom
-    // and never exhibited the crash-loop, so it keeps MSAA antialiasing and
-    // renders at true native resolution (hardwareScaling 1/DPR — no
-    // supersampling above native, which is where desktop's extra memory
-    // goes). deviceRenderConfig() still strips SSAO/IBL on ALL iOS,
-    // including iPad, as cheap insurance. On modern iPadOS the UA says
-    // "MacIntel" (desktop-class browsing) — the maxTouchPoints check is what
-    // actually catches those.
+    // on total WebGL memory (framebuffers + render targets + geometry). A
+    // DPR-3 iPhone rendered at 2× supersampling with 4× MSAA + every
+    // post-process target used to overrun that ceiling and crash-loop — but
+    // the dominant term was always the DECODED MODEL, and the pipeline's
+    // v2.9.0 micro-UV collapse halved it (~321MB → ~170MB measured on the
+    // real villa). With that headroom back, iPhone no longer needs the old
+    // maximum-aggression tier (no MSAA + rendering BELOW CSS resolution),
+    // whose single-sample minification of high-frequency tile textures also
+    // showed as rainbow speckle noise around lit floors — reported
+    // side-by-side vs a clean Android render of the same GLB. All devices
+    // now render at the same up-to-2×-CSS supersample with MSAA; what
+    // remains iOS-specific is the "default" power preference (WKWebView can
+    // refuse/drop a high-performance context) and deviceRenderConfig()'s
+    // SSAO/IBL strip — cheap insurance, and the crash-loop guard still
+    // catches a device that genuinely can't take it. On modern iPadOS the
+    // UA says "MacIntel" (desktop-class browsing) — the maxTouchPoints
+    // check is what actually catches those.
     const ua = navigator.userAgent;
-    const isIPhone = /iP(hone|od)/.test(ua);
-    const isIPad = !isIPhone && (/iPad/.test(ua)
-      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
-    const isIOS = isIPhone || isIPad;
+    const isIOS = /iP(hone|od|ad)/.test(ua)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     this.isIOS = isIOS;
-    this.engine = new Engine(canvas, !isIPhone, {
+    this.engine = new Engine(canvas, true, {
       preserveDrawingBuffer: false,
       stencil: true,
-      antialias: !isIPhone,
+      antialias: true,
       powerPreference: isIOS ? "default" : "high-performance",
     });
-    // iPhone: render at ≈CSS resolution or below (hardwareScaling ≥ 1) — a
-    // DPR-3 phone drops to ~0.67× CSS, ~1/9th the drawing-buffer memory of the
-    // non-iOS 2× supersample. iPad: exactly native (1/DPR — crisp, no
-    // supersampling). Elsewhere keep the up-to-2× supersampling.
-    this.engine.setHardwareScalingLevel(
-      isIPhone ? Math.max(1, window.devicePixelRatio / 2)
-        : isIPad ? 1 / window.devicePixelRatio
-          : 1 / Math.min(window.devicePixelRatio, 2));
+    // Up-to-2× supersampling everywhere (1× on DPR-1 desktops; a DPR≥2
+    // phone/tablet renders at 2× CSS — ~native on DPR 2, ⅔ native on DPR 3).
+    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 2));
 
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0.7, 0.85, 1.0, 1);

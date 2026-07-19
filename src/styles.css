@@ -625,7 +625,12 @@ input[type="range"]::-moz-range-thumb {
 .slider-pair > div { min-width: 0; }
 .slider-pair label { margin-top: 0; }
 @media (max-width: 560px) { .slider-pair { grid-template-columns: 1fr; } }
-.settings-body { flex: 1 1 auto; overflow-y: auto; padding: 8px 28px 12px; }
+/* overflow-x hidden: setting only overflow-y computes overflow-x to auto,
+   so any absolutely-positioned child poking past the right edge (the
+   .info-pop tooltip on a narrow phone) put a horizontal scrollbar on the
+   whole Advanced Settings body. Nothing in the body legitimately needs
+   horizontal scroll (wide tables card-stack on mobile already). */
+.settings-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 8px 28px 12px; }
 .settings-body label { display: block; font-size: 13px; color: var(--text-secondary); margin: 14px 0 6px; }
 .settings-body label.toggle { display: flex; align-items: center; gap: 12px; margin-top: 12px; cursor: pointer; font-size: 15px; color: var(--text-primary); }
 .settings-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; border-top: 1px solid var(--hairline); background: var(--bg-overlay); }
@@ -693,6 +698,22 @@ input[type="range"]::-moz-range-thumb {
 }
 .info-tip:hover .info-pop,
 .info-tip:focus-within .info-pop { opacity: 1; visibility: visible; transform: translateY(0); }
+/* Phones: anchored-absolute can't be guaranteed to fit — the button's offset
+   plus 78vw of popover overflowed the modal's right edge (horizontal-scroll
+   report). Pin it to the VIEWPORT instead, spanning the full width minus
+   margins and vertically centred, so a tap on the (i) always shows the whole
+   card on screen. Tap-to-open works via :focus-within (the button is
+   focusable); tapping anywhere else drops focus and closes it. */
+@media (max-width: 640px) {
+  .info-tip .info-pop {
+    position: fixed; left: 12px; right: 12px; width: auto;
+    top: 50%; transform: translateY(calc(-50% + 4px));
+    max-height: min(76vh, 560px);
+    overscroll-behavior: contain;
+  }
+  .info-tip:hover .info-pop,
+  .info-tip:focus-within .info-pop { transform: translateY(-50%); }
+}
 .info-pop .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
 .info-pop .row span:first-child { color: var(--text-dim); flex: 0 0 auto; }
 .info-pop .row span:last-child { color: var(--text-primary); word-break: break-all; text-align: right; }

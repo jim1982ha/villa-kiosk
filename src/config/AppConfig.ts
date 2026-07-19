@@ -65,12 +65,19 @@ export interface RenderConfig {
    *  enough that a lit fixture's own light clearly dominates the room, but
    *  never fully black (SunController floors it so rooms stay legible). */
   nightDimming: number;
-  /** Strength of the floor "light pool" a lit fixture casts in BAKED-lighting
-   *  villas (see babylon/LightPools.ts) — those villas' structure is exported
-   *  unlit, so a real dynamic light can never brighten the room; this is the
-   *  substitute. No effect in non-baked villas, which get a real PointLight
-   *  instead (see EntityVisuals.bakedMode). 1 = default. */
+  /** Strength of a lit fixture's room illumination, both flavours: the floor
+   *  "light pool" decal in BAKED-lighting villas (see babylon/LightPools.ts —
+   *  their structure is unlit, so a real light can't brighten it) AND the
+   *  real dynamic PointLight's intensity in non-baked villas (it was a
+   *  silent no-op there before 2.31.0). 1 = default. */
   lightPoolIntensity: number;
+  /** Manually INVERT the automatic day/night look (sun-position/sun.sun
+   *  driven): real daytime renders the night look and vice versa. Surfaced
+   *  in Settings only for BAKED villas (where day/night is a dramatic
+   *  atlas crossfade worth previewing/overriding on demand), but honoured
+   *  everywhere. Optional + absent from the presets, so switching quality
+   *  never resets it. */
+  dayNightInvert?: boolean;
 }
 
 /**
