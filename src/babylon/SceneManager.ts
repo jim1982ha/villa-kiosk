@@ -102,25 +102,42 @@ export class SceneManager {
     // forever on the "Loading the villa" spinner (reported: fine on desktop +
     // Android, crash-loops only on iPhone; smaller BAKE sizes don't help
     // because bake size only shrinks the light atlas, not the geometry or the
-    // framebuffer). So on iOS: no MSAA, default power preference (high-
+    // framebuffer). So on iPHONE: no MSAA, default power preference (high-
     // performance can make WKWebView refuse or drop the context), and render at
     // ~device-native resolution instead of 2× — a big cut in GPU memory that
-    // keeps it under the ceiling. Non-iOS is unchanged.
-    const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent)
-      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    // keeps it under the ceiling.
+    //
+    // iPad is deliberately a MIDDLE tier, not lumped in with iPhone anymore:
+    // treating the two identically made the same GLB render visibly blurry/
+    // aliased on an iPad next to a crisp MacBook (reported with side-by-side
+    // screenshots) — an iPad has several times an iPhone's per-tab headroom
+    // and never exhibited the crash-loop, so it keeps MSAA antialiasing and
+    // renders at true native resolution (hardwareScaling 1/DPR — no
+    // supersampling above native, which is where desktop's extra memory
+    // goes). deviceRenderConfig() still strips SSAO/IBL on ALL iOS,
+    // including iPad, as cheap insurance. On modern iPadOS the UA says
+    // "MacIntel" (desktop-class browsing) — the maxTouchPoints check is what
+    // actually catches those.
+    const ua = navigator.userAgent;
+    const isIPhone = /iP(hone|od)/.test(ua);
+    const isIPad = !isIPhone && (/iPad/.test(ua)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+    const isIOS = isIPhone || isIPad;
     this.isIOS = isIOS;
-    this.engine = new Engine(canvas, !isIOS, {
+    this.engine = new Engine(canvas, !isIPhone, {
       preserveDrawingBuffer: false,
       stencil: true,
-      antialias: !isIOS,
+      antialias: !isIPhone,
       powerPreference: isIOS ? "default" : "high-performance",
     });
-    // iOS: render at ≈CSS resolution or below (hardwareScaling ≥ 1) — a
+    // iPhone: render at ≈CSS resolution or below (hardwareScaling ≥ 1) — a
     // DPR-3 phone drops to ~0.67× CSS, ~1/9th the drawing-buffer memory of the
-    // non-iOS 2× supersample. Elsewhere keep the crisp up-to-2× supersampling.
+    // non-iOS 2× supersample. iPad: exactly native (1/DPR — crisp, no
+    // supersampling). Elsewhere keep the up-to-2× supersampling.
     this.engine.setHardwareScalingLevel(
-      isIOS ? Math.max(1, window.devicePixelRatio / 2)
-            : 1 / Math.min(window.devicePixelRatio, 2));
+      isIPhone ? Math.max(1, window.devicePixelRatio / 2)
+        : isIPad ? 1 / window.devicePixelRatio
+          : 1 / Math.min(window.devicePixelRatio, 2));
 
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0.7, 0.85, 1.0, 1);

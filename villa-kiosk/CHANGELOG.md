@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.30.3
+
+- **iPad no longer renders blurry/pixelated.** iPad was lumped into the same
+  maximum-aggression memory tier as iPhone (no MSAA antialiasing, rendering
+  at or below CSS resolution — on a DPR-2 iPad that's HALF native), built to
+  dodge iPhone's per-tab WebGL memory ceiling. Side-by-side screenshots of
+  the same GLB on iPad vs MacBook made the gap obvious. iPad is now its own
+  middle tier: MSAA on, true native-resolution rendering (no supersampling
+  above native, which is where desktop's extra memory goes), while keeping
+  the SSAO/IBL trim and default power preference as cheap insurance. iPhone
+  is unchanged. Detection: modern iPadOS reports a Mac UA, so the
+  maxTouchPoints check catches it; iPhone/iPod match by UA directly.
+- **(Model pipeline, not in this repo)** Root-caused the iPhone
+  crash-loop on baked GLBs by per-mesh byte accounting of the real villa
+  exports: the bake DOUBLED the exported vertex count vs the identical
+  no-bake geometry (5.61M vs 2.64M verts for the same 2.20M triangles —
+  `Structure_L1` alone at 2.85 verts/tri, near the 3.0 worst case), because
+  every micro-island face carried its own per-face UV spread inside its
+  material's patch cell, forcing the exporter to split every shared vertex.
+  ~250MB of decoded vertex buffers (plus textures and Draco's transient
+  decode) is what breaches iPhone's per-tab ceiling — file size was never
+  the issue. Fixed in `blender_pipeline.py`: after both atlases are baked,
+  micro-face UVs snap to their patch cell's centre texel (visually
+  imperceptible — the cell is a flat colour by design), so vertices weld
+  again at export. Also unified the non-baked export onto the same
+  level-splitter as the baked one, fixing 2F roof-planter hedges showing on
+  the 1F view in no-bake GLBs (the legacy splitter never peeled
+  `Structure_Exterior` and chained roof hedges to the ground floor through
+  bbox contact with adjacent tall vegetation). Both fixes require re-running
+  the pipeline and re-uploading the GLB.
+
 ## 2.30.2
 
 - **Restores early scene preload (v2.29.0's approach, reverted in v2.30.1)
