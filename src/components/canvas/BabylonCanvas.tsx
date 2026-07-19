@@ -13,6 +13,11 @@ import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
 import ModelUploader from "@/components/settings/ModelUploader";
+import ErrorReport from "@/components/ErrorReport";
+import {
+  isCrashLooping, crashLoopInfo, noteLoadStart, noteLoadPhase, noteModel,
+  noteLoadSuccess, clearCrashLoop, noteContextLoss, captureError, buildReport,
+} from "@/utils/diagnostics";
 import type { EntityMapping } from "@/types/scene.types";
 
 /**
@@ -84,9 +89,11 @@ export default function BabylonCanvas({
   const onLongPressedRef = useRef(onEntityLongPressed);
   useEffect(() => { onPickedRef.current = onEntityPicked; }, [onEntityPicked]);
   useEffect(() => { onLongPressedRef.current = onEntityLongPressed; }, [onEntityLongPressed]);
-  const [status, setStatus] = useState<"loading" | "ready" | "no-model" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "no-model" | "error" | "crash-loop">("loading");
   const [progress, setProgress] = useState(0); // 0..1 GLB download progress
   const [errorMsg, setErrorMsg] = useState("");
+  // Full copyable diagnostics report shown on the error / crash-loop screens.
+  const [report, setReport] = useState("");
   // True when the error came from a failed addon-config model fetch — the user
   // should fix their add-on settings, not upload a file.
   const [addonError, setAddonError] = useState(false);
@@ -100,19 +107,72 @@ export default function BabylonCanvas({
   // Create the scene once.
   useEffect(() => {
     if (!canvasRef.current) return;
+
+    // Break an iOS out-of-memory reload-loop before it repeats: if the scene
+    // has already crashed the page several times in quick succession, don't
+    // rebuild it — show the copyable diagnostics screen instead (see
+    // utils/diagnostics). This is the only way to "catch" an OS-level OOM kill,
+    // which tears the page down before any try/catch can run.
+    if (isCrashLooping()) {
+      const { count, sinceMs } = crashLoopInfo();
+      const cap = captureError(
+        "SCENE_LOAD_CRASH_LOOP",
+        new Error(
+          `The 3D scene failed to load ${count + 1} times in a row over ${Math.round(sinceMs / 1000)}s. ` +
+          "The device most likely ran out of memory for this model.",
+        ),
+        "crash-loop-guard",
+      );
+      setReport(buildReport(cap));
+      setStatus("crash-loop");
+      return;
+    }
+    noteLoadStart();
+
     let cancelled = false;
-    const manager = new SceneManager(canvasRef.current, {
-      config: sceneConfig,
-      onEntityPicked: (id) => onPickedRef.current(id),
-      onEntityLongPressed: (id) => onLongPressedRef.current(id),
-      onFloorChange,
-      onRoomChange,
-    });
+    const canvasEl = canvasRef.current;
+
+    let manager: SceneManager;
+    try {
+      noteLoadPhase("engine-init");
+      manager = new SceneManager(canvasEl, {
+        config: sceneConfig,
+        onEntityPicked: (id) => onPickedRef.current(id),
+        onEntityLongPressed: (id) => onLongPressedRef.current(id),
+        onFloorChange,
+        onRoomChange,
+      });
+    } catch (err) {
+      // WebGL unavailable/blocked — show a clear message, not a blank canvas.
+      setReport(buildReport(captureError("WEBGL_INIT_FAILED", err, "SceneManager")));
+      setStatus("error");
+      return;
+    }
     managerRef.current = manager;
     onManager(manager);
 
+    // A lost GPU/WebGL context (often memory pressure) would otherwise freeze
+    // the canvas. Record it; if it happens before the villa finished loading,
+    // surface the error instead of hanging.
+    let reachedReady = false;
+    const onCtxLost = (e: Event) => {
+      e.preventDefault();
+      noteContextLoss();
+      if (!reachedReady) {
+        setReport(buildReport(captureError(
+          "WEBGL_CONTEXT_LOST",
+          new Error("The GPU/WebGL context was lost (commonly from memory pressure)."),
+          "webglcontextlost",
+        )));
+        setStatus("error");
+      }
+    };
+    canvasEl.addEventListener("webglcontextlost", onCtxLost as EventListener, false);
+
     (async () => {
+      let loadErrorCode = "MODEL_LOAD_FAILED";
       try {
+        noteLoadPhase("fetch-config");
         const addonCfg = await fetchAddonConfig();
         let data: ArrayBuffer | null = null;
         let fromAddon = false;
@@ -126,17 +186,21 @@ export default function BabylonCanvas({
           // authoritative source and per-browser uploads are irrelevant.
           // Version-stamped URL → the service worker serves it from cache on
           // repeat opens (cache-first), so only the first load hits the network.
+          noteModel({ path: addonCfg.model_path });
+          noteLoadPhase("fetch-model");
           const modelUrl = await versionedModelUrl(addonCfg.model_path);
           loadedSource = modelUrl;
           const resp = await fetch(modelUrl);
           if (!resp.ok) {
             setAddonError(true);
+            loadErrorCode = `MODEL_FETCH_HTTP_${resp.status}`;
             throw new Error(
               `Central model not found at ${modelUrl} (HTTP ${resp.status}).\n` +
               "Re-upload it from Settings → Advanced Settings (Owner profile).",
             );
           }
           data = await readWithProgress(resp, (f) => { if (!cancelled) setProgress(f); });
+          noteModel({ bytes: data.byteLength });
           fromAddon = true;
         } else {
           // ── Standalone / dev mode: per-browser IndexedDB upload. ──────────
@@ -157,8 +221,12 @@ export default function BabylonCanvas({
           return;
         }
         const tFetchDone = performance.now();
+        // The heavy step and the usual iOS OOM point: Draco decode + texture
+        // decode + GPU upload of the whole villa.
+        noteLoadPhase("import-mesh");
         const { importMs, postMs } = await manager.loadModel(data);
         if (cancelled) return;
+        noteLoadPhase("post-process");
         const tParseDone = performance.now();
 
         // Fingerprint the GLB that actually loaded, so Settings can prove which
@@ -198,6 +266,11 @@ export default function BabylonCanvas({
         // heavy, optional SH3D refresh below. Room labels already render from the
         // persisted config, so we don't make first paint wait on it.
         setStatus("ready");
+        // Success: clear the crash-loop counter so a later legitimate reload
+        // isn't mistaken for a loop, and stop the context-loss guard from
+        // hijacking the screen once we're up.
+        reachedReady = true;
+        noteLoadSuccess();
 
         // Refresh central room names + calibration in the BACKGROUND from the
         // compact "<model>.rooms.json" sidecar the Blender pipeline emits next to
@@ -244,6 +317,7 @@ export default function BabylonCanvas({
       } catch (err) {
         if (cancelled) return;
         console.error("[BabylonCanvas] model load failed", err);
+        setReport(buildReport(captureError(loadErrorCode, err, "loadModel")));
         setErrorMsg((err as Error).message);
         setStatus("error");
       }
@@ -251,6 +325,7 @@ export default function BabylonCanvas({
 
     return () => {
       cancelled = true;
+      canvasEl.removeEventListener("webglcontextlost", onCtxLost as EventListener, false);
       onManager(null);
       manager.dispose();
       managerRef.current = null;
@@ -323,13 +398,42 @@ export default function BabylonCanvas({
         </div>
       )}
       {status === "error" && (
-        <div className="center-overlay">
-          <div className="danger-text">Failed to load the 3D model.</div>
-          <div className="muted body-text" style={{ whiteSpace: "pre-line" }}>{errorMsg}</div>
-          {!addonError && canManageModel && (
-            <button className="btn primary" onClick={onNeedModel}>Upload model</button>
-          )}
-        </div>
+        <ErrorReport
+          title="Failed to load the 3D model"
+          hint={<span style={{ whiteSpace: "pre-line" }}>{errorMsg}</span>}
+          detail={report}
+          actions={!addonError && canManageModel
+            ? <button className="btn ghost" onClick={onNeedModel}>Upload model</button>
+            : undefined}
+        />
+      )}
+      {status === "crash-loop" && (
+        <ErrorReport
+          title="The villa couldn't be displayed on this device"
+          hint={
+            <>
+              The 3D view failed to load several times in a row, so it was stopped
+              to avoid an endless reload loop. This almost always means the device
+              (typically an iPhone) ran out of memory for this model — a heavier
+              GLB (more geometry/textures) can exceed iOS Safari's per-tab limit
+              even when the same file works fine on a computer or Android phone.
+              Copy the details below and send them over. {canManageModel && "An Owner can upload a lighter model from Advanced Settings."}
+            </>
+          }
+          detail={report}
+          actions={
+            <>
+              <button className="btn ghost" onClick={() => { clearCrashLoop(); location.reload(); }}>
+                Try once more
+              </button>
+              {canManageModel && (
+                <button className="btn ghost" onClick={() => { clearCrashLoop(); onNeedModel(); }}>
+                  Upload a lighter model
+                </button>
+              )}
+            </>
+          }
+        />
       )}
       {sh3dSyncMsg && (
         <div className="sh3d-sync-banner">

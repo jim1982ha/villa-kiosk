@@ -3,7 +3,12 @@ import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router-dom";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { installGlobalErrorCapture } from "./utils/diagnostics";
 import "./styles.css";
+
+// Record uncaught errors / rejections to localStorage so one that fires just
+// before a reload still surfaces in the next load's diagnostics report.
+installGlobalErrorCapture();
 
 // Register the PWA service worker (best-effort). Skip it under HA Ingress: the
 // add-on is served from a per-session path (/api/hassio_ingress/<token>/), so a

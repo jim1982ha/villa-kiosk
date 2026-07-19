@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.25.0
+
+- **Never get stuck in a silent reload loop; copyable error reports.** A too-heavy
+  GLB can exceed iOS Safari / WKWebView's per-tab memory ceiling and get the
+  page killed by the OS mid-load — which iOS then silently reloads, crashing
+  again in an invisible loop (reported: an iPhone looping right after the PIN,
+  while the same model is fine on Android and macOS Safari). That OS-level kill
+  is not catchable in JS, so instead the app now **detects the reload-loop
+  pattern** (load attempts tracked in localStorage, which survives the crash)
+  and, after a few rapid failures that never reached "ready", stops and shows a
+  diagnostics screen instead of loading again. Every *catchable* failure too
+  (WebGL unavailable, model fetch 4xx/5xx, Draco/parse errors, lost WebGL
+  context, render exceptions) now lands on the same screen with a **"Copy error
+  details"** button that copies a full report — app version, error code +
+  message + stack, the furthest load phase reached, model path/size, device +
+  display, JS heap (where exposed), and WebGL renderer/limits — so a kiosk user
+  with no devtools can paste it back for troubleshooting.
+  - Note on the trigger: a baked (`--bake`) GLB is NOT incompatible with iPhone,
+    and the light-atlas/bake size is irrelevant here — it's total geometry +
+    texture memory. A 2-storey baked export can be ~7× the vertices of a
+    single-floor one (millions of verts, Draco decode spike, a 2nd lightmap UV
+    set); that peak is what iOS kills. Fix is a lighter GLB (more decimation /
+    fewer-smaller textures), which the diagnostics screen now guides toward.
+- **Overview: two-finger trackpad slide no longer inverts up/down.** A wheel
+  reports *scroll* deltas, whose vertical sign is opposite a pointer *drag*'s, so
+  a no-click slide panned the map up/down backwards vs. click-drag. Vertical is
+  now negated to match the drag; left/right (already correct) is untouched, and
+  it stays consistent whether the Natural Scrolling toggle is on or off.
+
 ## 2.24.0
 
 - **One app, two front doors — with real auth on both.** The kiosk is now a

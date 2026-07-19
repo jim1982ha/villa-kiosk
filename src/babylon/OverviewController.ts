@@ -392,7 +392,16 @@ export class OverviewController {
       this.applyZoom(-dy * WHEEL_ZOOM_SENS * this.camera.radius * s);
     } else {
       // Trackpad two-finger slide → pan (no click required).
-      this.applyPan(dx * s, dy * s, WHEEL_PAN_SENS);
+      // A wheel reports SCROLL deltas, whose VERTICAL sign is opposite to a
+      // pointer DRAG's: scrolling down is deltaY>0, but dragging content down is
+      // pointer dy>0. Feeding deltaY straight in (like the drag path does with
+      // dy) therefore inverts up/down vs. click-drag. Negate dy so a two-finger
+      // slide pans the map the SAME direction a click-drag does. It's negated
+      // INSIDE the `s` factor, so this stays consistent whether the app's
+      // Natural Scrolling toggle is on or off (both states flip together).
+      // deltaX already matches the drag convention on the trackpads tested, so
+      // it's left as-is (reported correct; only up/down was inverted).
+      this.applyPan(dx * s, -dy * s, WHEEL_PAN_SENS);
     }
     this.cb.onActivity();
   };

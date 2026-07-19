@@ -1,46 +1,41 @@
 // src/components/ErrorBoundary.tsx
-// Catches render-time errors so the kiosk shows a readable message instead of a
-// blank screen. (Error boundaries must be class components — React provides no
-// hook equivalent — so this is the one intentional class in the app.)
+// Catches render-time errors so the kiosk shows a readable, copyable report
+// instead of a blank screen or a silent reload loop. (Error boundaries must be
+// class components — React provides no hook equivalent — so this is the one
+// intentional class in the app.)
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import ErrorReport from "./ErrorReport";
+import { captureError, buildReport, type CapturedError } from "@/utils/diagnostics";
 
 interface Props {
   children: ReactNode;
 }
 interface State {
-  error: Error | null;
-  info: string;
+  captured: CapturedError | null;
 }
 
 export default class ErrorBoundary extends Component<Props, State> {
-  override state: State = { error: null, info: "" };
+  override state: State = { captured: null };
 
   static getDerivedStateFromError(error: Error): Partial<State> {
-    return { error };
+    return { captured: captureError("RENDER_EXCEPTION", error, "react-render") };
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error("[Villa Kiosk] render error:", error, info);
-    this.setState({ info: info.componentStack ?? "" });
   }
 
   override render(): ReactNode {
-    if (!this.state.error) return this.props.children;
+    const { captured } = this.state;
+    if (!captured) return this.props.children;
     return (
-      <div className="center-overlay" style={{ alignItems: "flex-start", overflow: "auto", padding: 24 }}>
-        <h2 style={{ fontFamily: "var(--font-display)", color: "var(--status-danger)" }}>
-          Something went wrong
-        </h2>
-        <p className="body-text">{this.state.error.message}</p>
-        {/* Stack traces can leak internal paths/structure — show only in dev. */}
-        {import.meta.env.DEV && (
-          <pre style={{ fontSize: 11, color: "var(--text-secondary)", whiteSpace: "pre-wrap", maxWidth: "100%" }}>
-            {this.state.error.stack}
-          </pre>
-        )}
-        <button className="btn primary" onClick={() => location.reload()}>Reload</button>
-      </div>
+      <ErrorReport
+        title="Something went wrong"
+        hint="The app hit an unexpected error while rendering. Copy the details below and send them over so it can be diagnosed."
+        detail={buildReport(captured)}
+        actions={<button className="btn ghost" onClick={() => location.reload()}>Reload</button>}
+      />
     );
   }
 }
