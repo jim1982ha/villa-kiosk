@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.25.1
+
+- **No more "rendered but frozen" gap after loading a model.** The central
+  room-data (`.rooms.json`) sync used to run AFTER the villa was revealed, and
+  applying it triggers one heavy structural rebuild (re-index + re-calibrate
+  over every mesh) — so the map looked ready but was unclickable for a few
+  seconds. It now runs BEHIND the loading overlay (before reveal), so the villa
+  only appears once it's actually interactive. And because `parseRoomData`
+  returns fresh arrays each open, the old reference-compare forced that rebuild
+  on *every* load even when nothing changed; it's now a content-compare, so an
+  unchanged plan (the common re-open case) skips the rebuild entirely — no
+  delay at all. A missing/slow sidecar never blocks the reveal (5s timeout).
+- **Model info (i) shows the real uploaded filename.** The "GLB" row displayed
+  the managed on-disk name (`villa.glb`) — which always looked the same
+  whatever you uploaded — instead of the file you picked. It now shows the
+  original uploaded name (e.g. `villa_2F_4096_no-bake.glb`) in full, with its
+  upload time; it's still stored/served as `villa.glb` (shown in the "From" URL
+  and explained in the footer).
+
 ## 2.25.0
 
 - **Never get stuck in a silent reload loop; copyable error reports.** A too-heavy

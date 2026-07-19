@@ -262,58 +262,75 @@ export default function BabylonCanvas({
         // Paint the current entity states immediately (meshes + markers).
         Object.values(entities).forEach((e) => manager.applyEntityState(e));
 
-        // The villa is interactive now — clear the loading overlay BEFORE the
-        // heavy, optional SH3D refresh below. Room labels already render from the
-        // persisted config, so we don't make first paint wait on it.
+        // Sync central room names + calibration from the compact
+        // "<model>.rooms.json" sidecar (the Blender pipeline emits it next to
+        // the GLB) BEFORE revealing the villa. Applying it can trigger one heavy
+        // structural rebuild (re-index + re-calibrate over every mesh); doing it
+        // here, while the loading overlay is still up, keeps that work off an
+        // already-visible map — which otherwise looked rendered but froze,
+        // unclickable, for a few seconds. When the parsed data already matches
+        // config (the common re-open case) we skip it entirely, so there's no
+        // rebuild and no delay. A hung/missing fetch never blocks the reveal
+        // (short timeout + it just proceeds without the refresh).
+        if (fromAddon && addonCfg.model_path) {
+          noteLoadPhase("post-process");
+          const roomsPath = roomsPathFor(addonCfg.model_path);
+          try {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), 5000);
+            const roomsResp = await fetch(await versionedModelUrl(roomsPath), { signal: ctrl.signal });
+            clearTimeout(tid);
+            if (!cancelled && !roomsResp.ok) {
+              setSh3dSyncMsg(
+                `Central room data (${roomsPath}) not found (HTTP ${roomsResp.status}) — room names ` +
+                "weren't refreshed. Re-run the Blender pipeline and upload the .rooms.json in Settings.",
+              );
+            } else if (!cancelled && roomsResp.ok) {
+              const { rooms, entities: sh3dEntities } = parseRoomData(await roomsResp.text());
+              if (!cancelled) {
+                // Compare by CONTENT, not reference: parseRoomData returns fresh
+                // arrays every open, so a reference check would force the
+                // rebuild on every load even when nothing actually changed.
+                const cur = configRef.current;
+                const sameRooms = JSON.stringify(cur.sh3dRooms ?? []) === JSON.stringify(rooms);
+                const sameEnts = JSON.stringify(cur.sh3dEntities ?? []) === JSON.stringify(sh3dEntities);
+                if (!sameRooms || !sameEnts) {
+                  // If the central plan's room SET changed (admin swapped the
+                  // file), drop stale rooms so only the new plan's remain — the
+                  // scene re-calibrates from the fresh set. Same set: leave
+                  // teleportPoints alone so user-added rooms + saved overview
+                  // poses survive.
+                  const prevNames = (cur.sh3dRooms ?? []).map((r) => r.name).sort().join("|");
+                  const nextNames = rooms.map((r) => r.name).sort().join("|");
+                  update(prevNames !== nextNames
+                    ? { sh3dRooms: rooms, sh3dEntities, teleportPoints: [] }
+                    : { sh3dRooms: rooms, sh3dEntities });
+                  // Give React a beat to commit + run the config effect (whose
+                  // updateConfig does the structural rebuild) BEHIND the overlay,
+                  // so we reveal an already-settled, interactive villa.
+                  await new Promise<void>((r) =>
+                    requestAnimationFrame(() => requestAnimationFrame(() => r())));
+                }
+              }
+            }
+          } catch (err) {
+            if ((err as Error).name !== "AbortError") {
+              console.warn("[BabylonCanvas] central room-data refresh failed", err);
+              if (!cancelled) {
+                setSh3dSyncMsg(`Failed to refresh room names from the central .rooms.json: ${(err as Error).message}`);
+              }
+            }
+          }
+        }
+        if (cancelled) return;
+
+        // Everything is applied and settled — reveal the interactive villa.
         setStatus("ready");
         // Success: clear the crash-loop counter so a later legitimate reload
         // isn't mistaken for a loop, and stop the context-loss guard from
         // hijacking the screen once we're up.
         reachedReady = true;
         noteLoadSuccess();
-
-        // Refresh central room names + calibration in the BACKGROUND from the
-        // compact "<model>.rooms.json" sidecar the Blender pipeline emits next to
-        // the GLB. (This replaced fetching the full multi-hundred-MB .sh3d, which
-        // bundles the whole furniture catalog we never needed.) Doing it off the
-        // render path keeps first paint fast and all clients in sync when the
-        // file changes.
-        if (fromAddon && addonCfg.model_path) {
-          const roomsPath = roomsPathFor(addonCfg.model_path);
-          void (async () => {
-            try {
-              const roomsResp = await fetch(await versionedModelUrl(roomsPath));
-              if (!roomsResp.ok) {
-                if (!cancelled) {
-                  setSh3dSyncMsg(
-                    `Central room data (${roomsPath}) not found (HTTP ${roomsResp.status}) — room names ` +
-                    `weren't refreshed. Re-run the Blender pipeline and upload the .rooms.json in Settings.`,
-                  );
-                }
-                return;
-              }
-              const roomsText = await roomsResp.text();
-              const { rooms, entities: sh3dEntities } = parseRoomData(roomsText);
-              if (cancelled) return;
-              // If the central plan's room SET changed (admin swapped the file),
-              // drop stale rooms so only the new plan's rooms remain — the scene
-              // re-calibrates from the fresh set. If it's the same set (the usual
-              // every-open refresh), leave teleportPoints alone so user-added
-              // rooms + saved overview poses survive.
-              const prevNames = (configRef.current.sh3dRooms ?? []).map((r) => r.name).sort().join("|");
-              const nextNames = rooms.map((r) => r.name).sort().join("|");
-              const roomsChanged = prevNames !== nextNames;
-              update(roomsChanged
-                ? { sh3dRooms: rooms, sh3dEntities, teleportPoints: [] }
-                : { sh3dRooms: rooms, sh3dEntities });
-            } catch (err) {
-              console.warn("[BabylonCanvas] central room-data refresh failed", err);
-              if (!cancelled) {
-                setSh3dSyncMsg(`Failed to refresh room names from the central .rooms.json: ${(err as Error).message}`);
-              }
-            }
-          })();
-        }
       } catch (err) {
         if (cancelled) return;
         console.error("[BabylonCanvas] model load failed", err);

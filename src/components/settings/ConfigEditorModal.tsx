@@ -105,20 +105,20 @@ function CentralModelInfo({
               ) : "—"}
             </span>
           </div>
-          <div className="row"><span>GLB</span><span><code>{addonCfg.model_path}</code></span></div>
-          {/* Every central upload overwrites the managed file, so the served
-              name above never changes — show what was actually uploaded or the
-              panel reads as "wrong file". */}
-          {addonCfg.model_upload?.original_name && (
-            <div className="row">
-              <span>Uploaded</span>
-              <span>
-                <code>{addonCfg.model_upload.original_name}</code>
-                {addonCfg.model_upload.uploaded_at &&
-                  ` · ${new Date(addonCfg.model_upload.uploaded_at).toLocaleString()}`}
-              </span>
-            </div>
-          )}
+          {/* Show the ORIGINAL uploaded filename (the one the user recognises),
+              not the managed on-disk name — every upload overwrites the same
+              managed file, so showing that would always read as "villa.glb" and
+              look like the wrong file. Full name, allowed to wrap so a long name
+              is never truncated. It's stored/served as villa.glb (see the
+              "From" URL below + the footer). */}
+          <div className="row">
+            <span>GLB</span>
+            <span style={{ wordBreak: "break-word", textAlign: "right" }}>
+              <code>{addonCfg.model_upload?.original_name || addonCfg.model_path}</code>
+              {addonCfg.model_upload?.uploaded_at &&
+                ` · ${new Date(addonCfg.model_upload.uploaded_at).toLocaleString()}`}
+            </span>
+          </div>
           {loadedModel && (
             <>
               <div className="row"><span>Loaded</span><span>{(loadedModel.bytes / 1_000_000).toFixed(2)} MB · {loadedModel.meshCount} meshes</span></div>
@@ -140,11 +140,11 @@ function CentralModelInfo({
           <div style={{ marginTop: 8, color: "var(--text-dim)" }}>
             {editable ? (
               <>
-                Stored in the add-on's own <code>/data</code> volume and served to every client from
-                there — an upload overwrites the managed file, so the GLB name above stays the same
-                whatever file you pick ("Uploaded" shows the file it came from). The room-data
-                sidecar (<code>.rooms.json</code>, emitted next to the GLB by the Blender pipeline)
-                lives alongside it. Upload both below; there's no path to configure.
+                Stored in the add-on's own <code>/data</code> volume (on disk as <code>villa.glb</code>)
+                and served to every client from there — an upload overwrites it, so re-uploading a new
+                file replaces the villa for everyone (the name above is the file it came from). The
+                room-data sidecar (<code>.rooms.json</code>, emitted next to the GLB by the Blender
+                pipeline) lives alongside it. Upload both below; there's no path to configure.
               </>
             ) : (
               <>
