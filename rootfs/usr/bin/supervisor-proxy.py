@@ -43,6 +43,13 @@ Access control (why this proxy authenticates at all):
       minted by /auth/verify once the profile passcode checks out. So the
       client-side profile gate is now backed by a real server-side session:
       no cookie -> no HA access, no floor-plan download.
+    * EXCEPTION — /model/* and /addon-config only, and only when the add-on
+      option `public_model_access` is enabled (default off): these become
+      reachable with no session at all. This exists so the kiosk app can
+      start decoding the (multi-second) GLB while the user is still on the
+      profile-select/PIN screen instead of only after login — see
+      _model_authorized() / _public_model_access(). /core/* (Home Assistant
+      control) and the PINs are NEVER affected by this option.
 
 Security notes:
   * Request smuggling (aiohttp CVE-2025-53643) affects only aiohttp's *pure
@@ -164,6 +171,22 @@ def _authorized(request: web.Request) -> bool:
     if _is_ingress(request):
         return True
     return _session_role(request.cookies.get(SESSION_COOKIE)) is not None
+
+
+def _public_model_access() -> bool:
+    """Opt-in add-on option (default off): treat /model/* and /addon-config as
+    PUBLIC — reachable with no session at all. Deliberately narrow to those two
+    routes; /core/* (Home Assistant control) always goes through _authorized()
+    regardless. Read fresh on every call (not cached) so flipping the option
+    takes effect without restarting this process."""
+    return bool(_read_options().get("public_model_access", False))
+
+
+def _model_authorized(request: web.Request) -> bool:
+    """Gate for /model/* and /addon-config specifically — same as _authorized()
+    PLUS the public_model_access escape hatch. See its docstring for the
+    security trade-off this represents."""
+    return _authorized(request) or _public_model_access()
 
 
 def _set_session_cookie(resp: web.Response, role: str) -> None:
@@ -393,22 +416,24 @@ def _resolve_upload_target(kind: str) -> str:
 
 
 async def addon_config_handler(request: web.Request) -> web.Response:
-    """Expose the non-sensitive model paths to the frontend (session-gated).
+    """Expose the non-sensitive model paths to the frontend (session-gated,
+    unless public_model_access is on — see _model_authorized()).
 
     The full /data/options.json is never forwarded — only the model-path fields
     are returned, so options with credentials (the profile PINs) stay
     server-side.
     """
-    if not _authorized(request):
+    if not _model_authorized(request):
         return _unauthorized()
     return web.json_response(_effective_paths())
 
 
 async def auth_check_handler(request: web.Request) -> web.Response:
     """nginx auth_request backend for the static /model/ route: 200 when the
-    caller is authorized (valid session cookie, or trusted Ingress), else 401.
-    Body is intentionally empty — nginx only reads the status."""
-    return web.Response(status=200 if _authorized(request) else 401)
+    caller is authorized (valid session cookie, trusted Ingress, or
+    public_model_access is on — see _model_authorized()), else 401. Body is
+    intentionally empty — nginx only reads the status."""
+    return web.Response(status=200 if _model_authorized(request) else 401)
 
 
 # ── Profile passcode verification ────────────────────────────────────────────

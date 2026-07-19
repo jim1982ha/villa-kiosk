@@ -62,6 +62,29 @@ Set at least one passcode before exposing the port, and for defence-in-depth put
 kiosk sidebar-only, just leave port 8099 unmapped in the add-on's **Network**
 panel.
 
+### Faster first load with `public_model_access` (optional)
+
+By default the villa floor plan can't even start downloading until *after*
+you sign in — the "Villa Loading" spinner's real cost is Babylon decoding it
+(several seconds for a large villa), and that can only run once the app is
+authenticated, so a slow first load stays slow no matter how long you wait on
+the PIN screen.
+
+If you already put **Cloudflare Access** (or equivalent) in front of the
+hostname — so nobody unauthenticated ever reaches this add-on at all — you can
+enable **`public_model_access`** in the add-on options to let the kiosk start
+downloading *and decoding* the model the moment the profile-select screen
+appears, well before you pick a profile or enter a PIN. This measurably
+shortens the spinner, since the multi-second decode now overlaps with the time
+you spend on that screen instead of starting after it.
+
+**Only enable this if something else already gates the hostname.** It makes
+the villa's 3D floor plan (not Home Assistant control, and not the PINs
+themselves — those stay fully gated either way) downloadable by anyone who
+reaches the hostname directly, with no PIN at all. Meaningless (and
+unnecessary) for Ingress, which is already auto-trusted, and irrelevant if you
+never expose port 8099.
+
 ## Notes
 
 - Requires **Home Assistant OS** or **Supervised** (add-ons need the Supervisor).

@@ -1,5 +1,50 @@
 # Changelog
 
+## 2.29.0
+
+- **v2.28.0's prefetch alone wasn't enough — field data explained why.** A
+  user's real "Load time" breakdown (Advanced Settings → central model info)
+  showed `fetch 58-183ms · parse 4.5-6.4s` — the network transfer was NEVER
+  the bottleneck, even cold. The actual cost is Babylon decoding the GLB
+  (Draco geometry + textures + GPU upload) plus this app's own mesh-indexing
+  pass, and that only runs inside a live Babylon Scene — which didn't exist
+  until after login, so prefetching bytes earlier had nothing to speed up.
+  Waiting 30s+ on the profile-select/PIN screen made no visible difference,
+  exactly as reported.
+- **The villa can now start decoding — not just downloading — before login,
+  while the user is still on the profile-select/PIN screen.** `ProfileGate`
+  can now mount the real Babylon scene early (`modelPreloadable`, fed by
+  `modelPrefetch.ts`'s `onPrefetchAvailable`) the instant it's confirmed
+  `/model/` is actually reachable, instead of waiting for `role` to be set.
+  `sceneConfig` is unfiltered while `role` is still null and reactively
+  re-filters the moment login sets it (existing behaviour, unchanged) — and
+  the opaque `.auth-screen` overlay means none of this is visible before
+  login regardless, same protection the profile-SWITCH overlay already relied
+  on. For an Owner login specifically (no role-based restrictions), the
+  post-login re-filter is a no-op — the entire spinner can be absorbed before
+  the PIN is even entered.
+  - Under HA Ingress, `/model/` was already auto-trusted, so this "just
+    works" immediately with no new exposure.
+  - **On the direct/Cloudflare-gated deployment, this requires a real
+    security trade-off**, so it ships OFF by default as a new opt-in add-on
+    option: **`public_model_access`**. Enabling it makes `/model/` (the
+    villa's floor plan) and `/addon-config` (its filename) reachable with NO
+    session cookie at all — anyone who reaches the add-on's public hostname
+    could download the raw GLB without ever entering a PIN. `/core/` (Home
+    Assistant control) and the PINs themselves are NEVER affected — only
+    those two routes. Intended for installs that already put something like
+    Cloudflare Access in front of the whole hostname, so an unauthenticated
+    visitor can't reach the add-on at all in the first place. See DOCS.md.
+  - Backend: `supervisor-proxy.py` gains `_public_model_access()` /
+    `_model_authorized()`, used only by `addon_config_handler` and
+    `auth_check_handler` (which gates nginx's `/model/` location) — every
+    other route (`/core/*`, `/model-upload`) is untouched and still requires
+    a real session or Ingress regardless of this option.
+  - Fixed a genuine latent bug surfaced while building this: `Dashboard.tsx`
+    had role-capability checks that were already null-safe (`role != null &&
+    …`), but a stale comment claimed "ProfileGate guarantees a signed-in role
+    before this page mounts" — no longer true, updated to say so.
+
 ## 2.28.0
 
 - **The central GLB now starts downloading in the background as soon as the

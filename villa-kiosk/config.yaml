@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: Villa Kiosk
-version: "2.28.0"
+version: "2.29.0"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -48,11 +48,26 @@ startup: application
 # kiosk's own Settings → Advanced (Owner profile) and stored in the add-on's
 # private /data volume, served to every client from there. No /config/www file
 # to place, and nothing on HA's unauthenticated /local/ route.
+#
+# public_model_access (off by default): lets the kiosk START DOWNLOADING AND
+# DECODING the GLB while still on the profile-select/PIN screen, instead of
+# only after login — the villa floor plan is a multi-second Draco-decode +
+# GPU-upload, not just a download, so waiting on the PIN screen only helps if
+# that whole pipeline can start early. Enabling this makes /model/ (and its
+# filename metadata) reachable WITHOUT a session cookie or PIN — so anyone who
+# reaches this add-on's public hostname could download the raw floor-plan
+# file without ever entering a PIN. /core (Home Assistant control) and the
+# PINs themselves are NOT affected — they stay fully gated either way. Only
+# turn this on if something else already gates the hostname itself (e.g.
+# Cloudflare Access) — it's meaningless for Ingress, which is already
+# auto-trusted, and unnecessary if you never expose port 8099 directly.
 options:
   guest_pin: ""
   owner_pin: ""
   ops_pin: ""
+  public_model_access: false
 schema:
   guest_pin: match(^[0-9]{4}$|^$)?
   owner_pin: match(^[0-9]{4}$|^$)?
   ops_pin: match(^[0-9]{4}$|^$)?
+  public_model_access: bool?

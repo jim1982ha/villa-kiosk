@@ -1,18 +1,26 @@
 // src/utils/modelPrefetch.ts
 // Background download of the central GLB, started as early as legally
 // possible — see callers — so BabylonCanvas's real load path can reuse the
-// bytes instead of re-fetching from a cold start. The single biggest cost in
-// the "Villa Loading" spinner is the network transfer of a many-MB GLB; this
-// runs that transfer WHILE the user is still looking at the profile-select /
-// PIN screen, invisibly (a plain background fetch(), no DOM/scene work, so it
-// cannot cause any jank on those screens).
+// bytes instead of re-fetching from a cold start.
 //
-// /addon-config and /model/ both require a session cookie on the
-// direct/Cloudflare-gated deployment (see supervisor-proxy.py's
-// _authorized()) — Ingress-sourced requests are auto-trusted, so under
-// Ingress this can genuinely start at the very first frame; under gated mode
-// it can only succeed once a session exists (an un-PIN'd profile's tap, or a
-// correct PIN), so callers retry it right at that moment too. An early,
+// Measured on a real villa (v2.28.0's own field report): the network fetch is
+// NOT the bottleneck — 47MB fetched in under 200ms even cold. The real cost
+// is Babylon decoding it (Draco geometry + textures + GPU upload) plus this
+// app's own mesh-indexing pass: 4.5-6.4 SECONDS, and that can only happen
+// inside a live Babylon Scene — which normally doesn't exist until after
+// login. So fetching bytes early (this module, v2.28.0) isn't enough on its
+// own; onPrefetchAvailable (v2.29.0) lets ProfileGate mount the actual scene
+// early too, once it's confirmed the model is reachable, so the DECODE also
+// runs while the user is still on the profile-select/PIN screen.
+//
+// /addon-config and /model/ both require a session cookie by default (see
+// supervisor-proxy.py's _authorized()) — Ingress-sourced requests are
+// auto-trusted, so under Ingress this always starts at the very first frame.
+// On the direct/Cloudflare-gated deployment it can only succeed once a
+// session exists (an un-PIN'd profile's tap, or a correct PIN) UNLESS the
+// add-on's opt-in `public_model_access` option is on (see
+// supervisor-proxy.py's _model_authorized() for the security trade-off) —
+// with it on, this succeeds at the very first frame there too. An
 // unauthorized attempt just fails harmlessly (see fetchAddonConfig's
 // no-cache-on-failure behaviour) and the state resets so a later authorized
 // call still works.
@@ -21,6 +29,7 @@ import { fetchAddonConfig, versionedModelUrl } from "./storage";
 import { readWithProgress } from "./fetchProgress";
 
 type ProgressListener = (frac: number) => void;
+type AvailabilityListener = () => void;
 
 interface PrefetchEntry {
   url: string;
@@ -31,6 +40,7 @@ interface PrefetchEntry {
 
 let state: "idle" | "pending" | "done" = "idle";
 let entry: PrefetchEntry | null = null;
+const availabilityListeners = new Set<AvailabilityListener>();
 
 /** Fire-and-forget: kick off the background GLB download if nothing is
  *  already in flight or done. Safe to call repeatedly (profile-select mount,
@@ -69,9 +79,27 @@ export function startModelPrefetch(): void {
     // unhandled rejection. A caller that DOES claim it awaits the same
     // promise and handles the error itself.
     e.promise.catch(() => {});
+    // We KNOW at this point that /model/ + /addon-config are reachable right
+    // now (the fetch() call above was accepted — its eventual success/failure
+    // doesn't change that) — safe for ProfileGate to mount the real scene
+    // early, since BabylonCanvas's own load effect will find a model waiting
+    // for it instead of hitting the same 401 this call would have hit before
+    // now. Fire even if e.promise later fails; BabylonCanvas's normal error
+    // handling (behind the opaque auth-screen overlay either way) covers that.
+    availabilityListeners.forEach((l) => l());
   })().catch(() => {
     state = "idle";
   });
+}
+
+/** Notify `fn` once /model/ becomes confirmed-reachable (immediately, if a
+ *  prefetch already succeeded before this was called). Used by ProfileGate to
+ *  decide it's safe to mount the real scene before login — see its docstring.
+ *  Returns an unsubscribe function. */
+export function onPrefetchAvailable(fn: AvailabilityListener): () => void {
+  if (entry) fn();
+  availabilityListeners.add(fn);
+  return () => availabilityListeners.delete(fn);
 }
 
 /** If a prefetch for this EXACT model URL is in flight or finished, hand it

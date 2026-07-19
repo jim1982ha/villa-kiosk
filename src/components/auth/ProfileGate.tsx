@@ -10,7 +10,7 @@ import { resolveSiteTitle } from "@/config/AppConfig";
 import { useProfile } from "@/auth/ProfileContext";
 import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/roles";
 import { pinRequired as fetchPinRequired, verify, openSession } from "@/auth/PinVerifier";
-import { startModelPrefetch } from "@/utils/modelPrefetch";
+import { startModelPrefetch, onPrefetchAvailable } from "@/utils/modelPrefetch";
 import PinPad from "./PinPad";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
@@ -44,6 +44,19 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
     if (!role || switching) startModelPrefetch();
   }, [role, switching]);
 
+  // Flips true once startModelPrefetch above has CONFIRMED /model/ is
+  // reachable right now (Ingress, or public_model_access on) — at that point
+  // it's safe to mount `children` (the real Babylon scene) BEFORE login, so
+  // the multi-second Draco-decode + mesh-indexing pass also runs while the
+  // user is still on this screen, not just the network fetch. Stays false
+  // (children mount only after login, today's behaviour) whenever /model/
+  // needs a session that doesn't exist yet — see modelPrefetch.ts.
+  const [modelPreloadable, setModelPreloadable] = useState(false);
+  useEffect(() => {
+    if (role && !switching) return; // already rendering children unconditionally below
+    return onPrefetchAvailable(() => setModelPreloadable(true));
+  }, [role, switching]);
+
   // Which profiles are gated — fetched once per visit to the select screen.
   // Until the answer arrives we assume every profile needs a PIN (fail closed).
   useEffect(() => {
@@ -67,8 +80,20 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   // beginSwitch docstring for why: unmounting `children` here would force a
   // full GLB re-fetch + re-parse just to show a PIN pad. `.auth-screen` is a
   // fixed, opaque full-viewport layer (styles.css), so it fully covers the
-  // scene beneath exactly like any other modal.
+  // scene beneath exactly like any other modal. The SAME reasoning now also
+  // applies to a first-ever (not-yet-logged-in) visit once modelPreloadable
+  // is true: mount `children` early so BabylonCanvas starts decoding the
+  // villa right away — sceneConfig (see BabylonCanvas) is unfiltered while
+  // `role` is still null and reactively re-filters the instant login sets
+  // it, so nothing role-restricted is ever exposed by loading early; the
+  // opaque overlay below means none of this is even visible until login
+  // anyway. `role != null` guards throughout Dashboard/BabylonCanvas already
+  // treat "no role yet" as "nothing interactive," same as this screen itself.
   const isSwitch = !!role && switching;
+  // Distinct from isSwitch: only isSwitch means there's a session to fall
+  // back to (drives the Cancel button below) — modelPreloadable alone (a
+  // first-ever, not-yet-logged-in visit) has nothing to cancel back to.
+  const showChildrenEarly = isSwitch || modelPreloadable;
 
   const choose = (r: Role) => {
     setGateError(null);
@@ -96,7 +121,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   if (pending) {
     return (
       <>
-        {isSwitch && children}
+        {showChildrenEarly && children}
         <div className="auth-screen">
           <PinPad
             roleLabel={ROLE_LABELS[pending]}
@@ -117,7 +142,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {isSwitch && children}
+      {showChildrenEarly && children}
       <div className="auth-screen">
         <div className="profile-select">
           <h1 className="profile-title">{resolveSiteTitle(config)}</h1>
