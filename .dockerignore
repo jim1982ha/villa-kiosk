@@ -2,6 +2,7 @@
 # regenerated inside the image. rootfs/ IS needed (it's COPYied in the runtime stage).
 node_modules
 dist
+dist.zip
 .git
 .github
 .env
@@ -11,6 +12,14 @@ tsconfig.tsbuildinfo
 villa-kiosk
 ADDON.md
 MODEL_PIPELINE.md
+
+# Model pipeline working files (source GLBs, SweetHome exports, Blender
+# intermediates) — 1.6GB+ locally, gitignored, and never read by the
+# Dockerfile. Without this, a local `docker build` sends the whole thing to
+# the daemon AND copies it into the build stage via `COPY . .`, on every
+# build. CI is unaffected (sources/ is untracked, so it's never checked out),
+# but this matters for the "Local build fallback" path in ADDON.md.
+sources
 
 # Python bytecode (supervisor-proxy.py) — rootfs/ IS copied into the image, so
 # without this a stale local __pycache__/*.pyc would get baked in too.

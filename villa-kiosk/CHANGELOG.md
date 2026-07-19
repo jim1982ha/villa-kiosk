@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.26.1
+
+- **`.dockerignore`: exclude `sources/`** — the model-pipeline working
+  directory (source GLBs/SweetHome exports/Blender intermediates, 1.6GB+
+  locally). It's gitignored and never read by the Dockerfile, but wasn't
+  excluded from the Docker build context, so a local `docker build` was
+  sending the whole thing to the daemon and copying it into the build stage
+  via `COPY . .` on every build. CI is unaffected (the checkout never has
+  `sources/`); this only speeds up the "Local build fallback" path in
+  ADDON.md. Also excluded the small `dist.zip` for the same reason.
+
 ## 2.26.0
 
 - **Device panel redesign.** The header/footer and every panel's "Last 24
