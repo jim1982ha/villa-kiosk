@@ -77,6 +77,32 @@ export default function BindingsTable() {
     intensityTimers.current[entityId] = setTimeout(() => commitIntensity(entityId, ratio), 500);
   };
 
+  // Same pattern for every other field here (Type/Category selects, Label and
+  // Room text inputs): patchMeta() -> a new entityMap reference triggers
+  // BabylonCanvas's structural scene re-index (SceneManager.updateConfig ->
+  // indexMeshes + applyStructure, an O(every mesh in the GLB) synchronous
+  // pass) on every single click or keystroke, freezing the UI for a few
+  // seconds each time and making the NEXT edit feel like it "didn't
+  // register." Unlike ConfigEditor's Label field, these were never debounced.
+  // Draft locally so the field updates instantly, commit after a short pause
+  // so a run of edits on one device coalesces into one rebuild.
+  const [fieldDrafts, setFieldDrafts] = useState<Record<string, Partial<EntityMapping>>>({});
+  const fieldTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const commitField = (entityId: string) => {
+    clearTimeout(fieldTimers.current[entityId]);
+    delete fieldTimers.current[entityId];
+    setFieldDrafts((prev) => {
+      const { [entityId]: change, ...rest } = prev;
+      if (change) patchMeta(entityId, change);
+      return rest;
+    });
+  };
+  const draftField = (entityId: string, change: Partial<EntityMapping>, delay = 350) => {
+    setFieldDrafts((prev) => ({ ...prev, [entityId]: { ...prev[entityId], ...change } }));
+    clearTimeout(fieldTimers.current[entityId]);
+    fieldTimers.current[entityId] = setTimeout(() => commitField(entityId), delay);
+  };
+
   return (
     <div>
       <p className="muted body-text">
@@ -98,7 +124,10 @@ export default function BindingsTable() {
 
       {bound.map((mesh) => {
         const entityId = config.meshBindings[mesh];
-        const meta = config.entityMap[entityId];
+        const meta0 = config.entityMap[entityId];
+        // Merge in any not-yet-committed edit so fields reflect the
+        // click/keystroke instantly, even while the commit is pending.
+        const meta = meta0 && fieldDrafts[entityId] ? { ...meta0, ...fieldDrafts[entityId] } : meta0;
         return (
           <div
             key={mesh}
@@ -154,7 +183,7 @@ export default function BindingsTable() {
                 <select
                   style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
                   value={meta.type}
-                  onChange={(e) => patchMeta(entityId, { type: e.target.value as EntityType })}
+                  onChange={(e) => draftField(entityId, { type: e.target.value as EntityType })}
                   title="Panel type"
                 >
                   {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -162,7 +191,7 @@ export default function BindingsTable() {
                 <select
                   style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
                   value={meta.category ?? categoryForEntity(entityId, meta.type)}
-                  onChange={(e) => patchMeta(entityId, { category: e.target.value as Category })}
+                  onChange={(e) => draftField(entityId, { category: e.target.value as Category })}
                   title="Which map filter group this device belongs to"
                 >
                   {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
@@ -171,14 +200,14 @@ export default function BindingsTable() {
                   style={{ flex: 1, minWidth: 80, fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
                   placeholder="Label"
                   value={meta.label}
-                  onChange={(e) => patchMeta(entityId, { label: e.target.value })}
+                  onChange={(e) => draftField(entityId, { label: e.target.value }, 500)}
                   title="Display name"
                 />
                 <input
                   style={{ flex: 1, minWidth: 80, fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
                   placeholder="Room"
                   value={meta.room}
-                  onChange={(e) => patchMeta(entityId, { room: e.target.value })}
+                  onChange={(e) => draftField(entityId, { room: e.target.value }, 500)}
                   title="Room name — must match a Rooms-menu name exactly for motion-glow/teleport to find it"
                   list="bindings-room-names"
                 />
@@ -207,7 +236,7 @@ export default function BindingsTable() {
                   <div style={{ flex: "1 1 220px", minWidth: 180 }}>
                     <EntityPicker
                       value={meta.motionEntityId}
-                      onChange={(id) => patchMeta(entityId, { motionEntityId: id })}
+                      onChange={(id) => draftField(entityId, { motionEntityId: id })}
                       domains={["binary_sensor"]}
                       allowCustom
                       hideCurrentLabel

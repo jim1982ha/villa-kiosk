@@ -127,6 +127,34 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     intensityTimers.current[key] = setTimeout(() => commitIntensity(key, ratio), 500);
   };
 
+  // Same story again for the "Shown" checkbox and the Type/Category/Room
+  // selects: a single click felt laggy not because the click itself was
+  // slow, but because patch() -> a new entityMap reference -> BabylonCanvas's
+  // structural re-index (SceneManager.updateConfig -> indexMeshes +
+  // applyStructure, an O(every mesh in the GLB) synchronous pass) blocks the
+  // main thread for a few seconds right after, during which the NEXT click
+  // (e.g. moving on to edit the device's Room right after toggling Show)
+  // doesn't register until that pass finishes. Flip the control instantly via
+  // local draft state — decoupled from the heavy commit — and commit shortly
+  // after, so a quick run of edits on one device coalesces into a single
+  // rebuild instead of freezing once per click.
+  const [fieldDrafts, setFieldDrafts] = useState<Record<string, Partial<EntityMapping>>>({});
+  const fieldTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const commitField = (key: string) => {
+    clearTimeout(fieldTimers.current[key]);
+    delete fieldTimers.current[key];
+    setFieldDrafts((prev) => {
+      const { [key]: change, ...rest } = prev;
+      if (change) patch(key, change);
+      return rest;
+    });
+  };
+  const draftField = (key: string, change: Partial<EntityMapping>) => {
+    setFieldDrafts((prev) => ({ ...prev, [key]: { ...prev[key], ...change } }));
+    clearTimeout(fieldTimers.current[key]);
+    fieldTimers.current[key] = setTimeout(() => commitField(key), 350);
+  };
+
   const remove = (key: string) => {
     const next = { ...config.entityMap };
     delete next[key];
@@ -210,16 +238,19 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
             </tr>
           </thead>
           <tbody>
-            {entries.map(([key, m]) => {
+            {entries.map(([key, m0]) => {
               const expanded = expandedKeys.has(key);
               const editing = remapKey === key;
+              // Merge in any not-yet-committed edit so the control reflects
+              // the click instantly, even while the heavy commit is pending.
+              const m = fieldDrafts[key] ? { ...m0, ...fieldDrafts[key] } : m0;
               return (
               <tr key={key} style={m.disabled ? { opacity: 0.5 } : undefined}>
                 <td data-label="" className="device-card-header">
                   <input
                     type="checkbox"
                     checked={!m.disabled}
-                    onChange={(e) => patch(key, { disabled: !e.target.checked })}
+                    onChange={(e) => draftField(key, { disabled: !e.target.checked })}
                     title="Show this device in the 3D view (badge, highlight, tap). Turn off for devices modelled but not yet integrated in Home Assistant."
                     aria-label={`Show ${m.entityId} in the 3D view`}
                   />
@@ -304,7 +335,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                     <td data-label="Type">
                       <select
                         value={m.type}
-                        onChange={(e) => patch(key, { type: e.target.value as EntityType })}
+                        onChange={(e) => draftField(key, { type: e.target.value as EntityType })}
                       >
                         {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                       </select>
@@ -312,7 +343,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                     <td data-label="Category">
                       <select
                         value={effectiveCategory(m.entityId, m.type, m.category, entities[m.entityId]?.attributes.device_class as string | undefined)}
-                        onChange={(e) => patch(key, { category: e.target.value as Category })}
+                        onChange={(e) => draftField(key, { category: e.target.value as Category })}
                         title="Which map filter group this device belongs to"
                       >
                         {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
@@ -328,7 +359,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                     <td data-label="Room">
                       <select
                         value={m.room ?? ""}
-                        onChange={(e) => patch(key, { room: e.target.value })}
+                        onChange={(e) => draftField(key, { room: e.target.value })}
                         title="Room this device is in — used for motion-glow and teleport. Pick from the villa's detected rooms."
                       >
                         <option value="">— none —</option>
@@ -368,7 +399,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                       {m.type === "camera" ? (
                         <EntityPicker
                           value={m.motionEntityId}
-                          onChange={(id) => patch(key, { motionEntityId: id })}
+                          onChange={(id) => draftField(key, { motionEntityId: id })}
                           domains={["binary_sensor"]}
                           allowCustom
                           hideCurrentLabel

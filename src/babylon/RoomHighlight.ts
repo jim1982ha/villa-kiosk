@@ -18,12 +18,15 @@
 //     a real polygon always wins — no redundant circle on top of a real room.
 
 import {
-  Mesh, VertexData, StandardMaterial, Color3, Vector3, Ray, MeshBuilder,
+  Mesh, VertexData, StandardMaterial, Vector3, Ray, MeshBuilder,
   type Scene,
 } from "@babylonjs/core";
 import { earClipTriangulate, type Pt2 } from "@/utils/geometry";
+import { ALERT_RED } from "./colors";
 
-const GLOW_COLOR = new Color3(0.95, 0.25, 0.2);
+// Same red as a running climate device's mesh outline / the badge alert ring
+// — see colors.ts. Was its own slightly-off Color3 before.
+const GLOW_COLOR = ALERT_RED;
 const BASE_ALPHA = 0.28;
 const PULSE_ALPHA = 0.5;
 // Sits just above the recentred floor (y≈0 after SceneManager.recenterModel)

@@ -36,6 +36,7 @@ import { axisWorldScale } from "./meshUnits";
 import { LightPool } from "./LightPools";
 import { badgeImageDataUrl, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { iconKeyFor } from "./badgeIconKeys";
+import { ALERT_RED, ALERT_RED_HEX } from "./colors";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 1.3;
@@ -155,7 +156,8 @@ const LIGHT_SHADOW_SIZE = 256;
 // Always on while the thermostat is running, independent of the "highlight
 // clickable objects" preference — this is a live status signal, not a
 // discoverability hint.
-const CLIMATE_ON_COLOR = new Color3(0.9, 0.2, 0.2);
+// Same red as the room-presence glow / badge alert ring — see colors.ts.
+const CLIMATE_ON_COLOR = ALERT_RED;
 const CLIMATE_OUTLINE_WORLD_WIDTH = 0.04; // metres, matches the blue outline's rim
 // World-space clearance added above a mesh-bound entity's bounding-box top when
 // placing its state-label anchor, so the badge floats just clear of the
@@ -225,7 +227,7 @@ type BadgeKind = "on" | "off" | "alert" | "info" | "unavailable";
 // that isn't reporting).
 const BADGE_RING: Record<BadgeKind, { color: string | null; alpha: number }> = {
   on: { color: "#FBBF24", alpha: 1 },
-  alert: { color: "#F43F5E", alpha: 1 },
+  alert: { color: ALERT_RED_HEX, alpha: 1 },
   info: { color: null, alpha: 1 },
   off: { color: null, alpha: 1 },
   unavailable: { color: null, alpha: 0.5 },

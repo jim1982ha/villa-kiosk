@@ -1,5 +1,47 @@
 # Changelog
 
+## 2.27.0
+
+- **Unified the "active/alert" red.** A room's presence-glow, a running
+  climate device's mesh outline, and the badge's alert ring were each carrying
+  their own independently hand-picked red — close but visibly different. All
+  three now share one constant (`src/babylon/colors.ts`).
+- **Fixed a room-presence highlight snapping to the wrong storey** for one
+  specific room (reported: Guest Bathroom, while other 1F rooms were
+  correct). Traced to the model pipeline's room-sidecar writer
+  (`sources/blender_pipeline.py`, `_write_room_sidecar`): it computed each
+  SweetHome level's 1-based floor number from **un-rounded** elevation
+  floats, while every other floor-assignment path in the same pipeline
+  (furniture, structural meshes) rounds first before comparing. A room drawn
+  on a sub-level whose elevation differed from the primary level by a
+  fraction of a centimetre — still the same physical storey everywhere else
+  — could get written to the sidecar on a phantom extra floor, so its glow
+  mesh got raycast against the WRONG storey's geometry
+  (`SceneManager.estimateFloorY`) while its own furniture/entities (parsed
+  through the already-correct rounded path) placed fine. Fixed by factoring
+  level→floor resolution into one shared helper (`_level_floor_map`) used by
+  both the sidecar writer and the furniture parser, so they can't drift
+  apart again. **Requires re-running the model pipeline and re-uploading the
+  regenerated `.rooms.json`** (Advanced Settings → 3D model source → Upload
+  room data) for already-exported villas to pick up the fix — the GLB itself
+  doesn't need to change.
+- **Advanced Settings device editing felt laggy** — every click on a
+  device's "Shown" checkbox, or a Type/Category/Room dropdown, patched
+  config synchronously, which triggers BabylonCanvas's structural scene
+  re-index (`SceneManager.updateConfig` → `indexMeshes` + `applyStructure`,
+  a pass over every mesh in the loaded GLB to rebuild lights, fan rigs,
+  cloned materials and shadow casters). On a villa-sized model this can
+  block the main thread for a few seconds, during which the NEXT click
+  (e.g. editing a second field right after the first) doesn't register
+  until the rebuild finishes. `ConfigEditor.tsx`'s Label field and light-
+  intensity slider already used a draft-locally/commit-after-a-pause
+  pattern to avoid this per-keystroke; extended the same pattern to the
+  Shown checkbox and every Type/Category/Room/motion-sensor field in both
+  `ConfigEditor.tsx` and `BindingsTable.tsx` (the latter's Label/Room text
+  inputs previously had no debounce at all). Controls now flip instantly via
+  local draft state, and a quick run of edits on one device coalesces into a
+  single rebuild instead of freezing once per click.
+
 ## 2.26.4
 
 - **Daily auto-reload safety net** (`src/utils/autoReload.ts`) against a slow
