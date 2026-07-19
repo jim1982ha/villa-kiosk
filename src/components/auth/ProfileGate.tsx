@@ -11,6 +11,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/roles";
 import { pinRequired as fetchPinRequired, verify, openSession } from "@/auth/PinVerifier";
 import { startModelPrefetch, onPrefetchAvailable } from "@/utils/modelPrefetch";
+import { isIOS } from "@/utils/diagnostics";
 import PinPad from "./PinPad";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
@@ -51,9 +52,21 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   // user is still on this screen, not just the network fetch. Stays false
   // (children mount only after login, today's behaviour) whenever /model/
   // needs a session that doesn't exist yet — see modelPrefetch.ts.
+  //
+  // EXCLUDES iOS entirely. iOS Safari/WebView has a known, real per-tab
+  // memory ceiling that a heavy villa's Draco decode + GPU upload can exceed
+  // — see diagnostics.ts's crash-loop guard, built for exactly this. Before
+  // this early-preload feature, that crash only happened after a deliberate
+  // login; mounting the scene here would instead trigger it the instant the
+  // profile-select screen appears, with no user action at all, and (worse)
+  // have it retry automatically on every reload before the user ever reaches
+  // the PIN screen. iOS keeps the pre-2.29.0 behaviour: load only after
+  // login, so a crash-prone villa fails the same way it always did, not
+  // sooner or more aggressively.
   const [modelPreloadable, setModelPreloadable] = useState(false);
   useEffect(() => {
     if (role && !switching) return; // already rendering children unconditionally below
+    if (isIOS()) return;
     return onPrefetchAvailable(() => setModelPreloadable(true));
   }, [role, switching]);
 

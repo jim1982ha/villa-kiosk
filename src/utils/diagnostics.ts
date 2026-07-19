@@ -162,7 +162,7 @@ function webglInfo(): Record<string, unknown> {
   }
 }
 
-function isIOS(): boolean {
+export function isIOS(): boolean {
   return /iP(hone|ad|od)/.test(navigator.userAgent)
     || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }

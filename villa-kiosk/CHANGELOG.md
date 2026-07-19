@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.29.1
+
+- **Fixed a real regression v2.29.0 introduced on iOS.** A field report: a
+  friend's iPhone hit the crash-loop guard (`SCENE_LOAD_CRASH_LOOP`,
+  `Last load phase reached: import-mesh`) before ever reaching the PIN
+  screen. This villa's GLB is known to exceed iOS Safari/WebView's per-tab
+  memory ceiling during Draco decode + GPU upload (a pre-existing device
+  limitation — see the earlier iPhone crash-loop investigation; the durable
+  fix is a lighter GLB export, not something fixable in app code). Before
+  2.29.0, that crash only happened after a deliberate login; 2.29.0's early
+  scene preload (`modelPreloadable`) started attempting the SAME decode
+  automatically the instant the profile-select screen appeared — so on a
+  crash-prone villa, iOS now hit the failure immediately and repeatedly on
+  every reload, with no user action at all, instead of only when someone
+  chose to log in.
+  - `src/components/auth/ProfileGate.tsx`: early scene preload now excludes
+    iOS entirely (`isIOS()`, newly exported from `utils/diagnostics.ts`) —
+    iOS keeps the pre-2.29.0 behaviour, loading only after login. Every
+    other platform (desktop, Android, and iOS's own Safari-based
+    `MacIntel`-with-touch detection aside) keeps the early-preload speedup.
+  - v2.28.0's byte-level prefetch (`startModelPrefetch`) is UNCHANGED and
+    still runs on iOS too — only the actual scene mount + decode is deferred
+    there. Fetching bytes early is harmless (no memory pressure); decoding
+    them is what risks the OOM.
+
 ## 2.29.0
 
 - **v2.28.0's prefetch alone wasn't enough — field data explained why.** A
