@@ -348,16 +348,16 @@ export class EntityVisuals {
     this.bakedMode = baked;
   }
 
-  /** Repaint every badge glyph in place from the current config (colour +
-   *  glyph) using each entity's last known state — cheap, no re-index. Called
-   *  when only per-entity badge COLOURS changed, so a colour pick doesn't pay
-   *  for the full indexMeshes pass (its several-second hitch is what made the
-   *  colour modal feel laggy). */
+  /** Repaint every badge from the current config (per-entity colour + glyph).
+   *  Called when only badge COLOURS changed, so a colour pick doesn't pay for
+   *  the full indexMeshes pass (its several-second hitch is what made the colour
+   *  modal feel laggy). Goes through rebuildLabels — which recreates each badge's
+   *  GUI Image fresh (a data-URL swap on the existing Babylon Image does NOT
+   *  reliably re-render the GUI texture, so the map badge kept its old colour)
+   *  and re-applies each entity's cached state — but skips the material re-clone
+   *  / per-light recreation that makes indexMeshes heavy. */
   repaintBadges(): void {
-    for (const [id, lbl] of this.labels) {
-      const st = this.lastState.get(id);
-      if (st) this.updateLabel(id, lbl.type, st);
-    }
+    this.rebuildLabels();
     this.requestRender();
   }
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.5
+
+### Changes
+- Fix badge colour not repainting on the map: route colour-only change through rebuildLabels (fresh GUI Image) instead of an in-place source swap that Babylon didn't re-render
+
+---
+
+
 ## 2.32.4
 
 ### Changes
