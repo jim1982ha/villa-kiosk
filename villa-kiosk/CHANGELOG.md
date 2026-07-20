@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.8
+
+### Changes
+- LED strip light now runs ALONG the whole strip: an elongated fixture gets several dimmed, overlapping floor pools distributed down its axis (blended into one even line + wall-clipped) instead of a single bright blob at its midpoint. Compact fixtures unchanged.
+
+---
+
+
 ## 2.32.7
 
 ### Changes

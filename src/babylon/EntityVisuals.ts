@@ -17,7 +17,7 @@
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
   Vector3, Matrix, Quaternion, TransformNode, Ray, VertexBuffer, Material, Mesh,
-  type AbstractMesh, type Scene,
+  type AbstractMesh, type Scene, type BoundingBox,
 } from "@babylonjs/core";
 import {
   AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel, Image,
@@ -278,7 +278,7 @@ export class EntityVisuals {
   /** Baked-mode counterpart to meshLights — see LightPools.ts for why a real
    *  PointLight is pointless there (the structure renders unlit) and what
    *  this fakes instead. Keyed the same way, one per fixture mesh. */
-  private meshLightPools = new Map<number, LightPool>();
+  private meshLightPools = new Map<number, LightPool[]>();
   /** Fixture-mesh uniqueIds whose pool has already been clipped to the walls
    *  (clipPoolToWalls runs once, lazily, the first time the light turns on). */
   private clippedPools = new Set<number>();
@@ -463,8 +463,8 @@ export class EntityVisuals {
       const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
       const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
       for (const mesh of meshes) {
-        const pool = this.meshLightPools.get(mesh.uniqueId);
-        if (pool) fn(pool, on && mesh.isEnabled(), colour, effectiveFrac);
+        const pools = this.meshLightPools.get(mesh.uniqueId);
+        if (pools) for (const pool of pools) fn(pool, on && mesh.isEnabled(), colour, effectiveFrac);
       }
     }
   }
@@ -633,16 +633,7 @@ export class EntityVisuals {
         // same floor-finding raycast; scene-wide predicate because every mesh is
         // already in the scene even though this loop hasn't reached them all.)
         if (this.bakedMode) {
-          const fixturePos = bb.centerWorld.clone();
-          const ray = new Ray(fixturePos, Vector3.Down(), 8);
-          const hit = this.scene.pickWithRay(ray, (candidate) =>
-            candidate !== m && candidate.getTotalVertices() > 0 &&
-            !/^(halo_|label_|marker)/i.test(candidate.name));
-          const floorPos = hit?.hit && hit.pickedPoint
-            ? new Vector3(fixturePos.x, hit.pickedPoint.y + 0.02, fixturePos.z)
-            : new Vector3(fixturePos.x, fixturePos.y - 1, fixturePos.z);
-          const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}`, floorPos, LIGHT_POOL_RADIUS);
-          this.meshLightPools.set(m.uniqueId, pool);
+          this.meshLightPools.set(m.uniqueId, this.buildFloorPools(m, bb, size, longest));
         }
       }
     }
@@ -857,10 +848,50 @@ export class EntityVisuals {
     const seen = new Set<PointLight>();
     this.meshLights.forEach((l) => { if (!seen.has(l)) { seen.add(l); l.dispose(); } });
     this.meshLights.clear();
-    this.meshLightPools.forEach((p) => p.dispose());
+    this.meshLightPools.forEach((arr) => arr.forEach((p) => p.dispose()));
     this.meshLightPools.clear();
     this.clippedPools.clear();
     this.wallOccluders = null; // shadowCasters is about to be rebuilt
+  }
+
+  /** Floor light-pool(s) for one fixture mesh (baked mode). A compact fixture
+   *  gets ONE circular pool under its centre; an elongated LED strip gets SEVERAL
+   *  dimmer pools spaced along its axis, so the wash follows the whole led line
+   *  instead of a single bright blob at the strip's midpoint (the reported bug).
+   *  Each pool floor-finds its own drop point. */
+  private buildFloorPools(m: AbstractMesh, bb: BoundingBox, size: Vector3, longest: number): LightPool[] {
+    const min = bb.minimumWorld, max = bb.maximumWorld;
+    const cx = (min.x + max.x) / 2, cz = (min.z + max.z) / 2;
+    const horiz = Math.max(size.x, size.z);
+    const isStrip = longest >= STRIP_MIN_LENGTH && horiz >= STRIP_MIN_LENGTH;
+
+    const centres: { x: number; z: number }[] = [];
+    if (isStrip) {
+      // One pool every ~radius along the dominant HORIZONTAL axis; the ~50%
+      // overlap blends them into one continuous line-shaped wash.
+      const n = Math.max(1, Math.round(horiz / LIGHT_POOL_RADIUS));
+      for (let i = 0; i <= n; i++) {
+        const t = i / n;
+        centres.push(size.x >= size.z
+          ? { x: min.x + t * size.x, z: cz }
+          : { x: cx, z: min.z + t * size.z });
+      }
+    } else {
+      centres.push({ x: cx, z: cz });
+    }
+    // Dim each strip pool so the additive overlap sums to an even line rather
+    // than a bright lump where pools stack (~2 overlap at any interior point).
+    const scale = isStrip ? 0.6 : 1;
+
+    return centres.map(({ x, z }, i) => {
+      const ray = new Ray(new Vector3(x, max.y, z), Vector3.Down(), 8);
+      const hit = this.scene.pickWithRay(ray, (c) =>
+        c !== m && c.getTotalVertices() > 0 && !/^(halo_|label_|marker)/i.test(c.name));
+      const y = hit?.hit && hit.pickedPoint ? hit.pickedPoint.y + 0.02 : min.y - 1;
+      const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}_${i}`, new Vector3(x, y, z), LIGHT_POOL_RADIUS);
+      pool.intensityScale = scale;
+      return pool;
+    });
   }
 
   /** Clip a baked-mode floor pool to the surrounding walls so its glow never
@@ -1801,16 +1832,18 @@ export class EntityVisuals {
         // on a currently-hidden floor must not light its pool even if the HA
         // entity itself is "on" (see resyncLightPoolsToFloor for the other
         // direction — a floor SWITCH with no entity-state change).
-        const pool = this.meshLightPools.get(mesh.uniqueId);
-        if (pool) {
-          // Clip the pool to the surrounding walls the first time it lights up,
+        const pools = this.meshLightPools.get(mesh.uniqueId);
+        if (pools) {
+          // Clip each pool to the surrounding walls the first time it lights up,
           // so its glow can't spill outside the house (see clipPoolToWalls).
           // Lazy: only fixtures the user actually turns on pay for the rays.
           if (on && !this.clippedPools.has(mesh.uniqueId)) {
             this.clippedPools.add(mesh.uniqueId);
-            this.clipPoolToWalls(pool);
+            for (const pool of pools) this.clipPoolToWalls(pool);
           }
-          pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
+          for (const pool of pools) {
+            pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
+          }
         }
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;

@@ -60,6 +60,11 @@ export class LightPool {
    *  (see applyFootprint) without re-deriving them. */
   readonly center: Vector3;
   readonly radius: number;
+  /** Per-pool brightness multiplier applied on top of the live intensity. 1 for
+   *  a normal single-fixture pool; <1 for the several overlapping pools an LED
+   *  strip is split into, so their additive overlap sums to an even line instead
+   *  of a bright lump in the middle. */
+  intensityScale = 1;
   private material: StandardMaterial;
 
   /** `floorPosition` — where the pool sits (the caller has already found the
@@ -101,7 +106,7 @@ export class LightPool {
     this.mesh.setEnabled(on);
     if (!on) return;
     this.material.emissiveColor = colour;
-    this.material.alpha = Math.max(0.15, Math.min(2, intensityFrac));
+    this.material.alpha = Math.min(2, Math.max(0.15, intensityFrac) * this.intensityScale);
   }
 
   /** Rebuild the round disc into a wall-clipped "visibility polygon": a triangle
