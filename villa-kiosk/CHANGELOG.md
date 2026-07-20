@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.9
+
+### Changes
+- Fix iOS-only rainbow speckle on light pools: additive pool material now disables depth-write and applies a polygon zOffset, so the coplanar/overlapping pools no longer z-fight the floor on iPad's lower-precision depth buffer (Android was already fine)
+
+---
+
+
 ## 2.32.8
 
 ### Changes

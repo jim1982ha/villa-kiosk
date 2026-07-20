@@ -93,6 +93,16 @@ export class LightPool {
     // whole point, since a normal alpha-blend decal would just paint a flat
     // circle over the (unlit) floor rather than reading as "lit".
     this.material.alphaMode = Constants.ALPHA_ADD;
+    // The pool lies ~2cm above the floor and (for strips) several pools overlap
+    // coplanar. That 2cm is enough separation on desktop/Android, but iOS uses a
+    // lower-precision depth buffer, so it z-fought the floor and the sibling
+    // pools — showing up as dense rainbow speckle across the lit area on iPad,
+    // fine everywhere else. Two resolution-independent fixes: don't WRITE depth
+    // (a glow decal never needs to; kills pool-vs-pool fighting while depth TEST
+    // still lets walls occlude it), and a polygon zOffset pulls it clear of the
+    // floor in depth regardless of the buffer's precision.
+    this.material.disableDepthWrite = true;
+    this.material.zOffset = -2;
     this.mesh.material = this.material;
     this.mesh.setEnabled(false);
   }
