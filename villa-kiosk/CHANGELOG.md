@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.6
+
+### Changes
+- Document that per-badge colour (entityMap.badgeColor) is covered by Export/Import Configuration — it already round-trips via whole-entityMap serialization; guard the contract against future field-copy rewrites
+
+---
+
+
 ## 2.32.5
 
 ### Changes

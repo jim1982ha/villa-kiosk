@@ -280,9 +280,13 @@ export function resetConfig(): void {
  *  - covers exactly what the product spec calls "your configuration" — device
  *    ↔ room bindings (entityMap + meshBindings, auto-detected AND manually
  *    bound), room definitions (teleportPoints, incl. each room's saved
- *    overviewPose), device icons, enabled/disabled devices (the entityMap
+ *    overviewPose), device icons (incl. each device's per-badge colour override,
+ *    entityMap `badgeColor`), enabled/disabled devices (the entityMap
  *    `disabled` flag) and every option in the First-person/Overview, Render
- *    quality and Device-icon Settings sections.
+ *    quality and Device-icon Settings sections. entityMap is exported/imported
+ *    as whole mapping objects, so every per-entity field rides along — do NOT
+ *    rewrite this to copy individual fields, or new ones (like badgeColor) would
+ *    silently stop being backed up.
  *  - excludes the per-device overview default framing (already documented in
  *    SceneManager.saveOverviewDefault as intentionally per-device, not
  *    synced/exported). There are no HA credentials to exclude anymore — the
