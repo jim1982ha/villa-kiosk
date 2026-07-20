@@ -4,7 +4,7 @@
 // a future model upload. Entities bound via tap mode are NOT shown here — they
 // appear (with inline settings) in the Bound 3D objects section below.
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Pencil, Check, X, Search, ChevronDown, ChevronRight } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -44,6 +44,17 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
+
+  // Opened via a device panel's edit shortcut: scroll the modal straight to
+  // THIS entity's card instead of leaving it at the top (Villa location / 3D
+  // model source), which is what the surrounding modal scrolls to by default.
+  // Ref'd on the matched row below; only fires once, and only for that entry
+  // point — a manual search shouldn't yank the scroll position around.
+  const matchedRowRef = useRef<HTMLTableRowElement>(null);
+  useEffect(() => {
+    if (initialSearch) matchedRowRef.current?.scrollIntoView({ block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Only show entities that are NOT already handled by a mesh binding.
   const boundEntityIds = useMemo(
@@ -245,7 +256,11 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
               // the click instantly, even while the heavy commit is pending.
               const m = fieldDrafts[key] ? { ...m0, ...fieldDrafts[key] } : m0;
               return (
-              <tr key={key} style={m.disabled ? { opacity: 0.5 } : undefined}>
+              <tr
+                key={key}
+                ref={key === initialSearch ? matchedRowRef : undefined}
+                style={m.disabled ? { opacity: 0.5 } : undefined}
+              >
                 <td data-label="" className="device-card-header">
                   <input
                     type="checkbox"

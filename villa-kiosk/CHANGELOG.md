@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.2
+
+### Changes
+- Advanced Settings opened via a device's Edit shortcut now auto-scrolls to that entity's card instead of the modal top
+
+---
+
+
 ## 2.32.1
 
 ### Changes
