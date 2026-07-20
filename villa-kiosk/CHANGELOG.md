@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.4
+
+### Changes
+- Fixes: badge colour picker now updates header live + no re-index lag (cheap repaint); stronger badge shrink on far zoom-out; hover/touch tooltip on discrete state-timeline charts
+
+---
+
+
 ## 2.32.3
 
 ### Changes

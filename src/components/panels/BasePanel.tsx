@@ -83,7 +83,7 @@ export default function BasePanel({ title, room, icon, onClose, children }: Prop
         <BadgeColorModal
           current={badge.color}
           categoryColor={badge.categoryColor}
-          onPick={(hex) => { onSetBadgeColor(hex); setColorOpen(false); }}
+          onChange={onSetBadgeColor}
           onClose={() => setColorOpen(false)}
         />
       )}

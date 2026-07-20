@@ -21,11 +21,17 @@ interface Props {
   current?: string;
   /** A representative swatch for the "category default" chip. */
   categoryColor: string;
-  onPick: (hex: string | null) => void;   // null = reset to category default
+  /** Apply a colour live (null = reset to category default). Does NOT close —
+   *  the header badge + map badge update immediately (cheap repaint), so the
+   *  custom picker previews as you drag without the modal dismissing itself. */
+  onChange: (hex: string | null) => void;
   onClose: () => void;
 }
 
-export default function BadgeColorModal({ current, categoryColor, onPick, onClose }: Props) {
+export default function BadgeColorModal({ current, categoryColor, onChange, onClose }: Props) {
+  // Swatches are a decision → apply and dismiss. The custom picker and "default"
+  // reset apply live but leave the modal open for further tweaking.
+  const pickAndClose = (hex: string | null) => { onChange(hex); onClose(); };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
@@ -49,7 +55,7 @@ export default function BadgeColorModal({ current, categoryColor, onPick, onClos
                 key={hex}
                 className={`badge-swatch${current?.toLowerCase() === hex.toLowerCase() ? " selected" : ""}`}
                 style={{ background: hex }}
-                onClick={() => onPick(hex)}
+                onClick={() => pickAndClose(hex)}
                 aria-label={`Set colour ${hex}`}
                 title={hex}
               />
@@ -61,12 +67,12 @@ export default function BadgeColorModal({ current, categoryColor, onPick, onClos
               <input
                 type="color"
                 value={current ?? categoryColor}
-                onChange={(e) => onPick(e.target.value)}
+                onChange={(e) => onChange(e.target.value)}
                 aria-label="Custom colour"
               />
               <span>Custom…</span>
             </label>
-            <button className="btn ghost" onClick={() => onPick(null)} style={{ marginLeft: "auto" }}>
+            <button className="btn ghost" onClick={() => pickAndClose(null)} style={{ marginLeft: "auto" }}>
               <RotateCcw size={16} /> Category default
             </button>
           </div>

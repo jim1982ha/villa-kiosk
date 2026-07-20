@@ -348,6 +348,19 @@ export class EntityVisuals {
     this.bakedMode = baked;
   }
 
+  /** Repaint every badge glyph in place from the current config (colour +
+   *  glyph) using each entity's last known state — cheap, no re-index. Called
+   *  when only per-entity badge COLOURS changed, so a colour pick doesn't pay
+   *  for the full indexMeshes pass (its several-second hitch is what made the
+   *  colour modal feel laggy). */
+  repaintBadges(): void {
+    for (const [id, lbl] of this.labels) {
+      const st = this.lastState.get(id);
+      if (st) this.updateLabel(id, lbl.type, st);
+    }
+    this.requestRender();
+  }
+
   updateConfig(config: AppConfig): void {
     const prevGroups = this.config.deviceGroups;
     this.config = config;

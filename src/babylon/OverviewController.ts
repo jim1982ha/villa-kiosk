@@ -112,7 +112,11 @@ export class OverviewController {
   getIconZoomCap(): number {
     const r = this.camera.radius || this.fitRadius;
     if (r <= this.fitRadius) return 1;
-    return clamp(this.fitRadius / r, 0.4, 1);
+    // Shrink FASTER than the villa does (exponent > 1) once zoomed out past the
+    // fit, so badges visibly recede instead of just tracking the villa's size —
+    // a plain fitRadius/r left them looking huge over a tiny far-zoom villa.
+    // Floored low so an extreme zoom-out declutters to small chips.
+    return clamp(Math.pow(this.fitRadius / r, 1.8), 0.22, 1);
   }
 
   fitTo(ext: { min: Vector3; max: Vector3 }): void {

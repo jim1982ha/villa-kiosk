@@ -5,9 +5,12 @@
 // states (on/off, locked/unlocked, open/closed, or an arbitrary text state
 // like an access point's "connected"/"disconnected") rather than a numeric
 // series. Renders div segments (not SVG) since flat colour blocks, not a
-// line, are the whole point.
+// line, are the whole point. Hover/touch shows the state + time at the pointer
+// (the discrete-history counterpart of the numeric charts' crosshair tooltip).
 
+import { useState } from "react";
 import type { StateHistoryPoint } from "@/types/ha.types";
+import { fmtChartTime } from "./chartUtils";
 
 export interface TimelineLegendEntry {
   state: string;
@@ -30,7 +33,15 @@ interface Props {
   legend?: TimelineLegendEntry[];
 }
 
+/** Tidy a raw HA state for display: "not_home" → "Not home", "on" → "On". */
+function prettyState(s: string): string {
+  const t = s.replace(/_/g, " ").trim();
+  return t ? t[0].toUpperCase() + t.slice(1) : s;
+}
+
 export default function StateTimeline({ data, hours = 24, colorFor, height, legend }: Props) {
+  const [hover, setHover] = useState<{ x: number; state: string; t: number } | null>(null);
+
   if (data.length === 0) {
     return <div className="muted body-text">Not enough history yet.</div>;
   }
@@ -60,17 +71,44 @@ export default function StateTimeline({ data, hours = 24, colorFor, height, lege
     return <div className="muted body-text">Not enough history yet.</div>;
   }
 
+  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const t = start + frac * span;
+    const seg = segments.find((s) => t >= s.from && t <= s.to) ?? segments[segments.length - 1];
+    setHover({ x: (e.clientX - rect.left), state: seg.state, t });
+  };
+
   return (
     <>
-      <div className="state-timeline" style={height ? { height } : undefined}>
-        {segments.map((s, i) => (
+      <div className="spark-wrap">
+        <div
+          className="state-timeline"
+          style={{ ...(height ? { height } : undefined), touchAction: "none" }}
+          onPointerMove={onMove}
+          onPointerDown={onMove}
+          onPointerLeave={() => setHover(null)}
+        >
+          {segments.map((s, i) => (
+            <div
+              key={i}
+              className="state-timeline-seg"
+              style={{ left: `${s.left}%`, width: `${Math.max(s.width, 0.3)}%`, background: colorFor(s.state) }}
+            />
+          ))}
+          {hover && (
+            <div className="state-timeline-cursor" style={{ left: hover.x }} />
+          )}
+        </div>
+        {hover && (
           <div
-            key={i}
-            className="state-timeline-seg"
-            style={{ left: `${s.left}%`, width: `${Math.max(s.width, 0.3)}%`, background: colorFor(s.state) }}
-            title={`${s.state} — ${new Date(s.from).toLocaleTimeString()} to ${new Date(s.to).toLocaleTimeString()}`}
-          />
-        ))}
+            className="spark-tip"
+            style={{ left: hover.x, bottom: "100%", marginBottom: 6, transform: `translateX(${hover.x > 160 ? "-100%" : "0"})` }}
+          >
+            <strong><span style={{ color: colorFor(hover.state) }}>●</span> {prettyState(hover.state)}</strong>
+            <span>{fmtChartTime(hover.t)}</span>
+          </div>
+        )}
       </div>
       {legend && legend.length > 1 && (
         <div className="row" style={{ gap: 16, marginTop: 8, fontSize: 12, flexWrap: "wrap" }}>

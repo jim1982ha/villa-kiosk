@@ -367,13 +367,17 @@ export default function Dashboard() {
             badge: (() => {
               const { entityId, mapping } = activePanel;
               const ent = entities[entityId];
+              // Read the colour from LIVE config, not activePanel.mapping (a
+              // snapshot taken when the panel opened) — otherwise the header
+              // badge wouldn't reflect a just-picked colour until reopened.
+              const liveMapping = config.entityMap[entityId] ?? mapping;
               const category = effectiveCategory(
-                entityId, mapping.type, mapping.category,
+                entityId, mapping.type, liveMapping.category ?? mapping.category,
                 ent?.attributes.device_class as string | undefined);
               return {
                 category,
                 iconKey: iconKeyFor(mapping.type, ent),
-                color: mapping.badgeColor,
+                color: liveMapping.badgeColor,
                 categoryColor: CATEGORY_COLORS[category].bottom,
               };
             })(),

@@ -38,7 +38,30 @@ import { tapDebug } from "@/utils/tapDebug";
 import { loadOverviewView, saveOverviewView } from "@/utils/storage";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
-import type { TeleportPoint } from "@/types/scene.types";
+import type { TeleportPoint, EntityMapping } from "@/types/scene.types";
+
+/** True when two entityMaps differ ONLY in badgeColor values (identical keys,
+ *  every other field equal, and at least one badgeColor actually changed). Lets
+ *  updateConfig route a colour pick to a cheap badge repaint instead of a full
+ *  structural re-index. */
+function badgeColorOnlyDiff(
+  a: Record<string, EntityMapping>,
+  b: Record<string, EntityMapping>,
+): boolean {
+  const ak = Object.keys(a);
+  if (ak.length !== Object.keys(b).length) return false;
+  let colourChanged = false;
+  for (const k of ak) {
+    const ea = a[k], eb = b[k];
+    if (!eb) return false;
+    if (ea === eb) continue;
+    const { badgeColor: ca, ...ra } = ea;
+    const { badgeColor: cb, ...rb } = eb;
+    if (JSON.stringify(ra) !== JSON.stringify(rb)) return false; // a non-colour field changed
+    if (ca !== cb) colourChanged = true;
+  }
+  return colourChanged;
+}
 
 export interface SceneManagerOptions {
   config: AppConfig;
@@ -1383,11 +1406,22 @@ export class SceneManager {
     const sh3dChanged =
       prev.sh3dRooms !== config.sh3dRooms || prev.sh3dEntities !== config.sh3dEntities;
 
+    // A per-entity BADGE COLOUR pick changes entityMap by reference like any
+    // other edit, but needs only a cheap glyph repaint — NOT the full
+    // indexMeshes re-clone/relight pass (whose multi-second hitch made the
+    // colour modal feel laggy). Detect the colour-only case and route it to
+    // repaintBadges() below instead of the structural branch.
+    const badgeColorOnly =
+      prev.entityMap !== config.entityMap &&
+      prev.meshBindings === config.meshBindings &&
+      !sh3dChanged &&
+      badgeColorOnlyDiff(prev.entityMap, config.entityMap);
+
     // indexMeshes()/applyStructure() only read entity↔mesh bindings; everything
     // else (glass hints, grass, model transform) takes effect on the next
     // model load, not here.
     const structuralChanged =
-      prev.entityMap !== config.entityMap ||
+      (prev.entityMap !== config.entityMap && !badgeColorOnly) ||
       prev.meshBindings !== config.meshBindings ||
       sh3dChanged;
 
@@ -1407,6 +1441,7 @@ export class SceneManager {
     this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
     this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes, config.hiddenCategories);
     this.visuals.updateConfig(config); // internally cheap; rebuilds labels only on its own diff
+    if (badgeColorOnly) this.visuals.repaintBadges(); // cheap glyph-only refresh
 
     // A room added/renamed/removed via the Rooms menu ("Add room here") should
     // start glowing (or stop) immediately — no model reload needed, unlike the
