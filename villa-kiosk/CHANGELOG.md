@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.1
+
+### Changes
+- Consistent active-device red: badge ring uses shared ALERT_RED for all active devices; camera/assist_satellite active states now ring; locked locks quiet
+
+---
+
+
 ## 2.32.0
 
 Full-codebase audit: redundancy, memory-leak, and security passes, with

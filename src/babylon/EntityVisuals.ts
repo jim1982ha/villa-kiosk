@@ -219,14 +219,16 @@ type BadgeKind = "on" | "off" | "alert" | "info" | "unavailable";
 // Badge outline palette. The squircle's own fill is now FIXED per category
 // (see config/EntityCategories.CATEGORY_COLORS + badgeIcons.ts) — it never
 // recolours with live state. State instead shows as a ring around the
-// squircle: amber = on/active, red = alert (mirrors the red mesh outline a
-// running climate device gets — see EntityVisuals.applyClimateOutline —
-// same signal, same colour language, applied to the 2D badge instead of the
-// 3D asset). Off and purely-informational sensors get no ring at all;
-// unavailable dims the whole badge instead (no ring makes sense for a device
-// that isn't reporting).
+// squircle in ONE colour: the shared ALERT_RED (colors.ts) — the same red
+// as a running climate unit's mesh outline (applyClimateOutline) and the
+// room-presence floor glow (RoomHighlight). ANY active device ("on") and
+// any alerting one ("alert") get that ring, whatever its category — "on"
+// used to be a separate amber that read as a different signal (and was
+// near-invisible on the orange comfort badges). Off and purely-
+// informational sensors get no ring at all; unavailable dims the whole
+// badge instead (no ring makes sense for a device that isn't reporting).
 const BADGE_RING: Record<BadgeKind, { color: string | null; alpha: number }> = {
-  on: { color: "#FBBF24", alpha: 1 },
+  on: { color: ALERT_RED_HEX, alpha: 1 },
   alert: { color: ALERT_RED_HEX, alpha: 1 },
   info: { color: null, alpha: 1 },
   off: { color: null, alpha: 1 },
@@ -1450,11 +1452,17 @@ export class EntityVisuals {
     return null;
   }
 
-  /** Distil any entity's live state into one of four colour-coded badge kinds. */
+  /** Distil any entity's live state into one of the colour-coded badge kinds.
+   *  Exhaustive over EntityDomain: every domain must resolve "active" from its
+   *  OWN state vocabulary — camera and assist_satellite are never literally
+   *  "on", so the default case silently left them ringless forever. */
   private badgeKind(type: EntityType, s: HassEntity): BadgeKind {
     if (s.state === "unavailable" || s.state === "unknown") return "unavailable";
     switch (type) {
-      case "lock":          return s.state === "locked" ? "on" : "alert";
+      // Locked is the normal, secure state — quiet, no ring. Only an
+      // unlocked door demands attention. (Locked used to ring amber; with
+      // the one-red signal a permanent ring would drown the real alerts.)
+      case "lock":          return s.state === "locked" ? "off" : "alert";
       case "binary_sensor": return s.state === "on" ? "alert" : "off";
       case "climate":       return s.state === "off" ? "off" : "on";
       case "cover": {
@@ -1462,7 +1470,9 @@ export class EntityVisuals {
         if (pos != null) return pos > 0 ? "on" : "off";
         return s.state === "closed" ? "off" : "on";
       }
-      case "media_player":  return s.state === "playing" ? "on" : "off";
+      case "media_player":  return s.state === "playing" || s.state === "buffering" ? "on" : "off";
+      case "camera":        return s.state === "recording" || s.state === "streaming" ? "on" : "off";
+      case "assist_satellite": return s.state === "idle" ? "off" : "on"; // listening/processing/responding
       case "sensor":        return "info"; // informational: neutral disc, value pill carries meaning
       default:              return s.state === "on" ? "on" : "off"; // light/fan/switch/input_boolean
     }
