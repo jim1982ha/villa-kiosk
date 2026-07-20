@@ -7,13 +7,13 @@
 // There's no HA URL/token here anymore: the kiosk always reaches Home Assistant
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sliders, Sun, Moon, Monitor } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { DEFAULT_SITE_TITLE, DEFAULT_RENDER, RENDER_PRESETS, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
+import { DEFAULT_SITE_TITLE, DEFAULT_RENDER, RENDER_PRESETS, type AppConfig, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
 import type { SceneManager } from "@/babylon/SceneManager";
 
 interface Props {
@@ -24,34 +24,59 @@ interface Props {
 }
 
 export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: Props) {
-  const { config, update, replace } = useConfig();
+  const { config, update } = useConfig();
   const { role } = useProfile();
   const { haConfig } = useHA();
   // RBAC: which settings areas the active profile may use. Dashboard already
   // refuses to open this modal without "openSettings"; these narrow further.
   const can = (c: Capability) => role != null && hasCapability(role, c);
 
-  // Snapshot the config at mount so Cancel can undo every live-applied tweak
-  // (render preview, eye height, walk speed, and the toggles that update()
-  // immediately) — restoring both the persisted config and the live scene.
-  const initialConfigRef = useRef(config);
-  const handleCancel = () => {
-    replace(initialConfigRef.current);
-    manager?.updateConfig(initialConfigRef.current);
-    onClose();
+  // Every setting here applies AND persists live now, matching Advanced
+  // Settings — there is nothing left to Cancel/Save, only a single Close.
+  // A slider/text field still needs a local echo for responsive typing/drag,
+  // but committing config on every single tick would mean writing the WHOLE
+  // config blob (entityMap included) to localStorage dozens of times a
+  // second. So: apply to the live scene on every tick (unchanged), but
+  // debounce the config commit — same pattern as Advanced Settings'
+  // commitLabel (ConfigEditor.tsx) — and always flush before the modal
+  // actually closes so a change made just before Close is never dropped.
+  const pendingPatch = useRef<Partial<AppConfig>>({});
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushPending = () => {
+    if (commitTimer.current) { clearTimeout(commitTimer.current); commitTimer.current = null; }
+    if (Object.keys(pendingPatch.current).length) {
+      update(pendingPatch.current);
+      pendingPatch.current = {};
+    }
   };
+  const scheduleCommit = (patch: Partial<AppConfig>) => {
+    pendingPatch.current = { ...pendingPatch.current, ...patch };
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    commitTimer.current = setTimeout(flushPending, 500);
+  };
+  // Safety net: flush if the component unmounts some other way than the
+  // Close button/backdrop (both already flush explicitly below).
+  useEffect(() => () => flushPending(), []);
+  const closeModal = () => { flushPending(); onClose(); };
 
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);
   const [eyeHeight, setEyeHeight] = useState(config.eyeHeight ?? 1.7);
   const [walkSpeed, setWalkSpeed] = useState(config.walkSpeed ?? 1);
   const [render, setRender] = useState<RenderConfig>(config.render ?? DEFAULT_RENDER);
 
+  const applySiteTitle = (v: string) => {
+    setSiteTitle(v);
+    scheduleCommit({ siteTitle: v.trim() });
+  };
+
   // Live-apply render tuning straight to the scene while dragging, so the user
-  // can iterate on look/perf without saving + reloading.
+  // can iterate on look/perf without saving + reloading, and debounce-commit
+  // the same object to config so it's remembered without a Save step.
   const applyRender = (patch: Partial<RenderConfig>) => {
     const next = { ...render, ...patch };
     setRender(next);
     manager?.setRenderConfig(next);
+    scheduleCommit({ render: next });
   };
 
   // Switching presets materialises a whole RenderConfig.
@@ -63,26 +88,24 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   const applyEyeHeight = (h: number) => {
     setEyeHeight(h);
     manager?.camera.setEyeHeight(h);
+    scheduleCommit({ eyeHeight: h });
   };
   const applyWalkSpeed = (v: number) => {
     setWalkSpeed(v);
     manager?.camera.setWalkSpeed(v);
-  };
-
-  const save = () => {
-    update({ siteTitle: siteTitle.trim(), eyeHeight, walkSpeed, render });
-    onClose();
+    scheduleCommit({ walkSpeed: v });
   };
 
   return (
-    <div className="modal-backdrop" onClick={handleCancel}>
+    <div className="modal-backdrop" onClick={closeModal}>
       <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <h2>Settings</h2>
           {/* Theme selector lives in the header, icon-only + right-aligned —
-              the Sun/Moon/Monitor glyphs are self-explanatory. Applied
-              instantly (config.theme drives the data-theme attribute in
-              ConfigContext) and persisted on Save. */}
+              the Sun/Moon/Monitor glyphs are self-explanatory. Applied AND
+              persisted instantly (config.theme drives the data-theme
+              attribute in ConfigContext) — no Save step, like everything
+              else in this modal now. */}
           {can("customizeAppearance") && (
             <div className="segmented segmented-icons" role="group" aria-label="Theme">
               {([
@@ -112,7 +135,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             <label>Dashboard title</label>
             <input
               value={siteTitle}
-              onChange={(e) => setSiteTitle(e.target.value)}
+              onChange={(e) => applySiteTitle(e.target.value)}
+              onBlur={flushPending}
               placeholder={haConfig?.location_name || DEFAULT_SITE_TITLE}
             />
           </>
@@ -174,8 +198,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               OPPOSITE look on demand (preview the night render at noon, or
               lift a villa back to daylight after dark). Live-applies through
               the same render path as the sliders (manager.setRenderConfig →
-              SunController), so it previews instantly and persists with Save
-              like everything else here. Hidden for non-baked villas, whose
+              SunController), so it previews instantly and persists on its own
+              (debounced) like everything else here. Hidden for non-baked villas, whose
               day/night is just a lighting dim — not worth a dedicated toggle. */}
           {(manager?.renderFx.isBaked() ?? false) && (
             <label className="toggle" style={{ margin: 0, fontSize: 13, whiteSpace: "nowrap" }}>
@@ -271,10 +295,10 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               <Sliders size={18} /> Advanced Settings
             </button>
           ) : <span />}
-          <div className="row" style={{ gap: 12 }}>
-            <button className="btn ghost" onClick={handleCancel}>Cancel</button>
-            <button className="btn primary" onClick={save}>Save</button>
-          </div>
+          {/* Single Close button — everything above already applied + persisted
+              live, so there's nothing to Cancel and nothing left to Save.
+              Matches Advanced Settings' own footer (ConfigEditorModal). */}
+          <button className="btn primary" onClick={closeModal}>Close</button>
         </div>
       </div>
     </div>

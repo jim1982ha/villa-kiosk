@@ -295,6 +295,7 @@ button {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 .hud-menu-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
   font-size: 12px; color: var(--text-secondary);
   padding: 8px 10px 6px;
   border-bottom: 1px solid var(--hairline); margin-bottom: 4px;
@@ -309,10 +310,6 @@ button {
 }
 .hud-menu-item svg { flex: 0 0 auto; color: var(--text-secondary); }
 .hud-menu-item:hover, .hud-menu-item:active { background: var(--bg-input); }
-/* Non-interactive rows (the right menu's connection-status line) — no
-   pointer cursor or hover wash, they're display-only. */
-.hud-menu-item.hud-menu-static { cursor: default; }
-.hud-menu-item.hud-menu-static:hover, .hud-menu-item.hud-menu-static:active { background: transparent; }
 
 /* Scrollable variant of a .hud-group (the category filter): however many
    buttons the profile/config produces, the pill never wraps and never grows
@@ -514,8 +511,8 @@ button {
 }
 .panel-close-btn:hover { background: var(--bg-input); color: var(--text-primary); }
 .panel-close-btn:active { transform: scale(0.92); }
-/* Same treatment as .settings-footer (Cancel/Save) — text-labelled buttons,
-   right-aligned, separated by a hairline. Unlike .settings-footer this sits
+/* Same treatment as .settings-footer (Advanced Settings/Close) — text-labelled
+   buttons, right-aligned, separated by a hairline. Unlike .settings-footer this sits
    INSIDE the modal's own padding (.panel-modal has no separate header/body/
    footer padding of their own, see .modal:not(.settings-modal)), so it's
    inset like the rest of the content rather than bleeding to the card edge. */

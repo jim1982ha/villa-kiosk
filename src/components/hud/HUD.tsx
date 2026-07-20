@@ -409,14 +409,20 @@ export default function HUD({
               </button>
               {menuOpen && (
                 <div className="hud-menu" role="menu" aria-label="Settings and profile">
-                  {role && <div className="hud-menu-header">Signed in as {ROLE_LABELS[role]}</div>}
                   {/* Connection status — lives ONLY here on a phone (no standalone
-                      top-bar button/space; see .hud-brand's mobile rule). */}
-                  <div className="hud-menu-item hud-menu-static">
-                    <span className={`conn-dot ${connClass}`} role="img" aria-hidden="true">
+                      top-bar button/space; see .hud-brand's mobile rule) — as a
+                      bare icon (no "Connection: " text) sharing the profile
+                      line, not its own row. */}
+                  <div className="hud-menu-header">
+                    {role && <span>Signed in as {ROLE_LABELS[role]}</span>}
+                    <span
+                      className={`conn-dot ${connClass}`}
+                      title={`Connection: ${connection}`}
+                      role="img"
+                      aria-label={`Connection: ${connection}`}
+                    >
                       <span className="dot" />
                     </span>
-                    <span>Connection: {connection}</span>
                   </div>
                   {canOpenSettings && (
                     <button

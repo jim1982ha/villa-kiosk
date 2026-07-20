@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.10
+
+### Changes
+- Settings modal now matches Advanced Settings: every setting (including theme) applies + persists live via a debounced commit, so Cancel/Save become a single Close button. Mobile overflow menu: connection status is now a bare icon on the 'Signed in as' line instead of a separate 'Connection: xxx' text row
+
+---
+
+
 ## 2.32.9
 
 ### Changes
