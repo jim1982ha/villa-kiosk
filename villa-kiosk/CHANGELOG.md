@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.7
+
+### Changes
+- Light pools no longer spill outside walls: each baked-mode floor pool is clipped to a wall-bounded visibility polygon (rays from the fixture stop at the villa shell), so glow stays inside the house and only crosses walls through door/window openings. Built lazily on first turn-on.
+
+---
+
+
 ## 2.32.6
 
 ### Changes
