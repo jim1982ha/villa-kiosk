@@ -19,6 +19,8 @@ const SPEED_LABELS: Record<number, string[]> = {
   2: ["Low", "High"],
   3: ["Low", "Medium", "High"],
   4: ["Low", "Medium", "High", "Max"],
+  5: ["Low", "Med-Low", "Medium", "Med-High", "High"],
+  6: ["1", "2", "3", "4", "5", "6"],
 };
 
 export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
@@ -38,8 +40,13 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
   // more-info card) rather than a free-drag slider — a separate control from
   // preset_modes above; a fan entity can report either, neither or both.
   const pct = entity?.attributes.percentage;
-  const step = entity?.attributes.percentage_step as number | undefined;
-  const levelCount = typeof step === "number" && step > 0 ? Math.round(100 / step) : 0;
+  // percentage_step can arrive as a number OR a numeric string depending on the
+  // integration (Tuya/template fans often stringify it); coerce so a 5-speed
+  // fan reporting "20" doesn't fail the type check and collapse to the preset
+  // list (which is what made a 5-speed fan show only 3 buttons).
+  const stepRaw = entity?.attributes.percentage_step;
+  const step = typeof stepRaw === "number" ? stepRaw : Number(stepRaw);
+  const levelCount = Number.isFinite(step) && step > 0 ? Math.round(100 / step) : 0;
   const levels = levelCount > 0
     ? Array.from({ length: levelCount }, (_, i) => {
       const value = Math.round(((i + 1) / levelCount) * 100);

@@ -67,9 +67,22 @@ function drawIcon(ctx: CanvasRenderingContext2D, primitives: readonly IconPrimit
 
 const cache = new Map<string, string>();
 
-/** Render (and cache) the composited squircle badge for a category + glyph. */
-export function badgeImageDataUrl(category: Category, iconKey: string): string {
-  const cacheKey = `${category}:${iconKey}`;
+/** Lighten/darken a #rrggbb hex by `amt` (-1..1) so a single user-picked colour
+ *  yields the same top→bottom gradient the per-category presets use. */
+function shade(hex: string, amt: number): string {
+  const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const adj = (c: number) => Math.max(0, Math.min(255, Math.round(c + amt * 255)));
+  const r = adj(parseInt(m[1], 16)), g = adj(parseInt(m[2], 16)), b = adj(parseInt(m[3], 16));
+  return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Render (and cache) the composited squircle badge for a category + glyph.
+ *  `colorOverride` (a #rrggbb) replaces the category's preset gradient with one
+ *  derived from that single colour — the per-entity badge colour a user sets
+ *  from the device panel (persisted on EntityMapping.badgeColor). */
+export function badgeImageDataUrl(category: Category, iconKey: string, colorOverride?: string): string {
+  const cacheKey = `${category}:${iconKey}:${colorOverride ?? ""}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -79,7 +92,9 @@ export function badgeImageDataUrl(category: Category, iconKey: string): string {
   const ctx = canvas.getContext("2d");
   let url = "";
   if (ctx) {
-    const colors = CATEGORY_COLORS[category];
+    const colors = colorOverride
+      ? { top: shade(colorOverride, 0.12), bottom: shade(colorOverride, -0.12) }
+      : CATEGORY_COLORS[category];
     const corner = CANVAS_PX * BADGE_CORNER_FRACTION;
 
     const grad = ctx.createLinearGradient(0, 0, CANVAS_PX * 0.3, CANVAS_PX);

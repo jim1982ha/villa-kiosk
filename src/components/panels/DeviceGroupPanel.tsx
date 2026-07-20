@@ -81,8 +81,8 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
         <div className="field">
           <label className="entity-label">Last 24 hours</label>
           <DualSparkline
-            a={{ data: history[numericRows[0].id] ?? [], color: SERIES_COLORS[0] }}
-            b={{ data: history[numericRows[1].id] ?? [], color: SERIES_COLORS[1] }}
+            a={{ data: history[numericRows[0].id] ?? [], color: SERIES_COLORS[0], unit: numericRows[0].unit, label: numericRows[0].label }}
+            b={{ data: history[numericRows[1].id] ?? [], color: SERIES_COLORS[1], unit: numericRows[1].unit, label: numericRows[1].label }}
           />
           <div className="row" style={{ gap: 16, marginTop: 8, fontSize: 12 }}>
             <span className="muted">
@@ -97,7 +97,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
         numericRows.map((r, i) => (
           <div className="field" key={r.id}>
             <label className="entity-label">{r.label} — last 24 hours</label>
-            <Sparkline data={history[r.id] ?? []} color={SERIES_COLORS[i % SERIES_COLORS.length]} />
+            <Sparkline data={history[r.id] ?? []} color={SERIES_COLORS[i % SERIES_COLORS.length]} unit={r.unit} />
           </div>
         ))
       )}

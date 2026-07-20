@@ -202,13 +202,22 @@ export class SceneManager {
     // setViewMode("overview") is called. Tap-to-pick routes through the same
     // picker as first-person.
     this.overview = new OverviewController(this.scene, canvas, {
-      onActivity: () => this.requestRender(),
+      onActivity: () => {
+        // Keep badges their configured size at the fit and zoomed IN, but shrink
+        // them once zoomed OUT past the fit so a far zoom-out can't pile every
+        // badge into one fixed-size blob over a tiny villa (getIconZoomCap).
+        if (this.viewMode === "overview") {
+          this.visuals.setIconZoomScale(this.overview.getIconZoomCap());
+        }
+        this.requestRender();
+      },
       onTap: handleTap,
       onLongPress: handleLongPress,
     });
     this.overview.setNaturalScrolling(opts.config.naturalScrolling ?? true);
-    // Badge size is the FIXED "Icon size" setting (config.entityIconScale) — it
-    // does NOT change with the bird's-eye zoom level. (We used to grow/shrink
+    // Badge size holds at the configured "Icon size" (config.entityIconScale) for
+    // all standard framings; only a zoom-OUT past the whole-villa fit scales it
+    // down (getIconZoomCap). (We used to grow/shrink
     // badges on every overview pan/zoom; the user expects the configured size to
     // hold at any zoom, so the zoom-driven rescale was removed.)
 
@@ -225,6 +234,21 @@ export class SceneManager {
     // Any pointer activity on the canvas (look-around drag, wheel, tap) wakes the
     // on-demand render loop so the view stays smooth.
     this.scene.onPointerObservable.add(() => this.requestRender());
+
+    // Land on the bird's-eye OVERVIEW camera from the very first rendered frame.
+    // Before the model finishes loading the active camera used to be the
+    // first-person walker, so on iPhone/iPad the loading screen flashed a view
+    // INTO a wall/door (the walker's default pose) behind the "Loading the
+    // villa…" overlay. Rendering the overview backdrop instead keeps the wait
+    // neutral. viewMode intentionally stays "first-person" here so the
+    // Dashboard's on-ready setViewMode("overview") still runs the real
+    // auto-fit (fitTo needs the loaded mesh extents, unavailable this early);
+    // this only swaps which camera renders + the backdrop while we wait.
+    this.camera.detachInput();          // avoid a two-controller pointer-capture race
+    this.overview.enable();
+    this.scene.activeCamera = this.overview.camera;
+    this.sky.setEnabled(false);
+    this.sun.setBackgroundOverride(this.overviewBackdropColor());
 
     this.startRenderLoop();
     window.addEventListener("resize", this.handleResize);

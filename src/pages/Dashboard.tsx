@@ -16,6 +16,8 @@ import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId } from "@/config/EntityMap";
+import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
+import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { installDailyAutoReload } from "@/utils/autoReload";
@@ -358,6 +360,33 @@ export default function Dashboard() {
                   setActivePanel(null);
                   setConfigEditorFocus(activePanel.entityId);
                   setConfigEditorOpen(true);
+                }
+              : undefined,
+            // The device's exact map badge (same glyph/colour as the 3D view),
+            // shown in the panel header and — for editors — clickable to recolour.
+            badge: (() => {
+              const { entityId, mapping } = activePanel;
+              const ent = entities[entityId];
+              const category = effectiveCategory(
+                entityId, mapping.type, mapping.category,
+                ent?.attributes.device_class as string | undefined);
+              return {
+                category,
+                iconKey: iconKeyFor(mapping.type, ent),
+                color: mapping.badgeColor,
+                categoryColor: CATEGORY_COLORS[category].bottom,
+              };
+            })(),
+            onSetBadgeColor: canEditConfig
+              ? (hex) => {
+                  const id = activePanel.entityId;
+                  const prev = config.entityMap[id] ?? activePanel.mapping;
+                  update({
+                    entityMap: {
+                      ...config.entityMap,
+                      [id]: { ...prev, badgeColor: hex ?? undefined },
+                    },
+                  });
                 }
               : undefined,
           }}

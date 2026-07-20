@@ -126,7 +126,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
                 legend={enumDistinctStates.map((s) => ({ state: s, color: enumPalette!(s) }))}
               />
             ) : (
-              <Sparkline data={history} color={LEVEL_COLOR[level]} />
+              <Sparkline data={history} color={LEVEL_COLOR[level]} unit={unit} />
             )}
           </div>
         </>

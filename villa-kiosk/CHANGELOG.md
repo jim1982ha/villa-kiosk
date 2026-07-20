@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.3
+
+### Changes
+- Batch: fan 5-speed buttons; overview camera during load; per-badge colour customisation; cap badge size on far zoom-out; light furniture under ON lights in baked mode; pinch/wheel zoom on camera feed; axes+tooltip on trend charts
+
+---
+
+
 ## 2.32.2
 
 ### Changes

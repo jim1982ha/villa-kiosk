@@ -69,6 +69,11 @@ export class OverviewController {
   /** Radius of the default whole-villa fit — the "1×" reference for icon zoom
    *  scaling (icons grow when the user zooms past it, shrink when zoomed out). */
   private refRadius = 30;
+  /** The exact whole-villa fit radius (see fitTo). Distinct from refRadius: this
+   *  is the threshold at/below which badges render at their configured size, and
+   *  above which (zoomed OUT past the fit) getIconZoomCap shrinks them so a far
+   *  zoom-out can't pile every badge into one blob over a tiny villa. */
+  private fitRadius = 30;
 
   private static readonly BETA_MIN = 0.05; // ~3° from straight down
   private static readonly BETA_MAX = 1.4;  // ~80° (near horizon)
@@ -97,6 +102,17 @@ export class OverviewController {
    *  vanish or swamp the view. */
   getIconZoomScale(): number {
     return clamp(this.refRadius / (this.camera.radius || this.refRadius), 0.5, 3);
+  }
+
+  /** Downward-only badge size factor vs the whole-villa fit. At the fit or
+   *  zoomed IN (radius ≤ fitRadius) it returns 1 — badges keep their configured
+   *  screen size, so standard framing is untouched (no side effects). Zoomed OUT
+   *  past the fit it shrinks proportionally (floored at 0.4) so badges scale down
+   *  with the shrinking villa instead of swamping it in a fixed-size blob. */
+  getIconZoomCap(): number {
+    const r = this.camera.radius || this.fitRadius;
+    if (r <= this.fitRadius) return 1;
+    return clamp(this.fitRadius / r, 0.4, 1);
   }
 
   fitTo(ext: { min: Vector3; max: Vector3 }): void {
@@ -130,6 +146,7 @@ export class OverviewController {
     this.camera.alpha = -Math.PI / 2;
     this.camera.beta = 0.5;
     this.camera.radius = correctedSpan * 1.05;
+    this.fitRadius = this.camera.radius;   // threshold for getIconZoomCap
     // The icon "1x" reference is deliberately CLOSER than the whole-villa fit
     // radius, not equal to it: the default overview is the single most crowded
     // view (every device in the villa on screen at once), so anchoring "1x" to

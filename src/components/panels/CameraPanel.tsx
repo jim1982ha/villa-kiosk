@@ -19,10 +19,11 @@ import { useEffect, useRef, useState } from "react";
 // setup effect's dynamic import() — so a kiosk that never opens a camera panel
 // never pays for it in the main bundle. This line compiles away entirely.
 import type Hls from "hls.js";
-import { X, VideoOff, Maximize2, Minimize2 } from "lucide-react";
+import { X, VideoOff, Maximize2, Minimize2, ZoomOut } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
+import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { devLog } from "@/utils/devLog";
 
 interface Props extends PanelProps {
@@ -73,6 +74,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   // regardless of teardown timing.
   const usingHlsJsRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const zoom = useMediaZoom<HTMLDivElement>();
   const [isFs, setIsFs] = useState(false);
   // Whether the current tier has painted a real frame yet — drives the loading
   // spinner so an empty <video>/<img> mid-setup reads as "loading", not "broken".
@@ -135,7 +137,8 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
     snapErrors.current = 0;
     streamLoaded.current = false;
     hlsLoaded.current = false;
-  }, [mapping.entityId]);
+    zoom.reset(); // a different camera starts un-zoomed
+  }, [mapping.entityId, zoom.reset]);
 
   // HLS setup: ask HA for a stream URL (camera/stream over the websocket), then
   // play it with hls.js (preferred whenever supported) or the native <video>
@@ -352,6 +355,12 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
 
   return (
     <div className="camera-fullscreen" ref={rootRef}>
+      {/* Zoom/pan layer — FIRST child so the controls below paint on top of it
+          and stay clickable while it captures pinch/wheel/drag gestures. */}
+      <div className="camera-zoom" ref={zoom.ref} style={zoom.style}>
+        {renderView()}
+      </div>
+
       <div className="label">
         {mapping.label}
         {lastMotion && (
@@ -360,6 +369,16 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
           </span>
         )}
       </div>
+      {zoom.zoomed && (
+        <button
+          className="icon-btn zoom-reset-btn"
+          onClick={zoom.reset}
+          title="Reset zoom"
+          aria-label="Reset zoom"
+        >
+          <ZoomOut size={22} />
+        </button>
+      )}
       <button
         className="icon-btn fs-btn"
         onClick={toggleFullscreen}
@@ -371,8 +390,6 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
       <button className="icon-btn close" onClick={onClose}>
         <X size={24} />
       </button>
-
-      {renderView()}
 
       {/* An empty <video>/<img> mid-setup reads as "broken" rather than
           "loading" — cover it with a spinner until a real frame arrives.

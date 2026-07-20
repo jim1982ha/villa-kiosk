@@ -5,6 +5,7 @@
 // so BasePanel needn't be threaded through all ten panel components.
 
 import { createContext, useContext } from "react";
+import type { Category } from "@/types/scene.types";
 
 export interface PanelActions {
   /** The HA entity_id the open panel controls (shown under the title). */
@@ -12,6 +13,21 @@ export interface PanelActions {
   /** Open Advanced Settings focused on this entity. Undefined when the current
    *  profile may not edit config — the edit button is then hidden. */
   onEdit?: () => void;
+  /** Everything BasePanel needs to render THIS device's exact map badge in its
+   *  header (same glyph + colour as the 3D view) and make it a colour editor.
+   *  Provided by Dashboard, which knows the live entity + config. */
+  badge?: {
+    category: Category;
+    iconKey: string;
+    /** Current per-entity override (#rrggbb), or undefined for category default. */
+    color?: string;
+    /** Representative category colour, for the picker's "default" chip. */
+    categoryColor: string;
+  };
+  /** Persist a new badge colour for the open entity (null = category default).
+   *  Undefined when the profile may not edit config — the badge is then a plain,
+   *  non-interactive icon. */
+  onSetBadgeColor?: (hex: string | null) => void;
 }
 
 const PanelActionsContext = createContext<PanelActions>({});

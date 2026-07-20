@@ -32,6 +32,11 @@ export interface EntityMapping {
    *  whose room reads darker than the others) without affecting every other
    *  light (see EntityVisuals' effectiveFrac). */
   lightIntensityRatio?: number;
+  /** Per-entity badge background colour (#rrggbb) set from the device panel's
+   *  icon. Overrides the category's preset gradient for THIS device's map badge
+   *  only (see babylon/badgeIcons.badgeImageDataUrl). Unset = category default.
+   *  Persisted with entityMap (local storage) and in the config export bundle. */
+  badgeColor?: string;
 }
 
 export interface Vec3 {
