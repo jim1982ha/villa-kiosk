@@ -15,7 +15,7 @@
 
 import {
   Mesh, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Constants,
-  VertexData, Vector3, type Scene,
+  type Vector3, type Scene,
 } from "@babylonjs/core";
 
 const POOL_TEXTURE_SIZE = 128;
@@ -55,11 +55,6 @@ export function resetLightPoolTextureCache(): void {
 
 export class LightPool {
   readonly mesh: Mesh;
-  /** Where the pool sits (floor under the fixture) and its world-space radius —
-   *  kept so EntityVisuals can rebuild the disc into a wall-clipped footprint
-   *  (see applyFootprint) without re-deriving them. */
-  readonly center: Vector3;
-  readonly radius: number;
   /** Per-pool brightness multiplier applied on top of the live intensity. 1 for
    *  a normal single-fixture pool; <1 for the several overlapping pools an LED
    *  strip is split into, so their additive overlap sums to an even line instead
@@ -73,8 +68,6 @@ export class LightPool {
    *  shared with the strip-drop placement). `radius` — the pool's
    *  world-space radius. */
   constructor(scene: Scene, name: string, floorPosition: Vector3, radius: number) {
-    this.center = floorPosition.clone();
-    this.radius = radius;
     this.mesh = MeshBuilder.CreateDisc(`lightPool_${name}`, { radius, tessellation: 32 }, scene);
     this.mesh.rotation.x = Math.PI / 2; // CreateDisc builds facing +Z; lay it flat facing up
     this.mesh.position.copyFrom(floorPosition);
@@ -117,39 +110,6 @@ export class LightPool {
     if (!on) return;
     this.material.emissiveColor = colour;
     this.material.alpha = Math.min(2, Math.max(0.15, intensityFrac) * this.intensityScale);
-  }
-
-  /** Rebuild the round disc into a wall-clipped "visibility polygon": a triangle
-   *  fan from the fixture out to `rim` offsets (local XZ, relative to center),
-   *  each already shortened to the nearest wall by the caller (EntityVisuals).
-   *  The additive radial gradient still centres on the fixture and fades over
-   *  `radius`, but a rim shortened to a wall cuts the glow THERE — so light stops
-   *  at walls instead of spilling outside the house, while door/window openings
-   *  (gaps in the wall geometry) let the rim run full length, matching "light
-   *  crosses a wall only where there's an opening/glass". */
-  applyFootprint(rim: { x: number; z: number }[]): void {
-    if (rim.length < 3) return;
-    const R = this.radius;
-    const positions: number[] = [0, 0, 0];   // fixture centre, local origin
-    const uvs: number[] = [0.5, 0.5];         // gradient centre
-    for (const p of rim) {
-      positions.push(p.x, 0, p.z);
-      // uv distance from centre = worldDist/(2R); at the full radius that's 0.5,
-      // which is the gradient texture's transparent edge (see poolTexture).
-      uvs.push(0.5 + p.x / (2 * R), 0.5 + p.z / (2 * R));
-    }
-    const indices: number[] = [];
-    const n = rim.length;
-    for (let i = 0; i < n; i++) {
-      const a = 1 + i, b = 1 + ((i + 1) % n);
-      indices.push(0, a, b, 0, b, a); // both windings (grazing first-person views)
-    }
-    const normals: number[] = [];
-    VertexData.ComputeNormals(positions, indices, normals);
-    const vd = new VertexData();
-    vd.positions = positions; vd.indices = indices; vd.uvs = uvs; vd.normals = normals;
-    vd.applyToMesh(this.mesh);
-    this.mesh.rotation.set(0, 0, 0); // custom geometry is already flat in world XZ
   }
 
   dispose(): void {

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.11
+
+### Changes
+- Restore instant light turn-on: revert the two effects that ran expensive work on the click path in baked mode — the per-fixture furniture PointLight (first setEnabled triggered a multi-second shader recompile; now redundant since the night bake lifts furniture) and the on-turn-on wall-clip raycasts. Baked mode is pools-only again (distributed strip pools + iOS z-fix kept, both load-time/free). Responsiveness on device interaction is the hard requirement.
+
+---
+
+
 ## 2.32.10
 
 ### Changes
