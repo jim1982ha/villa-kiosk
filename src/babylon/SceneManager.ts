@@ -1344,6 +1344,16 @@ export class SceneManager {
     this.visuals.apply(entity);
   }
 
+  /** Apply every known entity's state at once — the "paint the villa with
+   *  whatever's already known" pass after a structural re-index. See
+   *  EntityVisuals.applyBulk: distinct from applyEntityState so a baked
+   *  light's floor pool stays on the deferred idle-time build path during
+   *  this specific pass, instead of every fixture building synchronously,
+   *  all at once, right after load. */
+  applyEntityStatesBulk(entities: HassEntity[]): void {
+    this.visuals.applyBulk(entities);
+  }
+
   private markReady() {
     this.ready = true;
     this.readyCallbacks.forEach((cb) => cb());

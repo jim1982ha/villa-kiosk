@@ -39,7 +39,7 @@ export default function BabylonCanvas({
   const managerRef = useRef<SceneManager | null>(null);
   const { config, update } = useConfig();
   const { role } = useProfile();
-  const { subscribeAll, getEntitiesSnapshot } = useHA();
+  const { subscribeAll, subscribeAllBulk, getEntitiesSnapshot } = useHA();
   // What the SCENE is allowed to show for the active profile: role-denied
   // categories folded into the hidden set, denied entities stripped from the
   // entity map. The stored config stays complete (auto-detect below still
@@ -257,7 +257,7 @@ export default function BabylonCanvas({
         // so `entities` would be frozen at whatever it was at MOUNT (almost
         // always still {}, since HA's initial hydrate is an async round-trip
         // that hasn't resolved yet) — see getEntitiesSnapshot's docstring.
-        Object.values(getEntitiesSnapshot()).forEach((e) => manager.applyEntityState(e));
+        manager.applyEntityStatesBulk(Object.values(getEntitiesSnapshot()));
 
         // Sync central room names + calibration from the compact
         // "<model>.rooms.json" sidecar (the Blender pipeline emits it next to
@@ -371,7 +371,7 @@ export default function BabylonCanvas({
       // docstring; this effect's dep array ([sceneConfig]) doesn't include
       // `entities`, so the instance React actually runs can be one whose
       // closure captured a stale (often still-empty) entities value.
-      Object.values(getEntitiesSnapshot()).forEach((e) => m.applyEntityState(e));
+      m.applyEntityStatesBulk(Object.values(getEntitiesSnapshot()));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneConfig]);
@@ -386,6 +386,23 @@ export default function BabylonCanvas({
     });
     return off;
   }, [subscribeAll]);
+
+  // hydrate()'s belated bulk repaint (HA connects/reconnects AFTER the scene
+  // already exists — see getEntitiesSnapshot's docstring for why this case
+  // exists at all) — routed through applyEntityStatesBulk, NOT a loop of
+  // applyEntityState, so a baked light's floor-pool build stays on the
+  // deferred idle-time path for this whole-villa pass too (see
+  // EntityVisuals.inBulkRepaint).
+  useEffect(() => {
+    const off = subscribeAllBulk((entities) => {
+      const m = managerRef.current;
+      if (!m) return;
+      m.applyEntityStatesBulk(entities);
+      const sun = entities.find((e) => e.entity_id === "sun.sun");
+      if (sun) m.sun.applyHaSunState(sun.state);
+    });
+    return off;
+  }, [subscribeAllBulk]);
 
   return (
     <>

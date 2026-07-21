@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.20
+
+### Changes
+- Fix the actual root cause of ON/OFF feeling slow: a baked light's floor-pool glow was only built by a slow background idle queue, unaware of WHICH light the user just tapped — so tapping a fixture near the end of the queue got no visual response for however long the queue took to reach it, on either ON or OFF. Fixed by building a fixture's pool on demand the instant it's actually needed (ensurePoolsBuilt), for any live tap or real HA state change. Kept the villa's initial bulk repaint (every entity, right after load) on the deferred idle path via a new bulk-vs-live distinction all the way from HAStateStore (subscribeAllBulk/notifyBulk) through SceneManager to EntityVisuals — so a fresh load still doesn't build every fixture's pool synchronously at once, but any light a user actually interacts with responds immediately regardless of queue position.
+
+---
+
+
 ## 2.32.19
 
 ### Changes

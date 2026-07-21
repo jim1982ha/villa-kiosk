@@ -48,6 +48,13 @@ interface HAStateContextType {
   subscribe: (entityId: string, cb: EntityCallback) => () => void;
   /** Subscribe to *every* state change (used to drive the scene + alerts). */
   subscribeAll: (cb: (entity: HassEntity) => void) => () => void;
+  /** Subscribe to the BULK "every known entity at once" pushes — currently just
+   *  hydrate()'s initial paint. Kept distinct from subscribeAll deliberately:
+   *  the scene needs to know "this is the whole-villa repaint pass" vs. "this
+   *  is one live change" so it can defer expensive per-entity setup (a baked
+   *  light's floor-pool raycast) during the bulk pass instead of doing it for
+   *  every entity at once, synchronously, right after connecting. */
+  subscribeAllBulk: (cb: (entities: HassEntity[]) => void) => () => void;
   callService: (domain: string, service: string, data?: Record<string, unknown>, target?: HassServiceTarget) => Promise<void>;
   /** Optimistically overwrite an entity's state locally and notify subscribers
    *  IMMEDIATELY, without waiting for HA's round-trip echo — so a tapped light
@@ -105,10 +112,15 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   // Imperative subscriber registries (don't trigger React renders).
   const perEntity = useRef(new Map<string, Set<EntityCallback>>());
   const allSubs = useRef(new Set<(e: HassEntity) => void>());
+  const bulkSubs = useRef(new Set<(entities: HassEntity[]) => void>());
 
   const notify = useCallback((entity: HassEntity) => {
     perEntity.current.get(entity.entity_id)?.forEach((cb) => cb(entity));
     allSubs.current.forEach((cb) => cb(entity));
+  }, []);
+
+  const notifyBulk = useCallback((entities: HassEntity[]) => {
+    bulkSubs.current.forEach((cb) => cb(entities));
   }, []);
 
   useEffect(() => {
@@ -131,9 +143,13 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     const map: Record<string, HassEntity> = {};
     for (const e of all) map[e.entity_id] = e;
     commitEntities(map);
-    // Push initial values to imperative subscribers (scene paints correct state).
-    for (const e of all) notify(e);
-  }, [ws, notify, commitEntities]);
+    // Push initial values to imperative subscribers — BULK (one call with every
+    // entity), not a per-entity notify() loop. This is what lets the scene tell
+    // "the whole-villa repaint" apart from "one live change" and keep expensive
+    // per-entity setup (a baked light's floor-pool raycast) deferred during
+    // this pass — see subscribeAllBulk's docstring.
+    notifyBulk(all);
+  }, [ws, notifyBulk, commitEntities]);
 
   const connect = useCallback(
     async () => {
@@ -182,6 +198,11 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     return () => allSubs.current.delete(cb);
   }, []);
 
+  const subscribeAllBulk = useCallback((cb: (entities: HassEntity[]) => void) => {
+    bulkSubs.current.add(cb);
+    return () => bulkSubs.current.delete(cb);
+  }, []);
+
   const callService = useCallback(
     (domain: string, service: string, data?: Record<string, unknown>, target?: HassServiceTarget) =>
       ws.callService(domain, service, data ?? {}, target),
@@ -214,13 +235,14 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       ws,
       subscribe,
       subscribeAll,
+      subscribeAllBulk,
       callService,
       optimistic,
       connect,
       lastError,
       serviceError,
     }),
-    [entities, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, optimistic, connect, lastError, serviceError],
+    [entities, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, subscribeAllBulk, callService, optimistic, connect, lastError, serviceError],
   );
 
   return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;

@@ -309,6 +309,16 @@ export class EntityVisuals {
    *  scene appears immediately and each room's floor glow fills in a moment
    *  later (progressive), never on the load-blocking path. */
   private pendingPoolMeshes: AbstractMesh[] = [];
+  /** True only while applyBulk() is repainting EVERY known entity at once
+   *  (the "paint the villa with whatever's already known" pass right after a
+   *  structural re-index — see SceneManager.applyEntityStatesBulk). Suppresses
+   *  the on-demand pool build in applyToMesh during that pass specifically —
+   *  otherwise it would eagerly build every baked light's pool synchronously,
+   *  all at once, defeating the entire point of deferring pool creation to
+   *  idle time in the first place. A live single-entity update — a real HA
+   *  state_changed event, or the optimistic flip from a tap — is NOT bulk, so
+   *  it still builds its one pool immediately (see ensurePoolsBuilt). */
+  private inBulkRepaint = false;
   /** config.render.lightPoolIntensity, cached — see setLightPoolIntensity. */
   private lightPoolStrength = 1;
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
@@ -914,6 +924,26 @@ export class EntityVisuals {
     });
   }
 
+  /** Return this fixture's pool(s), building them right now if the background
+   *  idle queue (drainIdleWork) hasn't reached this mesh yet — see the call
+   *  site in applyToMesh for why "wait for the queue" was the actual cause of
+   *  a light feeling unresponsive on both ON and OFF. Returns undefined for a
+   *  non-baked-mode mesh (never queued, nothing to build). Idempotent: once
+   *  built, subsequent calls just return the cached pools. */
+  private ensurePoolsBuilt(m: AbstractMesh): LightPool[] | undefined {
+    const existing = this.meshLightPools.get(m.uniqueId);
+    if (existing) return existing;
+    const idx = this.pendingPoolMeshes.indexOf(m);
+    if (idx === -1) return undefined; // not a baked-mode light fixture
+    this.pendingPoolMeshes.splice(idx, 1);
+    const bb = m.getBoundingInfo().boundingBox;
+    const size = bb.maximumWorld.subtract(bb.minimumWorld);
+    const longest = Math.max(size.x, size.y, size.z);
+    const pools = this.buildFloorPools(m, bb, size, longest);
+    this.meshLightPools.set(m.uniqueId, pools);
+    return pools;
+  }
+
   // ── Opt-in wall-clip (config.clipLightPools) — ALWAYS ASYNC ────────────────
   // The clip needs per-fixture wall raycasts; running them inline on a
   // light-switch tap froze the UI for seconds (the regression that got this
@@ -1245,6 +1275,23 @@ export class EntityVisuals {
   /** All entity mappings resolved during the last indexMeshes call. */
   getDetectedMappings(): EntityMapping[] {
     return Array.from(this.mapping.values());
+  }
+
+  /** Apply every known entity's state at once — the "paint the villa with
+   *  whatever's already known" pass right after a structural re-index (see
+   *  SceneManager.applyEntityStatesBulk). Distinct from individual apply()
+   *  calls (a live HA state_changed event, or an optimistic tap) purely so a
+   *  baked light's floor pool STAYS deferred to the idle-time queue during
+   *  this pass — see inBulkRepaint's docstring for why that distinction
+   *  matters (otherwise every fixture's pool would build synchronously, all
+   *  at once, right after load). */
+  applyBulk(entities: HassEntity[]): void {
+    this.inBulkRepaint = true;
+    try {
+      for (const e of entities) this.apply(e);
+    } finally {
+      this.inBulkRepaint = false;
+    }
   }
 
   /** Called for every state change. */
@@ -1984,7 +2031,22 @@ export class EntityVisuals {
         // on a currently-hidden floor must not light its pool even if the HA
         // entity itself is "on" (see resyncLightPoolsToFloor for the other
         // direction — a floor SWITCH with no entity-state change).
-        const pools = this.meshLightPools.get(mesh.uniqueId);
+        // ensurePoolsBuilt (not a plain .get()) for a LIVE update: a fixture's
+        // pool is normally built by the background idle queue
+        // (drainIdleWork), which has no idea WHICH light the user just
+        // interacted with — a fixture queued near the end got no visual
+        // response for however long the queue took to reach it, on EITHER a
+        // turn-on or a turn-off tap (whichever came first found no pool yet,
+        // so nothing updated). Building it here, on demand, the instant it's
+        // actually needed, makes every tap resolve immediately regardless of
+        // queue position. During inBulkRepaint (every entity at once, right
+        // after load) this stays a plain lookup instead — see its docstring
+        // for why eager-building ALL of them in that one pass would be its
+        // own freeze. A single on-demand build is one cheap raycast
+        // (buildFloorPools), not the wall-clip's cost — safe to do inline.
+        const pools = this.inBulkRepaint
+          ? this.meshLightPools.get(mesh.uniqueId)
+          : this.ensurePoolsBuilt(mesh);
         if (pools) {
           for (const pool of pools) {
             pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
