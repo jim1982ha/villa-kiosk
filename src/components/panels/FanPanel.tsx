@@ -9,7 +9,6 @@ import type { StateHistoryPoint } from "@/types/ha.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
-import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { onOffColor } from "@/utils/stateColors";
 
 // Named labels for the common discrete-speed-count cases (matches how HA's
@@ -27,7 +26,6 @@ const SPEED_LABELS: Record<number, string[]> = {
 export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
   const on = entity?.state === "on";
-  const toggle = useOptimisticToggle(mapping.entityId, () => HAServices.toggleFan(ws, mapping.entityId));
   const presets = (entity?.attributes.preset_modes ?? []) as string[];
   const currentPreset = entity?.attributes.preset_mode;
   const [history, setHistory] = useState<StateHistoryPoint[]>([]);
@@ -62,7 +60,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Fan size={22} />} onClose={onClose}>
-      <PowerToggle on={on} onClick={toggle} />
+      <PowerToggle on={on} onClick={() => HAServices.toggleFan(ws, mapping.entityId)} />
 
       {levels.length > 0 && (
         <div className="field">

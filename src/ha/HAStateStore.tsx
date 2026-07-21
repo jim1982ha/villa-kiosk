@@ -48,20 +48,7 @@ interface HAStateContextType {
   subscribe: (entityId: string, cb: EntityCallback) => () => void;
   /** Subscribe to *every* state change (used to drive the scene + alerts). */
   subscribeAll: (cb: (entity: HassEntity) => void) => () => void;
-  /** Subscribe to the BULK "every known entity at once" pushes — currently just
-   *  hydrate()'s initial paint. Kept distinct from subscribeAll deliberately:
-   *  the scene needs to know "this is the whole-villa repaint pass" vs. "this
-   *  is one live change" so it can defer expensive per-entity setup (a baked
-   *  light's floor-pool raycast) during the bulk pass instead of doing it for
-   *  every entity at once, synchronously, right after connecting. */
-  subscribeAllBulk: (cb: (entities: HassEntity[]) => void) => () => void;
   callService: (domain: string, service: string, data?: Record<string, unknown>, target?: HassServiceTarget) => Promise<void>;
-  /** Optimistically overwrite an entity's state locally and notify subscribers
-   *  IMMEDIATELY, without waiting for HA's round-trip echo — so a tapped light
-   *  flips the instant you touch it. HA's real state_changed event then arrives
-   *  and reconciles (normally identical). Returns undefined; no-op if the entity
-   *  isn't known yet. Attribute patch is optional (e.g. leave brightness alone). */
-  optimistic: (entityId: string, state: string, attrs?: Record<string, unknown>) => void;
   /** Open the token-less connection to HA through the add-on's Supervisor proxy. */
   connect: () => Promise<void>;
   lastError: string | null;
@@ -83,25 +70,15 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const ws = wsRef.current;
 
   const [entities, setEntitiesState] = useState<Record<string, HassEntity>>({});
-  // Mirrors `entities` for getEntitiesSnapshot() below — MUST be written
-  // synchronously and unconditionally at the call site, never inside a React
-  // state UPDATER function. React does not guarantee an updater passed to
-  // setState runs before the setState call returns (it's queued for the next
-  // render, which for a plain DOM/pointer-driven call — exactly how a map tap
-  // arrives here — can land a task or more later). The bug this fixes: two
-  // taps close together (e.g. ON then OFF) each call optimistic() below; if
-  // the SECOND tap's getEntitiesSnapshot() read the ref before React had
-  // flushed the FIRST tap's updater, it saw the pre-tap state, computed the
-  // toggle in the WRONG direction (a silent no-op), and the light only
-  // caught up once Home Assistant's real echo eventually arrived — exactly
-  // the "OFF right after ON feels laggy" symptom. commitEntities below is the
-  // ONLY writer of entitiesRef, and it writes the ref BEFORE calling
-  // setEntitiesState, so a read immediately after (even from the very next
-  // synchronous call) is always correct.
+  // Mirrors `entities` synchronously (no extra render/effect lag) so
+  // getEntitiesSnapshot() below is never stale — see its docstring.
   const entitiesRef = useRef<Record<string, HassEntity>>({});
-  const commitEntities = useCallback((next: Record<string, HassEntity>) => {
-    entitiesRef.current = next;
-    setEntitiesState(next);
+  const setEntities = useCallback((next: Record<string, HassEntity> | ((prev: Record<string, HassEntity>) => Record<string, HassEntity>)) => {
+    setEntitiesState((prev) => {
+      const value = typeof next === "function" ? next(prev) : next;
+      entitiesRef.current = value;
+      return value;
+    });
   }, []);
   const getEntitiesSnapshot = useCallback(() => entitiesRef.current, []);
   const [connection, setConnection] = useState<ConnectionState>("disconnected");
@@ -112,15 +89,10 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   // Imperative subscriber registries (don't trigger React renders).
   const perEntity = useRef(new Map<string, Set<EntityCallback>>());
   const allSubs = useRef(new Set<(e: HassEntity) => void>());
-  const bulkSubs = useRef(new Set<(entities: HassEntity[]) => void>());
 
   const notify = useCallback((entity: HassEntity) => {
     perEntity.current.get(entity.entity_id)?.forEach((cb) => cb(entity));
     allSubs.current.forEach((cb) => cb(entity));
-  }, []);
-
-  const notifyBulk = useCallback((entities: HassEntity[]) => {
-    bulkSubs.current.forEach((cb) => cb(entities));
   }, []);
 
   useEffect(() => {
@@ -142,14 +114,10 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     const all = await ws.getStates();
     const map: Record<string, HassEntity> = {};
     for (const e of all) map[e.entity_id] = e;
-    commitEntities(map);
-    // Push initial values to imperative subscribers — BULK (one call with every
-    // entity), not a per-entity notify() loop. This is what lets the scene tell
-    // "the whole-villa repaint" apart from "one live change" and keep expensive
-    // per-entity setup (a baked light's floor-pool raycast) deferred during
-    // this pass — see subscribeAllBulk's docstring.
-    notifyBulk(all);
-  }, [ws, notifyBulk, commitEntities]);
+    setEntities(map);
+    // Push initial values to imperative subscribers (scene paints correct state).
+    for (const e of all) notify(e);
+  }, [ws, notify]);
 
   const connect = useCallback(
     async () => {
@@ -160,7 +128,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
           const { data } = event as StateChangedEvent;
           if (!data?.new_state) return;
           const ns = data.new_state;
-          commitEntities({ ...entitiesRef.current, [ns.entity_id]: ns });
+          setEntities((prev) => ({ ...prev, [ns.entity_id]: ns }));
           notify(ns);
         });
         await hydrate();
@@ -175,7 +143,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [ws, hydrate, notify, commitEntities],
+    [ws, hydrate, notify],
   );
 
   // Re-hydrate after an automatic reconnect.
@@ -198,32 +166,11 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     return () => allSubs.current.delete(cb);
   }, []);
 
-  const subscribeAllBulk = useCallback((cb: (entities: HassEntity[]) => void) => {
-    bulkSubs.current.add(cb);
-    return () => bulkSubs.current.delete(cb);
-  }, []);
-
   const callService = useCallback(
     (domain: string, service: string, data?: Record<string, unknown>, target?: HassServiceTarget) =>
       ws.callService(domain, service, data ?? {}, target),
     [ws],
   );
-
-  const optimistic = useCallback((entityId: string, state: string, attrs?: Record<string, unknown>) => {
-    // Reads entitiesRef.current DIRECTLY — always the true latest value (see
-    // commitEntities' docstring) — so back-to-back calls (a fast ON then OFF
-    // tap) each see the OTHER's result, never a stale pre-tap snapshot.
-    const cur = entitiesRef.current[entityId];
-    if (!cur) return;
-    const next: HassEntity = {
-      ...cur,
-      state,
-      attributes: attrs ? { ...cur.attributes, ...attrs } : cur.attributes,
-      last_changed: new Date().toISOString(),
-    };
-    commitEntities({ ...entitiesRef.current, [entityId]: next });
-    notify(next); // drive the imperative scene subscribers (badges + 3D visuals)
-  }, [notify, commitEntities]);
 
   const value = useMemo<HAStateContextType>(
     () => ({
@@ -235,14 +182,12 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       ws,
       subscribe,
       subscribeAll,
-      subscribeAllBulk,
       callService,
-      optimistic,
       connect,
       lastError,
       serviceError,
     }),
-    [entities, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, subscribeAllBulk, callService, optimistic, connect, lastError, serviceError],
+    [entities, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
   );
 
   return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;

@@ -194,19 +194,6 @@ export interface AppConfig {
    *  instead (see components/panels/DeviceGroupPanel). Editable in Advanced
    *  Settings. */
   deviceGroups: DeviceGroup[];
-  /** Baked-mode only: clip each fixture's floor light-glow "pool" to the
-   *  surrounding walls so it can't spill outside the house. OFF by default —
-   *  opt-in from Advanced Settings. The clip runs entirely in the BACKGROUND
-   *  (browser idle time — see EntityVisuals.drainIdleWork/clipPoolToWalls),
-   *  guarded by an AABB pre-filter so a single pool's wall test only checks
-   *  submeshes actually near it, not the whole baked shell (that pre-filter
-   *  fixed a real "villa just loaded, tapping a light freezes the UI for a
-   *  few seconds" regression — see clipPoolToWalls' comment for the exact
-   *  O(rays × allWalls) blowup it replaced). It's off by default anyway,
-   *  even now that it's fixed, because this exact subsystem has caused two
-   *  separate responsiveness regressions — the hard "always responsive"
-   *  requirement wins the tie-break for what a fresh install gets. */
-  clipLightPools?: boolean;
 }
 
 /** See AppConfig.deviceGroups. */
@@ -251,16 +238,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   // native (unscaled) size — still user-adjustable via the Settings slider.
   entityIconScale: 1.0,
   deviceGroups: [],
-  // OFF by default. The wall-clip runs in the background (idle-time raycasts —
-  // see EntityVisuals.drainIdleWork/clipPoolToWalls) and is now guarded by an
-  // AABB pre-filter that keeps its cost bounded even on a large villa, but this
-  // exact subsystem caused two separate main-thread-freeze regressions before
-  // that fix (a naive per-mesh octree-free raycast sweep is easy to
-  // accidentally make expensive again). Given the hard "always responsive"
-  // requirement, default new installs to the guaranteed-zero-background-cost
-  // option; a user who wants the "no wall spill" polish opts in from Advanced
-  // Settings knowing exactly what it costs.
-  clipLightPools: false,
 };
 
 /** Load config, deep-merging stored values over defaults (forward-compatible). */
@@ -328,7 +305,6 @@ export interface ConfigExportBundle {
   naturalScrolling: boolean;
   highlightInteractive: boolean;
   render: RenderConfig;
-  clipLightPools?: boolean;
 }
 
 export function buildConfigExport(config: AppConfig): ConfigExportBundle {
@@ -345,7 +321,6 @@ export function buildConfigExport(config: AppConfig): ConfigExportBundle {
     naturalScrolling: config.naturalScrolling,
     highlightInteractive: config.highlightInteractive,
     render: config.render,
-    clipLightPools: config.clipLightPools,
   };
 }
 
@@ -367,7 +342,6 @@ export function parseConfigImport(raw: unknown): Partial<ConfigExportBundle> {
   if (typeof b.naturalScrolling === "boolean") patch.naturalScrolling = b.naturalScrolling;
   if (typeof b.highlightInteractive === "boolean") patch.highlightInteractive = b.highlightInteractive;
   if (b.render && typeof b.render === "object") patch.render = b.render as RenderConfig;
-  if (typeof b.clipLightPools === "boolean") patch.clipLightPools = b.clipLightPools;
   return patch;
 }
 

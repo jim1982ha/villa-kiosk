@@ -19,7 +19,6 @@ import { mappingForEntityId } from "@/config/EntityMap";
 import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
-import { optimisticToggle } from "@/utils/optimisticToggle";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
@@ -29,7 +28,7 @@ import type { TeleportPoint } from "@/types/scene.types";
 export default function Dashboard() {
   const { config, update } = useConfig();
   const { role } = useProfile();
-  const { connect, entities, ws, haConfig, optimistic, getEntitiesSnapshot } = useHA();
+  const { connect, entities, ws, haConfig } = useHA();
   // ProfileGate does NOT guarantee a signed-in role before this page mounts
   // (v2.30.2's early scene preload — an explicit, informed trade-off, see
   // ProfileGate's modelPreloadable — mounts it pre-login on non-iOS
@@ -151,22 +150,14 @@ export default function Dashboard() {
       // action a "confirm before acting" gate would otherwise provide.
       const entity = entities[entityId];
       if (isQuickToggle(mapping, entity)) {
-        // Optimistic: flip the visual state the instant you tap, instead of
-        // waiting for HA's websocket round-trip to echo the change back —
-        // see utils/optimisticToggle for why it reads the LIVE snapshot
-        // (getEntitiesSnapshot), not the `entity` captured in this callback's
-        // closure (that was the "OFF right after ON feels laggy" bug: a stale
-        // closure read predicted the wrong direction). Same helper the device
-        // panels' PowerToggle uses (useOptimisticToggle), so a tap is equally
-        // instant everywhere in the UI.
-        optimisticToggle(entityId, getEntitiesSnapshot, optimistic, () => HAServices.toggleEntity(ws, entityId));
+        HAServices.toggleEntity(ws, entityId);
         return;
       }
 
       // Rich entities (sliders, streams, info) open their control panel as before.
       setActivePanel({ entityId, mapping });
     },
-    [config.entityMap, entities, ws, role, canControl, optimistic, getEntitiesSnapshot],
+    [config.entityMap, entities, ws, role, canControl],
   );
 
   // Long-press always opens the full control panel — even for quick-toggle

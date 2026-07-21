@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.21
+
+### Changes
+- Reverted the light-pool responsiveness work (v2.32.7 through v2.32.20) back to its v2.32.6 baseline: repeated attempts to fix ON/OFF latency in that subsystem (wall-clip, LED strip pools, iOS z-fix, optimistic tap toggling, on-demand pool building) did not resolve the reported lag, so the whole line of changes was rolled back rather than layering further fixes on unproven ground. Baked-mode lights are back to the pre-v2.32.7 behavior: a simple round floor-glow pool with no wall clipping, no optimistic tap prediction, and no background idle-queue pool building. The unrelated v2.32.10 Settings-modal (single "Close" button) and mobile-menu (connection status icon) changes were kept — they were not part of the reverted work.
+
+---
+
+
 ## 2.32.20
 
 ### Changes

@@ -17,7 +17,7 @@
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
   Vector3, Matrix, Quaternion, TransformNode, Ray, VertexBuffer, Material, Mesh,
-  type AbstractMesh, type Scene, type BoundingBox,
+  type AbstractMesh, type Scene,
 } from "@babylonjs/core";
 import {
   AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel, Image,
@@ -25,7 +25,7 @@ import {
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-import { resolveMeshToMapping, normaliseMeshName } from "@/config/EntityMap";
+import { resolveMeshToMapping } from "@/config/EntityMap";
 import { groupMemberIds } from "@/config/deviceGroups";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
@@ -63,27 +63,6 @@ const LIGHT_RANGE = 4;
 // PointLight at all, at any range/intensity — that's the whole reason the
 // pool trick exists).
 const LIGHT_POOL_RADIUS = 1.8;
-// Opt-in wall-clip for the floor pool (config.clipLightPools, run ASYNC — see
-// EntityVisuals.processClipQueue): how many rays sweep the fixture to find the
-// surrounding walls, how far above the floor they're cast (clear of the slab,
-// low enough to hit a wall's base), how many pools are clipped per deferred
-// tick (chunked so no single tick janks), and the mesh-name test for what
-// counts as an occluding wall — the fused villa shell only (walls/floor/
-// ceiling/exterior), NOT furniture, so a chair can't notch the pool.
-// 32 rays is still a smooth wall-bounded footprint (walls are straight lines,
-// not fine detail) at roughly half the per-pool ray-test cost of the original
-// 64.
-const POOL_CLIP_RAYS = 32;
-const POOL_CLIP_RAY_Y = 0.15;
-// Pools clipped per drain slice: up to this many while idle time remains (the
-// slice still yields the instant timeRemaining() runs low), or a small fixed
-// count on the setTimeout fallback path (no deadline to yield against). Kept
-// modest even after the AABB pre-filter (clipPoolToWalls) removed the O(rays ×
-// ALL walls) blowup that made a batch of these take seconds right after load —
-// this is now just a conservative per-slice ceiling, not the primary defence.
-const POOL_CLIP_BATCH_IDLE = 4;
-const POOL_CLIP_BATCH = 2;
-const STRUCTURE_SHELL_RE = /^Structure(?:_L\d+|_Exterior)?$/i;
 /** Clamp a per-light intensity override (Advanced Settings, -100%..+100%,
  *  stored as -1..1) to a safe range — a stale/hand-edited config value
  *  outside that range must not blow the fixture out or invert it. */
@@ -291,34 +270,7 @@ export class EntityVisuals {
   /** Baked-mode counterpart to meshLights — see LightPools.ts for why a real
    *  PointLight is pointless there (the structure renders unlit) and what
    *  this fakes instead. Keyed the same way, one per fixture mesh. */
-  private meshLightPools = new Map<number, LightPool[]>();
-  /** config.clipLightPools (opt-in): clip each pool to the surrounding walls so
-   *  its glow can't spill outside the house. The clip is ASYNC (see clipQueue)
-   *  so it never delays a light-switch tap. Default off. */
-  private clipLightPools = false;
-  /** The villa shell meshes (walls/floor/ceiling), filtered out of shadowCasters
-   *  once and cached — the ray occluders for the async pool wall-clip. */
-  private wallOccluders: AbstractMesh[] | null = null;
-  /** Pools waiting to be wall-clipped, drained a few per deferred tick so the
-   *  raycasts never land on the interaction (light-switch) frame. */
-  private clipQueue: LightPool[] = [];
-  private clipScheduled = false;
-  /** Baked-mode fixture meshes whose floor pool(s) haven't been BUILT yet.
-   *  Pool creation floor-finds each drop point by raycast; doing that for the
-   *  whole villa inline made load stutter, so it's deferred to idle too — the
-   *  scene appears immediately and each room's floor glow fills in a moment
-   *  later (progressive), never on the load-blocking path. */
-  private pendingPoolMeshes: AbstractMesh[] = [];
-  /** True only while applyBulk() is repainting EVERY known entity at once
-   *  (the "paint the villa with whatever's already known" pass right after a
-   *  structural re-index — see SceneManager.applyEntityStatesBulk). Suppresses
-   *  the on-demand pool build in applyToMesh during that pass specifically —
-   *  otherwise it would eagerly build every baked light's pool synchronously,
-   *  all at once, defeating the entire point of deferring pool creation to
-   *  idle time in the first place. A live single-entity update — a real HA
-   *  state_changed event, or the optimistic flip from a tap — is NOT bulk, so
-   *  it still builds its one pool immediately (see ensurePoolsBuilt). */
-  private inBulkRepaint = false;
+  private meshLightPools = new Map<number, LightPool>();
   /** config.render.lightPoolIntensity, cached — see setLightPoolIntensity. */
   private lightPoolStrength = 1;
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
@@ -428,7 +380,6 @@ export class EntityVisuals {
     if (typeof config.render?.lightPoolIntensity === "number") {
       this.setLightPoolIntensity(config.render.lightPoolIntensity);
     }
-    this.setClipLightPools(config.clipLightPools ?? false);
   }
 
   /** Settings' "Light effect strength" slider — mirrors setRenderConfig's
@@ -498,8 +449,8 @@ export class EntityVisuals {
       const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
       const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
       for (const mesh of meshes) {
-        const pools = this.meshLightPools.get(mesh.uniqueId);
-        if (pools) for (const pool of pools) fn(pool, on && mesh.isEnabled(), colour, effectiveFrac);
+        const pool = this.meshLightPools.get(mesh.uniqueId);
+        if (pool) fn(pool, on && mesh.isEnabled(), colour, effectiveFrac);
       }
     }
   }
@@ -615,52 +566,69 @@ export class EntityVisuals {
         // actual 3D location is encoded only in vertex data.
         m.computeWorldMatrix(true);
         this.inflateThinStrip(m);
+        // A real (diffuse-only, shadowless) PointLight at the fixture — created
+        // in BOTH modes now. In non-baked mode it lights the whole room. In
+        // BAKED mode the structure renders unlit (ModelLoader sets mat.unlit =
+        // true), so this light does NOT touch the already-baked walls/floor —
+        // it falls only on the separate furniture/entity meshes below the
+        // fixture, which the bake never covered. That's the fix for baked night
+        // scenes where furniture under an ON light stayed pitch-black while the
+        // floor around it was lit (the floor gets the pool below; the 3D assets
+        // get this light). Shadow maps stay OFF in baked mode (ensureLightShadow
+        // returns early), so the only added cost is the lights themselves — and
+        // they're disabled until their entity turns on, so an all-off villa pays
+        // nothing.
         const bb = m.getBoundingInfo().boundingBox;
+        const pos = bb.centerWorld.clone();
+        // Elongated strips are mounted flush against a ceiling or wall; a light
+        // AT the strip prints a hard hotspot on that surface (or a chain of
+        // them). Drop the light partway toward whatever is below so its pool is
+        // a wide soft wash instead — the visible "LED line" itself stays the
+        // mesh's emissive + glow, not this light.
         const size = bb.maximumWorld.subtract(bb.minimumWorld);
         const longest = Math.max(size.x, size.y, size.z);
-        if (!this.bakedMode) {
-          // NON-BAKED only: a real PointLight lights the whole room live.
-          // Baked mode gets the floor pool(s) below instead — its structure is
-          // unlit, so a PointLight can't reach the walls/floor anyway, and
-          // adding one to light the separate furniture made the FIRST turn-on
-          // stutter for seconds (Babylon recompiles every material that can see
-          // a newly-enabled light). Responsiveness on interaction is a hard
-          // requirement, and the night BAKE now lifts furniture out of black on
-          // its own (--night-fill), so that PointLight is pure cost — dropped.
-          const pos = bb.centerWorld.clone();
-          // Elongated strips are mounted flush against a ceiling or wall; a light
-          // AT the strip prints a hard hotspot there. Drop it partway toward the
-          // floor so its pool is a wide soft wash — the "LED line" look itself
-          // stays the mesh's emissive, not this light.
-          if (longest >= STRIP_MIN_LENGTH) {
-            const ray = new Ray(pos, Vector3.Down(), 8);
-            const hit = this.scene.pickWithRay(ray, (candidate) =>
-              candidate !== m && candidate.getTotalVertices() > 0 &&
-              !/^(halo_|label_|marker)/i.test(candidate.name));
-            if (hit?.hit && hit.distance > 0.3) {
-              pos.y -= Math.min(STRIP_DROP_MAX, hit.distance * STRIP_DROP_FRACTION);
-            }
+        if (longest >= STRIP_MIN_LENGTH) {
+          const ray = new Ray(pos, Vector3.Down(), 8);
+          const hit = this.scene.pickWithRay(ray, (candidate) =>
+            candidate !== m && candidate.getTotalVertices() > 0 &&
+            !/^(halo_|label_|marker)/i.test(candidate.name));
+          if (hit?.hit && hit.distance > 0.3) {
+            pos.y -= Math.min(STRIP_DROP_MAX, hit.distance * STRIP_DROP_FRACTION);
           }
-          const light = new PointLight(`elight_${m.name}_${m.uniqueId}`, pos, this.scene);
-          light.intensity = 0;
-          light.range = LIGHT_RANGE;
-          light.diffuse = WARM_GLOW.clone();
-          // No specular: on glossy surfaces (the tiled floor) a point light's
-          // white specular lobe is a bright glint that SLIDES as the camera moves
-          // — easily mistaken for the light itself flickering. Diffuse-only keeps
-          // the wash identical from every viewpoint.
-          light.specular = Color3.Black();
-          // Start DISABLED, not just intensity 0 — a disabled light is dropped
-          // from every material's shader light-loop entirely, so an off fixture
-          // costs nothing to compile; re-enabled in applyToMesh when it turns on.
-          light.setEnabled(false);
-          this.meshLights.set(m.uniqueId, light);
-        } else {
-          // BAKED mode: floor glow pool(s) only. Their creation floor-finds by
-          // raycast, so it's DEFERRED to idle (see drainIdleWork) — pools fill
-          // in a moment after the scene appears, off the load-blocking path.
-          // Turning a light on just enables whatever pools exist (cheap, instant).
-          this.pendingPoolMeshes.push(m);
+        }
+        const light = new PointLight(`elight_${m.name}_${m.uniqueId}`, pos, this.scene);
+        light.intensity = 0;
+        light.range = LIGHT_RANGE;
+        light.diffuse = WARM_GLOW.clone();
+        // No specular: on glossy surfaces (the tiled floor) a point light's
+        // white specular lobe is a bright glint that SLIDES as the camera moves
+        // — easily mistaken for the light itself flickering. Diffuse-only keeps
+        // the wash identical from every viewpoint.
+        light.specular = Color3.Black();
+        // Start DISABLED, not just intensity 0. A disabled light is dropped from
+        // every material's shader light-loop entirely, so an off fixture costs
+        // nothing to compile or shade; it's re-enabled in applyToMesh when the
+        // entity turns on. With most lights off at load, this slashes the active
+        // light count the first frame has to compile shaders for.
+        light.setEnabled(false);
+        this.meshLights.set(m.uniqueId, light);
+
+        // Baked mode ALSO gets the floor glow pool: the unlit baked floor can't
+        // be lit by the PointLight above, so the pool paints the on-floor wash
+        // while the PointLight handles the 3D furniture. (see LightPools.ts —
+        // same floor-finding raycast; scene-wide predicate because every mesh is
+        // already in the scene even though this loop hasn't reached them all.)
+        if (this.bakedMode) {
+          const fixturePos = bb.centerWorld.clone();
+          const ray = new Ray(fixturePos, Vector3.Down(), 8);
+          const hit = this.scene.pickWithRay(ray, (candidate) =>
+            candidate !== m && candidate.getTotalVertices() > 0 &&
+            !/^(halo_|label_|marker)/i.test(candidate.name));
+          const floorPos = hit?.hit && hit.pickedPoint
+            ? new Vector3(fixturePos.x, hit.pickedPoint.y + 0.02, fixturePos.z)
+            : new Vector3(fixturePos.x, fixturePos.y - 1, fixturePos.z);
+          const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}`, floorPos, LIGHT_POOL_RADIUS);
+          this.meshLightPools.set(m.uniqueId, pool);
         }
       }
     }
@@ -672,10 +640,6 @@ export class EntityVisuals {
     this.buildLabelAnchors();
     this.buildMotionToCameraIndex();
     this.rebuildLabels(); // labels are always shown
-
-    // Build the deferred baked-mode floor pools in the background (idle time),
-    // so their per-fixture floor raycasts never block the load path.
-    if (this.pendingPoolMeshes.length) this.scheduleIdleWork();
   }
 
   /** A rectangular LED cove (e.g. the dining-table or sofa-area perimeter) is
@@ -689,7 +653,9 @@ export class EntityVisuals {
    *  one entity (e.g. two bedside lamps) don't pass the "every mesh is a
    *  strip" test, so each keeps its own light exactly as before. */
   private mergeStripEntityLights(): void {
-    if (this.bakedMode) return; // baked mode has no per-mesh PointLights to merge (pools only)
+    // Runs in BOTH modes now — baked mode gained per-fixture PointLights (to
+    // light furniture), so a multi-piece LED strip would otherwise spawn one
+    // light per side here too. Pools are per-marker and untouched by this merge.
     for (const [entityId, meshes] of this.byEntity) {
       const map = this.mapping.get(entityId);
       if (!map || map.type !== "light" || meshes.length < 2) continue;
@@ -877,251 +843,8 @@ export class EntityVisuals {
     const seen = new Set<PointLight>();
     this.meshLights.forEach((l) => { if (!seen.has(l)) { seen.add(l); l.dispose(); } });
     this.meshLights.clear();
-    this.meshLightPools.forEach((arr) => arr.forEach((p) => p.dispose()));
+    this.meshLightPools.forEach((p) => p.dispose());
     this.meshLightPools.clear();
-    this.clipQueue = [];
-    this.pendingPoolMeshes = [];
-    this.wallOccluders = null; // shadowCasters is about to be rebuilt
-  }
-
-  /** Floor light-pool(s) for one fixture mesh (baked mode). A compact fixture
-   *  gets ONE circular pool under its centre; an elongated LED strip gets SEVERAL
-   *  dimmer pools spaced along its axis, so the wash follows the whole led line
-   *  instead of a single bright blob at the strip's midpoint (the reported bug).
-   *  Each pool floor-finds its own drop point. */
-  private buildFloorPools(m: AbstractMesh, bb: BoundingBox, size: Vector3, longest: number): LightPool[] {
-    const min = bb.minimumWorld, max = bb.maximumWorld;
-    const cx = (min.x + max.x) / 2, cz = (min.z + max.z) / 2;
-    const horiz = Math.max(size.x, size.z);
-    const isStrip = longest >= STRIP_MIN_LENGTH && horiz >= STRIP_MIN_LENGTH;
-
-    const centres: { x: number; z: number }[] = [];
-    if (isStrip) {
-      // One pool every ~radius along the dominant HORIZONTAL axis; the ~50%
-      // overlap blends them into one continuous line-shaped wash.
-      const n = Math.max(1, Math.round(horiz / LIGHT_POOL_RADIUS));
-      for (let i = 0; i <= n; i++) {
-        const t = i / n;
-        centres.push(size.x >= size.z
-          ? { x: min.x + t * size.x, z: cz }
-          : { x: cx, z: min.z + t * size.z });
-      }
-    } else {
-      centres.push({ x: cx, z: cz });
-    }
-    // Dim each strip pool so the additive overlap sums to an even line rather
-    // than a bright lump where pools stack (~2 overlap at any interior point).
-    const scale = isStrip ? 0.6 : 1;
-
-    return centres.map(({ x, z }, i) => {
-      const ray = new Ray(new Vector3(x, max.y, z), Vector3.Down(), 8);
-      const hit = this.scene.pickWithRay(ray, (c) =>
-        c !== m && c.getTotalVertices() > 0 && !/^(halo_|label_|marker)/i.test(c.name));
-      const y = hit?.hit && hit.pickedPoint ? hit.pickedPoint.y + 0.02 : min.y - 1;
-      const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}_${i}`, new Vector3(x, y, z), LIGHT_POOL_RADIUS);
-      pool.intensityScale = scale;
-      return pool;
-    });
-  }
-
-  /** Return this fixture's pool(s), building them right now if the background
-   *  idle queue (drainIdleWork) hasn't reached this mesh yet — see the call
-   *  site in applyToMesh for why "wait for the queue" was the actual cause of
-   *  a light feeling unresponsive on both ON and OFF. Returns undefined for a
-   *  non-baked-mode mesh (never queued, nothing to build). Idempotent: once
-   *  built, subsequent calls just return the cached pools. */
-  private ensurePoolsBuilt(m: AbstractMesh): LightPool[] | undefined {
-    const existing = this.meshLightPools.get(m.uniqueId);
-    if (existing) return existing;
-    const idx = this.pendingPoolMeshes.indexOf(m);
-    if (idx === -1) return undefined; // not a baked-mode light fixture
-    this.pendingPoolMeshes.splice(idx, 1);
-    const bb = m.getBoundingInfo().boundingBox;
-    const size = bb.maximumWorld.subtract(bb.minimumWorld);
-    const longest = Math.max(size.x, size.y, size.z);
-    const pools = this.buildFloorPools(m, bb, size, longest);
-    this.meshLightPools.set(m.uniqueId, pools);
-    return pools;
-  }
-
-  // ── Opt-in wall-clip (config.clipLightPools) — ALWAYS ASYNC ────────────────
-  // The clip needs per-fixture wall raycasts; running them inline on a
-  // light-switch tap froze the UI for seconds (the regression that got this
-  // reverted). So it's opt-in AND deferred: the pool lights up instantly as a
-  // round disc, then a few pools per idle tick get reshaped to their
-  // wall-bounded footprint. Turning a light on is never delayed.
-
-  /** Live toggle from config.clipLightPools (SceneManager → updateConfig). */
-  setClipLightPools(enabled: boolean): void {
-    if (enabled === this.clipLightPools) return;
-    this.clipLightPools = enabled;
-    if (enabled) {
-      // Clip whatever is already lit; off pools clip lazily when they turn on.
-      const onPools: LightPool[] = [];
-      this.forEachLightPoolState((pool, on) => { if (on) onPools.push(pool); });
-      this.enqueueClip(onPools);
-    } else {
-      // Restore round discs — a clipped pool's geometry was replaced in place.
-      this.rebuildLightPools();
-    }
-  }
-
-  private enqueueClip(pools: LightPool[]): void {
-    let added = false;
-    for (const p of pools) {
-      if (!p.clipped && !this.clipQueue.includes(p)) { this.clipQueue.push(p); added = true; }
-    }
-    if (added) this.scheduleIdleWork();
-  }
-
-  /** Drop pools from the pending clip queue — called when their light turns off,
-   *  so a quick ON→OFF cancels the (now-pointless) background raycasts. */
-  private dequeueClip(pools: LightPool[]): void {
-    if (this.clipQueue.length === 0) return;
-    const drop = new Set(pools);
-    this.clipQueue = this.clipQueue.filter((p) => !drop.has(p));
-  }
-
-  /** Schedule the background pool work (build + wall-clip) for the browser's
-   *  IDLE time — so its raycasts only run when nothing more important (input,
-   *  rendering) is pending, and never hang the UI. Falls back to a 0ms timeout
-   *  where requestIdleCallback is unavailable (older iOS Safari). */
-  private scheduleIdleWork(): void {
-    if (this.clipScheduled) return;
-    this.clipScheduled = true;
-    const rIC = (window as unknown as {
-      requestIdleCallback?: (cb: (d: IdleDeadline) => void, o?: { timeout: number }) => number;
-    }).requestIdleCallback;
-    if (rIC) rIC((d) => this.drainIdleWork(d), { timeout: 1500 });
-    else setTimeout(() => this.drainIdleWork(), 0);
-  }
-
-  private hasIdleTime(deadline: IdleDeadline | undefined, did: number, cap: number): boolean {
-    return did < cap && (did === 0 || !deadline || deadline.timeRemaining() > 4);
-  }
-
-  /** Drain the two background queues in idle time: FIRST build a few deferred
-   *  pools (floor-find raycasts) — applying live state so an ON light's glow
-   *  appears — then clip a few pools to their walls. Both yield the instant the
-   *  idle slice runs low, and reschedule until empty. Interaction never waits on
-   *  either: a light turns on immediately, its pool/shape just fill in after. */
-  private drainIdleWork(deadline?: IdleDeadline): void {
-    this.clipScheduled = false;
-
-    // 1. Build deferred pools.
-    let built = 0;
-    const buildCap = deadline ? POOL_CLIP_BATCH_IDLE : POOL_CLIP_BATCH;
-    while (this.pendingPoolMeshes.length && this.hasIdleTime(deadline, built, buildCap)) {
-      const m = this.pendingPoolMeshes.shift()!;
-      built++;
-      const bb = m.getBoundingInfo().boundingBox;
-      const size = bb.maximumWorld.subtract(bb.minimumWorld);
-      const longest = Math.max(size.x, size.y, size.z);
-      this.meshLightPools.set(m.uniqueId, this.buildFloorPools(m, bb, size, longest));
-    }
-    if (built) {
-      // Apply live state to every pool (new ones included) so ON lights show
-      // their glow the moment their pool exists; enqueue the ON ones for clip.
-      this.forEachLightPoolState((pool, on, colour, frac) => {
-        pool.setState(on, colour, frac * this.lightPoolStrength);
-        if (on && this.clipLightPools && !pool.clipped && !this.clipQueue.includes(pool)) {
-          this.clipQueue.push(pool);
-        }
-      });
-    }
-
-    // 2. Clip queued pools (only after builds, so a slice with pending builds
-    //    doesn't also try to clip pools that don't exist yet).
-    let clipped = 0;
-    if (this.pendingPoolMeshes.length === 0) {
-      if (this.wallOccluders === null) {
-        this.wallOccluders = this.shadowCasters.filter(
-          (m) => m.getTotalVertices() > 0 && STRUCTURE_SHELL_RE.test(normaliseMeshName(m.name)));
-      }
-      const walls = this.wallOccluders;
-      const clipCap = deadline ? POOL_CLIP_BATCH_IDLE : POOL_CLIP_BATCH;
-      while (this.clipQueue.length && this.hasIdleTime(deadline, clipped, clipCap)) {
-        const pool = this.clipQueue.shift()!;
-        clipped++;
-        if (pool.clipped || walls.length === 0) continue;
-        this.clipPoolToWalls(pool, walls);
-      }
-    }
-
-    if (built || clipped) this.requestRender();
-    if (this.pendingPoolMeshes.length || this.clipQueue.length) this.scheduleIdleWork();
-  }
-
-  /** Sweep rays from a pool's fixture out to its radius, stop each at the nearest
-   *  shell wall, and rebuild the pool as that wall-bounded footprint. Openings
-   *  (doors/windows) are gaps in the geometry, so a ray through one runs full
-   *  length — light crosses a wall only where there's actually an opening.
-   *
-   *  A baked Structure is commonly split into ~100+ per-material
-   *  `Structure_primitive<N>` submeshes (one per texture slot). Testing EVERY
-   *  ray against EVERY one of those with `intersectsMesh` (an unaccelerated,
-   *  full-triangle-list test — no octree) is O(rays × allWalls); with ~150
-   *  submeshes and 64 rays that's ~9,600 full-mesh intersection tests for a
-   *  SINGLE pool, and requestIdleCallback only yields BETWEEN pools, not
-   *  inside this loop — so a batch of a few pools blocked the whole main
-   *  thread for seconds (the "villa just loaded" freeze). Fixed by a cheap
-   *  AABB-distance pre-filter: walls whose bounding box can't possibly be
-   *  within the pool's radius are rejected in O(1), leaving only the small
-   *  handful of ACTUALLY nearby submeshes for the expensive per-ray test —
-   *  computed ONCE per pool, not once per ray. */
-  private clipPoolToWalls(pool: LightPool, walls: AbstractMesh[]): void {
-    const R = pool.radius;
-    const c = pool.center;
-    const nearby = walls.filter((w) => {
-      const bb = w.getBoundingInfo().boundingBox;
-      const cx = Math.max(bb.minimumWorld.x, Math.min(c.x, bb.maximumWorld.x));
-      const cz = Math.max(bb.minimumWorld.z, Math.min(c.z, bb.maximumWorld.z));
-      const dx = c.x - cx, dz = c.z - cz;
-      return dx * dx + dz * dz <= R * R;
-    });
-    if (nearby.length === 0) { pool.clipped = true; return; } // nothing could occlude it — round disc stays correct
-
-    const oy = pool.center.y + POOL_CLIP_RAY_Y;
-    const ray = new Ray(new Vector3(pool.center.x, oy, pool.center.z), Vector3.Down(), R);
-    const rim: { x: number; z: number }[] = [];
-    for (let i = 0; i < POOL_CLIP_RAYS; i++) {
-      const a = (i / POOL_CLIP_RAYS) * Math.PI * 2;
-      const dx = Math.cos(a), dz = Math.sin(a);
-      ray.origin.copyFromFloats(pool.center.x, oy, pool.center.z);
-      ray.direction.copyFromFloats(dx, 0, dz);
-      ray.length = R;
-      let dist = R;
-      for (const w of nearby) {
-        const pi = ray.intersectsMesh(w);
-        if (pi.hit && pi.distance < dist) dist = pi.distance;
-      }
-      rim.push({ x: dx * dist, z: dz * dist });
-    }
-    pool.applyFootprint(rim); // sets pool.clipped = true
-  }
-
-  /** Dispose + recreate every baked-mode pool as a fresh ROUND disc, then
-   *  reapply live state. Used when clipLightPools is turned OFF, to undo the
-   *  in-place footprint reshape (a clipped pool has no round geometry left). */
-  private rebuildLightPools(): void {
-    if (!this.bakedMode) return;
-    this.clipQueue = [];
-    this.pendingPoolMeshes = []; // we rebuild them all synchronously right here
-    this.meshLightPools.forEach((arr) => arr.forEach((p) => p.dispose()));
-    this.meshLightPools.clear();
-    for (const [entityId, meshes] of this.byEntity) {
-      const map = this.mapping.get(entityId);
-      if (!map || map.type !== "light") continue;
-      for (const m of meshes) {
-        const bb = m.getBoundingInfo().boundingBox;
-        const size = bb.maximumWorld.subtract(bb.minimumWorld);
-        const longest = Math.max(size.x, size.y, size.z);
-        this.meshLightPools.set(m.uniqueId, this.buildFloorPools(m, bb, size, longest));
-      }
-    }
-    this.forEachLightPoolState((pool, on, colour, frac) =>
-      pool.setState(on, colour, frac * this.lightPoolStrength));
-    this.requestRender();
   }
 
   /** World-space bounding box spanning ALL of an entity's meshes merged (e.g.
@@ -1275,23 +998,6 @@ export class EntityVisuals {
   /** All entity mappings resolved during the last indexMeshes call. */
   getDetectedMappings(): EntityMapping[] {
     return Array.from(this.mapping.values());
-  }
-
-  /** Apply every known entity's state at once — the "paint the villa with
-   *  whatever's already known" pass right after a structural re-index (see
-   *  SceneManager.applyEntityStatesBulk). Distinct from individual apply()
-   *  calls (a live HA state_changed event, or an optimistic tap) purely so a
-   *  baked light's floor pool STAYS deferred to the idle-time queue during
-   *  this pass — see inBulkRepaint's docstring for why that distinction
-   *  matters (otherwise every fixture's pool would build synchronously, all
-   *  at once, right after load). */
-  applyBulk(entities: HassEntity[]): void {
-    this.inBulkRepaint = true;
-    try {
-      for (const e of entities) this.apply(e);
-    } finally {
-      this.inBulkRepaint = false;
-    }
   }
 
   /** Called for every state change. */
@@ -1937,7 +1643,11 @@ export class EntityVisuals {
    * idle/off light costs nothing. Called once per entity from apply().
    */
   private syncEntityShadow(entityId: string, meshes: AbstractMesh[], on: boolean): void {
-    if (this.bakedMode) return; // no per-mesh PointLights in baked mode → nothing to occlude
+    // Baked mode DOES have entity lights now (they light the furniture — see the
+    // light-creation block), but deliberately NO shadow maps: wall shadows are
+    // already painted into the baked atlas, and per-fixture furniture shadows
+    // aren't worth the cube-shadow-map cost the user asked us to keep low.
+    if (this.bakedMode) return;
     const existing = this.lightShadows.get(entityId);
 
     if (!on) {
@@ -2031,34 +1741,8 @@ export class EntityVisuals {
         // on a currently-hidden floor must not light its pool even if the HA
         // entity itself is "on" (see resyncLightPoolsToFloor for the other
         // direction — a floor SWITCH with no entity-state change).
-        // ensurePoolsBuilt (not a plain .get()) for a LIVE update: a fixture's
-        // pool is normally built by the background idle queue
-        // (drainIdleWork), which has no idea WHICH light the user just
-        // interacted with — a fixture queued near the end got no visual
-        // response for however long the queue took to reach it, on EITHER a
-        // turn-on or a turn-off tap (whichever came first found no pool yet,
-        // so nothing updated). Building it here, on demand, the instant it's
-        // actually needed, makes every tap resolve immediately regardless of
-        // queue position. During inBulkRepaint (every entity at once, right
-        // after load) this stays a plain lookup instead — see its docstring
-        // for why eager-building ALL of them in that one pass would be its
-        // own freeze. A single on-demand build is one cheap raycast
-        // (buildFloorPools), not the wall-clip's cost — safe to do inline.
-        const pools = this.inBulkRepaint
-          ? this.meshLightPools.get(mesh.uniqueId)
-          : this.ensurePoolsBuilt(mesh);
-        if (pools) {
-          for (const pool of pools) {
-            pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
-          }
-          // Opt-in wall-clip, deferred: enqueue the freshly-lit pools so the
-          // raycasts run on a later tick, never on this switch-tap frame. When a
-          // light turns OFF, drop its pools from the queue instead — an off
-          // pool is invisible, so clipping it is wasted work, and cancelling it
-          // keeps a quick ON→OFF from leaving background raycasts running.
-          if (this.clipLightPools && on) this.enqueueClip(pools);
-          else if (!on) this.dequeueClip(pools);
-        }
+        const pool = this.meshLightPools.get(mesh.uniqueId);
+        if (pool) pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;
       }
