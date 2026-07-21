@@ -9,12 +9,14 @@ import type { StateHistoryPoint } from "@/types/ha.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { brightnessToPct } from "@/utils/colorUtils";
 import { onOffColor } from "@/utils/stateColors";
 
 export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
   const on = entity?.state === "on";
+  const toggle = useOptimisticToggle(mapping.entityId, () => HAServices.toggleLight(ws, mapping.entityId));
   const modes = (entity?.attributes.supported_color_modes ?? []) as string[];
   const supportsBrightness = modes.some((m) => ["brightness", "color_temp", "hs", "rgb", "rgbw", "xy"].includes(m));
   const supportsTemp = modes.includes("color_temp");
@@ -31,7 +33,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Lightbulb size={22} />} onClose={onClose}>
-      <PowerToggle on={on} onClick={() => HAServices.toggleLight(ws, mapping.entityId)} />
+      <PowerToggle on={on} onClick={toggle} />
 
       {supportsBrightness && (
         <div className="field">

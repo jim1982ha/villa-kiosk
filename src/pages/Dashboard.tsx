@@ -19,6 +19,7 @@ import { mappingForEntityId } from "@/config/EntityMap";
 import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
+import { optimisticToggle } from "@/utils/optimisticToggle";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
@@ -151,23 +152,14 @@ export default function Dashboard() {
       const entity = entities[entityId];
       if (isQuickToggle(mapping, entity)) {
         // Optimistic: flip the visual state the instant you tap, instead of
-        // waiting for HA's websocket round-trip to echo the change back (that
-        // round-trip — worse over a tunnel — is the only remaining "latency"
-        // once the render work is off the click path). HA's real state_changed
-        // reconciles a moment later; if the command actually fails, revert.
-        //
-        // Read the LIVE state (synchronous snapshot), NOT the `entity` captured
-        // in this callback's closure: on a rapid ON→OFF the closure hasn't been
-        // recreated by React yet, so it still shows the pre-ON state and would
-        // flip the WRONG way (predicting "on" again) — leaving the OFF to wait
-        // on HA. The snapshot always reflects the just-applied optimistic state.
-        const prev = getEntitiesSnapshot()[entityId]?.state;
-        if (prev !== undefined) {
-          optimistic(entityId, prev === "on" ? "off" : "on");
-        }
-        HAServices.toggleEntity(ws, entityId).catch(() => {
-          if (prev !== undefined) optimistic(entityId, prev);
-        });
+        // waiting for HA's websocket round-trip to echo the change back —
+        // see utils/optimisticToggle for why it reads the LIVE snapshot
+        // (getEntitiesSnapshot), not the `entity` captured in this callback's
+        // closure (that was the "OFF right after ON feels laggy" bug: a stale
+        // closure read predicted the wrong direction). Same helper the device
+        // panels' PowerToggle uses (useOptimisticToggle), so a tap is equally
+        // instant everywhere in the UI.
+        optimisticToggle(entityId, getEntitiesSnapshot, optimistic, () => HAServices.toggleEntity(ws, entityId));
         return;
       }
 

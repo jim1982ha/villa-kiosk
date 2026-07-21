@@ -10,6 +10,11 @@ export default function MediaPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
   const on = entity?.state === "on" || entity?.state === "playing" || entity?.state === "paused";
   const title = entity?.attributes.media_title as string | undefined;
+  // NOT optimistic (see hooks/useOptimisticToggle / utils/optimisticToggle,
+  // used by every other panel's PowerToggle): media_player.toggle isn't a
+  // clean on<->off flip — HA resolves it against the entity's own semantics
+  // (playing/paused/idle/on/off), so guessing the wrong direction here would
+  // be worse than the brief wait for the real state.
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Tv size={22} />} onClose={onClose}>

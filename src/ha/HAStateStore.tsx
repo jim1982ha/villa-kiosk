@@ -76,15 +76,25 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const ws = wsRef.current;
 
   const [entities, setEntitiesState] = useState<Record<string, HassEntity>>({});
-  // Mirrors `entities` synchronously (no extra render/effect lag) so
-  // getEntitiesSnapshot() below is never stale — see its docstring.
+  // Mirrors `entities` for getEntitiesSnapshot() below — MUST be written
+  // synchronously and unconditionally at the call site, never inside a React
+  // state UPDATER function. React does not guarantee an updater passed to
+  // setState runs before the setState call returns (it's queued for the next
+  // render, which for a plain DOM/pointer-driven call — exactly how a map tap
+  // arrives here — can land a task or more later). The bug this fixes: two
+  // taps close together (e.g. ON then OFF) each call optimistic() below; if
+  // the SECOND tap's getEntitiesSnapshot() read the ref before React had
+  // flushed the FIRST tap's updater, it saw the pre-tap state, computed the
+  // toggle in the WRONG direction (a silent no-op), and the light only
+  // caught up once Home Assistant's real echo eventually arrived — exactly
+  // the "OFF right after ON feels laggy" symptom. commitEntities below is the
+  // ONLY writer of entitiesRef, and it writes the ref BEFORE calling
+  // setEntitiesState, so a read immediately after (even from the very next
+  // synchronous call) is always correct.
   const entitiesRef = useRef<Record<string, HassEntity>>({});
-  const setEntities = useCallback((next: Record<string, HassEntity> | ((prev: Record<string, HassEntity>) => Record<string, HassEntity>)) => {
-    setEntitiesState((prev) => {
-      const value = typeof next === "function" ? next(prev) : next;
-      entitiesRef.current = value;
-      return value;
-    });
+  const commitEntities = useCallback((next: Record<string, HassEntity>) => {
+    entitiesRef.current = next;
+    setEntitiesState(next);
   }, []);
   const getEntitiesSnapshot = useCallback(() => entitiesRef.current, []);
   const [connection, setConnection] = useState<ConnectionState>("disconnected");
@@ -120,10 +130,10 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     const all = await ws.getStates();
     const map: Record<string, HassEntity> = {};
     for (const e of all) map[e.entity_id] = e;
-    setEntities(map);
+    commitEntities(map);
     // Push initial values to imperative subscribers (scene paints correct state).
     for (const e of all) notify(e);
-  }, [ws, notify]);
+  }, [ws, notify, commitEntities]);
 
   const connect = useCallback(
     async () => {
@@ -134,7 +144,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
           const { data } = event as StateChangedEvent;
           if (!data?.new_state) return;
           const ns = data.new_state;
-          setEntities((prev) => ({ ...prev, [ns.entity_id]: ns }));
+          commitEntities({ ...entitiesRef.current, [ns.entity_id]: ns });
           notify(ns);
         });
         await hydrate();
@@ -149,7 +159,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [ws, hydrate, notify],
+    [ws, hydrate, notify, commitEntities],
   );
 
   // Re-hydrate after an automatic reconnect.
@@ -179,6 +189,9 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   );
 
   const optimistic = useCallback((entityId: string, state: string, attrs?: Record<string, unknown>) => {
+    // Reads entitiesRef.current DIRECTLY — always the true latest value (see
+    // commitEntities' docstring) — so back-to-back calls (a fast ON then OFF
+    // tap) each see the OTHER's result, never a stale pre-tap snapshot.
     const cur = entitiesRef.current[entityId];
     if (!cur) return;
     const next: HassEntity = {
@@ -187,9 +200,9 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       attributes: attrs ? { ...cur.attributes, ...attrs } : cur.attributes,
       last_changed: new Date().toISOString(),
     };
-    setEntities((prev) => ({ ...prev, [entityId]: next }));
+    commitEntities({ ...entitiesRef.current, [entityId]: next });
     notify(next); // drive the imperative scene subscribers (badges + 3D visuals)
-  }, [notify, setEntities]);
+  }, [notify, commitEntities]);
 
   const value = useMemo<HAStateContextType>(
     () => ({

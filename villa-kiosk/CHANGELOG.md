@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.18
+
+### Changes
+- Root-cause fix for laggy OFF-after-ON: entitiesRef was written INSIDE a React state updater (not guaranteed synchronous), so two rapid taps could race and the second one read stale state, silently guessing the wrong toggle direction. Rewrote HAStateStore's commit path so the ref is always written synchronously before React is even told. Extended optimistic toggling to every panel's PowerToggle (light/fan/switch), not just the map tap, via a shared utils/optimisticToggle + hooks/useOptimisticToggle (DRY) — media player intentionally excluded (toggle isn't a clean on/off flip). Also fixed package.json's version never being bumped by push.sh (Advanced Settings footer was stuck on v2.32.0 while the HA add-on reported the real version) — push.sh now bumps and verifies both files together, using the correct outer-repo path for package.json.
+
+---
+
+
 ## 2.32.15
 
 ### Changes

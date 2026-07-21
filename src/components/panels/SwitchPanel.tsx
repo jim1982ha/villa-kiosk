@@ -11,6 +11,7 @@ import type { StateHistoryPoint } from "@/types/ha.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { onOffColor } from "@/utils/stateColors";
 
 export default function SwitchPanel({ entity, mapping, onClose }: PanelProps) {
@@ -24,7 +25,7 @@ export default function SwitchPanel({ entity, mapping, onClose }: PanelProps) {
     return () => { cancelled = true; };
   }, [mapping.entityId]);
 
-  const toggle = () => HAServices.toggleEntity(ws, mapping.entityId);
+  const toggle = useOptimisticToggle(mapping.entityId, () => HAServices.toggleEntity(ws, mapping.entityId));
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<ToggleLeft size={22} />} onClose={onClose}>
