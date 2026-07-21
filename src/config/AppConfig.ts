@@ -195,12 +195,17 @@ export interface AppConfig {
    *  Settings. */
   deviceGroups: DeviceGroup[];
   /** Baked-mode only: clip each fixture's floor light-glow "pool" to the
-   *  surrounding walls so it can't spill outside the house. ON by default. The
-   *  clip needs per-fixture wall raycasts, which run entirely in the BACKGROUND
-   *  (browser idle time — see EntityVisuals.drainClipQueue): the light turns on
-   *  instantly as a round pool and just swaps to its wall-bounded shape a moment
-   *  later, so interaction is never delayed. Toggle it off in Advanced Settings
-   *  on a weak device that would rather skip the background work entirely. */
+   *  surrounding walls so it can't spill outside the house. OFF by default —
+   *  opt-in from Advanced Settings. The clip runs entirely in the BACKGROUND
+   *  (browser idle time — see EntityVisuals.drainIdleWork/clipPoolToWalls),
+   *  guarded by an AABB pre-filter so a single pool's wall test only checks
+   *  submeshes actually near it, not the whole baked shell (that pre-filter
+   *  fixed a real "villa just loaded, tapping a light freezes the UI for a
+   *  few seconds" regression — see clipPoolToWalls' comment for the exact
+   *  O(rays × allWalls) blowup it replaced). It's off by default anyway,
+   *  even now that it's fixed, because this exact subsystem has caused two
+   *  separate responsiveness regressions — the hard "always responsive"
+   *  requirement wins the tie-break for what a fresh install gets. */
   clipLightPools?: boolean;
 }
 
@@ -246,11 +251,16 @@ export const DEFAULT_CONFIG: AppConfig = {
   // native (unscaled) size — still user-adjustable via the Settings slider.
   entityIconScale: 1.0,
   deviceGroups: [],
-  // ON by default: the wall-clip runs fully in the background (idle-time raycasts
-  // — see EntityVisuals.drainClipQueue), so the light still turns on instantly
-  // and just swaps to its wall-bounded shape a moment later. A toggle in
-  // Advanced Settings lets a weak device opt out.
-  clipLightPools: true,
+  // OFF by default. The wall-clip runs in the background (idle-time raycasts —
+  // see EntityVisuals.drainIdleWork/clipPoolToWalls) and is now guarded by an
+  // AABB pre-filter that keeps its cost bounded even on a large villa, but this
+  // exact subsystem caused two separate main-thread-freeze regressions before
+  // that fix (a naive per-mesh octree-free raycast sweep is easy to
+  // accidentally make expensive again). Given the hard "always responsive"
+  // requirement, default new installs to the guaranteed-zero-background-cost
+  // option; a user who wants the "no wall spill" polish opts in from Advanced
+  // Settings knowing exactly what it costs.
+  clipLightPools: false,
 };
 
 /** Load config, deep-merging stored values over defaults (forward-compatible). */

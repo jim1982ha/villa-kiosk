@@ -418,16 +418,17 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           <label className="toggle" style={{ marginTop: 10 }}>
             <input
               type="checkbox"
-              checked={config.clipLightPools ?? true}
+              checked={config.clipLightPools ?? false}
               onChange={(e) => update({ clipLightPools: e.target.checked })}
             />
             <span>Keep a light's floor glow inside its walls</span>
           </label>
           <p className="muted body-text" style={{ marginTop: 6, fontSize: 12 }}>
             Baked-lighting villas only. Trims each fixture's floor glow to the
-            surrounding walls so it doesn't spill outside the house. Computed in
-            the background, so turning lights on stays instant — turn it off on a
-            low-end device that would rather skip the extra work.
+            surrounding walls so it doesn't spill outside the house. Off by
+            default — it computes in the background (never blocking a light
+            switch), but turn it on only if you want that extra polish, since
+            it's still some added background work on top of the base experience.
           </p>
         </div>
 

@@ -70,12 +70,18 @@ const LIGHT_POOL_RADIUS = 1.8;
 // tick (chunked so no single tick janks), and the mesh-name test for what
 // counts as an occluding wall — the fused villa shell only (walls/floor/
 // ceiling/exterior), NOT furniture, so a chair can't notch the pool.
-const POOL_CLIP_RAYS = 64;
+// 32 rays is still a smooth wall-bounded footprint (walls are straight lines,
+// not fine detail) at roughly half the per-pool ray-test cost of the original
+// 64.
+const POOL_CLIP_RAYS = 32;
 const POOL_CLIP_RAY_Y = 0.15;
 // Pools clipped per drain slice: up to this many while idle time remains (the
 // slice still yields the instant timeRemaining() runs low), or a small fixed
-// count on the setTimeout fallback path (no deadline to yield against).
-const POOL_CLIP_BATCH_IDLE = 8;
+// count on the setTimeout fallback path (no deadline to yield against). Kept
+// modest even after the AABB pre-filter (clipPoolToWalls) removed the O(rays ×
+// ALL walls) blowup that made a batch of these take seconds right after load —
+// this is now just a conservative per-slice ceiling, not the primary defence.
+const POOL_CLIP_BATCH_IDLE = 4;
 const POOL_CLIP_BATCH = 2;
 const STRUCTURE_SHELL_RE = /^Structure(?:_L\d+|_Exterior)?$/i;
 /** Clamp a per-light intensity override (Advanced Settings, -100%..+100%,
@@ -412,7 +418,7 @@ export class EntityVisuals {
     if (typeof config.render?.lightPoolIntensity === "number") {
       this.setLightPoolIntensity(config.render.lightPoolIntensity);
     }
-    this.setClipLightPools(config.clipLightPools ?? true);
+    this.setClipLightPools(config.clipLightPools ?? false);
   }
 
   /** Settings' "Light effect strength" slider — mirrors setRenderConfig's
@@ -1019,9 +1025,32 @@ export class EntityVisuals {
   /** Sweep rays from a pool's fixture out to its radius, stop each at the nearest
    *  shell wall, and rebuild the pool as that wall-bounded footprint. Openings
    *  (doors/windows) are gaps in the geometry, so a ray through one runs full
-   *  length — light crosses a wall only where there's actually an opening. */
+   *  length — light crosses a wall only where there's actually an opening.
+   *
+   *  A baked Structure is commonly split into ~100+ per-material
+   *  `Structure_primitive<N>` submeshes (one per texture slot). Testing EVERY
+   *  ray against EVERY one of those with `intersectsMesh` (an unaccelerated,
+   *  full-triangle-list test — no octree) is O(rays × allWalls); with ~150
+   *  submeshes and 64 rays that's ~9,600 full-mesh intersection tests for a
+   *  SINGLE pool, and requestIdleCallback only yields BETWEEN pools, not
+   *  inside this loop — so a batch of a few pools blocked the whole main
+   *  thread for seconds (the "villa just loaded" freeze). Fixed by a cheap
+   *  AABB-distance pre-filter: walls whose bounding box can't possibly be
+   *  within the pool's radius are rejected in O(1), leaving only the small
+   *  handful of ACTUALLY nearby submeshes for the expensive per-ray test —
+   *  computed ONCE per pool, not once per ray. */
   private clipPoolToWalls(pool: LightPool, walls: AbstractMesh[]): void {
     const R = pool.radius;
+    const c = pool.center;
+    const nearby = walls.filter((w) => {
+      const bb = w.getBoundingInfo().boundingBox;
+      const cx = Math.max(bb.minimumWorld.x, Math.min(c.x, bb.maximumWorld.x));
+      const cz = Math.max(bb.minimumWorld.z, Math.min(c.z, bb.maximumWorld.z));
+      const dx = c.x - cx, dz = c.z - cz;
+      return dx * dx + dz * dz <= R * R;
+    });
+    if (nearby.length === 0) { pool.clipped = true; return; } // nothing could occlude it — round disc stays correct
+
     const oy = pool.center.y + POOL_CLIP_RAY_Y;
     const ray = new Ray(new Vector3(pool.center.x, oy, pool.center.z), Vector3.Down(), R);
     const rim: { x: number; z: number }[] = [];
@@ -1032,7 +1061,7 @@ export class EntityVisuals {
       ray.direction.copyFromFloats(dx, 0, dz);
       ray.length = R;
       let dist = R;
-      for (const w of walls) {
+      for (const w of nearby) {
         const pi = ray.intersectsMesh(w);
         if (pi.hit && pi.distance < dist) dist = pi.distance;
       }

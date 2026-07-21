@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.19
+
+### Changes
+- Fix the real cause of 'villa just loaded, first light tap freezes UI': the wall-clip's ray sweep tested every ray against EVERY baked-shell submesh (a baked Structure commonly splits into 100+ per-material Structure_primitive<N> meshes), with no yield inside that loop — a batch of a few pools could mean ~10k unaccelerated ray-mesh tests executed synchronously inside one idle callback. Fixed with a cheap AABB-distance pre-filter (per pool, not per ray) so only submeshes actually near that pool get the expensive test; halved ray count and idle batch size as extra margin. Given this exact subsystem caused two separate freeze regressions, defaulted clipLightPools to OFF (opt-in via Advanced Settings) even though it's now properly bounded — the 'always responsive' requirement wins the default, not the polish.
+
+---
+
+
 ## 2.32.18
 
 ### Changes
