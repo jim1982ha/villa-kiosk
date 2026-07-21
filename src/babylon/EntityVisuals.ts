@@ -297,6 +297,12 @@ export class EntityVisuals {
    *  raycasts never land on the interaction (light-switch) frame. */
   private clipQueue: LightPool[] = [];
   private clipScheduled = false;
+  /** Baked-mode fixture meshes whose floor pool(s) haven't been BUILT yet.
+   *  Pool creation floor-finds each drop point by raycast; doing that for the
+   *  whole villa inline made load stutter, so it's deferred to idle too — the
+   *  scene appears immediately and each room's floor glow fills in a moment
+   *  later (progressive), never on the load-blocking path. */
+  private pendingPoolMeshes: AbstractMesh[] = [];
   /** config.render.lightPoolIntensity, cached — see setLightPoolIntensity. */
   private lightPoolStrength = 1;
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
@@ -634,11 +640,11 @@ export class EntityVisuals {
           light.setEnabled(false);
           this.meshLights.set(m.uniqueId, light);
         } else {
-          // BAKED mode: floor glow pool(s) only — distributed along a strip, one
-          // under a compact fixture (buildFloorPools). Turning a light on just
-          // enables these (cheap, instant): no PointLight recompile, no raycasts
-          // on the click path.
-          this.meshLightPools.set(m.uniqueId, this.buildFloorPools(m, bb, size, longest));
+          // BAKED mode: floor glow pool(s) only. Their creation floor-finds by
+          // raycast, so it's DEFERRED to idle (see drainIdleWork) — pools fill
+          // in a moment after the scene appears, off the load-blocking path.
+          // Turning a light on just enables whatever pools exist (cheap, instant).
+          this.pendingPoolMeshes.push(m);
         }
       }
     }
@@ -650,6 +656,10 @@ export class EntityVisuals {
     this.buildLabelAnchors();
     this.buildMotionToCameraIndex();
     this.rebuildLabels(); // labels are always shown
+
+    // Build the deferred baked-mode floor pools in the background (idle time),
+    // so their per-fixture floor raycasts never block the load path.
+    if (this.pendingPoolMeshes.length) this.scheduleIdleWork();
   }
 
   /** A rectangular LED cove (e.g. the dining-table or sofa-area perimeter) is
@@ -854,6 +864,7 @@ export class EntityVisuals {
     this.meshLightPools.forEach((arr) => arr.forEach((p) => p.dispose()));
     this.meshLightPools.clear();
     this.clipQueue = [];
+    this.pendingPoolMeshes = [];
     this.wallOccluders = null; // shadowCasters is about to be rebuilt
   }
 
@@ -924,47 +935,77 @@ export class EntityVisuals {
     for (const p of pools) {
       if (!p.clipped && !this.clipQueue.includes(p)) { this.clipQueue.push(p); added = true; }
     }
-    if (added) this.scheduleClipDrain();
+    if (added) this.scheduleIdleWork();
   }
 
-  /** Schedule the queue drain for the browser's IDLE time — so the wall raycasts
-   *  only ever run when nothing more important (input, rendering) is pending, and
-   *  never hang the UI. Falls back to a 0ms timeout where requestIdleCallback is
-   *  unavailable (older iOS Safari). */
-  private scheduleClipDrain(): void {
+  /** Schedule the background pool work (build + wall-clip) for the browser's
+   *  IDLE time — so its raycasts only run when nothing more important (input,
+   *  rendering) is pending, and never hang the UI. Falls back to a 0ms timeout
+   *  where requestIdleCallback is unavailable (older iOS Safari). */
+  private scheduleIdleWork(): void {
     if (this.clipScheduled) return;
     this.clipScheduled = true;
     const rIC = (window as unknown as {
       requestIdleCallback?: (cb: (d: IdleDeadline) => void, o?: { timeout: number }) => number;
     }).requestIdleCallback;
-    if (rIC) rIC((d) => this.drainClipQueue(d), { timeout: 1500 });
-    else setTimeout(() => this.drainClipQueue(), 0);
+    if (rIC) rIC((d) => this.drainIdleWork(d), { timeout: 1500 });
+    else setTimeout(() => this.drainIdleWork(), 0);
   }
 
-  /** Clip a few pools, yielding as soon as the idle slice runs low, then
-   *  reschedule until the queue empties. Each pool lights up round the instant
-   *  its switch is tapped; this only swaps in its wall-bounded shape afterwards. */
-  private drainClipQueue(deadline?: IdleDeadline): void {
+  private hasIdleTime(deadline: IdleDeadline | undefined, did: number, cap: number): boolean {
+    return did < cap && (did === 0 || !deadline || deadline.timeRemaining() > 4);
+  }
+
+  /** Drain the two background queues in idle time: FIRST build a few deferred
+   *  pools (floor-find raycasts) — applying live state so an ON light's glow
+   *  appears — then clip a few pools to their walls. Both yield the instant the
+   *  idle slice runs low, and reschedule until empty. Interaction never waits on
+   *  either: a light turns on immediately, its pool/shape just fill in after. */
+  private drainIdleWork(deadline?: IdleDeadline): void {
     this.clipScheduled = false;
-    // Resolve the shell occluders once (walls only — not furniture).
-    if (this.wallOccluders === null) {
-      this.wallOccluders = this.shadowCasters.filter(
-        (m) => m.getTotalVertices() > 0 && STRUCTURE_SHELL_RE.test(normaliseMeshName(m.name)));
+
+    // 1. Build deferred pools.
+    let built = 0;
+    const buildCap = deadline ? POOL_CLIP_BATCH_IDLE : POOL_CLIP_BATCH;
+    while (this.pendingPoolMeshes.length && this.hasIdleTime(deadline, built, buildCap)) {
+      const m = this.pendingPoolMeshes.shift()!;
+      built++;
+      const bb = m.getBoundingInfo().boundingBox;
+      const size = bb.maximumWorld.subtract(bb.minimumWorld);
+      const longest = Math.max(size.x, size.y, size.z);
+      this.meshLightPools.set(m.uniqueId, this.buildFloorPools(m, bb, size, longest));
     }
-    const walls = this.wallOccluders;
-    // At least one per slice (guaranteed progress), then keep going only while
-    // idle time remains, capped so one slice can't monopolise a frame.
-    let did = 0;
-    const cap = deadline ? POOL_CLIP_BATCH_IDLE : POOL_CLIP_BATCH;
-    while (this.clipQueue.length && did < cap &&
-           (did === 0 || !deadline || deadline.timeRemaining() > 4)) {
-      const pool = this.clipQueue.shift()!;
-      did++;
-      if (pool.clipped || walls.length === 0) continue;
-      this.clipPoolToWalls(pool, walls);
+    if (built) {
+      // Apply live state to every pool (new ones included) so ON lights show
+      // their glow the moment their pool exists; enqueue the ON ones for clip.
+      this.forEachLightPoolState((pool, on, colour, frac) => {
+        pool.setState(on, colour, frac * this.lightPoolStrength);
+        if (on && this.clipLightPools && !pool.clipped && !this.clipQueue.includes(pool)) {
+          this.clipQueue.push(pool);
+        }
+      });
     }
-    if (did) this.requestRender();
-    if (this.clipQueue.length) this.scheduleClipDrain();
+
+    // 2. Clip queued pools (only after builds, so a slice with pending builds
+    //    doesn't also try to clip pools that don't exist yet).
+    let clipped = 0;
+    if (this.pendingPoolMeshes.length === 0) {
+      if (this.wallOccluders === null) {
+        this.wallOccluders = this.shadowCasters.filter(
+          (m) => m.getTotalVertices() > 0 && STRUCTURE_SHELL_RE.test(normaliseMeshName(m.name)));
+      }
+      const walls = this.wallOccluders;
+      const clipCap = deadline ? POOL_CLIP_BATCH_IDLE : POOL_CLIP_BATCH;
+      while (this.clipQueue.length && this.hasIdleTime(deadline, clipped, clipCap)) {
+        const pool = this.clipQueue.shift()!;
+        clipped++;
+        if (pool.clipped || walls.length === 0) continue;
+        this.clipPoolToWalls(pool, walls);
+      }
+    }
+
+    if (built || clipped) this.requestRender();
+    if (this.pendingPoolMeshes.length || this.clipQueue.length) this.scheduleIdleWork();
   }
 
   /** Sweep rays from a pool's fixture out to its radius, stop each at the nearest
@@ -998,6 +1039,7 @@ export class EntityVisuals {
   private rebuildLightPools(): void {
     if (!this.bakedMode) return;
     this.clipQueue = [];
+    this.pendingPoolMeshes = []; // we rebuild them all synchronously right here
     this.meshLightPools.forEach((arr) => arr.forEach((p) => p.dispose()));
     this.meshLightPools.clear();
     for (const [entityId, meshes] of this.byEntity) {

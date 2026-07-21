@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.13
+
+### Changes
+- Progressive load (#1): baked-mode floor-pool creation now runs in the background too (idle time), not just the wall-clip. The scene appears immediately and each room's light glow floor-finds + fills in a moment later, so per-fixture load raycasts never block first paint. On lights get their glow the instant their pool is built.
+
+---
+
+
 ## 2.32.12
 
 ### Changes
