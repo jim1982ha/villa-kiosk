@@ -55,6 +55,15 @@ export function resetLightPoolTextureCache(): void {
 
 export class LightPool {
   readonly mesh: Mesh;
+  /** Per-pool brightness multiplier applied on top of the live intensity. 1 for
+   *  a normal single-fixture pool; <1 for a strip's END pools (a light "sitting
+   *  in" for the corner where two adjoining strips meet) — see EntityVisuals'
+   *  light-creation block, where an elongated strip gets a full-intensity pool
+   *  at its centre plus two half-intensity pools at its ends, so two adjoining
+   *  strips' end-pools sum to roughly the centre's brightness at the shared
+   *  corner instead of leaving it dark (or, if both ends were left at 1,
+   *  doubling up into a hotspot there). */
+  intensityScale = 1;
   private material: StandardMaterial;
 
   /** `floorPosition` — where the pool sits (the caller has already found the
@@ -94,7 +103,7 @@ export class LightPool {
     this.mesh.setEnabled(on);
     if (!on) return;
     this.material.emissiveColor = colour;
-    this.material.alpha = Math.max(0.15, Math.min(2, intensityFrac));
+    this.material.alpha = Math.min(2, Math.max(0.15, intensityFrac) * this.intensityScale);
   }
 
   dispose(): void {

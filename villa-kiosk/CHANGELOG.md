@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.23
+
+### Changes
+- LED strip cove lighting: dark corners fixed. A rectangular LED cove is 4 separate strip segments, each previously lighting only its own centre — corners (where two segments' ends meet) fell outside every pool's radius and stayed dim. Each strip now gets 3 floor-glow pools: full intensity at its centre (unchanged) plus half intensity at each of its own two ends, so two adjoining strips' end-pools land on the same corner and sum back to roughly the centre's brightness, lighting the corner without doubling it into a hotspot. Compact (non-strip) fixtures are unaffected — still exactly one pool. This is the corner-lighting half of the earlier-reverted v2.32.8 strip work, reapplied on its own — no wall-clip, no idle queue, no optimistic toggle, so it carries none of the responsiveness risk from that reverted saga.
+
+---
+
+
 ## 2.32.22
 
 ### Changes

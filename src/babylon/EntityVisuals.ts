@@ -269,8 +269,12 @@ export class EntityVisuals {
   private meshLights = new Map<number, PointLight>();
   /** Baked-mode counterpart to meshLights — see LightPools.ts for why a real
    *  PointLight is pointless there (the structure renders unlit) and what
-   *  this fakes instead. Keyed the same way, one per fixture mesh. */
-  private meshLightPools = new Map<number, LightPool>();
+   *  this fakes instead. Keyed the same way, one per fixture mesh. A compact
+   *  fixture gets a single pool; an elongated strip gets an ARRAY — one
+   *  full-intensity pool at its centre plus two half-intensity pools at its
+   *  ends, so two strips meeting at a corner light that corner too instead of
+   *  leaving it dark between their centres (see the light-creation block). */
+  private meshLightPools = new Map<number, LightPool[]>();
   /** config.render.lightPoolIntensity, cached — see setLightPoolIntensity. */
   private lightPoolStrength = 1;
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
@@ -449,8 +453,8 @@ export class EntityVisuals {
       const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
       const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
       for (const mesh of meshes) {
-        const pool = this.meshLightPools.get(mesh.uniqueId);
-        if (pool) fn(pool, on && mesh.isEnabled(), colour, effectiveFrac);
+        const pools = this.meshLightPools.get(mesh.uniqueId);
+        if (pools) for (const pool of pools) fn(pool, on && mesh.isEnabled(), colour, effectiveFrac);
       }
     }
   }
@@ -618,17 +622,42 @@ export class EntityVisuals {
         // while the PointLight handles the 3D furniture. (see LightPools.ts —
         // same floor-finding raycast; scene-wide predicate because every mesh is
         // already in the scene even though this loop hasn't reached them all.)
+        //
+        // An elongated strip (e.g. one side of a rectangular LED ceiling cove)
+        // only lighting its OWN centre left the CORNERS dark where two adjoining
+        // strips' ends meet — each strip's single pool fades out well before
+        // reaching that far. Fixed by giving a strip THREE pools instead of one:
+        // full-intensity at its centre (unchanged), plus two half-intensity
+        // pools at its own ends. At a shared corner, the two adjoining strips'
+        // half-intensity end-pools land on (almost) the same spot and sum back
+        // to roughly the centre's brightness — lighting the corner without
+        // doubling it into a hotspot. A compact (non-strip) fixture is
+        // unaffected: it still gets exactly one full-intensity pool.
         if (this.bakedMode) {
-          const fixturePos = bb.centerWorld.clone();
-          const ray = new Ray(fixturePos, Vector3.Down(), 8);
-          const hit = this.scene.pickWithRay(ray, (candidate) =>
-            candidate !== m && candidate.getTotalVertices() > 0 &&
-            !/^(halo_|label_|marker)/i.test(candidate.name));
-          const floorPos = hit?.hit && hit.pickedPoint
-            ? new Vector3(fixturePos.x, hit.pickedPoint.y + 0.02, fixturePos.z)
-            : new Vector3(fixturePos.x, fixturePos.y - 1, fixturePos.z);
-          const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}`, floorPos, LIGHT_POOL_RADIUS);
-          this.meshLightPools.set(m.uniqueId, pool);
+          const min = bb.minimumWorld, max = bb.maximumWorld;
+          const cx = (min.x + max.x) / 2, cz = (min.z + max.z) / 2;
+          const horiz = Math.max(size.x, size.z);
+          const isStrip = longest >= STRIP_MIN_LENGTH && horiz >= STRIP_MIN_LENGTH;
+          const spots: { x: number; z: number; scale: number }[] = isStrip
+            ? (size.x >= size.z
+              ? [{ x: cx, z: cz, scale: 1 }, { x: min.x, z: cz, scale: 0.5 }, { x: max.x, z: cz, scale: 0.5 }]
+              : [{ x: cx, z: cz, scale: 1 }, { x: cx, z: min.z, scale: 0.5 }, { x: cx, z: max.z, scale: 0.5 }])
+            : [{ x: cx, z: cz, scale: 1 }];
+
+          const pools = spots.map(({ x, z, scale }, i) => {
+            const fixturePos = new Vector3(x, bb.centerWorld.y, z);
+            const ray = new Ray(fixturePos, Vector3.Down(), 8);
+            const hit = this.scene.pickWithRay(ray, (candidate) =>
+              candidate !== m && candidate.getTotalVertices() > 0 &&
+              !/^(halo_|label_|marker)/i.test(candidate.name));
+            const floorPos = hit?.hit && hit.pickedPoint
+              ? new Vector3(fixturePos.x, hit.pickedPoint.y + 0.02, fixturePos.z)
+              : new Vector3(fixturePos.x, fixturePos.y - 1, fixturePos.z);
+            const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}_${i}`, floorPos, LIGHT_POOL_RADIUS);
+            pool.intensityScale = scale;
+            return pool;
+          });
+          this.meshLightPools.set(m.uniqueId, pools);
         }
       }
     }
@@ -843,7 +872,7 @@ export class EntityVisuals {
     const seen = new Set<PointLight>();
     this.meshLights.forEach((l) => { if (!seen.has(l)) { seen.add(l); l.dispose(); } });
     this.meshLights.clear();
-    this.meshLightPools.forEach((p) => p.dispose());
+    this.meshLightPools.forEach((arr) => arr.forEach((p) => p.dispose()));
     this.meshLightPools.clear();
   }
 
@@ -1741,8 +1770,12 @@ export class EntityVisuals {
         // on a currently-hidden floor must not light its pool even if the HA
         // entity itself is "on" (see resyncLightPoolsToFloor for the other
         // direction — a floor SWITCH with no entity-state change).
-        const pool = this.meshLightPools.get(mesh.uniqueId);
-        if (pool) pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
+        const pools = this.meshLightPools.get(mesh.uniqueId);
+        if (pools) {
+          for (const pool of pools) {
+            pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
+          }
+        }
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;
       }
