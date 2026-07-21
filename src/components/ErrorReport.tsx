@@ -49,7 +49,14 @@ export default function ErrorReport({ title, hint, detail, actions }: Props) {
   return (
     <div
       className="center-overlay"
-      style={{ alignItems: "stretch", justifyContent: "flex-start", overflow: "auto", padding: 24, gap: 14, textAlign: "left" }}
+      style={{
+        alignItems: "stretch", justifyContent: "flex-start", overflow: "auto", gap: 14, textAlign: "left",
+        // Override just the horizontal/bottom padding here — the CSS class's
+        // own top padding (clearing the HUD topbar's height, safe-area aware)
+        // must survive, or this report's title/buttons render right under the
+        // topbar again on a real device.
+        paddingLeft: 24, paddingRight: 24, paddingBottom: 24,
+      }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <AlertTriangle size={22} style={{ color: "var(--status-danger)", flexShrink: 0 }} />

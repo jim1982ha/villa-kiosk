@@ -900,7 +900,25 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 
 /* --- Loading / overlay --- */
-.center-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; z-index: 5; text-align: center; padding: 24px; }
+/* Shared full-screen state for loading / no-model / error / crash-loop (see
+   BabylonCanvas + ErrorReport). MUST paint above the HUD (topbar z-index 22,
+   left column z-index 21, both always-rendered siblings in Dashboard — the
+   3D scene not being up yet doesn't hide them) and fully occlude it with a
+   real background, not just outrank it in z-order: an error/loading screen
+   with no background let the topbar's own text/icons show through and
+   visually overlap the report (the "l to fetch" / "odel" clipping bug — the
+   topbar was painting OVER the top of the error text since it had the
+   higher z-index despite this being the "on top" logical state). Top padding
+   mirrors .hud-topbar's own height calc (52px + the same safe-area inset) so
+   content on a notched phone still starts clear of the status bar, matching
+   the topbar's own mobile treatment below. */
+.center-overlay {
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  text-align: center;
+  padding: calc(52px + env(safe-area-inset-top, 0px) + 24px) 24px 24px;
+  background: var(--bg-base);
+}
 .spinner { width: 44px; height: 44px; border: 4px solid var(--bg-input); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; }
 
 /* Shared "last 24 hours" graph height for Sparkline/DualSparkline/

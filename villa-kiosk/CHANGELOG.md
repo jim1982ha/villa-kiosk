@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.22
+
+### Changes
+- Fix error/loading/no-model/crash-loop screens rendering underneath the HUD: .center-overlay now paints above the topbar and floor-switch column (z-index 30 vs 21/22) with a solid background and top padding that clears the topbar's real height (safe-area aware, so notched phones are correct too) — previously the topbar's higher z-index let its own text/icons visually overlap and clip the error report's title/buttons.
+
+---
+
+
 ## 2.32.21
 
 ### Changes
