@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.24
+
+### Changes
+- Remove the 'Exit to Home Assistant' button and all related code (redundant now): the login/profile-select screen's top-right exit button, the HUD's overflow-menu and inline exit buttons, ha/ingress.ts's isIngress()/exitToHomeAssistant() helpers, and the now-unused .auth-exit-btn CSS.
+
+---
+
+
 ## 2.32.23
 
 ### Changes

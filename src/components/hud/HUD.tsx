@@ -16,12 +16,11 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Home, Compass, Settings, Map,
-  PersonStanding, Anchor, LogOut, DoorOpen,
+  PersonStanding, Anchor, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
   EllipsisVertical, Minus, Plus,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
-import { isIngress, exitToHomeAssistant } from "@/ha/ingress";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
@@ -444,16 +443,6 @@ export default function HUD({
                       <span>Switch profile</span>
                     </button>
                   )}
-                  {isIngress() && (
-                    <button
-                      role="menuitem"
-                      className="hud-menu-item"
-                      onClick={() => { setMenuOpen(false); exitToHomeAssistant(); }}
-                    >
-                      <DoorOpen size={18} />
-                      <span>Exit to Home Assistant</span>
-                    </button>
-                  )}
                 </div>
               )}
             </div>
@@ -482,16 +471,6 @@ export default function HUD({
             {canOpenSettings && (
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
                 <Settings size={20} />
-              </button>
-            )}
-            {isIngress() && (
-              <button
-                className="icon-btn"
-                onClick={exitToHomeAssistant}
-                title="Exit to Home Assistant"
-                aria-label="Exit to Home Assistant"
-              >
-                <DoorOpen size={20} />
               </button>
             )}
           </div>
