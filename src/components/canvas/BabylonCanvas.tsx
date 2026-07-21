@@ -10,7 +10,7 @@ import { filterConfigForRole, hasCapability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { loadModelFromIndexedDB, fetchAddonConfig, getModelMeta, clearStoredModel, versionedModelUrl, roomsPathFor } from "@/utils/storage";
 import { claimPrefetch } from "@/utils/modelPrefetch";
-import { readWithProgress } from "@/utils/fetchProgress";
+import { fetchModelWithRetry } from "@/utils/fetchProgress";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
@@ -181,7 +181,15 @@ export default function BabylonCanvas({
             }
           }
           if (!data) {
-            const resp = await fetch(modelUrl);
+            // fetchModelWithRetry absorbs a transient NETWORK failure (dropped
+            // connection, DNS blip) with a couple of quick retries — common on
+            // the standalone hostname's public Cloudflare hop, rare on the HA
+            // sidebar's local Ingress path, which is why the same GLB could
+            // fail here and not there. An HTTP error status still surfaces
+            // immediately below, unretried — that's a real "nothing there"
+            // failure, not a blip.
+            const { resp, data: fetched } = await fetchModelWithRetry(
+              modelUrl, (f) => { if (!cancelled) setProgress(f); });
             if (!resp.ok) {
               setAddonError(true);
               loadErrorCode = `MODEL_FETCH_HTTP_${resp.status}`;
@@ -190,7 +198,7 @@ export default function BabylonCanvas({
                 "Re-upload it from Settings → Advanced Settings (Owner profile).",
               );
             }
-            data = await readWithProgress(resp, (f) => { if (!cancelled) setProgress(f); });
+            data = fetched;
           }
           noteModel({ bytes: data.byteLength });
           fromAddon = true;

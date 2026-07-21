@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.25
+
+### Changes
+- Model download now retries on a transient network failure (fetch() throwing, or the stream dropping mid-read — both surface as 'TypeError: Failed to fetch'), up to 2 extra attempts with a short backoff, before giving up and showing the error screen. Common on the standalone hostname's public Cloudflare hop, rare on the HA sidebar's local Ingress path — a real HTTP error status (404/500) is still surfaced immediately, unretried, since that's a genuine failure, not a blip.
+
+---
+
+
 ## 2.32.24
 
 ### Changes
