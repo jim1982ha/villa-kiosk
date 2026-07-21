@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.14
+
+### Changes
+- Instant tap feedback: a map tap on a light/switch now flips its state OPTIMISTICALLY (badge + 3D glow update the moment you touch it) instead of waiting for HA's websocket echo — that round-trip was the remaining perceived latency. HA's real state_changed reconciles a beat later; a failed command reverts.
+
+---
+
+
 ## 2.32.13
 
 ### Changes

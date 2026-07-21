@@ -49,6 +49,12 @@ interface HAStateContextType {
   /** Subscribe to *every* state change (used to drive the scene + alerts). */
   subscribeAll: (cb: (entity: HassEntity) => void) => () => void;
   callService: (domain: string, service: string, data?: Record<string, unknown>, target?: HassServiceTarget) => Promise<void>;
+  /** Optimistically overwrite an entity's state locally and notify subscribers
+   *  IMMEDIATELY, without waiting for HA's round-trip echo — so a tapped light
+   *  flips the instant you touch it. HA's real state_changed event then arrives
+   *  and reconciles (normally identical). Returns undefined; no-op if the entity
+   *  isn't known yet. Attribute patch is optional (e.g. leave brightness alone). */
+  optimistic: (entityId: string, state: string, attrs?: Record<string, unknown>) => void;
   /** Open the token-less connection to HA through the add-on's Supervisor proxy. */
   connect: () => Promise<void>;
   lastError: string | null;
@@ -172,6 +178,19 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     [ws],
   );
 
+  const optimistic = useCallback((entityId: string, state: string, attrs?: Record<string, unknown>) => {
+    const cur = entitiesRef.current[entityId];
+    if (!cur) return;
+    const next: HassEntity = {
+      ...cur,
+      state,
+      attributes: attrs ? { ...cur.attributes, ...attrs } : cur.attributes,
+      last_changed: new Date().toISOString(),
+    };
+    setEntities((prev) => ({ ...prev, [entityId]: next }));
+    notify(next); // drive the imperative scene subscribers (badges + 3D visuals)
+  }, [notify, setEntities]);
+
   const value = useMemo<HAStateContextType>(
     () => ({
       entities,
@@ -183,11 +202,12 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       subscribe,
       subscribeAll,
       callService,
+      optimistic,
       connect,
       lastError,
       serviceError,
     }),
-    [entities, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
+    [entities, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, optimistic, connect, lastError, serviceError],
   );
 
   return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;
