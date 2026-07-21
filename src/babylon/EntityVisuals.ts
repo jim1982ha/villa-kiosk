@@ -25,7 +25,7 @@ import {
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-import { resolveMeshToMapping } from "@/config/EntityMap";
+import { resolveMeshToMapping, normaliseMeshName } from "@/config/EntityMap";
 import { groupMemberIds } from "@/config/deviceGroups";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
@@ -63,6 +63,21 @@ const LIGHT_RANGE = 4;
 // PointLight at all, at any range/intensity — that's the whole reason the
 // pool trick exists).
 const LIGHT_POOL_RADIUS = 1.8;
+// Opt-in wall-clip for the floor pool (config.clipLightPools, run ASYNC — see
+// EntityVisuals.processClipQueue): how many rays sweep the fixture to find the
+// surrounding walls, how far above the floor they're cast (clear of the slab,
+// low enough to hit a wall's base), how many pools are clipped per deferred
+// tick (chunked so no single tick janks), and the mesh-name test for what
+// counts as an occluding wall — the fused villa shell only (walls/floor/
+// ceiling/exterior), NOT furniture, so a chair can't notch the pool.
+const POOL_CLIP_RAYS = 64;
+const POOL_CLIP_RAY_Y = 0.15;
+// Pools clipped per drain slice: up to this many while idle time remains (the
+// slice still yields the instant timeRemaining() runs low), or a small fixed
+// count on the setTimeout fallback path (no deadline to yield against).
+const POOL_CLIP_BATCH_IDLE = 8;
+const POOL_CLIP_BATCH = 2;
+const STRUCTURE_SHELL_RE = /^Structure(?:_L\d+|_Exterior)?$/i;
 /** Clamp a per-light intensity override (Advanced Settings, -100%..+100%,
  *  stored as -1..1) to a safe range — a stale/hand-edited config value
  *  outside that range must not blow the fixture out or invert it. */
@@ -271,6 +286,17 @@ export class EntityVisuals {
    *  PointLight is pointless there (the structure renders unlit) and what
    *  this fakes instead. Keyed the same way, one per fixture mesh. */
   private meshLightPools = new Map<number, LightPool[]>();
+  /** config.clipLightPools (opt-in): clip each pool to the surrounding walls so
+   *  its glow can't spill outside the house. The clip is ASYNC (see clipQueue)
+   *  so it never delays a light-switch tap. Default off. */
+  private clipLightPools = false;
+  /** The villa shell meshes (walls/floor/ceiling), filtered out of shadowCasters
+   *  once and cached — the ray occluders for the async pool wall-clip. */
+  private wallOccluders: AbstractMesh[] | null = null;
+  /** Pools waiting to be wall-clipped, drained a few per deferred tick so the
+   *  raycasts never land on the interaction (light-switch) frame. */
+  private clipQueue: LightPool[] = [];
+  private clipScheduled = false;
   /** config.render.lightPoolIntensity, cached — see setLightPoolIntensity. */
   private lightPoolStrength = 1;
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
@@ -380,6 +406,7 @@ export class EntityVisuals {
     if (typeof config.render?.lightPoolIntensity === "number") {
       this.setLightPoolIntensity(config.render.lightPoolIntensity);
     }
+    this.setClipLightPools(config.clipLightPools ?? true);
   }
 
   /** Settings' "Light effect strength" slider — mirrors setRenderConfig's
@@ -826,6 +853,8 @@ export class EntityVisuals {
     this.meshLights.clear();
     this.meshLightPools.forEach((arr) => arr.forEach((p) => p.dispose()));
     this.meshLightPools.clear();
+    this.clipQueue = [];
+    this.wallOccluders = null; // shadowCasters is about to be rebuilt
   }
 
   /** Floor light-pool(s) for one fixture mesh (baked mode). A compact fixture
@@ -866,6 +895,124 @@ export class EntityVisuals {
       pool.intensityScale = scale;
       return pool;
     });
+  }
+
+  // ── Opt-in wall-clip (config.clipLightPools) — ALWAYS ASYNC ────────────────
+  // The clip needs per-fixture wall raycasts; running them inline on a
+  // light-switch tap froze the UI for seconds (the regression that got this
+  // reverted). So it's opt-in AND deferred: the pool lights up instantly as a
+  // round disc, then a few pools per idle tick get reshaped to their
+  // wall-bounded footprint. Turning a light on is never delayed.
+
+  /** Live toggle from config.clipLightPools (SceneManager → updateConfig). */
+  setClipLightPools(enabled: boolean): void {
+    if (enabled === this.clipLightPools) return;
+    this.clipLightPools = enabled;
+    if (enabled) {
+      // Clip whatever is already lit; off pools clip lazily when they turn on.
+      const onPools: LightPool[] = [];
+      this.forEachLightPoolState((pool, on) => { if (on) onPools.push(pool); });
+      this.enqueueClip(onPools);
+    } else {
+      // Restore round discs — a clipped pool's geometry was replaced in place.
+      this.rebuildLightPools();
+    }
+  }
+
+  private enqueueClip(pools: LightPool[]): void {
+    let added = false;
+    for (const p of pools) {
+      if (!p.clipped && !this.clipQueue.includes(p)) { this.clipQueue.push(p); added = true; }
+    }
+    if (added) this.scheduleClipDrain();
+  }
+
+  /** Schedule the queue drain for the browser's IDLE time — so the wall raycasts
+   *  only ever run when nothing more important (input, rendering) is pending, and
+   *  never hang the UI. Falls back to a 0ms timeout where requestIdleCallback is
+   *  unavailable (older iOS Safari). */
+  private scheduleClipDrain(): void {
+    if (this.clipScheduled) return;
+    this.clipScheduled = true;
+    const rIC = (window as unknown as {
+      requestIdleCallback?: (cb: (d: IdleDeadline) => void, o?: { timeout: number }) => number;
+    }).requestIdleCallback;
+    if (rIC) rIC((d) => this.drainClipQueue(d), { timeout: 1500 });
+    else setTimeout(() => this.drainClipQueue(), 0);
+  }
+
+  /** Clip a few pools, yielding as soon as the idle slice runs low, then
+   *  reschedule until the queue empties. Each pool lights up round the instant
+   *  its switch is tapped; this only swaps in its wall-bounded shape afterwards. */
+  private drainClipQueue(deadline?: IdleDeadline): void {
+    this.clipScheduled = false;
+    // Resolve the shell occluders once (walls only — not furniture).
+    if (this.wallOccluders === null) {
+      this.wallOccluders = this.shadowCasters.filter(
+        (m) => m.getTotalVertices() > 0 && STRUCTURE_SHELL_RE.test(normaliseMeshName(m.name)));
+    }
+    const walls = this.wallOccluders;
+    // At least one per slice (guaranteed progress), then keep going only while
+    // idle time remains, capped so one slice can't monopolise a frame.
+    let did = 0;
+    const cap = deadline ? POOL_CLIP_BATCH_IDLE : POOL_CLIP_BATCH;
+    while (this.clipQueue.length && did < cap &&
+           (did === 0 || !deadline || deadline.timeRemaining() > 4)) {
+      const pool = this.clipQueue.shift()!;
+      did++;
+      if (pool.clipped || walls.length === 0) continue;
+      this.clipPoolToWalls(pool, walls);
+    }
+    if (did) this.requestRender();
+    if (this.clipQueue.length) this.scheduleClipDrain();
+  }
+
+  /** Sweep rays from a pool's fixture out to its radius, stop each at the nearest
+   *  shell wall, and rebuild the pool as that wall-bounded footprint. Openings
+   *  (doors/windows) are gaps in the geometry, so a ray through one runs full
+   *  length — light crosses a wall only where there's actually an opening. */
+  private clipPoolToWalls(pool: LightPool, walls: AbstractMesh[]): void {
+    const R = pool.radius;
+    const oy = pool.center.y + POOL_CLIP_RAY_Y;
+    const ray = new Ray(new Vector3(pool.center.x, oy, pool.center.z), Vector3.Down(), R);
+    const rim: { x: number; z: number }[] = [];
+    for (let i = 0; i < POOL_CLIP_RAYS; i++) {
+      const a = (i / POOL_CLIP_RAYS) * Math.PI * 2;
+      const dx = Math.cos(a), dz = Math.sin(a);
+      ray.origin.copyFromFloats(pool.center.x, oy, pool.center.z);
+      ray.direction.copyFromFloats(dx, 0, dz);
+      ray.length = R;
+      let dist = R;
+      for (const w of walls) {
+        const pi = ray.intersectsMesh(w);
+        if (pi.hit && pi.distance < dist) dist = pi.distance;
+      }
+      rim.push({ x: dx * dist, z: dz * dist });
+    }
+    pool.applyFootprint(rim); // sets pool.clipped = true
+  }
+
+  /** Dispose + recreate every baked-mode pool as a fresh ROUND disc, then
+   *  reapply live state. Used when clipLightPools is turned OFF, to undo the
+   *  in-place footprint reshape (a clipped pool has no round geometry left). */
+  private rebuildLightPools(): void {
+    if (!this.bakedMode) return;
+    this.clipQueue = [];
+    this.meshLightPools.forEach((arr) => arr.forEach((p) => p.dispose()));
+    this.meshLightPools.clear();
+    for (const [entityId, meshes] of this.byEntity) {
+      const map = this.mapping.get(entityId);
+      if (!map || map.type !== "light") continue;
+      for (const m of meshes) {
+        const bb = m.getBoundingInfo().boundingBox;
+        const size = bb.maximumWorld.subtract(bb.minimumWorld);
+        const longest = Math.max(size.x, size.y, size.z);
+        this.meshLightPools.set(m.uniqueId, this.buildFloorPools(m, bb, size, longest));
+      }
+    }
+    this.forEachLightPoolState((pool, on, colour, frac) =>
+      pool.setState(on, colour, frac * this.lightPoolStrength));
+    this.requestRender();
   }
 
   /** World-space bounding box spanning ALL of an entity's meshes merged (e.g.
@@ -1763,6 +1910,9 @@ export class EntityVisuals {
           for (const pool of pools) {
             pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
           }
+          // Opt-in wall-clip, deferred: enqueue the freshly-lit pools so the
+          // raycasts run on a later tick, never on this switch-tap frame.
+          if (this.clipLightPools && on) this.enqueueClip(pools);
         }
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;

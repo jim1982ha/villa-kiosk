@@ -376,6 +376,7 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
 
 export default function ConfigEditorModal({ onBack, focusEntityId, onModelChanged }: Props) {
   const { role } = useProfile();
+  const { config, update } = useConfig();
 
   return (
     <div className="modal-backdrop" onClick={onBack}>
@@ -410,6 +411,24 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
             Bound 3D objects
           </div>
           <BindingsTable />
+
+          <div className="settings-section-title" style={{ marginTop: 28 }}>
+            Lighting
+          </div>
+          <label className="toggle" style={{ marginTop: 10 }}>
+            <input
+              type="checkbox"
+              checked={config.clipLightPools ?? true}
+              onChange={(e) => update({ clipLightPools: e.target.checked })}
+            />
+            <span>Keep a light's floor glow inside its walls</span>
+          </label>
+          <p className="muted body-text" style={{ marginTop: 6, fontSize: 12 }}>
+            Baked-lighting villas only. Trims each fixture's floor glow to the
+            surrounding walls so it doesn't spill outside the house. Computed in
+            the background, so turning lights on stays instant — turn it off on a
+            low-end device that would rather skip the extra work.
+          </p>
         </div>
 
         <div className="settings-footer" style={{ justifyContent: "space-between" }}>

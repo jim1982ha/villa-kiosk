@@ -194,6 +194,14 @@ export interface AppConfig {
    *  instead (see components/panels/DeviceGroupPanel). Editable in Advanced
    *  Settings. */
   deviceGroups: DeviceGroup[];
+  /** Baked-mode only: clip each fixture's floor light-glow "pool" to the
+   *  surrounding walls so it can't spill outside the house. ON by default. The
+   *  clip needs per-fixture wall raycasts, which run entirely in the BACKGROUND
+   *  (browser idle time — see EntityVisuals.drainClipQueue): the light turns on
+   *  instantly as a round pool and just swaps to its wall-bounded shape a moment
+   *  later, so interaction is never delayed. Toggle it off in Advanced Settings
+   *  on a weak device that would rather skip the background work entirely. */
+  clipLightPools?: boolean;
 }
 
 /** See AppConfig.deviceGroups. */
@@ -238,6 +246,11 @@ export const DEFAULT_CONFIG: AppConfig = {
   // native (unscaled) size — still user-adjustable via the Settings slider.
   entityIconScale: 1.0,
   deviceGroups: [],
+  // ON by default: the wall-clip runs fully in the background (idle-time raycasts
+  // — see EntityVisuals.drainClipQueue), so the light still turns on instantly
+  // and just swaps to its wall-bounded shape a moment later. A toggle in
+  // Advanced Settings lets a weak device opt out.
+  clipLightPools: true,
 };
 
 /** Load config, deep-merging stored values over defaults (forward-compatible). */
@@ -305,6 +318,7 @@ export interface ConfigExportBundle {
   naturalScrolling: boolean;
   highlightInteractive: boolean;
   render: RenderConfig;
+  clipLightPools?: boolean;
 }
 
 export function buildConfigExport(config: AppConfig): ConfigExportBundle {
@@ -321,6 +335,7 @@ export function buildConfigExport(config: AppConfig): ConfigExportBundle {
     naturalScrolling: config.naturalScrolling,
     highlightInteractive: config.highlightInteractive,
     render: config.render,
+    clipLightPools: config.clipLightPools,
   };
 }
 
@@ -342,6 +357,7 @@ export function parseConfigImport(raw: unknown): Partial<ConfigExportBundle> {
   if (typeof b.naturalScrolling === "boolean") patch.naturalScrolling = b.naturalScrolling;
   if (typeof b.highlightInteractive === "boolean") patch.highlightInteractive = b.highlightInteractive;
   if (b.render && typeof b.render === "object") patch.render = b.render as RenderConfig;
+  if (typeof b.clipLightPools === "boolean") patch.clipLightPools = b.clipLightPools;
   return patch;
 }
 

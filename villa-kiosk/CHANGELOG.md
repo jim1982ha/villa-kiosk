@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.12
+
+### Changes
+- Light-pool wall-clip is back — now fully BACKGROUND, on by default: a light turns on instantly as a round pool, then its wall-bounded shape is computed in browser idle time (requestIdleCallback, chunked, yields on low idle) and swapped in, so interaction never blocks. Advanced Settings toggle (default on) to opt out on weak devices. Persists + exports with config.
+
+---
+
+
 ## 2.32.11
 
 ### Changes
