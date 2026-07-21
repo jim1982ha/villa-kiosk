@@ -938,6 +938,14 @@ export class EntityVisuals {
     if (added) this.scheduleIdleWork();
   }
 
+  /** Drop pools from the pending clip queue — called when their light turns off,
+   *  so a quick ON→OFF cancels the (now-pointless) background raycasts. */
+  private dequeueClip(pools: LightPool[]): void {
+    if (this.clipQueue.length === 0) return;
+    const drop = new Set(pools);
+    this.clipQueue = this.clipQueue.filter((p) => !drop.has(p));
+  }
+
   /** Schedule the background pool work (build + wall-clip) for the browser's
    *  IDLE time — so its raycasts only run when nothing more important (input,
    *  rendering) is pending, and never hang the UI. Falls back to a 0ms timeout
@@ -1953,8 +1961,12 @@ export class EntityVisuals {
             pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
           }
           // Opt-in wall-clip, deferred: enqueue the freshly-lit pools so the
-          // raycasts run on a later tick, never on this switch-tap frame.
+          // raycasts run on a later tick, never on this switch-tap frame. When a
+          // light turns OFF, drop its pools from the queue instead — an off
+          // pool is invisible, so clipping it is wasted work, and cancelling it
+          // keeps a quick ON→OFF from leaving background raycasts running.
           if (this.clipLightPools && on) this.enqueueClip(pools);
+          else if (!on) this.dequeueClip(pools);
         }
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;

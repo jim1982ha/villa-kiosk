@@ -28,7 +28,7 @@ import type { TeleportPoint } from "@/types/scene.types";
 export default function Dashboard() {
   const { config, update } = useConfig();
   const { role } = useProfile();
-  const { connect, entities, ws, haConfig, optimistic } = useHA();
+  const { connect, entities, ws, haConfig, optimistic, getEntitiesSnapshot } = useHA();
   // ProfileGate does NOT guarantee a signed-in role before this page mounts
   // (v2.30.2's early scene preload — an explicit, informed trade-off, see
   // ProfileGate's modelPreloadable — mounts it pre-login on non-iOS
@@ -155,12 +155,18 @@ export default function Dashboard() {
         // round-trip — worse over a tunnel — is the only remaining "latency"
         // once the render work is off the click path). HA's real state_changed
         // reconciles a moment later; if the command actually fails, revert.
-        const prev = entity?.state;
-        if (entity && prev !== undefined) {
+        //
+        // Read the LIVE state (synchronous snapshot), NOT the `entity` captured
+        // in this callback's closure: on a rapid ON→OFF the closure hasn't been
+        // recreated by React yet, so it still shows the pre-ON state and would
+        // flip the WRONG way (predicting "on" again) — leaving the OFF to wait
+        // on HA. The snapshot always reflects the just-applied optimistic state.
+        const prev = getEntitiesSnapshot()[entityId]?.state;
+        if (prev !== undefined) {
           optimistic(entityId, prev === "on" ? "off" : "on");
         }
         HAServices.toggleEntity(ws, entityId).catch(() => {
-          if (entity && prev !== undefined) optimistic(entityId, prev);
+          if (prev !== undefined) optimistic(entityId, prev);
         });
         return;
       }
@@ -168,7 +174,7 @@ export default function Dashboard() {
       // Rich entities (sliders, streams, info) open their control panel as before.
       setActivePanel({ entityId, mapping });
     },
-    [config.entityMap, entities, ws, role, canControl, optimistic],
+    [config.entityMap, entities, ws, role, canControl, optimistic, getEntitiesSnapshot],
   );
 
   // Long-press always opens the full control panel — even for quick-toggle

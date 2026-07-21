@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.15
+
+### Changes
+- Fix laggy OFF right after ON: optimistic toggle now reads the LIVE state snapshot instead of a stale React closure, so a rapid ON→OFF flips the correct direction and turns off instantly (was mispredicting 'on' and waiting on HA). Also cancel a light's pending background wall-clip when it turns off.
+
+---
+
+
 ## 2.32.14
 
 ### Changes
