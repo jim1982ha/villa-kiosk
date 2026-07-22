@@ -652,16 +652,23 @@ export class SceneManager {
    * to place a room's RoomHighlight glow (and its teleport point) on the
    * storey it's actually on.
    *
-   * Cast a ray straight DOWN at the room's centre, hitting only that storey's
-   * structure meshes: the first (highest) hit is the floor slab's top surface.
-   * A room centroid sits in open floor, so the ray does NOT hit the wall tops
-   * that ring the room — which is exactly why an earlier bbox-max approach put
-   * a 2F glow on the CEILING: a wall's material-mesh bbox spans floor→ceiling
-   * and its XZ footprint wraps the whole room, so "max Y of covering meshes"
-   * returned the ceiling height, not the floor. FloorManager hides every
-   * storey except the one being viewed, and picking skips disabled meshes, so
-   * the target storey's meshes are momentarily force-enabled for the probe and
-   * restored after. Falls back to 0 (ground) when nothing is hit.
+   * Cast a ray straight DOWN at the room's centre through only that storey's
+   * structure meshes and take the LOWEST hit — the floor slab's top surface is
+   * always the lowest solid thing a downward ray finds within its own storey's
+   * mesh group; anything else in that group (a beam, a duct run, an overhang,
+   * or — for a room sitting under a tight ceiling section — the underside of
+   * the storey above, if it got tagged into this storey's group) sits ABOVE
+   * it. An earlier version took the FIRST (nearest-to-1000, i.e. highest) hit
+   * instead, reasoning that a room centroid sits in open floor and so never
+   * hits the walls/ceiling ringing it — true for most rooms, but not
+   * guaranteed: one room (a bathroom under structure) had its centroid line
+   * up with an overhead beam, so the "first hit" put its glow at ceiling
+   * height instead of the floor. Picking the lowest hit removes that
+   * assumption entirely rather than patching around one more special case.
+   * FloorManager hides every storey except the one being viewed, and picking
+   * skips disabled meshes, so the target storey's meshes are momentarily
+   * force-enabled for the probe and restored after. Falls back to 0 (ground)
+   * when nothing is hit.
    */
   private estimateFloorY(x: number, z: number, floor: number): number {
     const meshes = this.floors.getFloorMeshes(floor);
@@ -669,12 +676,15 @@ export class SceneManager {
     const saved = meshes.map((m) => [m.isEnabled(false), m.isPickable] as const);
     for (const m of meshes) { m.setEnabled(true); m.isPickable = true; }
     // World Y is metres after normalisation; ±1000 comfortably brackets any villa.
-    const hit = this.scene.pickWithRay(
+    const hits = this.scene.multiPickWithRay(
       new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000),
       (m) => meshes.includes(m),
     );
     meshes.forEach((m, i) => { m.setEnabled(saved[i][0]); m.isPickable = saved[i][1]; });
-    return hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : 0;
+    if (!hits?.length) return 0;
+    let lowestY = Infinity;
+    for (const h of hits) if (h.pickedPoint && h.pickedPoint.y < lowestY) lowestY = h.pickedPoint.y;
+    return Number.isFinite(lowestY) ? lowestY : 0;
   }
 
   /**
@@ -686,7 +696,9 @@ export class SceneManager {
    *
    * Picking skips setEnabled(false) meshes and FloorManager hides other storeys,
    * so this room's floor is force-shown for the probe then restored — the same
-   * trick estimateFloorY uses.
+   * trick estimateFloorY uses, including taking the LOWEST hit per column
+   * (not the first/highest) so a beam or overhead structure above a tread
+   * can't be mistaken for the tread itself.
    */
   private buildRoomConform(pts: Pt2[], floor: number): { positions: number[]; indices: number[] } | null {
     const meshes = this.floors.getFloorMeshes(floor);
@@ -709,9 +721,12 @@ export class SceneManager {
     const xAt = (c: number) => Math.min(minX + c * STEP, maxX);
     const zAt = (r: number) => Math.min(minZ + r * STEP, maxZ);
     const probe = (x: number, z: number): number | null => {
-      const hit = this.scene.pickWithRay(
+      const hits = this.scene.multiPickWithRay(
         new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000), (m) => meshes.includes(m));
-      return hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : null;
+      if (!hits?.length) return null;
+      let lowestY: number | null = null;
+      for (const h of hits) if (h.pickedPoint && (lowestY === null || h.pickedPoint.y < lowestY)) lowestY = h.pickedPoint.y;
+      return lowestY;
     };
 
     // Cheap steppedness pre-check (~10 interior probes) so a big FLAT room never

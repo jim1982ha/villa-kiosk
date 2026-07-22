@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.27
+
+### Changes
+- Fix a room's presence/motion floor-glow landing at ceiling height instead of the floor: estimateFloorY's downward probe took the FIRST (topmost) raycast hit within its storey's mesh group, reasoning a room's centroid never hits overhead structure — true for most rooms, but the guest bathroom's centroid lined up with a beam/overhead structure, so its glow rendered up at that height instead of the tile floor. Switched to multiPickWithRay + the LOWEST hit, which is always the actual floor slab regardless of what else is overhead — removes the fragile per-room assumption instead of special-casing it. Same fix applied to buildRoomConform's stepped-room (staircase) probe for consistency.
+
+---
+
+
 ## 2.32.26
 
 ### Changes
