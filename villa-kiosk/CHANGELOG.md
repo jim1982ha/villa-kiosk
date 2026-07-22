@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.32.26
+
+### Changes
+- Two fixes: (1) chart axis/grid/tooltip-border text was using --text-muted/--border, which were never defined in either theme — fell back to SVG's default black fill, nearly invisible in dark mode. Now uses the app's real --text-secondary/--hairline tokens, themed correctly both ways. (2) Entity 'unavailable'/'unknown' state was silently read as a definite off/unlocked/closed/etc. in every device panel and in the lock/binary_sensor mesh colouring — worst case, a lock HA had lost contact with rendered as a confirmed red UNLOCKED on the map and in its panel. Added a shared isUnavailable() check + a distinct amber 'UNAVAILABLE' treatment (status pill, mesh tint, disabled controls) across every panel (Light/Fan/Switch/Media/Lock/Cover/AC/Sensor/DeviceGroup) and the lock/binary_sensor 3D mesh colouring, so the kiosk never asserts a state HA never actually confirmed. The map badge ring/value chip already handled this correctly and needed no change.
+
+---
+
+
 ## 2.32.25
 
 ### Changes

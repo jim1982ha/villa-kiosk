@@ -16,7 +16,7 @@ import { fetchHistory, fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
-import { binarySensorColor, paletteColorFor } from "@/utils/stateColors";
+import { binarySensorColor, paletteColorFor, isUnavailable } from "@/utils/stateColors";
 
 const LEVEL_COLOR: Record<AlertLevel, string> = {
   normal: "var(--status-on)",
@@ -30,6 +30,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const [stateHistory, setStateHistory] = useState<StateHistoryPoint[]>([]);
 
   const isBinary = mapping.type === "binary_sensor";
+  const unavailable = isUnavailable(entity);
   const numeric = Number(entity?.state);
   // A plain "sensor" whose current state doesn't parse as a number is a
   // text/enum sensor (connectivity status, a weather condition string, …) —
@@ -96,9 +97,20 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
       {isBinary ? (
         <>
           <div className="center" style={{ padding: "12px 0 6px" }}>
-            <div className={`status-pill ${binaryPillTone}`} style={{ fontSize: 20, padding: "14px 24px" }}>
-              {level === "danger" ? <AlertTriangle size={22} /> : <BinaryIcon size={22} />}
-              {level === "danger" ? binaryStateText.toUpperCase() : binaryStateText}
+            {/* unavailable MUST win over the device_class off-label below —
+                showing e.g. "Dry"/"No motion" (classInfo.offLabel) for a
+                sensor HA has actually lost contact with claims a confirmed
+                reading that was never taken. */}
+            <div
+              className={`status-pill ${unavailable ? "unavailable" : binaryPillTone}`}
+              style={{ fontSize: 20, padding: "14px 24px" }}
+            >
+              {unavailable
+                ? <AlertTriangle size={22} />
+                : level === "danger" ? <AlertTriangle size={22} /> : <BinaryIcon size={22} />}
+              {unavailable
+                ? "UNAVAILABLE"
+                : level === "danger" ? binaryStateText.toUpperCase() : binaryStateText}
             </div>
           </div>
           <div className="field">
@@ -112,10 +124,13 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
       ) : (
         <>
           <div className="center" style={{ margin: "6px 0 18px" }}>
-            <span className="value-large" style={{ color: isEnum ? "var(--text-primary)" : LEVEL_COLOR[level] }}>
-              {isEnum ? (entity?.state ?? "--") : Number.isFinite(numeric) ? numeric : entity?.state ?? "--"}
+            <span
+              className="value-large"
+              style={{ color: unavailable ? "var(--status-warning)" : isEnum ? "var(--text-primary)" : LEVEL_COLOR[level] }}
+            >
+              {unavailable ? "Unavailable" : isEnum ? (entity?.state ?? "--") : Number.isFinite(numeric) ? numeric : entity?.state ?? "--"}
             </span>{" "}
-            {!isEnum && <span className="value-unit">{unit}</span>}
+            {!unavailable && !isEnum && <span className="value-unit">{unit}</span>}
           </div>
           <div className="field">
             <label className="entity-label">Last 24 hours</label>

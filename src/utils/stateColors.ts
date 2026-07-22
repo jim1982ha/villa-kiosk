@@ -3,6 +3,20 @@
 // on/off/danger colouring consistent with the existing .status-pill tones
 // used elsewhere in the same panels.
 
+import type { HassEntity } from "@/types/ha.types";
+
+/** HA reports "unavailable" when it has lost contact with the device
+ *  (offline, integration reload, …) and "unknown" when it's never reported a
+ *  real value yet — in BOTH cases the entity's true state is NOT known, so a
+ *  panel must never fold either into a definite on/off/locked/open reading.
+ *  Every panel's binary state derivation (`entity?.state === "on"`, etc.)
+ *  needs to check this FIRST — see LockPanel, the worst case: silently
+ *  treating "unavailable" as "not locked" rendered a lock HA has lost contact
+ *  with as a confirmed, alarming "UNLOCKED". */
+export function isUnavailable(entity: HassEntity | undefined): boolean {
+  return entity == null || entity.state === "unavailable" || entity.state === "unknown";
+}
+
 const ON_COLOR = "var(--status-on)";
 const OFF_COLOR = "var(--bg-input)"; // matches .status-pill.off
 const WARN_COLOR = "var(--status-warning)";

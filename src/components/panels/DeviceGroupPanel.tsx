@@ -17,6 +17,7 @@ import { fetchHistory } from "@/ha/HAHistoryAPI";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HistoryPoint } from "@/types/ha.types";
+import { isUnavailable } from "@/utils/stateColors";
 
 interface Props {
   group: DeviceGroup;
@@ -42,6 +43,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       unit: (entity?.attributes.unit_of_measurement as string | undefined) ?? "",
       value: entity?.state ?? "—",
       numeric: Number.isFinite(numeric) ? numeric : undefined,
+      unavailable: isUnavailable(entity),
     };
   });
   const numericRows = rows.filter((r) => r.numeric !== undefined);
@@ -71,7 +73,9 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       <div className="row-buttons" style={{ marginBottom: 18 }}>
         {rows.map((r) => (
           <div key={r.id} className="center" style={{ flex: 1, minWidth: 90 }}>
-            <div className="value-large" style={{ fontSize: 26 }}>{r.value}</div>
+            <div className="value-large" style={{ fontSize: 26, color: r.unavailable ? "var(--status-warning)" : undefined }}>
+              {r.unavailable ? "Unavailable" : r.value}
+            </div>
             <div className="muted body-text">{r.unit || r.label}</div>
           </div>
         ))}

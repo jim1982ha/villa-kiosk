@@ -8,10 +8,11 @@ import type { StateHistoryPoint } from "@/types/ha.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
-import { coverColor } from "@/utils/stateColors";
+import { coverColor, isUnavailable } from "@/utils/stateColors";
 
 export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
+  const unavailable = isUnavailable(entity);
   const pos = entity?.attributes.current_position;
   const hasPosition = typeof pos === "number";
   const [position, setPosition] = useState<number>(hasPosition ? pos! : 0);
@@ -31,8 +32,9 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
     return () => { cancelled = true; };
   }, [mapping.entityId]);
 
-  const stateLabel =
-    entity?.state === "open"
+  const stateLabel = unavailable
+    ? "UNAVAILABLE"
+    : entity?.state === "open"
       ? hasPosition && position < 100
         ? `Partially open (${position}%)`
         : "Open"
@@ -43,23 +45,30 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Blinds size={22} />} onClose={onClose}>
       <div className="center" style={{ marginBottom: 16 }}>
-        <span className="status-pill off">{stateLabel}</span>
+        <span className={`status-pill ${unavailable ? "unavailable" : "off"}`}>{stateLabel}</span>
       </div>
 
-      <div className="row-buttons">
-        <button className="btn" style={{ flex: 1 }} onClick={() => HAServices.openCover(ws, mapping.entityId)}>
+      {unavailable && (
+        <p className="muted body-text center" style={{ marginBottom: 16 }}>
+          Home Assistant has lost contact with this cover — its real position
+          isn't known, so controls are disabled until it reports in again.
+        </p>
+      )}
+
+      <div className="row-buttons" style={unavailable ? { opacity: 0.5, pointerEvents: "none" } : undefined}>
+        <button className="btn" style={{ flex: 1 }} disabled={unavailable} onClick={() => HAServices.openCover(ws, mapping.entityId)}>
           <ChevronUp size={20} /> Open
         </button>
-        <button className="btn ghost" style={{ flex: 1 }} onClick={() => HAServices.stopCover(ws, mapping.entityId)}>
+        <button className="btn ghost" style={{ flex: 1 }} disabled={unavailable} onClick={() => HAServices.stopCover(ws, mapping.entityId)}>
           <Square size={16} /> Stop
         </button>
-        <button className="btn" style={{ flex: 1 }} onClick={() => HAServices.closeCover(ws, mapping.entityId)}>
+        <button className="btn" style={{ flex: 1 }} disabled={unavailable} onClick={() => HAServices.closeCover(ws, mapping.entityId)}>
           <ChevronDown size={20} /> Close
         </button>
       </div>
 
       {/* Position slider only when the device reports current_position. */}
-      {hasPosition && (
+      {!unavailable && hasPosition && (
         <div className="field">
           <label className="entity-label">Position · {position}%</label>
           <input

@@ -4,12 +4,13 @@ import { Fan } from "lucide-react";
 import BasePanel from "./BasePanel";
 import PowerToggle from "./PowerToggle";
 import StateTimeline from "./StateTimeline";
+import UnavailableNotice from "./UnavailableNotice";
 import type { PanelProps } from "@/types/panel.types";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
-import { onOffColor } from "@/utils/stateColors";
+import { onOffColor, isUnavailable } from "@/utils/stateColors";
 
 // Named labels for the common discrete-speed-count cases (matches how HA's
 // own more-info dialog reads a fan with a small, fixed number of steps —
@@ -25,6 +26,7 @@ const SPEED_LABELS: Record<number, string[]> = {
 
 export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
+  const unavailable = isUnavailable(entity);
   const on = entity?.state === "on";
   const presets = (entity?.attributes.preset_modes ?? []) as string[];
   const currentPreset = entity?.attributes.preset_mode;
@@ -60,9 +62,11 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Fan size={22} />} onClose={onClose}>
-      <PowerToggle on={on} onClick={() => HAServices.toggleFan(ws, mapping.entityId)} />
+      {unavailable ? <UnavailableNotice device="fan" /> : (
+        <PowerToggle on={on} onClick={() => HAServices.toggleFan(ws, mapping.entityId)} />
+      )}
 
-      {levels.length > 0 && (
+      {!unavailable && levels.length > 0 && (
         <div className="field">
           <label className="entity-label">Speed</label>
           <div className="row-buttons">
@@ -80,7 +84,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      {presets.length > 0 && (
+      {!unavailable && presets.length > 0 && (
         <div className="field">
           <label className="entity-label">Preset</label>
           <div className="row-buttons scroll">

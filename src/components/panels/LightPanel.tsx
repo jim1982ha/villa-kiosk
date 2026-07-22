@@ -4,16 +4,18 @@ import { Lightbulb } from "lucide-react";
 import BasePanel from "./BasePanel";
 import PowerToggle from "./PowerToggle";
 import StateTimeline from "./StateTimeline";
+import UnavailableNotice from "./UnavailableNotice";
 import type { PanelProps } from "@/types/panel.types";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { brightnessToPct } from "@/utils/colorUtils";
-import { onOffColor } from "@/utils/stateColors";
+import { onOffColor, isUnavailable } from "@/utils/stateColors";
 
 export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
+  const unavailable = isUnavailable(entity);
   const on = entity?.state === "on";
   const modes = (entity?.attributes.supported_color_modes ?? []) as string[];
   const supportsBrightness = modes.some((m) => ["brightness", "color_temp", "hs", "rgb", "rgbw", "xy"].includes(m));
@@ -31,9 +33,11 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Lightbulb size={22} />} onClose={onClose}>
-      <PowerToggle on={on} onClick={() => HAServices.toggleLight(ws, mapping.entityId)} />
+      {unavailable ? <UnavailableNotice device="light" /> : (
+        <PowerToggle on={on} onClick={() => HAServices.toggleLight(ws, mapping.entityId)} />
+      )}
 
-      {supportsBrightness && (
+      {!unavailable && supportsBrightness && (
         <div className="field">
           <label className="entity-label">Brightness · {brightnessToPct(brightness)}%</label>
           <input
@@ -44,7 +48,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      {supportsTemp && (
+      {!unavailable && supportsTemp && (
         <div className="field">
           <label className="entity-label">Colour temperature · {kelvin}K</label>
           <input

@@ -29,6 +29,7 @@ import { resolveMeshToMapping } from "@/config/EntityMap";
 import { groupMemberIds } from "@/config/deviceGroups";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
+import { isUnavailable } from "@/utils/stateColors";
 import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
@@ -36,7 +37,7 @@ import { axisWorldScale } from "./meshUnits";
 import { LightPool } from "./LightPools";
 import { badgeImageDataUrl, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { iconKeyFor } from "./badgeIconKeys";
-import { ALERT_RED, ALERT_RED_HEX } from "./colors";
+import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER } from "./colors";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 1.3;
@@ -1781,6 +1782,16 @@ export class EntityVisuals {
       }
 
       case "lock": {
+        // unavailable MUST win over the locked/unlocked colouring below —
+        // colouring the mesh confirmed-red for a lock HA has actually lost
+        // contact with asserts an "unlocked" reading that was never taken
+        // (the bug this fixed: a lock reporting "unavailable" rendered, on
+        // the map AND in its panel, exactly like a confirmed open door).
+        if (isUnavailable(state)) {
+          setDiffuse?.(UNAVAILABLE_AMBER);
+          setEmissive?.(UNAVAILABLE_AMBER.scale(0.25));
+          break;
+        }
         const locked = state.state === "locked";
         setDiffuse?.(locked ? new Color3(0.2, 0.75, 0.3) : new Color3(0.9, 0.2, 0.2));
         setEmissive?.(locked ? new Color3(0.0, 0.15, 0.05) : new Color3(0.25, 0, 0));
@@ -1788,6 +1799,14 @@ export class EntityVisuals {
       }
 
       case "binary_sensor": {
+        // Same reasoning as lock above: silently reading "unavailable" as
+        // "not triggered" makes an offline leak/smoke sensor look exactly
+        // like a safe, monitored one — flag it instead of going quiet.
+        if (isUnavailable(state)) {
+          this.pulsing.delete(mesh);
+          setEmissive?.(UNAVAILABLE_AMBER.scale(0.4));
+          break;
+        }
         const alert = state.state === "on"; // "on" = triggered (e.g. leak)
         if (alert) this.pulsing.add(mesh);
         else {

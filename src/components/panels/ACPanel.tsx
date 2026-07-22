@@ -7,6 +7,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useProfile } from "@/auth/ProfileContext";
 import { climateLimits } from "@/auth/permissions";
 import { HAServices } from "@/ha/HAServiceCalls";
+import { isUnavailable } from "@/utils/stateColors";
 
 const MODE_LABELS: Record<string, string> = {
   cool: "Cool", heat: "Heat", fan_only: "Fan", auto: "Auto", off: "Off",
@@ -16,6 +17,7 @@ const MODE_LABELS: Record<string, string> = {
 export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
   const { role } = useProfile();
+  const unavailable = isUnavailable(entity);
   const a = entity?.attributes;
   const step = a?.target_temp_step ?? 0.5;
   // RBAC bounded controls: a profile with a climate range (guests) gets the
@@ -40,38 +42,51 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Snowflake size={22} />} onClose={onClose}>
+      {unavailable && (
+        <div className="center" style={{ marginBottom: 16 }}>
+          <span className="status-pill unavailable">UNAVAILABLE</span>
+          <p className="muted body-text mt" style={{ maxWidth: 320 }}>
+            Home Assistant has lost contact with this AC — its real
+            temperature/mode isn't known, so controls are disabled until it
+            reports in again.
+          </p>
+        </div>
+      )}
+
       <div className="temp-display">
         <span className="value-unit">Current</span>
-        <div className="big">{a?.current_temperature ?? "--"}°C</div>
+        <div className="big">{unavailable ? "--" : a?.current_temperature ?? "--"}°C</div>
       </div>
 
-      <div className="temp-stepper">
-        <button onClick={() => commit(target - step)} aria-label="Lower target temperature"><Minus size={26} /></button>
-        <div className="target">{target}°C</div>
-        <button onClick={() => commit(target + step)} aria-label="Raise target temperature"><Plus size={26} /></button>
+      <div className="temp-stepper" style={unavailable ? { opacity: 0.5, pointerEvents: "none" } : undefined}>
+        <button onClick={() => commit(target - step)} aria-label="Lower target temperature" disabled={unavailable}><Minus size={26} /></button>
+        <div className="target">{unavailable ? "--" : target}°C</div>
+        <button onClick={() => commit(target + step)} aria-label="Raise target temperature" disabled={unavailable}><Plus size={26} /></button>
       </div>
-      {limits && (
+      {limits && !unavailable && (
         <div className="muted" style={{ textAlign: "center", fontSize: 13 }}>
           Adjustable between {min}–{max} °C
         </div>
       )}
 
-      <div className="field">
-        <label className="entity-label">Mode</label>
-        <div className="row-buttons scroll">
-          {hvacModes.map((m) => (
-            <button
-              key={m}
-              className={`btn ${entity?.state === m ? "active" : "ghost"}`}
-              onClick={() => HAServices.setHvacMode(ws, mapping.entityId, m)}
-            >
-              {MODE_LABELS[m] ?? m}
-            </button>
-          ))}
+      {!unavailable && (
+        <div className="field">
+          <label className="entity-label">Mode</label>
+          <div className="row-buttons scroll">
+            {hvacModes.map((m) => (
+              <button
+                key={m}
+                className={`btn ${entity?.state === m ? "active" : "ghost"}`}
+                onClick={() => HAServices.setHvacMode(ws, mapping.entityId, m)}
+              >
+                {MODE_LABELS[m] ?? m}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {fanModes.length > 0 && (
+      {!unavailable && fanModes.length > 0 && (
         <div className="field">
           <label className="entity-label">Fan speed</label>
           <div className="row-buttons scroll">

@@ -497,7 +497,7 @@ button {
 .badge-swatch.custom {
   display: flex; align-items: center; gap: 8px; width: auto; aspect-ratio: auto;
   padding: 8px 12px; background: var(--bg-input); color: var(--text-primary);
-  font-size: 13px; box-shadow: none; border: 1px solid var(--border);
+  font-size: 13px; box-shadow: none; border: 1px solid var(--hairline);
 }
 .badge-swatch.custom input[type="color"] { width: 26px; height: 26px; border: none; background: none; padding: 0; cursor: pointer; }
 /* Plain icon-only dismiss button, top-right of the header (replaces the old
@@ -556,6 +556,12 @@ input[type="range"]::-moz-range-thumb {
 .status-pill.on { background: color-mix(in srgb, var(--status-on) 20%, transparent); color: var(--status-on); }
 .status-pill.off { background: var(--bg-input); color: var(--text-secondary); }
 .status-pill.danger { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }
+/* Entity is unavailable/unknown to HA — a DISTINCT tone from both on/off and
+   danger. Danger ("UNLOCKED"/"OPEN") asserts a known, confirmed state; showing
+   that same tone when HA has actually LOST CONTACT with the device is a real
+   misrepresentation (a lock reporting "unavailable" is NOT confirmed unlocked
+   — its true state just isn't known), so this needs its own look. */
+.status-pill.unavailable { background: color-mix(in srgb, var(--status-warning) 20%, transparent); color: var(--status-warning); }
 
 /* --- Temperature control --- */
 .temp-display { text-align: center; margin: 12px 0 20px; }
@@ -927,19 +933,25 @@ label.toggle span { user-select: none; line-height: 1.4; }
    in favour of taller, more readable graphs). */
 .sparkline { width: 100%; display: block; }
 .spark-wrap { position: relative; width: 100%; }
-.spark-grid { stroke: var(--border); stroke-width: 1; opacity: 0.35; }
-.spark-axis { font-size: 10px; fill: var(--text-muted); }
-.spark-crosshair { stroke: var(--text-muted); stroke-width: 1; opacity: 0.55; }
+/* --text-muted / --border were never defined in either theme (only
+   --text-secondary / --hairline exist as the app's actual muted-text and
+   border tokens) — an undefined custom property falls back to the SVG/CSS
+   initial value (fill: black for text/stroke), which is why the axis labels
+   were nearly invisible specifically in dark mode (black text on a dark
+   panel) and the grid/tooltip border was similarly off in both themes. */
+.spark-grid { stroke: var(--hairline); stroke-width: 1; opacity: 0.35; }
+.spark-axis { font-size: 10px; fill: var(--text-secondary); }
+.spark-crosshair { stroke: var(--text-secondary); stroke-width: 1; opacity: 0.55; }
 .spark-tip {
   position: absolute; z-index: 5; pointer-events: none;
   display: flex; flex-direction: column; gap: 1px;
   padding: 5px 8px; border-radius: 8px; white-space: nowrap;
   background: var(--bg-overlay); backdrop-filter: blur(8px);
-  border: 1px solid var(--border); box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  border: 1px solid var(--hairline); box-shadow: 0 4px 14px rgba(0,0,0,0.35);
   font-size: 12px; color: var(--text-primary); line-height: 1.35;
 }
 .spark-tip strong { font-size: 13px; }
-.spark-tip .spark-tip-time, .spark-tip span:last-child { color: var(--text-muted); font-size: 11px; }
+.spark-tip .spark-tip-time, .spark-tip span:last-child { color: var(--text-secondary); font-size: 11px; }
 .state-timeline { position: relative; width: 100%; height: 78px; border-radius: 8px; overflow: hidden; background: var(--bg-input); }
 .state-timeline-seg { position: absolute; top: 0; bottom: 0; }
 .state-timeline-cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.85); box-shadow: 0 0 3px rgba(0,0,0,0.5); pointer-events: none; }
