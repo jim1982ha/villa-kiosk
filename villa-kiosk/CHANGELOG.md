@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.35.11
+
+### Changes
+- Fixed a camera detection-beam load-order bug surfaced by the ?debug log. Beams are (re)built by `setCameraDirections`, which runs AFTER the first batch of Home Assistant states has already been applied — so a camera whose motion sensor was already `on` at kiosk load/reload fired its beam-activation against a beam mesh that didn't exist yet (a no-op), and the beam then stayed dark until that sensor's NEXT state change. `buildCameraBeams` now replays the current motion state from `lastState` onto the freshly-built beams, so a beam whose sensor is already on lights up immediately instead of one toggle late. Benign when a sensor is off at load (the common case), which is why it hid until now; real whenever motion is active at load.
+
 ## 2.35.10
 
 ### Changes

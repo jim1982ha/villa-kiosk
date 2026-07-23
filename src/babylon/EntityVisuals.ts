@@ -1131,6 +1131,17 @@ export class EntityVisuals {
         + (skipped.length ? ` | skipped: ${skipped.join("; ")}` : ""));
     }
     this.beams.rebuild(sources, new Set(this.shadowCasters));
+    // Re-assert current motion state onto the freshly-built beams. Beams are
+    // (re)built by setCameraDirections, which runs AFTER the first batch of HA
+    // states has already been applied — so a camera whose motion sensor was
+    // already "on" at load fired setBeamActive against a beam that didn't
+    // exist yet (a logged no-op), and without this its beam would stay dark
+    // until the sensor's NEXT state change. Replay from lastState so a beam
+    // built while its sensor is on lights up immediately, not one toggle late.
+    for (const [motionId, camIds] of this.motionToCameraIds) {
+      const st = this.lastState.get(motionId);
+      if (st?.state === "on") for (const camId of camIds) this.setBeamActive(camId, true);
+    }
   }
 
   /** Turn a camera's beam on/off (driven by its linked motion sensor state).
