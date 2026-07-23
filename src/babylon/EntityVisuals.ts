@@ -1086,14 +1086,17 @@ export class EntityVisuals {
     this.beams.rebuild(sources, new Set(this.shadowCasters));
   }
 
-  /** Turn a camera's beam on/off (driven by its linked motion sensor state). */
-  private setBeamActive(entityId: string, on: boolean): void {
+  /** Turn a camera's beam on/off (driven by its linked motion sensor state).
+   *  Returns whether a beam mesh actually existed to activate — see
+   *  applyMotionRouting's fallback for why callers need to know that. */
+  private setBeamActive(entityId: string, on: boolean): boolean {
     if (!this.beams.has(entityId)) {
       tapDebug(`beam ${entityId}: motion ${on ? "ON" : "off"} but NO BEAM MESH exists for this camera`);
-      return;
+      return false;
     }
     this.beams.setActive(entityId, on);
     this.requestRender();
+    return true;
   }
 
   hasEntity(entityId: string): boolean {
@@ -1174,12 +1177,35 @@ export class EntityVisuals {
    *  - otherwise, a binary_sensor with a Room set -> that room's floor glow
    *  A sensor already driving a camera beam does NOT also glow its room —
    *  the two are separate treatments for separate device kinds (see the
-   *  camera-vs-physical-sensor design discussion), not a doubled-up alert. */
+   *  camera-vs-physical-sensor design discussion), not a doubled-up alert.
+   *
+   *  EXCEPT: a camera only gets a beam mesh at all when its SweetHome3D
+   *  placement was given a real facing rotation (see buildCameraBeams — a
+   *  deliberate "no data, no beam" choice, never a guessed direction). A
+   *  camera left at its default/unrotated placement — an easy authoring step
+   *  to miss, and the single most common reason this whole feature looks
+   *  broken — has no beam mesh, so setBeamActive is a silent no-op and motion
+   *  on that camera would otherwise show NOTHING at all. Fall back to glowing
+   *  the CAMERA's own room instead (not the sensor's — a camera's built-in
+   *  motion detector is typically only ever referenced by entity_id via
+   *  motionEntityId, not separately added as its own mapped/roomed entity,
+   *  so the sensor's own fallback below usually has nothing to work with
+   *  either). Still real, still opt-in (only fires when the camera's own
+   *  Room is set), never a guess about WHERE the camera is aiming. */
   private applyMotionRouting(entity: HassEntity): void {
     const on = entity.state === "on";
     const cameraIds = this.motionToCameraIds.get(entity.entity_id);
     if (cameraIds) {
-      for (const camId of cameraIds) this.setBeamActive(camId, on);
+      let anyBeam = false;
+      for (const camId of cameraIds) {
+        if (this.setBeamActive(camId, on)) anyBeam = true;
+      }
+      if (!anyBeam) {
+        for (const camId of cameraIds) {
+          const camRoom = this.config.entityMap[camId]?.room;
+          if (camRoom) this.roomHighlight.setActive(camRoom, on);
+        }
+      }
       return;
     }
     const map = this.config.entityMap[entity.entity_id];

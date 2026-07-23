@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.35.4
+
+### Changes
+- A camera's motion-detection beam requires the camera's SweetHome3D placement to have a real facing rotation authored (buildCameraBeams deliberately never guesses a direction from no data) — a camera left at its default/unrotated placement gets no beam mesh at all, so turning its linked motion sensor on used to do nothing visible, with the only diagnostic being a console/on-screen line gated behind `?debug`. Added a fallback: when a linked camera has no beam mesh, its motion sensor now glows that camera's own room instead (sourced from the camera's own Room field, since the motion sensor itself — typically just the camera's built-in detector, referenced only by entity_id — usually has no room mapping of its own to fall back to). Never a guess about aiming direction, just real feedback instead of silence for the single most common reason this looked broken.
+
 ## 2.35.3
 
 ### Changes
