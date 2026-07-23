@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.35.2
+
+### Changes
+- Fixed the intermittent "Failed to load the 3D model — Failed to fetch" screen some users saw on a cold open over the public (Cloudflare) hostname. Root cause: fetching the multi-MB central GLB over the public hop occasionally hits a transient network-layer failure (a connection reset mid-transfer, a brief cloudflared tunnel reconnect, a TLS renegotiation drop) — all of which surface as "TypeError: Failed to fetch". These are near-absent on the HA sidebar's local Ingress path (no public hop), which is why it was origin-specific and never happened right after a GLB upload (that reuses bytes already in hand, no big re-download). The previous retry window (3 attempts / ~2.7s) simply didn't always outlast the blip, so it dead-ended on a terminal screen needing a manual reload. Now the model fetch rides through a network failure with capped exponential backoff for a generous ~2-minute budget — comfortably longer than any realistic Cloudflare/tunnel/add-on-restart hiccup — so the kiosk SELF-HEALS the moment the hop is back, showing an honest "Connection unstable — reconnecting…" message instead of a frozen spinner or a dead end. A real HTTP error (404/500 — a genuinely missing/broken model) still surfaces immediately with the actionable re-upload message, unretried, exactly as before.
+- Hardened the same class of transient failure on the /addon-config gateway call that runs first: a network blip there used to silently misroute the whole load to the "no model — upload one" screen even when a model exists. It now retries a network failure a few times, while still returning immediately on an HTTP status (a 401 there is the expected "not authorized yet" signal the pre-login model prefetch relies on, so that common path keeps its zero added latency).
+
 ## 2.35.1
 
 ### Changes

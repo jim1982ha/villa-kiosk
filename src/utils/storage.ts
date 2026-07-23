@@ -294,18 +294,38 @@ export async function uploadCentralModel(
  *  Only a genuine 200 (even one reporting an empty model_path) is cached. */
 export async function fetchAddonConfig(): Promise<AddonConfig> {
   if (_addonConfigCache) return _addonConfigCache;
-  try {
-    const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 3000);
-    const resp = await fetch(ingressPath("addon-config"), { signal: ctrl.signal });
-    clearTimeout(tid);
-    if (!resp.ok) throw new Error(`${resp.status}`);
-    const cfg = await resp.json() as AddonConfig;
-    _addonConfigCache = cfg;
-    return cfg;
-  } catch {
-    // Not authorized yet, no model uploaded, or the service is briefly
-    // unreachable — NOT cached, so the next call (e.g. after login) retries.
-    return { model_path: "" };
+  // A NETWORK-level failure here (fetch throwing, or our own abort timeout on a
+  // slow public hop) is transient — the SAME Cloudflare-hop blip that used to
+  // dead-end the model download (see fetchModelWithRetry) can hit this gateway
+  // call too, and when it did the whole load silently misrouted to the "no
+  // model — upload one" screen even though a model actually exists. Retry those
+  // a couple of times. An HTTP non-ok RESPONSE is deliberately NOT retried: a
+  // 401 here is the expected, correct "not authorized yet" signal the
+  // pre-login prefetch relies on (see this function's docstring +
+  // modelPrefetch), and any other status is a real answer, not a blip — both
+  // just mean "no central model right now" and return empty immediately, with
+  // zero added latency on that (common, pre-login) path.
+  const ATTEMPTS = 3;
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 3000);
+      let resp: Response;
+      try {
+        resp = await fetch(ingressPath("addon-config"), { signal: ctrl.signal });
+      } finally {
+        clearTimeout(tid);
+      }
+      if (!resp.ok) return { model_path: "" }; // real answer (often an expected 401) — not a blip
+      const cfg = await resp.json() as AddonConfig;
+      _addonConfigCache = cfg;
+      return cfg;
+    } catch {
+      // Network throw / abort timeout — transient. Short backoff, then retry;
+      // never cached, so a still-failing gateway just falls back to empty and a
+      // later call (e.g. the daily auto-reload, or a manual retry) tries again.
+      if (attempt < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+    }
   }
+  return { model_path: "" };
 }

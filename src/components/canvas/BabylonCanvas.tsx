@@ -64,6 +64,12 @@ export default function BabylonCanvas({
   useEffect(() => { onLongPressedRef.current = onEntityLongPressed; }, [onEntityLongPressed]);
   const [status, setStatus] = useState<"loading" | "ready" | "no-model" | "error" | "crash-loop">("loading");
   const [progress, setProgress] = useState(0); // 0..1 GLB download progress
+  // True while fetchModelWithRetry is riding through a transient network
+  // failure on the (public Cloudflare) model download — turns the plain
+  // loading spinner into an honest "reconnecting…" message instead of a
+  // frozen-looking bar, and (more importantly) means the load is SELF-HEALING
+  // rather than dead-ending on the terminal error screen. See fetchModelWithRetry.
+  const [reconnecting, setReconnecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   // Full copyable diagnostics report shown on the error / crash-loop screens.
   const [report, setReport] = useState("");
@@ -189,7 +195,16 @@ export default function BabylonCanvas({
             // immediately below, unretried — that's a real "nothing there"
             // failure, not a blip.
             const { resp, data: fetched } = await fetchModelWithRetry(
-              modelUrl, (f) => { if (!cancelled) setProgress(f); });
+              modelUrl,
+              (f) => {
+                if (cancelled) return;
+                setProgress(f);
+                // Real bytes flowing again (f > 0, not the 0 a retry resets to)
+                // means the blip is over — drop the reconnecting notice.
+                if (f > 0) setReconnecting(false);
+              },
+              () => { if (!cancelled) setReconnecting(true); },
+            );
             if (!resp.ok) {
               setAddonError(true);
               loadErrorCode = `MODEL_FETCH_HTTP_${resp.status}`;
@@ -220,6 +235,10 @@ export default function BabylonCanvas({
           setStatus("no-model");
           return;
         }
+        // Bytes are in hand — clear any lingering reconnecting notice even if
+        // the successful fetch happened to report no progress fractions (a
+        // cache hit / no Content-Length skips readWithProgress's onProgress).
+        setReconnecting(false);
         const tFetchDone = performance.now();
         // The heavy step and the usual iOS OOM point: Draco decode + texture
         // decode + GPU upload of the whole villa.
@@ -415,7 +434,9 @@ export default function BabylonCanvas({
         <div className="center-overlay">
           <div className="spinner" />
           <div className="muted">
-            Loading the villa…{progress > 0 && progress < 1 ? ` ${Math.round(progress * 100)}%` : ""}
+            {reconnecting
+              ? "Connection to the villa is unstable — reconnecting…"
+              : `Loading the villa…${progress > 0 && progress < 1 ? ` ${Math.round(progress * 100)}%` : ""}`}
           </div>
         </div>
       )}
