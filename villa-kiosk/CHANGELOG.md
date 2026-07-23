@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.35.7
+
+### Changes
+- Root-caused and robustly fixed the intermittent "the fully-open curtain pose won't disappear" bug (the v2.35.6 floor-check was only patching one symptom). The real cause: pose exclusivity used `setEnabled()`, the SAME flat per-mesh flag FloorManager uses for whole-storey visibility — AND that room calibration (estimateFloorY / buildRoomConform) SAVES every floor mesh's setEnabled state, force-enables them all for a floor-height raycast, then RESTORES the snapshot. Three systems writing one flag: whether a calibration's save-snapshot happened to capture "all poses enabled" or "only the chosen one" depended purely on timing versus when the pose toggle ran — exactly why it was random and un-patternable. Fixed by moving pose exclusivity onto `isVisible` instead: a mesh renders only when isEnabled() AND isVisible are both true, so FloorManager's setEnabled (WHICH FLOOR) and the pose toggle's isVisible (WHICH POSE) are now fully orthogonal and can never clobber each other — no floor check, no post-switch resync, no calibration interference. Nothing else in the app sets isVisible on an entity mesh, so a hidden pose stays hidden through every floor switch and recalibration, deterministically.
+- This fix lives in the single shared applyMeshVariant, so it applies automatically to EVERY pose-swap asset type — both the curtains (cover) and the door lock (lock, its __locked/__unlocked meshes) — and any future one, with no per-type work. The ceiling fan and all other dynamic assets are unaffected by this class of bug because they never toggle mesh VISIBILITY for state: fan spins (rotation), light changes glow/illumination (the fixture mesh stays visible; only its light + baked pool change), switch/media/climate/binary_sensor change emissive tint/outline. The only mechanism that shows/hides entity meshes by state is the pose swap, and it now composes cleanly with floor visibility for every type that uses it.
+
 ## 2.35.6
 
 ### Changes
