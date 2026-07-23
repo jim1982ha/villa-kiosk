@@ -504,8 +504,9 @@ button {
   box-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
 
-/* Badge colour picker */
-.badge-color-modal { max-width: 340px; }
+/* Badge colour picker — sizing comes from .panel-modal (see BadgeColorModal.tsx,
+   same treatment as the device panel it opens from) — .badge-color-modal is
+   just a styling hook, no rules of its own needed right now. */
 .badge-swatch-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
 .badge-swatch {
   width: 100%; aspect-ratio: 1; border-radius: 10px; border: 2px solid transparent;

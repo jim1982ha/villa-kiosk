@@ -39,8 +39,14 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
   }, [onClose]);
 
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 80 }}>
-      <div className="modal badge-color-modal" onClick={(e) => e.stopPropagation()}>
+    // Same panel-modal-backdrop/panel-modal treatment as the device panel
+    // underneath it (BasePanel) — without these, mobile fell through to the
+    // BASE .modal-backdrop/.modal rules, meant for long full-screen sheets
+    // (Settings/Config Editor): top-anchored, edge-to-edge, square corners.
+    // This is a short picker, same category as the device panel itself, so it
+    // should get the same small centered rounded card on phones.
+    <div className="modal-backdrop panel-modal-backdrop" onClick={onClose} style={{ zIndex: 80 }}>
+      <div className="modal panel-modal badge-color-modal" onClick={(e) => e.stopPropagation()}>
         <div className="panel-header">
           <div className="title"><h2>Icon colour</h2></div>
           <button className="panel-close-btn" onClick={onClose} aria-label="Close">

@@ -2,23 +2,26 @@
 // Unified editor for all 3D-object → entity bindings. Each row lets you
 // change which entity the object controls AND edit its display metadata
 // (type, label, room, requires-confirmation) — all in one place.
+//
+// Each row is its own React.memo'd component (BindingRow) — see its docstring
+// and EntityMapRow's (ConfigEditor.tsx's sibling table) for why: draft state
+// used to live in a flat Record HERE, so typing in any one row's Label/Room
+// field re-rendered every other bound row's JSX too, and this component reads
+// live HA `entities` at the top level, so the same full-list re-render fired
+// on every state_changed event for ANY device in the house, typing or not.
+// bind/unbind/patchMeta are given a STABLE identity (read the latest config
+// through a ref rather than closing over it) so React.memo's default shallow
+// prop comparison actually has stable props to compare against.
 
-import { useMemo, useState } from "react";
-import { Unlink, ChevronDown, ChevronRight, Link2 } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import EntityPicker from "./EntityPicker";
+import BindingRow from "./BindingRow";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { upsertBinding, removeBinding } from "@/config/bindingUtils";
 import { loadMeshCatalog } from "@/utils/meshCatalog";
-import { CATEGORY_ORDER, CATEGORY_LABELS, categoryForEntity } from "@/config/EntityCategories";
-import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-
-const TYPES: EntityType[] = [
-  "light", "climate", "lock", "camera", "cover", "fan",
-  "binary_sensor", "sensor", "media_player", "switch", "input_boolean",
-  "assist_satellite",
-];
+import type { EntityMapping } from "@/types/scene.types";
 
 export default function BindingsTable() {
   const { config, update } = useConfig();
@@ -43,33 +46,25 @@ export default function BindingsTable() {
     [catalog, config.meshBindings],
   );
 
-  const bind = (mesh: string, entityId: string) =>
-    update(upsertBinding(config, mesh, entityId, entities[entityId]));
-  const unbind = (mesh: string) => update(removeBinding(config, mesh));
+  // Latest config/entities via refs, read inside the stable callbacks below —
+  // see the module docstring for why identity stability matters here.
+  const configRef = useRef(config);
+  configRef.current = config;
+  const entitiesRef = useRef(entities);
+  entitiesRef.current = entities;
 
-  const patchMeta = (entityId: string, change: Partial<EntityMapping>) => {
+  const bind = useCallback((mesh: string, entityId: string) =>
+    update(upsertBinding(configRef.current, mesh, entityId, entitiesRef.current[entityId])), [update]);
+  const unbind = useCallback((mesh: string) =>
+    update(removeBinding(configRef.current, mesh)), [update]);
+  const patchMeta = useCallback((entityId: string, change: Partial<EntityMapping>) => {
     update({
       entityMap: {
-        ...config.entityMap,
-        [entityId]: { ...config.entityMap[entityId], ...change },
+        ...configRef.current.entityMap,
+        [entityId]: { ...configRef.current.entityMap[entityId], ...change },
       },
     });
-  };
-
-  // Every field below commits via patchMeta() -> a new entityMap reference ->
-  // BabylonCanvas's structural scene re-index (SceneManager.updateConfig ->
-  // indexMeshes + applyStructure — see its docstring for why that pass is
-  // heavy and how it now yields instead of freezing in one block).
-  // useDraftCommit (shared with ConfigEditor/SettingsModal — see its own
-  // docstring) drafts locally so a field updates instantly on every
-  // click/keystroke/drag tick, and coalesces a run of edits into one commit.
-  const intensityDraft = useDraftCommit<number>(
-    (entityId, ratio) => patchMeta(entityId, { lightIntensityRatio: ratio }), 500,
-  );
-  const draftIntensity = (entityId: string, ratio: number) => intensityDraft.draft(entityId, ratio);
-  const fieldDraft = useDraftCommit<Partial<EntityMapping>>((entityId, change) => patchMeta(entityId, change));
-  const draftField = (entityId: string, change: Partial<EntityMapping>, delay?: number) =>
-    fieldDraft.draft(entityId, { ...fieldDraft.drafts[entityId], ...change }, delay);
+  }, [update]);
 
   return (
     <div>
@@ -90,132 +85,17 @@ export default function BindingsTable() {
         </p>
       )}
 
-      {bound.map((mesh) => {
-        const entityId = config.meshBindings[mesh];
-        const meta0 = config.entityMap[entityId];
-        // Merge in any not-yet-committed edit so fields reflect the
-        // click/keystroke instantly, even while the commit is pending.
-        const meta = meta0 && fieldDraft.drafts[entityId] ? { ...meta0, ...fieldDraft.drafts[entityId] } : meta0;
-        return (
-          <div
-            key={mesh}
-            style={{
-              padding: "14px 0",
-              borderTop: "1px solid var(--hairline)",
-            }}
-          >
-            {/* Row 1 — object ↔ entity */}
-            <div className="row spread" style={{ gap: 12 }}>
-              <div
-                style={{
-                  flex: "0 0 34%",
-                  fontSize: 12,
-                  color: "var(--text-secondary)",
-                  wordBreak: "break-all",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <Link2 size={13} style={{ flexShrink: 0, opacity: 0.5 }} />
-                {mesh}
-              </div>
-              <div style={{ flex: 1 }}>
-                <EntityPicker
-                  value={entityId}
-                  onChange={(id) => bind(mesh, id)}
-                  allowCustom
-                />
-              </div>
-              <button
-                className="icon-btn"
-                style={{ width: 36, height: 36 }}
-                onClick={() => unbind(mesh)}
-                title="Remove binding"
-              >
-                <Unlink size={15} />
-              </button>
-            </div>
-
-            {/* Row 2 — display settings (only if entityMap entry exists) */}
-            {meta && (
-              <div
-                className="row"
-                style={{
-                  gap: 10,
-                  marginTop: 10,
-                  paddingLeft: "calc(34% + 12px)",
-                  flexWrap: "wrap",
-                }}
-              >
-                <select
-                  style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
-                  value={meta.type}
-                  onChange={(e) => draftField(entityId, { type: e.target.value as EntityType })}
-                  title="Panel type"
-                >
-                  {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <select
-                  style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
-                  value={meta.category ?? categoryForEntity(entityId, meta.type)}
-                  onChange={(e) => draftField(entityId, { category: e.target.value as Category })}
-                  title="Which map filter group this device belongs to"
-                >
-                  {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-                </select>
-                <input
-                  style={{ flex: 1, minWidth: 80, fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
-                  placeholder="Label"
-                  value={meta.label}
-                  onChange={(e) => draftField(entityId, { label: e.target.value }, 500)}
-                  title="Display name"
-                />
-                <input
-                  style={{ flex: 1, minWidth: 80, fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
-                  placeholder="Room"
-                  value={meta.room}
-                  onChange={(e) => draftField(entityId, { room: e.target.value }, 500)}
-                  title="Room name — must match a Rooms-menu name exactly for motion-glow/teleport to find it"
-                  list="bindings-room-names"
-                />
-                {meta.type === "light" && (() => {
-                  const ratio = intensityDraft.drafts[entityId] ?? meta.lightIntensityRatio ?? 0;
-                  const pct = Math.round(ratio * 100);
-                  return (
-                    <div className="row" style={{ flex: "1 1 220px", minWidth: 180, gap: 8 }}>
-                      <input
-                        type="range" min={-100} max={100} step={5}
-                        value={pct}
-                        onChange={(e) => draftIntensity(entityId, Number(e.target.value) / 100)}
-                        onMouseUp={() => intensityDraft.flush(entityId)}
-                        onTouchEnd={() => intensityDraft.flush(entityId)}
-                        style={{ flex: 1 }}
-                        title="Per-light brightness override on top of this light's live Home Assistant brightness and the global Light effect strength setting. 0% = no change."
-                        aria-label={`Intensity override for ${entityId}`}
-                      />
-                      <span className="muted" style={{ fontSize: 12, minWidth: 36, textAlign: "right" }}>
-                        {pct > 0 ? "+" : ""}{pct}%
-                      </span>
-                    </div>
-                  );
-                })()}
-                {meta.type === "camera" && (
-                  <div style={{ flex: "1 1 220px", minWidth: 180 }}>
-                    <EntityPicker
-                      value={meta.motionEntityId}
-                      onChange={(id) => draftField(entityId, { motionEntityId: id })}
-                      domains={["binary_sensor"]}
-                      allowCustom
-                      hideCurrentLabel
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {bound.map((mesh) => (
+        <BindingRow
+          key={mesh}
+          mesh={mesh}
+          entityId={config.meshBindings[mesh]}
+          meta={config.entityMap[config.meshBindings[mesh]]}
+          onBind={bind}
+          onUnbind={unbind}
+          onPatch={patchMeta}
+        />
+      ))}
 
       {/* Unbound objects — collapsed by default */}
       {catalog.length > 0 && (

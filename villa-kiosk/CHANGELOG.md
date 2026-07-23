@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.34.1
+
+### Changes
+- Icon-colour picker (tap a device panel's badge) rendered inconsistently on mobile — top-anchored, edge-to-edge, square corners — because it was missing the `panel-modal-backdrop`/`panel-modal` classes that give short dialogs (the device panel itself, which it opens from) their small centered rounded-card treatment; without them it fell through to the base full-screen-sheet rules meant for long forms like Settings. Now uses the same classes as the panel underneath it.
+- Root-caused (not re-debounced) the remaining Advanced Settings typing lag: every field's "not-yet-committed" draft state lived in a flat Record keyed by entity ID at the TABLE level (ConfigEditor/BindingsTable), so a keystroke in any ONE row's Label field re-rendered the entire table — recomputing every OTHER row's Type/Category selects, room dropdown, motion-sensor picker, on every character typed. Both tables also read live HA `entities` at that same top level, so the identical full-table re-render fired on every state_changed event for ANY device in the house, typing or not. Split each row into its own component (EntityMapRow, BindingRow), React.memo'd, with its own localized draft state and a narrowly-scoped `entity` prop (only that row's own entity, not the whole house's state) — a keystroke, a drag, or someone else's sensor updating now only re-renders the one row it actually affects. The existing debounce and SceneManager's frame-yielding (from v2.33.0) are still needed for the eventual heavy commit itself; this fixes the separate, purely-React cost that was still there in between commits.
+
 ## 2.34.0
 
 ### Changes

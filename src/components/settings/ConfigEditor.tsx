@@ -3,22 +3,27 @@
 // already named after the entity_id), plus a form to pre-configure entities for
 // a future model upload. Entities bound via tap mode are NOT shown here — they
 // appear (with inline settings) in the Bound 3D objects section below.
+//
+// Each row is its own React.memo'd component (EntityMapRow) with its own
+// localized draft state — see that file's docstring for why: this used to be
+// one flat draft Record per field living HERE, which meant a keystroke in any
+// one row's Label field (or literally any HA state_changed event anywhere in
+// the house, since `entities` below is read at this level) re-rendered the
+// WHOLE table. Every callback passed down to rows (patch/remove/toggleExpanded/
+// remap handlers) is given a STABLE identity — via useCallback reading the
+// latest config through a ref, never closing over `config` directly — because
+// React.memo's default shallow prop comparison only pays off if the props
+// rows receive are actually referentially stable when nothing relevant to
+// THEM changed.
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2, Pencil, Check, X, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { createDefaultMapping } from "@/config/EntityMap";
-import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory } from "@/config/EntityCategories";
 import EntityPicker from "./EntityPicker";
-import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-
-const TYPES: EntityType[] = [
-  "light", "climate", "lock", "camera", "cover", "fan",
-  "binary_sensor", "sensor", "media_player", "switch", "input_boolean",
-  "assist_satellite",
-];
+import EntityMapRow from "./EntityMapRow";
+import type { EntityMapping } from "@/types/scene.types";
 
 export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
   const { config, update } = useConfig();
@@ -39,12 +44,12 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
     () => new Set(initialSearch ? [initialSearch] : []),
   );
-  const toggleExpanded = (key: string) =>
+  const toggleExpanded = useCallback((key: string) =>
     setExpandedKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
-    });
+    }), []);
 
   // Opened via a device panel's edit shortcut: scroll the modal straight to
   // THIS entity's card instead of leaving it at the top (Villa location / 3D
@@ -91,33 +96,28 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     [config.teleportPoints, config.sh3dRooms],
   );
 
-  const patch = (key: string, change: Partial<EntityMapping>) =>
-    update({ entityMap: { ...config.entityMap, [key]: { ...config.entityMap[key], ...change } } });
+  // Stable-identity commit path: reads the LATEST config through a ref rather
+  // than closing over `config` directly, so `patch`'s own function identity
+  // never changes — every row receives the exact same `onPatch` reference on
+  // every ConfigEditor render, which is what lets React.memo actually skip
+  // re-rendering rows that a given edit doesn't touch (patch()'s shallow
+  // spread also preserves reference equality for every OTHER entry in
+  // entityMap, so their `mapping` prop stays stable too).
+  const configRef = useRef(config);
+  configRef.current = config;
+  const patch = useCallback((key: string, change: Partial<EntityMapping>) =>
+    update({
+      entityMap: {
+        ...configRef.current.entityMap,
+        [key]: { ...configRef.current.entityMap[key], ...change },
+      },
+    }), [update]);
 
-  // Every field below commits via patch() -> a new entityMap reference -> a
-  // full SceneManager structural re-index (mesh classification + light/fan/
-  // badge rebuild) — see SceneManager.updateConfig's docstring for why that
-  // pass is heavy and how it now yields instead of freezing in one block.
-  // Committing straight from onChange would trigger that pass once per
-  // keystroke/click/pixel-of-drag; useDraftCommit (see its own docstring)
-  // updates the control instantly via local draft state and coalesces a
-  // burst of edits into a single commit after a short pause.
-  const label = useDraftCommit<string>((key, value) => patch(key, { label: value }), 500);
-  const intensity = useDraftCommit<number>((key, ratio) => patch(key, { lightIntensityRatio: ratio }), 500);
-  const field = useDraftCommit<Partial<EntityMapping>>((key, change) => patch(key, change));
-  const draftLabel = (key: string, value: string) => label.draft(key, value);
-  const draftIntensity = (key: string, ratio: number) => intensity.draft(key, ratio);
-  // field's drafts are PARTIAL patches, merged on top of any not-yet-committed
-  // change for the same row — so toggling Show then immediately picking a Room
-  // (before the first commit fires) coalesces into one patch with both fields.
-  const draftField = (key: string, change: Partial<EntityMapping>) =>
-    field.draft(key, { ...field.drafts[key], ...change });
-
-  const remove = (key: string) => {
-    const next = { ...config.entityMap };
+  const remove = useCallback((key: string) => {
+    const next = { ...configRef.current.entityMap };
     delete next[key];
     update({ entityMap: next });
-  };
+  }, [update]);
 
   /**
    * Redirect a GLB mesh (named oldKey) to a different HA entity (newId) without
@@ -127,16 +127,21 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
    *  3. Removing the old entityMap entry
    * The 3D mesh stays in the scene — only the entity it controls changes.
    */
-  const remapEntity = (oldKey: string, newId: string) => {
+  const remapEntity = useCallback((oldKey: string, newId: string) => {
     if (!newId || newId === oldKey) return;
-    const oldEntry = config.entityMap[oldKey];
+    const oldEntry = configRef.current.entityMap[oldKey];
     if (!oldEntry) return;
-    const { [oldKey]: _removed, ...restMap } = config.entityMap;
+    const { [oldKey]: _removed, ...restMap } = configRef.current.entityMap;
     update({
       entityMap: { ...restMap, [newId]: { ...oldEntry, entityId: newId } },
-      meshBindings: { ...config.meshBindings, [oldKey]: newId },
+      meshBindings: { ...configRef.current.meshBindings, [oldKey]: newId },
     });
-  };
+    setRemapKey(null);
+    setRemapNewId(undefined);
+  }, [update]);
+
+  const startRemap = useCallback((key: string) => { setRemapKey(key); setRemapNewId(undefined); }, []);
+  const cancelRemap = useCallback(() => { setRemapKey(null); setRemapNewId(undefined); }, []);
 
   const add = (id: string) => {
     if (!id || config.entityMap[id]) return;
@@ -196,185 +201,26 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
             </tr>
           </thead>
           <tbody>
-            {entries.map(([key, m0]) => {
-              const expanded = expandedKeys.has(key);
-              const editing = remapKey === key;
-              // Merge in any not-yet-committed edit so the control reflects
-              // the click instantly, even while the heavy commit is pending.
-              const m = field.drafts[key] ? { ...m0, ...field.drafts[key] } : m0;
-              return (
-              <tr
+            {entries.map(([key, m0]) => (
+              <EntityMapRow
                 key={key}
-                ref={key === initialSearch ? matchedRowRef : undefined}
-                style={m.disabled ? { opacity: 0.5 } : undefined}
-              >
-                <td data-label="" className="device-card-header">
-                  <input
-                    type="checkbox"
-                    checked={!m.disabled}
-                    onChange={(e) => draftField(key, { disabled: !e.target.checked })}
-                    title="Show this device in the 3D view (badge, highlight, tap). Turn off for devices modelled but not yet integrated in Home Assistant."
-                    aria-label={`Show ${m.entityId} in the 3D view`}
-                  />
-                  {editing ? (
-                    /* ── inline remap picker — one line on desktop, wraps on mobile ── */
-                    <div className="remap-row">
-                      <div className="remap-picker">
-                        <EntityPicker
-                          value={remapNewId}
-                          onChange={setRemapNewId}
-                          allowCustom
-                          hideCurrentLabel
-                          placeholder="New entity ID…"
-                        />
-                      </div>
-                      <div className="remap-actions">
-                        <button
-                          className="btn primary"
-                          style={{ padding: "5px 8px", fontSize: 12 }}
-                          disabled={!remapNewId || remapNewId === key}
-                          onClick={() => {
-                            if (remapNewId) remapEntity(key, remapNewId);
-                            setRemapKey(null);
-                            setRemapNewId(undefined);
-                          }}
-                        >
-                          <Check size={13} /> Apply
-                        </button>
-                        <button
-                          className="btn ghost"
-                          style={{ padding: "5px 8px", fontSize: 12 }}
-                          onClick={() => { setRemapKey(null); setRemapNewId(undefined); }}
-                        >
-                          <X size={13} /> Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      className="entity-id-display entity-id-toggle"
-                      role="button"
-                      tabIndex={0}
-                      aria-expanded={expanded}
-                      title="Click to expand — use the pencil to redirect this mesh to a different entity ID"
-                      onClick={() => toggleExpanded(key)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpanded(key); }
-                      }}
-                    >
-                      <span className="entity-id-text">{m.entityId}</span>
-                      <span className="entity-id-actions">
-                        <button
-                          className="icon-btn"
-                          title="Redirect this 3D mesh to a different entity ID"
-                          onClick={(e) => { e.stopPropagation(); setRemapKey(key); setRemapNewId(undefined); }}
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          className="icon-btn icon-btn-danger"
-                          title="Remove this entity"
-                          onClick={(e) => { e.stopPropagation(); remove(key); }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </span>
-                      {expanded ? <ChevronDown size={16} className="muted" /> : <ChevronRight size={16} className="muted" />}
-                    </div>
-                  )}
-                </td>
-
-                {editing && (
-                  <td data-label="">
-                    <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>
-                      Mesh stays, entity ID changes — no model rebuild needed.
-                    </span>
-                  </td>
-                )}
-
-                {expanded && !editing && (
-                  <>
-                    <td data-label="Type">
-                      <select
-                        value={m.type}
-                        onChange={(e) => draftField(key, { type: e.target.value as EntityType })}
-                      >
-                        {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </td>
-                    <td data-label="Category">
-                      <select
-                        value={effectiveCategory(m.entityId, m.type, m.category, entities[m.entityId]?.attributes.device_class as string | undefined)}
-                        onChange={(e) => draftField(key, { category: e.target.value as Category })}
-                        title="Which map filter group this device belongs to"
-                      >
-                        {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-                      </select>
-                    </td>
-                    <td data-label="Label">
-                      <input
-                        value={label.drafts[key] ?? m.label}
-                        onChange={(e) => draftLabel(key, e.target.value)}
-                        onBlur={() => label.flush(key)}
-                      />
-                    </td>
-                    <td data-label="Room">
-                      <select
-                        value={m.room ?? ""}
-                        onChange={(e) => draftField(key, { room: e.target.value })}
-                        title="Room this device is in — used for motion-glow and teleport. Pick from the villa's detected rooms."
-                      >
-                        <option value="">— none —</option>
-                        {/* Keep the current value selectable even if it's not (or
-                            no longer) a known room, so editing never silently drops
-                            an existing binding. */}
-                        {m.room && !roomNames.includes(m.room) && (
-                          <option value={m.room}>{m.room} (custom)</option>
-                        )}
-                        {roomNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                      </select>
-                    </td>
-                    {m.type === "light" && (() => {
-                      const ratio = intensity.drafts[key] ?? m.lightIntensityRatio ?? 0;
-                      const pct = Math.round(ratio * 100);
-                      return (
-                        <td data-label="Intensity">
-                          <div className="row" style={{ gap: 8, width: "100%" }}>
-                            <input
-                              type="range" min={-100} max={100} step={5}
-                              value={pct}
-                              onChange={(e) => draftIntensity(key, Number(e.target.value) / 100)}
-                              onMouseUp={() => intensity.flush(key)}
-                              onTouchEnd={() => intensity.flush(key)}
-                              style={{ flex: 1 }}
-                              title="Per-light brightness override on top of this light's live Home Assistant brightness and the global Light effect strength setting. 0% = no change."
-                              aria-label={`Intensity override for ${m.entityId}`}
-                            />
-                            <span className="muted" style={{ fontSize: 12, minWidth: 40, textAlign: "right" }}>
-                              {pct > 0 ? "+" : ""}{pct}%
-                            </span>
-                          </div>
-                        </td>
-                      );
-                    })()}
-                    <td data-label="Motion sensor" style={{ minWidth: 180 }}>
-                      {m.type === "camera" ? (
-                        <EntityPicker
-                          value={m.motionEntityId}
-                          onChange={(id) => draftField(key, { motionEntityId: id })}
-                          domains={["binary_sensor"]}
-                          allowCustom
-                          hideCurrentLabel
-                        />
-                      ) : (
-                        <span className="muted" style={{ fontSize: 12 }}>—</span>
-                      )}
-                    </td>
-                  </>
-                )}
-              </tr>
-              );
-            })}
+                entryKey={key}
+                mapping={m0}
+                entity={entities[key]}
+                expanded={expandedKeys.has(key)}
+                editing={remapKey === key}
+                remapNewId={remapKey === key ? remapNewId : undefined}
+                roomNames={roomNames}
+                matchedRowRef={key === initialSearch ? matchedRowRef : undefined}
+                onToggleExpanded={toggleExpanded}
+                onStartRemap={startRemap}
+                onRemapChange={setRemapNewId}
+                onRemapApply={remapEntity}
+                onRemapCancel={cancelRemap}
+                onRemove={remove}
+                onPatch={patch}
+              />
+            ))}
           </tbody>
         </table>
       )}
