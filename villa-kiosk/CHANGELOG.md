@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.35.1
+
+### Changes
+- Extended v2.35.0's opt-in mesh-variant mechanism to locks: a door lock can now be authored as two alternate poses ("lock.foo__unlocked"/"__locked", unsuffixed = unlocked) to show its real bolt/lever position, on top of the existing always-on green/red tint. Reused the exact same generic machinery (VARIANT_VOCAB/meshVariants/applyMeshVariant) built for covers — a 3-line vocabulary entry plus one small state-bucketing helper, not a parallel implementation. Live state is interpreted defensively: anything uncertain (jammed, mid-transition, offline) shows the LOCKED pose rather than risk implying a door is open when its real state genuinely isn't known. A lock with just one plain mesh — every villa today — is completely unaffected.
+
 ## 2.35.0
 
 ### Changes

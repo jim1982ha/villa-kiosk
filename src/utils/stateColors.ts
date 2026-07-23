@@ -40,6 +40,25 @@ export function lockColor(state: string): string {
   return WARN_COLOR; // jammed / opening / unknown
 }
 
+/**
+ * A lock's discrete 2-way VISUAL bucket — "unlocked"/"locked" — used to pick
+ * which of a door lock's alternate meshes to show in the 3D scene (see
+ * EntityVisuals' lock handling / VARIANT_VOCAB). Distinct from the mesh-
+ * NAMING default: an UNSUFFIXED mesh defaults to "unlocked" (VARIANT_VOCAB.
+ * lock), mirroring cover's "no suffix = open/accessible state" convention —
+ * that only matters for how a bare mesh is CLASSIFIED when grouped alongside
+ * an authored second pose. THIS function instead interprets live HA state,
+ * and deliberately leans the OTHER way for anything uncertain (jammed,
+ * mid-transition, unavailable) — showing the locked pose rather than a
+ * lock's 3D model implying a door is open when its real state genuinely
+ * isn't known. Not a contradiction: one is a naming convention, the other a
+ * fail-safe default for uncertain live data.
+ */
+export function lockVisualBucket(entity: HassEntity | undefined): "unlocked" | "locked" {
+  if (entity?.state === "unlocked" || entity?.state === "open") return "unlocked";
+  return "locked"; // locked / jammed / locking / unlocking / unavailable / unknown / missing
+}
+
 export function coverColor(state: string): string {
   if (state === "open") return ON_COLOR;
   if (state === "closed") return OFF_COLOR;

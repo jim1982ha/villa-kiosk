@@ -16,7 +16,12 @@
 //                    that mesh stays visible always, exactly as before this
 //                    existed.
 //   fan           -> emissive teal tint while on.
-//   lock          -> green (locked) / red (unlocked).
+//   lock          -> green (locked) / red (unlocked) diffuse+emissive tint,
+//                    PLUS the same OPT-IN alternate-mesh mechanism as cover
+//                    ("lock.foo__unlocked"/"__locked" — unsuffixed = unlocked)
+//                    for a bolt/lever that visibly changes position. The tint
+//                    always applies (any lock, suffixed or not); the mesh
+//                    swap only for a lock actually authored with 2 poses.
 //   switch/media  -> emissive "active" tint when on/playing.
 //   binary_sensor -> pulsing red when triggered (e.g. leak).
 
@@ -35,7 +40,7 @@ import { resolveMeshToMapping, extractVariantSuffix } from "@/config/EntityMap";
 import { groupMemberIds } from "@/config/deviceGroups";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
-import { isUnavailable, coverVisualBucket } from "@/utils/stateColors";
+import { isUnavailable, coverVisualBucket, lockVisualBucket } from "@/utils/stateColors";
 import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
@@ -83,12 +88,14 @@ function clampRatio(ratio: number | undefined): number {
 // recognised variant words for that type (order also drives the nearest-
 // available fallback in pickNearestVariant, for a villa that only bothered
 // authoring SOME of them) and which word an unsuffixed — or unrecognised-
-// suffix — mesh defaults to. Extending this to another domain (e.g. a lock's
-// bolt position) only needs a new entry here plus one call in apply() below;
-// the indexing/grouping/fallback machinery (meshVariants/applyMeshVariant)
-// itself is entirely generic and needs no per-type changes.
+// suffix — mesh defaults to. Extending this to another domain needs only a
+// new entry here plus one call in apply() below; the indexing/grouping/
+// fallback machinery (meshVariants/applyMeshVariant) itself is entirely
+// generic and needs no per-type changes — cover and lock are two independent
+// consumers of the exact same mechanism, not two copies of it.
 const VARIANT_VOCAB: Partial<Record<EntityType, { words: string[]; default: string }>> = {
   cover: { words: ["closed", "half", "open"], default: "open" },
+  lock: { words: ["unlocked", "locked"], default: "unlocked" },
 };
 
 /** The available variant word nearest `desired` in `order` (by index
@@ -1122,6 +1129,9 @@ export class EntityVisuals {
     }
     if (map.type === "cover") {
       this.applyMeshVariant(entity.entity_id, VARIANT_VOCAB.cover!.words, coverVisualBucket(entity));
+    }
+    if (map.type === "lock") {
+      this.applyMeshVariant(entity.entity_id, VARIANT_VOCAB.lock!.words, lockVisualBucket(entity));
     }
     this.updateLabel(entity.entity_id, map.type, entity);
     this.requestRender();

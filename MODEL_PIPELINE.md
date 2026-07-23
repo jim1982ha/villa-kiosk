@@ -62,11 +62,11 @@ Config Editor, so you choose what each object does):
 | Entity type | What happens in the visualisation |
 |---|---|
 | **light** | The bound object **glows**, *and* a real light source **illuminates the room**. Colour follows the bulb's `hs_color` / `color_temp`, brightness follows the dimmer, OFF = dark. |
-| **cover** (curtain/blind) | **Optional, opt-in position feedback** — see [Optional: curtain open/closed/half poses](#optional-pre-name-curtaincover-meshes-for-position-feedback) below. With no extra naming, the curtain mesh is simply always visible, same as any other bound object. |
+| **cover** (curtain/blind) | **Optional, opt-in position feedback** — see [Optional: pre-name meshes for position feedback](#optional-pre-name-meshes-for-position-feedback-curtains-locks) below. With no extra naming, the curtain mesh is simply always visible, same as any other bound object. |
 | **fan** | Blades **spin** while on, stop when off. |
 | **switch** | Object lights up with an "active" tint when on (good for pumps, etc.). |
 | **media_player** | "Active" tint when playing/on. |
-| **lock** | **Green** when locked, **red** when unlocked. |
+| **lock** | **Green** when locked, **red** when unlocked (always, on any lock mesh) — **plus** the same optional bolt-position feedback covers get; see [the same section](#optional-pre-name-meshes-for-position-feedback-curtains-locks) below. |
 | **binary_sensor** | **Pulsing red** when triggered (e.g. water leak). |
 | **climate / camera / sensor** | No state-driven mesh change; tapping opens the control/stream/reading panel. |
 
@@ -99,41 +99,45 @@ light.pool_area
 …
 ```
 
-### Optional: pre-name curtain/cover meshes for position feedback
+### Optional: pre-name meshes for position feedback (curtains, locks)
 
-By default a `cover` entity's mesh is just always visible, exactly like any
-other bound object — curtains don't move or scale to fake motion (fabric
-doesn't behave like a rigid body, so there's no reliable way to fake that
-convincingly). **You can opt into real open/closed/half position feedback
-instead**, with no code changes, purely by how you name the objects in
-SweetHome 3D:
+By default a `cover`/`lock` entity's mesh is just always visible, exactly
+like any other bound object — nothing moves or scales to fake motion (that
+doesn't look convincing for fabric, and there's no reliable pivot to infer
+for an arbitrary bolt mechanism either). **You can opt into real position
+feedback instead**, with no code changes, purely by how you name the objects
+in SweetHome 3D — the same convention works for both device types:
 
-1. Place the **same curtain** two or three times at the window, each copy
-   posed differently — fully drawn shut, fully gathered open, and (optionally)
-   a middle pose.
-2. Name each copy with the entity_id plus a `__closed` / `__half` / `__open`
-   suffix:
+1. Place the **same object** two or three times in the exact same spot, each
+   copy posed differently.
+2. Name each copy with the entity_id plus a suffix for its pose:
 
    ```
    cover.curtain_living_room_big__closed
    cover.curtain_living_room_big__half        (optional — you can skip this one)
    cover.curtain_living_room_big__open
+
+   lock.front_door__locked
+   lock.front_door__unlocked
    ```
 
-   The **unsuffixed** name (`cover.curtain_living_room_big`, no `__…` at all)
-   counts as `__open` — so if you only ever want ONE pose that's just always
-   there, don't add a suffix at all and nothing changes from today's behaviour.
+   The **unsuffixed** name (no `__…` at all) counts as `__open` for a cover,
+   `__unlocked` for a lock — so if you only ever want ONE pose that's just
+   always there, don't add a suffix at all and nothing changes from today's
+   behaviour.
 3. Upload the model as usual. All the differently-suffixed copies are treated
    as the SAME entity (the suffix doesn't affect binding/tapping/RBAC at all),
-   and the kiosk shows whichever pose matches the curtain's live position —
-   using `current_position` (0–100%) when the device reports it, or falling
-   back to its plain open/closed state when it doesn't. Opening/closing (in
-   transit) shows the half pose if you made one, or the nearest pose you did
-   author otherwise.
+   and the kiosk shows whichever pose matches the device's live state — for a
+   cover, using `current_position` (0–100%) when it's reported, or falling
+   back to plain open/closed state when it isn't (opening/closing shows the
+   half pose if you made one, or the nearest pose you did author otherwise);
+   for a lock, its locked/unlocked state directly (anything uncertain —
+   jammed, mid-transition, offline — shows the LOCKED pose, on the side of
+   never implying a door is open when its real state genuinely isn't known).
 
-This is entirely **per-curtain and optional** — a villa can mix curtains that
-use this (2 or 3 poses) with curtains that don't (a single plain mesh), and a
-model that never uses this convention at all behaves exactly as before.
+This is entirely **per-device and optional** — a villa can mix curtains/locks
+that use this (2 or 3 poses) with ones that don't (a single plain mesh), and
+a model that never uses this convention at all behaves exactly as before.
 
 ---
 
