@@ -743,6 +743,39 @@ export class EntityVisuals {
     scene.blockMaterialDirtyMechanism = false;
 
     this.buildLabelAnchors();
+
+    // Safety net for multi-variant entities (see VARIANT_VOCAB/meshVariants):
+    // default each one to its type's default pose RIGHT NOW, rather than
+    // leaving every authored pose visible at once — their raw as-imported
+    // visibility — until a live HA state arrives for it. applyMeshVariant is
+    // normally the ONLY thing that hides the other poses, and it only ever
+    // runs from apply(), which needs a real state_changed event (or an
+    // initial get_states snapshot entry) to fire at all. An entity that's
+    // been modelled with 2-3 poses but isn't wired to a real HA entity yet —
+    // or simply hasn't reported in before this index ran — would otherwise
+    // show ALL of them overlapping, indefinitely, with nothing left to ever
+    // correct it. Reuses applyMeshVariant itself (not a parallel visibility
+    // pass) so this gets the exact same label-anchor re-parenting fix too.
+    // Visible with ?debug — the "did my __closed/__half/__open naming
+    // actually get grouped as ONE entity with several poses, or as several
+    // separate (probably 'Unmapped') entities that never get toggled at
+    // all" question is otherwise near-impossible to answer on a real kiosk
+    // with no console access. Only entities that reached 2+ recognised poses
+    // are worth a line — every ordinary single-mesh cover/lock in the villa
+    // (the common case) would otherwise print one too, burying the ones
+    // actually worth looking at.
+    const variantSummary: string[] = [];
+    for (const [entityId, byWord] of this.meshVariants) {
+      if (byWord.size < 2) continue;
+      const type = this.mapping.get(entityId)?.type;
+      const vocab = type ? VARIANT_VOCAB[type] : undefined;
+      if (!vocab) continue;
+      this.applyMeshVariant(entityId, vocab.words, vocab.default);
+      const counts = Array.from(byWord, ([w, ms]) => `${w}:${ms.length}`).join(", ");
+      variantSummary.push(`${entityId} -> {${counts}}, defaulted to "${vocab.default}"`);
+    }
+    if (variantSummary.length) tapDebug(`mesh variant groups:\n  ${variantSummary.join("\n  ")}`);
+
     this.buildMotionToCameraIndex();
     this.rebuildLabels(); // labels are always shown
   }

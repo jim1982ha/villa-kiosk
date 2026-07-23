@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.35.5
+
+### Changes
+- Fixed a real gap in the curtain/lock mesh-variant feature (v2.35.0/2.35.1): the toggle that hides all-but-the-active pose (applyMeshVariant) only ever ran from a live Home Assistant state event — an entity authored with 2-3 poses that hasn't reported a state yet (not wired to a real integration, or simply hasn't checked in before the model finished indexing) showed EVERY pose overlapping simultaneously, with nothing left to ever correct it, since nothing else ever calls that toggle. Now defaults every multi-variant entity to its type's default pose immediately at index time — before any live state is needed — so the worst case is "shows the default pose" instead of "shows all of them forever". Also added a `?debug`-gated diagnostic line reporting exactly which entities got 2+ poses grouped and how many meshes landed in each, so a naming/grouping problem is verifiable on a real kiosk without console access.
+
 ## 2.35.4
 
 ### Changes
