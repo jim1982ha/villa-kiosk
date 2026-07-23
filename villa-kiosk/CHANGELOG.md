@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.35.12
+
+### Changes
+- Docs: added a **"Configuring interactive assets in SweetHome 3D"** section to `README.md` (entity-id naming for auto-mapping, curtain/lock position feedback via `__open`/`__half`/`__closed` and `__unlocked`/`__locked` pose copies, placing curtains over windows, and bake resolution), and expanded `MODEL_PIPELINE.md`'s pose-feedback section with the windows-stay-transparent + no-ghost-shadow behaviour and the `--bake-size 2048` recommendation for detailed curtain geometry. No app code change — documents the cover/lock visual-variant feature and the pipeline improvements (v2.9.4–v2.9.7) delivered this development cycle.
+
 ## 2.35.11
 
 ### Changes

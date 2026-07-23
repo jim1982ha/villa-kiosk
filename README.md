@@ -178,6 +178,62 @@ SweetHome 3D → Export to OBJ
 
 ---
 
+## Configuring interactive assets in SweetHome 3D
+
+Everything below is **optional** — the app's runtime tap-to-bind works with an
+unprepared model. But if you author your plan with these conventions, devices
+auto-map **and** get richer live visual feedback with zero code or config. Full
+detail: **[MODEL_PIPELINE.md](./MODEL_PIPELINE.md)**.
+
+### 1. Name a piece with its HA `entity_id` → it auto-maps
+
+Set a furniture piece's **Name** (SweetHome Properties panel) to the exact HA
+entity_id (`light.kitchen_ceiling`, `climate.living_room_ac`, `camera.patio_cam`,
+`lock.front_door`, `cover.living_room_curtain`, `fan.bedroom_ceiling`, …). On
+import the mesh binds to that entity automatically — no tapping needed. The
+pipeline matches by **3D position**, not the internal OBJ part names, so it works
+even though SweetHome renames parts to things like `Sphere_1_1017`.
+
+### 2. Curtains & locks — real position feedback via pose copies
+
+A `cover` (curtain/blind) or `lock` can show its **live position** by giving you
+one mesh per state. Place the **same object 2–3 times in the same spot**, each
+copy posed differently, and suffix each Name with its pose:
+
+```
+cover.living_room_curtain__open      cover.living_room_curtain__half   (half is optional)
+cover.living_room_curtain__closed
+lock.front_door__unlocked            lock.front_door__locked
+```
+
+- All suffixed copies are treated as **one entity** (the suffix never affects
+  binding, tapping, or RBAC) — the kiosk shows whichever pose matches the live
+  state (a cover uses `current_position` 0–100 % when reported, else open/closed).
+- The **unsuffixed** name counts as the default pose (`__open` for a cover,
+  `__unlocked` for a lock) — so a single plain mesh with no suffix behaves exactly
+  as before. This is fully opt-in and **per-device**: mix multi-pose and plain
+  curtains freely.
+- You can use **different catalog models per pose** (e.g. a slim gathered curtain
+  for `__open`, a full-width one for `__closed`) and different widths — the
+  pipeline handles it. Detailed/high-poly catalog curtains are fine.
+
+### 3. Curtains over windows — nothing special needed
+
+Place curtains **directly over their window**; the pipeline keeps the window's
+glass/frame in the structural shell (so it stays transparent and correctly lit)
+and never lets the curtain "absorb" it. Only the poses that are **hidden at rest**
+(a closed/half curtain when the default is open) are excluded from the light bake,
+so you won't see a hidden pose's shadow ghosted onto the floor in the default view.
+
+### 4. Bake resolution
+
+If your plan uses **detailed curtain/fabric geometry**, bake the lightmap at
+**`--bake-size 2048`** (not 1024). The extra texel budget prevents lightmap-atlas
+bleed (stray light smearing onto benches/frames) once the denser geometry re-packs
+the atlas. See [MODEL_PIPELINE.md](./MODEL_PIPELINE.md) for all bake flags.
+
+---
+
 ## Project structure
 
 ```

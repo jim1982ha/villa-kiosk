@@ -139,6 +139,31 @@ This is entirely **per-device and optional** — a villa can mix curtains/locks
 that use this (2 or 3 poses) with ones that don't (a single plain mesh), and
 a model that never uses this convention at all behaves exactly as before.
 
+**You can pose each copy with a different catalog model and different width**
+(e.g. a slim gathered curtain for `__open`, a full-width one for `__closed`) —
+the pipeline maps each by position and handles multi-material catalog assets
+correctly, so high-poly/detailed curtains are fine.
+
+#### What the bake does for you automatically (no authoring needed)
+
+- **Windows stay windows.** A curtain hangs directly over its window, so the
+  window's glass + frame sit inside the curtain's match box. The pipeline keeps
+  that glass/frame in the structural shell (baked transparent, correctly lit) and
+  never lets the curtain "absorb" it — otherwise the window would render as an
+  opaque, curtain-toggling white panel. Just place the curtain over the window;
+  nothing special to do.
+- **No ghost shadows from hidden poses.** During the light bake, only the pose
+  that's shown **at rest** (the default `__open` / `__unlocked`, or nearest
+  authored) casts shadows — the hidden closed/half copies are excluded, so their
+  shadow isn't frozen onto the floor in the default view. A non-default pose,
+  when later selected, simply has no baked shadow (a minor omission, never a
+  wrong ghost).
+
+> **Bake resolution:** detailed curtain/fabric geometry re-packs the lightmap
+> atlas. Bake at **`--bake-size 2048`** (not 1024) to avoid atlas bleed — stray
+> light smearing onto nearby benches/frames — which only shows up at low
+> resolution once the denser geometry is added.
+
 ---
 
 ## Two pipeline strategies — choose one
