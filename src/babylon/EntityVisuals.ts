@@ -304,6 +304,12 @@ export class EntityVisuals {
    *  mesh defaulted to its type's default word), and applyMeshVariant treats
    *  both of those as "nothing to toggle". */
   private meshVariants = new Map<string, Map<string, AbstractMesh[]>>();
+  /** entity_id -> the variant word currently chosen for it — remembered so a
+   *  FLOOR switch (which re-enables every mesh on the newly active floor via
+   *  FloorManager's own applyVisibility, including a curtain's OTHER, not-
+   *  chosen poses) can re-assert the right one without needing to re-derive
+   *  it from HA state. See setVariantVisibility/resyncMeshVariantsToFloor. */
+  private lastChosenVariant = new Map<string, string>();
   private pulsing = new Set<AbstractMesh>();
   /** entity_id → angular speed (rad/s) for a CEILING fan currently spinning. */
   private spinningFans = new Map<string, number>();
@@ -547,6 +553,7 @@ export class EntityVisuals {
     this.byEntity.clear();
     this.mapping.clear();
     this.meshVariants.clear();
+    this.lastChosenVariant.clear();
     this.shadowCasters = [];
 
     // Creating dozens of PointLights one-by-one makes Babylon re-flag every
@@ -1185,10 +1192,8 @@ export class EntityVisuals {
     const byWord = this.meshVariants.get(entityId);
     if (!byWord || byWord.size < 2) return;
     const chosen = pickNearestVariant(order, active, byWord.keys());
-    for (const [word, meshes] of byWord) {
-      const show = word === chosen;
-      for (const mesh of meshes) mesh.setEnabled(show);
-    }
+    this.lastChosenVariant.set(entityId, chosen);
+    this.setVariantVisibility(byWord, chosen);
     // The label anchor inherits its enabled-state from whichever mesh it's
     // parented to (see buildLabelAnchors — that's the mechanism a hidden
     // FLOOR uses to hide an entity's badge along with it). buildLabelAnchors
@@ -1202,6 +1207,37 @@ export class EntityVisuals {
     const chosenMesh = byWord.get(chosen)?.[0];
     if (anchor && chosenMesh && anchor.parent !== chosenMesh) {
       anchor.setParent(chosenMesh);
+    }
+  }
+
+  /** Enable exactly the CHOSEN word's mesh(es), folding in FloorManager's own
+   *  per-mesh floor visibility (metadata.floorIndex, stamped by
+   *  FloorManager.indexFloors for every mesh — see its docstring). setEnabled()
+   *  is a flat per-mesh flag here, not hierarchical, so blindly enabling the
+   *  chosen pose without this check was re-showing a 2F curtain's default pose
+   *  while viewing 1F (FloorManager had already correctly disabled it; this
+   *  call clobbered that). floorIndex defaults to 1 for the (shouldn't-happen)
+   *  case a mesh was somehow never floor-indexed, matching FloorManager's own
+   *  default active floor. */
+  private setVariantVisibility(byWord: Map<string, AbstractMesh[]>, chosen: string): void {
+    for (const [word, meshes] of byWord) {
+      for (const mesh of meshes) {
+        const floorIndex = (mesh.metadata?.floorIndex as number | undefined) ?? 1;
+        mesh.setEnabled(word === chosen && floorIndex <= this.activeFloor);
+      }
+    }
+  }
+
+  /** Re-assert every multi-variant entity's already-chosen pose after a floor
+   *  switch — FloorManager's own applyVisibility just re-enabled EVERY mesh on
+   *  the newly active floor, including a curtain's other, not-currently-chosen
+   *  poses, which would otherwise all reappear together. Mirrors
+   *  resyncLightPoolsToFloor's role for lights; called from setActiveFloor. */
+  private resyncMeshVariantsToFloor(): void {
+    if (this.lastChosenVariant.size === 0) return;
+    for (const [entityId, chosen] of this.lastChosenVariant) {
+      const byWord = this.meshVariants.get(entityId);
+      if (byWord) this.setVariantVisibility(byWord, chosen);
     }
   }
 
@@ -1267,6 +1303,7 @@ export class EntityVisuals {
     if (floor === this.activeFloor) return;
     this.activeFloor = floor;
     this.resyncLightPoolsToFloor();
+    this.resyncMeshVariantsToFloor();
     this.requestRender();
   }
 

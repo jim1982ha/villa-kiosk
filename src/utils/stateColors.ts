@@ -76,9 +76,16 @@ export function coverColor(state: string): string {
  * open/closed state (most curtain motors don't report a position at all)
  * fall back to that — opening/closing (actively in transit) reads as "half",
  * the same "something's in between" bucket coverColor already gives it.
+ * Anything else genuinely uncertain (unavailable, unknown, a state this
+ * function doesn't recognise) falls back to "open" — the SAME default an
+ * unsuffixed mesh gets and the index-time safety net applies before any live
+ * state is even known (see VARIANT_VOCAB.cover / EntityVisuals' indexMeshes)
+ * — so "we don't actually know" reads consistently as "open" everywhere in
+ * this feature, never as the half-open bucket (which is reserved for the
+ * cases that DO indicate something is genuinely happening: opening/closing).
  */
 export function coverVisualBucket(entity: HassEntity | undefined): "closed" | "half" | "open" {
-  if (!entity) return "open"; // matches the "no suffix = open" default mesh
+  if (!entity) return "open";
   const pos = entity.attributes.current_position;
   if (typeof pos === "number" && Number.isFinite(pos)) {
     if (pos <= 15) return "closed";
@@ -86,8 +93,8 @@ export function coverVisualBucket(entity: HassEntity | undefined): "closed" | "h
     return "half";
   }
   if (entity.state === "closed") return "closed";
-  if (entity.state === "open") return "open";
-  return "half"; // opening / closing / unavailable / unknown
+  if (entity.state === "opening" || entity.state === "closing") return "half";
+  return "open"; // "open" itself, unavailable, unknown, or anything else
 }
 
 const PALETTE = [ON_COLOR, "var(--accent)", WARN_COLOR, DANGER_COLOR, "var(--accent-strong)"];

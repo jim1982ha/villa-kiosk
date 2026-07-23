@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.35.6
+
+### Changes
+- Fixed a real bug: a 2F curtain's mesh-variant toggle could show up while viewing 1F (and vice versa). FloorManager stamps every mesh's floor on `metadata.floorIndex` and manages visibility with a flat, non-hierarchical `setEnabled()` flag — the mesh-variant toggle (applyMeshVariant) was calling `setEnabled()` on the chosen pose with no awareness of which floor is active, directly clobbering FloorManager's own decision for that same mesh. It now folds in `metadata.floorIndex <= the active floor` on every enable/disable, in both directions: the initial choice, AND a floor switch (which re-enables every mesh on the newly active floor via FloorManager's own logic, including a curtain's other, not-chosen poses — now re-asserted right after, the same pattern lights already use for their floor pools).
+- Fixed the remaining "all poses visible until moved once" case: `coverVisualBucket`'s fallback for a genuinely uncertain live state (unavailable, unknown) returned "half" — inconsistent with the "default to open" behavior everywhere else in this feature (the unsuffixed-mesh convention, and the index-time safety net in v2.35.5). It now defaults to "open" for anything uncertain too, reserving "half" specifically for the states that DO mean something is actively happening (opening/closing).
+
 ## 2.35.5
 
 ### Changes
