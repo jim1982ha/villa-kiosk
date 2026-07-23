@@ -6,6 +6,10 @@ import BabylonCanvas from "@/components/canvas/BabylonCanvas";
 import HUD from "@/components/hud/HUD";
 import RoomLabel from "@/components/hud/RoomLabel";
 import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
+import AppNotice from "@/components/hud/AppNotice";
+import FirstRunTips from "@/components/hud/FirstRunTips";
+import TapRipple, { RIPPLE_LIFETIME_MS, type Ripple } from "@/components/hud/TapRipple";
+import { hasSeenFirstRunTips } from "@/utils/storage";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
 import PanelRouter from "@/components/panels/PanelRouter";
 import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
@@ -70,6 +74,25 @@ export default function Dashboard() {
   // save/clear, without polling. Re-derived per manager since a model reload
   // swaps the manager but the saved device pose is still valid to show.
   const [hasOverviewDefault, setHasOverviewDefault] = useState(false);
+  // General app notices (e.g. "this floor isn't modelled yet") — themed,
+  // replaces a native alert() that used to break out of the kiosk's own
+  // dark/light chrome entirely. See AppNotice.
+  const [notice, setNotice] = useState<string | null>(null);
+  // First-ever login on this device — see FirstRunTips/utils/storage's
+  // hasSeenFirstRunTips docstring. Checked once, lazily, so it reflects
+  // whatever was in localStorage when this component first mounted rather
+  // than being re-evaluated (and potentially flipping on) on every render.
+  const [showFirstRunTips, setShowFirstRunTips] = useState(() => !hasSeenFirstRunTips());
+  // Tap-acknowledgment ripples for the in-scene quick-toggle gesture (tap a
+  // light/switch -> instant HA call, no panel) — see TapRipple's docstring
+  // for why this exists instead of predicting the on/off outcome.
+  const [ripples, setRipples] = useState<Ripple[]>([]);
+  const rippleIdRef = useRef(0);
+  const spawnRipple = useCallback((x: number, y: number) => {
+    const id = ++rippleIdRef.current;
+    setRipples((prev) => [...prev, { id, x, y }]);
+    setTimeout(() => setRipples((prev) => prev.filter((r) => r.id !== id)), RIPPLE_LIFETIME_MS);
+  }, []);
 
   // Once-a-day auto-reload safety net (see utils/autoReload.ts) against a slow
   // background memory drift — only fires during its quiet overnight hour AND
@@ -135,7 +158,7 @@ export default function Dashboard() {
   }, [manager, haSun]);
 
   const onEntityPicked = useCallback(
-    (entityId: string) => {
+    (entityId: string, clientX: number, clientY: number) => {
       // mappingForEntityId handles type-upgrade for stored "sensor" fallbacks
       // (e.g. input_boolean entities bound before that domain was recognized).
       const mapping = mappingForEntityId(entityId, config.entityMap);
@@ -151,13 +174,18 @@ export default function Dashboard() {
       const entity = entities[entityId];
       if (isQuickToggle(mapping, entity)) {
         HAServices.toggleEntity(ws, entityId);
+        // No panel opens for this path, so nothing on screen changes until
+        // HA's real state_changed round-trip lands — spawn a tap ripple right
+        // at the tap point so the gesture itself reads as acknowledged. See
+        // TapRipple's docstring for why this doesn't predict on/off.
+        spawnRipple(clientX, clientY);
         return;
       }
 
       // Rich entities (sliders, streams, info) open their control panel as before.
       setActivePanel({ entityId, mapping });
     },
-    [config.entityMap, entities, ws, role, canControl],
+    [config.entityMap, entities, ws, role, canControl, spawnRipple],
   );
 
   // Long-press always opens the full control panel — even for quick-toggle
@@ -219,7 +247,7 @@ export default function Dashboard() {
         setCurrentFloor(floor);
       } else {
         // Floor not modelled yet.
-        alert(`Floor ${floor} isn't modelled yet — coming soon.`);
+        setNotice(`Floor ${floor} isn't modelled yet — coming soon.`);
       }
     },
     [manager],
@@ -321,6 +349,14 @@ export default function Dashboard() {
       />
 
       <RoomLabel room={room} />
+
+      <TapRipple ripples={ripples} />
+
+      <AppNotice message={notice} onExpire={() => setNotice(null)} />
+
+      {role && showFirstRunTips && (
+        <FirstRunTips onClose={() => setShowFirstRunTips(false)} />
+      )}
 
       <ServiceErrorToast />
 

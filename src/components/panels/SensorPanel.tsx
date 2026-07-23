@@ -28,6 +28,11 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const { config } = useConfig();
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [stateHistory, setStateHistory] = useState<StateHistoryPoint[]>([]);
+  // Distinguishes "still fetching" from "HA genuinely has no history yet" —
+  // see useStateHistory's docstring for why this matters (same gap, this
+  // panel just doesn't go through that shared hook, since it fetches ONE of
+  // two different history shapes depending on isBinary/isEnum).
+  const [historyLoading, setHistoryLoading] = useState(true);
 
   const isBinary = mapping.type === "binary_sensor";
   const unavailable = isUnavailable(entity);
@@ -64,14 +69,15 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   useEffect(() => {
     // History is fetched token-less through the add-on's Supervisor proxy.
     let cancelled = false;
+    setHistoryLoading(true);
     if (isBinary || isEnum) {
       fetchStateHistory(mapping.entityId, 24)
-        .then((h) => !cancelled && setStateHistory(h))
-        .catch(() => {});
+        .then((h) => { if (!cancelled) { setStateHistory(h); setHistoryLoading(false); } })
+        .catch(() => { if (!cancelled) setHistoryLoading(false); });
     } else {
       fetchHistory(mapping.entityId, 24)
-        .then((h) => !cancelled && setHistory(h))
-        .catch(() => {});
+        .then((h) => { if (!cancelled) { setHistory(h); setHistoryLoading(false); } })
+        .catch(() => { if (!cancelled) setHistoryLoading(false); });
     }
     return () => {
       cancelled = true;
@@ -118,6 +124,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
             <StateTimeline
               data={stateHistory}
               colorFor={(s) => binarySensorColor(s, alertState)}
+              loading={historyLoading}
             />
           </div>
         </>
@@ -139,9 +146,10 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
                 data={stateHistory}
                 colorFor={enumPalette!}
                 legend={enumDistinctStates.map((s) => ({ state: s, color: enumPalette!(s) }))}
+                loading={historyLoading}
               />
             ) : (
-              <Sparkline data={history} color={LEVEL_COLOR[level]} unit={unit} />
+              <Sparkline data={history} color={LEVEL_COLOR[level]} unit={unit} loading={historyLoading} />
             )}
           </div>
         </>

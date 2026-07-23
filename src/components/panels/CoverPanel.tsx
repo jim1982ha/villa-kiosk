@@ -15,7 +15,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   const pos = entity?.attributes.current_position;
   const hasPosition = typeof pos === "number";
   const [position, setPosition] = useState<number>(hasPosition ? pos! : 0);
-  const history = useStateHistory(mapping.entityId);
+  const { data: history, loading: historyLoading } = useStateHistory(mapping.entityId);
   // While the user is dragging the slider, ignore live HA updates: a state event
   // arriving mid-drag would otherwise snap `position` back to the device's value,
   // so the release would send the stale number (or nothing changed). Resume
@@ -76,7 +76,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline data={history} colorFor={coverColor} />
+      <LastDayTimeline data={history} colorFor={coverColor} loading={historyLoading} />
     </BasePanel>
   );
 }

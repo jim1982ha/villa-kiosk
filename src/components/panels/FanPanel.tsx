@@ -28,7 +28,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
   const on = entity?.state === "on";
   const presets = (entity?.attributes.preset_modes ?? []) as string[];
   const currentPreset = entity?.attributes.preset_mode;
-  const history = useStateHistory(mapping.entityId);
+  const { data: history, loading: historyLoading } = useStateHistory(mapping.entityId);
 
   // Continuous speed, exposed as discrete steps (same idea as HA's own fan
   // more-info card) rather than a free-drag slider — a separate control from
@@ -93,7 +93,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline data={history} colorFor={onOffColor} />
+      <LastDayTimeline data={history} colorFor={onOffColor} loading={historyLoading} />
     </BasePanel>
   );
 }

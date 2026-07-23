@@ -17,8 +17,8 @@ import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 
 export class PickHandler {
   private scene: Scene;
-  private onPicked: (entityId: string) => void;
-  private onLongPicked: (entityId: string) => void;
+  private onPicked: (entityId: string, clientX: number, clientY: number) => void;
+  private onLongPicked: (entityId: string, clientX: number, clientY: number) => void;
   private entityMap: Record<string, EntityMapping>;
   private bindings: Record<string, string> = {};
   /** RBAC type denials (AppConfig.deniedTypes) — a mesh resolving to one of
@@ -40,10 +40,10 @@ export class PickHandler {
 
   constructor(
     scene: Scene,
-    onPicked: (entityId: string) => void,
+    onPicked: (entityId: string, clientX: number, clientY: number) => void,
     entityMap: Record<string, EntityMapping> = {},
     bindings: Record<string, string> = {},
-    onLongPicked?: (entityId: string) => void,
+    onLongPicked?: (entityId: string, clientX: number, clientY: number) => void,
     badgeHitTest?: (clientX: number, clientY: number) => boolean,
   ) {
     this.scene = scene;
@@ -128,6 +128,6 @@ export class PickHandler {
 
     const mapping = this.resolveMesh(pick.pickedMesh);
     tapDebug(`3D pick: mesh="${pick.pickedMesh.name}" mapping=${mapping?.entityId ?? "none"}`);
-    if (mapping) (longPress ? this.onLongPicked : this.onPicked)(mapping.entityId);
+    if (mapping) (longPress ? this.onLongPicked : this.onPicked)(mapping.entityId, clientX, clientY);
   }
 }

@@ -8,15 +8,16 @@ import StateTimeline from "./StateTimeline";
 import type { StateHistoryPoint } from "@/types/ha.types";
 
 export default function LastDayTimeline({
-  data, colorFor,
+  data, colorFor, loading,
 }: {
   data: StateHistoryPoint[];
   colorFor: (state: string) => string;
+  loading?: boolean;
 }) {
   return (
     <div className="field">
       <label className="entity-label">Last 24 hours</label>
-      <StateTimeline data={data} colorFor={colorFor} />
+      <StateTimeline data={data} colorFor={colorFor} loading={loading} />
     </div>
   );
 }

@@ -14,7 +14,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   const unavailable = isUnavailable(entity);
   const locked = entity?.state === "locked";
   const [confirming, setConfirming] = useState(false);
-  const history = useStateHistory(mapping.entityId);
+  const { data: history, loading: historyLoading } = useStateHistory(mapping.entityId);
 
   const doUnlock = () => {
     HAServices.unlockDoor(ws, mapping.entityId);
@@ -66,7 +66,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline data={history} colorFor={lockColor} />
+      <LastDayTimeline data={history} colorFor={lockColor} loading={historyLoading} />
 
       {!unavailable && !locked && (
         <p className="muted body-text mt">

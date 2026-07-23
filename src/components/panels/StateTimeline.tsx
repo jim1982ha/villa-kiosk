@@ -31,6 +31,11 @@ interface Props {
    *  plain on/off device, whose current-state pill above already says which
    *  colour means what. */
   legend?: TimelineLegendEntry[];
+  /** True while the history fetch is still in flight — distinguishes "still
+   *  loading" from "HA genuinely has no history for this entity" (both used
+   *  to render as the same empty state, so a slow network looked identical
+   *  to a device that's never reported). */
+  loading?: boolean;
 }
 
 /** Tidy a raw HA state for display: "not_home" → "Not home", "on" → "On". */
@@ -39,11 +44,13 @@ function prettyState(s: string): string {
   return t ? t[0].toUpperCase() + t.slice(1) : s;
 }
 
-export default function StateTimeline({ data, hours = 24, colorFor, height, legend }: Props) {
+export default function StateTimeline({ data, hours = 24, colorFor, height, legend, loading }: Props) {
   const [hover, setHover] = useState<{ x: number; state: string; t: number } | null>(null);
 
   if (data.length === 0) {
-    return <div className="muted body-text">Not enough history yet.</div>;
+    return loading
+      ? <div className="state-timeline-skeleton" style={height ? { height } : undefined} />
+      : <div className="muted body-text">Not enough history yet.</div>;
   }
 
   const now = Date.now();

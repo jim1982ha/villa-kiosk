@@ -9,7 +9,7 @@ import { useStateHistory } from "@/hooks/useStateHistory";
 import { paletteColorFor } from "@/utils/stateColors";
 
 export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
-  const history = useStateHistory(mapping.entityId);
+  const { data: history, loading: historyLoading } = useStateHistory(mapping.entityId);
 
   const colorFor = paletteColorFor(history.map((p) => p.state));
   const distinctStates = [...new Set(history.map((p) => p.state))];
@@ -29,6 +29,7 @@ export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
           data={history}
           colorFor={colorFor}
           legend={distinctStates.map((s) => ({ state: s, color: colorFor(s) }))}
+          loading={historyLoading}
         />
       </div>
     </BasePanel>

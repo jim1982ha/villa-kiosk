@@ -14,11 +14,14 @@ interface Props {
   color?: string;
   height?: number;
   unit?: string;
+  /** True while the history fetch is still in flight — see StateTimeline's
+   *  `loading` prop for why this distinction matters. */
+  loading?: boolean;
 }
 
 const M = { top: 8, right: 10, bottom: 18, left: 38 };
 
-export default function Sparkline({ data, color = "var(--accent-teal)", height = 110, unit = "" }: Props) {
+export default function Sparkline({ data, color = "var(--accent-teal)", height = 110, unit = "", loading }: Props) {
   const [ref, W] = useElementWidth<HTMLDivElement>(320);
   const [hover, setHover] = useState<number | null>(null);
 
@@ -45,7 +48,11 @@ export default function Sparkline({ data, color = "var(--accent-teal)", height =
     setHover(nearestIndexByX(geom.pts, x));
   }, [geom, W]);
 
-  if (!geom) return <div ref={ref} className="muted body-text">Not enough history yet.</div>;
+  if (!geom) {
+    return loading
+      ? <div ref={ref} className="state-timeline-skeleton" style={{ height }} />
+      : <div ref={ref} className="muted body-text">Not enough history yet.</div>;
+  }
 
   const polyline = geom.pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
   const hp = hover != null ? geom.pts[hover] : null;

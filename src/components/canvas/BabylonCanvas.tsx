@@ -24,8 +24,8 @@ import type { EntityMapping } from "@/types/scene.types";
 
 interface Props {
   onManager: (m: SceneManager | null) => void;
-  onEntityPicked: (entityId: string) => void;
-  onEntityLongPressed: (entityId: string) => void;
+  onEntityPicked: (entityId: string, clientX: number, clientY: number) => void;
+  onEntityLongPressed: (entityId: string, clientX: number, clientY: number) => void;
   onFloorChange: (floor: number) => void;
   onRoomChange: (room: string | null) => void;
   onNeedModel: () => void;
@@ -110,8 +110,8 @@ export default function BabylonCanvas({
       noteLoadPhase("engine-init");
       manager = new SceneManager(canvasEl, {
         config: sceneConfig,
-        onEntityPicked: (id) => onPickedRef.current(id),
-        onEntityLongPressed: (id) => onLongPressedRef.current(id),
+        onEntityPicked: (id, x, y) => onPickedRef.current(id, x, y),
+        onEntityLongPressed: (id, x, y) => onLongPressedRef.current(id, x, y),
         onFloorChange,
         onRoomChange,
       });
@@ -456,7 +456,8 @@ export default function BabylonCanvas({
               (typically an iPhone) ran out of memory for this model — a heavier
               GLB (more geometry/textures) can exceed iOS Safari's per-tab limit
               even when the same file works fine on a computer or Android phone.
-              Copy the details below and send them over. {canManageModel && "An Owner can upload a lighter model from Advanced Settings."}
+              {canManageModel && " An Owner can upload a lighter model from Advanced Settings."}
+              {" "}For troubleshooting, tap &ldquo;Show technical details&rdquo; below to copy a report.
             </>
           }
           detail={report}

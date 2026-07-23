@@ -22,7 +22,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
 
   const [brightness, setBrightness] = useState(entity?.attributes.brightness ?? 255);
   const [kelvin, setKelvin] = useState(entity?.attributes.color_temp_kelvin ?? 4000);
-  const history = useStateHistory(mapping.entityId);
+  const { data: history, loading: historyLoading } = useStateHistory(mapping.entityId);
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Lightbulb size={22} />} onClose={onClose}>
@@ -55,7 +55,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline data={history} colorFor={onOffColor} />
+      <LastDayTimeline data={history} colorFor={onOffColor} loading={historyLoading} />
     </BasePanel>
   );
 }

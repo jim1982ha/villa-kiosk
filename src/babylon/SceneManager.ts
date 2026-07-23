@@ -65,10 +65,13 @@ function badgeColorOnlyDiff(
 
 export interface SceneManagerOptions {
   config: AppConfig;
-  /** Called when a mesh mapped to an entity is tapped (fast on/off action). */
-  onEntityPicked: (entityId: string) => void;
+  /** Called when a mesh mapped to an entity is tapped (fast on/off action).
+   *  clientX/clientY are the tap's screen position — used to spawn a brief
+   *  tap-acknowledgment ripple at the DOM layer (see Dashboard's onEntityPicked)
+   *  since a quick on/off tap has no panel/badge change to confirm it landed. */
+  onEntityPicked: (entityId: string, clientX: number, clientY: number) => void;
   /** Called when a mesh mapped to an entity is long-pressed (open full panel). */
-  onEntityLongPressed: (entityId: string) => void;
+  onEntityLongPressed: (entityId: string, clientX: number, clientY: number) => void;
   /** Called when the active floor changes (staircase or button). */
   onFloorChange: (floor: number) => void;
   /** Called when the camera enters a new named room. */
@@ -180,13 +183,13 @@ export class SceneManager {
     const handleTap = (x: number, y: number) => {
       tapDebug(`TAP client(${x.toFixed(0)},${y.toFixed(0)})`);
       const badgeEntity = this.visuals.pickBadgeAt(x, y);
-      if (badgeEntity) { opts.onEntityPicked(badgeEntity); return; }
+      if (badgeEntity) { opts.onEntityPicked(badgeEntity, x, y); return; }
       this.pick.pickAtScreen(x, y);
     };
     const handleLongPress = (x: number, y: number) => {
       tapDebug(`LONGPRESS client(${x.toFixed(0)},${y.toFixed(0)})`);
       const badgeEntity = this.visuals.pickBadgeAt(x, y);
-      if (badgeEntity) { opts.onEntityLongPressed(badgeEntity); return; }
+      if (badgeEntity) { opts.onEntityLongPressed(badgeEntity, x, y); return; }
       this.pick.pickAtScreen(x, y, true);
     };
 

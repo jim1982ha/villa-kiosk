@@ -414,6 +414,24 @@ button {
   animation: fadeSlide 0.3s ease-out;
   max-width: 86vw; font-size: 14px;
 }
+/* Neutral variant (AppNotice) — a general "heads up", not a failure, so it
+   doesn't borrow the danger-red tone the plain .service-toast uses for a
+   failed HA service call. */
+.service-toast.app-notice { border-color: var(--hairline-strong); color: var(--text-primary); background: var(--bg-panel); }
+
+/* Instant tap-acknowledgment ring for the in-scene quick-toggle gesture (see
+   TapRipple.tsx) — fixed layer over the whole viewport, never intercepts
+   input, sits above the 3D canvas but below any real UI (panels/menus). */
+.tap-ripple-layer { position: fixed; inset: 0; z-index: 12; pointer-events: none; }
+.tap-ripple {
+  position: fixed; width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  border-radius: 50%; border: 2px solid var(--accent);
+  animation: tap-ripple-expand 0.5s ease-out forwards;
+}
+@keyframes tap-ripple-expand {
+  from { transform: scale(0.4); opacity: 0.9; }
+  to   { transform: scale(3.2); opacity: 0; }
+}
 
 .bottom-bar {
   position: absolute; bottom: 0; left: 0; right: 0; height: 96px;
@@ -551,6 +569,12 @@ input[type="range"]::-moz-range-thumb {
 }
 .big-toggle.on { background: linear-gradient(135deg, var(--accent), var(--accent-strong)); color: var(--text-on-accent); }
 .big-toggle:active { transform: scale(0.97); }
+/* Tap acknowledgment while waiting on HA's real state_changed round-trip —
+   see PowerToggle.tsx's docstring. Deliberately NOT a colour/text change
+   (that would read as a state prediction); just a soft breathing opacity so
+   the button visibly "knows" a tap landed. */
+.big-toggle.pending { animation: big-toggle-pending 0.9s ease-in-out infinite; }
+@keyframes big-toggle-pending { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
 .status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-weight: 600; }
 .status-pill.on { background: color-mix(in srgb, var(--status-on) 20%, transparent); color: var(--status-on); }
@@ -668,6 +692,39 @@ input[type="range"]::-moz-range-thumb {
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
 .settings-section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin: 22px 0 8px; font-weight: 600; }
+
+/* Screen-reader-only text — visually hidden, still announced. Used to
+   describe a gesture-only secondary action (e.g. "hold to manage rooms")
+   that has no on-screen label of its own. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Persistent visual cue for a button whose long-press/hold does something
+   MORE than its tap — a hover tooltip alone (the previous only affordance)
+   never reaches a touchscreen kiosk. A small dot, not more tooltip text. */
+.has-hold-action { position: relative; }
+.has-hold-action::after {
+  content: ""; position: absolute; top: 3px; right: 3px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); pointer-events: none;
+}
+
+/* First-run orientation card (FirstRunTips). */
+.first-run-tip-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+.first-run-tip-list li { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; line-height: 1.5; }
+.first-run-tip-list li > svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
+.first-run-dot-demo { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
+
+/* Map colours legend (LegendModal). */
+.legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin-top: 10px; }
+.legend-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.legend-swatch { width: 20px; height: 20px; border-radius: 7px; flex-shrink: 0; border: 1px solid var(--hairline); }
+.legend-swatch-round { border-radius: 50%; }
+@media (max-width: 480px) {
+  .legend-grid { grid-template-columns: 1fr; }
+}
 
 /* Segmented control (used for the Light / Dark / Auto theme selector). */
 .segmented { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg-input); }
@@ -955,6 +1012,16 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .state-timeline { position: relative; width: 100%; height: 78px; border-radius: 8px; overflow: hidden; background: var(--bg-input); }
 .state-timeline-seg { position: absolute; top: 0; bottom: 0; }
 .state-timeline-cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.85); box-shadow: 0 0 3px rgba(0,0,0,0.5); pointer-events: none; }
+/* Loading placeholder — same footprint as the real bar, so nothing jumps
+   when history actually arrives. A soft sweep, not spinner/text, so it
+   doesn't compete with the rest of the panel while it's still settling. */
+.state-timeline-skeleton {
+  width: 100%; height: 78px; border-radius: 8px;
+  background: linear-gradient(90deg, var(--bg-input) 25%, var(--bg-panel) 50%, var(--bg-input) 75%);
+  background-size: 200% 100%;
+  animation: state-timeline-sweep 1.4s ease-in-out infinite;
+}
+@keyframes state-timeline-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 /* --- Animations --- */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1168,6 +1235,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 
 /* Reserve a fixed line so the layout never jumps between idle/error/lockout. */
 .pinpad-status { min-height: 22px; font-size: 13.5px; margin-bottom: 10px; }
+.pinpad-help { font-size: 12.5px; margin: -4px 0 14px; max-width: 264px; margin-left: auto; margin-right: auto; text-align: center; }
 
 .pinpad-keys {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;

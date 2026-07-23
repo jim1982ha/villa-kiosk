@@ -23,6 +23,12 @@ export default function PinPad({ roleLabel, onSubmit, onAccepted, onBack }: Prop
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lockedFor, setLockedFor] = useState(0);
+  // Wrong-code streak (server-side lockout has its own separate counter —
+  // this is purely local, to decide when to show extra guidance). A wrong
+  // code used to be a dead end: "Incorrect code — try again" with no path
+  // forward besides the small "Profiles" link, which is easy to miss on a
+  // kiosk someone's never used before.
+  const [failCount, setFailCount] = useState(0);
   const mounted = useRef(true);
   useEffect(() => () => { mounted.current = false; }, []);
 
@@ -52,6 +58,7 @@ export default function PinPad({ roleLabel, onSubmit, onAccepted, onBack }: Prop
         setError(null);
       } else {
         setError("Incorrect code — try again.");
+        setFailCount((c) => c + 1);
       }
     } catch {
       if (!mounted.current) return;
@@ -118,6 +125,16 @@ export default function PinPad({ roleLabel, onSubmit, onAccepted, onBack }: Prop
           " "
         )}
       </div>
+
+      {/* After a couple of wrong tries, offer a way forward beyond "try
+          again" — someone who genuinely doesn't have this code (a guest who
+          mistyped what they were given, or was never told one) has nowhere
+          else to go otherwise. */}
+      {!locked && failCount >= 2 && (
+        <p className="pinpad-help muted body-text">
+          Don&apos;t have the code? Ask whoever manages this villa&apos;s kiosk for it.
+        </p>
+      )}
 
       <div className="pinpad-keys">
         {KEYS.map((k) => (

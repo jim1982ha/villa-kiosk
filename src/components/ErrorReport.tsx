@@ -20,6 +20,14 @@ interface Props {
 export default function ErrorReport({ title, hint, detail, actions }: Props) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const [copied, setCopied] = useState(false);
+  // Technical detail (the raw copyable report) is opt-in, collapsed by
+  // default. This screen is reachable by anyone using the kiosk at the
+  // moment it fails — not just the owner — and "copy the details below and
+  // send them over" reads as a dead end to someone who doesn't know what a
+  // stack trace is or who to send it to. The action that actually helps most
+  // people (Reload) now leads; the report is one tap away for whoever DOES
+  // want to troubleshoot it (an owner, or support).
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const copy = async () => {
     let ok = false;
@@ -65,38 +73,57 @@ export default function ErrorReport({ title, hint, detail, actions }: Props) {
 
       {hint && <div className="body-text" style={{ maxWidth: 640 }}>{hint}</div>}
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <button className="btn primary" onClick={copy} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          {copied ? <Check size={18} /> : <Copy size={18} />}
-          {copied ? "Copied!" : "Copy error details"}
-        </button>
-        {actions}
-      </div>
+      {/* Primary recovery action(s) first — usually just Reload. */}
+      {actions && (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          {actions}
+        </div>
+      )}
 
-      {/* Readonly, pre-selectable — so copy works even if the clipboard API is
-          blocked (the user can tap → Select All → Copy). */}
-      <textarea
-        ref={taRef}
-        readOnly
-        value={detail}
-        onFocus={(e) => e.currentTarget.select()}
-        spellCheck={false}
-        style={{
-          width: "100%",
-          minHeight: 240,
-          resize: "vertical",
-          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-          fontSize: 11,
-          lineHeight: 1.5,
-          color: "var(--text-secondary)",
-          background: "color-mix(in srgb, var(--text-primary) 6%, transparent)",
-          border: "1px solid var(--hairline)",
-          borderRadius: 10,
-          padding: 12,
-          whiteSpace: "pre",
-          overflow: "auto",
-        }}
-      />
+      <button
+        className="btn ghost"
+        onClick={() => setDetailsOpen((o) => !o)}
+        style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 8 }}
+        aria-expanded={detailsOpen}
+      >
+        {detailsOpen ? "Hide" : "Show"} technical details
+      </button>
+
+      {detailsOpen && (
+        <>
+          <div>
+            <button className="btn primary" onClick={copy} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              {copied ? <Check size={18} /> : <Copy size={18} />}
+              {copied ? "Copied!" : "Copy error details"}
+            </button>
+          </div>
+
+          {/* Readonly, pre-selectable — so copy works even if the clipboard API is
+              blocked (the user can tap → Select All → Copy). */}
+          <textarea
+            ref={taRef}
+            readOnly
+            value={detail}
+            onFocus={(e) => e.currentTarget.select()}
+            spellCheck={false}
+            style={{
+              width: "100%",
+              minHeight: 240,
+              resize: "vertical",
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              fontSize: 11,
+              lineHeight: 1.5,
+              color: "var(--text-secondary)",
+              background: "color-mix(in srgb, var(--text-primary) 6%, transparent)",
+              border: "1px solid var(--hairline)",
+              borderRadius: 10,
+              padding: 12,
+              whiteSpace: "pre",
+              overflow: "auto",
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

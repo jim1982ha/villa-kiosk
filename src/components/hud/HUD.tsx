@@ -18,7 +18,7 @@ import {
   Home, Compass, Settings, Map,
   PersonStanding, Anchor, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
-  EllipsisVertical, Minus, Plus,
+  EllipsisVertical, Minus, Plus, CircleHelp,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -30,6 +30,7 @@ import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_COLORS } from "@/config/Entit
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
+import LegendModal from "./LegendModal";
 
 type IconType = ComponentType<{ size?: number | string }>;
 
@@ -181,6 +182,29 @@ export default function HUD({
     if (radial) closeRadial(); else openRadial(); // tap toggles the dial
   };
 
+  // Keyboard equivalent of the two gestures above — this button previously had
+  // ONLY pointer handlers, so Tab+Enter/Space did nothing at all (native button
+  // keyboard activation dispatches a click, not pointer events, so onPointerDown/
+  // onPointerUp never fired). Holding Enter/Space now mirrors a touch hold;
+  // preventDefault on keydown suppresses the browser's own click-on-activation
+  // so it can't ALSO fire and double-toggle the dial.
+  const onRoomsKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    if (e.repeat) return; // ignore OS key-repeat while held, same as a still finger
+    roomsLongFired.current = false;
+    if (roomsLongTimer.current) clearTimeout(roomsLongTimer.current);
+    roomsLongTimer.current = setTimeout(() => {
+      roomsLongFired.current = true;
+      closeRadial();
+      onOpenTeleport();
+    }, 450);
+  };
+  const onRoomsKeyUp = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    onRoomsPointerUp();
+  };
+
   const onRadialPick = (it: RadialItem) => {
     if (it.kind === "floor") {
       const f = Number(it.key.slice(1));
@@ -233,6 +257,7 @@ export default function HUD({
   // the compact bar), this state only drives the dropdown. Closes on outside
   // tap and Escape, and after any action is chosen.
   const [menuOpen, setMenuOpen] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!menuOpen) return;
@@ -433,6 +458,14 @@ export default function HUD({
                       <span>Settings</span>
                     </button>
                   )}
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    onClick={() => { setMenuOpen(false); setLegendOpen(true); }}
+                  >
+                    <CircleHelp size={18} />
+                    <span>Map colours</span>
+                  </button>
                   {role && (
                     <button
                       role="menuitem"
@@ -468,6 +501,9 @@ export default function HUD({
                 </button>
               </span>
             )}
+            <button className="icon-btn" onClick={() => setLegendOpen(true)} title="What do these colours mean?" aria-label="Map colour legend">
+              <CircleHelp size={19} />
+            </button>
             {canOpenSettings && (
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
                 <Settings size={20} />
@@ -476,6 +512,8 @@ export default function HUD({
           </div>
         </div>
       </div>
+
+      {legendOpen && <LegendModal onClose={() => setLegendOpen(false)} />}
 
       {/* Left column: the floor toggle (1F / 2F) plus the Rooms dial button.
           Tapping a floor switches to it (and frames it in the bird's-eye); the
@@ -499,17 +537,21 @@ export default function HUD({
           ))}
           <button
             ref={roomsBtnRef}
-            className={`icon-btn rooms-dial-btn${radial ? " active" : ""}`}
+            className={`icon-btn rooms-dial-btn has-hold-action${radial ? " active" : ""}`}
             title="Rooms — tap for the quick floor/room dial, long-press to add/edit rooms"
             aria-label="Rooms"
+            aria-describedby="rooms-btn-hint"
             style={{ touchAction: "none" }}
             onPointerDown={onRoomsPointerDown}
             onPointerUp={onRoomsPointerUp}
             onPointerCancel={() => { if (roomsLongTimer.current) clearTimeout(roomsLongTimer.current); }}
             onContextMenu={(e) => e.preventDefault()}
+            onKeyDown={onRoomsKeyDown}
+            onKeyUp={onRoomsKeyUp}
           >
             <Compass size={20} />
           </button>
+          <span id="rooms-btn-hint" className="sr-only">Hold (or hold Enter/Space) to add or edit rooms</span>
         </div>
       </div>
 
@@ -538,7 +580,7 @@ export default function HUD({
             </button>
             {viewMode === "overview" && (
               <button
-                className={`icon-btn${hasOverviewDefault ? " active" : ""}`}
+                className={`icon-btn has-hold-action${hasOverviewDefault ? " active" : ""}`}
                 onPointerDown={onViewBtnDown}
                 onPointerUp={cancelViewPress}
                 onPointerLeave={cancelViewPress}
@@ -549,13 +591,23 @@ export default function HUD({
                   onSaveOverviewDefault();
                   flashView("saved");
                 }}
+                // Space-only (not Enter): a <button> fires its click on Enter's
+                // KEYDOWN but on Space's KEYUP, so only Space can time a real
+                // "hold" — arming this on Enter too would fire the tap AND,
+                // ~480ms later while still held, spuriously ALSO fire save.
+                // Enter needs no extra handling: its native click already
+                // reaches onViewBtnClick above, same as a plain tap.
+                onKeyDown={(e) => { if (e.key === " " && !e.repeat) onViewBtnDown(); }}
+                onKeyUp={(e) => { if (e.key === " ") cancelViewPress(); }}
                 title="Tap to go to this device's default view · long-press / right-click to set it to the current view"
                 aria-label="Go to this device's default overview view"
+                aria-describedby="anchor-btn-hint"
                 aria-pressed={hasOverviewDefault}
               >
                 <Anchor size={18} />
               </button>
             )}
+            <span id="anchor-btn-hint" className="sr-only">Hold Space to save the current view as the default</span>
           </div>
         </div>
 
