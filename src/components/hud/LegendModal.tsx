@@ -18,8 +18,12 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
 
 export default function LegendModal({ onClose }: { onClose: () => void }) {
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal legend-modal" onClick={(e) => e.stopPropagation()}>
+    // panel-modal-backdrop/panel-modal: short content → the same small centered
+    // rounded card as the device panel on mobile, instead of the base
+    // top-anchored full-screen sheet meant for long Settings forms. See
+    // FirstRunTips for the same fix.
+    <div className="modal-backdrop panel-modal-backdrop" onClick={onClose}>
+      <div className="modal panel-modal legend-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <h2>Map colours</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">

@@ -14,8 +14,13 @@ import { markFirstRunTipsSeen } from "@/utils/storage";
 export default function FirstRunTips({ onClose }: { onClose: () => void }) {
   const dismiss = () => { markFirstRunTipsSeen(); onClose(); };
   return (
-    <div className="modal-backdrop first-run-backdrop" onClick={dismiss}>
-      <div className="modal first-run-tips" onClick={(e) => e.stopPropagation()}>
+    // panel-modal-backdrop/panel-modal: this is short content, so on mobile it
+    // gets the same small centered rounded card as the device panel — without
+    // these it fell through to the base full-screen top-anchored sheet meant
+    // for long forms (Settings), which is why it rendered up at the top with a
+    // big empty area below instead of centered like every other popup.
+    <div className="modal-backdrop panel-modal-backdrop first-run-backdrop" onClick={dismiss}>
+      <div className="modal panel-modal first-run-tips" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <h2>Quick tips</h2>
         </div>

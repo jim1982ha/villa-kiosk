@@ -83,13 +83,13 @@ export default function GroupedDevices() {
               className="row spread"
               style={{ padding: "8px 0", borderTop: "1px solid var(--hairline)" }}
             >
-              <span className="body-text" style={{ fontSize: 12 }}>
+              <span className="body-text" style={{ fontSize: 12, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
                 {entityLabel(entities, s.primaryEntityId)} <span className="muted">+</span>{" "}
                 {entityLabel(entities, s.memberEntityId)}
               </span>
               <button
                 className="btn ghost"
-                style={{ padding: "5px 10px", fontSize: 12 }}
+                style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }}
                 onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}
               >
                 Group these
@@ -106,13 +106,16 @@ export default function GroupedDevices() {
       {config.deviceGroups.map((group) => (
         <div key={group.id} style={{ padding: "14px 0", borderTop: "1px solid var(--hairline)" }}>
           <div className="row spread" style={{ gap: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>
+            {/* flex:1 + minWidth:0 + overflowWrap so a long entity_id with no
+                friendly_name (one unbreakable underscore-joined token) wraps
+                inside the row instead of pushing the delete button off-screen. */}
+            <div style={{ fontSize: 13, fontWeight: 500, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
               {entityLabel(entities, group.primaryEntityId)}
-              <div className="muted body-text" style={{ fontSize: 11, marginTop: 2 }}>
+              <div className="muted body-text" style={{ fontSize: 11, marginTop: 2, overflowWrap: "anywhere" }}>
                 {group.primaryEntityId} — primary (keeps the map badge)
               </div>
             </div>
-            <button className="icon-btn icon-btn-danger" title="Delete group" onClick={() => deleteGroup(group.id)}>
+            <button className="icon-btn icon-btn-danger" style={{ flexShrink: 0 }} title="Delete group" onClick={() => deleteGroup(group.id)}>
               <Trash2 size={15} />
             </button>
           </div>
@@ -126,11 +129,12 @@ export default function GroupedDevices() {
                   style={{
                     display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12,
                     padding: "4px 8px", borderRadius: 999, background: "var(--bg-input)",
+                    maxWidth: "100%", overflowWrap: "anywhere",
                   }}
                 >
                   {entityLabel(entities, id)}
                   <button
-                    className="icon-btn" style={{ width: 20, height: 20, borderRadius: 999 }}
+                    className="icon-btn" style={{ width: 20, height: 20, borderRadius: 999, flexShrink: 0 }}
                     title="Remove from group" onClick={() => removeMember(group, id)}
                   >
                     <X size={12} />

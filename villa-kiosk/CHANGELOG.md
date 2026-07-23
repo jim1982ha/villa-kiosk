@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.35.3
+
+### Changes
+- Fixed two mobile UX issues. (1) In Advanced Settings → grouped devices, a group whose primary entity has no friendly_name showed the raw entity_id as its heading — one long unbreakable underscore-joined token that overflowed the row and pushed the delete (trash) button off the right edge of the screen. The heading (and the suggestion rows and member chips, same risk) now wrap long tokens inside the row and the delete button stays put. (2) The first-run "Quick tips" card and the "Map colours" legend rendered as top-anchored full-screen sheets on a phone — with a big empty area below — instead of centered cards like every other popup, because they used the base modal classes (meant for long Settings forms) rather than the centered-card treatment. Same fix as the badge-colour picker got in v2.34.1: they now appear as a centered rounded card on mobile.
+
 ## 2.35.2
 
 ### Changes

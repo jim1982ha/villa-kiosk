@@ -1168,6 +1168,14 @@ label.toggle span { user-select: none; line-height: 1.4; }
     border: 1px solid var(--hairline-strong);
     padding: 20px;
   }
+  /* These two borrow panel-modal's centered-card SHAPE but bring their own
+     header/body/footer padding (they're built on the .settings-* structure,
+     unlike the badge/device panels which have no inner padding) — so drop the
+     card's own 20px to avoid doubling it up on every side. */
+  .modal.panel-modal.first-run-tips,
+  .modal.panel-modal.legend-modal {
+    padding: 0;
+  }
 
   /* (Config table is card-styled at all widths now — see the base rules.) */
 
