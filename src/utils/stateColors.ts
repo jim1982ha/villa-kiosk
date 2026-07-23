@@ -46,6 +46,31 @@ export function coverColor(state: string): string {
   return WARN_COLOR; // opening / closing
 }
 
+/**
+ * A cover's discrete 3-way VISUAL bucket — "closed"/"half"/"open" — used to
+ * pick which of a curtain's alternate meshes to show in the 3D scene (see
+ * EntityVisuals' cover handling / VARIANT_VOCAB). Deliberately mirrors
+ * coverColor's own open/closed/in-between split above, just with position-%
+ * awareness added: current_position (0-100, HA convention: 0=closed,
+ * 100=open) wins when the device reports it, with a tolerance band since
+ * real motors rarely stop at EXACTLY 0/100; devices that only report bare
+ * open/closed state (most curtain motors don't report a position at all)
+ * fall back to that — opening/closing (actively in transit) reads as "half",
+ * the same "something's in between" bucket coverColor already gives it.
+ */
+export function coverVisualBucket(entity: HassEntity | undefined): "closed" | "half" | "open" {
+  if (!entity) return "open"; // matches the "no suffix = open" default mesh
+  const pos = entity.attributes.current_position;
+  if (typeof pos === "number" && Number.isFinite(pos)) {
+    if (pos <= 15) return "closed";
+    if (pos >= 85) return "open";
+    return "half";
+  }
+  if (entity.state === "closed") return "closed";
+  if (entity.state === "open") return "open";
+  return "half"; // opening / closing / unavailable / unknown
+}
+
 const PALETTE = [ON_COLOR, "var(--accent)", WARN_COLOR, DANGER_COLOR, "var(--accent-strong)"];
 
 /**

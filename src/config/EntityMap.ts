@@ -229,13 +229,63 @@ export function mappingForEntityId(
   return createDefaultMapping(entityId, { type: inferred });
 }
 
-/** Normalise a Babylon/glTF mesh name (strip ".001", "_primitive0", "(clone)"). */
-export function normaliseMeshName(meshName: string): string {
+/** Strip glTF/Blender export artifacts ONLY — ".001" (Blender's own
+ *  duplicate-object suffix), "_primitive0" (glTF's per-primitive child
+ *  suffix), "(clone)" — but NOT the optional "__<variant>" visual-state
+ *  suffix (see extractVariantSuffix below). Shared by normaliseMeshName
+ *  (which also strips the variant suffix, for entity resolution) and
+ *  extractVariantSuffix (which reads it, for visual-state grouping) so both
+ *  start from the exact same export-artifact-free name — whichever export
+ *  artifact Blender/glTF tacks on lands AFTER whatever was actually typed in
+ *  SweetHome3D, so artifacts must come off first either way. */
+function stripExportArtifacts(meshName: string): string {
   return meshName
     .replace(/_primitive\d+$/i, "")
     .replace(/\.\d{3}$/, "")
     .replace(/\s*\(clone\)$/i, "")
     .trim();
+}
+
+/**
+ * Normalise a Babylon/glTF mesh name for ENTITY resolution: strips export
+ * artifacts (see stripExportArtifacts) AND an optional trailing
+ * "__<variant>" visual-state suffix, so e.g. "cover.curtain_big__closed" and
+ * "cover.curtain_big__open" both resolve to the exact same entity as a plain
+ * "cover.curtain_big" would — see extractVariantSuffix's docstring for what
+ * that suffix means and why "__" was chosen as its delimiter.
+ */
+export function normaliseMeshName(meshName: string): string {
+  return stripExportArtifacts(meshName).replace(/__[a-z0-9]+$/i, "").trim();
+}
+
+/**
+ * An OPTIONAL "__<variant>" suffix on an object's SweetHome3D/Blender name
+ * marks it as one of several alternate meshes standing in for the SAME
+ * entity, each a different discrete visual pose — e.g. a curtain modelled
+ * three times as "cover.curtain_big__closed" / "__half" / "__open", with
+ * EntityVisuals showing whichever one matches the entity's live state and
+ * hiding the other two (see VARIANT_VOCAB / applyMeshVariant there). "__"
+ * (double underscore) is deliberately the delimiter: HA entity_ids and every
+ * other naming convention this app already recognises (MESH_ALIASES) only
+ * ever use a SINGLE underscore, so "__" is a distinctive, low-collision
+ * marker a real entity_id essentially never contains naturally. If one ever
+ * did, resolution for that one entity would need a manual mesh binding
+ * (Advanced Settings' remap) as a fallback — an accepted, documented trade-off
+ * for keeping this convention simple rather than threading per-type
+ * vocabulary knowledge into name resolution, which happens before an
+ * entity's type is even known.
+ *
+ * Returns null when the mesh has no such suffix — by far the common case,
+ * and the ENTIRE point of this being opt-in: a mesh with no variant suffix
+ * keeps its type's configured default meaning (see VARIANT_VOCAB), and until
+ * a SECOND variant is ever authored for the same entity, that default mesh
+ * behaves exactly as if this mechanism didn't exist — always visible, never
+ * hidden by state. A villa that never uses this convention is completely
+ * unaffected by it.
+ */
+export function extractVariantSuffix(meshName: string): string | null {
+  const m = /__([a-z0-9]+)$/i.exec(stripExportArtifacts(meshName));
+  return m ? m[1].toLowerCase() : null;
 }
 
 /**

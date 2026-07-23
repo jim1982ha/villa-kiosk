@@ -7,8 +7,14 @@
 //   light         -> the bound object glows AND a real PointLight illuminates
 //                    the room; colour follows hs/kelvin, intensity follows
 //                    brightness, off = dark.
-//   cover         -> curtain mesh shows OPEN / HALF / CLOSED (by position % or
-//                    open/closed state).
+//   cover         -> OPT-IN: if a curtain was authored as up to 3 alternate
+//                    meshes ("cover.foo__closed"/"__half"/"__open" — see
+//                    EntityMap's extractVariantSuffix), the one matching live
+//                    position/state is shown and the others hidden (see
+//                    VARIANT_VOCAB/applyMeshVariant below). A villa with just
+//                    the plain, unsuffixed mesh (the default) is unaffected —
+//                    that mesh stays visible always, exactly as before this
+//                    existed.
 //   fan           -> emissive teal tint while on.
 //   lock          -> green (locked) / red (unlocked).
 //   switch/media  -> emissive "active" tint when on/playing.
@@ -25,11 +31,11 @@ import {
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-import { resolveMeshToMapping } from "@/config/EntityMap";
+import { resolveMeshToMapping, extractVariantSuffix } from "@/config/EntityMap";
 import { groupMemberIds } from "@/config/deviceGroups";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
-import { isUnavailable } from "@/utils/stateColors";
+import { isUnavailable, coverVisualBucket } from "@/utils/stateColors";
 import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
@@ -69,6 +75,45 @@ const LIGHT_POOL_RADIUS = 1.8;
  *  outside that range must not blow the fixture out or invert it. */
 function clampRatio(ratio: number | undefined): number {
   return Math.max(-1, Math.min(1, ratio ?? 0));
+}
+
+// ── Multi-mesh visual variants (e.g. a curtain's closed/half/open poses) ────
+// See EntityMap.extractVariantSuffix's docstring for the "__<variant>" mesh-
+// naming convention this reads. Per-type "vocabulary": the ordered list of
+// recognised variant words for that type (order also drives the nearest-
+// available fallback in pickNearestVariant, for a villa that only bothered
+// authoring SOME of them) and which word an unsuffixed — or unrecognised-
+// suffix — mesh defaults to. Extending this to another domain (e.g. a lock's
+// bolt position) only needs a new entry here plus one call in apply() below;
+// the indexing/grouping/fallback machinery (meshVariants/applyMeshVariant)
+// itself is entirely generic and needs no per-type changes.
+const VARIANT_VOCAB: Partial<Record<EntityType, { words: string[]; default: string }>> = {
+  cover: { words: ["closed", "half", "open"], default: "open" },
+};
+
+/** The available variant word nearest `desired` in `order` (by index
+ *  distance) — e.g. a cover authored with only "closed"/"open" meshes (no
+ *  "half") still shows something sensible for a live half-open position,
+ *  rather than showing nothing or crashing. Ties are broken toward the LATER
+ *  word in `order` (for cover's [closed, half, open], that biases toward
+ *  "open" — the same default an unsuffixed mesh already gets elsewhere in
+ *  this mechanism, rather than depending on incidental mesh-iteration
+ *  order). `available` is assumed non-empty (callers already check that). */
+function pickNearestVariant(order: string[], desired: string, available: Iterable<string>): string {
+  let best: string | null = null;
+  let bestIndex = -1;
+  let bestDist = Infinity;
+  const desiredIndex = order.indexOf(desired);
+  for (const word of available) {
+    if (word === desired) return word;
+    const idx = order.indexOf(word);
+    const dist = Math.abs(idx - desiredIndex);
+    if (dist < bestDist || (dist === bestDist && idx > bestIndex)) {
+      bestDist = dist; best = word; bestIndex = idx;
+    }
+  }
+  // best is only ever null if `available` was empty, which callers rule out.
+  return best!;
 }
 // A SweetHome "line light" (the Sweet Home Light plugin's linear LED strip) is
 // mounted flush against a ceiling/wall. A PointLight placed ON the strip sits
@@ -245,6 +290,13 @@ export class EntityVisuals {
   /** entity_id -> meshes (one entity can drive several meshes, e.g. curtains). */
   private byEntity = new Map<string, AbstractMesh[]>();
   private mapping = new Map<string, EntityMapping>();
+  /** entity_id -> variant word -> its mesh(es) — see VARIANT_VOCAB/
+   *  applyMeshVariant. Only ever has 2+ words for an entity that was
+   *  actually authored with alternate "__<variant>" meshes; everything else
+   *  (the common case) either has zero entries or exactly one (an unsuffixed
+   *  mesh defaulted to its type's default word), and applyMeshVariant treats
+   *  both of those as "nothing to toggle". */
+  private meshVariants = new Map<string, Map<string, AbstractMesh[]>>();
   private pulsing = new Set<AbstractMesh>();
   /** entity_id → angular speed (rad/s) for a CEILING fan currently spinning. */
   private spinningFans = new Map<string, number>();
@@ -487,6 +539,7 @@ export class EntityVisuals {
     this.fanAngles.clear();
     this.byEntity.clear();
     this.mapping.clear();
+    this.meshVariants.clear();
     this.shadowCasters = [];
 
     // Creating dozens of PointLights one-by-one makes Babylon re-flag every
@@ -513,6 +566,21 @@ export class EntityVisuals {
       list.push(m);
       this.byEntity.set(map.entityId, list);
       this.mapping.set(map.entityId, map);
+
+      // Multi-mesh visual variants (see VARIANT_VOCAB above) — only for
+      // types that have a configured vocabulary; every other type ignores
+      // this entirely (its "__<variant>" suffix, if any, was still stripped
+      // for entity resolution above, just never grouped/toggled).
+      const vocab = VARIANT_VOCAB[map.type];
+      if (vocab) {
+        const suffix = extractVariantSuffix(m.name);
+        const word = suffix && vocab.words.includes(suffix) ? suffix : vocab.default;
+        let byWord = this.meshVariants.get(map.entityId);
+        if (!byWord) { byWord = new Map(); this.meshVariants.set(map.entityId, byWord); }
+        const wordList = byWord.get(word) ?? [];
+        wordList.push(m);
+        byWord.set(word, wordList);
+      }
 
       // ISOLATE the material so state visuals can't bleed across meshes.
       // The Blender pipeline fuses non-entity geometry and the glTF exporter
@@ -1052,8 +1120,43 @@ export class EntityVisuals {
     if (map.type === "light") {
       this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
     }
+    if (map.type === "cover") {
+      this.applyMeshVariant(entity.entity_id, VARIANT_VOCAB.cover!.words, coverVisualBucket(entity));
+    }
     this.updateLabel(entity.entity_id, map.type, entity);
     this.requestRender();
+  }
+
+  /** Show exactly one "visual variant" mesh for an entity and hide the rest
+   *  — see EntityMap.extractVariantSuffix's docstring for the underlying
+   *  naming convention this reflects. A no-op unless this entity actually
+   *  has 2+ DISTINCT variant meshes registered (see indexMeshes): the common
+   *  case — one plain mesh, or none at all — is left completely untouched,
+   *  which is what makes this fully opt-in. `order` is the type's full
+   *  vocabulary (see VARIANT_VOCAB), used only for the nearest-available
+   *  fallback when `active`'s exact mesh wasn't authored. */
+  private applyMeshVariant(entityId: string, order: string[], active: string): void {
+    const byWord = this.meshVariants.get(entityId);
+    if (!byWord || byWord.size < 2) return;
+    const chosen = pickNearestVariant(order, active, byWord.keys());
+    for (const [word, meshes] of byWord) {
+      const show = word === chosen;
+      for (const mesh of meshes) mesh.setEnabled(show);
+    }
+    // The label anchor inherits its enabled-state from whichever mesh it's
+    // parented to (see buildLabelAnchors — that's the mechanism a hidden
+    // FLOOR uses to hide an entity's badge along with it). buildLabelAnchors
+    // parents it to meshes[0] — for a multi-variant entity that's arbitrarily
+    // whichever mesh indexMeshes happened to encounter first, which is now
+    // hidden two times out of three. Re-anchor to whichever mesh is ACTUALLY
+    // visible right now, so the badge only goes dark for the right reason
+    // (its floor is hidden), never because the wrong pose happened to be its
+    // anchor.
+    const anchor = this.labelAnchors.get(entityId);
+    const chosenMesh = byWord.get(chosen)?.[0];
+    if (anchor && chosenMesh && anchor.parent !== chosenMesh) {
+      anchor.setParent(chosenMesh);
+    }
   }
 
   /** Route a state change to whichever motion-driven visual it feeds:
@@ -1830,10 +1933,15 @@ export class EntityVisuals {
         break;
       }
 
-      // Covers (curtains) are intentionally inert: per product decision the
-      // curtain geometry must NEVER move or scale with position/state. We keep
-      // the case so cover entities don't fall through to the default and get
-      // treated as something else, but apply no visual transform.
+      // No per-mesh material/colour treatment for covers — a single curtain
+      // mesh is never deformed/scaled to fake motion (fabric doesn't behave
+      // like a rigid body, and there's no reliable way to infer a gather
+      // pivot from arbitrary SweetHome3D geometry). Position IS reflected
+      // now, but as a whole-mesh SWAP between up to 3 alternate, pre-posed
+      // meshes (see VARIANT_VOCAB / applyMeshVariant) — that's an
+      // entity-level decision (which mesh to show), not a per-mesh one, so
+      // it happens once in apply(), not here. Kept as an explicit case (not
+      // falling to default) so a cover doesn't get treated as something else.
       case "cover":
         break;
 

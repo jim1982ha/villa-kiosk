@@ -62,7 +62,7 @@ Config Editor, so you choose what each object does):
 | Entity type | What happens in the visualisation |
 |---|---|
 | **light** | The bound object **glows**, *and* a real light source **illuminates the room**. Colour follows the bulb's `hs_color` / `color_temp`, brightness follows the dimmer, OFF = dark. |
-| **cover** (curtain/blind) | **Three states**: fully **closed** (mesh full height) · **half / partial** (when opening, closing, or any position between) · fully **open** (mesh retracts & fades). If the device reports `current_position`, it's continuous 0–100%. |
+| **cover** (curtain/blind) | **Optional, opt-in position feedback** — see [Optional: curtain open/closed/half poses](#optional-pre-name-curtaincover-meshes-for-position-feedback) below. With no extra naming, the curtain mesh is simply always visible, same as any other bound object. |
 | **fan** | Blades **spin** while on, stop when off. |
 | **switch** | Object lights up with an "active" tint when on (good for pumps, etc.). |
 | **media_player** | "Active" tint when playing/on. |
@@ -98,6 +98,42 @@ light.master_bedroom_ceiling
 light.pool_area
 …
 ```
+
+### Optional: pre-name curtain/cover meshes for position feedback
+
+By default a `cover` entity's mesh is just always visible, exactly like any
+other bound object — curtains don't move or scale to fake motion (fabric
+doesn't behave like a rigid body, so there's no reliable way to fake that
+convincingly). **You can opt into real open/closed/half position feedback
+instead**, with no code changes, purely by how you name the objects in
+SweetHome 3D:
+
+1. Place the **same curtain** two or three times at the window, each copy
+   posed differently — fully drawn shut, fully gathered open, and (optionally)
+   a middle pose.
+2. Name each copy with the entity_id plus a `__closed` / `__half` / `__open`
+   suffix:
+
+   ```
+   cover.curtain_living_room_big__closed
+   cover.curtain_living_room_big__half        (optional — you can skip this one)
+   cover.curtain_living_room_big__open
+   ```
+
+   The **unsuffixed** name (`cover.curtain_living_room_big`, no `__…` at all)
+   counts as `__open` — so if you only ever want ONE pose that's just always
+   there, don't add a suffix at all and nothing changes from today's behaviour.
+3. Upload the model as usual. All the differently-suffixed copies are treated
+   as the SAME entity (the suffix doesn't affect binding/tapping/RBAC at all),
+   and the kiosk shows whichever pose matches the curtain's live position —
+   using `current_position` (0–100%) when the device reports it, or falling
+   back to its plain open/closed state when it doesn't. Opening/closing (in
+   transit) shows the half pose if you made one, or the nearest pose you did
+   author otherwise.
+
+This is entirely **per-curtain and optional** — a villa can mix curtains that
+use this (2 or 3 poses) with curtains that don't (a single plain mesh), and a
+model that never uses this convention at all behaves exactly as before.
 
 ---
 

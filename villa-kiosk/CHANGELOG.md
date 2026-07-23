@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.35.0
+
+### Changes
+- Curtains/blinds can now show real open/half/closed position in the 3D view — opt-in, per curtain, zero effect on a villa that doesn't use it. A curtain authored as up to 3 alternate SweetHome3D pieces named "cover.foo__closed"/"__half"/"__open" (unsuffixed = open, by convention) shows whichever pose matches the entity's live current_position (or bare open/closed state when a device doesn't report position), and hides the other poses; a plain, unsuffixed single mesh — today's default for every existing villa — is completely unaffected and stays always visible, exactly as before. Verified end-to-end against the actual sources/blender_pipeline.py: SweetHome3D's declared piece name (suffix included) is preserved verbatim into the final GLB mesh name, so this works with the real toolchain, not just in theory. Also found and fixed a real latent bug this surfaced: the map-badge label anchor inherits its enabled-state from whichever mesh happens to be first in an entity's mesh list — fine for a single mesh, but for a multi-pose curtain that mesh is hidden 2 times out of 3, which would have made the badge itself flicker in and out with the wrong pose. Re-anchors to whichever pose mesh is actually visible whenever it changes.
+- The underlying mechanism (EntityVisuals' VARIANT_VOCAB / meshVariants / applyMeshVariant, EntityMap's extractVariantSuffix) is fully generic, not cover-specific — extending it to another domain (e.g. a lock's bolt position) is a ~10-line addition (one vocabulary entry + one bucketing function + one call in apply()), not a parallel implementation.
+- Documentation: MODEL_PIPELINE.md's cover row and light-naming section described a position-feedback behavior that the actual code never implemented ("mesh retracts & fades", continuous 0-100%) — corrected to describe what's now actually built, with a new authoring walkthrough alongside the existing light-naming one.
+
 ## 2.34.1
 
 ### Changes
