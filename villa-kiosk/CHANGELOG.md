@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.35.9
+
+### Changes
+- Added a "Copy all" button to the `?debug` on-screen log box. It was capturing everything correctly, but the visible window only ever showed the last 40 lines and scrolled past too fast to read (or select by hand) during a busy model load — there was no way to get the full transcript off a device without real devtools. The box now keeps the full history for the page load (up to 5000 lines) in the background; the button copies all of it to the clipboard in one tap (with an execCommand fallback for browsers without the async Clipboard API), while the visible window still only shows the last 40 for at-a-glance reading.
+- Added targeted runtime diagnostics for the pose-swap feature (cover/lock), since the on-screen box previously only logged the ONE-TIME grouping summary at model-load time, not what happens on every subsequent live state change: `apply()` now logs when a `cover.*`/`lock.*` entity's state arrives but no mesh/mapping resolves for it at all (nothing could ever be shown), and when one resolves but with an unexpected `type` (e.g. the Advanced Settings Type field got changed away from cover/lock, silently disabling the pose swap for that entity); `applyMeshVariant` now logs every call's requested vs. chosen pose. This turns "which stage of the chain broke" from a guess into something visible directly in the copyable log.
+
 ## 2.35.8
 
 ### Changes

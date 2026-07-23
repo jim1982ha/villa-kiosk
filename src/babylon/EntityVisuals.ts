@@ -1164,8 +1164,19 @@ export class EntityVisuals {
 
     const meshes = this.byEntity.get(entity.entity_id);
     const map = this.mapping.get(entity.entity_id);
-    if (!meshes || !map) return;
+    if (!meshes || !map) {
+      if (entity.entity_id.startsWith("cover.") || entity.entity_id.startsWith("lock.")) {
+        tapDebug(`apply(${entity.entity_id}): NO MESH/MAPPING — meshes=${!!meshes} map=${!!map}. This entity's live state changed but nothing in the model resolves to it, so no variant could ever be shown for it.`);
+      }
+      return;
+    }
     this.lastState.set(entity.entity_id, entity);
+    if (
+      (entity.entity_id.startsWith("cover.") && map.type !== "cover") ||
+      (entity.entity_id.startsWith("lock.") && map.type !== "lock")
+    ) {
+      tapDebug(`apply(${entity.entity_id}): resolved mesh(es) but map.type="${map.type}" — a variant pose will NEVER be applied while the type mismatch stands (check Advanced Settings' Type field for this entity).`);
+    }
     // Normalise by the number of DISTINCT light objects, not meshes — a merged
     // strip entity (mergeStripEntityLights) shares ONE light across several
     // meshes, so it must get the full intensity, not 1/N of it.
@@ -1178,7 +1189,9 @@ export class EntityVisuals {
       this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
     }
     if (map.type === "cover") {
-      this.applyMeshVariant(entity.entity_id, VARIANT_VOCAB.cover!.words, coverVisualBucket(entity));
+      const bucket = coverVisualBucket(entity);
+      tapDebug(`apply(${entity.entity_id}): state="${entity.state}" current_position=${entity.attributes?.current_position} -> bucket="${bucket}"`);
+      this.applyMeshVariant(entity.entity_id, VARIANT_VOCAB.cover!.words, bucket);
     }
     if (map.type === "lock") {
       this.applyMeshVariant(entity.entity_id, VARIANT_VOCAB.lock!.words, lockVisualBucket(entity));
@@ -1197,8 +1210,12 @@ export class EntityVisuals {
    *  fallback when `active`'s exact mesh wasn't authored. */
   private applyMeshVariant(entityId: string, order: string[], active: string): void {
     const byWord = this.meshVariants.get(entityId);
-    if (!byWord || byWord.size < 2) return;
+    if (!byWord || byWord.size < 2) {
+      tapDebug(`applyMeshVariant(${entityId}): SKIPPED — only ${byWord?.size ?? 0} variant group(s) registered (need 2+); requested="${active}"`);
+      return;
+    }
     const chosen = pickNearestVariant(order, active, byWord.keys());
+    tapDebug(`applyMeshVariant(${entityId}): requested="${active}" -> chosen="${chosen}" from {${Array.from(byWord.keys()).join(",")}}`);
     // Exclusivity is driven by `isVisible`, NOT `setEnabled` — deliberately.
     // FloorManager owns `setEnabled` on every mesh to hide/show whole storeys,
     // AND estimateFloorY/buildRoomConform (room calibration) SAVE, force-
