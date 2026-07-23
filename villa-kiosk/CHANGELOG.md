@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.35.10
+
+### Changes
+- Closed a gap in the pose-swap diagnostics: v2.35.9's log proved which pose gets *chosen* on every state change, but not whether the non-chosen poses' meshes actually ended up hidden on screen — a real bug in that last mile (e.g. a duplicate mesh reference, or a floor-visibility conflict independent of the pose toggle) wouldn't have shown up. `applyMeshVariant` now reads `isVisible`/`isEnabled()` straight back off every mesh right after toggling and logs it (a mesh only renders with BOTH true), so "is `__open` actually hidden right now" is answered directly from the copyable log instead of by eyeballing the 3D view.
+- Investigation update on `cover.bedroom4_curtain`: confirmed from the .sh3d source that `__closed`/`__half` use real, distinct, intentionally high-detail catalog curtain models (`curtain_2_full.obj`/`curtain_2_half.obj`, ~124k vertices each, `half` is an exact half-width scale of `full`) — not a pipeline mis-assignment; the earlier triangle-count anomaly was fully explained by this. Runtime state→pose selection was already independently proven correct via the ?debug log. This release's post-toggle visibility readback is the next concrete step to rule the last possible failure point in or out.
+
 ## 2.35.9
 
 ### Changes

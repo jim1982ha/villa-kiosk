@@ -1236,6 +1236,15 @@ export class EntityVisuals {
       const show = word === chosen;
       for (const mesh of meshes) mesh.isVisible = show;
     }
+    // Read the flags straight back off the mesh objects (not just "what we
+    // just set") so this answers "is __open ACTUALLY hidden right now" with
+    // zero ambiguity — a mesh only renders if BOTH isVisible AND isEnabled()
+    // are true, so this also catches a floor-visibility (setEnabled) conflict
+    // that isVisible alone wouldn't reveal.
+    const postState = Array.from(byWord, ([word, meshes]) =>
+      `${word}:[${meshes.map((m) => `${m.isVisible ? "V" : "-"}${m.isEnabled() ? "E" : "-"}`).join(",")}]`
+    ).join(" ");
+    tapDebug(`applyMeshVariant(${entityId}): after toggle (V=visible E=enabled, need BOTH to render) -> ${postState}`);
     // buildLabelAnchors parents the badge anchor to meshes[0] — arbitrarily
     // whichever pose indexMeshes saw first. Re-anchor it to the chosen
     // (visible) pose so the badge tracks that pose's exact position; its
