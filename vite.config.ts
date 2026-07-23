@@ -157,7 +157,6 @@ export default defineConfig(({ command }) => {
         "react-dom/client",
         "react-router-dom",
         "lucide-react",
-        "jszip",
         "@babylonjs/core",
         "@babylonjs/gui",
         "@babylonjs/loaders/glTF",

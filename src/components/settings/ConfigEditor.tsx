@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Pencil, Check, X, Search, ChevronDown, ChevronRight } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
+import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { createDefaultMapping } from "@/config/EntityMap";
 import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory } from "@/config/EntityCategories";
 import EntityPicker from "./EntityPicker";
@@ -93,78 +94,24 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   const patch = (key: string, change: Partial<EntityMapping>) =>
     update({ entityMap: { ...config.entityMap, [key]: { ...config.entityMap[key], ...change } } });
 
-  // The Label field commits on every keystroke via patch() -> a new entityMap
-  // reference -> a full SceneManager structural re-index (mesh classification +
-  // light/fan/badge rebuild), so typing a name used to trigger that whole pass
-  // per character and made the field feel laggy. Type into local state instantly
-  // and only patch() after a short pause (or on blur), so the heavy re-index
-  // runs once per edit instead of once per keystroke.
-  const [labelDrafts, setLabelDrafts] = useState<Record<string, string>>({});
-  const labelTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const commitLabel = (key: string, value: string) => {
-    clearTimeout(labelTimers.current[key]);
-    delete labelTimers.current[key];
-    patch(key, { label: value });
-    setLabelDrafts((prev) => {
-      const { [key]: _removed, ...rest } = prev;
-      return rest;
-    });
-  };
-  const draftLabel = (key: string, value: string) => {
-    setLabelDrafts((prev) => ({ ...prev, [key]: value }));
-    clearTimeout(labelTimers.current[key]);
-    labelTimers.current[key] = setTimeout(() => commitLabel(key, value), 500);
-  };
-
-  // Same story as the Label field: dragging a range input fires onChange
-  // continuously (React normalises it to the native `input` event, not
-  // `change`), so committing straight to patch() on every tick would trigger
-  // a full re-index per pixel of drag. Draft locally, commit on release
-  // (mouseup/touchend) or after a short pause if release is missed.
-  const [intensityDrafts, setIntensityDrafts] = useState<Record<string, number>>({});
-  const intensityTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const commitIntensity = (key: string, ratio: number) => {
-    clearTimeout(intensityTimers.current[key]);
-    delete intensityTimers.current[key];
-    patch(key, { lightIntensityRatio: ratio });
-    setIntensityDrafts((prev) => {
-      const { [key]: _removed, ...rest } = prev;
-      return rest;
-    });
-  };
-  const draftIntensity = (key: string, ratio: number) => {
-    setIntensityDrafts((prev) => ({ ...prev, [key]: ratio }));
-    clearTimeout(intensityTimers.current[key]);
-    intensityTimers.current[key] = setTimeout(() => commitIntensity(key, ratio), 500);
-  };
-
-  // Same story again for the "Shown" checkbox and the Type/Category/Room
-  // selects: a single click felt laggy not because the click itself was
-  // slow, but because patch() -> a new entityMap reference -> BabylonCanvas's
-  // structural re-index (SceneManager.updateConfig -> indexMeshes +
-  // applyStructure, an O(every mesh in the GLB) synchronous pass) blocks the
-  // main thread for a few seconds right after, during which the NEXT click
-  // (e.g. moving on to edit the device's Room right after toggling Show)
-  // doesn't register until that pass finishes. Flip the control instantly via
-  // local draft state — decoupled from the heavy commit — and commit shortly
-  // after, so a quick run of edits on one device coalesces into a single
-  // rebuild instead of freezing once per click.
-  const [fieldDrafts, setFieldDrafts] = useState<Record<string, Partial<EntityMapping>>>({});
-  const fieldTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const commitField = (key: string) => {
-    clearTimeout(fieldTimers.current[key]);
-    delete fieldTimers.current[key];
-    setFieldDrafts((prev) => {
-      const { [key]: change, ...rest } = prev;
-      if (change) patch(key, change);
-      return rest;
-    });
-  };
-  const draftField = (key: string, change: Partial<EntityMapping>) => {
-    setFieldDrafts((prev) => ({ ...prev, [key]: { ...prev[key], ...change } }));
-    clearTimeout(fieldTimers.current[key]);
-    fieldTimers.current[key] = setTimeout(() => commitField(key), 350);
-  };
+  // Every field below commits via patch() -> a new entityMap reference -> a
+  // full SceneManager structural re-index (mesh classification + light/fan/
+  // badge rebuild) — see SceneManager.updateConfig's docstring for why that
+  // pass is heavy and how it now yields instead of freezing in one block.
+  // Committing straight from onChange would trigger that pass once per
+  // keystroke/click/pixel-of-drag; useDraftCommit (see its own docstring)
+  // updates the control instantly via local draft state and coalesces a
+  // burst of edits into a single commit after a short pause.
+  const label = useDraftCommit<string>((key, value) => patch(key, { label: value }), 500);
+  const intensity = useDraftCommit<number>((key, ratio) => patch(key, { lightIntensityRatio: ratio }), 500);
+  const field = useDraftCommit<Partial<EntityMapping>>((key, change) => patch(key, change));
+  const draftLabel = (key: string, value: string) => label.draft(key, value);
+  const draftIntensity = (key: string, ratio: number) => intensity.draft(key, ratio);
+  // field's drafts are PARTIAL patches, merged on top of any not-yet-committed
+  // change for the same row — so toggling Show then immediately picking a Room
+  // (before the first commit fires) coalesces into one patch with both fields.
+  const draftField = (key: string, change: Partial<EntityMapping>) =>
+    field.draft(key, { ...field.drafts[key], ...change });
 
   const remove = (key: string) => {
     const next = { ...config.entityMap };
@@ -254,7 +201,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
               const editing = remapKey === key;
               // Merge in any not-yet-committed edit so the control reflects
               // the click instantly, even while the heavy commit is pending.
-              const m = fieldDrafts[key] ? { ...m0, ...fieldDrafts[key] } : m0;
+              const m = field.drafts[key] ? { ...m0, ...field.drafts[key] } : m0;
               return (
               <tr
                 key={key}
@@ -366,9 +313,9 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                     </td>
                     <td data-label="Label">
                       <input
-                        value={labelDrafts[key] ?? m.label}
+                        value={label.drafts[key] ?? m.label}
                         onChange={(e) => draftLabel(key, e.target.value)}
-                        onBlur={(e) => commitLabel(key, e.target.value)}
+                        onBlur={() => label.flush(key)}
                       />
                     </td>
                     <td data-label="Room">
@@ -388,7 +335,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                       </select>
                     </td>
                     {m.type === "light" && (() => {
-                      const ratio = intensityDrafts[key] ?? m.lightIntensityRatio ?? 0;
+                      const ratio = intensity.drafts[key] ?? m.lightIntensityRatio ?? 0;
                       const pct = Math.round(ratio * 100);
                       return (
                         <td data-label="Intensity">
@@ -397,8 +344,8 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                               type="range" min={-100} max={100} step={5}
                               value={pct}
                               onChange={(e) => draftIntensity(key, Number(e.target.value) / 100)}
-                              onMouseUp={(e) => commitIntensity(key, Number((e.target as HTMLInputElement).value) / 100)}
-                              onTouchEnd={(e) => commitIntensity(key, Number((e.target as HTMLInputElement).value) / 100)}
+                              onMouseUp={() => intensity.flush(key)}
+                              onTouchEnd={() => intensity.flush(key)}
                               style={{ flex: 1 }}
                               title="Per-light brightness override on top of this light's live Home Assistant brightness and the global Light effect strength setting. 0% = no change."
                               aria-label={`Intensity override for ${m.entityId}`}

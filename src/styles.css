@@ -203,12 +203,22 @@ button {
 .btn.active { background: var(--accent); color: var(--text-on-accent); }
 .btn:disabled { opacity: 0.4; pointer-events: none; }
 
+/* Shared "glass" chrome — translucent panel background + backdrop blur —
+   used by every floating HUD/modal-adjacent piece over the 3D scene. One
+   definition instead of eight copies of the same two values; each selector
+   below still sets its own border (color/width vary: hairline, hairline-strong,
+   or the danger color for the service-error toast) and layout separately. */
+.icon-btn, .hud-group, .hud-stack, .hud-brand, .hud-menu,
+.room-label, .service-toast, .joystick-base {
+  background: var(--bg-panel);
+  backdrop-filter: blur(8px);
+}
+
 .icon-btn {
   /* Squircle (not a circle) so every standalone control — Settings, view toggle,
      compass, anchor, (i), profile logout — matches the squircle buttons in the
      top-bar groups and the left stack. */
   width: 48px; height: 48px; border-radius: 14px;
-  background: var(--bg-panel); backdrop-filter: blur(8px);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-primary);
   border: 1px solid var(--hairline);
@@ -220,33 +230,28 @@ button {
    its own pill, so the categories read clearly without any text labels. */
 .hud-group {
   display: flex; align-items: center; gap: 4px;
-  background: var(--bg-panel); backdrop-filter: blur(8px);
   border-radius: 14px; padding: 4px;
   border: 1px solid var(--hairline);
 }
-.hud-group .icon-btn {
-  width: 38px; height: 38px; border-radius: 10px;
-  background: transparent; backdrop-filter: none; border: none;
-}
-.hud-group .icon-btn:hover { background: var(--bg-input); }
-.hud-group .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
-.hud-group .icon-btn.active:hover { background: var(--accent); }
-
 /* Vertically stacked HUD control block (Room + Switch View under the floor
    switch, on the left). Full-width rows inside a single rounded pill. */
 .hud-stack {
   display: flex; flex-direction: column; gap: 4px;
-  background: var(--bg-panel); backdrop-filter: blur(8px);
   border-radius: 14px; padding: 4px;
   border: 1px solid var(--hairline);
 }
-.hud-stack .icon-btn {
-  width: 40px; height: 38px; border-radius: 10px;
+/* Both groups reset the shared .icon-btn glass chrome to a flat, borderless
+   button — only their own size differs (hud-stack's rows are full-width). */
+.hud-group .icon-btn, .hud-stack .icon-btn {
+  border-radius: 10px;
   background: transparent; backdrop-filter: none; border: none;
   color: var(--text-primary);
 }
-.hud-stack .icon-btn:hover { background: var(--bg-input); }
-.hud-stack .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
+.hud-group .icon-btn { width: 38px; height: 38px; }
+.hud-stack .icon-btn { width: 40px; height: 38px; }
+.hud-group .icon-btn:hover, .hud-stack .icon-btn:hover { background: var(--bg-input); }
+.hud-group .icon-btn.active, .hud-stack .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
+.hud-group .icon-btn.active:hover { background: var(--accent); }
 
 /* --- HUD --- */
 /* Three zones: brand + time (left) · action icons (centre) · alerts + settings (right). */
@@ -271,7 +276,6 @@ button {
 .hud-brand {
   justify-self: start; display: flex; align-items: center; gap: 10px;
   font-family: var(--font-display); font-size: 22px; font-weight: 500;
-  background: var(--bg-panel); backdrop-filter: blur(8px);
   border: 1px solid var(--hairline); border-radius: 999px;
   padding: 6px 16px 6px 10px;
 }
@@ -289,7 +293,6 @@ button {
   position: absolute; top: calc(100% + 8px); right: 0;
   min-width: 210px;
   display: flex; flex-direction: column; gap: 2px;
-  background: var(--bg-panel); backdrop-filter: blur(8px);
   border: 1px solid var(--hairline); border-radius: 14px;
   padding: 6px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
@@ -394,7 +397,6 @@ button {
 
 .room-label {
   position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
-  background: var(--bg-panel); backdrop-filter: blur(8px);
   padding: 8px 22px; border-radius: 999px; z-index: 15;
   animation: fadeSlide 0.4s ease-out;
   text-align: center; max-width: 86vw;
@@ -407,7 +409,6 @@ button {
   position: absolute; top: calc(64px + env(safe-area-inset-top, 0px));
   left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 8px;
-  background: var(--bg-panel); backdrop-filter: blur(8px);
   border: 1px solid var(--status-danger); color: var(--status-danger);
   padding: 10px 18px; border-radius: 999px; z-index: 70;
   animation: fadeSlide 0.3s ease-out;
@@ -438,7 +439,6 @@ button {
 /* --- Virtual joystick --- */
 .joystick-base {
   width: 120px; height: 120px; border-radius: 50%;
-  background: var(--bg-panel); backdrop-filter: blur(8px);
   position: relative; touch-action: none;
   border: 1px solid var(--hairline-strong);
 }

@@ -127,7 +127,11 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
             login(r);
           } else setGateError("Couldn't start a session — please try again.");
         })
-        .catch(() => setGateError("Couldn't reach the kiosk service — please try again."));
+        .catch((err) => setGateError(
+          err instanceof Error && err.message && !err.message.startsWith("auth service unavailable")
+            ? err.message
+            : "Couldn't reach the kiosk service — please try again.",
+        ));
     } else {
       setPending(r);
     }

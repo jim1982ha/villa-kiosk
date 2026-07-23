@@ -372,15 +372,28 @@ export default function BabylonCanvas({
   useEffect(() => {
     const m = managerRef.current;
     if (!m) return;
-    const structuralChanged = m.updateConfig(sceneConfig);
-    if (structuralChanged || !repaintedOnceRef.current) {
-      repaintedOnceRef.current = true;
-      // Live snapshot, not a closed-over `entities` — see getEntitiesSnapshot's
-      // docstring; this effect's dep array ([sceneConfig]) doesn't include
-      // `entities`, so the instance React actually runs can be one whose
-      // closure captured a stale (often still-empty) entities value.
-      Object.values(getEntitiesSnapshot()).forEach((e) => m.applyEntityState(e));
-    }
+    // updateConfig() is async now — its structural branch yields the main
+    // thread between its heavy steps (see SceneManager.updateConfig's
+    // docstring) instead of freezing it in one uninterrupted block. `cancelled`
+    // guards the entity-state replay below against firing on a stale run: if
+    // sceneConfig changes again (or this component unmounts) while we're
+    // still awaiting, React runs THIS effect's cleanup first, which is what
+    // sets cancelled — so a superseded call's result is simply dropped
+    // instead of replaying entity states from a rebuild that never happened.
+    let cancelled = false;
+    (async () => {
+      const structuralChanged = await m.updateConfig(sceneConfig);
+      if (cancelled) return;
+      if (structuralChanged || !repaintedOnceRef.current) {
+        repaintedOnceRef.current = true;
+        // Live snapshot, not a closed-over `entities` — see getEntitiesSnapshot's
+        // docstring; this effect's dep array ([sceneConfig]) doesn't include
+        // `entities`, so the instance React actually runs can be one whose
+        // closure captured a stale (often still-empty) entities value.
+        Object.values(getEntitiesSnapshot()).forEach((e) => m.applyEntityState(e));
+      }
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneConfig]);
 

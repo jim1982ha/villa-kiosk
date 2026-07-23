@@ -2,12 +2,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Blinds, ChevronUp, ChevronDown, Square } from "lucide-react";
 import BasePanel from "./BasePanel";
-import StateTimeline from "./StateTimeline";
+import LastDayTimeline from "./LastDayTimeline";
 import type { PanelProps } from "@/types/panel.types";
-import type { StateHistoryPoint } from "@/types/ha.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { useStateHistory } from "@/hooks/useStateHistory";
 import { coverColor, isUnavailable } from "@/utils/stateColors";
 
 export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
@@ -16,7 +15,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   const pos = entity?.attributes.current_position;
   const hasPosition = typeof pos === "number";
   const [position, setPosition] = useState<number>(hasPosition ? pos! : 0);
-  const [history, setHistory] = useState<StateHistoryPoint[]>([]);
+  const history = useStateHistory(mapping.entityId);
   // While the user is dragging the slider, ignore live HA updates: a state event
   // arriving mid-drag would otherwise snap `position` back to the device's value,
   // so the release would send the stale number (or nothing changed). Resume
@@ -25,12 +24,6 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   useEffect(() => {
     if (!dragging.current && typeof pos === "number") setPosition(pos);
   }, [pos]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchStateHistory(mapping.entityId, 24).then((h) => !cancelled && setHistory(h)).catch(() => {});
-    return () => { cancelled = true; };
-  }, [mapping.entityId]);
 
   const stateLabel = unavailable
     ? "UNAVAILABLE"
@@ -83,10 +76,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <div className="field">
-        <label className="entity-label">Last 24 hours</label>
-        <StateTimeline data={history} colorFor={coverColor} />
-      </div>
+      <LastDayTimeline data={history} colorFor={coverColor} />
     </BasePanel>
   );
 }

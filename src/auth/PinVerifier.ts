@@ -50,6 +50,13 @@ async function postVerify(body: { role: Role; pin?: string }): Promise<VerifyRes
     const data = (await resp.json().catch(() => ({}))) as { retryAfter?: number };
     return { ok: false, retryAfter: data.retryAfter ?? 60 };
   }
+  if (resp.status === 403) {
+    // A privileged (owner/ops) profile with no PIN configured — the server
+    // refuses to auto-grant it (see supervisor-proxy.py's auth_verify_handler).
+    // Surface the server's specific reason instead of a generic retry prompt.
+    const data = (await resp.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "this profile is not available");
+  }
   if (!resp.ok) throw new Error(`auth service unavailable (HTTP ${resp.status})`);
   const data = (await resp.json()) as { ok?: boolean };
   return { ok: Boolean(data.ok) };

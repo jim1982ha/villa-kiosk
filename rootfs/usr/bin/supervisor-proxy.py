@@ -38,7 +38,9 @@ Access control (why this proxy authenticates at all):
   /addon-config) requires a valid session:
     * Ingress-sourced requests are trusted (HA already authed them) — nginx
       tags them with `X-VK-Ingress: 1` based on the real gateway source IP,
-      a header the client cannot forge because nginx overwrites it.
+      a header the client cannot forge because nginx overwrites it. Treated
+      as owner-equivalent (see _role_for()) since reaching an add-on's
+      Ingress panel already implies HA admin.
     * Direct requests must carry a `vk_session` cookie, an HMAC-signed token
       minted by /auth/verify once the profile passcode checks out. So the
       client-side profile gate is now backed by a real server-side session:
@@ -50,6 +52,36 @@ Access control (why this proxy authenticates at all):
       profile-select/PIN screen instead of only after login — see
       _model_authorized() / _public_model_access(). /core/* (Home Assistant
       control) and the PINs are NEVER affected by this option.
+
+  A valid session used to be the WHOLE story: any authenticated role (guest
+  included) could reach the raw /core/websocket or /core/api/* bridge and,
+  from a browser devtools console, call ANY Home Assistant service in ANY
+  domain — automations, scripts, alarm_control_panel, config, arbitrary
+  template rendering, homeassistant.restart/stop — none of which the guest/
+  ops profiles in src/auth/permissions.ts are meant to reach. That matrix
+  only ever filtered what the 3D view RENDERS; it was never enforced at the
+  point a service call actually leaves the browser, because until this add-on's
+  port was exposed directly, Ingress-only access meant the caller already had
+  full HA admin access via the main HA UI anyway — the kiosk's own RBAC was UX,
+  not a security boundary. Now that a `guest`/`ops` session can be established
+  over the open internet via a 4-digit PIN, that gap is a real privilege
+  escalation. _service_call_allowed() closes the dangerous part of it: for any
+  non-owner role, call_service (WS) and /core/api/services/<domain>/<service>
+  (REST) are restricted to the small, fixed set of domains the kiosk's own UI
+  ever calls (see src/ha/HAServiceCalls.ts) — light/climate/lock/cover/fan/
+  switch/media_player, plus homeassistant.toggle. Anything else reaching this
+  proxy from a non-owner session is either a bug or someone driving the raw
+  API from devtools, and is rejected before it reaches Core.
+  This does NOT restrict what a non-owner session can READ (get_states /
+  subscribe_events still stream every entity in the whole HA instance,
+  cameras included) — the kiosk's category/type filtering
+  (permissions.ts/deniedTypes) that hides those from guest is resolved from
+  entityMap, which lives only in the browser's own localStorage and is never
+  visible to this process, so a faithful server-side mirror of THAT part of
+  the matrix isn't possible without moving entity metadata into the add-on's
+  own storage — a larger change, not attempted here. Camera images
+  specifically ARE blocked server-side for guest (see _rest_call_allowed),
+  since that one denial needs no entity metadata, just the request path.
 
 Security notes:
   * Request smuggling (aiohttp CVE-2025-53643) affects only aiohttp's *pure
@@ -173,6 +205,47 @@ def _authorized(request: web.Request) -> bool:
     return _session_role(request.cookies.get(SESSION_COOKIE)) is not None
 
 
+def _role_for(request: web.Request) -> str:
+    """The caller's role, for authorization decisions beyond "is there any
+    valid session at all" (see _authorized above). Ingress already means HA
+    authenticated this browser as an admin (module docstring's Access control
+    section) — treat it as owner-equivalent. A direct-path caller's role
+    comes from its signed session cookie, which is always valid here in
+    practice (callers only reach this after _authorized() passed) — the
+    "guest" fallback is defense in depth for a should-never-happen None,
+    failing toward the LEAST privileged role rather than trusting one."""
+    if _is_ingress(request):
+        return "owner"
+    return _session_role(request.cookies.get(SESSION_COOKIE)) or "guest"
+
+
+# The exact (domain, service) surface the kiosk's own UI ever calls — see
+# src/ha/HAServiceCalls.ts and the one generic callService() use in
+# SwitchPanel.tsx (homeassistant.toggle). Anything outside this reaching
+# call_service/services/* from a non-owner session did not come from a kiosk
+# button. Keep this in sync if a new panel starts calling a new domain —
+# the failure mode of forgetting is a clear "service not permitted" error on
+# that panel's very first click, not a silent gap.
+ALLOWED_SERVICE_DOMAINS = {"light", "climate", "lock", "cover", "fan", "switch", "media_player"}
+# homeassistant.* also holds system-level services (restart, stop,
+# reload_core_config, set_location, ...) — only the generic toggle
+# SwitchPanel actually uses is let through.
+ALLOWED_HOMEASSISTANT_SERVICES = {"toggle"}
+
+
+def _service_call_allowed(role: str, domain: str, service: str) -> bool:
+    """Whether a call_service (WS) / services/<domain>/<service> (REST) frame
+    from this role may reach Core. Owner administers the kiosk and is exempt
+    (matches its "manageModel"/full capability set in permissions.ts); every
+    other role is confined to the domains above regardless of what
+    permissions.ts's category/type matrix would otherwise show them."""
+    if role == "owner":
+        return True
+    if domain == "homeassistant":
+        return service in ALLOWED_HOMEASSISTANT_SERVICES
+    return domain in ALLOWED_SERVICE_DOMAINS
+
+
 def _public_model_access() -> bool:
     """Opt-in add-on option (default off): treat /model/* and /addon-config as
     PUBLIC — reachable with no session at all. Deliberately narrow to those two
@@ -198,6 +271,12 @@ def _set_session_cookie(resp: web.Response, role: str) -> None:
 
 def _unauthorized() -> web.Response:
     return web.json_response({"error": "unauthorized"}, status=401)
+
+
+def _forbidden(message: str = "forbidden") -> web.Response:
+    """Distinct from _unauthorized(): the session IS valid, its role just
+    isn't allowed to do this specific thing."""
+    return web.json_response({"error": message}, status=403)
 # Safety cap on a single upload (the GLB is the big one, ~tens of MB).
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 # Leading bytes the upload must start with for its declared kind: a binary
@@ -225,6 +304,7 @@ async def ws_handler(request: web.Request):
         # Cookies ARE sent on a same-origin WS handshake, so an unauthenticated
         # direct caller is rejected before any socket to Core is opened.
         return _unauthorized()
+    role = _role_for(request)
     client = web.WebSocketResponse(heartbeat=30)
     await client.prepare(request)
 
@@ -243,6 +323,24 @@ async def ws_handler(request: web.Request):
                         if obj.get("type") == "auth":
                             obj["access_token"] = TOKEN
                             data = json.dumps(obj)
+                        elif obj.get("type") == "call_service" and not _service_call_allowed(
+                            role, str(obj.get("domain", "")), str(obj.get("service", "")),
+                        ):
+                            # Reply to the BROWSER, not Core — mirrors HA's own
+                            # websocket error shape (id + success:false) so the
+                            # kiosk's pending call_service promise resolves
+                            # (rejects) instead of hanging forever, and never
+                            # forward the frame upstream.
+                            await client.send_json({
+                                "id": obj.get("id"),
+                                "type": "result",
+                                "success": False,
+                                "error": {
+                                    "code": "unauthorized",
+                                    "message": "This profile may not call this service.",
+                                },
+                            })
+                            continue
                     except (ValueError, TypeError):
                         pass
                     await upstream.send_str(data)
@@ -266,12 +364,40 @@ async def ws_handler(request: web.Request):
     return client
 
 
+_SERVICES_PATH_RE = re.compile(r"^services/([^/]+)/([^/]+)/?$")
+
+
+def _rest_call_allowed(role: str, tail: str) -> bool:
+    """Whether a non-owner session's REST call may reach Core. Owner is exempt
+    (mirrors _service_call_allowed)."""
+    if role == "owner":
+        return True
+    m = _SERVICES_PATH_RE.match(tail)
+    if m:
+        # HA's REST API accepts POST /api/services/<domain>/<service> as an
+        # exact equivalent of the websocket's call_service — same allowlist.
+        return _service_call_allowed(role, m.group(1), m.group(2))
+    if tail.startswith("template"):
+        # Arbitrary Jinja2 template rendering — never called by the kiosk UI;
+        # can read entity/attribute data across the WHOLE HA instance.
+        return False
+    if role == "guest" and tail.startswith("camera_proxy"):
+        # permissions.ts denies the "camera" type to guest, but that's a
+        # client-side render filter — mirror the intent here since a camera
+        # image request needs no entity-metadata lookup to recognise.
+        return False
+    return True
+
+
 async def rest_handler(request: web.Request) -> web.StreamResponse:
     """Relay a REST call to Core, adding the Supervisor Bearer token."""
     if not _authorized(request):
         return _unauthorized()
-    session: ClientSession = request.app["session"]
+    role = _role_for(request)
     tail = request.match_info.get("path", "")
+    if not _rest_call_allowed(role, tail):
+        return _forbidden("This profile may not access this endpoint.")
+    session: ClientSession = request.app["session"]
     url = f"http://{SUPERVISOR}/core/api/{tail}"
     headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP_BY_HOP}
     headers["Authorization"] = f"Bearer {TOKEN}"
@@ -502,8 +628,20 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
 
     configured = _configured_pin(role)
     if not configured:
-        # Un-PIN'd profile: grant a session without touching the rate limiter
-        # or requiring a pin. (A pin sent anyway is simply ignored.)
+        if role != "guest":
+            # owner/ops are privileged roles — an unset PIN must mean "this
+            # profile isn't available on this path", never "open to anyone
+            # who asks". Only "guest" may be intentionally left PIN-less (a
+            # villa that wants a no-PIN "just look around" mode); config.yaml
+            # ships all three PINs empty by default, and before this check an
+            # unconfigured owner/ops PIN silently minted a full-access session
+            # for ANY caller who reached this endpoint — see the module
+            # docstring's Access control section.
+            return web.json_response(
+                {"error": f"the {role} profile has no PIN configured"}, status=403,
+            )
+        # Un-PIN'd guest profile: grant a session without touching the rate
+        # limiter or requiring a pin. (A pin sent anyway is simply ignored.)
         resp = web.json_response({"ok": True})
         _set_session_cookie(resp, role)
         return resp
@@ -680,6 +818,11 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     """
     if not _authorized(request):
         return _unauthorized()
+    if _role_for(request) != "owner":
+        # manageModel is an owner-only capability in permissions.ts — a
+        # guest/ops session could otherwise overwrite the villa model every
+        # kiosk loads. (Ingress requests resolve to "owner" — see _role_for.)
+        return _forbidden("Only the owner profile may upload a model.")
     kind = request.query.get("kind", "")
     if kind not in ("glb", "rooms"):
         return web.json_response({"error": "kind must be 'glb' or 'rooms'"}, status=400)

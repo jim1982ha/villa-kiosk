@@ -7,12 +7,13 @@
 // There's no HA URL/token here anymore: the kiosk always reaches Home Assistant
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Sliders, Sun, Moon, Monitor } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
+import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { DEFAULT_SITE_TITLE, DEFAULT_RENDER, RENDER_PRESETS, type AppConfig, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
 import type { SceneManager } from "@/babylon/SceneManager";
 
@@ -40,23 +41,15 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   // debounce the config commit — same pattern as Advanced Settings'
   // commitLabel (ConfigEditor.tsx) — and always flush before the modal
   // actually closes so a change made just before Close is never dropped.
-  const pendingPatch = useRef<Partial<AppConfig>>({});
-  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flushPending = () => {
-    if (commitTimer.current) { clearTimeout(commitTimer.current); commitTimer.current = null; }
-    if (Object.keys(pendingPatch.current).length) {
-      update(pendingPatch.current);
-      pendingPatch.current = {};
-    }
-  };
-  const scheduleCommit = (patch: Partial<AppConfig>) => {
-    pendingPatch.current = { ...pendingPatch.current, ...patch };
-    if (commitTimer.current) clearTimeout(commitTimer.current);
-    commitTimer.current = setTimeout(flushPending, 500);
-  };
-  // Safety net: flush if the component unmounts some other way than the
-  // Close button/backdrop (both already flush explicitly below).
-  useEffect(() => () => flushPending(), []);
+  // Single (non-keyed) pending patch — see useDraftCommit's docstring for the
+  // general pattern (same one Advanced Settings uses per-row). useDraftCommit
+  // already flushes on unmount on its own, so there's no separate safety-net
+  // effect needed here beyond the explicit flush in closeModal below.
+  const SETTINGS_DRAFT_KEY = "settings";
+  const pending = useDraftCommit<Partial<AppConfig>>((_key, patch) => update(patch), 500);
+  const scheduleCommit = (patch: Partial<AppConfig>) =>
+    pending.draft(SETTINGS_DRAFT_KEY, { ...pending.drafts[SETTINGS_DRAFT_KEY], ...patch });
+  const flushPending = () => pending.flush(SETTINGS_DRAFT_KEY);
   const closeModal = () => { flushPending(); onClose(); };
 
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);

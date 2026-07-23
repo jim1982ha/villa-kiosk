@@ -1,13 +1,12 @@
 // src/components/panels/LockPanel.tsx
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Lock, Unlock } from "lucide-react";
 import BasePanel from "./BasePanel";
-import StateTimeline from "./StateTimeline";
+import LastDayTimeline from "./LastDayTimeline";
 import type { PanelProps } from "@/types/panel.types";
-import type { StateHistoryPoint } from "@/types/ha.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { useStateHistory } from "@/hooks/useStateHistory";
 import { lockColor, isUnavailable } from "@/utils/stateColors";
 
 export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
@@ -15,13 +14,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   const unavailable = isUnavailable(entity);
   const locked = entity?.state === "locked";
   const [confirming, setConfirming] = useState(false);
-  const [history, setHistory] = useState<StateHistoryPoint[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchStateHistory(mapping.entityId, 24).then((h) => !cancelled && setHistory(h)).catch(() => {});
-    return () => { cancelled = true; };
-  }, [mapping.entityId]);
+  const history = useStateHistory(mapping.entityId);
 
   const doUnlock = () => {
     HAServices.unlockDoor(ws, mapping.entityId);
@@ -73,10 +66,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <div className="field">
-        <label className="entity-label">Last 24 hours</label>
-        <StateTimeline data={history} colorFor={lockColor} />
-      </div>
+      <LastDayTimeline data={history} colorFor={lockColor} />
 
       {!unavailable && !locked && (
         <p className="muted body-text mt">

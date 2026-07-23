@@ -1,15 +1,14 @@
 // src/components/panels/LightPanel.tsx
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Lightbulb } from "lucide-react";
 import BasePanel from "./BasePanel";
 import PowerToggle from "./PowerToggle";
-import StateTimeline from "./StateTimeline";
+import LastDayTimeline from "./LastDayTimeline";
 import UnavailableNotice from "./UnavailableNotice";
 import type { PanelProps } from "@/types/panel.types";
-import type { StateHistoryPoint } from "@/types/ha.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { useStateHistory } from "@/hooks/useStateHistory";
 import { brightnessToPct } from "@/utils/colorUtils";
 import { onOffColor, isUnavailable } from "@/utils/stateColors";
 
@@ -23,13 +22,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
 
   const [brightness, setBrightness] = useState(entity?.attributes.brightness ?? 255);
   const [kelvin, setKelvin] = useState(entity?.attributes.color_temp_kelvin ?? 4000);
-  const [history, setHistory] = useState<StateHistoryPoint[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchStateHistory(mapping.entityId, 24).then((h) => !cancelled && setHistory(h)).catch(() => {});
-    return () => { cancelled = true; };
-  }, [mapping.entityId]);
+  const history = useStateHistory(mapping.entityId);
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Lightbulb size={22} />} onClose={onClose}>
@@ -62,10 +55,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <div className="field">
-        <label className="entity-label">Last 24 hours</label>
-        <StateTimeline data={history} colorFor={onOffColor} />
-      </div>
+      <LastDayTimeline data={history} colorFor={onOffColor} />
     </BasePanel>
   );
 }

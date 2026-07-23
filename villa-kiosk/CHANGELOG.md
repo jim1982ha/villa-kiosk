@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.33.0
+
+### Changes
+- Security hardening on the direct/Cloudflare-exposed port: permissions.ts's role matrix was UI-only — any authenticated session, including guest, could reach the raw /core/websocket or /core/api/* bridge and call ANY Home Assistant service in ANY domain from devtools (automations, scripts, alarm_control_panel, arbitrary Jinja template rendering, homeassistant.restart/stop), not just what the kiosk's own panels expose. supervisor-proxy.py now enforces a role-based allowlist at the point a service call actually leaves the browser, on both the WebSocket (call_service) and REST (/services/<domain>/<service>) paths: non-owner sessions are confined to the exact domains the kiosk's UI ever calls (light/climate/lock/cover/fan/switch/media_player, plus homeassistant.toggle). Also fixed: an owner/ops profile left with no PIN configured (config.yaml's shipped default) used to silently grant a full-access session to anyone who asked for it on the direct path — refused now unless a PIN is actually set (only the guest profile may stay intentionally PIN-less). Model upload is now owner-only (was any authenticated role) and /core/api/template + guest camera_proxy access are blocked server-side, not just hidden client-side. See supervisor-proxy.py's module docstring for the full threat model and the one known residual gap (entity-category read visibility, which needs entityMap moved server-side to close — not attempted here).
+- Advanced Settings / Bindings editing lag, root-caused rather than further debounced: every field commit still ran SceneManager.updateConfig's structural rebuild (indexMeshes + applyStructure) as one uninterrupted multi-second block on the main thread, so the debounce already in place only reduced how OFTEN that block happened, not how long any single one froze input. updateConfig now yields the main thread between its heavy steps — the same technique loadModel already used for the initial model load — turning one long freeze into shorter ones with real paint/input opportunities in between. Also consolidated three separately hand-rolled "instant local draft, debounced commit" implementations (ConfigEditor, BindingsTable, SettingsModal) into one shared hook (useDraftCommit), which incidentally fixes a couple of needless-rebuild edge cases (e.g. blurring an untouched field used to commit anyway).
+- Cleanup: removed two npm dependencies with zero remaining imports (jszip, @babylonjs/serializers), extracted six panels' identical history-fetch effect into a shared hook (useStateHistory) and their identical "Last 24 hours" render block into a shared component (LastDayTimeline), merged duplicated CSS chrome (the same background+blur pair repeated across 8 rules; the hud-group/hud-stack icon-btn reset rules), and cleared stale build artifacts (dist/, dist.zip, tsconfig.tsbuildinfo, macOS/Python junk) from the working tree.
+
+---
+
+
 ## 2.32.27
 
 ### Changes

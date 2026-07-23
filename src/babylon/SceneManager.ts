@@ -1391,8 +1391,23 @@ export class SceneManager {
 
   /** Returns true if this call did a structural mesh re-index (see
    *  structuralChanged below) — the caller uses this to know whether entity
-   *  visuals were torn down and need repainting from their last known state. */
-  updateConfig(config: AppConfig): boolean {
+   *  visuals were torn down and need repainting from their last known state.
+   *
+   *  ASYNC for the same reason loadModel() is: indexMeshes()/applyStructure()
+   *  are each one long uninterrupted synchronous pass over every mesh in the
+   *  GLB (see loadModel's docstring — genuinely chunking either one needs
+   *  Web Worker offload, a separate undertaking). Every Advanced Settings /
+   *  Bindings edit — a single checkbox, one label keystroke's debounced
+   *  commit — used to run BOTH of those back-to-back on the main thread with
+   *  no gap, which is what made the *next* click feel like it "didn't
+   *  register": it was queued behind a multi-second block. Debouncing the
+   *  COMMIT (ConfigEditor/BindingsTable/SettingsModal's draft-state pattern)
+   *  only reduces how OFTEN this runs, not how long any single run blocks.
+   *  yieldFrame() between the two heavy calls — the exact technique already
+   *  proven at initial load — turns one long freeze into two shorter ones
+   *  with a real animation-frame gap where the browser can paint the click
+   *  that triggered this and drain any input queued during the first half. */
+  async updateConfig(config: AppConfig): Promise<boolean> {
     const prev = this.config;
     this.config = config;
 
@@ -1466,7 +1481,24 @@ export class SceneManager {
     }
 
     if (this.loadedMeshes.length && structuralChanged) {
+      // Yield BEFORE the first heavy call too, not just between the two —
+      // the click/keystroke that triggered this edit only just committed via
+      // React's state update; giving the browser a frame here is what lets
+      // it actually paint that commit before the freeze starts, instead of
+      // the paint and the freeze racing on the same tick.
+      await this.yieldFrame();
+      // Bail if a NEWER config has since superseded this call (another edit
+      // landed while we were yielding) — this.config is only ever written by
+      // this method, so a mismatch here means a later invocation already
+      // took over; let ITS rebuild cover this change too instead of paying
+      // for indexMeshes twice back-to-back. The caller discards this stale
+      // call's result on its own (React effect cleanup), so returning early
+      // is safe either way.
+      if (this.disposed || this.config !== config) return structuralChanged;
       this.visuals.indexMeshes(this.loadedMeshes);
+
+      await this.yieldFrame();
+      if (this.disposed || this.config !== config) return structuralChanged;
       this.applyStructure(this.loadedMeshes);
 
       const prevEntityCount = Object.keys(prev.entityMap).length;

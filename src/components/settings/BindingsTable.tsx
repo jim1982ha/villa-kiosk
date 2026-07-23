@@ -3,11 +3,12 @@
 // change which entity the object controls AND edit its display metadata
 // (type, label, room, requires-confirmation) — all in one place.
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Unlink, ChevronDown, ChevronRight, Link2 } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
+import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { upsertBinding, removeBinding } from "@/config/bindingUtils";
 import { loadMeshCatalog } from "@/utils/meshCatalog";
 import { CATEGORY_ORDER, CATEGORY_LABELS, categoryForEntity } from "@/config/EntityCategories";
@@ -55,53 +56,20 @@ export default function BindingsTable() {
     });
   };
 
-  // Dragging a range input fires onChange continuously (React normalises it
-  // to the native `input` event) — commit straight to patchMeta() on every
-  // tick would trigger a full structural re-index per pixel of drag. Draft
-  // locally, commit on release or after a short pause if release is missed
-  // (same pattern as ConfigEditor's Label field / intensity slider).
-  const [intensityDrafts, setIntensityDrafts] = useState<Record<string, number>>({});
-  const intensityTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const commitIntensity = (entityId: string, ratio: number) => {
-    clearTimeout(intensityTimers.current[entityId]);
-    delete intensityTimers.current[entityId];
-    patchMeta(entityId, { lightIntensityRatio: ratio });
-    setIntensityDrafts((prev) => {
-      const { [entityId]: _removed, ...rest } = prev;
-      return rest;
-    });
-  };
-  const draftIntensity = (entityId: string, ratio: number) => {
-    setIntensityDrafts((prev) => ({ ...prev, [entityId]: ratio }));
-    clearTimeout(intensityTimers.current[entityId]);
-    intensityTimers.current[entityId] = setTimeout(() => commitIntensity(entityId, ratio), 500);
-  };
-
-  // Same pattern for every other field here (Type/Category selects, Label and
-  // Room text inputs): patchMeta() -> a new entityMap reference triggers
+  // Every field below commits via patchMeta() -> a new entityMap reference ->
   // BabylonCanvas's structural scene re-index (SceneManager.updateConfig ->
-  // indexMeshes + applyStructure, an O(every mesh in the GLB) synchronous
-  // pass) on every single click or keystroke, freezing the UI for a few
-  // seconds each time and making the NEXT edit feel like it "didn't
-  // register." Unlike ConfigEditor's Label field, these were never debounced.
-  // Draft locally so the field updates instantly, commit after a short pause
-  // so a run of edits on one device coalesces into one rebuild.
-  const [fieldDrafts, setFieldDrafts] = useState<Record<string, Partial<EntityMapping>>>({});
-  const fieldTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const commitField = (entityId: string) => {
-    clearTimeout(fieldTimers.current[entityId]);
-    delete fieldTimers.current[entityId];
-    setFieldDrafts((prev) => {
-      const { [entityId]: change, ...rest } = prev;
-      if (change) patchMeta(entityId, change);
-      return rest;
-    });
-  };
-  const draftField = (entityId: string, change: Partial<EntityMapping>, delay = 350) => {
-    setFieldDrafts((prev) => ({ ...prev, [entityId]: { ...prev[entityId], ...change } }));
-    clearTimeout(fieldTimers.current[entityId]);
-    fieldTimers.current[entityId] = setTimeout(() => commitField(entityId), delay);
-  };
+  // indexMeshes + applyStructure — see its docstring for why that pass is
+  // heavy and how it now yields instead of freezing in one block).
+  // useDraftCommit (shared with ConfigEditor/SettingsModal — see its own
+  // docstring) drafts locally so a field updates instantly on every
+  // click/keystroke/drag tick, and coalesces a run of edits into one commit.
+  const intensityDraft = useDraftCommit<number>(
+    (entityId, ratio) => patchMeta(entityId, { lightIntensityRatio: ratio }), 500,
+  );
+  const draftIntensity = (entityId: string, ratio: number) => intensityDraft.draft(entityId, ratio);
+  const fieldDraft = useDraftCommit<Partial<EntityMapping>>((entityId, change) => patchMeta(entityId, change));
+  const draftField = (entityId: string, change: Partial<EntityMapping>, delay?: number) =>
+    fieldDraft.draft(entityId, { ...fieldDraft.drafts[entityId], ...change }, delay);
 
   return (
     <div>
@@ -127,7 +95,7 @@ export default function BindingsTable() {
         const meta0 = config.entityMap[entityId];
         // Merge in any not-yet-committed edit so fields reflect the
         // click/keystroke instantly, even while the commit is pending.
-        const meta = meta0 && fieldDrafts[entityId] ? { ...meta0, ...fieldDrafts[entityId] } : meta0;
+        const meta = meta0 && fieldDraft.drafts[entityId] ? { ...meta0, ...fieldDraft.drafts[entityId] } : meta0;
         return (
           <div
             key={mesh}
@@ -212,7 +180,7 @@ export default function BindingsTable() {
                   list="bindings-room-names"
                 />
                 {meta.type === "light" && (() => {
-                  const ratio = intensityDrafts[entityId] ?? meta.lightIntensityRatio ?? 0;
+                  const ratio = intensityDraft.drafts[entityId] ?? meta.lightIntensityRatio ?? 0;
                   const pct = Math.round(ratio * 100);
                   return (
                     <div className="row" style={{ flex: "1 1 220px", minWidth: 180, gap: 8 }}>
@@ -220,8 +188,8 @@ export default function BindingsTable() {
                         type="range" min={-100} max={100} step={5}
                         value={pct}
                         onChange={(e) => draftIntensity(entityId, Number(e.target.value) / 100)}
-                        onMouseUp={(e) => commitIntensity(entityId, Number((e.target as HTMLInputElement).value) / 100)}
-                        onTouchEnd={(e) => commitIntensity(entityId, Number((e.target as HTMLInputElement).value) / 100)}
+                        onMouseUp={() => intensityDraft.flush(entityId)}
+                        onTouchEnd={() => intensityDraft.flush(entityId)}
                         style={{ flex: 1 }}
                         title="Per-light brightness override on top of this light's live Home Assistant brightness and the global Light effect strength setting. 0% = no change."
                         aria-label={`Intensity override for ${entityId}`}

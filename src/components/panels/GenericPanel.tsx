@@ -1,23 +1,15 @@
 // src/components/panels/GenericPanel.tsx
 // Fallback for entity types without a dedicated panel (e.g. assist_satellite).
 
-import { useEffect, useState } from "react";
 import { Info } from "lucide-react";
 import BasePanel from "./BasePanel";
 import StateTimeline from "./StateTimeline";
 import type { PanelProps } from "@/types/panel.types";
-import type { StateHistoryPoint } from "@/types/ha.types";
-import { fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { useStateHistory } from "@/hooks/useStateHistory";
 import { paletteColorFor } from "@/utils/stateColors";
 
 export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
-  const [history, setHistory] = useState<StateHistoryPoint[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchStateHistory(mapping.entityId, 24).then((h) => !cancelled && setHistory(h)).catch(() => {});
-    return () => { cancelled = true; };
-  }, [mapping.entityId]);
+  const history = useStateHistory(mapping.entityId);
 
   const colorFor = paletteColorFor(history.map((p) => p.state));
   const distinctStates = [...new Set(history.map((p) => p.state))];

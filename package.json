@@ -1,7 +1,7 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.32.27",
+  "version": "2.33.0",
   "description": "Villa Kiosk — a 3D interactive villa dashboard for Home Assistant",
   "type": "module",
   "scripts": {
@@ -19,9 +19,7 @@
     "@babylonjs/gui": "^7.54.3",
     "@babylonjs/loaders": "^7.37.2",
     "@babylonjs/materials": "^7.54.3",
-    "@babylonjs/serializers": "^7.54.3",
     "hls.js": "^1.6.16",
-    "jszip": "^3.10.1",
     "lucide-react": "^0.577.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
