@@ -231,19 +231,36 @@ export function mappingForEntityId(
 
 /** Strip glTF/Blender export artifacts ONLY — ".001" (Blender's own
  *  duplicate-object suffix), "_primitive0" (glTF's per-primitive child
- *  suffix), "(clone)" — but NOT the optional "__<variant>" visual-state
- *  suffix (see extractVariantSuffix below). Shared by normaliseMeshName
- *  (which also strips the variant suffix, for entity resolution) and
- *  extractVariantSuffix (which reads it, for visual-state grouping) so both
- *  start from the exact same export-artifact-free name — whichever export
- *  artifact Blender/glTF tacks on lands AFTER whatever was actually typed in
- *  SweetHome3D, so artifacts must come off first either way. */
+ *  suffix), "(clone)", and a bare trailing " (2)"/"_2" numeric duplicate —
+ *  but NOT the optional "__<variant>" visual-state suffix (see
+ *  extractVariantSuffix below). Shared by normaliseMeshName (which also strips
+ *  the variant suffix, for entity resolution) and extractVariantSuffix (which
+ *  reads it, for visual-state grouping) so both start from the exact same
+ *  export-artifact-free name.
+ *
+ *  LOOPS until stable rather than stripping each pattern once: a mesh can pick
+ *  up SEVERAL of these at once and in either order — Babylon appends
+ *  "_primitive<N>" when it splits a multi-material mesh, Blender appends
+ *  ".00N" for a duplicate object, and depending on which happened first the
+ *  tail can read "__open.001_primitive0" OR "__open_primitive0.001". A single
+ *  fixed-order pass caught the first but left the "__open" un-strippable on
+ *  the second — so that pose's meshes resolved to their OWN entity
+ *  ("cover.x__open") instead of the base ("cover.x"), never joined the base's
+ *  variant group, and thus never got toggled: the exact "one pose (usually
+ *  the default) is always visible while the others toggle fine" symptom.
+ *  Looping removes whatever's on the tail regardless of order or how many. */
 function stripExportArtifacts(meshName: string): string {
-  return meshName
-    .replace(/_primitive\d+$/i, "")
-    .replace(/\.\d{3}$/, "")
-    .replace(/\s*\(clone\)$/i, "")
-    .trim();
+  let s = meshName.trim();
+  for (;;) {
+    const next = s
+      .replace(/_primitive\d+$/i, "")
+      .replace(/\.\d{3,}$/, "")
+      .replace(/\s*\(clone\)$/i, "")
+      .replace(/\s*\(\d+\)$/, "")
+      .trim();
+    if (next === s) return s;
+    s = next;
+  }
 }
 
 /**

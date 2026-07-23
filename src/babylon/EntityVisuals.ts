@@ -766,15 +766,29 @@ export class EntityVisuals {
     // actually worth looking at.
     const variantSummary: string[] = [];
     for (const [entityId, byWord] of this.meshVariants) {
-      if (byWord.size < 2) continue;
       const type = this.mapping.get(entityId)?.type;
       const vocab = type ? VARIANT_VOCAB[type] : undefined;
-      if (!vocab) continue;
-      this.applyMeshVariant(entityId, vocab.words, vocab.default);
+      if (vocab && byWord.size >= 2) this.applyMeshVariant(entityId, vocab.words, vocab.default);
+      // Report EVERY entity that picked up a variant bucket, size-1 included:
+      // a pose that escaped grouping into its OWN single-mesh entity (e.g.
+      // "cover.x__open" resolving separately from "cover.x") is the exact
+      // "one pose always visible while the rest toggle" bug, and it shows up
+      // here as a lonely size-1 group next to the real multi-pose one.
       const counts = Array.from(byWord, ([w, ms]) => `${w}:${ms.length}`).join(", ");
-      variantSummary.push(`${entityId} -> {${counts}}, defaulted to "${vocab.default}"`);
+      variantSummary.push(
+        `${entityId} -> {${counts}}${byWord.size < 2 ? "  (SIZE 1 — escaped grouping?)" : `, default "${vocab?.default}"`}`,
+      );
     }
-    if (variantSummary.length) tapDebug(`mesh variant groups:\n  ${variantSummary.join("\n  ")}`);
+    // Also flag any entity whose id STILL carries a "__<variant>" suffix — a
+    // sign normalisation didn't collapse it onto its base (stale config, or a
+    // mesh-name mangling stripExportArtifacts didn't catch).
+    const orphanIds = Array.from(this.byEntity.keys()).filter((id) => /__[a-z0-9]+$/i.test(id));
+    if (variantSummary.length || orphanIds.length) {
+      tapDebug(
+        `mesh variant groups:\n  ${variantSummary.join("\n  ") || "(none)"}`
+        + (orphanIds.length ? `\n  ORPHAN un-collapsed entities: ${orphanIds.join(", ")}` : ""),
+      );
+    }
 
     this.buildMotionToCameraIndex();
     this.rebuildLabels(); // labels are always shown

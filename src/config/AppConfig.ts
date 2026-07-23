@@ -241,12 +241,36 @@ export const DEFAULT_CONFIG: AppConfig = {
 };
 
 /** Load config, deep-merging stored values over defaults (forward-compatible). */
+/**
+ * Drop stale entity-map / mesh-binding entries whose id carries a "__<variant>"
+ * pose suffix (see EntityMap.extractVariantSuffix). A real HA entity_id never
+ * contains "__" — the app reserves it solely as the variant delimiter — so any
+ * such entry is an artifact from BEFORE that convention existed (v2.35.0),
+ * when the app auto-detected each pose ("cover.x__closed"/"__half"/"__open")
+ * as its OWN separate entity and persisted it here. Those stale keys shadow
+ * the correct base entity and leave one pose (typically the un-migrated
+ * default) permanently un-toggled. Migrate them away on load, once — the base
+ * entity re-auto-detects cleanly from the mesh names on the next model index.
+ */
+function stripStaleVariantEntities(config: AppConfig): AppConfig {
+  const hasVariantSuffix = (id: string) => /__[a-z0-9]+$/i.test(id);
+  const entityMap = Object.fromEntries(
+    Object.entries(config.entityMap).filter(([id]) => !hasVariantSuffix(id)),
+  );
+  const meshBindings = Object.fromEntries(
+    Object.entries(config.meshBindings).filter(
+      ([mesh, id]) => !hasVariantSuffix(mesh) && !hasVariantSuffix(id),
+    ),
+  );
+  return { ...config, entityMap, meshBindings };
+}
+
 export function loadConfig(): AppConfig {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
     if (!raw) return { ...DEFAULT_CONFIG };
     const stored = JSON.parse(raw) as Partial<AppConfig>;
-    return {
+    return stripStaleVariantEntities({
       ...DEFAULT_CONFIG,
       ...stored,
       entityMap: { ...DEFAULT_CONFIG.entityMap, ...(stored.entityMap ?? {}) },
@@ -255,7 +279,7 @@ export function loadConfig(): AppConfig {
       modelTransform: { ...DEFAULT_CONFIG.modelTransform, ...(stored.modelTransform ?? {}) },
       render: { ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) },
       teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
-    };
+    });
   } catch (err) {
     console.warn("[AppConfig] failed to load, using defaults", err);
     return { ...DEFAULT_CONFIG };

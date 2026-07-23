@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.35.8
+
+### Changes
+- Fixed the "one curtain pose (usually fully-open) stays visible no matter the position, while the others toggle correctly" bug. It wasn't a visibility-flag conflict (that was v2.35.7) — that pose's meshes were escaping the entity grouping entirely, so nothing ever hid them. Two independent causes, both addressed: (1) mesh-name normalisation stripped export artifacts in a single fixed-order pass, so a mesh whose tail combined several ("__open_primitive0.001" order, vs the "__open.001_primitive0" the single pass handled) kept its "__open" and resolved to its own separate entity instead of the shared base — now loops until the tail is fully clean, verified against every artifact ordering plus a bare "(2)"/numeric duplicate, while leaving legitimate entity_ids with digits/underscores untouched. (2) Stale per-browser config: before the pose convention existed (v2.35.0), the app auto-detected each pose as its OWN entity and saved it to localStorage; those stale "cover.x__open" entries shadowed the correct base and are now migrated away on load (any entity_id containing "__" — which a real HA entity_id never does, the app reserves it as the pose delimiter). Also strengthened the ?debug diagnostic to list every variant group INCLUDING single-mesh ones and to flag any entity whose id still carries an un-collapsed "__" suffix, so a grouping problem is immediately visible.
+
 ## 2.35.7
 
 ### Changes
