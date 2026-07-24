@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.26
+
+### Changes
+- SummaryBar: more compact tiles (smaller icon 42/22, fonts 16/11, trimmed padding+gaps) and cap raised to min(98vw,1800px) so all tiles fit without horizontal scroll on a normal wide screen
+
+---
+
+
 ## 2.35.25
 
 ### Changes
