@@ -460,22 +460,22 @@ button {
    it never collides with the corner controls (view toggle / joystick). Own
    pointer-events since it's a sibling of the pointer-events:none bottom-bar. */
 .summary-bar {
-  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
   z-index: 21; pointer-events: auto;
-  display: flex; gap: 8px; align-items: stretch;
-  max-width: min(70vw, 860px);
-  padding: 6px; border-radius: 18px;
+  display: flex; gap: 10px; align-items: stretch;
+  max-width: min(80vw, 1080px);
+  padding: 9px; border-radius: 24px;
   background: var(--bg-panel); backdrop-filter: blur(8px);
-  border: 1px solid var(--hairline); box-shadow: 0 6px 22px var(--shadow);
+  border: 1px solid var(--hairline); box-shadow: 0 8px 28px var(--shadow);
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
 }
 .summary-bar::-webkit-scrollbar { display: none; }
 
 .summary-tile {
   flex: 0 0 auto;
-  display: flex; align-items: center; gap: 10px;
-  min-width: 88px; max-width: 190px;
-  padding: 7px 12px 7px 8px; border-radius: 13px;
+  display: flex; align-items: center; gap: 13px;
+  min-width: 116px; max-width: 240px;
+  padding: 11px 20px 11px 12px; border-radius: 18px;
   border: 1px solid var(--hairline); background: var(--bg-card);
   color: var(--text-primary); text-align: left; cursor: pointer;
   transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
@@ -487,16 +487,17 @@ button {
 
 .summary-tile-icon {
   display: flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; flex: 0 0 auto; border-radius: 10px;
+  width: 46px; height: 46px; flex: 0 0 auto; border-radius: 13px;
   color: #fff; background: var(--tile-accent, var(--accent));
 }
-.summary-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.summary-tile-icon svg { width: 24px; height: 24px; }
+.summary-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.18; gap: 1px; }
 .summary-tile-label {
-  font-size: 11px; font-weight: 500; color: var(--text-secondary);
+  font-size: 12px; font-weight: 500; color: var(--text-secondary);
   text-transform: uppercase; letter-spacing: 0.02em;
 }
 .summary-tile-value {
-  font-size: 14px; font-weight: 600; color: var(--text-primary);
+  font-size: 18px; font-weight: 600; color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -507,9 +508,11 @@ button {
 .summary-tile.tone-off .summary-tile-value { color: var(--text-secondary); }
 
 @media (max-width: 720px) {
-  .summary-bar { max-width: 86vw; bottom: 12px; }
-  .summary-tile { min-width: 76px; padding: 6px 10px 6px 6px; }
-  .summary-tile-icon { width: 30px; height: 30px; }
+  .summary-bar { max-width: 92vw; bottom: 14px; gap: 8px; padding: 7px; }
+  .summary-tile { min-width: 96px; padding: 9px 14px 9px 9px; gap: 10px; }
+  .summary-tile-icon { width: 40px; height: 40px; }
+  .summary-tile-icon svg { width: 21px; height: 21px; }
+  .summary-tile-value { font-size: 16px; }
 }
 
 /* --- Virtual joystick --- */

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.21
+
+### Changes
+- make the bottom SummaryBar larger — bigger tiles, icons (46px chip, 24px glyph) and value text (18px), roomier padding + a proportional phone breakpoint
+
+---
+
+
 ## 2.35.20
 
 ### Changes
