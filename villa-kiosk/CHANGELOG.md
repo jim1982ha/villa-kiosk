@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.22
+
+### Changes
+- shared Scenes across devices: store scenes in the add-on's /data volume via a new supervisor-proxy /scenes endpoint (GET any session, PUT owner-only, atomic) + nginx route; client ScenesProvider makes the server authoritative (pull on mount/focus, write-through on edit, first-run migration of local scenes)
+
+---
+
+
 ## 2.35.21
 
 ### Changes

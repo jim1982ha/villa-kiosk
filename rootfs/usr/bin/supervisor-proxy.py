@@ -862,6 +862,65 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     return web.json_response({"path": rel, "size": total})
 
 
+# ── Shared kiosk scenes ──────────────────────────────────────────────────────
+# User-defined "scenes" (config/scenes.ts KioskScene[]) are stored HERE, in the
+# add-on's own persistent /data volume, rather than each browser's localStorage
+# — so a scene saved on one device is immediately available (read, activate,
+# and — for the owner — edit) on every other device that connects. Same
+# durable-shared-storage pattern the model upload above already uses.
+SCENES_FILE = "/data/scenes.json"
+SCENES_MAX_BYTES = 1_000_000  # scenes are tiny; cap so a bad body can't fill /data
+
+
+async def scenes_get_handler(request: web.Request) -> web.Response:
+    """Return the shared scenes list. Any authorized session may READ (a guest
+    still needs to see + activate scenes); an absent/corrupt file reads as []."""
+    if not _authorized(request):
+        return _unauthorized()
+    try:
+        with open(SCENES_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        data = []
+    if not isinstance(data, list):
+        data = []
+    return web.json_response({"scenes": data})
+
+
+async def scenes_put_handler(request: web.Request) -> web.Response:
+    """Replace the shared scenes list (owner only — editing scenes is an owner
+    capability, matching the Settings UI's gating). Atomic overwrite so a
+    partial write never corrupts the live file."""
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may edit scenes.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    scenes = body.get("scenes") if isinstance(body, dict) else body
+    if not isinstance(scenes, list):
+        return web.json_response({"error": "scenes must be a list"}, status=400)
+    payload = json.dumps(scenes)
+    if len(payload.encode("utf-8")) > SCENES_MAX_BYTES:
+        return web.json_response({"error": "scenes payload too large"}, status=413)
+    os.makedirs(os.path.dirname(SCENES_FILE), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(SCENES_FILE), suffix=".part")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(payload)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, SCENES_FILE)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    return web.json_response({"ok": True, "count": len(scenes)})
+
+
 def main() -> None:
     app = web.Application()
 
@@ -878,6 +937,8 @@ def main() -> None:
     app.on_cleanup.append(on_cleanup)
     app.router.add_get("/addon-config", addon_config_handler)
     app.router.add_post("/model-upload", model_upload_handler)
+    app.router.add_get("/scenes", scenes_get_handler)
+    app.router.add_put("/scenes", scenes_put_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
     app.router.add_post("/auth/verify", auth_verify_handler)
     app.router.add_get("/auth/check", auth_check_handler)

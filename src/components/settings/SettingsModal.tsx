@@ -14,6 +14,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { captureScene } from "@/config/scenes";
+import { useScenes } from "@/config/ScenesContext";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { DEFAULT_SITE_TITLE, DEFAULT_RENDER, RENDER_PRESETS, type AppConfig, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
 import type { SceneManager } from "@/babylon/SceneManager";
@@ -29,6 +30,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   const { config, update } = useConfig();
   const { role } = useProfile();
   const { haConfig, entities } = useHA();
+  const { scenes, setScenes } = useScenes();
   const [sceneName, setSceneName] = useState("");
   // RBAC: which settings areas the active profile may use. Dashboard already
   // refuses to open this modal without "openSettings"; these narrow further.
@@ -289,17 +291,16 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             className="btn"
             disabled={!sceneName.trim()}
             onClick={() => {
-              const scene = captureScene(sceneName, entities);
-              update({ kioskScenes: [...(config.kioskScenes ?? []), scene] });
+              setScenes([...scenes, captureScene(sceneName, entities)]);
               setSceneName("");
             }}
           >
             <Sparkles size={16} /> Save current
           </button>
         </div>
-        {(config.kioskScenes ?? []).length > 0 && (
+        {scenes.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
-            {(config.kioskScenes ?? []).map((scene) => (
+            {scenes.map((scene) => (
               <div
                 key={scene.id}
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -315,7 +316,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
                   style={{ width: 32, height: 32 }}
                   title={`Delete scene "${scene.name}"`}
                   aria-label={`Delete scene ${scene.name}`}
-                  onClick={() => update({ kioskScenes: (config.kioskScenes ?? []).filter((s) => s.id !== scene.id) })}
+                  onClick={() => setScenes(scenes.filter((s) => s.id !== scene.id))}
                 >
                   <Trash2 size={15} />
                 </button>
