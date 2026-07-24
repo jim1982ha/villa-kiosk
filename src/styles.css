@@ -501,10 +501,13 @@ button {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Tone accents (drive the icon chip + a subtle lit border). */
+/* The icon chip ALWAYS carries its device category's colour (var(--tile-accent),
+   set per tile from CATEGORY_COLORS) so the bar reads as a category legend —
+   AC is comfort-coral whether on or off, Pool is energy-blue, etc. On/off state
+   is conveyed by the value text + a subtle border, NOT by recolouring the icon
+   grey (which made an "off" tile look like an unrelated category). */
 .summary-tile.tone-on { border-color: color-mix(in srgb, var(--tile-accent) 50%, transparent); }
-.summary-tile.tone-warn .summary-tile-icon { background: var(--status-warning); }
-.summary-tile.tone-off .summary-tile-icon { background: var(--text-dim); }
+.summary-tile.tone-warn { border-color: var(--status-warning); } /* alert cue (unlocked, high energy) */
 .summary-tile.tone-off .summary-tile-value { color: var(--text-secondary); }
 
 @media (max-width: 720px) {

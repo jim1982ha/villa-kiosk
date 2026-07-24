@@ -202,8 +202,8 @@ export default function SummaryBar({ onOpenEntity }: Props) {
     // ANY category (a pure view-only role gets read-only scene tiles).
     const canRunScenes = CATEGORY_ORDER.some(can);
 
-    // User-defined kiosk scenes (config.kioskScenes) lead the bar — the
-    // headline "set the whole villa" action. Applying replays the snapshot.
+    // User-defined kiosk scenes (config.kioskScenes) sit at the END of the bar
+    // (right side). Applying replays the snapshot.
     const sceneTiles: SummaryTile[] = (config.kioskScenes ?? []).map((scene) => ({
       id: scene.id,
       icon: Sparkles,
@@ -215,8 +215,8 @@ export default function SummaryBar({ onOpenEntity }: Props) {
     }));
 
     return [
-      ...sceneTiles,
       ...deriveTiles(entities, can, callService, onOpenEntity),
+      ...sceneTiles,
     ];
   }, [entities, role, callService, onOpenEntity, config.kioskScenes]);
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.23
+
+### Changes
+- SummaryBar: move Scene tiles to the far right; icon chips now always carry their device category's colour (AC=comfort, Pool/Energy=energy, Lights=light, Lock=access) instead of greying out when off — on/off shows via value text + border
+
+---
+
+
 ## 2.35.22
 
 ### Changes
