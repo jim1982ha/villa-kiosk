@@ -18,7 +18,8 @@
 // scrollable centre strip so it never fights the corner controls
 // (view toggle / joystick) in the bottom bar.
 
-import { useMemo, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { createPortal } from "react-dom";
 import {
   Lightbulb, Snowflake, Zap, Waves, Sparkles, DoorClosed, DoorOpen,
 } from "lucide-react";
@@ -28,6 +29,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
 import { CATEGORY_COLORS, CATEGORY_ORDER } from "@/config/EntityCategories";
 import { applyScene } from "@/config/scenes";
+import type { KioskScene } from "@/config/scenes";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 
@@ -191,62 +193,149 @@ interface Props {
   onOpenEntity: (entityId: string) => void;
 }
 
+function Tile({ t }: { t: SummaryTile }) {
+  const Icon = t.icon;
+  const accent = CATEGORY_COLORS[t.category].bottom;
+  const interactive = !!t.onTap;
+  return (
+    <button
+      type="button"
+      className={`summary-tile tone-${t.tone}${interactive ? "" : " is-info"}`}
+      style={{ ["--tile-accent" as string]: accent }}
+      onClick={t.onTap}
+      disabled={!interactive}
+      title={interactive ? `${t.label}: ${t.value}` : `${t.label}: ${t.value} (view only)`}
+    >
+      <span className="summary-tile-icon"><Icon size={24} /></span>
+      <span className="summary-tile-text">
+        <span className="summary-tile-label">{t.label}</span>
+        <span className="summary-tile-value">{t.value}</span>
+      </span>
+    </button>
+  );
+}
+
+/** ONE "Scene" tile for however many scenes exist. A single scene applies on
+ *  tap; two or more open a pop-up picker above the tile. */
+function SceneMenu({ scenes, canRun, apply }: {
+  scenes: KioskScene[];
+  canRun: boolean;
+  apply: (s: KioskScene) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // The pop-up is PORTALED to <body>: the summary-bar has a transform +
+  // overflow, so a menu nested inside it would be clipped and mis-positioned.
+  // We anchor it to the tile via the tile's viewport rect (position: fixed).
+  const [pos, setPos] = useState<{ right: number; bottom: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const single = scenes.length === 1;
+  const accent = CATEGORY_COLORS.others.bottom;
+
+  const toggle = () => {
+    if (single) { apply(scenes[0]); return; }
+    if (open) { setOpen(false); return; }
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8 });
+    setOpen(true);
+  };
+
+  return (
+    <div className="summary-scene">
+      <button
+        ref={btnRef}
+        type="button"
+        className="summary-tile tone-neutral"
+        style={{ ["--tile-accent" as string]: accent }}
+        disabled={!canRun}
+        aria-haspopup={single ? undefined : "menu"}
+        aria-expanded={single ? undefined : open}
+        title={single ? `Apply scene: ${scenes[0].name}` : "Choose a scene to apply"}
+        onClick={toggle}
+      >
+        <span className="summary-tile-icon"><Sparkles size={24} /></span>
+        <span className="summary-tile-text">
+          <span className="summary-tile-label">Scene</span>
+          <span className="summary-tile-value">
+            {single ? scenes[0].name : `${scenes.length} scenes`}
+          </span>
+        </span>
+      </button>
+      {open && !single && pos && createPortal(
+        <div
+          ref={menuRef}
+          className="summary-scene-menu"
+          role="menu"
+          aria-label="Scenes"
+          style={{ position: "fixed", right: pos.right, bottom: pos.bottom }}
+        >
+          {scenes.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              role="menuitem"
+              className="summary-scene-item"
+              onClick={() => { apply(s); setOpen(false); }}
+            >
+              <Sparkles size={16} /><span>{s.name}</span>
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
 export default function SummaryBar({ onOpenEntity }: Props) {
   const { entities, callService } = useHA();
   const { role } = useProfile();
   const { config } = useConfig();
 
-  const tiles = useMemo(() => {
-    const can = (c: Category) => (role ? isCategoryAllowed(role, c) : false);
-    // A scene spans categories — allow running one if the profile may control
-    // ANY category (a pure view-only role gets read-only scene tiles).
-    const canRunScenes = CATEGORY_ORDER.some(can);
+  const deviceTiles = useMemo(
+    () => deriveTiles(
+      entities,
+      (c) => (role ? isCategoryAllowed(role, c) : false),
+      callService,
+      onOpenEntity,
+    ),
+    [entities, role, callService, onOpenEntity],
+  );
 
-    // User-defined kiosk scenes (config.kioskScenes) sit at the END of the bar
-    // (right side). Applying replays the snapshot.
-    const sceneTiles: SummaryTile[] = (config.kioskScenes ?? []).map((scene) => ({
-      id: scene.id,
-      icon: Sparkles,
-      label: "Scene",
-      value: scene.name,
-      tone: "neutral" as const,
-      category: "others" as Category,
-      onTap: canRunScenes ? () => { void applyScene(scene, callService); } : undefined,
-    }));
+  const scenes = config.kioskScenes ?? [];
+  // A scene spans categories — allow running one if the profile may control ANY.
+  const canRunScenes = !!role && CATEGORY_ORDER.some((c) => isCategoryAllowed(role, c));
 
-    return [
-      ...deriveTiles(entities, can, callService, onOpenEntity),
-      ...sceneTiles,
-    ];
-  }, [entities, role, callService, onOpenEntity, config.kioskScenes]);
-
-  // Hidden via Settings, or nothing to show.
-  if (config.showSummaryBar === false || !tiles.length) return null;
+  // Hidden via Settings, or nothing at all to show.
+  if (config.showSummaryBar === false || (!deviceTiles.length && !scenes.length)) return null;
 
   return (
     <div className="summary-bar" role="toolbar" aria-label="Quick controls and summaries">
-      {tiles.map((t) => {
-        const Icon = t.icon;
-        const accent = CATEGORY_COLORS[t.category].bottom;
-        const interactive = !!t.onTap;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            className={`summary-tile tone-${t.tone}${interactive ? "" : " is-info"}`}
-            style={{ ["--tile-accent" as string]: accent }}
-            onClick={t.onTap}
-            disabled={!interactive}
-            title={interactive ? `${t.label}: ${t.value}` : `${t.label}: ${t.value} (view only)`}
-          >
-            <span className="summary-tile-icon"><Icon size={18} /></span>
-            <span className="summary-tile-text">
-              <span className="summary-tile-label">{t.label}</span>
-              <span className="summary-tile-value">{t.value}</span>
-            </span>
-          </button>
-        );
-      })}
+      {deviceTiles.map((t) => <Tile key={t.id} t={t} />)}
+      {scenes.length > 0 && (
+        <SceneMenu
+          scenes={scenes}
+          canRun={canRunScenes}
+          apply={(s) => { void applyScene(s, callService); }}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.24
+
+### Changes
+- SummaryBar: collapse scenes into ONE Scene tile — a single scene applies on tap, multiple open a pop-up picker (portaled above the tile); reduce the bar's vertical padding so it's less tall
+
+---
+
+
 ## 2.35.23
 
 ### Changes
