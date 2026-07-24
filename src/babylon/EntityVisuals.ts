@@ -308,11 +308,13 @@ export class EntityVisuals {
   private byEntity = new Map<string, AbstractMesh[]>();
   private mapping = new Map<string, EntityMapping>();
   /** entity_id -> variant word -> its mesh(es) — see VARIANT_VOCAB/
-   *  applyMeshVariant. Only ever has 2+ words for an entity that was
-   *  actually authored with alternate "__<variant>" meshes; everything else
-   *  (the common case) either has zero entries or exactly one (an unsuffixed
-   *  mesh defaulted to its type's default word), and applyMeshVariant treats
-   *  both of those as "nothing to toggle". */
+   *  applyMeshVariant. ONLY meshes with a recognised "__<word>" pose suffix are
+   *  registered here; an unsuffixed base mesh (e.g. a physical lock device) is
+   *  never a pose and is left out entirely. So this has 2+ words only for an
+   *  entity actually authored with alternate "__<variant>" meshes; a single
+   *  authored pose gives exactly one word, and everything else (the common
+   *  case) has no entry at all — applyMeshVariant treats <2 words as "nothing
+   *  to toggle". */
   private meshVariants = new Map<string, Map<string, AbstractMesh[]>>();
   private pulsing = new Set<AbstractMesh>();
   /** entity_id → angular speed (rad/s) for a CEILING fan currently spinning. */
@@ -590,13 +592,25 @@ export class EntityVisuals {
       // for entity resolution above, just never grouped/toggled).
       const vocab = VARIANT_VOCAB[map.type];
       if (vocab) {
+        // ONLY a mesh carrying a RECOGNISED "__<word>" pose suffix is a pose.
+        // An UNSUFFIXED mesh (no "__word", or an unknown one) is NOT a pose —
+        // it's the entity's always-present base geometry, e.g. the physical
+        // lock/keypad DEVICE modelled as "lock.front_door" alongside the door
+        // leaf poses "lock.front_door__locked"/"__unlocked". It used to be
+        // bucketed under vocab.default, which quietly folded it INTO one pose's
+        // bucket — so applyMeshVariant then hid the device whenever the OTHER
+        // pose was active (the "device vanishes when unlocked" bug), and its
+        // state tint disappeared with it. Leaving it out of meshVariants keeps
+        // it permanently visible AND still state-tinted (applyToMesh tints any
+        // unsuffixed lock; the pose meshes are the ones that skip the tint).
         const suffix = extractVariantSuffix(m.name);
-        const word = suffix && vocab.words.includes(suffix) ? suffix : vocab.default;
-        let byWord = this.meshVariants.get(map.entityId);
-        if (!byWord) { byWord = new Map(); this.meshVariants.set(map.entityId, byWord); }
-        const wordList = byWord.get(word) ?? [];
-        wordList.push(m);
-        byWord.set(word, wordList);
+        if (suffix && vocab.words.includes(suffix)) {
+          let byWord = this.meshVariants.get(map.entityId);
+          if (!byWord) { byWord = new Map(); this.meshVariants.set(map.entityId, byWord); }
+          const wordList = byWord.get(suffix) ?? [];
+          wordList.push(m);
+          byWord.set(suffix, wordList);
+        }
       }
 
       // ISOLATE the material so state visuals can't bleed across meshes.

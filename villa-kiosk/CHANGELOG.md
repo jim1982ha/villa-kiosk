@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.14
+
+### Changes
+- unsuffixed base mesh (e.g. physical lock device) is no longer swept into a pose bucket — it stays always-visible and state-tinted instead of vanishing when the opposite pose is active
+
+---
+
+
 ## 2.35.13
 
 ### Changes
