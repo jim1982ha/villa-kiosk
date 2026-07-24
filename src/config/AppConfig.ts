@@ -340,6 +340,8 @@ export interface ConfigExportBundle {
   walkSpeed: number;
   naturalScrolling: boolean;
   highlightInteractive: boolean;
+  badgeStyle?: "classic" | "card";
+  showSummaryBar?: boolean;
   render: RenderConfig;
 }
 
@@ -356,6 +358,8 @@ export function buildConfigExport(config: AppConfig): ConfigExportBundle {
     walkSpeed: config.walkSpeed,
     naturalScrolling: config.naturalScrolling,
     highlightInteractive: config.highlightInteractive,
+    badgeStyle: config.badgeStyle,
+    showSummaryBar: config.showSummaryBar,
     render: config.render,
   };
 }
@@ -377,6 +381,8 @@ export function parseConfigImport(raw: unknown): Partial<ConfigExportBundle> {
   if (typeof b.walkSpeed === "number") patch.walkSpeed = b.walkSpeed;
   if (typeof b.naturalScrolling === "boolean") patch.naturalScrolling = b.naturalScrolling;
   if (typeof b.highlightInteractive === "boolean") patch.highlightInteractive = b.highlightInteractive;
+  if (b.badgeStyle === "classic" || b.badgeStyle === "card") patch.badgeStyle = b.badgeStyle;
+  if (typeof b.showSummaryBar === "boolean") patch.showSummaryBar = b.showSummaryBar;
   if (b.render && typeof b.render === "object") patch.render = b.render as RenderConfig;
   return patch;
 }

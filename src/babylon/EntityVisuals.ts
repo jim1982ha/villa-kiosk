@@ -1507,8 +1507,11 @@ export class EntityVisuals {
       // docstring for why. The badge is a purely visual control now.
       if (card) {
         badge.adaptWidthToChildren = true; // card hugs its icon+value row
-        badge.paddingLeft = "5px";
-        badge.paddingRight = "10px";
+        // Symmetric horizontal padding so an icon-ONLY card centres its chip
+        // (an icon+value card balances too: pad · icon · gap · value · pad).
+        // ~matches the 5px vertical padding ((CARD_HEIGHT−CARD_ICON)/2).
+        badge.paddingLeft = "6px";
+        badge.paddingRight = "6px";
       } else {
         badge.width = `${BADGE_DIAMETER_PX}px`;
       }
@@ -1544,7 +1547,11 @@ export class EntityVisuals {
       if (card) {
         valueWrap.height = `${CARD_HEIGHT_PX}px`;
         valueWrap.background = "transparent";
-        valueWrap.paddingLeft = "8px";
+        // The icon↔value gap is applied in updateLabel ONLY when a value is
+        // actually shown — otherwise this (invisible) wrap would still add its
+        // gap width to the row, pushing an icon-only card's right edge out and
+        // re-introducing the very left/right asymmetry we're fixing.
+        valueWrap.paddingLeft = "0px";
         valueWrap.isVisible = false;
         row!.addControl(valueWrap);
       } else {
@@ -1622,8 +1629,14 @@ export class EntityVisuals {
     }
 
     const value = this.compactValue(type, entity);
+    const hasValue = value.length > 0;
     lbl.valueText.text = value;
-    lbl.valueWrap.isVisible = value.length > 0;
+    lbl.valueWrap.isVisible = hasValue;
+    // Card style: apply the icon↔value gap only when a value is shown, so an
+    // icon-only card stays symmetric (see the valueWrap construction note).
+    if (this.config.badgeStyle === "card") {
+      lbl.valueWrap.paddingLeft = hasValue ? "8px" : "0px";
+    }
   }
 
   /** Decide which badges are visible, then DECLUTTER the visible ones so no two
@@ -1726,8 +1739,8 @@ export class EntityVisuals {
     const boxes = shown.map((s) => {
       if (card) {
         const hasVal = s.lbl.valueWrap.isVisible;
-        const valW = hasVal ? s.lbl.valueText.text.length * 7.2 + 16 : 0;
-        const cardW = 5 + CARD_ICON_PX + valW + 10; // paddings + chip + value
+        const valW = hasVal ? 8 + s.lbl.valueText.text.length * 7.2 : 0; // gap + text
+        const cardW = 6 + CARD_ICON_PX + valW + 6; // symmetric pad + chip + value
         return {
           halfW: (cardW / 2) * scale,
           halfH: (CARD_HEIGHT_PX / 2 + 1) * scale,

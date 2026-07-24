@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.18
+
+### Changes
+- card badges: symmetric left/right padding (icon-only cards now centre their chip; no phantom gap from a hidden value) + include badgeStyle/showSummaryBar in the config export/import backup bundle
+
+---
+
+
 ## 2.35.17
 
 ### Changes
