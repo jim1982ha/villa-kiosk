@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.16
+
+### Changes
+- add bottom SummaryBar: auto-derived scene/quick-action/summary tiles (entrance lock, pool, lights-all, AC, scenes, energy) from live entities, RBAC-aware, matching the dashboard mockup
+
+---
+
+
 ## 2.35.15
 
 ### Changes

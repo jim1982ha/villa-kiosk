@@ -8,6 +8,7 @@ import RoomLabel from "@/components/hud/RoomLabel";
 import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
 import AppNotice from "@/components/hud/AppNotice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
+import SummaryBar from "@/components/hud/SummaryBar";
 import TapRipple, { RIPPLE_LIFETIME_MS, type Ripple } from "@/components/hud/TapRipple";
 import { hasSeenFirstRunTips } from "@/utils/storage";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
@@ -201,6 +202,17 @@ export default function Dashboard() {
     [config.entityMap, role, canControl],
   );
 
+  // Open an entity's control panel from a SummaryBar tile (a lock/climate
+  // "open" tile). The tile already gates on category permission before calling
+  // this; the panel's own controls enforce RBAC for any action taken inside.
+  const openEntityPanel = useCallback(
+    (entityId: string) => {
+      const mapping = mappingForEntityId(entityId, config.entityMap);
+      if (mapping) setActivePanel({ entityId, mapping });
+    },
+    [config.entityMap],
+  );
+
   // Open the app in the bird's-eye overview by default — seeing the whole villa
   // at a glance is the natural landing view. One-shot: fires the first time the
   // scene becomes ready (model loaded + fitted) and never overrides the user's
@@ -376,6 +388,11 @@ export default function Dashboard() {
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
       />
+
+      {/* Bottom dashboard strip — scene / quick-action / summary tiles,
+          auto-derived from live entities. Centred so it sits between the
+          bottom bar's corner controls (view toggle / joystick). */}
+      <SummaryBar onOpenEntity={openEntityPanel} />
 
       {teleportOpen && (
         <TeleportMenu
