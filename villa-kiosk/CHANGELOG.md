@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.19
+
+### Changes
+- card badges: bake the icon-chip inset into the image for deterministic even padding on all sides (fixes chip touching edges); grouped device badges (e.g. temp+humidity combo) now show BOTH members' readings on the one badge (24°C · 58%)
+
+---
+
+
 ## 2.35.18
 
 ### Changes

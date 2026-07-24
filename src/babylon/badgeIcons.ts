@@ -125,10 +125,19 @@ export function badgeImageDataUrl(category: Category, iconKey: string, colorOver
 
 const chipCache = new Map<string, string>();
 
-/** Icon-only glyph for the "card" badge style (config.badgeStyle): a
- *  translucent-white rounded chip with a white icon, on a TRANSPARENT
- *  background — meant to sit inside a solid category-coloured card (see
- *  EntityVisuals' card badges), where the full category-coloured squircle
+// The chip is drawn INSET inside its (transparent) canvas by this fraction on
+// every side — so when EntityVisuals renders the image at the card's full
+// height, that transparent margin lets the solid coloured card show through
+// EVENLY on all four sides. Baking the padding into the image is deterministic
+// (it's just pixels), unlike Babylon GUI's adaptWidthToChildren + control
+// padding, which wasn't producing a reliable, symmetric inset for the card.
+const CHIP_INSET = 0.15;             // ~6 px at a 40 px render
+const CHIP_ICON_FRACTION = 0.62;     // icon size as a fraction of the CHIP (not the canvas)
+
+/** Icon glyph for the "card" badge style (config.badgeStyle): a translucent-
+ *  white rounded chip (inset, see CHIP_INSET) with a white icon, on a
+ *  TRANSPARENT background — meant to sit inside a solid category-coloured card
+ *  (EntityVisuals card badges), where the full category-coloured squircle
  *  badgeImageDataUrl() produces would blend into the same-coloured card. Icon
  *  only, no category colour, so it's cached by iconKey alone. */
 export function iconChipDataUrl(iconKey: string): string {
@@ -141,14 +150,16 @@ export function iconChipDataUrl(iconKey: string): string {
   const ctx = canvas.getContext("2d");
   let url = "";
   if (ctx) {
-    const corner = CANVAS_PX * BADGE_CORNER_FRACTION;
-    roundRectPath(ctx, 0, 0, CANVAS_PX, CANVAS_PX, corner);
+    const margin = CANVAS_PX * CHIP_INSET;
+    const chip = CANVAS_PX - 2 * margin;
+    const corner = chip * BADGE_CORNER_FRACTION;
+    roundRectPath(ctx, margin, margin, chip, chip, corner);
     ctx.fillStyle = "rgba(255,255,255,0.22)"; // translucent chip on the card
     ctx.fill();
 
-    const iconScale = (CANVAS_PX / ICON_VIEWBOX) * ICON_FRACTION;
+    const iconScale = (chip / ICON_VIEWBOX) * CHIP_ICON_FRACTION;
     const iconPx = ICON_VIEWBOX * iconScale;
-    const offset = (CANVAS_PX - iconPx) / 2;
+    const offset = (CANVAS_PX - iconPx) / 2; // centre the icon in the whole canvas
     drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset);
 
     url = canvas.toDataURL("image/png");

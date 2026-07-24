@@ -52,8 +52,8 @@ import {
 import type { AppConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-import { resolveMeshToMapping, extractVariantSuffix } from "@/config/EntityMap";
-import { groupMemberIds } from "@/config/deviceGroups";
+import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
+import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable, coverVisualBucket, lockVisualBucket, openingVisualBucket } from "@/utils/stateColors";
@@ -265,8 +265,9 @@ const BADGE_DIAMETER_PX = 40;
 // squircle+pill. Both are the SAME LabelControls (container/badge/glyph/
 // valueWrap/valueText), just arranged differently; `badge` stays the single
 // tappable region (badgeContaining hit-tests it), so pickBadgeAt is unchanged.
-const CARD_HEIGHT_PX = 40;         // the coloured card's own height
-const CARD_ICON_PX = 30;           // the translucent icon chip inside it
+const CARD_HEIGHT_PX = 40;         // the coloured card's own height (also the
+                                   // chip image's render size — its baked-in
+                                   // CHIP_INSET margin becomes the visible inset)
 const CARD_LABEL_HEIGHT_PX = 46;   // container height (card + a little clearance)
 
 // Entity types compactValue() can EVER return non-empty text for — must stay
@@ -1230,6 +1231,23 @@ export class EntityVisuals {
     // driving either effect typically isn't a modelled 3D object at all.
     this.applyMotionRouting(entity);
 
+    // Cache EVERY entity's latest state up front — even one with no badge of
+    // its own (a hidden device-group member, e.g. the humidity half of a
+    // temp+humidity combo). That lets its group PRIMARY's badge read and show
+    // the member's reading (see groupedValue), and refreshes that primary
+    // badge when only the member changed.
+    this.lastState.set(entity.entity_id, entity);
+    const owningGroup = this.config.deviceGroups.find((g) =>
+      g.memberEntityIds.includes(entity.entity_id));
+    if (owningGroup && this.labels.has(owningGroup.primaryEntityId)) {
+      const pst = this.lastState.get(owningGroup.primaryEntityId);
+      const pmap = this.mapping.get(owningGroup.primaryEntityId);
+      if (pst && pmap) {
+        this.updateLabel(owningGroup.primaryEntityId, pmap.type, pst);
+        this.requestRender();
+      }
+    }
+
     const meshes = this.byEntity.get(entity.entity_id);
     const map = this.mapping.get(entity.entity_id);
     if (!meshes || !map) {
@@ -1238,7 +1256,6 @@ export class EntityVisuals {
       }
       return;
     }
-    this.lastState.set(entity.entity_id, entity);
     if (
       (entity.entity_id.startsWith("cover.") && map.type !== "cover") ||
       (entity.entity_id.startsWith("lock.") && map.type !== "lock")
@@ -1506,12 +1523,11 @@ export class EntityVisuals {
       // Tap/long-press handling is NOT wired here — see pickBadgeAt()'s
       // docstring for why. The badge is a purely visual control now.
       if (card) {
-        badge.adaptWidthToChildren = true; // card hugs its icon+value row
-        // Symmetric horizontal padding so an icon-ONLY card centres its chip
-        // (an icon+value card balances too: pad · icon · gap · value · pad).
-        // ~matches the 5px vertical padding ((CARD_HEIGHT−CARD_ICON)/2).
-        badge.paddingLeft = "6px";
-        badge.paddingRight = "6px";
+        // The card hugs its icon+value row. All the visible inset padding
+        // comes from the chip image's baked-in transparent margin (top/bottom/
+        // left, and the icon↔value gap) plus the value's own right padding —
+        // NOT from control padding here, which wasn't insetting reliably.
+        badge.adaptWidthToChildren = true;
       } else {
         badge.width = `${BADGE_DIAMETER_PX}px`;
       }
@@ -1533,7 +1549,10 @@ export class EntityVisuals {
           ? iconChipDataUrl(iconKeyFor(type, this.lastState.get(entityId)))
           : badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)),
               this.config.entityMap[entityId]?.badgeColor));
-      const glyphPx = card ? CARD_ICON_PX : BADGE_DIAMETER_PX;
+      // Card: the chip image spans the FULL card height; its own baked-in
+      // transparent margin (CHIP_INSET) is what shows the coloured card as an
+      // even inset on all sides. Classic: the squircle is the badge's fill.
+      const glyphPx = card ? CARD_HEIGHT_PX : BADGE_DIAMETER_PX;
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
       glyph.stretch = Image.STRETCH_UNIFORM;
@@ -1547,11 +1566,11 @@ export class EntityVisuals {
       if (card) {
         valueWrap.height = `${CARD_HEIGHT_PX}px`;
         valueWrap.background = "transparent";
-        // The icon↔value gap is applied in updateLabel ONLY when a value is
-        // actually shown — otherwise this (invisible) wrap would still add its
-        // gap width to the row, pushing an icon-only card's right edge out and
-        // re-introducing the very left/right asymmetry we're fixing.
+        // No left padding: the icon↔value gap is the chip image's OWN baked-in
+        // right margin (CHIP_INSET). The right padding matches that margin so
+        // left/gap/right all read the same — value text · then card edge.
         valueWrap.paddingLeft = "0px";
+        valueWrap.paddingRight = "8px";
         valueWrap.isVisible = false;
         row!.addControl(valueWrap);
       } else {
@@ -1628,15 +1647,9 @@ export class EntityVisuals {
       lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, override);
     }
 
-    const value = this.compactValue(type, entity);
-    const hasValue = value.length > 0;
+    const value = this.groupedValue(entityId, this.compactValue(type, entity));
     lbl.valueText.text = value;
-    lbl.valueWrap.isVisible = hasValue;
-    // Card style: apply the icon↔value gap only when a value is shown, so an
-    // icon-only card stays symmetric (see the valueWrap construction note).
-    if (this.config.badgeStyle === "card") {
-      lbl.valueWrap.paddingLeft = hasValue ? "8px" : "0px";
-    }
+    lbl.valueWrap.isVisible = value.length > 0;
   }
 
   /** Decide which badges are visible, then DECLUTTER the visible ones so no two
@@ -1739,8 +1752,10 @@ export class EntityVisuals {
     const boxes = shown.map((s) => {
       if (card) {
         const hasVal = s.lbl.valueWrap.isVisible;
-        const valW = hasVal ? 8 + s.lbl.valueText.text.length * 7.2 : 0; // gap + text
-        const cardW = 6 + CARD_ICON_PX + valW + 6; // symmetric pad + chip + value
+        // Chip spans the full card height (CARD_HEIGHT), its inset gives the
+        // left+gap padding; a value adds its text + the 8px right pad.
+        const valW = hasVal ? s.lbl.valueText.text.length * 7.2 + 8 : 0;
+        const cardW = CARD_HEIGHT_PX + valW;
         return {
           halfW: (cardW / 2) * scale,
           halfH: (CARD_HEIGHT_PX / 2 + 1) * scale,
@@ -1910,6 +1925,26 @@ export class EntityVisuals {
       case "sensor":        return "info"; // informational: neutral disc, value pill carries meaning
       default:              return s.state === "on" ? "on" : "off"; // light/fan/switch/input_boolean
     }
+  }
+
+  /** For a device-group PRIMARY, combine its own reading with its members'
+   *  (e.g. a temp+humidity combo shows "24°C · 58%" on its one badge instead
+   *  of just the primary's temperature). A non-primary entity — or a primary
+   *  whose members have no readable value — passes through unchanged, so this
+   *  is a no-op for every ordinary single badge. Member states come from
+   *  lastState, which apply() now caches for hidden members too. */
+  private groupedValue(entityId: string, primaryValue: string): string {
+    const group = groupForPrimary(this.config.deviceGroups, entityId);
+    if (!group) return primaryValue;
+    const parts = primaryValue ? [primaryValue] : [];
+    for (const member of group.memberEntityIds) {
+      const st = this.lastState.get(member);
+      if (!st) continue;
+      const t = this.config.entityMap[member]?.type ?? inferTypeFromEntityId(member) ?? "sensor";
+      const v = this.compactValue(t, st);
+      if (v) parts.push(v);
+    }
+    return parts.join("  ·  ");
   }
 
   /** Tiny chip text under the badge for entities whose state is a reading, not just on/off. */
