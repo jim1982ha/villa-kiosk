@@ -26,7 +26,8 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
-import { CATEGORY_COLORS } from "@/config/EntityCategories";
+import { CATEGORY_COLORS, CATEGORY_ORDER } from "@/config/EntityCategories";
+import { applyScene } from "@/config/scenes";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 
@@ -195,16 +196,29 @@ export default function SummaryBar({ onOpenEntity }: Props) {
   const { role } = useProfile();
   const { config } = useConfig();
 
-  const tiles = useMemo(
-    () =>
-      deriveTiles(
-        entities,
-        (c) => (role ? isCategoryAllowed(role, c) : false),
-        callService,
-        onOpenEntity,
-      ),
-    [entities, role, callService, onOpenEntity],
-  );
+  const tiles = useMemo(() => {
+    const can = (c: Category) => (role ? isCategoryAllowed(role, c) : false);
+    // A scene spans categories — allow running one if the profile may control
+    // ANY category (a pure view-only role gets read-only scene tiles).
+    const canRunScenes = CATEGORY_ORDER.some(can);
+
+    // User-defined kiosk scenes (config.kioskScenes) lead the bar — the
+    // headline "set the whole villa" action. Applying replays the snapshot.
+    const sceneTiles: SummaryTile[] = (config.kioskScenes ?? []).map((scene) => ({
+      id: scene.id,
+      icon: Sparkles,
+      label: "Scene",
+      value: scene.name,
+      tone: "neutral" as const,
+      category: "others" as Category,
+      onTap: canRunScenes ? () => { void applyScene(scene, callService); } : undefined,
+    }));
+
+    return [
+      ...sceneTiles,
+      ...deriveTiles(entities, can, callService, onOpenEntity),
+    ];
+  }, [entities, role, callService, onOpenEntity, config.kioskScenes]);
 
   // Hidden via Settings, or nothing to show.
   if (config.showSummaryBar === false || !tiles.length) return null;

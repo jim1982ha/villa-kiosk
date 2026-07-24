@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.20
+
+### Changes
+- add kiosk Scenes: capture the villa's current controllable state (lights/switches/fans/AC/covers/locks) as a named scene in Settings, then re-apply it one-tap from the bottom SummaryBar; scenes are stored in config + included in backup export/import
+
+---
+
+
 ## 2.35.19
 
 ### Changes

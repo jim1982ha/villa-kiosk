@@ -8,11 +8,12 @@
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
 import { useState } from "react";
-import { Sliders, Sun, Moon, Monitor } from "lucide-react";
+import { Sliders, Sun, Moon, Monitor, Sparkles, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
+import { captureScene } from "@/config/scenes";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { DEFAULT_SITE_TITLE, DEFAULT_RENDER, RENDER_PRESETS, type AppConfig, type RenderConfig, type QualityPreset } from "@/config/AppConfig";
 import type { SceneManager } from "@/babylon/SceneManager";
@@ -27,7 +28,8 @@ interface Props {
 export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: Props) {
   const { config, update } = useConfig();
   const { role } = useProfile();
-  const { haConfig } = useHA();
+  const { haConfig, entities } = useHA();
+  const [sceneName, setSceneName] = useState("");
   // RBAC: which settings areas the active profile may use. Dashboard already
   // refuses to open this modal without "openSettings"; these narrow further.
   const can = (c: Capability) => role != null && hasCapability(role, c);
@@ -264,6 +266,63 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           />
           <span>Show the bottom summary bar (scenes, lights, AC, energy…)</span>
         </label>
+
+        {/* ── Scenes ─────────────────────────────────────────────────────────
+            One-tap snapshots of the whole villa's controllable state (lights,
+            switches, fans, AC, covers, locks). Set the villa how you like it,
+            name it, and Save — it then appears in the bottom summary bar to
+            re-apply any time. Distinct from Home Assistant's own scenes. */}
+        <div className="settings-section-title" style={{ margin: "18px 0 0" }}>Scenes</div>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          Save the villa's current state (lights, AC, covers, locks…) as a named
+          scene, then re-apply it in one tap from the bottom bar.
+        </p>
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <input
+            type="text"
+            value={sceneName}
+            placeholder="New scene name (e.g. Movie night)"
+            onChange={(e) => setSceneName(e.target.value)}
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <button
+            className="btn"
+            disabled={!sceneName.trim()}
+            onClick={() => {
+              const scene = captureScene(sceneName, entities);
+              update({ kioskScenes: [...(config.kioskScenes ?? []), scene] });
+              setSceneName("");
+            }}
+          >
+            <Sparkles size={16} /> Save current
+          </button>
+        </div>
+        {(config.kioskScenes ?? []).length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+            {(config.kioskScenes ?? []).map((scene) => (
+              <div
+                key={scene.id}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+                         gap: 10, padding: "8px 12px", borderRadius: 10, background: "var(--bg-input)" }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <Sparkles size={15} />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{scene.name}</span>
+                  <span className="muted" style={{ fontSize: 11 }}>· {scene.calls.length} devices</span>
+                </span>
+                <button
+                  className="icon-btn"
+                  style={{ width: 32, height: 32 }}
+                  title={`Delete scene "${scene.name}"`}
+                  aria-label={`Delete scene ${scene.name}`}
+                  onClick={() => update({ kioskScenes: (config.kioskScenes ?? []).filter((s) => s.id !== scene.id) })}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
