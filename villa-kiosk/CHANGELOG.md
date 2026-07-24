@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.25
+
+### Changes
+- SummaryBar: widen the max-width cap (min(96vw,1600px)) so the bar fits all its tiles without horizontal scroll when the screen has room; scroll only kicks in when it truly can't fit
+
+---
+
+
 ## 2.35.24
 
 ### Changes

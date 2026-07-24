@@ -463,7 +463,9 @@ button {
   position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
   z-index: 21; pointer-events: auto;
   display: flex; gap: 10px; align-items: stretch;
-  max-width: min(80vw, 1080px);
+  /* Shrinks to fit its tiles; the cap only kicks in — turning on the
+     horizontal scroll — when the tiles genuinely can't fit the viewport. */
+  max-width: min(96vw, 1600px);
   padding: 6px; border-radius: 22px;
   background: var(--bg-panel); backdrop-filter: blur(8px);
   border: 1px solid var(--hairline); box-shadow: 0 8px 28px var(--shadow);
