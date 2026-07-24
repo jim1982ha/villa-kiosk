@@ -18,9 +18,14 @@
 //   fan           -> emissive teal tint while on.
 //   lock          -> green (locked) / red (unlocked) diffuse+emissive tint,
 //                    PLUS the same OPT-IN alternate-mesh mechanism as cover
-//                    ("lock.foo__unlocked"/"__locked" — unsuffixed = unlocked)
-//                    for a bolt/lever that visibly changes position. The tint
-//                    always applies (any lock, suffixed or not); the mesh
+//                    ("lock.foo__unlocked"/"__locked" — unsuffixed/rest =
+//                    locked) for a door/bolt that visibly changes position.
+//                    The tint
+//                    applies ONLY to a plain, single-mesh lock (no "__word"
+//                    suffix): a POSE mesh already shows its state by which
+//                    pose is visible, so tinting the door leaf flat green/red
+//                    is redundant and ugly — it's skipped for __locked/
+//                    __unlocked meshes (see applyToMesh's lock case). The mesh
 //                    swap only for a lock actually authored with 2 poses.
 //   switch/media  -> emissive "active" tint when on/playing.
 //   binary_sensor -> pulsing red when triggered (e.g. leak).
@@ -95,7 +100,12 @@ function clampRatio(ratio: number | undefined): number {
 // consumers of the exact same mechanism, not two copies of it.
 const VARIANT_VOCAB: Partial<Record<EntityType, { words: string[]; default: string }>> = {
   cover: { words: ["closed", "half", "open"], default: "open" },
-  lock: { words: ["unlocked", "locked"], default: "unlocked" },
+  // default "locked": rest/pre-state pose is the CLOSED door (sensible for a
+  // front door) AND the pose the pipeline bake keeps as its shadow-caster —
+  // "unlocked" is the door swung open, whose big floor shadow must NOT bake in
+  // and linger when the door is actually locked. MUST stay equal to
+  // blender_pipeline _VARIANT_VOCAB["lock"]["default"].
+  lock: { words: ["unlocked", "locked"], default: "locked" },
 };
 
 /** The available variant word nearest `desired` in `order` (by index
@@ -2020,6 +2030,22 @@ export class EntityVisuals {
       }
 
       case "lock": {
+        // A lock authored as POSE meshes (lock.foo__locked / __unlocked — a
+        // door leaf that visibly swings open/closed) communicates its state
+        // through which pose is shown (see applyMeshVariant), so the
+        // red/green diffuse+emissive tint is both redundant AND ugly: it
+        // paints the whole door leaf flat green/red. Skip ALL colour
+        // treatment for a named pose mesh and let it keep its real door
+        // material; the state is already legible from the open/closed pose.
+        // A plain, single-mesh lock (lock.foo, no "__word" suffix) has no
+        // pose to read, so it still relies on the tint below — that's the
+        // one that stays coloured. Name-based on purpose (mirrors the user's
+        // model: the suffix is what marks a mesh as a pose). VARIANT_VOCAB
+        // gates it so only a RECOGNISED lock pose word suppresses the tint,
+        // never some unrelated "__x" suffix.
+        const poseWord = extractVariantSuffix(mesh.name);
+        if (poseWord && VARIANT_VOCAB.lock!.words.includes(poseWord)) break;
+
         // unavailable MUST win over the locked/unlocked colouring below —
         // colouring the mesh confirmed-red for a lock HA has actually lost
         // contact with asserts an "unlocked" reading that was never taken

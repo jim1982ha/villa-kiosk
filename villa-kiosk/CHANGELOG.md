@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.13
+
+### Changes
+- lock pose meshes (__locked/__unlocked) skip the red/green state tint; flip lock rest/default pose to locked so the open-door shadow no longer bakes in
+
+---
+
+
 ## 2.35.12
 
 ### Changes
