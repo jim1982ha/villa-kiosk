@@ -122,3 +122,37 @@ export function badgeImageDataUrl(category: Category, iconKey: string, colorOver
   cache.set(cacheKey, url);
   return url;
 }
+
+const chipCache = new Map<string, string>();
+
+/** Icon-only glyph for the "card" badge style (config.badgeStyle): a
+ *  translucent-white rounded chip with a white icon, on a TRANSPARENT
+ *  background — meant to sit inside a solid category-coloured card (see
+ *  EntityVisuals' card badges), where the full category-coloured squircle
+ *  badgeImageDataUrl() produces would blend into the same-coloured card. Icon
+ *  only, no category colour, so it's cached by iconKey alone. */
+export function iconChipDataUrl(iconKey: string): string {
+  const cached = chipCache.get(iconKey);
+  if (cached) return cached;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = CANVAS_PX;
+  canvas.height = CANVAS_PX;
+  const ctx = canvas.getContext("2d");
+  let url = "";
+  if (ctx) {
+    const corner = CANVAS_PX * BADGE_CORNER_FRACTION;
+    roundRectPath(ctx, 0, 0, CANVAS_PX, CANVAS_PX, corner);
+    ctx.fillStyle = "rgba(255,255,255,0.22)"; // translucent chip on the card
+    ctx.fill();
+
+    const iconScale = (CANVAS_PX / ICON_VIEWBOX) * ICON_FRACTION;
+    const iconPx = ICON_VIEWBOX * iconScale;
+    const offset = (CANVAS_PX - iconPx) / 2;
+    drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset);
+
+    url = canvas.toDataURL("image/png");
+  }
+  chipCache.set(iconKey, url);
+  return url;
+}

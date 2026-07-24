@@ -187,6 +187,16 @@ export interface AppConfig {
   /** Global size multiplier for the in-scene state-icon badges (1 = default).
    *  In the bird's-eye view this is further scaled by the zoom level. */
   entityIconScale: number;
+  /** Floating-badge visual style:
+   *  - "classic" (default): a category-coloured icon squircle with a small
+   *    value pill beneath it.
+   *  - "card": a horizontal category-coloured card with the icon and value
+   *    side by side (the dashboard-mockup look).
+   *  Both carry identical information; purely a look preference. Read by
+   *  EntityVisuals.rebuildLabels. */
+  badgeStyle?: "classic" | "card";
+  /** Show the bottom summary/scene strip (SummaryBar). Default true. */
+  showSummaryBar?: boolean;
   /** Manually-grouped entities that are really one physical device (e.g. a
    *  combo sensor exposing separate `_temperature`/`_humidity` entities).
    *  Only `primaryEntityId` gets a badge/mesh presence on the map; every
@@ -237,6 +247,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   // devices in a room fall within the same clash radius). 1.0x is the badge's
   // native (unscaled) size — still user-adjustable via the Settings slider.
   entityIconScale: 1.0,
+  badgeStyle: "classic",
+  showSummaryBar: true,
   deviceGroups: [],
 };
 

@@ -193,7 +193,7 @@ interface Props {
 export default function SummaryBar({ onOpenEntity }: Props) {
   const { entities, callService } = useHA();
   const { role } = useProfile();
-  useConfig(); // reserved: future per-villa tile overrides (config.summaryTiles)
+  const { config } = useConfig();
 
   const tiles = useMemo(
     () =>
@@ -206,7 +206,8 @@ export default function SummaryBar({ onOpenEntity }: Props) {
     [entities, role, callService, onOpenEntity],
   );
 
-  if (!tiles.length) return null;
+  // Hidden via Settings, or nothing to show.
+  if (config.showSummaryBar === false || !tiles.length) return null;
 
   return (
     <div className="summary-bar" role="toolbar" aria-label="Quick controls and summaries">

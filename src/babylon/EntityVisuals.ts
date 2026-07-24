@@ -54,7 +54,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix } from "@/config/EntityMap";
 import { groupMemberIds } from "@/config/deviceGroups";
-import { effectiveCategory } from "@/config/EntityCategories";
+import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable, coverVisualBucket, lockVisualBucket, openingVisualBucket } from "@/utils/stateColors";
 import { OPENING_DEVICE_CLASSES } from "@/config/BinarySensorClasses";
@@ -63,7 +63,7 @@ import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { axisWorldScale } from "./meshUnits";
 import { LightPool } from "./LightPools";
-import { badgeImageDataUrl, BADGE_CORNER_FRACTION } from "./badgeIcons";
+import { badgeImageDataUrl, iconChipDataUrl, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER } from "./colors";
 
@@ -259,6 +259,15 @@ const VALUE_CHIP_HEIGHT_PX = 18;
 // The badge circle's rendered diameter (unscaled) — also its tap radius
 // basis for pickBadgeAt()'s nearest-centre hit-testing.
 const BADGE_DIAMETER_PX = 40;
+
+// ── "card" badge style (config.badgeStyle==="card") — a horizontal category-
+// coloured card with an icon chip + value, instead of the classic vertical
+// squircle+pill. Both are the SAME LabelControls (container/badge/glyph/
+// valueWrap/valueText), just arranged differently; `badge` stays the single
+// tappable region (badgeContaining hit-tests it), so pickBadgeAt is unchanged.
+const CARD_HEIGHT_PX = 40;         // the coloured card's own height
+const CARD_ICON_PX = 30;           // the translucent icon chip inside it
+const CARD_LABEL_HEIGHT_PX = 46;   // container height (card + a little clearance)
 
 // Entity types compactValue() can EVER return non-empty text for — must stay
 // in sync with that switch. Used by declutterLabels to reserve pill-sized
@@ -462,6 +471,7 @@ export class EntityVisuals {
 
   updateConfig(config: AppConfig): void {
     const prevGroups = this.config.deviceGroups;
+    const prevBadgeStyle = this.config.badgeStyle;
     this.config = config;
     // Entity-light wall occlusion is always-on: walls block lamp light out of
     // the box, so there is nothing to tear down here when config changes.
@@ -473,7 +483,7 @@ export class EntityVisuals {
     // Labels are always shown; rebuild when a device group is created/edited
     // (a member's badge must appear/disappear without needing a full
     // re-index — see rebuildLabels' hiddenMembers).
-    if (config.deviceGroups !== prevGroups) {
+    if (config.deviceGroups !== prevGroups || config.badgeStyle !== prevBadgeStyle) {
       this.rebuildLabels();
     }
     if (typeof config.render?.lightPoolIntensity === "number") {
@@ -1463,10 +1473,13 @@ export class EntityVisuals {
       // and the value pill only appears for entities with a meaningful
       // reading (%, °, sensor value). Children are top-aligned in a
       // fixed-height panel so the badge never shifts when the pill shows/hides.
+      const card = this.config.badgeStyle === "card";
+      const labelH = card ? CARD_LABEL_HEIGHT_PX : LABEL_HEIGHT_PX;
+
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
-      container.width = "128px";
-      container.height = `${LABEL_HEIGHT_PX}px`;
+      container.width = "180px";
+      container.height = `${labelH}px`;
       container.spacing = 3;
       this.labelLayer.addControl(container);
       container.linkWithMesh(anchor);
@@ -1475,16 +1488,16 @@ export class EntityVisuals {
       // the WHOLE container clear of that point
       // (rather than centering it on the point), not the large hand-tuned
       // constant this used to be.
-      container.linkOffsetYInPixels = -LABEL_HEIGHT_PX / 2;
+      container.linkOffsetYInPixels = -labelH / 2;
 
-      // The squircle's fill is the composited category+glyph image below —
-      // this Rectangle is now just its outline (a ring shown only while the
-      // device is on/alert, see updateLabel) plus a drop shadow for depth
-      // against the 3D scene.
+      // `badge` is the single tappable region either way (badgeContaining
+      // hit-tests it) — classic: a transparent squircle whose fill is the
+      // composited category+glyph image, showing state as an outline ring.
+      // card: a SOLID category-coloured rounded card holding an icon chip +
+      // value inline (its fill/ring are driven in updateLabel).
       const badge = new Rectangle(`lbl_badge_${entityId}`);
-      badge.width = `${BADGE_DIAMETER_PX}px`;
-      badge.height = `${BADGE_DIAMETER_PX}px`;
-      badge.cornerRadius = BADGE_DIAMETER_PX * BADGE_CORNER_FRACTION;
+      badge.height = `${card ? CARD_HEIGHT_PX : BADGE_DIAMETER_PX}px`;
+      badge.cornerRadius = (card ? CARD_HEIGHT_PX : BADGE_DIAMETER_PX) * BADGE_CORNER_FRACTION;
       badge.thickness = 0;
       badge.background = "transparent";
       badge.shadowColor = "rgba(0,0,0,0.55)";
@@ -1492,30 +1505,61 @@ export class EntityVisuals {
       badge.shadowOffsetY = 2;
       // Tap/long-press handling is NOT wired here — see pickBadgeAt()'s
       // docstring for why. The badge is a purely visual control now.
+      if (card) {
+        badge.adaptWidthToChildren = true; // card hugs its icon+value row
+        badge.paddingLeft = "5px";
+        badge.paddingRight = "10px";
+      } else {
+        badge.width = `${BADGE_DIAMETER_PX}px`;
+      }
       container.addControl(badge);
 
-      const glyph = new Image(`lbl_glyph_${entityId}`,
-        badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)),
-          this.config.entityMap[entityId]?.badgeColor));
-      glyph.width = `${BADGE_DIAMETER_PX}px`;
-      glyph.height = `${BADGE_DIAMETER_PX}px`;
-      glyph.stretch = Image.STRETCH_UNIFORM;
-      badge.addControl(glyph);
+      // Card mode lays the icon + value in a horizontal row INSIDE the card;
+      // classic keeps the glyph as the badge's full fill and the value in a
+      // separate pill below.
+      const row = card ? new StackPanel(`lbl_row_${entityId}`) : null;
+      if (row) {
+        row.isVertical = false;
+        row.height = `${CARD_HEIGHT_PX}px`;
+        row.adaptWidthToChildren = true;
+        badge.addControl(row);
+      }
 
-      // Value pill: a snug rounded chip that hugs its text (adaptWidthToChildren).
+      const glyph = new Image(`lbl_glyph_${entityId}`,
+        card
+          ? iconChipDataUrl(iconKeyFor(type, this.lastState.get(entityId)))
+          : badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)),
+              this.config.entityMap[entityId]?.badgeColor));
+      const glyphPx = card ? CARD_ICON_PX : BADGE_DIAMETER_PX;
+      glyph.width = `${glyphPx}px`;
+      glyph.height = `${glyphPx}px`;
+      glyph.stretch = Image.STRETCH_UNIFORM;
+      (row ?? badge).addControl(glyph);
+
+      // Value: classic → a dark rounded pill BELOW the badge; card → inline
+      // text to the RIGHT of the icon chip, on the coloured card itself.
       const valueWrap = new Rectangle(`lbl_valwrap_${entityId}`);
-      valueWrap.adaptWidthToChildren = true;
-      valueWrap.height = `${VALUE_CHIP_HEIGHT_PX}px`;
-      valueWrap.cornerRadius = VALUE_CHIP_HEIGHT_PX / 2;
       valueWrap.thickness = 0;
-      valueWrap.background = "rgba(15,23,42,0.85)";
-      // Padding must clear the stadium's corner radius (VALUE_CHIP_HEIGHT/2) or
-      // the text crowds the rounded ends and reads as touching the edges.
-      valueWrap.paddingLeft = "10px";
-      valueWrap.paddingRight = "10px";
-      valueWrap.shadowColor = "rgba(0,0,0,0.5)";
-      valueWrap.shadowBlur = 4;
-      valueWrap.isVisible = false;
+      valueWrap.adaptWidthToChildren = true;
+      if (card) {
+        valueWrap.height = `${CARD_HEIGHT_PX}px`;
+        valueWrap.background = "transparent";
+        valueWrap.paddingLeft = "8px";
+        valueWrap.isVisible = false;
+        row!.addControl(valueWrap);
+      } else {
+        valueWrap.height = `${VALUE_CHIP_HEIGHT_PX}px`;
+        valueWrap.cornerRadius = VALUE_CHIP_HEIGHT_PX / 2;
+        valueWrap.background = "rgba(15,23,42,0.85)";
+        // Padding must clear the stadium's corner radius (VALUE_CHIP_HEIGHT/2) or
+        // the text crowds the rounded ends and reads as touching the edges.
+        valueWrap.paddingLeft = "10px";
+        valueWrap.paddingRight = "10px";
+        valueWrap.shadowColor = "rgba(0,0,0,0.5)";
+        valueWrap.shadowBlur = 4;
+        valueWrap.isVisible = false;
+        container.addControl(valueWrap);
+      }
 
       const valueText = new TextBlock(`lbl_value_${entityId}`);
       valueText.text = "";
@@ -1527,12 +1571,11 @@ export class EntityVisuals {
       // that visually clashed with every other label in the app.
       valueText.fontFamily = "Inter, system-ui, sans-serif";
       valueText.fontWeight = "600";
-      valueText.fontSize = 11;
+      valueText.fontSize = card ? 13 : 11;
       valueText.resizeToFit = true;
       valueText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
       valueText.textVerticalAlignment = TextBlock.VERTICAL_ALIGNMENT_CENTER;
       valueWrap.addControl(valueText);
-      container.addControl(valueWrap);
 
       this.labels.set(entityId, { container, badge, glyph, valueWrap, valueText, anchor, type, category });
 
@@ -1554,14 +1597,29 @@ export class EntityVisuals {
       entity.attributes.device_class as string | undefined);
     const kind = this.badgeKind(type, entity);
     const ring = BADGE_RING[kind];
-    // The squircle's own fill never changes — only this outline ring (state)
-    // and the glyph (device type / device_class, honouring live device_class
-    // for the two catch-all domains) do.
-    lbl.badge.thickness = ring.color ? BADGE_RING_THICKNESS : 0;
-    lbl.badge.color = ring.color ?? "transparent";
-    lbl.badge.alpha = ring.alpha;
-    lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKeyFor(type, entity),
-      this.config.entityMap[entityId]?.badgeColor);
+    const iconKey = iconKeyFor(type, entity);
+    const override = this.config.entityMap[entityId]?.badgeColor;
+
+    if (this.config.badgeStyle === "card") {
+      // The card's FILL is the category colour (or per-entity override); the
+      // glyph is a translucent icon chip (no baked colour). State shows as the
+      // same outline ring; "unavailable" dims the whole card since its fill,
+      // not just a ring, carries the colour.
+      lbl.badge.background = override ?? CATEGORY_COLORS[lbl.category].bottom;
+      lbl.badge.thickness = ring.color ? BADGE_RING_THICKNESS : 0;
+      lbl.badge.color = ring.color ?? "transparent";
+      lbl.badge.alpha = kind === "unavailable" ? ring.alpha : 1;
+      lbl.glyph.source = iconChipDataUrl(iconKey);
+    } else {
+      // The squircle's own fill never changes — only this outline ring (state)
+      // and the glyph (device type / device_class, honouring live device_class
+      // for the two catch-all domains) do.
+      lbl.badge.background = "transparent";
+      lbl.badge.thickness = ring.color ? BADGE_RING_THICKNESS : 0;
+      lbl.badge.color = ring.color ?? "transparent";
+      lbl.badge.alpha = ring.alpha;
+      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, override);
+    }
 
     const value = this.compactValue(type, entity);
     lbl.valueText.text = value;
@@ -1655,15 +1713,27 @@ export class EntityVisuals {
   ): void {
     const scale = this.iconUserScale * this.iconZoomScale;
     const maxOff = 150 * scale; // never fling a label miles from its device
-    const baseY = -LABEL_HEIGHT_PX / 2;
+    const card = this.config.badgeStyle === "card";
+    const baseY = -(card ? CARD_LABEL_HEIGHT_PX : LABEL_HEIGHT_PX) / 2;
     const GAP = 5 * scale; // breathing room between two labels' boxes
 
     // Each label's collision box, in screen px, relative to its anchor point.
-    // Layout (unscaled, anchor at 0, y grows downward, container hangs ABOVE):
+    // Classic layout (unscaled, anchor at 0, y grows downward, hangs ABOVE):
     //   badge  → centre −56, half 20         (BADGE_DIAMETER 40, container 76 tall)
     //   pill   → centre −24, half 9          (VALUE_CHIP_HEIGHT 18, under the badge)
-    // With a pill the box spans the badge top down to the pill bottom.
+    // Card layout: one horizontal card (height CARD_HEIGHT 40, container 46
+    // tall), centre ≈ −26 above the anchor, width = icon chip + inline value.
     const boxes = shown.map((s) => {
+      if (card) {
+        const hasVal = s.lbl.valueWrap.isVisible;
+        const valW = hasVal ? s.lbl.valueText.text.length * 7.2 + 16 : 0;
+        const cardW = 5 + CARD_ICON_PX + valW + 10; // paddings + chip + value
+        return {
+          halfW: (cardW / 2) * scale,
+          halfH: (CARD_HEIGHT_PX / 2 + 1) * scale,
+          cy: -26 * scale,
+        };
+      }
       const hasPill = s.lbl.valueWrap.isVisible;
       // Reserve the WITH-PILL footprint (halfH/cy) for any type that can EVER
       // grow one (see compactValue) even while it currently has none — not

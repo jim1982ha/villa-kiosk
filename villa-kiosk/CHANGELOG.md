@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.17
+
+### Changes
+- badge style toggle (classic squircle+pill / card) + summary bar visibility toggle in Settings; card badges are a category-coloured horizontal icon+value card (opt-in, classic stays default)
+
+---
+
+
 ## 2.35.16
 
 ### Changes

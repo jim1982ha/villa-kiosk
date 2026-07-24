@@ -242,6 +242,29 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           the +/- buttons next to the category filters in the top bar.
         </p>
 
+        <label style={{ marginTop: 16 }}>Floating badge style</label>
+        <select
+          value={config.badgeStyle ?? "classic"}
+          onChange={(e) => update({ badgeStyle: e.target.value as "classic" | "card" })}
+          style={{ width: "100%" }}
+        >
+          <option value="classic">Classic — icon badge with a value pill</option>
+          <option value="card">Card — coloured card with icon &amp; value inline</option>
+        </select>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+          Both show the same information — purely a look preference. The card
+          style matches the dashboard layout with the icon and reading side by side.
+        </p>
+
+        <label className="toggle" style={{ marginTop: 14 }}>
+          <input
+            type="checkbox"
+            checked={config.showSummaryBar ?? true}
+            onChange={(e) => update({ showSummaryBar: e.target.checked })}
+          />
+          <span>Show the bottom summary bar (scenes, lights, AC, energy…)</span>
+        </label>
+
         <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         {/* ── Camera & movement ─────────────────────────────────────────────
