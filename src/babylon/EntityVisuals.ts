@@ -20,15 +20,26 @@
 //                    PLUS the same OPT-IN alternate-mesh mechanism as cover
 //                    ("lock.foo__unlocked"/"__locked" — unsuffixed/rest =
 //                    locked) for a door/bolt that visibly changes position.
-//                    The tint
-//                    applies ONLY to a plain, single-mesh lock (no "__word"
-//                    suffix): a POSE mesh already shows its state by which
-//                    pose is visible, so tinting the door leaf flat green/red
-//                    is redundant and ugly — it's skipped for __locked/
-//                    __unlocked meshes (see applyToMesh's lock case). The mesh
-//                    swap only for a lock actually authored with 2 poses.
+//                    The tint applies ONLY to a plain, single-mesh lock (no
+//                    "__word" suffix): a POSE mesh already shows its state by
+//                    which pose is visible, so tinting the door leaf flat
+//                    green/red is redundant and ugly — it's skipped for
+//                    __locked/__unlocked meshes (see applyToMesh's lock
+//                    case). The mesh swap only for a lock actually authored
+//                    with 2 poses.
 //   switch/media  -> emissive "active" tint when on/playing.
-//   binary_sensor -> pulsing red when triggered (e.g. leak).
+//   binary_sensor -> pulsing red when triggered (e.g. leak/motion/etc), PLUS
+//                    the same OPT-IN alternate-mesh mechanism as cover/lock
+//                    for a door/window CONTACT sensor whose physical door was
+//                    authored with "__open"/"__closed" meshes — unsuffixed/
+//                    rest = closed. Gated on device_class (see
+//                    OPENING_DEVICE_CLASSES in BinarySensorClasses.ts):
+//                    only door/garage_door/window/opening classes get their
+//                    live on/off state interpreted as open/closed; every
+//                    other class (leak, motion, …) is untouched even if it
+//                    somehow had "__word" meshes. Pulsing is skipped on a
+//                    pose mesh for the same reason lock's tint is — the pose
+//                    itself already shows the state.
 
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
@@ -45,7 +56,8 @@ import { resolveMeshToMapping, extractVariantSuffix } from "@/config/EntityMap";
 import { groupMemberIds } from "@/config/deviceGroups";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
-import { isUnavailable, coverVisualBucket, lockVisualBucket } from "@/utils/stateColors";
+import { isUnavailable, coverVisualBucket, lockVisualBucket, openingVisualBucket } from "@/utils/stateColors";
+import { OPENING_DEVICE_CLASSES } from "@/config/BinarySensorClasses";
 import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
@@ -96,8 +108,9 @@ function clampRatio(ratio: number | undefined): number {
 // suffix — mesh defaults to. Extending this to another domain needs only a
 // new entry here plus one call in apply() below; the indexing/grouping/
 // fallback machinery (meshVariants/applyMeshVariant) itself is entirely
-// generic and needs no per-type changes — cover and lock are two independent
-// consumers of the exact same mechanism, not two copies of it.
+// generic and needs no per-type changes — cover, lock and binary_sensor are
+// three independent consumers of the exact same mechanism, not three copies
+// of it.
 const VARIANT_VOCAB: Partial<Record<EntityType, { words: string[]; default: string }>> = {
   cover: { words: ["closed", "half", "open"], default: "open" },
   // default "locked": rest/pre-state pose is the CLOSED door (sensible for a
@@ -106,6 +119,16 @@ const VARIANT_VOCAB: Partial<Record<EntityType, { words: string[]; default: stri
   // and linger when the door is actually locked. MUST stay equal to
   // blender_pipeline _VARIANT_VOCAB["lock"]["default"].
   lock: { words: ["unlocked", "locked"], default: "locked" },
+  // For a door/window CONTACT sensor authored with an "__open" swung-door
+  // mesh (mirrors lock exactly) — default "closed" for the same reason
+  // lock's default is "locked": the closed pose is the low-shadow rest state
+  // the pipeline bake keeps as its shadow-caster. MUST stay equal to
+  // blender_pipeline _VARIANT_VOCAB["binary_sensor"]["default"]. Only
+  // entities whose device_class is in OPENING_DEVICE_CLASSES ever get their
+  // live state routed here (see apply()) — an unauthored/irrelevant
+  // binary_sensor (leak, motion, …) never registers 2+ pose meshes, so this
+  // vocabulary entry is a no-op for it regardless.
+  binary_sensor: { words: ["closed", "open"], default: "closed" },
 };
 
 /** The available variant word nearest `desired` in `order` (by index
@@ -1231,6 +1254,20 @@ export class EntityVisuals {
     if (map.type === "lock") {
       this.applyMeshVariant(entity.entity_id, VARIANT_VOCAB.lock!.words, lockVisualBucket(entity));
     }
+    if (map.type === "binary_sensor") {
+      // Gate on device_class: only a door/window/garage_door/opening contact
+      // ever gets its live on/off routed through open/closed pose selection.
+      // Harmless even without this gate for anything with no authored poses
+      // (applyMeshVariant is a no-op below 2 registered words), but the gate
+      // keeps a leak/motion/etc. sensor's state from ever being MISREAD as
+      // open/closed if it somehow carried "__word" meshes.
+      const deviceClass = entity.attributes?.device_class;
+      if (deviceClass && OPENING_DEVICE_CLASSES.has(deviceClass)) {
+        this.applyMeshVariant(
+          entity.entity_id, VARIANT_VOCAB.binary_sensor!.words, openingVisualBucket(entity),
+        );
+      }
+    }
     this.updateLabel(entity.entity_id, map.type, entity);
     this.requestRender();
   }
@@ -2077,6 +2114,21 @@ export class EntityVisuals {
       }
 
       case "binary_sensor": {
+        // Same reasoning as lock's pose meshes: a door/window CONTACT
+        // authored with "__open"/"__closed" alternate meshes already shows
+        // its state by which pose is visible, so pulsing/tinting that same
+        // mesh red on top would be redundant (and, for "open" on an
+        // otherwise-informational door class, actively misleading — it'd
+        // read as an alert the device_class says it isn't). The plain,
+        // single-mesh case (the overwhelming majority of binary_sensors —
+        // leak/motion/smoke/… — never authored with poses) is completely
+        // unaffected and still pulses exactly as before.
+        const poseWord = extractVariantSuffix(mesh.name);
+        if (poseWord && VARIANT_VOCAB.binary_sensor!.words.includes(poseWord)) {
+          this.pulsing.delete(mesh);
+          break;
+        }
+
         // Same reasoning as lock above: silently reading "unavailable" as
         // "not triggered" makes an offline leak/smoke sensor look exactly
         // like a safe, monitored one — flag it instead of going quiet.

@@ -62,12 +62,12 @@ Config Editor, so you choose what each object does):
 | Entity type | What happens in the visualisation |
 |---|---|
 | **light** | The bound object **glows**, *and* a real light source **illuminates the room**. Colour follows the bulb's `hs_color` / `color_temp`, brightness follows the dimmer, OFF = dark. |
-| **cover** (curtain/blind) | **Optional, opt-in position feedback** — see [Optional: pre-name meshes for position feedback](#optional-pre-name-meshes-for-position-feedback-curtains-locks) below. With no extra naming, the curtain mesh is simply always visible, same as any other bound object. |
+| **cover** (curtain/blind) | **Optional, opt-in position feedback** — see [Optional: pre-name meshes for position feedback](#optional-pre-name-meshes-for-position-feedback-curtains-locks-doorwindow-contacts) below. With no extra naming, the curtain mesh is simply always visible, same as any other bound object. |
 | **fan** | Blades **spin** while on, stop when off. |
 | **switch** | Object lights up with an "active" tint when on (good for pumps, etc.). |
 | **media_player** | "Active" tint when playing/on. |
-| **lock** | **Green** when locked, **red** when unlocked (always, on any lock mesh) — **plus** the same optional bolt-position feedback covers get; see [the same section](#optional-pre-name-meshes-for-position-feedback-curtains-locks) below. |
-| **binary_sensor** | **Pulsing red** when triggered (e.g. water leak). |
+| **lock** | **Green** when locked, **red** when unlocked — but *only* on a plain, single-mesh lock (no pose authored). A lock authored with `__locked`/`__unlocked` pose copies (see below) skips the tint entirely: the pose itself already shows the state, so tinting the visible door leaf on top would be redundant. |
+| **binary_sensor** | **Pulsing red** when triggered (e.g. water leak) — same "skip it on a pose mesh" rule as lock applies if you've authored `__open`/`__closed` poses for a door/window contact (see below); every other binary_sensor is untouched. |
 | **climate / camera / sensor** | No state-driven mesh change; tapping opens the control/stream/reading panel. |
 
 ### How you choose what's activatable
@@ -99,14 +99,15 @@ light.pool_area
 …
 ```
 
-### Optional: pre-name meshes for position feedback (curtains, locks)
+### Optional: pre-name meshes for position feedback (curtains, locks, door/window contacts)
 
-By default a `cover`/`lock` entity's mesh is just always visible, exactly
-like any other bound object — nothing moves or scales to fake motion (that
-doesn't look convincing for fabric, and there's no reliable pivot to infer
-for an arbitrary bolt mechanism either). **You can opt into real position
-feedback instead**, with no code changes, purely by how you name the objects
-in SweetHome 3D — the same convention works for both device types:
+By default a `cover`/`lock`/`binary_sensor` entity's mesh is just always
+visible, exactly like any other bound object — nothing moves or scales to
+fake motion (that doesn't look convincing for fabric, and there's no
+reliable pivot to infer for an arbitrary bolt/door mechanism either). **You
+can opt into real position feedback instead**, with no code changes, purely
+by how you name the objects in SweetHome 3D — the identical convention
+works across all three device types:
 
 1. Place the **same object** two or three times in the exact same spot, each
    copy posed differently.
@@ -119,25 +120,50 @@ in SweetHome 3D — the same convention works for both device types:
 
    lock.front_door__locked
    lock.front_door__unlocked
+
+   binary_sensor.front_door_contact__closed
+   binary_sensor.front_door_contact__open
    ```
 
-   The **unsuffixed** name (no `__…` at all) counts as `__open` for a cover,
-   `__unlocked` for a lock — so if you only ever want ONE pose that's just
-   always there, don't add a suffix at all and nothing changes from today's
-   behaviour.
+   | Domain | Pose words | Rest/default pose |
+   |---|---|---|
+   | `cover` | `closed`, `half` (optional), `open` | `open` |
+   | `lock` | `locked`, `unlocked` | `locked` |
+   | `binary_sensor` (door/window/garage-door contact only) | `closed`, `open` | `closed` |
+
+   **Every pose you want shown needs an explicit `__word` suffix —
+   including the rest/default one.** An unsuffixed piece (no `__…` at all)
+   is *never* treated as a pose, no matter what — it's always-visible
+   base/detail geometry that sits alongside whichever pose is currently
+   showing. This is deliberate: it's what lets a lock be modelled as a fixed
+   device body (e.g. a keypad housing, named plain `lock.front_door`) *plus*
+   a swinging door leaf that has its own two poses (`lock.front_door__locked`
+   / `__unlocked`) — the housing stays visible either way, and only the leaf
+   swaps. If you only ever want ONE always-there mesh for a device and no
+   pose-swap at all, just leave its name unsuffixed and skip pose authoring
+   entirely — nothing about it changes.
 3. Upload the model as usual. All the differently-suffixed copies are treated
    as the SAME entity (the suffix doesn't affect binding/tapping/RBAC at all),
-   and the kiosk shows whichever pose matches the device's live state — for a
-   cover, using `current_position` (0–100%) when it's reported, or falling
-   back to plain open/closed state when it isn't (opening/closing shows the
-   half pose if you made one, or the nearest pose you did author otherwise);
-   for a lock, its locked/unlocked state directly (anything uncertain —
-   jammed, mid-transition, offline — shows the LOCKED pose, on the side of
-   never implying a door is open when its real state genuinely isn't known).
+   and the kiosk shows whichever pose matches the device's live state:
+   - **cover** — `current_position` (0–100%) when it's reported, or falling
+     back to plain open/closed state when it isn't (opening/closing shows the
+     half pose if you made one, or the nearest pose you did author otherwise).
+   - **lock** — its locked/unlocked state directly (anything uncertain —
+     jammed, mid-transition, offline — shows the LOCKED pose, on the side of
+     never implying a door is open when its real state genuinely isn't known).
+   - **binary_sensor** — ONLY for a door/window/garage-door contact, gated on
+     the entity's HA `device_class` (`door`, `window`, `garage_door`, or
+     `opening`); its raw `on`/`off` state maps to open/closed. Every other
+     binary_sensor class (leak, motion, smoke, …) is completely unaffected by
+     this mechanism, even if you happened to name its mesh with a `__word`
+     suffix — the live-state routing only fires for a recognised opening
+     device_class. Anything uncertain (unavailable/unknown) shows CLOSED, the
+     same fail-safe direction as lock.
 
-This is entirely **per-device and optional** — a villa can mix curtains/locks
-that use this (2 or 3 poses) with ones that don't (a single plain mesh), and
-a model that never uses this convention at all behaves exactly as before.
+This is entirely **per-device and optional** — a villa can mix
+covers/locks/contacts that use this (2 or 3 poses) with ones that don't (a
+single plain mesh), and a model that never uses this convention at all
+behaves exactly as before.
 
 **You can pose each copy with a different catalog model and different width**
 (e.g. a slim gathered curtain for `__open`, a full-width one for `__closed`) —
@@ -146,18 +172,20 @@ correctly, so high-poly/detailed curtains are fine.
 
 #### What the bake does for you automatically (no authoring needed)
 
-- **Windows stay windows.** A curtain hangs directly over its window, so the
-  window's glass + frame sit inside the curtain's match box. The pipeline keeps
-  that glass/frame in the structural shell (baked transparent, correctly lit) and
-  never lets the curtain "absorb" it — otherwise the window would render as an
-  opaque, curtain-toggling white panel. Just place the curtain over the window;
-  nothing special to do.
-- **No ghost shadows from hidden poses.** During the light bake, only the pose
-  that's shown **at rest** (the default `__open` / `__unlocked`, or nearest
-  authored) casts shadows — the hidden closed/half copies are excluded, so their
-  shadow isn't frozen onto the floor in the default view. A non-default pose,
-  when later selected, simply has no baked shadow (a minor omission, never a
-  wrong ghost).
+- **Windows stay windows.** A curtain (or a door's own frame/glass) hangs
+  directly over its window/opening, so the window's glass + frame sit inside
+  the curtain/door's match box. The pipeline keeps that glass/frame in the
+  structural shell (baked transparent, correctly lit) and never lets the
+  curtain/door "absorb" it — otherwise the window would render as an opaque,
+  state-toggling white panel. Just place it over the window; nothing special
+  to do.
+- **No ghost shadows from hidden poses.** During the light bake, only the
+  pose that's shown **at rest** (`open` for a cover, `locked`/`closed` for a
+  lock/contact, or the nearest authored pose if the exact default wasn't
+  made) casts shadows — every other pose is excluded, so its shadow isn't
+  frozen onto the floor in the default view. A non-default pose, when later
+  selected, simply has no baked shadow (a minor omission, never a wrong
+  ghost).
 
 > **Bake resolution:** detailed curtain/fabric geometry re-packs the lightmap
 > atlas. Bake at **`--bake-size 2048`** (not 1024) to avoid atlas bleed — stray

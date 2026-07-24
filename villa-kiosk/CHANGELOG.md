@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.15
+
+### Changes
+- extend the cover/lock pose-swap mechanism to binary_sensor door/window contact sensors (device_class-gated open/closed poses); update README + MODEL_PIPELINE docs to reflect current lock/binary_sensor defaults and the unsuffixed-mesh-is-never-a-pose rule
+
+---
+
+
 ## 2.35.14
 
 ### Changes

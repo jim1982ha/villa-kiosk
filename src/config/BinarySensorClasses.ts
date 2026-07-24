@@ -75,3 +75,18 @@ export function binarySensorClassInfo(deviceClass?: string): BinarySensorClassIn
   if (!deviceClass) return DEFAULT_INFO;
   return BINARY_SENSOR_CLASSES[deviceClass] ?? DEFAULT_INFO;
 }
+
+/** Device classes whose on/off state is a physical opening's POSITION
+ *  (open/closed), not a fault or presence reading — the four classes above
+ *  that share the door/closed wording and DoorOpen icon. This is what
+ *  EntityVisuals gates its binary_sensor pose-swap on (an authored door/
+ *  window contact modelled with "__open"/"__closed" alternate meshes, the
+ *  same mechanism as cover/lock — see EntityVisuals' VARIANT_VOCAB): only a
+ *  sensor whose device_class genuinely means "open vs closed" should ever
+ *  have its live state interpreted that way, even though applyMeshVariant
+ *  is already a no-op for any entity nobody authored alternate poses for.
+ *  A property of the device_class itself, so it lives here rather than
+ *  being duplicated in EntityVisuals. */
+export const OPENING_DEVICE_CLASSES: ReadonlySet<string> = new Set([
+  "door", "garage_door", "window", "opening",
+]);
