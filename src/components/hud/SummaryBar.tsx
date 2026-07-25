@@ -213,7 +213,10 @@ function SceneMenu({ scenes, canRun, apply }: {
   const single = scenes.length === 1;
 
   const toggle = () => {
-    if (single) { apply(scenes[0]); return; }
+    // Tapping the tile NEVER applies a scene directly (even with just one) —
+    // it always opens the menu; a scene is only applied when SELECTED from it.
+    // This keeps the bar's rule uniform: an icon tap opens a chooser/modal,
+    // never a direct state change.
     if (open) { setOpen(false); return; }
     const r = btnRef.current?.getBoundingClientRect();
     if (r) setPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8 });
@@ -231,9 +234,9 @@ function SceneMenu({ scenes, canRun, apply }: {
           ["--tile-accent" as string]: CATEGORY_COLORS.others.bottom,
         }}
         disabled={!canRun}
-        aria-haspopup={single ? undefined : "menu"}
-        aria-expanded={single ? undefined : open}
-        title={single ? `Apply scene: ${scenes[0].name}` : "Choose a scene to apply"}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Choose a scene to apply"
         onClick={toggle}
       >
         <span className="summary-tile-icon"><Sparkles size={24} /></span>
@@ -244,7 +247,7 @@ function SceneMenu({ scenes, canRun, apply }: {
           </span>
         </span>
       </button>
-      {open && !single && pos && createPortal(
+      {open && pos && createPortal(
         <div
           ref={menuRef}
           className="summary-scene-menu"

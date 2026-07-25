@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.33
+
+### Changes
+- enforce the bottom-bar rule uniformly: the Scene tile no longer applies a single scene directly on tap — it always opens its menu, and a scene is applied only when selected from it (device tiles already open a modal, never a direct state change)
+
+---
+
+
 ## 2.35.32
 
 ### Changes
