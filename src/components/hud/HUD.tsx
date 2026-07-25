@@ -26,7 +26,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
 import { ROLE_LABELS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
-import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_COLORS } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
@@ -367,16 +367,15 @@ export default function HUD({
             {visibleCategories.map((cat) => {
               const hidden = config.hiddenCategories.includes(cat);
               const Icon = CATEGORY_ICONS[cat];
-              const colors = CATEGORY_COLORS[cat];
               return (
                 <button
                   key={cat}
                   className={`icon-btn${hidden ? "" : " active"}`}
-                  // Lit in the SAME colour as this category's badges on the
-                  // map (see config/EntityCategories.CATEGORY_COLORS), so the
+                  // Lit in the SAME gradient as this category's badges on the
+                  // map (see config/EntityCategories.categoryGradient), so the
                   // filter row doubles as a colour legend.
                   style={hidden ? undefined : {
-                    background: `linear-gradient(135deg, ${colors.top}, ${colors.bottom})`,
+                    background: categoryGradient(cat),
                     color: "#ffffff",
                   }}
                   onClick={() => toggleCategory(cat)}

@@ -54,7 +54,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
-import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
+import { effectiveCategory } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable, coverVisualBucket, lockVisualBucket, openingVisualBucket } from "@/utils/stateColors";
 import { OPENING_DEVICE_CLASSES } from "@/config/BinarySensorClasses";
@@ -63,7 +63,7 @@ import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { axisWorldScale } from "./meshUnits";
 import { LightPool } from "./LightPools";
-import { badgeImageDataUrl, iconChipDataUrl, BADGE_CORNER_FRACTION } from "./badgeIcons";
+import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER } from "./colors";
 
@@ -265,10 +265,18 @@ const BADGE_DIAMETER_PX = 40;
 // squircle+pill. Both are the SAME LabelControls (container/badge/glyph/
 // valueWrap/valueText), just arranged differently; `badge` stays the single
 // tappable region (badgeContaining hit-tests it), so pickBadgeAt is unchanged.
-const CARD_HEIGHT_PX = 40;         // the coloured card's own height (also the
-                                   // chip image's render size — its baked-in
-                                   // CHIP_INSET margin becomes the visible inset)
+const CARD_HEIGHT_PX = 40;         // the card's own height (also the gradient
+                                   // squircle's render size — its baked-in
+                                   // BADGE_INSET_CARD margin becomes the inset)
 const CARD_LABEL_HEIGHT_PX = 46;   // container height (card + a little clearance)
+// The card is a NEUTRAL surface (like the bottom-bar tiles) carrying a GRADIENT
+// squircle icon (badgeImageDataUrl) + dark text — so the gradient icon square
+// reads consistently with the top bar and the bottom bar. Hardcoded (Babylon
+// GUI can't read CSS theme vars); a light glassy card + dark text reads over
+// the villa the same way the bottom bar does.
+const CARD_BG = "rgba(255,255,255,0.94)";
+const CARD_TEXT = "#1e293b";
+const CLASSIC_PILL_TEXT = "#f8fafc";
 
 // Entity types compactValue() can EVER return non-empty text for — must stay
 // in sync with that switch. Used by declutterLabels to reserve pill-sized
@@ -1559,14 +1567,14 @@ export class EntityVisuals {
         badge.addControl(row);
       }
 
+      // BOTH styles use the SAME gradient squircle image (badgeImageDataUrl) —
+      // the app's one gradient icon square. The card just bakes an inset so the
+      // squircle sits padded on its neutral card; the classic badge fills its
+      // own control (inset 0). Its baked-in margin also supplies the card's
+      // icon↔value gap and top/bottom/left padding.
       const glyph = new Image(`lbl_glyph_${entityId}`,
-        card
-          ? iconChipDataUrl(iconKeyFor(type, this.lastState.get(entityId)))
-          : badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)),
-              this.config.entityMap[entityId]?.badgeColor));
-      // Card: the chip image spans the FULL card height; its own baked-in
-      // transparent margin (CHIP_INSET) is what shows the coloured card as an
-      // even inset on all sides. Classic: the squircle is the badge's fill.
+        badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)),
+          this.config.entityMap[entityId]?.badgeColor, card ? BADGE_INSET_CARD : 0));
       const glyphPx = card ? CARD_HEIGHT_PX : BADGE_DIAMETER_PX;
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
@@ -1604,7 +1612,8 @@ export class EntityVisuals {
 
       const valueText = new TextBlock(`lbl_value_${entityId}`);
       valueText.text = "";
-      valueText.color = "#f8fafc";
+      // Card: dark text on the neutral card. Classic: white text on the dark pill.
+      valueText.color = card ? CARD_TEXT : CLASSIC_PILL_TEXT;
       // Match the app's own UI typeface (--font-ui: Inter) instead of the GUI
       // layer's Babylon default (Arial) — that mismatch, plus font-style:"bold"
       // faking a weight Inter doesn't ship (only 200/400/500/600 are loaded, see
@@ -1642,15 +1651,14 @@ export class EntityVisuals {
     const override = this.config.entityMap[entityId]?.badgeColor;
 
     if (this.config.badgeStyle === "card") {
-      // The card's FILL is the category colour (or per-entity override); the
-      // glyph is a translucent icon chip (no baked colour). State shows as the
-      // same outline ring; "unavailable" dims the whole card since its fill,
-      // not just a ring, carries the colour.
-      lbl.badge.background = override ?? CATEGORY_COLORS[lbl.category].bottom;
+      // NEUTRAL card + GRADIENT squircle glyph (the app's one gradient icon
+      // square) + dark text. State shows as the outline ring; "unavailable"
+      // dims the whole card.
+      lbl.badge.background = CARD_BG;
       lbl.badge.thickness = ring.color ? BADGE_RING_THICKNESS : 0;
       lbl.badge.color = ring.color ?? "transparent";
       lbl.badge.alpha = kind === "unavailable" ? ring.alpha : 1;
-      lbl.glyph.source = iconChipDataUrl(iconKey);
+      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, override, BADGE_INSET_CARD);
     } else {
       // The squircle's own fill never changes — only this outline ring (state)
       // and the glyph (device type / device_class, honouring live device_class

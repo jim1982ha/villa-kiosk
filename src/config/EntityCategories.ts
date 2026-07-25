@@ -42,6 +42,17 @@ export const CATEGORY_COLORS: Record<Category, { top: string; bottom: string }> 
   energy:         { top: "#7FCBF7", bottom: "#2E8FD6" }, // sky -> electric blue
 };
 
+/** The category's gradient as a CSS value — the ONE source of the app's
+ *  gradient icon squares in the DOM (top-bar category chips, the legend, the
+ *  bottom-bar tile icons). The 3D badges bake the same top→bottom gradient via
+ *  badgeImageDataUrl, so every gradient icon in the app comes from this same
+ *  CATEGORY_COLORS pair. An optional #rrggbb override (a per-entity badge
+ *  colour) derives a matching gradient from that single colour. */
+export function categoryGradient(category: Category, override?: string): string {
+  const c = override ? { top: override, bottom: override } : CATEGORY_COLORS[category];
+  return `linear-gradient(135deg, ${c.top}, ${c.bottom})`;
+}
+
 /** Default category by device TYPE. Anything not listed here (and not caught by
  *  a device_class rule below) falls into "others". */
 export const DEFAULT_CATEGORY_BY_TYPE: Partial<Record<EntityType, Category>> = {

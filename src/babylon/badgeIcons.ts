@@ -77,12 +77,25 @@ function shade(hex: string, amt: number): string {
   return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 }
 
-/** Render (and cache) the composited squircle badge for a category + glyph.
+// Baking an INSET (a transparent margin on every side) into the image is a
+// deterministic way to pad the glyph — used by the "card" badge style, whose
+// gradient squircle sits on a neutral card and needs even breathing room the
+// Babylon GUI adaptWidthToChildren + control padding wouldn't give reliably.
+// The classic badge passes inset 0 (the squircle fills its own control).
+export const BADGE_INSET_CARD = 0.15; // ~6 px margin at a 40 px render
+
+/** Render (and cache) the composited GRADIENT squircle badge for a category +
+ *  glyph — the single source of the app's gradient icon squares (top bar,
+ *  bottom bar and both badge styles all resolve to this same look).
  *  `colorOverride` (a #rrggbb) replaces the category's preset gradient with one
  *  derived from that single colour — the per-entity badge colour a user sets
- *  from the device panel (persisted on EntityMapping.badgeColor). */
-export function badgeImageDataUrl(category: Category, iconKey: string, colorOverride?: string): string {
-  const cacheKey = `${category}:${iconKey}:${colorOverride ?? ""}`;
+ *  from the device panel (persisted on EntityMapping.badgeColor). `inset` bakes
+ *  a transparent margin so the squircle can sit padded inside a larger control
+ *  (see BADGE_INSET_CARD). */
+export function badgeImageDataUrl(
+  category: Category, iconKey: string, colorOverride?: string, inset = 0,
+): string {
+  const cacheKey = `${category}:${iconKey}:${colorOverride ?? ""}:${inset}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -95,75 +108,32 @@ export function badgeImageDataUrl(category: Category, iconKey: string, colorOver
     const colors = colorOverride
       ? { top: shade(colorOverride, 0.12), bottom: shade(colorOverride, -0.12) }
       : CATEGORY_COLORS[category];
-    const corner = CANVAS_PX * BADGE_CORNER_FRACTION;
+    const m = CANVAS_PX * inset;            // transparent margin
+    const size = CANVAS_PX - 2 * m;         // the squircle itself
+    const corner = size * BADGE_CORNER_FRACTION;
 
-    const grad = ctx.createLinearGradient(0, 0, CANVAS_PX * 0.3, CANVAS_PX);
+    const grad = ctx.createLinearGradient(m, m, m + size * 0.3, m + size);
     grad.addColorStop(0, colors.top);
     grad.addColorStop(1, colors.bottom);
-    roundRectPath(ctx, 0, 0, CANVAS_PX, CANVAS_PX, corner);
+    roundRectPath(ctx, m, m, size, size, corner);
     ctx.fillStyle = grad;
     ctx.fill();
 
     // Subtle bottom-edge shading for the slight bevel/depth of the reference look.
     ctx.save();
-    roundRectPath(ctx, 0, 0, CANVAS_PX, CANVAS_PX, corner);
+    roundRectPath(ctx, m, m, size, size, corner);
     ctx.clip();
     ctx.fillStyle = "rgba(0,0,0,0.15)";
-    ctx.fillRect(0, CANVAS_PX * 0.92, CANVAS_PX, CANVAS_PX * 0.08);
+    ctx.fillRect(m, m + size * 0.92, size, size * 0.08);
     ctx.restore();
 
-    const iconScale = (CANVAS_PX / ICON_VIEWBOX) * ICON_FRACTION;
+    const iconScale = (size / ICON_VIEWBOX) * ICON_FRACTION;
     const iconPx = ICON_VIEWBOX * iconScale;
-    const offset = (CANVAS_PX - iconPx) / 2;
+    const offset = (CANVAS_PX - iconPx) / 2; // centred in the canvas = in the squircle
     drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset);
 
     url = canvas.toDataURL("image/png");
   }
   cache.set(cacheKey, url);
-  return url;
-}
-
-const chipCache = new Map<string, string>();
-
-// The chip is drawn INSET inside its (transparent) canvas by this fraction on
-// every side — so when EntityVisuals renders the image at the card's full
-// height, that transparent margin lets the solid coloured card show through
-// EVENLY on all four sides. Baking the padding into the image is deterministic
-// (it's just pixels), unlike Babylon GUI's adaptWidthToChildren + control
-// padding, which wasn't producing a reliable, symmetric inset for the card.
-const CHIP_INSET = 0.15;             // ~6 px at a 40 px render
-const CHIP_ICON_FRACTION = 0.62;     // icon size as a fraction of the CHIP (not the canvas)
-
-/** Icon glyph for the "card" badge style (config.badgeStyle): a translucent-
- *  white rounded chip (inset, see CHIP_INSET) with a white icon, on a
- *  TRANSPARENT background — meant to sit inside a solid category-coloured card
- *  (EntityVisuals card badges), where the full category-coloured squircle
- *  badgeImageDataUrl() produces would blend into the same-coloured card. Icon
- *  only, no category colour, so it's cached by iconKey alone. */
-export function iconChipDataUrl(iconKey: string): string {
-  const cached = chipCache.get(iconKey);
-  if (cached) return cached;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = CANVAS_PX;
-  canvas.height = CANVAS_PX;
-  const ctx = canvas.getContext("2d");
-  let url = "";
-  if (ctx) {
-    const margin = CANVAS_PX * CHIP_INSET;
-    const chip = CANVAS_PX - 2 * margin;
-    const corner = chip * BADGE_CORNER_FRACTION;
-    roundRectPath(ctx, margin, margin, chip, chip, corner);
-    ctx.fillStyle = "rgba(255,255,255,0.22)"; // translucent chip on the card
-    ctx.fill();
-
-    const iconScale = (chip / ICON_VIEWBOX) * CHIP_ICON_FRACTION;
-    const iconPx = ICON_VIEWBOX * iconScale;
-    const offset = (CANVAS_PX - iconPx) / 2; // centre the icon in the whole canvas
-    drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset);
-
-    url = canvas.toDataURL("image/png");
-  }
-  chipCache.set(iconKey, url);
   return url;
 }

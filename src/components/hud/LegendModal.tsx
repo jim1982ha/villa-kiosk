@@ -7,7 +7,7 @@
 // that reference, one tap away, not shown by default.
 
 import { X } from "lucide-react";
-import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_COLORS } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
 
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "On / active", swatch: "var(--status-on)", note: "Device is on, unlocked-safe, or open" },
@@ -40,7 +40,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
               <div className="legend-row" key={c}>
                 <span
                   className="legend-swatch"
-                  style={{ background: `linear-gradient(135deg, ${CATEGORY_COLORS[c].top}, ${CATEGORY_COLORS[c].bottom})` }}
+                  style={{ background: categoryGradient(c) }}
                 />
                 <span>{CATEGORY_LABELS[c]}</span>
               </div>

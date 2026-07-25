@@ -27,7 +27,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
-import { CATEGORY_COLORS, CATEGORY_ORDER } from "@/config/EntityCategories";
+import { CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient } from "@/config/EntityCategories";
 import { applyScene } from "@/config/scenes";
 import type { KioskScene } from "@/config/scenes";
 import type { HassEntity } from "@/types/ha.types";
@@ -195,13 +195,18 @@ interface Props {
 
 function Tile({ t }: { t: SummaryTile }) {
   const Icon = t.icon;
-  const accent = CATEGORY_COLORS[t.category].bottom;
   const interactive = !!t.onTap;
   return (
     <button
       type="button"
       className={`summary-tile tone-${t.tone}${interactive ? "" : " is-info"}`}
-      style={{ ["--tile-accent" as string]: accent }}
+      // --tile-grad: the gradient icon square (categoryGradient, shared with the
+      // top bar). --tile-accent: the solid bottom colour, used only for the lit
+      // border (color-mix needs a solid colour, not a gradient).
+      style={{
+        ["--tile-grad" as string]: categoryGradient(t.category),
+        ["--tile-accent" as string]: CATEGORY_COLORS[t.category].bottom,
+      }}
       onClick={t.onTap}
       disabled={!interactive}
       title={interactive ? `${t.label}: ${t.value}` : `${t.label}: ${t.value} (view only)`}
@@ -247,7 +252,6 @@ function SceneMenu({ scenes, canRun, apply }: {
   }, [open]);
 
   const single = scenes.length === 1;
-  const accent = CATEGORY_COLORS.others.bottom;
 
   const toggle = () => {
     if (single) { apply(scenes[0]); return; }
@@ -263,7 +267,10 @@ function SceneMenu({ scenes, canRun, apply }: {
         ref={btnRef}
         type="button"
         className="summary-tile tone-neutral"
-        style={{ ["--tile-accent" as string]: accent }}
+        style={{
+          ["--tile-grad" as string]: categoryGradient("others"),
+          ["--tile-accent" as string]: CATEGORY_COLORS.others.bottom,
+        }}
         disabled={!canRun}
         aria-haspopup={single ? undefined : "menu"}
         aria-expanded={single ? undefined : open}

@@ -496,7 +496,9 @@ button {
 .summary-tile-icon {
   display: flex; align-items: center; justify-content: center;
   width: 46px; height: 46px; flex: 0 0 auto; border-radius: 13px;
-  color: #fff; background: var(--tile-accent, var(--accent));
+  /* Gradient icon square — same categoryGradient() as the top-bar chips and
+     the 3D badges (fallback keeps a solid fill if the var is ever unset). */
+  color: #fff; background: var(--tile-grad, var(--tile-accent, var(--accent)));
 }
 .summary-tile-icon svg { width: 24px; height: 24px; }
 .summary-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.18; gap: 1px; }

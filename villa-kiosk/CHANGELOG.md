@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.31
+
+### Changes
+- gradient icon squares everywhere (DRY): one categoryGradient() helper drives the top bar, legend and bottom-bar tile icons; badgeImageDataUrl unified with an inset param (deletes near-duplicate iconChipDataUrl) so the card badge now shows the same gradient squircle on a neutral card
+
+---
+
+
 ## 2.35.30
 
 ### Changes
