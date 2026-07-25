@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.28
+
+### Changes
+- status/enum sensor badges: hide the value while nominal (Connected/OK/Normal…) since the badge is already category-coloured; a non-nominal state stays shown and a known-bad one (Disconnected/Error/Offline…) rings the badge red so a real change never goes unseen
+
+---
+
+
 ## 2.35.27
 
 ### Changes

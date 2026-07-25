@@ -277,6 +277,21 @@ const CARD_LABEL_HEIGHT_PX = 46;   // container height (card + a little clearanc
 // "currently has one" for collision-box sizing).
 const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climate", "sensor"]);
 
+// Status/enum SENSOR states (a text sensor like an AP's connectivity state).
+// NOMINAL = "all good, nothing to report" — its value is hidden (the badge is
+// already category-coloured, so "Connected" is just clutter). ALERT = a known
+// bad state — its value stays SHOWN and the badge rings red (see badgeKind),
+// so a real change is never silently swallowed. An unrecognised enum value
+// (e.g. a weather "sunny") is neither: it's shown, un-ringed, as before.
+const SENSOR_NOMINAL_STATES = new Set([
+  "connected", "online", "ok", "okay", "normal", "nominal", "available",
+  "ready", "clear", "operational", "up", "good", "healthy", "active",
+]);
+const SENSOR_ALERT_STATES = new Set([
+  "disconnected", "offline", "error", "fault", "faulted", "failed", "fail",
+  "unreachable", "down", "disabled", "problem", "alarm", "tripped",
+]);
+
 // Pulse animation speed in radians per second (was 0.06 per frame at ~60 fps).
 // Advanced by real elapsed time so the alert pulse breathes at the same rate on
 // a 60 Hz tablet and a 120 Hz phone.
@@ -1922,7 +1937,10 @@ export class EntityVisuals {
       case "media_player":  return s.state === "playing" || s.state === "buffering" ? "on" : "off";
       case "camera":        return s.state === "recording" || s.state === "streaming" ? "on" : "off";
       case "assist_satellite": return s.state === "idle" ? "off" : "on"; // listening/processing/responding
-      case "sensor":        return "info"; // informational: neutral disc, value pill carries meaning
+      case "sensor":
+        // A status/enum sensor reading a known-bad state (disconnected, error…)
+        // rings red so it stands out; everything else is neutral info.
+        return SENSOR_ALERT_STATES.has(s.state.trim().toLowerCase()) ? "alert" : "info";
       default:              return s.state === "on" ? "on" : "off"; // light/fan/switch/input_boolean
     }
   }
@@ -1989,6 +2007,11 @@ export class EntityVisuals {
 
     // ── Non-numeric (enum / status text) ──────────────────────────────────
     if (s.state.trim() === "" || !Number.isFinite(n)) {
+      // Hide a NOMINAL/healthy status ("Connected", "OK", "Normal"…) — the
+      // badge is already category-coloured, so the word is redundant clutter.
+      // Any OTHER value stays shown (and a known-bad one rings red, see
+      // badgeKind), so a state change is never silently lost.
+      if (SENSOR_NOMINAL_STATES.has(s.state.trim().toLowerCase())) return "";
       const words = String(s.state).replace(/_/g, " ").trim();
       const pretty = words.charAt(0).toUpperCase() + words.slice(1);
       return this.clampPill(pretty);
