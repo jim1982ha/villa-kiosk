@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.29
+
+### Changes
+- SummaryBar: fit all tiles without scroll on desktop — keep the icon at 46px but tighten inter-tile gap/padding, cap tile width at 200, single-line (ellipsised) labels, and shorten the lock tile label to Entrance (was the widest tile)
+
+---
+
+
 ## 2.35.28
 
 ### Changes
