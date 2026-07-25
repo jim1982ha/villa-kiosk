@@ -54,7 +54,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
-import { effectiveCategory } from "@/config/EntityCategories";
+import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable, coverVisualBucket, lockVisualBucket, openingVisualBucket } from "@/utils/stateColors";
 import { OPENING_DEVICE_CLASSES } from "@/config/BinarySensorClasses";
@@ -269,14 +269,11 @@ const CARD_HEIGHT_PX = 40;         // the card's own height (also the gradient
                                    // squircle's render size — its baked-in
                                    // BADGE_INSET_CARD margin becomes the inset)
 const CARD_LABEL_HEIGHT_PX = 46;   // container height (card + a little clearance)
-// The card is a NEUTRAL surface (like the bottom-bar tiles) carrying a GRADIENT
-// squircle icon (badgeImageDataUrl) + dark text — so the gradient icon square
-// reads consistently with the top bar and the bottom bar. Hardcoded (Babylon
-// GUI can't read CSS theme vars); a light glassy card + dark text reads over
-// the villa the same way the bottom bar does.
-const CARD_BG = "rgba(255,255,255,0.94)";
-const CARD_TEXT = "#1e293b";
-const CLASSIC_PILL_TEXT = "#f8fafc";
+// The card is filled with the entity's CATEGORY colour (or per-entity
+// override) — a solid coloured card carrying the GRADIENT squircle icon
+// (badgeImageDataUrl, whose lighter top + white glyph + drop shadow keep it
+// legible on the same-family colour) and white text.
+const CARD_TEXT = "#f8fafc";
 
 // Entity types compactValue() can EVER return non-empty text for — must stay
 // in sync with that switch. Used by declutterLabels to reserve pill-sized
@@ -1612,8 +1609,8 @@ export class EntityVisuals {
 
       const valueText = new TextBlock(`lbl_value_${entityId}`);
       valueText.text = "";
-      // Card: dark text on the neutral card. Classic: white text on the dark pill.
-      valueText.color = card ? CARD_TEXT : CLASSIC_PILL_TEXT;
+      // White on both: the classic pill (dark) and the coloured card.
+      valueText.color = CARD_TEXT;
       // Match the app's own UI typeface (--font-ui: Inter) instead of the GUI
       // layer's Babylon default (Arial) — that mismatch, plus font-style:"bold"
       // faking a weight Inter doesn't ship (only 200/400/500/600 are loaded, see
@@ -1651,10 +1648,10 @@ export class EntityVisuals {
     const override = this.config.entityMap[entityId]?.badgeColor;
 
     if (this.config.badgeStyle === "card") {
-      // NEUTRAL card + GRADIENT squircle glyph (the app's one gradient icon
-      // square) + dark text. State shows as the outline ring; "unavailable"
-      // dims the whole card.
-      lbl.badge.background = CARD_BG;
+      // CATEGORY-COLOURED card (or per-entity override) + the GRADIENT squircle
+      // glyph (the app's one gradient icon square). State shows as the outline
+      // ring; "unavailable" dims the whole card.
+      lbl.badge.background = override ?? CATEGORY_COLORS[lbl.category].bottom;
       lbl.badge.thickness = ring.color ? BADGE_RING_THICKNESS : 0;
       lbl.badge.color = ring.color ?? "transparent";
       lbl.badge.alpha = kind === "unavailable" ? ring.alpha : 1;

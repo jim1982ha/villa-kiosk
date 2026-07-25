@@ -30,22 +30,26 @@ import { isCategoryAllowed } from "@/auth/permissions";
 import { CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient } from "@/config/EntityCategories";
 import { applyScene } from "@/config/scenes";
 import type { KioskScene } from "@/config/scenes";
+import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 
 type IconType = ComponentType<{ size?: number | string }>;
 
-/** One rendered tile. `onTap` present ⇒ interactive; absent ⇒ read-only info. */
+/** One rendered tile. Clicking it opens a SummaryGroupPanel listing (and
+ *  controlling) the `entityIds` it represents. `value`/`tone` are the at-a-
+ *  glance summary; `title`/`icon` head the modal; `canControl` gates the
+ *  modal's inline controls for the active profile. */
 interface SummaryTile {
   id: string;
   icon: IconType;
   label: string;
   value: string;
-  /** Drives the accent: "on" lit, "warn" amber, "off"/"neutral" muted. */
   tone: "on" | "off" | "warn" | "neutral";
-  /** The category whose colour tints the tile (matches the 3D badges). */
   category: Category;
-  onTap?: () => void;
+  entityIds: string[];
+  title: string;
+  canControl: boolean;
 }
 
 const OFF_STATES = new Set(["off", "unavailable", "unknown", ""]);
@@ -55,78 +59,61 @@ const friendly = (e: HassEntity) =>
   e.attributes.friendly_name ??
   e.entity_id.split(".")[1].replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
-const MAX_SCENE_TILES = 4;
-
 /** Build the ordered tile list from the live entity snapshot. Pure (no side
  *  effects) so it's cheap to recompute on every state push via useMemo. */
 function deriveTiles(
   entities: Record<string, HassEntity>,
   can: (c: Category) => boolean,
-  callService: ReturnType<typeof useHA>["callService"],
-  onOpenEntity: (entityId: string) => void,
 ): SummaryTile[] {
   const all = Object.values(entities);
   const byDomain = (d: string) => all.filter((e) => e.entity_id.startsWith(`${d}.`));
   const tiles: SummaryTile[] = [];
 
-  // ── Door lock → "Entrance" open/closed, opens its panel ──────────────
-  for (const lock of byDomain("lock")) {
-    const locked = lock.state === "locked";
+  // ── Door locks ───────────────────────────────────────────────────────
+  const locks = byDomain("lock");
+  if (locks.length) {
+    const lockedN = locks.filter((l) => l.state === "locked").length;
+    const allLocked = lockedN === locks.length;
+    const single = locks.length === 1;
     tiles.push({
-      id: lock.entity_id,
-      icon: locked ? DoorClosed : DoorOpen,
-      label: friendly(lock),
-      value: locked ? "Locked" : lock.state === "unlocked" ? "Unlocked" : lock.state,
-      tone: locked ? "neutral" : "warn",
+      id: "__locks",
+      icon: allLocked ? DoorClosed : DoorOpen,
+      label: single ? friendly(locks[0]) : "Locks",
+      value: single
+        ? (locks[0].state === "locked" ? "Locked" : locks[0].state === "unlocked" ? "Unlocked" : locks[0].state)
+        : `${lockedN}/${locks.length} locked`,
+      tone: allLocked ? "neutral" : "warn",
       category: "access_control",
-      onTap: can("access_control") ? () => onOpenEntity(lock.entity_id) : undefined,
+      entityIds: locks.map((l) => l.entity_id),
+      title: single ? friendly(locks[0]) : "Locks",
+      canControl: can("access_control"),
     });
   }
 
-  // ── Pool / jacuzzi switch → quick on/off toggle ──────────────────────
-  const pool = byDomain("switch").find((e) =>
-    /pool|jacuzzi|jaccuzi|spa/i.test(e.entity_id));
-  if (pool) {
-    const on = isOn(pool);
+  // ── Pool / jacuzzi switches ──────────────────────────────────────────
+  const poolSwitches = byDomain("switch").filter((e) => /pool|jacuzzi|jaccuzi|spa/i.test(e.entity_id));
+  if (poolSwitches.length) {
+    const on = poolSwitches.some(isOn);
     tiles.push({
-      id: pool.entity_id,
-      icon: Waves,
-      label: "Pool",
-      value: on ? "On" : "Off",
-      tone: on ? "on" : "off",
-      category: "energy",
-      onTap: can("energy")
-        ? () => callService("switch", "toggle", {}, { entity_id: pool.entity_id })
-        : undefined,
+      id: "__pool", icon: Waves, label: "Pool",
+      value: on ? "On" : "Off", tone: on ? "on" : "off", category: "energy",
+      entityIds: poolSwitches.map((e) => e.entity_id), title: "Pool", canControl: can("energy"),
     });
   }
 
-  // ── All lights → one aggregate toggle ────────────────────────────────
+  // ── All lights ───────────────────────────────────────────────────────
   const lights = byDomain("light");
   if (lights.length) {
-    const onIds = lights.filter(isOn).map((e) => e.entity_id);
-    const n = onIds.length;
-    const anyOn = n > 0;
+    const n = lights.filter(isOn).length;
     tiles.push({
-      id: "__lights",
-      icon: Lightbulb,
-      label: "Lights",
-      value: n === lights.length ? "All On" : anyOn ? `${n} On` : "All Off",
-      tone: anyOn ? "on" : "off",
-      category: "light",
-      onTap: can("light")
-        ? () =>
-            callService(
-              "light",
-              anyOn ? "turn_off" : "turn_on",
-              {},
-              { entity_id: anyOn ? onIds : lights.map((e) => e.entity_id) },
-            )
-        : undefined,
+      id: "__lights", icon: Lightbulb, label: "Lights",
+      value: n === lights.length ? "All On" : n > 0 ? `${n} On` : "All Off",
+      tone: n > 0 ? "on" : "off", category: "light",
+      entityIds: lights.map((e) => e.entity_id), title: "Lights", canControl: can("light"),
     });
   }
 
-  // ── Climate → "AC" summary (avg current temp of the ones that are on) ─
+  // ── Climate ("AC") ───────────────────────────────────────────────────
   const climates = byDomain("climate");
   if (climates.length) {
     const active = climates.filter((e) => e.state !== "off" && !OFF_STATES.has(e.state));
@@ -135,40 +122,16 @@ function deriveTiles(
       .filter((t): t is number => typeof t === "number");
     const avg = temps.length ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : null;
     tiles.push({
-      id: "__climate",
-      icon: Snowflake,
-      label: "AC",
+      id: "__climate", icon: Snowflake, label: "AC",
       value: active.length === 0 ? "Off" : avg !== null ? `${avg}°C` : `${active.length} On`,
-      tone: active.length ? "on" : "off",
-      category: "comfort",
-      onTap:
-        can("comfort") && climates[0]
-          ? () => onOpenEntity(climates[0].entity_id)
-          : undefined,
+      tone: active.length ? "on" : "off", category: "comfort",
+      entityIds: climates.map((e) => e.entity_id), title: "Climate", canControl: can("comfort"),
     });
   }
 
-  // ── Scenes → one-tap activation tiles ────────────────────────────────
-  const scenes = byDomain("scene").slice(0, MAX_SCENE_TILES);
-  for (const scene of scenes) {
-    tiles.push({
-      id: scene.entity_id,
-      icon: Sparkles,
-      label: "Scene",
-      value: friendly(scene),
-      tone: "neutral",
-      category: "others",
-      onTap: can("others")
-        ? () => callService("scene", "turn_on", {}, { entity_id: scene.entity_id })
-        : undefined,
-    });
-  }
-
-  // ── Energy → total instantaneous power across power sensors ──────────
+  // ── Energy → total instantaneous power across power sensors (read-only) ─
   const powerSensors = byDomain("sensor").filter(
-    (e) =>
-      e.attributes.device_class === "power" ||
-      /(^|_)w$|watt/i.test(e.attributes.unit_of_measurement ?? ""),
+    (e) => e.attributes.device_class === "power" || /(^|_)w$|watt/i.test(e.attributes.unit_of_measurement ?? ""),
   );
   if (powerSensors.length) {
     const totalW = powerSensors.reduce((sum, e) => {
@@ -176,12 +139,10 @@ function deriveTiles(
       return sum + (Number.isFinite(v) ? v : 0);
     }, 0);
     tiles.push({
-      id: "__energy",
-      icon: Zap,
-      label: "Energy",
+      id: "__energy", icon: Zap, label: "Energy",
       value: totalW >= 1000 ? `${(totalW / 1000).toFixed(1)} kW` : `${Math.round(totalW)} W`,
-      tone: totalW > 3000 ? "warn" : "neutral",
-      category: "energy",
+      tone: totalW > 3000 ? "warn" : "neutral", category: "energy",
+      entityIds: powerSensors.map((e) => e.entity_id), title: "Energy", canControl: false,
     });
   }
 
@@ -193,13 +154,12 @@ interface Props {
   onOpenEntity: (entityId: string) => void;
 }
 
-function Tile({ t }: { t: SummaryTile }) {
+function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void }) {
   const Icon = t.icon;
-  const interactive = !!t.onTap;
   return (
     <button
       type="button"
-      className={`summary-tile tone-${t.tone}${interactive ? "" : " is-info"}`}
+      className={`summary-tile tone-${t.tone}`}
       // --tile-grad: the gradient icon square (categoryGradient, shared with the
       // top bar). --tile-accent: the solid bottom colour, used only for the lit
       // border (color-mix needs a solid colour, not a gradient).
@@ -207,9 +167,8 @@ function Tile({ t }: { t: SummaryTile }) {
         ["--tile-grad" as string]: categoryGradient(t.category),
         ["--tile-accent" as string]: CATEGORY_COLORS[t.category].bottom,
       }}
-      onClick={t.onTap}
-      disabled={!interactive}
-      title={interactive ? `${t.label}: ${t.value}` : `${t.label}: ${t.value} (view only)`}
+      onClick={() => onOpen(t)}
+      title={`${t.label}: ${t.value} — tap to see & control everything it includes`}
     >
       <span className="summary-tile-icon"><Icon size={24} /></span>
       <span className="summary-tile-text">
@@ -316,14 +275,11 @@ export default function SummaryBar({ onOpenEntity }: Props) {
   const { role } = useProfile();
   const { config } = useConfig();
 
+  const [openGroup, setOpenGroup] = useState<SummaryTile | null>(null);
+
   const deviceTiles = useMemo(
-    () => deriveTiles(
-      entities,
-      (c) => (role ? isCategoryAllowed(role, c) : false),
-      callService,
-      onOpenEntity,
-    ),
-    [entities, role, callService, onOpenEntity],
+    () => deriveTiles(entities, (c) => (role ? isCategoryAllowed(role, c) : false)),
+    [entities, role],
   );
 
   const scenes = config.kioskScenes ?? [];
@@ -334,15 +290,25 @@ export default function SummaryBar({ onOpenEntity }: Props) {
   if (config.showSummaryBar === false || (!deviceTiles.length && !scenes.length)) return null;
 
   return (
-    <div className="summary-bar" role="toolbar" aria-label="Quick controls and summaries">
-      {deviceTiles.map((t) => <Tile key={t.id} t={t} />)}
-      {scenes.length > 0 && (
-        <SceneMenu
-          scenes={scenes}
-          canRun={canRunScenes}
-          apply={(s) => { void applyScene(s, callService); }}
+    <>
+      <div className="summary-bar" role="toolbar" aria-label="Quick controls and summaries">
+        {deviceTiles.map((t) => <Tile key={t.id} t={t} onOpen={setOpenGroup} />)}
+        {scenes.length > 0 && (
+          <SceneMenu
+            scenes={scenes}
+            canRun={canRunScenes}
+            apply={(s) => { void applyScene(s, callService); }}
+          />
+        )}
+      </div>
+      {openGroup && (
+        <SummaryGroupPanel
+          group={{ title: openGroup.title, icon: openGroup.icon, entityIds: openGroup.entityIds }}
+          canControl={openGroup.canControl}
+          onClose={() => setOpenGroup(null)}
+          onOpenEntity={(id) => { setOpenGroup(null); onOpenEntity(id); }}
         />
       )}
-    </div>
+    </>
   );
 }

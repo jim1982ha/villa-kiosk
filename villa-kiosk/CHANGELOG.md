@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.32
+
+### Changes
+- bottom-bar tiles now open a comprehensive SummaryGroupPanel modal listing every entity they control (inline on/off + drill-down to each entity's full panel, reusing BasePanel/PanelRouter — DRY); restore the card badge's category-coloured background (keeping the new gradient squircle icon)
+
+---
+
+
 ## 2.35.31
 
 ### Changes
