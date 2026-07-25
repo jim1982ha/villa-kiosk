@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.27
+
+### Changes
+- SummaryBar: revert tiles to the larger size (icon 46, 18/12 fonts) and instead widen the bar (cap min(99vw,1900px), tighter trailing padding) so the full-size tiles fit without horizontal scroll
+
+---
+
+
 ## 2.35.26
 
 ### Changes
