@@ -462,10 +462,14 @@ button {
 .summary-bar {
   position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
   z-index: 21; pointer-events: auto;
-  display: flex; gap: 6px; align-items: stretch;
-  /* Shrinks to fit its tiles; use nearly the whole viewport before the cap
-     kicks in (turning on horizontal scroll) — so tiles stay full size and the
-     bar just gets wider to fit them. */
+  display: flex; gap: 8px; align-items: stretch;
+  /* width:max-content is ESSENTIAL: a centred (left:50%) absolutely-positioned
+     scroll container (overflow-x:auto) otherwise shrink-to-fits only into the
+     space from 50% to the right edge (~half the viewport), then scrolls — so
+     max-width:99vw never actually took effect and the tiles were needlessly
+     clipped. Forcing the width to the tiles' own size (capped at 99vw) lets
+     the bar use the FULL viewport before any scroll kicks in. */
+  width: max-content;
   max-width: min(99vw, 1900px);
   padding: 6px; border-radius: 22px;
   background: var(--bg-panel); backdrop-filter: blur(8px);
@@ -477,9 +481,9 @@ button {
 
 .summary-tile {
   flex: 0 0 auto;
-  display: flex; align-items: center; gap: 11px;
-  min-width: 92px; max-width: 200px;
-  padding: 6px 11px 6px 8px; border-radius: 16px;
+  display: flex; align-items: center; gap: 13px;
+  min-width: 116px; max-width: 260px;
+  padding: 6px 16px 6px 10px; border-radius: 16px;
   border: 1px solid var(--hairline); background: var(--bg-card);
   color: var(--text-primary); text-align: left; cursor: pointer;
   transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
@@ -499,9 +503,6 @@ button {
 .summary-tile-label {
   font-size: 12px; font-weight: 500; color: var(--text-secondary);
   text-transform: uppercase; letter-spacing: 0.02em;
-  /* Single line — a long name never wraps to a second row (taller tile) or
-     widens the text column; it ellipsises within the tile's max-width. */
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .summary-tile-value {
   font-size: 18px; font-weight: 600; color: var(--text-primary);

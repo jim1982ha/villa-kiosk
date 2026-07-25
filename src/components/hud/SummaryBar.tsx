@@ -75,10 +75,7 @@ function deriveTiles(
     tiles.push({
       id: lock.entity_id,
       icon: locked ? DoorClosed : DoorOpen,
-      // Short label (the value already says Locked/Unlocked) so this tile
-      // doesn't dominate the bar's width — a long friendly name like
-      // "Outdoor Entrance Lock" was the widest tile, forcing a scroll.
-      label: "Entrance",
+      label: friendly(lock),
       value: locked ? "Locked" : lock.state === "unlocked" ? "Unlocked" : lock.state,
       tone: locked ? "neutral" : "warn",
       category: "access_control",

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.30
+
+### Changes
+- SummaryBar: fix the real width bug — a centred overflow:auto container only shrink-to-fit into half the viewport, so max-width:99vw never applied; add width:max-content so the bar uses the FULL viewport width before scrolling. Reverts the tile-shrinking/label workarounds — full-size tiles + full lock label now fit without scroll
+
+---
+
+
 ## 2.35.29
 
 ### Changes
