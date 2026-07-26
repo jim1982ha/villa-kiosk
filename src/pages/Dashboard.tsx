@@ -61,6 +61,8 @@ export default function Dashboard() {
   const [room, setRoom] = useState<string | null>(null);
   const [currentFloor, setCurrentFloor] = useState(1);
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
+  /** Entities with real geometry in the loaded model (see manager.mappedEntityIds). */
+  const [mappedEntityIds, setMappedEntityIds] = useState<Set<string>>(new Set());
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
   // Starts "overview" to match the actual landing view (see the one-shot
   // effect below): the HUD reads this to decide joystick vs. overview-help
@@ -291,6 +293,10 @@ export default function Dashboard() {
     if (!manager) return;
     const adopt = () => {
       setFloorsAvailable(manager.floors.getFloorsDetected());
+      // Which devices are actually ON the 3D map — the SummaryBar's group
+      // modals mark everything else as "not on the map" (it exists in HA but
+      // has no geometry in this villa model).
+      setMappedEntityIds(new Set(manager.mappedEntityIds()));
       const pts = manager.getCalibratedTeleportPoints();
       if (pts) {
         // Rooms fitted from the sh3d plan always refresh to the new fit
@@ -392,7 +398,7 @@ export default function Dashboard() {
       {/* Bottom dashboard strip — scene / quick-action / summary tiles,
           auto-derived from live entities. Centred so it sits between the
           bottom bar's corner controls (view toggle / joystick). */}
-      <SummaryBar onOpenEntity={openEntityPanel} />
+      <SummaryBar onOpenEntity={openEntityPanel} mappedEntityIds={mappedEntityIds} />
 
       {teleportOpen && (
         <TeleportMenu

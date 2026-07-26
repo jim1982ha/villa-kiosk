@@ -30,6 +30,10 @@ interface Props {
   group: SummaryGroup;
   /** Whether the profile may control these devices (else the modal is read-only). */
   canControl: boolean;
+  /** Entities with real geometry in the loaded model. Anything NOT in here
+   *  exists only in Home Assistant — it's listed last and tinted, so it's
+   *  obvious it can't be found on the 3D map. */
+  mappedEntityIds: Set<string>;
   onClose: () => void;
   /** Drill into an entity's full type panel (PanelRouter) — wired to
    *  Dashboard's setActivePanel, so it opens the exact same rich panel a 3D
@@ -42,11 +46,18 @@ const TOGGLEABLE = new Set(["light", "switch", "input_boolean", "fan"]);
 
 const pretty = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
 
-export default function SummaryGroupPanel({ group, canControl, onClose, onOpenEntity }: Props) {
+export default function SummaryGroupPanel({
+  group, canControl, mappedEntityIds, onClose, onOpenEntity,
+}: Props) {
   const { entities, callService } = useHA();
   const { config } = useConfig();
 
-  const rows = group.entityIds.map((id) => entities[id]).filter((e): e is NonNullable<typeof e> => !!e);
+  const all = group.entityIds.map((id) => entities[id]).filter((e): e is NonNullable<typeof e> => !!e);
+  // Devices you can see in the villa first; HA-only ones (no geometry in this
+  // model) grouped after them under their own heading.
+  const onMap = all.filter((e) => mappedEntityIds.has(e.entity_id));
+  const offMap = all.filter((e) => !mappedEntityIds.has(e.entity_id));
+  const rows = [...onMap, ...offMap];
   const toggleables = rows.filter((e) => TOGGLEABLE.has(e.entity_id.split(".")[0]));
   const anyOn = toggleables.some((e) => !OFF.has(e.state));
 
@@ -56,7 +67,12 @@ export default function SummaryGroupPanel({ group, canControl, onClose, onOpenEn
   const Icon = group.icon;
 
   return (
-    <BasePanel title={group.title} icon={<Icon size={22} />} onClose={onClose}>
+    <BasePanel
+      title={group.title}
+      icon={<Icon size={22} />}
+      className="summary-group-modal"
+      onClose={onClose}
+    >
       {canControl && toggleables.length > 1 && (
         <button
           className="btn ghost"
@@ -74,65 +90,77 @@ export default function SummaryGroupPanel({ group, canControl, onClose, onOpenEn
         </button>
       )}
 
-      <div className="summary-entity-list">
-        {rows.length === 0 && <div className="muted body-text">No devices in this group.</div>}
-        {rows.map((e) => {
-          const id = e.entity_id;
-          const domain = id.split(".")[0];
-          const type = typeOf(id);
-          const cat: Category = effectiveCategory(
-            id, type, config.entityMap[id]?.category, e.attributes.device_class as string | undefined);
-          const label = config.entityMap[id]?.label ?? e.attributes.friendly_name ?? id;
-          const unit = (e.attributes.unit_of_measurement as string | undefined) ?? "";
-          const stateText = isUnavailable(e)
-            ? "Unavailable"
-            : domain === "climate"
-              ? `${Math.round((e.attributes.current_temperature as number | undefined) ?? 0)}°`
-              : `${pretty(e.state)}${unit ? ` ${unit}` : ""}`;
+      {rows.length === 0 && <div className="muted body-text">No devices in this group.</div>}
 
-          const isLock = domain === "lock";
-          const canToggle = canControl && (TOGGLEABLE.has(domain) || isLock);
-          const toggleOn = isLock ? e.state !== "locked" : !OFF.has(e.state);
-          const doToggle = () =>
-            isLock
-              ? callService("lock", e.state === "locked" ? "unlock" : "lock", {}, { entity_id: id })
-              : callService(domain, "toggle", {}, { entity_id: id });
-
-          return (
-            <div className="summary-entity-row" key={id}>
-              <button
-                className="summary-entity-main"
-                onClick={() => onOpenEntity(id)}
-                title={`Open ${label}`}
-              >
-                <img
-                  className="summary-entity-badge"
-                  src={badgeImageDataUrl(cat, iconKeyFor(type, e), config.entityMap[id]?.badgeColor)}
-                  alt=""
-                  draggable={false}
-                />
-                <span className="summary-entity-text">
-                  <span className="summary-entity-name" title={label}>{label}</span>
-                  <span className="summary-entity-state">{stateText}</span>
-                </span>
-                <ChevronRight size={18} className="summary-entity-chevron" />
-              </button>
-              {canToggle && (
-                <button
-                  className={`summary-entity-toggle${toggleOn ? " on" : ""}`}
-                  onClick={doToggle}
-                  role="switch"
-                  aria-checked={toggleOn}
-                  aria-label={`${label}: ${toggleOn ? "on" : "off"}`}
-                  title={toggleOn ? "Turn off" : "Turn on"}
-                >
-                  <span className="knob" />
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {/* On-map devices first, then (if any) the HA-only ones under their own
+          heading — one renderer for both, so the two lists can't drift. */}
+      {onMap.length > 0 && <div className="summary-entity-grid">{onMap.map(renderRow)}</div>}
+      {offMap.length > 0 && (
+        <>
+          <div className="summary-offmap-heading" title="These devices exist in Home Assistant but have no 3D geometry in this villa model">
+            Not on the map
+          </div>
+          <div className="summary-entity-grid">{offMap.map(renderRow)}</div>
+        </>
+      )}
     </BasePanel>
   );
+
+  function renderRow(e: NonNullable<(typeof all)[number]>) {
+    const id = e.entity_id;
+    const domain = id.split(".")[0];
+    const type = typeOf(id);
+    const cat: Category = effectiveCategory(
+      id, type, config.entityMap[id]?.category, e.attributes.device_class as string | undefined);
+    const label = config.entityMap[id]?.label ?? e.attributes.friendly_name ?? id;
+    const unit = (e.attributes.unit_of_measurement as string | undefined) ?? "";
+    const stateText = isUnavailable(e)
+      ? "Unavailable"
+      : domain === "climate"
+        ? `${Math.round((e.attributes.current_temperature as number | undefined) ?? 0)}°`
+        : `${pretty(e.state)}${unit ? ` ${unit}` : ""}`;
+
+    const isLock = domain === "lock";
+    const canToggle = canControl && (TOGGLEABLE.has(domain) || isLock);
+    const toggleOn = isLock ? e.state !== "locked" : !OFF.has(e.state);
+    const offMapRow = !mappedEntityIds.has(id);
+    const doToggle = () =>
+      isLock
+        ? callService("lock", e.state === "locked" ? "unlock" : "lock", {}, { entity_id: id })
+        : callService(domain, "toggle", {}, { entity_id: id });
+
+    return (
+      <div className={`summary-entity-row${offMapRow ? " is-offmap" : ""}`} key={id}>
+        <button
+          className="summary-entity-main"
+          onClick={() => onOpenEntity(id)}
+          title={offMapRow ? `${label} — not on the 3D map` : `Open ${label}`}
+        >
+          <img
+            className="summary-entity-badge"
+            src={badgeImageDataUrl(cat, iconKeyFor(type, e), config.entityMap[id]?.badgeColor)}
+            alt=""
+            draggable={false}
+          />
+          <span className="summary-entity-text">
+            <span className="summary-entity-name" title={label}>{label}</span>
+            <span className="summary-entity-state">{stateText}</span>
+          </span>
+          <ChevronRight size={18} className="summary-entity-chevron" />
+        </button>
+        {canToggle && (
+          <button
+            className={`summary-entity-toggle${toggleOn ? " on" : ""}`}
+            onClick={doToggle}
+            role="switch"
+            aria-checked={toggleOn}
+            aria-label={`${label}: ${toggleOn ? "on" : "off"}`}
+            title={toggleOn ? "Turn off" : "Turn on"}
+          >
+            <span className="knob" />
+          </button>
+        )}
+      </div>
+    );
+  }
 }

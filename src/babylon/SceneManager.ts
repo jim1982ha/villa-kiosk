@@ -1132,6 +1132,12 @@ export class SceneManager {
     return this.calibratedPoints;
   }
 
+  /** Entities that resolved to real geometry in the loaded model — the devices
+   *  actually visible on the 3D map (see EntityVisuals.mappedEntityIds). */
+  mappedEntityIds(): string[] {
+    return this.visuals.mappedEntityIds();
+  }
+
   /** Subscribe to re-calibration (load + every mirror-toggle re-fit). */
   onCalibrated(cb: () => void): () => void {
     this.calibrateCallbacks.add(cb);

@@ -82,8 +82,38 @@ export const SENSOR_ICON_KEY: Record<string, string> = {
   duration: "timer",
 };
 
+/** device_class -> glyph, for switch entities (HA defines just these two). */
+export const SWITCH_ICON_KEY: Record<string, string> = {
+  outlet: "plug",
+  switch: "power",
+};
+
+/** `switch` is HA's generic RELAY domain: a pool pump, a lamp relay, a motion
+ *  detector's enable toggle and a lock relay are all plain `switch.*` with no
+ *  device_class, so they all resolved to the one "power" glyph — a wall of
+ *  identical icons with nothing to tell them apart (very visible in the
+ *  bottom-bar group modals). A switch's PURPOSE is normally evident from its
+ *  name, so fall back to a name hint before the generic default. Ordered:
+ *  first match wins, most specific first. Applies to switch/input_boolean
+ *  only — every other domain already has a meaningful per-type or
+ *  per-device_class glyph above. */
+const SWITCH_NAME_HINTS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/motion|presence|occupan|detect/i, "activity"],
+  [/\block|unlock|door|gate/i, "lock"],
+  [/light|lamp|\bled\b|spot/i, "lightbulb"],
+  [/fan|vmc|extract|vent/i, "fan"],
+  [/pump|filtr|filter|jet|jacuzzi|spa|pool/i, "droplets"],
+  [/heat|boiler|water_?heater|thermo/i, "thermometer"],
+  [/camera|cctv/i, "cctv"],
+  [/speaker|music|audio|sonos/i, "music"],
+  [/plug|socket|outlet/i, "plug"],
+];
+
 /** Resolve the badge glyph key for an entity — device_class override (for the
- *  two catch-all domains) falling back to the per-type default. */
+ *  catch-all domains) then a name hint (for generic relays), falling back to
+ *  the per-type default. ONE resolver for every surface that draws an entity
+ *  icon (3D badges, panel headers, the bottom-bar group modals), so a device
+ *  reads the same glyph everywhere. */
 export function iconKeyFor(type: EntityType, entity?: HassEntity): string {
   const dc = entity?.attributes?.device_class as string | undefined;
   if (type === "binary_sensor" && dc) {
@@ -95,6 +125,19 @@ export function iconKeyFor(type: EntityType, entity?: HassEntity): string {
     const effectiveClass = effectiveSensorClass(dc, unit);
     const key = effectiveClass ? SENSOR_ICON_KEY[effectiveClass] : undefined;
     if (key) return key;
+  }
+  if (type === "switch" || type === "input_boolean") {
+    if (dc) {
+      const key = SWITCH_ICON_KEY[dc];
+      if (key) return key;
+    }
+    // Match the friendly name AND the entity_id — the id often carries the
+    // purpose ("switch.swimming_pool_light_led_...") even when the friendly
+    // name has been shortened.
+    const haystack = `${(entity?.attributes?.friendly_name as string | undefined) ?? ""} ${entity?.entity_id ?? ""}`;
+    for (const [re, key] of SWITCH_NAME_HINTS) {
+      if (re.test(haystack)) return key;
+    }
   }
   return TYPE_ICON_KEY[type] ?? "gauge";
 }

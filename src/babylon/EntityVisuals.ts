@@ -265,10 +265,14 @@ const BADGE_DIAMETER_PX = 40;
 // squircle+pill. Both are the SAME LabelControls (container/badge/glyph/
 // valueWrap/valueText), just arranged differently; `badge` stays the single
 // tappable region (badgeContaining hit-tests it), so pickBadgeAt is unchanged.
-const CARD_HEIGHT_PX = 40;         // the card's own height (also the gradient
+const CARD_HEIGHT_PX = 34;         // the card's own height (also the gradient
                                    // squircle's render size — its baked-in
-                                   // BADGE_INSET_CARD margin becomes the inset)
-const CARD_LABEL_HEIGHT_PX = 46;   // container height (card + a little clearance)
+                                   // BADGE_INSET_CARD margin is the card's
+                                   // top/bottom padding, kept tight so the
+                                   // card hugs the icon)
+const CARD_LABEL_HEIGHT_PX = 40;   // container height (card + a little clearance)
+const CARD_PAD_LEFT_PX = 4;        // extra LEFT breathing room (the baked inset
+                                   // alone would leave it as tight as the top)
 // The card is filled with the entity's CATEGORY colour (or per-entity
 // override) — a solid coloured card carrying the GRADIENT squircle icon
 // (badgeImageDataUrl, whose lighter top + white glyph + drop shadow keep it
@@ -488,6 +492,16 @@ export class EntityVisuals {
   repaintBadges(): void {
     this.rebuildLabels();
     this.requestRender();
+  }
+
+  /** Every entity that actually resolved to geometry in the loaded model —
+   *  i.e. the devices genuinely visible on the 3D map. The UI uses this to
+   *  distinguish a device you can SEE in the villa from one that only exists
+   *  in Home Assistant (see SummaryGroupPanel's "not on the map" styling).
+   *  Derived from byEntity, which indexMeshes fills from real mesh bindings,
+   *  so it can't drift from what's drawn. */
+  mappedEntityIds(): string[] {
+    return [...this.byEntity.keys()];
   }
 
   updateConfig(config: AppConfig): void {
@@ -1536,18 +1550,26 @@ export class EntityVisuals {
       badge.height = `${card ? CARD_HEIGHT_PX : BADGE_DIAMETER_PX}px`;
       badge.cornerRadius = (card ? CARD_HEIGHT_PX : BADGE_DIAMETER_PX) * BADGE_CORNER_FRACTION;
       badge.thickness = 0;
-      badge.background = "transparent";
+      // Apply the style's resting fill NOW, not only in updateLabel: an entity
+      // that has never reported (or is UNAVAILABLE and so never pushed a state
+      // this session) would otherwise keep the transparent default and render
+      // with NO card at all — reading as "this badge ignores the card style".
+      // updateLabel re-applies the same value whenever a state does arrive.
+      badge.background = card
+        ? (this.config.entityMap[entityId]?.badgeColor ?? CATEGORY_COLORS[category].bottom)
+        : "transparent";
       badge.shadowColor = "rgba(0,0,0,0.55)";
       badge.shadowBlur = 6;
       badge.shadowOffsetY = 2;
       // Tap/long-press handling is NOT wired here — see pickBadgeAt()'s
       // docstring for why. The badge is a purely visual control now.
       if (card) {
-        // The card hugs its icon+value row. All the visible inset padding
-        // comes from the chip image's baked-in transparent margin (top/bottom/
-        // left, and the icon↔value gap) plus the value's own right padding —
-        // NOT from control padding here, which wasn't insetting reliably.
+        // The card hugs its icon+value row. Top/bottom padding is the glyph
+        // image's baked-in margin (BADGE_INSET_CARD, deliberately tight);
+        // left/right get extra room here + on the value, so the card reads
+        // short but not cramped horizontally.
         badge.adaptWidthToChildren = true;
+        badge.paddingLeft = `${CARD_PAD_LEFT_PX}px`;
       } else {
         badge.width = `${BADGE_DIAMETER_PX}px`;
       }
@@ -1767,19 +1789,18 @@ export class EntityVisuals {
     // Classic layout (unscaled, anchor at 0, y grows downward, hangs ABOVE):
     //   badge  → centre −56, half 20         (BADGE_DIAMETER 40, container 76 tall)
     //   pill   → centre −24, half 9          (VALUE_CHIP_HEIGHT 18, under the badge)
-    // Card layout: one horizontal card (height CARD_HEIGHT 40, container 46
-    // tall), centre ≈ −26 above the anchor, width = icon chip + inline value.
+    // Card layout: one horizontal card (CARD_HEIGHT tall inside a
+    // CARD_LABEL_HEIGHT container), hanging above the anchor; width = the
+    // glyph (rendered at the card height) + left pad + any inline value.
     const boxes = shown.map((s) => {
       if (card) {
         const hasVal = s.lbl.valueWrap.isVisible;
-        // Chip spans the full card height (CARD_HEIGHT), its inset gives the
-        // left+gap padding; a value adds its text + the 8px right pad.
         const valW = hasVal ? s.lbl.valueText.text.length * 7.2 + 8 : 0;
-        const cardW = CARD_HEIGHT_PX + valW;
+        const cardW = CARD_PAD_LEFT_PX + CARD_HEIGHT_PX + valW;
         return {
           halfW: (cardW / 2) * scale,
           halfH: (CARD_HEIGHT_PX / 2 + 1) * scale,
-          cy: -26 * scale,
+          cy: -(CARD_LABEL_HEIGHT_PX / 2 + CARD_HEIGHT_PX / 2 - 4) * scale,
         };
       }
       const hasPill = s.lbl.valueWrap.isVisible;

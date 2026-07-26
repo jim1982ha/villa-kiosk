@@ -152,6 +152,9 @@ function deriveTiles(
 interface Props {
   /** Open an entity's full control panel (wired to Dashboard's setActivePanel). */
   onOpenEntity: (entityId: string) => void;
+  /** Entities with real geometry in the loaded model — everything else is
+   *  flagged "not on the map" in the group modal. */
+  mappedEntityIds: Set<string>;
 }
 
 function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void }) {
@@ -273,7 +276,7 @@ function SceneMenu({ scenes, canRun, apply }: {
   );
 }
 
-export default function SummaryBar({ onOpenEntity }: Props) {
+export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
   const { entities, callService } = useHA();
   const { role } = useProfile();
   const { config } = useConfig();
@@ -308,6 +311,7 @@ export default function SummaryBar({ onOpenEntity }: Props) {
         <SummaryGroupPanel
           group={{ title: openGroup.title, icon: openGroup.icon, entityIds: openGroup.entityIds }}
           canControl={openGroup.canControl}
+          mappedEntityIds={mappedEntityIds}
           onClose={() => setOpenGroup(null)}
           onOpenEntity={(id) => { setOpenGroup(null); onOpenEntity(id); }}
         />

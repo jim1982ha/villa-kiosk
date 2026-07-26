@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.34
+
+### Changes
+- badge + modal fixes: card style now applies even to never-reported/unavailable entities; icon stroke is proportional (lucide line style, no longer bold on the smaller card icon); tighter card top/bottom padding; switch icons resolve by device_class/name instead of one generic power glyph (shared iconKeyFor, fixes every surface); group modal gets a responsive 2-3 column grid, a pinned header (same flex layout as Settings - fixes ALL panels), and lists HA-only devices last under a tinted 'Not on the map' section
+
+---
+
+
 ## 2.35.33
 
 ### Changes

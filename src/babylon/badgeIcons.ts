@@ -16,11 +16,15 @@ import { ICON_NODES, type IconPrimitive } from "./badgeIconNodes";
 // BADGE_DIAMETER_PX) so it stays crisp when the user's label-size stepper or
 // the bird's-eye zoom scales the badge up.
 const CANVAS_PX = 128;
-const DISPLAY_PX = 40;
-const RENDER_SCALE = CANVAS_PX / DISPLAY_PX;
 const ICON_VIEWBOX = 24; // lucide's own viewBox is 0-24
 const ICON_FRACTION = 0.56; // icon size as a fraction of the badge
-const STROKE_DISPLAY_PX = 2.6; // desired stroke thickness AT DISPLAY size
+// Stroke in lucide VIEWBOX units — i.e. PROPORTIONAL to the icon, exactly like
+// the real lucide components the top bar renders (their default stroke-width is
+// 2 on this same 24 viewBox). It used to be an ABSOLUTE display-pixel width,
+// which meant a smaller icon kept the same thick stroke and so read as BOLD —
+// very visible on the "card" badge style, whose inset squircle is smaller than
+// the classic one. Proportional keeps one consistent line style at every size.
+const ICON_STROKE_VIEWBOX = 2;
 /** Squircle corner radius as a fraction of the badge's size — exported so
  *  EntityVisuals' outline Rectangle can match this canvas's rounding exactly. */
 export const BADGE_CORNER_FRACTION = 0.28;
@@ -40,7 +44,9 @@ function drawIcon(ctx: CanvasRenderingContext2D, primitives: readonly IconPrimit
   ctx.translate(offset, offset);
   ctx.scale(scale, scale);
   ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = (STROKE_DISPLAY_PX * RENDER_SCALE) / scale;
+  // ctx is already scaled by `scale`, so a viewBox-unit width renders
+  // proportionally to the icon — see ICON_STROKE_VIEWBOX.
+  ctx.lineWidth = ICON_STROKE_VIEWBOX;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   for (const [tag, attrs] of primitives) {
@@ -82,7 +88,12 @@ function shade(hex: string, amt: number): string {
 // gradient squircle sits on a neutral card and needs even breathing room the
 // Babylon GUI adaptWidthToChildren + control padding wouldn't give reliably.
 // The classic badge passes inset 0 (the squircle fills its own control).
-export const BADGE_INSET_CARD = 0.15; // ~6 px margin at a 40 px render
+// 0.10 → a ~3.4 px margin at the card's 34 px render. Kept SMALL on purpose:
+// this margin is the card's TOP/BOTTOM padding, and a tighter one puts the
+// card's outer edge closer to the icon (a shorter, less chunky badge). The
+// horizontal breathing room is restored separately via the badge's own left
+// padding + the value's right padding, so left/right stay roomy.
+export const BADGE_INSET_CARD = 0.10;
 
 /** Render (and cache) the composited GRADIENT squircle badge for a category +
  *  glyph — the single source of the app's gradient icon squares (top bar,

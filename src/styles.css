@@ -541,7 +541,23 @@ button {
 .summary-scene-item svg { color: var(--text-secondary); flex: 0 0 auto; }
 
 /* --- SummaryGroupPanel: the modal a bottom-bar tile opens (entity list) --- */
-.summary-entity-list { display: flex; flex-direction: column; gap: 8px; }
+/* Wider than a single-device panel: it lists a whole group, in columns. */
+.modal.panel-modal.summary-group-modal { max-width: 860px; }
+/* Responsive columns: as many ~250px tracks as fit, so a laptop/tablet gets
+   2-3 across and a phone collapses to one — no breakpoint juggling. */
+.summary-entity-grid {
+  display: grid; gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+}
+/* HA-only devices (no geometry in this villa model) — listed after the mapped
+   ones under this heading and tinted, so it's clear they're not on the map. */
+.summary-offmap-heading {
+  margin: 18px 0 8px; font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent);
+  border-top: 1px solid var(--hairline); padding-top: 14px;
+}
+.summary-entity-row.is-offmap .summary-entity-name,
+.summary-entity-row.is-offmap .summary-entity-state { color: var(--accent); }
 .summary-entity-row {
   display: flex; align-items: center; gap: 10px;
   border-radius: 14px; background: var(--bg-input);
@@ -604,8 +620,16 @@ button {
    same visual language. .panel-modal only adds what's specific to it: a
    readable width and its own internal scroll (content can be taller than a
    preset/high climate or camera-motion panel comfortably fits). */
-.modal.panel-modal { max-width: 460px; overflow-y: auto; overscroll-behavior: contain; }
-.panel-body { padding-top: 4px; }
+/* Same 3-section layout as the Settings modal (.settings-header/.settings-body/
+   .settings-footer): the HEADER and FOOTER stay put and only the BODY scrolls.
+   It used to scroll as one block (overflow-y on the modal itself), so the
+   device name/badge scrolled away on a long panel — inconsistent with
+   Settings, which pins its header. */
+.modal.panel-modal {
+  max-width: 460px; overflow: hidden; overscroll-behavior: contain;
+}
+.panel-header { flex: 0 0 auto; }
+.panel-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding-top: 4px; }
 /* Edit/Close live in .panel-footer, not here (see BasePanel) — the header is
    ONLY the icon/title/room/entity-id, so a long device name always gets the
    full row width to wrap into instead of fighting two buttons for room
@@ -667,6 +691,7 @@ button {
    footer padding of their own, see .modal:not(.settings-modal)), so it's
    inset like the rest of the content rather than bleeding to the card edge. */
 .panel-footer {
+  flex: 0 0 auto;
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
   margin-top: 20px; padding-top: 16px;
   border-top: 1px solid var(--hairline);
