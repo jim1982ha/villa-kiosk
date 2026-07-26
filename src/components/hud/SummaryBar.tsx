@@ -31,6 +31,7 @@ import { CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient } from "@/config/Enti
 import { applyScene } from "@/config/scenes";
 import type { KioskScene } from "@/config/scenes";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
+import ViewControls, { type ViewControlsProps } from "./ViewControls";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 
@@ -155,6 +156,9 @@ interface Props {
   /** Entities with real geometry in the loaded model — everything else is
    *  flagged "not on the map" in the group modal. */
   mappedEntityIds: Set<string>;
+  /** The camera view controls this bar hosts in its left section (see
+   *  ViewControls) — HUD renders them standalone only when this bar is off. */
+  view: ViewControlsProps;
 }
 
 function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void }) {
@@ -276,7 +280,7 @@ function SceneMenu({ scenes, canRun, apply }: {
   );
 }
 
-export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
+export default function SummaryBar({ onOpenEntity, mappedEntityIds, view }: Props) {
   const { entities, callService } = useHA();
   const { role } = useProfile();
   const { config } = useConfig();
@@ -292,12 +296,16 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
   // A scene spans categories — allow running one if the profile may control ANY.
   const canRunScenes = !!role && CATEGORY_ORDER.some((c) => isCategoryAllowed(role, c));
 
-  // Hidden via Settings, or nothing at all to show.
-  if (config.showSummaryBar === false || (!deviceTiles.length && !scenes.length)) return null;
+  // Hidden via Settings. (When shown it always renders — even with no tiles —
+  // because it hosts the view controls HUD then leaves out.)
+  if (config.showSummaryBar === false) return null;
 
   return (
     <>
       <div className="summary-bar" role="toolbar" aria-label="Quick controls and summaries">
+        {/* Left section: camera view controls, fenced off by a separator. */}
+        <div className="summary-bar-views"><ViewControls {...view} /></div>
+        {(deviceTiles.length > 0 || scenes.length > 0) && <span className="summary-bar-sep" aria-hidden="true" />}
         {deviceTiles.map((t) => <Tile key={t.id} t={t} onOpen={setOpenGroup} />)}
         {scenes.length > 0 && (
           <SceneMenu

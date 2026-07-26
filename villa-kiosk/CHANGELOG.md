@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.35
+
+### Changes
+- move the view-mode + default-view buttons into the bottom bar's left section (separated by a hairline) when it's shown — extracted to a shared ViewControls component so HUD and SummaryBar use ONE implementation; group modal keeps the standard panel width (columns fit inside it)
+
+---
+
+
 ## 2.35.34
 
 ### Changes

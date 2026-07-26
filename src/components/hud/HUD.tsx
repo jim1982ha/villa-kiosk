@@ -15,8 +15,7 @@
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
-  Home, Compass, Settings, Map,
-  PersonStanding, Anchor, LogOut,
+  Home, Compass, Settings, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
   EllipsisVertical, Minus, Plus, CircleHelp,
 } from "lucide-react";
@@ -29,6 +28,7 @@ import { resolveSiteTitle } from "@/config/AppConfig";
 import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
+import ViewControls from "./ViewControls";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 import LegendModal from "./LegendModal";
 
@@ -273,37 +273,8 @@ export default function HUD({
     };
   }, [menuOpen]);
 
-  // Tap = jump to this device's saved default view; long-press / right-click
-  // = (re)define it as the current framing (same tap-vs-hold convention as
-  // the Rooms menu's re-anchor gesture and the in-scene badge gestures). A
-  // brief confirmation line replaces the tips text for ~1.8s either way.
-  const [viewFlash, setViewFlash] = useState<"applied" | "none" | "saved" | null>(null);
-  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longFired = useRef(false);
-
-  const flashView = (kind: "applied" | "none" | "saved") => {
-    setViewFlash(kind);
-    if (flashTimer.current) clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setViewFlash(null), 1800);
-  };
-  const cancelViewPress = () => {
-    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
-  };
-  const onViewBtnDown = () => {
-    longFired.current = false;
-    cancelViewPress();
-    pressTimer.current = setTimeout(() => {
-      longFired.current = true;
-      onSaveOverviewDefault();
-      flashView("saved");
-    }, 480);
-  };
-  const onViewBtnClick = () => {
-    cancelViewPress();
-    if (longFired.current) { longFired.current = false; return; }
-    flashView(onApplyOverviewDefault() ? "applied" : "none");
-  };
+  // The view toggle + default-view anchor (and their tap-vs-hold gesture) live
+  // in <ViewControls>, rendered either here or inside the SummaryBar.
 
   useEffect(() => { document.title = title; }, [title]);
 
@@ -323,7 +294,6 @@ export default function HUD({
     update({ entityIconScale: next });
   };
 
-  const overviewActive = viewMode === "overview";
 
   return (
     <>
@@ -555,60 +525,19 @@ export default function HUD({
       </div>
 
       <div className="bottom-bar">
-        {/* Bottom-left, always present: first-person/bird's-eye toggle on
-            top, then (overview only) the view-default (Anchor) button right
-            below it. */}
-        <div className="overview-help">
-          {viewFlash && (
-            <div className="overview-hint">
-              {viewFlash === "applied"
-                ? "Jumped to this device's default view."
-                : viewFlash === "saved"
-                  ? "Default view updated for this device — it'll open here every reload."
-                  : "No default view saved yet — long-press (or right-click) to set one."}
-            </div>
-          )}
-          <div className="overview-help-buttons">
-            <button
-              className={`icon-btn${overviewActive ? " active" : ""}`}
-              onClick={onToggleViewMode}
-              title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-              aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
-            >
-              {overviewActive ? <PersonStanding size={19} /> : <Map size={18} />}
-            </button>
-            {viewMode === "overview" && (
-              <button
-                className={`icon-btn has-hold-action${hasOverviewDefault ? " active" : ""}`}
-                onPointerDown={onViewBtnDown}
-                onPointerUp={cancelViewPress}
-                onPointerLeave={cancelViewPress}
-                onPointerCancel={cancelViewPress}
-                onClick={onViewBtnClick}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  onSaveOverviewDefault();
-                  flashView("saved");
-                }}
-                // Space-only (not Enter): a <button> fires its click on Enter's
-                // KEYDOWN but on Space's KEYUP, so only Space can time a real
-                // "hold" — arming this on Enter too would fire the tap AND,
-                // ~480ms later while still held, spuriously ALSO fire save.
-                // Enter needs no extra handling: its native click already
-                // reaches onViewBtnClick above, same as a plain tap.
-                onKeyDown={(e) => { if (e.key === " " && !e.repeat) onViewBtnDown(); }}
-                onKeyUp={(e) => { if (e.key === " ") cancelViewPress(); }}
-                title="Tap to go to this device's default view · long-press / right-click to set it to the current view"
-                aria-label="Go to this device's default overview view"
-                aria-describedby="anchor-btn-hint"
-                aria-pressed={hasOverviewDefault}
-              >
-                <Anchor size={18} />
-              </button>
-            )}
-            <span id="anchor-btn-hint" className="sr-only">Hold Space to save the current view as the default</span>
-          </div>
-        </div>
+        {/* Bottom-left view controls — ONLY when the SummaryBar is hidden.
+            When that bar is shown it hosts the very same <ViewControls> in its
+            own left section instead (see SummaryBar), so the two never both
+            appear and there's one implementation of the gesture. */}
+        {config.showSummaryBar === false ? (
+          <ViewControls
+            viewMode={viewMode}
+            onToggleViewMode={onToggleViewMode}
+            hasOverviewDefault={hasOverviewDefault}
+            onApplyOverviewDefault={onApplyOverviewDefault}
+            onSaveOverviewDefault={onSaveOverviewDefault}
+          />
+        ) : <span />}
 
         {/* Bottom-right: the first-person movement joystick. */}
         {viewMode === "first-person" && <VirtualJoystick onMove={onMove} />}

@@ -15,14 +15,11 @@ interface Props {
   title: string;
   room?: string;
   icon?: ReactNode;
-  /** Extra class on the modal card — for panels needing a different width
-   *  (e.g. the multi-column SummaryGroupPanel). */
-  className?: string;
   onClose: () => void;
   children: ReactNode;
 }
 
-export default function BasePanel({ title, room, icon, className, onClose, children }: Props) {
+export default function BasePanel({ title, room, icon, onClose, children }: Props) {
   const { entityId, onEdit, badge, onSetBadgeColor } = usePanelActions();
   const [colorOpen, setColorOpen] = useState(false);
 
@@ -60,7 +57,7 @@ export default function BasePanel({ title, room, icon, className, onClose, child
 
   return (
     <div className="modal-backdrop panel-modal-backdrop" onClick={onClose}>
-      <div className={`modal panel-modal${className ? ` ${className}` : ""}`} onClick={(e) => e.stopPropagation()}>
+      <div className="modal panel-modal" onClick={(e) => e.stopPropagation()}>
         <div className="panel-header">
           <div className="title">
             {headerIcon}

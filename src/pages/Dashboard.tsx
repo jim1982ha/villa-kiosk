@@ -398,7 +398,17 @@ export default function Dashboard() {
       {/* Bottom dashboard strip — scene / quick-action / summary tiles,
           auto-derived from live entities. Centred so it sits between the
           bottom bar's corner controls (view toggle / joystick). */}
-      <SummaryBar onOpenEntity={openEntityPanel} mappedEntityIds={mappedEntityIds} />
+      <SummaryBar
+        onOpenEntity={openEntityPanel}
+        mappedEntityIds={mappedEntityIds}
+        view={{
+          viewMode,
+          onToggleViewMode: toggleViewMode,
+          hasOverviewDefault,
+          onApplyOverviewDefault: applyOverviewDefault,
+          onSaveOverviewDefault: saveOverviewDefault,
+        }}
+      />
 
       {teleportOpen && (
         <TeleportMenu
