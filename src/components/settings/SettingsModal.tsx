@@ -8,7 +8,7 @@
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
 import { useState } from "react";
-import { Sliders, Sun, Moon, Monitor, Sparkles, Trash2 } from "lucide-react";
+import { Sliders, Sun, Moon, Monitor, SunMoon, Sparkles, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
@@ -98,29 +98,48 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
       <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <h2>Settings</h2>
-          {/* Theme selector lives in the header, icon-only + right-aligned —
-              the Sun/Moon/Monitor glyphs are self-explanatory. Applied AND
-              persisted instantly (config.theme drives the data-theme
-              attribute in ConfigContext) — no Save step, like everything
-              else in this modal now. */}
+          {/* Theme selector + day/night invert live together in the header,
+              icon-only + right-aligned — self-explanatory glyphs, no Save
+              step (both apply and persist instantly). */}
           {can("customizeAppearance") && (
-            <div className="segmented segmented-icons" role="group" aria-label="Theme">
-              {([
-                { key: "light", label: "Light theme", icon: Sun },
-                { key: "dark", label: "Dark theme", icon: Moon },
-                { key: "auto", label: "Auto (system) theme", icon: Monitor },
-              ] as const).map(({ key, label, icon: Icon }) => (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="segmented segmented-icons" role="group" aria-label="Theme">
+                {([
+                  { key: "light", label: "Light theme", icon: Sun },
+                  { key: "dark", label: "Dark theme", icon: Moon },
+                  { key: "auto", label: "Auto (system) theme", icon: Monitor },
+                ] as const).map(({ key, label, icon: Icon }) => (
+                  <button
+                    key={key}
+                    className={config.theme === key ? "active" : ""}
+                    onClick={() => update({ theme: key })}
+                    aria-pressed={config.theme === key}
+                    title={label}
+                    aria-label={label}
+                  >
+                    <Icon size={17} />
+                  </button>
+                ))}
+              </div>
+              {/* Baked villas only: their day/night is a dramatic pre-rendered
+                  atlas crossfade driven by the real sun — this forces the
+                  OPPOSITE look on demand (preview the night render at noon, or
+                  lift a villa back to daylight after dark). Hidden for
+                  non-baked villas, whose day/night is just a lighting dim —
+                  not worth a dedicated toggle. A single active/inactive icon
+                  button (not a checkbox) so it sits naturally beside the
+                  theme selector rather than as a labelled row further down. */}
+              {(manager?.renderFx.isBaked() ?? false) && (
                 <button
-                  key={key}
-                  className={config.theme === key ? "active" : ""}
-                  onClick={() => update({ theme: key })}
-                  aria-pressed={config.theme === key}
-                  title={label}
-                  aria-label={label}
+                  className={`icon-btn${render.dayNightInvert ? " active" : ""}`}
+                  onClick={() => applyRender({ dayNightInvert: !render.dayNightInvert })}
+                  aria-pressed={!!render.dayNightInvert}
+                  title="Invert day/night preview"
+                  aria-label="Invert day/night preview"
                 >
-                  <Icon size={17} />
+                  <SunMoon size={18} />
                 </button>
-              ))}
+              )}
             </div>
           )}
         </div>
@@ -188,27 +207,10 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           </p>
         )}
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 14 }}>
-          <label style={{ margin: 0 }}>Brightness · {render.exposure.toFixed(2)}×</label>
-          {/* Baked villas only: their day/night is a dramatic pre-rendered
-              atlas crossfade driven by the real sun — this forces the
-              OPPOSITE look on demand (preview the night render at noon, or
-              lift a villa back to daylight after dark). Live-applies through
-              the same render path as the sliders (manager.setRenderConfig →
-              SunController), so it previews instantly and persists on its own
-              (debounced) like everything else here. Hidden for non-baked villas, whose
-              day/night is just a lighting dim — not worth a dedicated toggle. */}
-          {(manager?.renderFx.isBaked() ?? false) && (
-            <label className="toggle" style={{ margin: 0, fontSize: 13, whiteSpace: "nowrap" }}>
-              <input
-                type="checkbox"
-                checked={!!render.dayNightInvert}
-                onChange={(e) => applyRender({ dayNightInvert: e.target.checked })}
-              />
-              <span>Invert day/night</span>
-            </label>
-          )}
-        </div>
+        {/* Invert day/night moved to the header, next to the theme selector
+            (a single active/inactive icon button) — see the .segmented-icons
+            block above. */}
+        <label style={{ marginTop: 14 }}>Brightness · {render.exposure.toFixed(2)}×</label>
         <input
           type="range" min={0.6} max={2} step={0.05} value={render.exposure}
           onChange={(e) => applyRender({ exposure: Number(e.target.value) })}

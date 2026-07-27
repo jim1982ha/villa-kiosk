@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.51
+
+### Changes
+- move Invert day/night from a labelled checkbox row (deep in Render quality & look) to a single active/inactive icon button in the Settings header, right next to the theme selector (SunMoon icon) -- same baked-villa-only gating preserved
+
+---
+
+
 ## 2.35.50
 
 ### Changes
