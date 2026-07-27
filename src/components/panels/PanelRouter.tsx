@@ -5,6 +5,7 @@ import type { ActivePanel } from "@/types/panel.types";
 import { useHAEntity } from "@/hooks/useHAEntity";
 import { useConfig } from "@/config/ConfigContext";
 import { groupForPrimary } from "@/config/deviceGroups";
+import { displayLabelFor } from "@/config/EntityMap";
 import LightPanel from "./LightPanel";
 import ACPanel from "./ACPanel";
 import LockPanel from "./LockPanel";
@@ -29,14 +30,24 @@ interface Props {
 export default function PanelRouter({ active, onClose, pinContinuous, onOpenEntity }: Props) {
   const entity = useHAEntity(active.entityId);
   const { config } = useConfig();
-  const props = { entity, mapping: active.mapping, onClose };
+  // Every panel's title comes from mapping.label — resolved HERE, once, so
+  // EVERY panel (not just the bottom-bar group modal) stops showing a device
+  // stuck with the ugly all-lowercase raw-id label a mesh binding can leave
+  // behind when it auto-created this mapping before the entity's live
+  // friendly_name had arrived (see displayLabelFor's docstring). A real
+  // stored customisation still always wins.
+  const mapping = {
+    ...active.mapping,
+    label: displayLabelFor(active.entityId, active.mapping.label, entity?.attributes.friendly_name),
+  };
+  const props = { entity, mapping, onClose };
 
   // An entity that's the PRIMARY of a device group opens the combined view
   // (current values + history for every grouped entity) instead of its own
   // type-based panel — see config/deviceGroups.ts.
   const group = groupForPrimary(config.deviceGroups, active.entityId);
   if (group) {
-    return <DeviceGroupPanel group={group} primaryMapping={active.mapping} onClose={onClose} />;
+    return <DeviceGroupPanel group={group} primaryMapping={mapping} onClose={onClose} />;
   }
 
   // Explicit DETAIL request (long-press on a camera) — the shared state +
@@ -46,7 +57,7 @@ export default function PanelRouter({ active, onClose, pinContinuous, onOpenEnti
     return <GenericPanel {...props} />;
   }
 
-  switch (active.mapping.type) {
+  switch (mapping.type) {
     case "light":
       return <LightPanel {...props} />;
     case "climate":

@@ -16,7 +16,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory } from "@/config/EntityCategories";
-import { inferTypeFromEntityId } from "@/config/EntityMap";
+import { inferTypeFromEntityId, displayLabelFor } from "@/config/EntityMap";
 import { isUnavailable } from "@/utils/stateColors";
 import type { Category, EntityType } from "@/types/scene.types";
 
@@ -112,7 +112,7 @@ export default function SummaryGroupPanel({
     const type = typeOf(id);
     const cat: Category = effectiveCategory(
       id, type, config.entityMap[id]?.category, e.attributes.device_class as string | undefined);
-    const label = config.entityMap[id]?.label ?? e.attributes.friendly_name ?? id;
+    const label = displayLabelFor(id, config.entityMap[id]?.label, e.attributes.friendly_name);
     const unit = (e.attributes.unit_of_measurement as string | undefined) ?? "";
     const stateText = isUnavailable(e)
       ? "Unavailable"

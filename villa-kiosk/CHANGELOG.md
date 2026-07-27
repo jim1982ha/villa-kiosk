@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.52
+
+### Changes
+- fix ugly entity labels for devices ON the map: an auto-bound mesh->entity mapping sometimes got created before HA's friendly_name had arrived, permanently storing the raw all-lowercase entity_id slug as the label (e.g. 'master bedroom master bedroom light ceiling center', doubled because the villa's HA integration names some devices <area>_<area>_<domain>_<fixture>) -- indistinguishable afterward from a real user customisation. New displayLabelFor() (EntityMap.ts) is the one place every display surface now resolves a name: a real stored label always wins, but an untouched raw-fallback label is upgraded live to the current friendly_name, or a properly Title-Cased + deduped version of the id. Applied to the bottom-bar group modal, every device panel title (PanelRouter, centrally), the device-group panel, the motion toast, the SummaryBar tile labels, and Advanced Settings' device-grouping list -- the Label EDIT FIELD itself is untouched, still showing/editing the raw stored value
+
+---
+
+
 ## 2.35.51
 
 ### Changes

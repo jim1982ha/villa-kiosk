@@ -13,10 +13,16 @@ import type { HassEntity } from "@/types/ha.types";
 import {
   suggestDeviceGroups, upsertGroup, removeGroup, newGroupId, groupedEntityIds,
 } from "@/config/deviceGroups";
-import type { DeviceGroup } from "@/config/AppConfig";
+import type { DeviceGroup, AppConfig } from "@/config/AppConfig";
+import { displayLabelFor } from "@/config/EntityMap";
 
-function entityLabel(entities: Record<string, HassEntity>, id: string): string {
-  return entities[id]?.attributes.friendly_name ?? id;
+// Same resolver every other display surface uses — a real stored label wins,
+// an untouched raw-id fallback is upgraded live to friendly_name (or a
+// properly Title-Cased/deduped id) — instead of this file's own narrower
+// version, which ignored any stored label entirely and fell back to the
+// bare, unprettified entity_id.
+function entityLabel(config: AppConfig, entities: Record<string, HassEntity>, id: string): string {
+  return displayLabelFor(id, config.entityMap[id]?.label, entities[id]?.attributes.friendly_name);
 }
 
 export default function GroupedDevices() {
@@ -84,8 +90,8 @@ export default function GroupedDevices() {
               style={{ padding: "8px 0", borderTop: "1px solid var(--hairline)" }}
             >
               <span className="body-text" style={{ fontSize: 12, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
-                {entityLabel(entities, s.primaryEntityId)} <span className="muted">+</span>{" "}
-                {entityLabel(entities, s.memberEntityId)}
+                {entityLabel(config, entities, s.primaryEntityId)} <span className="muted">+</span>{" "}
+                {entityLabel(config, entities, s.memberEntityId)}
               </span>
               <button
                 className="btn ghost"
@@ -110,7 +116,7 @@ export default function GroupedDevices() {
                 friendly_name (one unbreakable underscore-joined token) wraps
                 inside the row instead of pushing the delete button off-screen. */}
             <div style={{ fontSize: 13, fontWeight: 500, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
-              {entityLabel(entities, group.primaryEntityId)}
+              {entityLabel(config, entities, group.primaryEntityId)}
               <div className="muted body-text" style={{ fontSize: 11, marginTop: 2, overflowWrap: "anywhere" }}>
                 {group.primaryEntityId} — primary (keeps the map badge)
               </div>
@@ -132,7 +138,7 @@ export default function GroupedDevices() {
                     maxWidth: "100%", overflowWrap: "anywhere",
                   }}
                 >
-                  {entityLabel(entities, id)}
+                  {entityLabel(config, entities, id)}
                   <button
                     className="icon-btn" style={{ width: 20, height: 20, borderRadius: 999, flexShrink: 0 }}
                     title="Remove from group" onClick={() => removeMember(group, id)}

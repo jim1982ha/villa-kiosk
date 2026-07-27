@@ -165,13 +165,74 @@ export function inferTypeFromEntityId(entityId: string): EntityType | null {
   return (known as string[]).includes(domain) ? (domain as EntityType) : null;
 }
 
+/** Collapse an immediately-repeated leading word-group — "master bedroom
+ *  master bedroom light ceiling" → "master bedroom light ceiling". This
+ *  villa's HA integration names several devices <area>_<area>_<domain>_
+ *  <fixture>: the area prefix HA itself adds is ALSO already baked into the
+ *  device's own configured name, so the raw entity_id doubles it verbatim.
+ *  Longest possible repeat wins first, so a 2-word area name ("master
+ *  bedroom") dedupes as one unit rather than leaving one copy of "bedroom"
+ *  behind. */
+function dedupeRepeatedPrefix(words: string[]): string[] {
+  for (let len = Math.floor(words.length / 2); len >= 1; len--) {
+    const a = words.slice(0, len).join(" ").toLowerCase();
+    const b = words.slice(len, 2 * len).join(" ").toLowerCase();
+    if (a === b) return [...words.slice(0, len), ...words.slice(2 * len)];
+  }
+  return words;
+}
+
+/** Turn a raw entity_id local part into a readable label when no HA
+ *  friendly_name is available: dedupe a repeated leading phrase (see
+ *  dedupeRepeatedPrefix), then Title Case each remaining word — instead of
+ *  the all-lowercase, doubled-up raw slug ("master bedroom master bedroom
+ *  light ceiling center") that used to be the permanent fallback. */
+export function prettifyEntitySlug(entityId: string): string {
+  const raw = entityId.split(".")[1]?.replace(/_/g, " ") ?? entityId;
+  const words = dedupeRepeatedPrefix(raw.split(/\s+/).filter(Boolean));
+  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") || entityId;
+}
+
 /**
  * Human label from an entity_id: the friendly name if supplied, else the
- * prettified local part ("light.living_room" → "living room"). One place so the
+ * prettified local part ("light.living_room" → "Living Room"). One place so the
  * same derivation isn't re-implemented in every binding/marker/config site.
  */
 export function labelFromEntityId(entityId: string, friendlyName?: string): string {
-  return friendlyName?.trim() || entityId.split(".")[1]?.replace(/_/g, " ") || entityId;
+  return friendlyName?.trim() || prettifyEntitySlug(entityId);
+}
+
+/** True when `label` is still the untouched raw fallback labelFromEntityId()
+ *  produces when no friendly_name is available yet — NOT a real HA
+ *  friendly_name and NOT something a user actually typed in Advanced
+ *  Settings (both of those are virtually always capitalised; the raw
+ *  entity_id-derived fallback never is). Devices bound to a mesh during
+ *  model load often get auto-created BEFORE their HA state (and so their
+ *  friendly_name) has arrived over the websocket — this label then sits
+ *  permanently in config, indistinguishable from a deliberate customisation,
+ *  even though a proper name was available moments later. */
+export function looksLikeRawFallbackLabel(entityId: string, label: string): boolean {
+  const raw = entityId.split(".")[1]?.replace(/_/g, " ") ?? "";
+  return label.trim().toLowerCase() === raw.trim().toLowerCase();
+}
+
+/**
+ * THE single place every display surface (device panel titles, the bottom-bar
+ * group modal, device-group rows, the motion toast…) resolves "what to call
+ * this entity" — a REAL stored customisation always wins, but a label that's
+ * still the untouched raw auto-fallback (see looksLikeRawFallbackLabel) is
+ * upgraded live to the current HA friendly_name, or failing that a properly
+ * Title-Cased/deduped version of the id — so an entity bound early in model
+ * load doesn't stay stuck with an ugly name forever even once a perfectly
+ * good one is available. Advanced Settings' own Label EDIT FIELD deliberately
+ * does NOT go through this — editing shows the exact raw stored value, not a
+ * live-computed stand-in for it.
+ */
+export function displayLabelFor(
+  entityId: string, storedLabel: string | undefined, friendlyName?: string,
+): string {
+  if (storedLabel && !looksLikeRawFallbackLabel(entityId, storedLabel)) return storedLabel;
+  return friendlyName?.trim() || prettifyEntitySlug(entityId);
 }
 
 /**

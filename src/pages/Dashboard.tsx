@@ -20,7 +20,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
-import { mappingForEntityId } from "@/config/EntityMap";
+import { mappingForEntityId, displayLabelFor } from "@/config/EntityMap";
 import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
 import { isUnavailable } from "@/utils/stateColors";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
@@ -237,7 +237,7 @@ export default function Dashboard() {
       wasOn.set(id, on);
       if (!on || prev === undefined || prev) return; // only a fresh off->on edge
 
-      const label = map?.label ?? (e.attributes?.friendly_name as string | undefined) ?? id;
+      const label = displayLabelFor(id, map?.label, e.attributes?.friendly_name as string | undefined);
       const room = map?.room;
       setNotice(room ? `Motion detected · ${room} — ${label}` : `Motion detected · ${label}`);
     });

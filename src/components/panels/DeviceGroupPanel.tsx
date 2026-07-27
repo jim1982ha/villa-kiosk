@@ -19,6 +19,7 @@ import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HistoryPoint } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
+import { displayLabelFor } from "@/config/EntityMap";
 
 interface Props {
   group: DeviceGroup;
@@ -40,7 +41,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
     const numeric = Number(entity?.state);
     return {
       id,
-      label: mapping?.label ?? entity?.attributes.friendly_name ?? id,
+      label: displayLabelFor(id, mapping?.label, entity?.attributes.friendly_name),
       unit: (entity?.attributes.unit_of_measurement as string | undefined) ?? "",
       value: entity?.state ?? "—",
       numeric: Number.isFinite(numeric) ? numeric : undefined,

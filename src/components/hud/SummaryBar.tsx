@@ -30,6 +30,7 @@ import { isCategoryAllowed } from "@/auth/permissions";
 import { CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient } from "@/config/EntityCategories";
 import { applyScene } from "@/config/scenes";
 import type { KioskScene } from "@/config/scenes";
+import { prettifyEntitySlug } from "@/config/EntityMap";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import ViewControls, { type ViewControlsProps } from "./ViewControls";
 import type { HassEntity } from "@/types/ha.types";
@@ -56,9 +57,10 @@ interface SummaryTile {
 const OFF_STATES = new Set(["off", "unavailable", "unknown", ""]);
 const isOn = (e: HassEntity | undefined) => !!e && !OFF_STATES.has(e.state);
 
-const friendly = (e: HassEntity) =>
-  e.attributes.friendly_name ??
-  e.entity_id.split(".")[1].replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+// Same fallback prettifier every other display surface uses (dedupe a
+// repeated leading phrase, then Title Case) instead of a separate, simpler
+// re-implementation here that didn't dedupe — see EntityMap.prettifyEntitySlug.
+const friendly = (e: HassEntity) => e.attributes.friendly_name?.trim() || prettifyEntitySlug(e.entity_id);
 
 /** Build the ordered tile list from the live entity snapshot. Pure (no side
  *  effects) so it's cheap to recompute on every state push via useMemo. */
