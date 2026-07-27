@@ -468,22 +468,22 @@ export class EntityVisuals {
   /** Camera motion-detection cones — mesh lifecycle owned by CameraBeams;
    *  this class only decides WHICH cameras get a beam and when it pulses. */
   private beams: CameraBeams;
-  /** linkedEntityId (typically a motion binary_sensor) -> camera entity_ids
-   *  it drives (see EntityMapping.linkedEntityId). Rebuilt from
+  // Two indexes, two DISTINCT source fields, two distinct visuals — see
+  // EntityMapping's notes on why these must not be merged again:
+  //   motionEntityId  -> beam / room glow  ("detection fired", from HA)
+  //   linkedEntityId  -> badge ring        ("armed", user-toggled)
+  // Both map driver entity_id -> the device entity_ids it drives, so a state
+  // change is a single lookup regardless of which side owns a 3D mesh.
+  /** motionEntityId -> camera entity_ids whose beam it drives. Rebuilt from
    *  config.entityMap on every indexMeshes() (structural entityMap edits
    *  re-trigger that already). */
   private motionToCameraIds = new Map<string, string[]>();
-  /** Linked entity -> device(s) that reference it via
-   *  EntityMapping.linkedEntityId. Mirrors motionToCameraIds but keyed the
-   *  other direction (the linked entity is the driver, not the device
-   *  showing the ring). Generic over ANY entity type on either side. */
+  /** linkedEntityId -> device entity_ids whose badge ring it drives. Generic
+   *  over ANY entity type on either side. */
   private linkedEntityIndex = new Map<string, string[]>();
   /** Devices whose linkedEntityId is currently "on" — rings red, applied
    *  uniformly for every entity type in badgeKind (see there). */
   private linkActiveIds = new Set<string>();
-  /** Cameras whose linked motion sensor is currently firing — their badge
-   *  shows the shared red alert ring while they're in here (see badgeKind). */
-  private motionActiveCameras = new Set<string>();
   /** Floor-glow overlay for physical (non-camera) motion/presence sensors —
    *  a room, not a direction, is the natural signal for those. */
   private roomHighlight: RoomHighlight;
@@ -922,7 +922,7 @@ export class EntityVisuals {
     }
 
     this.buildMotionToCameraIndex();
-    this.buildLightLinkIndex();
+    this.buildLinkedEntityIndex();
     this.rebuildLabels(); // labels are always shown
   }
 
@@ -1021,36 +1021,41 @@ export class EntityVisuals {
     }
   }
 
-  /** A camera's linkedEntityId (typically its motion/occupancy sensor) ->
-   *  camera(s) it drives, from the FULL entityMap (not just meshes indexed in
-   *  THIS glb) so the link works regardless of which side has a 3D mesh.
-   *  Cheap lookup rebuild — safe to redo on every index. */
-  private buildMotionToCameraIndex(): void {
-    this.motionToCameraIds.clear();
+  /** Build a "driver entity_id -> device entity_ids it drives" index from one
+   *  EntityMapping field, over the FULL entityMap (not just meshes indexed in
+   *  THIS glb) so a link works regardless of which side has a 3D mesh — the
+   *  driver very often has none at all (a motion sensor is rarely a modelled
+   *  object). Cheap rebuild, safe to redo on every index. Shared by both
+   *  indexes since they differ ONLY in which field they read and whether
+   *  they're camera-scoped. */
+  private buildLinkIndex(
+    target: Map<string, string[]>,
+    driverOf: (map: EntityMapping) => string | undefined,
+  ): void {
+    target.clear();
     for (const map of Object.values(this.config.entityMap)) {
-      if (map.type !== "camera" || !map.linkedEntityId) continue;
-      const list = this.motionToCameraIds.get(map.linkedEntityId) ?? [];
+      const driver = driverOf(map);
+      if (!driver) continue;
+      const list = target.get(driver) ?? [];
       list.push(map.entityId);
-      this.motionToCameraIds.set(map.linkedEntityId, list);
+      target.set(driver, list);
     }
   }
 
-  /** linkedEntityId -> device(s) that reference it, from the FULL entityMap
-   *  — same reasoning as buildMotionToCameraIndex (the linked entity may
-   *  have no mesh of its own in this GLB). */
-  private buildLightLinkIndex(): void {
-    this.linkedEntityIndex.clear();
-    for (const map of Object.values(this.config.entityMap)) {
-      if (!map.linkedEntityId) continue;
-      const list = this.linkedEntityIndex.get(map.linkedEntityId) ?? [];
-      list.push(map.entityId);
-      this.linkedEntityIndex.set(map.linkedEntityId, list);
-    }
-    // Seed from whatever state already arrived — unlike the camera beam
-    // index (which needs a REBUILT beam mesh before it can replay), this is
-    // just a Set, so it's always safe to resync it here rather than only on
-    // the next state_changed event, which may never come again if the linked
-    // entity was already on before this index existed.
+  private buildMotionToCameraIndex(): void {
+    // Camera-scoped: motionEntityId is meaningless on any other type (nothing
+    // else has a beam), so a stray value elsewhere must not build an entry.
+    this.buildLinkIndex(this.motionToCameraIds,
+      (m) => (m.type === "camera" ? m.motionEntityId : undefined));
+  }
+
+  private buildLinkedEntityIndex(): void {
+    this.buildLinkIndex(this.linkedEntityIndex, (m) => m.linkedEntityId);
+    // Seed the ring set from whatever state already arrived — unlike the
+    // camera beam index (which needs a REBUILT beam mesh before it can
+    // replay), this is just a Set, so it's always safe to resync here rather
+    // than waiting on the next state_changed event, which may never come
+    // again if the linked entity was already on before this index existed.
     for (const [linkedId, ids] of this.linkedEntityIndex) {
       const on = this.lastState.get(linkedId)?.state === "on";
       for (const id of ids) {
@@ -1329,7 +1334,7 @@ export class EntityVisuals {
     // whether THIS entity has a mesh of its own — a plain HA binary_sensor
     // driving either effect typically isn't a modelled 3D object at all.
     this.applyMotionRouting(entity);
-    this.applyLightLinkRouting(entity);
+    this.applyLinkedEntityRouting(entity);
 
     // Cache EVERY entity's latest state up front — even one with no badge of
     // its own (a hidden device-group member, e.g. the humidity half of a
@@ -1457,7 +1462,7 @@ export class EntityVisuals {
   }
 
   /** Route a state change to whichever motion-driven visual it feeds:
-   *  - linked to a camera's linkedEntityId  -> that camera's detection beam
+   *  - linked to a camera's motionEntityId  -> that camera's detection beam
    *  - otherwise, a binary_sensor with a Room set -> that room's floor glow
    *  A sensor already driving a camera beam does NOT also glow its room —
    *  the two are separate treatments for separate device kinds (see the
@@ -1472,7 +1477,7 @@ export class EntityVisuals {
    *  on that camera would otherwise show NOTHING at all. Fall back to glowing
    *  the CAMERA's own room instead (not the sensor's — a camera's built-in
    *  motion detector is typically only ever referenced by entity_id via
-   *  linkedEntityId, not separately added as its own mapped/roomed entity,
+   *  motionEntityId, not separately added as its own mapped/roomed entity,
    *  so the sensor's own fallback below usually has nothing to work with
    *  either). Still real, still opt-in (only fires when the camera's own
    *  Room is set), never a guess about WHERE the camera is aiming. */
@@ -1480,17 +1485,13 @@ export class EntityVisuals {
     const on = entity.state === "on";
     const cameraIds = this.motionToCameraIds.get(entity.entity_id);
     if (cameraIds) {
+      // Beam (or room-glow fallback) ONLY — motion deliberately does not ring
+      // the camera's badge. The ring means "detection is armed" and is driven
+      // by linkedEntityId (see applyLinkedEntityRouting); this means
+      // "detection just fired". Two states, two visuals, so both stay
+      // readable at once instead of one overwriting the other.
       let anyBeam = false;
       for (const camId of cameraIds) {
-        // The camera's OWN badge rings red while its linked motion sensor is
-        // active — the same alert outline any active/alerting device gets, so
-        // "there's movement on this camera" reads at a glance on the map
-        // (a camera entity is otherwise almost always just "idle").
-        if (on) this.motionActiveCameras.add(camId);
-        else this.motionActiveCameras.delete(camId);
-        const camState = this.lastState.get(camId);
-        const camMap = this.mapping.get(camId);
-        if (camState && camMap) this.updateLabel(camId, camMap.type, camState);
         if (this.setBeamActive(camId, on)) anyBeam = true;
       }
       if (!anyBeam) {
@@ -1507,15 +1508,12 @@ export class EntityVisuals {
     }
   }
 
-  /** Mirror of applyMotionRouting for EntityMapping.linkedEntityId: when a
-   *  linked entity changes state, ring red every device that links to it
-   *  (its own badge, not the linked entity's — e.g. a motion sensor whose
-   *  linked porch light just turned on). Runs independently of
-   *  applyMotionRouting's beam/room-glow path even though a camera's
-   *  linkedEntityId now feeds BOTH: one field, two consumers (the beam
-   *  keys off it by camera entity_id via motionToCameraIds; this keys off
-   *  it by linked entity_id via linkedEntityIndex). */
-  private applyLightLinkRouting(entity: HassEntity): void {
+  /** Counterpart to applyMotionRouting for EntityMapping.linkedEntityId: when
+   *  a linked entity changes state, ring red every device that references it
+   *  (that device's OWN badge, not the linked entity's — e.g. a camera whose
+   *  detection switch was just armed). Fully independent of the beam path
+   *  above: different source field, different visual, no shared state. */
+  private applyLinkedEntityRouting(entity: HassEntity): void {
     const linkedIds = this.linkedEntityIndex.get(entity.entity_id);
     if (!linkedIds) return;
     const on = entity.state === "on";
@@ -2089,9 +2087,11 @@ export class EntityVisuals {
    *  "on", so the default case silently left them ringless forever. */
   private badgeKind(type: EntityType, s: HassEntity): BadgeKind {
     if (s.state === "unavailable" || s.state === "unknown") return "unavailable";
-    // EntityMapping.linkedEntityId is generic over every entity type — the
-    // ring it drives outranks each type's own vocabulary below, same as a
-    // camera's motion beam already outranks its idle/streaming state.
+    // EntityMapping.linkedEntityId is generic over every entity type, so its
+    // ring is resolved ONCE here rather than per-case below — it outranks
+    // each type's own state vocabulary. A camera's MOTION sensor is
+    // deliberately absent from this function: it drives the beam/room glow
+    // (applyMotionRouting), never the ring, so the two read independently.
     if (this.linkActiveIds.has(s.entity_id)) return "alert";
     switch (type) {
       // Locked is the normal, secure state — quiet, no ring. Only an
@@ -2106,11 +2106,7 @@ export class EntityVisuals {
         return s.state === "closed" ? "off" : "on";
       }
       case "media_player":  return s.state === "playing" || s.state === "buffering" ? "on" : "off";
-      case "camera":
-        // Motion on this camera's linked sensor outranks its own idle/streaming
-        // state — that's the thing worth flagging on the map.
-        if (this.motionActiveCameras.has(s.entity_id)) return "alert";
-        return s.state === "recording" || s.state === "streaming" ? "on" : "off";
+      case "camera":       return s.state === "recording" || s.state === "streaming" ? "on" : "off";
       case "assist_satellite": return s.state === "idle" ? "off" : "on"; // listening/processing/responding
       case "sensor":
         // A status/enum sensor reading a known-bad state (disconnected, error…)

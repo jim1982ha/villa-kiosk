@@ -488,11 +488,10 @@ export default function Dashboard() {
                 ent?.attributes.device_class as string | undefined);
               // Same two alert sources as EntityVisuals' badgeKind (map
               // badge), mirrored here so the panel header ring never
-              // disagrees with the badge that was just tapped to open it. A
-              // camera's own beam/ring-driving sensor IS liveMapping.linkedEntityId
-              // now (the two fields merged into one), so this single check
-              // covers it — no separate camera-only branch needed anymore.
-              const lightLinkAlert =
+              // disagrees with the badge that was just tapped to open it.
+              // motionEntityId is deliberately NOT one of them — it drives
+              // the map's detection beam, never a ring (see badgeKind).
+              const linkedAlert =
                 !!liveMapping.linkedEntityId
                   && entities[liveMapping.linkedEntityId]?.state === "on";
               const sensorOwnAlert = liveMapping.type === "binary_sensor" && ent?.state === "on";
@@ -507,7 +506,7 @@ export default function Dashboard() {
                 // instead of always rendering full-strength regardless of
                 // live state (the map badge already fades; this icon didn't).
                 unavailable: isUnavailable(ent),
-                alertRing: lightLinkAlert || sensorOwnAlert,
+                alertRing: linkedAlert || sensorOwnAlert,
               };
             })(),
             onSetBadgeColor: canEditConfig

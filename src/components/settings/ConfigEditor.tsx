@@ -198,6 +198,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
               <th>Label</th>
               <th>Room</th>
               <th>Linked entity</th>
+              <th>Motion sensor</th>
             </tr>
           </thead>
           <tbody>

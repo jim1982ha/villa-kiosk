@@ -119,13 +119,10 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
               </div>
             );
           })()}
-          {/* THE one "additional entity" field for every type — see
-              EntityMapping.linkedEntityId. Always drives the red ring; on a
-              camera it's also the motion/occupancy sensor that drives the
-              detection beam AND the long-press toggle target (both unique
-              to cameras — every other type's placeholder just says "ring
-              only", including binary_sensor, whose long-press still opens
-              its detail panel like any other device). */}
+          {/* The device's CONTROL link (any type) — drives the red badge
+              ring, and on a camera is the long-press toggle target. Paired
+              with, but separate from, the camera-only motion sensor below:
+              this is what the user toggles, that is what HA reports. */}
           <div style={{ flex: "1 1 220px", minWidth: 180 }}>
             <EntityPicker
               value={meta.linkedEntityId}
@@ -134,11 +131,23 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
               hideCurrentLabel
               placeholder={
                 meta.type === "camera"
-                  ? "Linked entity (motion sensor, long-press toggle)…"
+                  ? "Linked entity (arms detection, long-press)…"
                   : "Linked entity (ring only)…"
               }
             />
           </div>
+          {meta.type === "camera" && (
+            <div style={{ flex: "1 1 220px", minWidth: 180 }}>
+              <EntityPicker
+                value={meta.motionEntityId}
+                onChange={(id) => draftField({ motionEntityId: id })}
+                domains={["binary_sensor"]}
+                allowCustom
+                hideCurrentLabel
+                placeholder="Motion sensor (detection beam)…"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

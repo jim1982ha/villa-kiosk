@@ -225,14 +225,32 @@ function EntityMapRow({
               </td>
             );
           })()}
+          {/* Two DISTINCT links — see EntityMapping. Linked entity = what the
+              user toggles (drives the red badge ring, long-press target on a
+              camera); Motion sensor = what HA reports (drives the map's beam
+              / room glow), camera-only and read-only. */}
           <td data-label="Linked entity" style={{ minWidth: 180 }}>
             <EntityPicker
               value={m.linkedEntityId}
               onChange={(id) => draftField({ linkedEntityId: id })}
               allowCustom
               hideCurrentLabel
-              placeholder={m.type === "camera" ? "Motion sensor, long-press toggle…" : "Ring only…"}
+              placeholder={m.type === "camera" ? "Arms detection, long-press…" : "Ring only…"}
             />
+          </td>
+          <td data-label="Motion sensor" style={{ minWidth: 180 }}>
+            {m.type === "camera" ? (
+              <EntityPicker
+                value={m.motionEntityId}
+                onChange={(id) => draftField({ motionEntityId: id })}
+                domains={["binary_sensor"]}
+                allowCustom
+                hideCurrentLabel
+                placeholder="Detection beam on the map…"
+              />
+            ) : (
+              <span className="muted" style={{ fontSize: 12 }}>—</span>
+            )}
           </td>
         </>
       )}

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.59
+
+### Changes
+- Camera motion: split the merged link field back into two with distinct, non-overlapping roles — 'Linked entity' (any type, user-toggled: drives the red badge ring, and is the long-press toggle target on a camera) and a camera-only read-only 'Motion sensor' (drives the map's detection beam / room glow). Refactor + cleanup: the two indexes were both keyed off the SAME field and built by two near-identical functions (now one shared buildLinkIndex helper); motionActiveCameras was dead code (badgeKind's generic linkActiveIds check returned first, so the camera-specific branch could never fire) and is removed; renamed stale applyLightLinkRouting/buildLightLinkIndex/lightLinkAlert. Camera panel's status timeline now reads the motion sensor (what detected) rather than the control link (whether armed). One-time migration moves an upgraded camera's binary_sensor out of linkedEntityId back into motionEntityId
+
+---
+
+
 ## 2.35.58
 
 ### Changes

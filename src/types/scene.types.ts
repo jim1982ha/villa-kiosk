@@ -19,21 +19,36 @@ export interface EntityMapping {
    *  modelled ahead of their Home Assistant integration (e.g. ceiling fans not
    *  yet controllable). Toggled per-device in Advanced Settings. */
   disabled?: boolean;
-  /** THE single "additional entity" for this device — no domain or type
-   *  restriction (a light, a switch, a motion/occupancy sensor…), one field,
-   *  configurable on every entity type (replaces the old camera-only
-   *  motionEntityId, which this superseded). Universally drives one thing:
-   *  the badge rings red (the same alert outline any active device gets)
-   *  while the linked entity's state is "on" — for type "camera" this is
-   *  also what drives the simulated detection beam (EntityVisuals), so
-   *  pointing a camera's linkedEntityId at its motion/occupancy sensor keeps
-   *  that working exactly as before. On a camera SPECIFICALLY, it's also a
-   *  long-press target — long-pressing the badge toggles the linked entity
-   *  instead of opening the detail panel (a camera's tap already IS its
-   *  panel/feed). Every other type keeps long-press opening its detail panel
-   *  as before, even with this set — set once per device in the Config
-   *  Editor / Advanced Settings. */
+  /** The device's CONTROL entity — no domain or type restriction (a switch,
+   *  a light, an input_boolean…), configurable on every entity type. Drives
+   *  exactly one visual: the badge rings red (the same alert outline any
+   *  active device gets) while this entity's state is "on". On a camera
+   *  SPECIFICALLY it's also a long-press target — long-pressing the badge
+   *  toggles it, since a camera's tap already IS its panel (the fullscreen
+   *  feed), leaving long-press free. Every other type keeps long-press
+   *  opening its detail panel, even with this set.
+   *
+   *  Deliberately paired with, and kept SEPARATE from, motionEntityId below:
+   *  this one is what the USER toggles (arm/disarm), that one is what HOME
+   *  ASSISTANT reports (detection fired). Collapsing them into one field
+   *  (briefly done in v2.35.56) meant a single entity had to be both
+   *  user-writable and sensor-read-only at once — see that field's note. */
   linkedEntityId?: string;
+  /** For type "camera": the HA motion/occupancy binary_sensor that goes "on"
+   *  when this camera actually DETECTS something. Read-only — this is a
+   *  sensor reporting reality, never something the UI toggles. Drives the
+   *  simulated detection beam on the map (CameraBeams), falling back to
+   *  glowing the camera's own room when its SweetHome placement carries no
+   *  facing rotation (see applyMotionRouting). Not inferred from naming
+   *  (camera integrations name these too inconsistently) — set once per
+   *  camera in the Config Editor.
+   *
+   *  Strictly separate from linkedEntityId above, and the two drive
+   *  DIFFERENT visuals on purpose: ring = "detection is armed" (user
+   *  controls it), beam/glow = "detection just fired" (HA reports it). One
+   *  field could never express both, which is exactly why the merged
+   *  version had to be split back apart. */
+  motionEntityId?: string;
   /** For type "light": a per-fixture override, -1..1 (Advanced Settings shows
    *  it as a -100%..+100% slider), applied ON TOP of the entity's live HA
    *  brightness and the global "Light effect strength" setting — 0 = no

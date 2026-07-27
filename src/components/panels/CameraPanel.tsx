@@ -140,18 +140,20 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
   }, [canCycle, zoom.ref]);
 
   // Bottom status bar: this camera's own online/offline history, layered with
-  // its linked entity's (mapping.linkedEntityId, set in Advanced Settings —
-  // typically the camera's motion/occupancy sensor) on/off history — merged
-  // into ONE composite timeline (see mergeStateHistories) and rendered
-  // through the SAME StateTimeline every other panel's "Last 24 hours" chart
-  // uses, just slim and pinned to the screen edge instead of sitting in a
-  // scrollable panel body.
+  // its MOTION sensor's (mapping.motionEntityId, set in Advanced Settings)
+  // on/off history — merged into ONE composite timeline (see
+  // mergeStateHistories) and rendered through the SAME StateTimeline every
+  // other panel's "Last 24 hours" chart uses, just slim and pinned to the
+  // screen edge instead of sitting in a scrollable panel body. Reads the
+  // motion sensor, NOT linkedEntityId: this band answers "did it detect
+  // anything", which is the sensor's job — linkedEntityId only says whether
+  // detection was armed (and drives the badge ring, see EntityVisuals).
   const [statusHistory, setStatusHistory] = useState<StateHistoryPoint[]>([]);
   const [statusLoading, setStatusLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
     setStatusLoading(true);
-    const motionId = mapping.linkedEntityId;
+    const motionId = mapping.motionEntityId;
     Promise.all([
       fetchStateHistory(mapping.entityId, 24),
       motionId ? fetchStateHistory(motionId, 24) : Promise.resolve<StateHistoryPoint[]>([]),
@@ -168,7 +170,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
       setStatusLoading(false);
     }).catch(() => { if (!cancelled) setStatusLoading(false); });
     return () => { cancelled = true; };
-  }, [mapping.entityId, mapping.linkedEntityId]);
+  }, [mapping.entityId, mapping.motionEntityId]);
 
   // Whether the current tier has painted a real frame yet — drives the loading
   // spinner so an empty <video>/<img> mid-setup reads as "loading", not "broken".

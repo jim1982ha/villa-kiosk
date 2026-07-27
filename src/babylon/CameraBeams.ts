@@ -5,7 +5,7 @@
 // A simulated "diffused red light beam" pointing the way a camera prop was
 // rotated AND tilted in SweetHome 3D (see sh3dParser's `angle` for yaw and
 // `pitch` for tilt), toggled by that camera's linked motion binary_sensor
-// (EntityMapping.linkedEntityId). It is a translucent unlit cone, not a real
+// (EntityMapping.motionEntityId). It is a translucent unlit cone, not a real
 // light — no shadow map, no surface interaction.
 
 import {
