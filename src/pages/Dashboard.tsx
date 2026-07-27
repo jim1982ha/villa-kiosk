@@ -199,7 +199,11 @@ export default function Dashboard() {
       const mapping = mappingForEntityId(entityId, config.entityMap);
       if (!mapping) return;
       if (!canControl || !role || !isMappingAllowed(role, entityId, mapping)) return;
-      setActivePanel({ entityId, mapping });
+      // A camera's normal panel IS its fullscreen feed (that's what a TAP
+      // gives), so a long-press there would otherwise just repeat the tap.
+      // Route it to the shared detail/Edit panel instead, matching what a
+      // long-press does for every other entity type.
+      setActivePanel({ entityId, mapping, detail: mapping.type === "camera" });
     },
     [config.entityMap, role, canControl],
   );
@@ -464,7 +468,12 @@ export default function Dashboard() {
               : undefined,
           }}
         >
-          <PanelRouter active={activePanel} onClose={() => setActivePanel(null)} pinContinuous={pinContinuous} />
+          <PanelRouter
+            active={activePanel}
+            onClose={() => setActivePanel(null)}
+            pinContinuous={pinContinuous}
+            onOpenEntity={openEntityPanel}
+          />
         </PanelActionsProvider>
       )}
 

@@ -781,6 +781,11 @@ input[type="range"]::-moz-range-thumb {
 .camera-fullscreen .label { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); left: calc(24px + env(safe-area-inset-left, 0px)); font-size: 18px; background: rgba(0,0,0,0.5); color: #fff; padding: 8px 16px; border-radius: 10px; }
 .camera-fullscreen .close { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(24px + env(safe-area-inset-right, 0px)); }
 .camera-fullscreen .fs-btn { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(72px + env(safe-area-inset-right, 0px)); }
+/* Prev/next camera — continue the same top-right control row, left of the
+   zoom-reset slot (which only appears while zoomed, so these keep fixed
+   offsets rather than shifting as it comes and goes). */
+.camera-fullscreen .cam-next { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(176px + env(safe-area-inset-right, 0px)); }
+.camera-fullscreen .cam-prev { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: calc(228px + env(safe-area-inset-right, 0px)); }
 .camera-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 /* Wraps the HLS <video> together with its instant snapshot preview so the two
    overlap regardless of the video's own (pre-metadata) intrinsic size. */

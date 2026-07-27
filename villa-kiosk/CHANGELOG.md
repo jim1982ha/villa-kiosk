@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.37
+
+### Changes
+- (2) prev/next camera buttons in the fullscreen viewer, cycling all cameras without closing; (3) zoom/pan now clamps to the video's actual painted area (object-fit contain) measured untransformed, so you can no longer pan into the letterbox bars; (4) long-press on a camera opens the shared detail/Edit panel (GenericPanel) like every other entity instead of repeating the tap
+
+---
+
+
 ## 2.35.36
 
 ### Changes

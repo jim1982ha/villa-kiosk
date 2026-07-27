@@ -21,9 +21,12 @@ interface Props {
   active: ActivePanel;
   onClose: () => void;
   pinContinuous?: () => () => void;
+  /** Swap the open panel to another entity — used by the camera panel's
+   *  prev/next buttons to cycle cameras without closing. */
+  onOpenEntity?: (entityId: string) => void;
 }
 
-export default function PanelRouter({ active, onClose, pinContinuous }: Props) {
+export default function PanelRouter({ active, onClose, pinContinuous, onOpenEntity }: Props) {
   const entity = useHAEntity(active.entityId);
   const { config } = useConfig();
   const props = { entity, mapping: active.mapping, onClose };
@@ -36,6 +39,13 @@ export default function PanelRouter({ active, onClose, pinContinuous }: Props) {
     return <DeviceGroupPanel group={group} primaryMapping={active.mapping} onClose={onClose} />;
   }
 
+  // Explicit DETAIL request (long-press on a camera) — the shared state +
+  // history + Edit panel every other entity type shows, instead of this
+  // type's own experience (for a camera that's the fullscreen live feed).
+  if (active.detail) {
+    return <GenericPanel {...props} />;
+  }
+
   switch (active.mapping.type) {
     case "light":
       return <LightPanel {...props} />;
@@ -44,7 +54,7 @@ export default function PanelRouter({ active, onClose, pinContinuous }: Props) {
     case "lock":
       return <LockPanel {...props} />;
     case "camera":
-      return <CameraPanel {...props} pinContinuous={pinContinuous} />;
+      return <CameraPanel {...props} pinContinuous={pinContinuous} onOpenEntity={onOpenEntity} />;
     case "sensor":
     case "binary_sensor":
       return <SensorPanel {...props} />;

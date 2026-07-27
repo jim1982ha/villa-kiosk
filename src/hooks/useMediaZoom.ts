@@ -36,12 +36,34 @@ export function useMediaZoom<T extends HTMLElement>(): MediaZoom<T> {
     const el = ref.current;
     if (!el) return;
 
-    // Pan is clamped so the scaled image edge can never cross the viewport
-    // centre (you can't fling it entirely off-screen).
+    // Pan is clamped to the MEDIA's own painted area, so no empty space (the
+    // letterbox bars beside a 16:9 feed in a taller container) can ever be
+    // panned into view. Two things this gets right that the old
+    // container-rect maths didn't:
+    //   • it measures the UNTRANSFORMED layout box (offsetWidth/Height) —
+    //     getBoundingClientRect() reports the already-scaled box, so the limit
+    //     grew as you zoomed and drifted out of step with what was drawn;
+    //   • it uses the video/img's CONTENT box after object-fit: contain, not
+    //     the container's, so the bars are excluded. Below the scale where the
+    //     media still fits an axis, that axis simply can't pan (max 0).
     const applyClamped = (s: number, x: number, y: number) => {
-      const rect = el.getBoundingClientRect();
-      const maxX = (rect.width * (s - 1)) / 2;
-      const maxY = (rect.height * (s - 1)) / 2;
+      const cw = el.offsetWidth;
+      const ch = el.offsetHeight;
+      // Intrinsic size of whatever media this wrapper holds (video or image).
+      const media = el.querySelector("video, img") as
+        (HTMLVideoElement & HTMLImageElement) | null;
+      const iw = media?.videoWidth || media?.naturalWidth || 0;
+      const ih = media?.videoHeight || media?.naturalHeight || 0;
+      // object-fit: contain → the painted box is the container shrunk to the
+      // media's aspect ratio. With no intrinsic size yet (stream still
+      // negotiating) fall back to the container itself.
+      const fit = iw > 0 && ih > 0 ? Math.min(cw / iw, ch / ih) : 0;
+      const mw = fit > 0 ? iw * fit : cw;
+      const mh = fit > 0 ? ih * fit : ch;
+      // How far the scaled media can travel before its edge would come inside
+      // the container edge (never negative — that means it doesn't fill it).
+      const maxX = Math.max(0, (mw * s - cw) / 2);
+      const maxY = Math.max(0, (mh * s - ch) / 2);
       setScale(s);
       setTx(clamp(x, -maxX, maxX));
       setTy(clamp(y, -maxY, maxY));

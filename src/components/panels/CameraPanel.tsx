@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from "react";
 // setup effect's dynamic import() — so a kiosk that never opens a camera panel
 // never pays for it in the main bundle. This line compiles away entirely.
 import type Hls from "hls.js";
-import { X, VideoOff, Maximize2, Minimize2, ZoomOut } from "lucide-react";
+import { X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
@@ -29,6 +29,8 @@ import { devLog } from "@/utils/devLog";
 interface Props extends PanelProps {
   /** Lets the camera pin continuous rendering while the stream is open. */
   pinContinuous?: () => () => void;
+  /** Swap this panel to another entity — drives the prev/next camera buttons. */
+  onOpenEntity?: (entityId: string) => void;
 }
 
 type Mode = "hls" | "stream" | "snapshot" | "failed";
@@ -53,8 +55,8 @@ const STREAM_WATCHDOG_MS = 6000;
 // nothing breaks either way — it just takes longer to drop to MJPEG/snapshot.
 const HLS_WATCHDOG_MS = 15000;
 
-export default function CameraPanel({ entity, mapping, onClose, pinContinuous }: Props) {
-  const { connected, ws } = useHA();
+export default function CameraPanel({ entity, mapping, onClose, pinContinuous, onOpenEntity }: Props) {
+  const { connected, ws, entities } = useHA();
   const [mode, setMode] = useState<Mode>("hls");
   const [tick, setTick] = useState(0);
   const snapErrors = useRef(0);
@@ -76,6 +78,17 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
   const rootRef = useRef<HTMLDivElement>(null);
   const zoom = useMediaZoom<HTMLDivElement>();
   const [isFs, setIsFs] = useState(false);
+
+  // Every camera in the house, in a stable order, so prev/next can cycle
+  // through them without leaving the viewer. Wraps around at both ends.
+  const cameraIds = Object.keys(entities).filter((id) => id.startsWith("camera.")).sort();
+  const camIndex = cameraIds.indexOf(mapping.entityId);
+  const canCycle = !!onOpenEntity && cameraIds.length > 1 && camIndex >= 0;
+  const stepCamera = (delta: number) => {
+    if (!canCycle) return;
+    const next = (camIndex + delta + cameraIds.length) % cameraIds.length;
+    onOpenEntity!(cameraIds[next]);
+  };
   // Whether the current tier has painted a real frame yet — drives the loading
   // spinner so an empty <video>/<img> mid-setup reads as "loading", not "broken".
   const [frameReady, setFrameReady] = useState(false);
@@ -387,6 +400,28 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous }:
       >
         {isFs ? <Minimize2 size={22} /> : <Maximize2 size={22} />}
       </button>
+      {/* Cycle cameras without leaving the viewer — sits with the other
+          top-right controls, left of Close. */}
+      {canCycle && (
+        <>
+          <button
+            className="icon-btn cam-prev"
+            onClick={() => stepCamera(-1)}
+            title="Previous camera"
+            aria-label="Previous camera"
+          >
+            <ChevronLeft size={24} />
+          </button>
+          <button
+            className="icon-btn cam-next"
+            onClick={() => stepCamera(1)}
+            title="Next camera"
+            aria-label="Next camera"
+          >
+            <ChevronRight size={24} />
+          </button>
+        </>
+      )}
       <button className="icon-btn close" onClick={onClose}>
         <X size={24} />
       </button>
