@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.38
+
+### Changes
+- (9) unify HUD section glass: brand/clock, category row, floor stack and bottom bar now share the profile chip's lighter --chip-bg; the standalone view buttons get a shared .hud-stack section; move the colour-legend (?) into the category row behind a separator (desktop/tablet only); legend modal now describes the REAL map badge outline (red ring active/alerting, no ring off, dimmed unavailable) separately from the panel status pill, and 'Got it' becomes 'Close'
+
+---
+
+
 ## 2.35.37
 
 ### Changes

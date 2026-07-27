@@ -21,6 +21,11 @@ export interface ViewControlsProps {
   onApplyOverviewDefault: () => boolean;
   /** Long-press / right-click: save the current framing as the default. */
   onSaveOverviewDefault: () => void;
+  /** Standalone (bottom-left corner) mode: wrap the buttons in the shared
+   *  .hud-stack section — the same glass block the floor toggle uses — so the
+   *  two buttons read as one HUD section instead of two loose buttons. Inside
+   *  the SummaryBar this is off: the bar is already that section. */
+  stacked?: boolean;
 }
 
 const HOLD_MS = 480;
@@ -28,7 +33,7 @@ const FLASH_MS = 1800;
 
 export default function ViewControls({
   viewMode, onToggleViewMode, hasOverviewDefault,
-  onApplyOverviewDefault, onSaveOverviewDefault,
+  onApplyOverviewDefault, onSaveOverviewDefault, stacked,
 }: ViewControlsProps) {
   // Tap = jump to this device's saved default view; long-press / right-click
   // = (re)define it as the current framing (same tap-vs-hold convention as
@@ -74,7 +79,7 @@ export default function ViewControls({
               : "No default view saved yet — long-press (or right-click) to set one."}
         </div>
       )}
-      <div className="overview-help-buttons">
+      <div className={`overview-help-buttons${stacked ? " hud-stack" : ""}`}>
         <button
           className={`icon-btn${overviewActive ? " active" : ""}`}
           onClick={onToggleViewMode}

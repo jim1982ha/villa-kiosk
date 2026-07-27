@@ -8,7 +8,22 @@
 
 import { X } from "lucide-react";
 import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
+import { ALERT_RED_HEX } from "@/babylon/colors";
 
+/** What the MAP badge actually does per state — mirrors EntityVisuals'
+ *  BADGE_RING exactly (red ring for on/alert, no ring when off/idle, the whole
+ *  badge dimmed when unavailable). Kept faithful to the code rather than
+ *  describing the panel pill's palette, which is a different thing (below). */
+const BADGE_ITEMS: { label: string; note: string; ring?: string; dim?: boolean }[] = [
+  { label: "Active / alerting", ring: ALERT_RED_HEX,
+    note: "Red outline — the device is on, or needs attention (unlocked door, leak…)" },
+  { label: "Off / idle", note: "No outline — the device is off or resting" },
+  { label: "Unavailable", dim: true,
+    note: "The badge fades — Home Assistant has lost contact, so its state is unknown" },
+];
+
+/** The coloured status pill each device PANEL shows (a different vocabulary
+ *  from the map badge above — panels have room for four distinct states). */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "On / active", swatch: "var(--status-on)", note: "Device is on, unlocked-safe, or open" },
   { label: "Off / idle", swatch: "var(--bg-input)", note: "Device is off or in its resting state" },
@@ -49,9 +64,34 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
 
           <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "20px 0" }} />
 
-          <div className="settings-section-title">Device state (status pill / outline)</div>
+          <div className="settings-section-title">On the map (badge outline)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
-            Shown on each device's control panel and its map highlight.
+            How a device's own badge shows its state in the 3D view.
+          </p>
+          <div className="legend-grid">
+            {BADGE_ITEMS.map((b) => (
+              <div className="legend-row" key={b.label}>
+                <span
+                  className="legend-swatch"
+                  style={{
+                    background: categoryGradient("light"),
+                    boxShadow: b.ring ? `0 0 0 3px ${b.ring}` : undefined,
+                    opacity: b.dim ? 0.5 : 1,
+                  }}
+                />
+                <span>
+                  <strong>{b.label}</strong>
+                  <span className="muted" style={{ display: "block", fontSize: 12 }}>{b.note}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "20px 0" }} />
+
+          <div className="settings-section-title">On a device panel (status pill)</div>
+          <p className="muted body-text" style={{ marginTop: 4 }}>
+            Shown when you open a device's controls.
           </p>
           <div className="legend-grid">
             {STATUS_ITEMS.map((s) => (
@@ -67,7 +107,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="settings-footer">
           <span />
-          <button className="btn primary" onClick={onClose}>Got it</button>
+          <button className="btn primary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

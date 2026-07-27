@@ -214,6 +214,27 @@ button {
   backdrop-filter: blur(8px);
 }
 
+/* Every HUD *section* (a container grouping controls) shares ONE glass level —
+   the lighter --chip-bg the profile chip already used, so the brand/clock, the
+   category row, the floor stack and the bottom bar all read as the same
+   material rather than the profile chip looking like a different component.
+   Standalone .icon-btn keeps the denser --bg-panel above: a lone button needs
+   more backing than a group that's mostly filled by its contents. */
+.hud-brand, .hud-group, .hud-stack, .summary-bar {
+  background: var(--chip-bg);
+}
+
+/* Colour-legend (?) button living at the END of the category row, behind a
+   hairline separator. Roomy screens only — on a phone the right-hand cluster
+   (incl. this) collapses into the overflow menu, so both hide here. */
+.hud-cat-sep {
+  flex: 0 0 auto; width: 1px; align-self: stretch; margin: 3px 4px;
+  background: var(--hairline-strong);
+}
+@media (max-width: 640px) {
+  .hud-cat-help { display: none; }
+}
+
 .icon-btn {
   /* Squircle (not a circle) so every standalone control — Settings, view toggle,
      compass, anchor, (i), profile logout — matches the squircle buttons in the
@@ -472,7 +493,7 @@ button {
   width: max-content;
   max-width: min(99vw, 1900px);
   padding: 6px; border-radius: 22px;
-  background: var(--bg-panel); backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px); /* background: shared HUD-section glass, above */
   border: 1px solid var(--hairline); box-shadow: 0 8px 28px var(--shadow);
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
 }

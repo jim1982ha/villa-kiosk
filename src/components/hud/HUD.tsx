@@ -357,6 +357,20 @@ export default function HUD({
                 </button>
               );
             })}
+            {/* The colour-legend (?) lives INSIDE the category row — it explains
+                exactly these colours, so it belongs with them — fenced off by a
+                separator. Roomy screens only: on a phone it stays in the
+                overflow menu (see .hud-cat-help's media query), which is where
+                the whole right-hand cluster collapses to. */}
+            <span className="hud-cat-sep hud-cat-help" aria-hidden="true" />
+            <button
+              className="icon-btn hud-cat-help"
+              onClick={() => setLegendOpen(true)}
+              title="What do these colours mean?"
+              aria-label="Map colour legend"
+            >
+              <CircleHelp size={18} />
+            </button>
           </div>
 
           {/* Label size: steps the in-scene badge scale by 0.25 per click,
@@ -470,9 +484,8 @@ export default function HUD({
                 </button>
               </span>
             )}
-            <button className="icon-btn" onClick={() => setLegendOpen(true)} title="What do these colours mean?" aria-label="Map colour legend">
-              <CircleHelp size={19} />
-            </button>
+            {/* (The colour-legend button moved into the category row — it
+                explains those very colours. See .hud-cat-help.) */}
             {canOpenSettings && (
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
                 <Settings size={20} />
@@ -531,6 +544,7 @@ export default function HUD({
             appear and there's one implementation of the gesture. */}
         {config.showSummaryBar === false ? (
           <ViewControls
+            stacked
             viewMode={viewMode}
             onToggleViewMode={onToggleViewMode}
             hasOverviewDefault={hasOverviewDefault}
