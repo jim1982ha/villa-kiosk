@@ -89,6 +89,51 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
     const next = (camIndex + delta + cameraIds.length) % cameraIds.length;
     onOpenEntity!(cameraIds[next]);
   };
+  // Refs so the swipe listener below (registered once, not on every render)
+  // always reads the LATEST zoomed/stepCamera without needing to re-attach.
+  const zoomedRef = useRef(false);
+  zoomedRef.current = zoom.zoomed;
+  const stepCameraRef = useRef(stepCamera);
+  stepCameraRef.current = stepCamera;
+
+  // Swipe left/right on the feed itself cycles cameras — the touch
+  // equivalent of the prev/next buttons. Gated on NOT zoomed: a single-finger
+  // drag is already a complete no-op in useMediaZoom until the feed is zoomed
+  // in (panning only starts once scale > 1 there), so this coexists with pinch
+  // /pan without fighting over the same pointer events — swipes only resolve
+  // to a camera change while the feed is at its default 1x framing.
+  useEffect(() => {
+    const el = zoom.ref.current;
+    if (!el || !canCycle) return;
+    let downX = 0, downY = 0, downT = 0, tracking = false;
+    const SWIPE_MIN_PX = 60;
+    const SWIPE_MAX_MS = 600;
+    const onDown = (e: PointerEvent) => {
+      if (zoomedRef.current) return;
+      tracking = true;
+      downX = e.clientX; downY = e.clientY; downT = Date.now();
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!tracking) return;
+      tracking = false;
+      if (zoomedRef.current) return;
+      const dx = e.clientX - downX, dy = e.clientY - downY;
+      if (Date.now() - downT <= SWIPE_MAX_MS
+          && Math.abs(dx) >= SWIPE_MIN_PX
+          && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        stepCameraRef.current(dx < 0 ? 1 : -1); // swipe left -> next, right -> previous
+      }
+    };
+    const onCancel = () => { tracking = false; };
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onCancel);
+    return () => {
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onCancel);
+    };
+  }, [canCycle, zoom.ref]);
   // Whether the current tier has painted a real frame yet — drives the loading
   // spinner so an empty <video>/<img> mid-setup reads as "loading", not "broken".
   const [frameReady, setFrameReady] = useState(false);
@@ -374,11 +419,11 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
         {renderView()}
       </div>
 
-      {/* Title + controls share ONE header container so a narrow phone can
-          flex them into two rows (title above, controls below — see
-          .camera-header's mobile rule) instead of the title text and the
-          button row overlapping, which individually absolute-positioned
-          buttons made unavoidable on a small screen. */}
+      {/* Title only now — the controls used to share this header (stacking
+          into a second row on mobile), but now live in their OWN cluster at
+          the bottom-right instead (see .camera-controls below): easier
+          one-handed thumb reach, and it fully sidesteps the title ever
+          overlapping a button regardless of screen size. */}
       <div className="camera-header">
         <div className="label">
           {mapping.label}
@@ -388,50 +433,56 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
             </span>
           )}
         </div>
-        <div className="camera-controls">
-          {zoom.zoomed && (
-            <button
-              className="icon-btn zoom-reset-btn"
-              onClick={zoom.reset}
-              title="Reset zoom"
-              aria-label="Reset zoom"
-            >
-              <ZoomOut size={22} />
-            </button>
-          )}
-          {/* Cycle cameras without leaving the viewer. */}
-          {canCycle && (
-            <>
-              <button
-                className="icon-btn cam-prev"
-                onClick={() => stepCamera(-1)}
-                title="Previous camera"
-                aria-label="Previous camera"
-              >
-                <ChevronLeft size={24} />
-              </button>
-              <button
-                className="icon-btn cam-next"
-                onClick={() => stepCamera(1)}
-                title="Next camera"
-                aria-label="Next camera"
-              >
-                <ChevronRight size={24} />
-              </button>
-            </>
-          )}
+      </div>
+
+      {/* Bottom-right control cluster — prev/next (swipe does the same thing
+          on the feed itself), fullscreen, close, plus zoom-reset while
+          zoomed. Bigger than the app's standard .icon-btn (56px vs 48px):
+          these are the primary way to act on a camera you're actively
+          watching, at arm's length on a phone, not an incidental toolbar
+          button. */}
+      <div className="camera-controls">
+        {zoom.zoomed && (
           <button
-            className="icon-btn fs-btn"
-            onClick={toggleFullscreen}
-            title={isFs ? "Exit fullscreen" : "Fullscreen"}
-            aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
+            className="icon-btn zoom-reset-btn"
+            onClick={zoom.reset}
+            title="Reset zoom"
+            aria-label="Reset zoom"
           >
-            {isFs ? <Minimize2 size={22} /> : <Maximize2 size={22} />}
+            <ZoomOut size={26} />
           </button>
-          <button className="icon-btn close" onClick={onClose}>
-            <X size={24} />
-          </button>
-        </div>
+        )}
+        {canCycle && (
+          <>
+            <button
+              className="icon-btn cam-prev"
+              onClick={() => stepCamera(-1)}
+              title="Previous camera"
+              aria-label="Previous camera"
+            >
+              <ChevronLeft size={28} />
+            </button>
+            <button
+              className="icon-btn cam-next"
+              onClick={() => stepCamera(1)}
+              title="Next camera"
+              aria-label="Next camera"
+            >
+              <ChevronRight size={28} />
+            </button>
+          </>
+        )}
+        <button
+          className="icon-btn fs-btn"
+          onClick={toggleFullscreen}
+          title={isFs ? "Exit fullscreen" : "Fullscreen"}
+          aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
+        >
+          {isFs ? <Minimize2 size={26} /> : <Maximize2 size={26} />}
+        </button>
+        <button className="icon-btn close" onClick={onClose}>
+          <X size={28} />
+        </button>
       </div>
 
       {/* An empty <video>/<img> mid-setup reads as "broken" rather than

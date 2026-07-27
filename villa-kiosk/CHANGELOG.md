@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.49
+
+### Changes
+- camera fullscreen viewer: move prev/next/fullscreen/close/zoom-reset controls to a bottom-right cluster (easier one-handed thumb reach, title stays top-left, the two can never overlap now), enlarge the buttons (56px vs the app's standard 48px, bigger icons), and add swipe-left/right on the feed itself to cycle cameras (gated on not-zoomed, so it coexists with pinch/pan without stealing those gestures)
+
+---
+
+
 ## 2.35.48
 
 ### Changes

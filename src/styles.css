@@ -806,30 +806,31 @@ input[type="range"]::-moz-range-thumb {
 /* Zoom/pan layer: fills the screen, centres the feed, and is transformed by
    useMediaZoom. will-change keeps the transform on the compositor (cheap). */
 .camera-zoom { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; will-change: transform; }
-/* Title + control row share one header, laid out with real flexbox instead of
-   each button individually absolute-positioned at a hand-tuned pixel offset
-   (the old "24px / 72px / 124px / 176px / 228px" stack, fragile to reorder or
-   add to). Desktop/tablet: one row, title left, controls right. */
+/* Header now holds ONLY the title — top-left, out of the controls' way on
+   every screen size (no more stacking rule needed: the two can never
+   collide once they're not sharing a row at all). */
 .camera-header {
   position: absolute; top: 0; left: 0; right: 0;
   padding: calc(20px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px)) 0 calc(24px + env(safe-area-inset-left, 0px));
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-  pointer-events: none; /* re-enabled on the actual controls below */
+  pointer-events: none; /* the label itself re-enables it, nothing else lives here now */
 }
 .camera-header .label {
   pointer-events: auto;
   font-size: 18px; background: rgba(0,0,0,0.5); color: #fff;
-  padding: 8px 16px; border-radius: 10px; min-width: 0;
+  padding: 8px 16px; border-radius: 10px; min-width: 0; display: inline-block;
 }
-.camera-controls { pointer-events: auto; display: flex; gap: 8px; flex: 0 0 auto; }
-@media (max-width: 640px) {
-  /* Stack title above controls (title's own row, controls wrap below it) —
-     avoids the button row drawing on top of the title text, which a long
-     camera name made unreadable on a narrow phone. */
-  .camera-header { flex-direction: column; align-items: stretch; }
-  .camera-header .label { align-self: flex-start; }
-  .camera-controls { justify-content: flex-end; flex-wrap: wrap; margin-top: 8px; }
+/* Bottom-right control cluster (prev/next/zoom-reset/fullscreen/close) —
+   easier one-handed thumb reach on a phone than a top corner, and it can
+   never overlap the title since the two are now at opposite screen edges.
+   Buttons here are BIGGER than the app's standard .icon-btn (56 vs 48px):
+   these are the primary way to act on a camera you're actively watching. */
+.camera-controls {
+  position: absolute; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  right: calc(20px + env(safe-area-inset-right, 0px));
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;
+  max-width: calc(100vw - 40px - env(safe-area-inset-right, 0px) - env(safe-area-inset-left, 0px));
 }
+.camera-controls .icon-btn { width: 56px; height: 56px; }
 .camera-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 /* Wraps the HLS <video> together with its instant snapshot preview so the two
    overlap regardless of the video's own (pre-metadata) intrinsic size. */
