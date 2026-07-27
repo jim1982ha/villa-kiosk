@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.45
+
+### Changes
+- found the real bug: an entity_id bound to a mesh but that NEVER exists in Home Assistant (e.g. a stale/misconfigured binding) never receives a single live state event, so apply()/updateLabel() — the ONLY place the unavailable dim/desaturate logic lives — was simply never called for it. Its badge sat frozen at the constructor's plain full-colour default forever, indistinguishable from a healthy device. rebuildLabels now falls back to a synthetic 'unavailable' stub entity for any badge with no cached state, routing it through the exact same dim treatment a real HA-lost-contact device gets (mirrors isUnavailable()'s own 'no entity = unavailable' convention)
+
+---
+
+
 ## 2.35.44
 
 ### Changes

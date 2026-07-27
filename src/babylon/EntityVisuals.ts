@@ -356,6 +356,21 @@ const BADGE_RING: Record<BadgeKind, { color: string | null; alpha: number }> = {
 };
 const BADGE_RING_THICKNESS = 3;
 
+/** A minimal, well-typed stand-in HassEntity for a mesh-bound entity_id that
+ *  has NEVER reported a real state — see rebuildLabels' construction-time
+ *  fallback. state: "unavailable" is what routes it through the existing
+ *  dim/desaturated badge treatment; every other field is a harmless, unused
+ *  placeholder (no code path reads them for an "unavailable"-kind badge). */
+function PHANTOM_ENTITY(entityId: string): HassEntity {
+  return {
+    entity_id: entityId,
+    state: "unavailable",
+    attributes: {},
+    last_changed: "", last_updated: "",
+    context: { id: "", parent_id: null, user_id: null },
+  };
+}
+
 export class EntityVisuals {
   private scene: Scene;
   private config: AppConfig;
@@ -1689,9 +1704,20 @@ export class EntityVisuals {
       this.labels.set(entityId, { container, badge, glyph, valueWrap, valueText, anchor, type, category });
 
       // Repaint from the last known state so a rebuild (toggle on / icon edit)
-      // shows live status immediately instead of an idle default.
-      const cached = this.lastState.get(entityId);
-      if (cached) this.updateLabel(entityId, type, cached);
+      // shows live status immediately instead of an idle default. An entity
+      // with NO cached state has never received a single live update from HA
+      // — apply() (the only caller of updateLabel outside this constructor)
+      // fires exclusively off real HA state events, so an entity_id that's
+      // misconfigured or was removed/renamed in HA generates none, EVER. Left
+      // as "no cached state, do nothing", such a badge stayed frozen at this
+      // constructor's plain full-colour default forever — impossible to
+      // distinguish from a genuinely healthy device on the map. A synthetic
+      // "unavailable" stub routes it through the exact same updateLabel path
+      // (dim/desaturated glyph, no ring) as a real device HA lost contact
+      // with — the SAME convention isUnavailable() already uses elsewhere
+      // (entity == null counts as unavailable), just applied here too.
+      const cached = this.lastState.get(entityId) ?? PHANTOM_ENTITY(entityId);
+      this.updateLabel(entityId, type, cached);
     }
     this.applyIconScale(); // honour current size + zoom on freshly built badges
   }
