@@ -11,6 +11,7 @@
 // choice is preserved.
 
 import type { Category, EntityType } from "@/types/scene.types";
+import { OPENING_DEVICE_CLASSES } from "./BinarySensorClasses";
 
 /** Fixed display order for the HUD filter buttons and Config Editor dropdown. */
 export const CATEGORY_ORDER: Category[] = [
@@ -124,8 +125,19 @@ export function categoryForEntity(entityId: string, type: EntityType, deviceClas
     // Enum (text-state) sensors — connectivity, status, mode … — read as network.
     if (dc === "enum") return "network";
   } else if (type === "binary_sensor") {
-    // Motion / presence detectors belong with access control.
-    if (ACCESS_BINARY_DC.has(dc) || /(^|[._])(motion|presence|occupancy|pir)([._]|$)/.test(id)) return "access_control";
+    // Motion/presence detectors AND door/window/garage contacts both belong
+    // with access control — a plain contact sensor (e.g. "door_network_
+    // contact") used to match neither test here and fall all the way through
+    // to the pale, near-colourless "others" default, which also made its
+    // UNAVAILABLE dim (EntityVisuals' badge alpha) nearly invisible: an
+    // already-pale badge going 50% pale reads as "no change at all". Reuses
+    // OPENING_DEVICE_CLASSES — the SAME set the door/window pose-swap gate
+    // (EntityVisuals) already trusts to mean "this is a physical opening" —
+    // instead of a second, possibly-drifting list of device_classes.
+    if (ACCESS_BINARY_DC.has(dc) || OPENING_DEVICE_CLASSES.has(dc)
+        || /(^|[._])(motion|presence|occupancy|pir|door|window|gate)([._]|$)/.test(id)) {
+      return "access_control";
+    }
   }
 
   // `switch`/`input_boolean` is HA's generic RELAY domain — a pool pump, a lamp

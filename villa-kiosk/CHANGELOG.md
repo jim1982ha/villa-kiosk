@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.42
+
+### Changes
+- categorize door/window/garage contact sensors (binary_sensor device_class door/window/opening/garage_door, or id hints) as access_control instead of falling through to the pale 'others' default — that's what made the UNAVAILABLE badge dim look like nothing changed: an already near-colourless badge going 50% pale reads as no fade at all. Reuses OPENING_DEVICE_CLASSES (the same set the door pose-swap gate trusts) instead of a second list
+
+---
+
+
 ## 2.35.41
 
 ### Changes
