@@ -538,20 +538,23 @@ export default function HUD({
       </div>
 
       <div className="bottom-bar">
-        {/* Bottom-left view controls — ONLY when the SummaryBar is hidden.
-            When that bar is shown it hosts the very same <ViewControls> in its
-            own left section instead (see SummaryBar), so the two never both
-            appear and there's one implementation of the gesture. */}
-        {config.showSummaryBar === false ? (
-          <ViewControls
-            stacked
-            viewMode={viewMode}
-            onToggleViewMode={onToggleViewMode}
-            hasOverviewDefault={hasOverviewDefault}
-            onApplyOverviewDefault={onApplyOverviewDefault}
-            onSaveOverviewDefault={onSaveOverviewDefault}
-          />
-        ) : <span />}
+        {/* Bottom-left view controls — ALWAYS standalone here now, regardless
+            of whether the SummaryBar (device/scene tiles) is shown. It used
+            to move INTO that bar's own left section while the bar was
+            visible; kept purely standalone instead so it never has to share
+            width with however wide the tile row grows on a given screen —
+            see .bottom-bar's z-index note in styles.css for how this stays
+            clickable even when the (separately, absolutely positioned)
+            SummaryBar happens to visually extend over this corner on a
+            narrow phone. */}
+        <ViewControls
+          stacked
+          viewMode={viewMode}
+          onToggleViewMode={onToggleViewMode}
+          hasOverviewDefault={hasOverviewDefault}
+          onApplyOverviewDefault={onApplyOverviewDefault}
+          onSaveOverviewDefault={onSaveOverviewDefault}
+        />
 
         {/* Bottom-right: the first-person movement joystick. */}
         {viewMode === "first-person" && <VirtualJoystick onMove={onMove} />}

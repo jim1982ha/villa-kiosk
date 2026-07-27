@@ -8,7 +8,7 @@
 // Built on the shared BasePanel (same modal chrome/header/close as every other
 // panel) and the shared gradient badge (badgeImageDataUrl) so it feels native.
 
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import { ChevronRight } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
@@ -76,6 +76,10 @@ export default function SummaryGroupPanel({
   const { entities, callService } = useHA();
   const { config } = useConfig();
   const { role } = useProfile();
+  // Bulk-toggling an entire group (potentially dozens of devices) from one
+  // tap is easy to trigger by accident — require an explicit second tap
+  // before it actually fires, same pattern as LockPanel's unlock confirm.
+  const [confirming, setConfirming] = useState(false);
 
   const roomOf = (id: string) => config.entityMap[id]?.room?.trim() ?? "";
 
@@ -97,6 +101,16 @@ export default function SummaryGroupPanel({
 
   const Icon = group.icon;
 
+  const doToggleAll = () => {
+    callService(
+      toggleables[0].entity_id.split(".")[0],
+      anyOn ? "turn_off" : "turn_on",
+      {},
+      { entity_id: toggleables.map((e) => e.entity_id) },
+    );
+    setConfirming(false);
+  };
+
   return (
     <BasePanel
       title={group.title}
@@ -107,19 +121,18 @@ export default function SummaryGroupPanel({
       // action that applies to the WHOLE group belongs where it's always
       // visible, not scrolled past a long, room-grouped device list.
       headerActions={canControl && toggleables.length > 1 && (
-        <button
-          className="btn ghost"
-          onClick={() =>
-            callService(
-              toggleables[0].entity_id.split(".")[0],
-              anyOn ? "turn_off" : "turn_on",
-              {},
-              { entity_id: toggleables.map((e) => e.entity_id) },
-            )
-          }
-        >
-          {anyOn ? "Turn all off" : "Turn all on"}
-        </button>
+        confirming ? (
+          <div className="modal-actions" style={{ margin: 0 }}>
+            <button className="btn ghost" onClick={() => setConfirming(false)}>Cancel</button>
+            <button className="btn danger" onClick={doToggleAll}>
+              {anyOn ? "Turn off?" : "Turn on?"}
+            </button>
+          </div>
+        ) : (
+          <button className="btn ghost" onClick={() => setConfirming(true)}>
+            {anyOn ? "Turn all off" : "Turn all on"}
+          </button>
+        )
       )}
     >
       {rows.length === 0 && <div className="muted body-text">No devices in this group.</div>}

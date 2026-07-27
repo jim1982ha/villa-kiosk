@@ -32,7 +32,6 @@ import { applyScene } from "@/config/scenes";
 import type { KioskScene } from "@/config/scenes";
 import { prettifyEntitySlug } from "@/config/EntityMap";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
-import ViewControls, { type ViewControlsProps } from "./ViewControls";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 
@@ -81,7 +80,14 @@ function deriveTiles(
     tiles.push({
       id: "__locks",
       icon: allLocked ? DoorClosed : DoorOpen,
-      label: single ? friendly(locks[0]) : "Locks",
+      // Short + generic on purpose, even for a single lock: the tile's real
+      // constraint is horizontal space in the bar, and "Outdoor Entrance
+      // Lock" (the lock's own HA friendly_name) was one of the widest tiles
+      // in it. "Door Lock" also reads sensibly once a second lock exists (the
+      // tile already becomes the even-more-generic "Locks" at that point —
+      // see the `single` branch below). The MODAL this tile opens still uses
+      // the real per-device name (title, further down) — it has the room.
+      label: single ? "Door Lock" : "Locks",
       value: single
         ? (locks[0].state === "locked" ? "Locked" : locks[0].state === "unlocked" ? "Unlocked" : locks[0].state)
         : `${lockedN}/${locks.length} locked`,
@@ -158,9 +164,6 @@ interface Props {
   /** Entities with real geometry in the loaded model — everything else is
    *  flagged "not on the map" in the group modal. */
   mappedEntityIds: Set<string>;
-  /** The camera view controls this bar hosts in its left section (see
-   *  ViewControls) — HUD renders them standalone only when this bar is off. */
-  view: ViewControlsProps;
 }
 
 function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void }) {
@@ -282,7 +285,7 @@ function SceneMenu({ scenes, canRun, apply }: {
   );
 }
 
-export default function SummaryBar({ onOpenEntity, mappedEntityIds, view }: Props) {
+export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
   const { entities, callService } = useHA();
   const { role } = useProfile();
   const { config } = useConfig();
@@ -298,16 +301,15 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, view }: Prop
   // A scene spans categories — allow running one if the profile may control ANY.
   const canRunScenes = !!role && CATEGORY_ORDER.some((c) => isCategoryAllowed(role, c));
 
-  // Hidden via Settings. (When shown it always renders — even with no tiles —
-  // because it hosts the view controls HUD then leaves out.)
-  if (config.showSummaryBar === false) return null;
+  // Hidden via Settings, or nothing to show. (The view-mode/default-view
+  // buttons used to live in a left section here — they're back to always
+  // rendering standalone via HUD instead, see ViewControls' own docstring —
+  // so this bar goes back to being purely the device/scene tiles.)
+  if (config.showSummaryBar === false || (!deviceTiles.length && !scenes.length)) return null;
 
   return (
     <>
       <div className="summary-bar" role="toolbar" aria-label="Quick controls and summaries">
-        {/* Left section: camera view controls, fenced off by a separator. */}
-        <div className="summary-bar-views"><ViewControls {...view} /></div>
-        {(deviceTiles.length > 0 || scenes.length > 0) && <span className="summary-bar-sep" aria-hidden="true" />}
         {deviceTiles.map((t) => <Tile key={t.id} t={t} onOpen={setOpenGroup} />)}
         {scenes.length > 0 && (
           <SceneMenu

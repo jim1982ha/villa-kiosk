@@ -208,9 +208,11 @@ const LED_HOUSING_COLOR = new Color3(0.8, 0.79, 0.77);
 // frame, which can flip against the (also transparent) glass walls as the
 // camera moves — the exact appear/disappear glitch ModelLoader documents for
 // glass vs. strips. Transparency does not affect pickability, so an off
-// strip stays clickable exactly where its faint trace shows. Only meshes
-// tagged __inflatedStrip get this treatment — real lamp geometry keeps full
-// visibility when off (a physical lamp doesn't vanish when switched off).
+// strip stays clickable exactly where its faint trace shows. Every light
+// fixture mesh gets this treatment now, strip or not (see applyToMesh) — a
+// smart light should read as "off" the instant HA says so, not stay a
+// permanently solid, statically-coloured prop just because it happens to be
+// nicely modelled geometry rather than stand-in placeholder geometry.
 // When the light is ON, applyToMesh restores alpha 1 + MATERIAL_OPAQUE, so
 // the on-state render path is byte-identical to before this existed.
 const STRIP_OFF_ALPHA = 0.25; // slightly clearer than window glass (0.38)
@@ -470,6 +472,14 @@ export class EntityVisuals {
    *  EntityMapping.motionEntityId). Rebuilt from config.entityMap on every
    *  indexMeshes() (structural entityMap edits re-trigger that already). */
   private motionToCameraIds = new Map<string, string[]>();
+  /** Linked entity -> device(s) that reference it via
+   *  EntityMapping.linkedEntityId. Mirrors motionToCameraIds but keyed the
+   *  other direction (the linked entity is the driver, not the device
+   *  showing the ring). Generic over ANY entity type on either side. */
+  private linkedEntityIndex = new Map<string, string[]>();
+  /** Devices whose linkedEntityId is currently "on" — rings red, applied
+   *  uniformly for every entity type in badgeKind (see there). */
+  private linkActiveIds = new Set<string>();
   /** Cameras whose linked motion sensor is currently firing — their badge
    *  shows the shared red alert ring while they're in here (see badgeKind). */
   private motionActiveCameras = new Set<string>();
@@ -756,17 +766,16 @@ export class EntityVisuals {
         // actual 3D location is encoded only in vertex data.
         m.computeWorldMatrix(true);
         this.inflateThinStrip(m);
-        // A geometry-less "virtual light" MARKER (the small placeholder sphere
-        // the pipeline emits for a ceiling spot / bulb that has no modelled
-        // fixture) is, like an inflated strip, only meaningful while the light
-        // is ON — off, an opaque ball hanging at the ceiling reads as a solid
-        // object that isn't really there. Tag it so applyToMesh gives it the
-        // SAME off-state transparency the strips get (see STRIP_OFF_ALPHA):
-        // the two are the same kind of stand-in geometry and shouldn't look
-        // like different things. Real modelled lamp geometry is untouched.
-        if (this.isLightMarker(m)) {
-          m.metadata = { ...(m.metadata ?? {}), __lightMarker: true };
-        }
+        // EVERY light fixture mesh — marker sphere, inflated strip, or a
+        // fully modelled bulb/fixture from the SweetHome catalog — gets the
+        // same off-state alpha treatment in applyToMesh (see STRIP_OFF_ALPHA):
+        // a smart light should read as "off" (translucent) the instant HA
+        // says so, not stay a permanently opaque, statically-coloured prop.
+        // That toggle needs depth writing while alpha-blended (see the
+        // window-glass/strip depth-sort note by STRIP_OFF_ALPHA), so set it
+        // here, once, for every light mesh — not only the ones inflateThinStrip
+        // happens to touch.
+        if (mat) mat.forceDepthWrite = true;
         // A real (diffuse-only, shadowless) PointLight at the fixture — created
         // in BOTH modes now. In non-baked mode it lights the whole room. In
         // BAKED mode the structure renders unlit (ModelLoader sets mat.unlit =
@@ -912,6 +921,7 @@ export class EntityVisuals {
     }
 
     this.buildMotionToCameraIndex();
+    this.buildLightLinkIndex();
     this.rebuildLabels(); // labels are always shown
   }
 
@@ -1023,6 +1033,31 @@ export class EntityVisuals {
     }
   }
 
+  /** linkedEntityId -> device(s) that reference it, from the FULL entityMap
+   *  — same reasoning as buildMotionToCameraIndex (the linked entity may
+   *  have no mesh of its own in this GLB). */
+  private buildLightLinkIndex(): void {
+    this.linkedEntityIndex.clear();
+    for (const map of Object.values(this.config.entityMap)) {
+      if (!map.linkedEntityId) continue;
+      const list = this.linkedEntityIndex.get(map.linkedEntityId) ?? [];
+      list.push(map.entityId);
+      this.linkedEntityIndex.set(map.linkedEntityId, list);
+    }
+    // Seed from whatever state already arrived — unlike the camera beam
+    // index (which needs a REBUILT beam mesh before it can replay), this is
+    // just a Set, so it's always safe to resync it here rather than only on
+    // the next state_changed event, which may never come again if the linked
+    // entity was already on before this index existed.
+    for (const [linkedId, ids] of this.linkedEntityIndex) {
+      const on = this.lastState.get(linkedId)?.state === "on";
+      for (const id of ids) {
+        if (on) this.linkActiveIds.add(id);
+        else this.linkActiveIds.delete(id);
+      }
+    }
+  }
+
   // axisWorldScale moved to ./meshUnits — shared with SceneManager's outline
   // width, which hit the exact same local-cm-vs-world-metre trap (see there).
 
@@ -1061,23 +1096,6 @@ export class EntityVisuals {
    *  artifact, not a lighting bug at all, just this function over-stretching
    *  the mesh it was supposed to gently thicken. A fixed target offset is
    *  bounded for any input, including exactly zero, so it can't recur. */
-  /** A geometry-less "virtual light" placeholder (the pipeline's small marker
-   *  sphere for a spot/bulb with no modelled fixture) rather than real lamp
-   *  geometry. Detected by its baked marker material (VillaLightMarker) or, for
-   *  older GLBs with no material, by being a tiny near-cubic blob — the same
-   *  two signals the marker's own styling above keys off. */
-  private isLightMarker(mesh: AbstractMesh): boolean {
-    if (/villalightmarker|litemarker/i.test(mesh.material?.name ?? "")) return true;
-    const bb = mesh.getBoundingInfo().boundingBox;
-    const s = bb.maximum.subtract(bb.minimum);
-    const u = axisWorldScale(mesh);
-    const w = { x: Math.abs(s.x * u.x), y: Math.abs(s.y * u.y), z: Math.abs(s.z * u.z) };
-    const max = Math.max(w.x, w.y, w.z);
-    const min = Math.min(w.x, w.y, w.z);
-    // ≤25 cm on every axis and roughly isotropic (a blob, not a strip/lamp).
-    return max <= 0.25 && min > 0 && max / min < 2.5;
-  }
-
   private inflateThinStrip(mesh: AbstractMesh): void {
     const bb = mesh.getBoundingInfo().boundingBox;
     const size = bb.maximum.subtract(bb.minimum);
@@ -1106,7 +1124,6 @@ export class EntityVisuals {
     // opaque (ON) — opaque geometry writes depth anyway. Set once here; the
     // per-state alpha/transparencyMode toggle lives in applyToMesh.
     if (mat) mat.forceDepthWrite = true;
-    mesh.metadata = { ...(mesh.metadata ?? {}), __inflatedStrip: true };
 
     const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
     if (!positions) return;
@@ -1310,6 +1327,7 @@ export class EntityVisuals {
     // whether THIS entity has a mesh of its own — a plain HA binary_sensor
     // driving either effect typically isn't a modelled 3D object at all.
     this.applyMotionRouting(entity);
+    this.applyLightLinkRouting(entity);
 
     // Cache EVERY entity's latest state up front — even one with no badge of
     // its own (a hidden device-group member, e.g. the humidity half of a
@@ -1484,6 +1502,26 @@ export class EntityVisuals {
     const map = this.config.entityMap[entity.entity_id];
     if (map?.type === "binary_sensor" && map.room) {
       this.roomHighlight.setActive(map.room, on);
+    }
+  }
+
+  /** Mirror of applyMotionRouting for EntityMapping.linkedEntityId: when a
+   *  linked entity changes state, ring red every device that links to it
+   *  (its own badge, not the linked entity's — e.g. a motion sensor whose
+   *  linked porch light just turned on). Independent of applyMotionRouting's
+   *  beam/room-glow path; a device can have both a motionEntityId (camera
+   *  beam) AND a linkedEntityId (ring, plus a long-press toggle target on
+   *  camera/binary_sensor) at once. */
+  private applyLightLinkRouting(entity: HassEntity): void {
+    const linkedIds = this.linkedEntityIndex.get(entity.entity_id);
+    if (!linkedIds) return;
+    const on = entity.state === "on";
+    for (const id of linkedIds) {
+      if (on) this.linkActiveIds.add(id);
+      else this.linkActiveIds.delete(id);
+      const st = this.lastState.get(id);
+      const map = this.mapping.get(id);
+      if (st && map) this.updateLabel(id, map.type, st);
     }
   }
 
@@ -2029,6 +2067,10 @@ export class EntityVisuals {
    *  "on", so the default case silently left them ringless forever. */
   private badgeKind(type: EntityType, s: HassEntity): BadgeKind {
     if (s.state === "unavailable" || s.state === "unknown") return "unavailable";
+    // EntityMapping.linkedEntityId is generic over every entity type — the
+    // ring it drives outranks each type's own vocabulary below, same as a
+    // camera's motion beam already outranks its idle/streaming state.
+    if (this.linkActiveIds.has(s.entity_id)) return "alert";
     switch (type) {
       // Locked is the normal, secure state — quiet, no ring. Only an
       // unlocked door demands attention. (Locked used to ring amber; with
@@ -2278,22 +2320,20 @@ export class EntityVisuals {
         // 1) The fixture mesh glows.
         setEmissive?.(on ? colour.scale(effectiveFrac) : Color3.Black());
 
-        // An artificially-inflated LED strip bar is only meant to be seen
-        // while it IS the light — off, it goes window-glass transparent
-        // instead of sitting at the ceiling as a solid 6cm slab; on, it's
-        // fully opaque again so the glow renders exactly as always (see
-        // STRIP_OFF_ALPHA for why material alpha, not mesh.visibility).
-        // Placeholder MARKERS (bulbs/spots with no modelled fixture) get the
-        // same treatment as inflated strips — both are stand-in geometry that
-        // should fade out when the light is off rather than sit there solid.
-        if (mesh.metadata?.__inflatedStrip || mesh.metadata?.__lightMarker) {
-          const stripMat = mesh.material;
-          if (stripMat) {
-            stripMat.alpha = on ? 1 : STRIP_OFF_ALPHA;
-            stripMat.transparencyMode = on
-              ? Material.MATERIAL_OPAQUE
-              : Material.MATERIAL_ALPHABLEND;
-          }
+        // EVERY light fixture mesh — an inflated LED strip bar, a geometry-
+        // less marker sphere, or a fully modelled bulb/fixture straight from
+        // the SweetHome catalog — goes window-glass transparent while off
+        // and fully opaque again once on (see STRIP_OFF_ALPHA for why
+        // material alpha, not mesh.visibility). Applied unconditionally, by
+        // TYPE alone (map.type === "light"), not by guessing which meshes
+        // "look like" stand-in geometry from their size/name — any current
+        // or future light asset gets this for free, no per-fixture setup.
+        const fixtureMat = mesh.material;
+        if (fixtureMat) {
+          fixtureMat.alpha = on ? 1 : STRIP_OFF_ALPHA;
+          fixtureMat.transparencyMode = on
+            ? Material.MATERIAL_OPAQUE
+            : Material.MATERIAL_ALPHABLEND;
         }
 
         // 2) This fixture mesh's own light source illuminates the room.

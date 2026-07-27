@@ -130,6 +130,22 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
               />
             </div>
           )}
+          {/* Generic over every type — see EntityMapping.linkedEntityId.
+              Always drives the red ring; only toggled by long-press on
+              camera/binary_sensor (noted in the placeholder as a hint). */}
+          <div style={{ flex: "1 1 220px", minWidth: 180 }}>
+            <EntityPicker
+              value={meta.linkedEntityId}
+              onChange={(id) => draftField({ linkedEntityId: id })}
+              allowCustom
+              hideCurrentLabel
+              placeholder={
+                meta.type === "camera" || meta.type === "binary_sensor"
+                  ? "Linked entity (long-press toggle)…"
+                  : "Linked entity (ring only)…"
+              }
+            />
+          </div>
         </div>
       )}
     </div>

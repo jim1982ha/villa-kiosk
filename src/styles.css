@@ -465,7 +465,13 @@ button {
 .bottom-bar {
   position: absolute; bottom: 0; left: 0; right: 0; height: 96px;
   display: flex; align-items: flex-end; justify-content: space-between;
-  padding: 16px 20px; z-index: 20; pointer-events: none;
+  padding: 16px 20px; z-index: 23; pointer-events: none;
+  /* ABOVE .summary-bar (21) on purpose: the view-mode toggle here lives in
+     the SAME bottom-left corner the summary bar's centred, near-full-width
+     tile row can visually extend over on a narrow phone — without this the
+     view button would be covered (and unclickable) whenever that overlap
+     happens, exactly the failure this bar existing standalone (not inside
+     the tile row any more) would otherwise reintroduce. */
 }
 .bottom-bar > * { pointer-events: auto; }
 
@@ -507,23 +513,6 @@ button {
 }
 .summary-bar::-webkit-scrollbar { display: none; }
 .summary-scene { display: flex; }
-
-/* Left section of the bar: the camera view controls, fenced off from the
-   device tiles by a hairline so they read as a separate group. Their
-   .overview-help stack is horizontal here (it's a vertical corner stack when
-   HUD renders it standalone with the bar hidden). */
-.summary-bar-views { display: flex; align-items: center; flex: 0 0 auto; position: relative; }
-.summary-bar-views .overview-help { flex-direction: row; align-items: center; gap: 8px; }
-.summary-bar-views .overview-help-buttons { flex-direction: row; gap: 6px; }
-.summary-bar-views .icon-btn { width: 44px; height: 44px; }
-/* The confirmation flash would stretch the bar — float it above instead. */
-.summary-bar-views .overview-hint {
-  position: absolute; bottom: calc(100% + 10px); left: 0; z-index: 3;
-}
-.summary-bar-sep {
-  flex: 0 0 auto; width: 1px; align-self: stretch; margin: 4px 2px;
-  background: var(--hairline-strong);
-}
 
 .summary-tile {
   flex: 0 0 auto;
@@ -838,32 +827,35 @@ input[type="range"]::-moz-range-thumb {
   font-size: 18px; background: rgba(0,0,0,0.5); color: #fff;
   padding: 8px 16px; border-radius: 10px; min-width: 0; display: inline-block;
 }
-/* Bottom-right control cluster (prev/next/zoom-reset/fullscreen/close) —
-   easier one-handed thumb reach on a phone than a top corner, and it can
-   never overlap the title since the two are now at opposite screen edges.
-   Buttons here are BIGGER than the app's standard .icon-btn (56 vs 48px):
-   these are the primary way to act on a camera you're actively watching. */
-.camera-controls {
+/* Bottom row: status strip + control cluster (prev/next/zoom-reset/
+   fullscreen/close) share one flex row so they're always the same height
+   and bottom offset. The status bar sits in the flex:1 space to the left of
+   the controls, but only fills 75% of it (width below) — the user wants a
+   visible gap before the button cluster, not an edge-to-edge bar touching
+   it. Easier one-handed thumb reach on a phone than a top corner, and it
+   can never overlap the title since the two are at opposite screen edges. */
+.camera-bottom-row {
   position: absolute; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  left: calc(20px + env(safe-area-inset-left, 0px));
   right: calc(20px + env(safe-area-inset-right, 0px));
+  display: flex; align-items: center; gap: 10px;
+}
+.camera-controls {
   display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;
-  max-width: calc(100vw - 40px - env(safe-area-inset-right, 0px) - env(safe-area-inset-left, 0px));
+  margin-left: auto;
 }
 .camera-controls .icon-btn { width: 56px; height: 56px; }
 .camera-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-/* Bottom status strip (online/offline/motion — see CameraPanel's
-   statusHistory) — full-bleed at the very screen edge, well clear of the
-   bottom-right control cluster (which sits 20px+ up from the bottom, this
-   bar is only ~7px tall). Reuses StateTimeline unmodified; only the container
-   is camera-specific (full width, no rounding, a translucent dark track so
-   the bar reads against whatever the live feed looks like behind it). */
-.camera-status-bar {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
+/* Status strip (online/offline/motion — see CameraPanel's statusHistory).
+   The outer .camera-status-bar claims the full flex:1 space left of the
+   controls; the StateTimeline itself is capped to 75% width of that space
+   (per spec: "75% of the width between the left side of the screen and the
+   first control button") and matches the controls' 56px height/rounding so
+   it reads as one aligned toolbar rather than a separate full-bleed strip. */
+.camera-status-bar { flex: 1 1 auto; min-width: 0; display: flex; }
 .camera-status-bar .state-timeline,
 .camera-status-bar .state-timeline-skeleton {
-  border-radius: 0; background: rgba(255,255,255,0.12);
+  width: 75%; border-radius: 14px; background: rgba(255,255,255,0.12);
 }
 /* Wraps the HLS <video> together with its instant snapshot preview so the two
    overlap regardless of the video's own (pre-metadata) intrinsic size. */
@@ -935,6 +927,10 @@ input[type="range"]::-moz-range-thumb {
 .config-editor-modal { max-width: 780px; }
 /* Header is a row: title left, the icon-only theme selector right. */
 .settings-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px 16px; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
+/* Matches .segmented-icons' own rendered height exactly (34px button +
+   3px×2 padding = 40px) — the default .icon-btn (48px) sat visibly taller
+   than the theme selector right next to it in this same header row. */
+.header-icon-btn { width: 40px; height: 40px; border-radius: 11px; }
 /* Two sliders (or coordinate fields) side by side; stacks on narrow screens. */
 .slider-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-items: start; }
 .slider-pair > div { min-width: 0; }

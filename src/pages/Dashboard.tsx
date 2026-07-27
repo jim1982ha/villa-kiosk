@@ -205,13 +205,25 @@ export default function Dashboard() {
       const mapping = mappingForEntityId(entityId, config.entityMap);
       if (!mapping) return;
       if (!canControl || !role || !isMappingAllowed(role, entityId, mapping)) return;
+      // linkedEntityId is configurable on every type (it universally drives
+      // the badge's red ring — see EntityVisuals.badgeKind), but only
+      // camera/binary_sensor use long-press to TOGGLE it: those two often
+      // have nothing sensible to toggle on themselves (a binary_sensor has
+      // no HA turn_on/off service at all; a camera's tap already IS its
+      // panel). Every other type keeps long-press opening its detail panel
+      // as before, even with a linkedEntityId set — that field is ring-only
+      // for them, for now.
+      if ((mapping.type === "camera" || mapping.type === "binary_sensor") && mapping.linkedEntityId) {
+        HAServices.toggleEntity(ws, mapping.linkedEntityId);
+        return;
+      }
       // A camera's normal panel IS its fullscreen feed (that's what a TAP
       // gives), so a long-press there would otherwise just repeat the tap.
       // Route it to the shared detail/Edit panel instead, matching what a
       // long-press does for every other entity type.
       setActivePanel({ entityId, mapping, detail: mapping.type === "camera" });
     },
-    [config.entityMap, role, canControl],
+    [config.entityMap, role, canControl, ws],
   );
 
   // Announce motion the moment it's detected, wherever it happens: a brief
@@ -440,13 +452,6 @@ export default function Dashboard() {
       <SummaryBar
         onOpenEntity={openEntityPanel}
         mappedEntityIds={mappedEntityIds}
-        view={{
-          viewMode,
-          onToggleViewMode: toggleViewMode,
-          hasOverviewDefault,
-          onApplyOverviewDefault: applyOverviewDefault,
-          onSaveOverviewDefault: saveOverviewDefault,
-        }}
       />
 
       {teleportOpen && (
@@ -482,6 +487,16 @@ export default function Dashboard() {
               const category = effectiveCategory(
                 entityId, mapping.type, liveMapping.category ?? mapping.category,
                 ent?.attributes.device_class as string | undefined);
+              // Same three alert sources as EntityVisuals' badgeKind (map
+              // badge), mirrored here so the panel header ring never
+              // disagrees with the badge that was just tapped to open it.
+              const motionAlert =
+                liveMapping.type === "camera" && !!liveMapping.motionEntityId
+                  && entities[liveMapping.motionEntityId]?.state === "on";
+              const lightLinkAlert =
+                !!liveMapping.linkedEntityId
+                  && entities[liveMapping.linkedEntityId]?.state === "on";
+              const sensorOwnAlert = liveMapping.type === "binary_sensor" && ent?.state === "on";
               return {
                 category,
                 iconKey: iconKeyFor(mapping.type, ent),
@@ -493,15 +508,7 @@ export default function Dashboard() {
                 // instead of always rendering full-strength regardless of
                 // live state (the map badge already fades; this icon didn't).
                 unavailable: isUnavailable(ent),
-                // A camera's linked motion sensor firing — the panel-header
-                // equivalent of the map badge's red ring for the same
-                // condition (see EntityVisuals' motionActiveCameras). Reads
-                // straight off live entities + the mapping's own
-                // motionEntityId, no separate lookup needed.
-                alertRing:
-                  liveMapping.type === "camera" && !!liveMapping.motionEntityId
-                    ? entities[liveMapping.motionEntityId]?.state === "on"
-                    : false,
+                alertRing: motionAlert || lightLinkAlert || sensorOwnAlert,
               };
             })(),
             onSetBadgeColor: canEditConfig

@@ -238,6 +238,19 @@ function EntityMapRow({
               <span className="muted" style={{ fontSize: 12 }}>—</span>
             )}
           </td>
+          <td data-label="Linked entity" style={{ minWidth: 180 }}>
+            <EntityPicker
+              value={m.linkedEntityId}
+              onChange={(id) => draftField({ linkedEntityId: id })}
+              allowCustom
+              hideCurrentLabel
+              placeholder={
+                m.type === "camera" || m.type === "binary_sensor"
+                  ? "Long-press toggle…"
+                  : "Ring only…"
+              }
+            />
+          </td>
         </>
       )}
     </tr>

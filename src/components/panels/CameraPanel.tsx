@@ -470,56 +470,6 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
         </div>
       </div>
 
-      {/* Bottom-right control cluster — prev/next (swipe does the same thing
-          on the feed itself), fullscreen, close, plus zoom-reset while
-          zoomed. Bigger than the app's standard .icon-btn (56px vs 48px):
-          these are the primary way to act on a camera you're actively
-          watching, at arm's length on a phone, not an incidental toolbar
-          button. */}
-      <div className="camera-controls">
-        {zoom.zoomed && (
-          <button
-            className="icon-btn zoom-reset-btn"
-            onClick={zoom.reset}
-            title="Reset zoom"
-            aria-label="Reset zoom"
-          >
-            <ZoomOut size={26} />
-          </button>
-        )}
-        {canCycle && (
-          <>
-            <button
-              className="icon-btn cam-prev"
-              onClick={() => stepCamera(-1)}
-              title="Previous camera"
-              aria-label="Previous camera"
-            >
-              <ChevronLeft size={28} />
-            </button>
-            <button
-              className="icon-btn cam-next"
-              onClick={() => stepCamera(1)}
-              title="Next camera"
-              aria-label="Next camera"
-            >
-              <ChevronRight size={28} />
-            </button>
-          </>
-        )}
-        <button
-          className="icon-btn fs-btn"
-          onClick={toggleFullscreen}
-          title={isFs ? "Exit fullscreen" : "Fullscreen"}
-          aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
-        >
-          {isFs ? <Minimize2 size={26} /> : <Maximize2 size={26} />}
-        </button>
-        <button className="icon-btn close" onClick={onClose}>
-          <X size={28} />
-        </button>
-      </div>
-
       {/* An empty <video>/<img> mid-setup reads as "broken" rather than
           "loading" — cover it with a spinner until a real frame arrives.
           Skipped on the hls tier once the instant snapshot preview is up:
@@ -533,16 +483,63 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           </div>
         )}
 
-      {/* Bottom status strip — green while online, red the instant the
-          linked motion sensor trips, black across any gap this camera was
-          genuinely unreachable. See the statusHistory effect above. */}
-      <div className="camera-status-bar">
-        <StateTimeline
-          data={statusHistory}
-          loading={statusLoading}
-          height={7}
-          colorFor={(s) => (s === "motion" ? "var(--status-danger)" : s === "offline" ? "#000" : "var(--status-on)")}
-        />
+      {/* Bottom row: status strip (green online / red motion / black gap)
+          sharing the same offset + height as the control cluster, sized to
+          fill the space left of it (see .camera-bottom-row flex rule) so it
+          stays aligned with prev/next/zoom/fullscreen/close regardless of
+          how many of those are currently rendered. */}
+      <div className="camera-bottom-row">
+        <div className="camera-status-bar">
+          <StateTimeline
+            data={statusHistory}
+            loading={statusLoading}
+            height={56}
+            colorFor={(s) => (s === "motion" ? "var(--status-danger)" : s === "offline" ? "#000" : "var(--status-on)")}
+          />
+        </div>
+        <div className="camera-controls">
+          {zoom.zoomed && (
+            <button
+              className="icon-btn zoom-reset-btn"
+              onClick={zoom.reset}
+              title="Reset zoom"
+              aria-label="Reset zoom"
+            >
+              <ZoomOut size={26} />
+            </button>
+          )}
+          {canCycle && (
+            <>
+              <button
+                className="icon-btn cam-prev"
+                onClick={() => stepCamera(-1)}
+                title="Previous camera"
+                aria-label="Previous camera"
+              >
+                <ChevronLeft size={28} />
+              </button>
+              <button
+                className="icon-btn cam-next"
+                onClick={() => stepCamera(1)}
+                title="Next camera"
+                aria-label="Next camera"
+              >
+                <ChevronRight size={28} />
+              </button>
+            </>
+          )}
+          <button
+            className="icon-btn fs-btn"
+            onClick={toggleFullscreen}
+            title={isFs ? "Exit fullscreen" : "Fullscreen"}
+            aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
+          >
+            {isFs ? <Minimize2 size={26} /> : <Maximize2 size={26} />}
+          </button>
+          <button className="icon-btn close" onClick={onClose}>
+            <X size={28} />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -131,7 +131,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
                   theme selector rather than as a labelled row further down. */}
               {(manager?.renderFx.isBaked() ?? false) && (
                 <button
-                  className={`icon-btn${render.dayNightInvert ? " active" : ""}`}
+                  className={`icon-btn header-icon-btn${render.dayNightInvert ? " active" : ""}`}
                   onClick={() => applyRender({ dayNightInvert: !render.dayNightInvert })}
                   aria-pressed={!!render.dayNightInvert}
                   title="Invert day/night preview"

@@ -24,6 +24,18 @@ export interface EntityMapping {
    *  (EntityVisuals). Not inferred from naming (camera integrations name
    *  these too inconsistently) — set once per camera in the Config Editor. */
   motionEntityId?: string;
+  /** Any other entity to associate with THIS device — no domain or type
+   *  restriction (a light, a switch, another sensor…), configurable on every
+   *  entity type. Universally drives one thing: the badge rings red (the
+   *  same alert outline any active device gets) while the linked entity's
+   *  state is "on". On a camera or a binary_sensor specifically, it ALSO
+   *  becomes a long-press target — long-pressing the badge toggles the
+   *  linked entity instead of opening a panel, since those two types often
+   *  have nothing sensible to toggle on themselves (a binary_sensor has no
+   *  HA turn_on/off service at all). Every other type keeps long-press
+   *  opening its detail panel as before, even with this set — set once per
+   *  device in the Config Editor / Advanced Settings. */
+  linkedEntityId?: string;
   /** For type "light": a per-fixture override, -1..1 (Advanced Settings shows
    *  it as a -100%..+100% slider), applied ON TOP of the entity's live HA
    *  brightness and the global "Light effect strength" setting — 0 = no

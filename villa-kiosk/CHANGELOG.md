@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.55
+
+### Changes
+- (1) SummaryBar lock tile label shortened to generic 'Door Lock'; (2) bird's-eye/default-view buttons moved out of the bottom bar (always visible, standalone), bottom-bar z-index fixed so they're never hidden behind it on phone; (3) Settings' day/night invert button now matches the theme selector's height; (4) camera feed's bottom status bar resized to match the control-button row's height/offset and span 75% of the space left of it, instead of a full-bleed edge strip; (5) EntityMapping.linkedEntityId: a generic per-device linked-entity field (any type) that rings the badge red wherever it's on, plus a long-press toggle specifically on camera/binary_sensor (their own state usually isn't toggleable); (6) SummaryGroupPanel's Turn all on/off now requires a confirm tap before firing; (7) every light fixture mesh — not just marker spheres/inflated strips — now fades translucent when off like an LED strip, so newly added light assets get this automatically with no per-fixture setup
+
+---
+
+
 ## 2.35.54
 
 ### Changes
