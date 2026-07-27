@@ -374,57 +374,65 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
         {renderView()}
       </div>
 
-      <div className="label">
-        {mapping.label}
-        {lastMotion && (
-          <span className="muted" style={{ marginLeft: 10, fontSize: 13 }}>
-            updated {new Date(lastMotion as string).toLocaleTimeString()}
-          </span>
-        )}
+      {/* Title + controls share ONE header container so a narrow phone can
+          flex them into two rows (title above, controls below — see
+          .camera-header's mobile rule) instead of the title text and the
+          button row overlapping, which individually absolute-positioned
+          buttons made unavoidable on a small screen. */}
+      <div className="camera-header">
+        <div className="label">
+          {mapping.label}
+          {lastMotion && (
+            <span className="muted" style={{ marginLeft: 10, fontSize: 13 }}>
+              updated {new Date(lastMotion as string).toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+        <div className="camera-controls">
+          {zoom.zoomed && (
+            <button
+              className="icon-btn zoom-reset-btn"
+              onClick={zoom.reset}
+              title="Reset zoom"
+              aria-label="Reset zoom"
+            >
+              <ZoomOut size={22} />
+            </button>
+          )}
+          {/* Cycle cameras without leaving the viewer. */}
+          {canCycle && (
+            <>
+              <button
+                className="icon-btn cam-prev"
+                onClick={() => stepCamera(-1)}
+                title="Previous camera"
+                aria-label="Previous camera"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <button
+                className="icon-btn cam-next"
+                onClick={() => stepCamera(1)}
+                title="Next camera"
+                aria-label="Next camera"
+              >
+                <ChevronRight size={24} />
+              </button>
+            </>
+          )}
+          <button
+            className="icon-btn fs-btn"
+            onClick={toggleFullscreen}
+            title={isFs ? "Exit fullscreen" : "Fullscreen"}
+            aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
+          >
+            {isFs ? <Minimize2 size={22} /> : <Maximize2 size={22} />}
+          </button>
+          <button className="icon-btn close" onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
       </div>
-      {zoom.zoomed && (
-        <button
-          className="icon-btn zoom-reset-btn"
-          onClick={zoom.reset}
-          title="Reset zoom"
-          aria-label="Reset zoom"
-        >
-          <ZoomOut size={22} />
-        </button>
-      )}
-      <button
-        className="icon-btn fs-btn"
-        onClick={toggleFullscreen}
-        title={isFs ? "Exit fullscreen" : "Fullscreen"}
-        aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
-      >
-        {isFs ? <Minimize2 size={22} /> : <Maximize2 size={22} />}
-      </button>
-      {/* Cycle cameras without leaving the viewer — sits with the other
-          top-right controls, left of Close. */}
-      {canCycle && (
-        <>
-          <button
-            className="icon-btn cam-prev"
-            onClick={() => stepCamera(-1)}
-            title="Previous camera"
-            aria-label="Previous camera"
-          >
-            <ChevronLeft size={24} />
-          </button>
-          <button
-            className="icon-btn cam-next"
-            onClick={() => stepCamera(1)}
-            title="Next camera"
-            aria-label="Next camera"
-          >
-            <ChevronRight size={24} />
-          </button>
-        </>
-      )}
-      <button className="icon-btn close" onClick={onClose}>
-        <X size={24} />
-      </button>
 
       {/* An empty <video>/<img> mid-setup reads as "broken" rather than
           "loading" — cover it with a spinner until a real frame arrives.

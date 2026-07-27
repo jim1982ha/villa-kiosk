@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.48
+
+### Changes
+- camera fullscreen viewer: title and controls (prev/next/fullscreen/close/zoom-reset) now share one flex header instead of each button individually absolute-positioned at a hand-tuned pixel offset. On mobile (<=640px) the header stacks into two rows -- title above, controls below, wrapping if needed -- so a long camera title no longer draws underneath the button row
+
+---
+
+
 ## 2.35.47
 
 ### Changes
