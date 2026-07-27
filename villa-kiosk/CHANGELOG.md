@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.50
+
+### Changes
+- fix modal navigation: drilling from the group modal (bottom-bar tile) into a row's own detail panel no longer closes the group behind it -- it stays mounted, so closing the detail panel reveals the group again instead of slamming back to the bare villa map. Both share the same .modal-backdrop z-index, so this relies on nothing but DOM render order (SummaryBar mounts before the entity panel block in Dashboard) -- no extra 'return to parent' state needed
+
+---
+
+
 ## 2.35.49
 
 ### Changes

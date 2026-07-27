@@ -321,7 +321,16 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, view }: Prop
           canControl={openGroup.canControl}
           mappedEntityIds={mappedEntityIds}
           onClose={() => setOpenGroup(null)}
-          onOpenEntity={(id) => { setOpenGroup(null); onOpenEntity(id); }}
+          // Deliberately DON'T close the group when drilling into one of its
+          // rows — leave this modal mounted underneath. Both this panel and
+          // the entity's own detail panel (rendered later in Dashboard's
+          // tree, so it stacks visually on top at the same z-index) share the
+          // same .modal-backdrop system, so the group modal is genuinely
+          // still there, just covered — closing the entity panel (its own X,
+          // unrelated to this component) reveals the group again with no
+          // extra "return to parent" bookkeeping needed. Only the group's OWN
+          // X (onClose above) actually clears this state.
+          onOpenEntity={onOpenEntity}
         />
       )}
     </>
