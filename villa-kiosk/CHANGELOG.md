@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.39
+
+### Changes
+- (7) one shared SWITCH_PURPOSE_HINTS table now decides BOTH a generic switch's category (colour) and its badge glyph, so a pool/light/lock relay can no longer show a lightbulb icon on a grey 'others' badge — they were resolved separately and drifted
+
+---
+
+
 ## 2.35.38
 
 ### Changes

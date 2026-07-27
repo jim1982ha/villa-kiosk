@@ -86,6 +86,27 @@ export const CATEGORY_EXCEPTIONS: Partial<Record<string, Category>> = {
 const COMFORT_SENSOR_DC = new Set(["temperature", "humidity"]);
 const ACCESS_BINARY_DC = new Set(["motion", "presence", "occupancy", "moving"]);
 
+/**
+ * What a generic `switch.*` / `input_boolean.*` is actually FOR, inferred from
+ * its name — as [pattern, category, badge glyph key]. ONE table so the colour
+ * (this module) and the icon (babylon/badgeIconKeys) always agree; they used to
+ * be decided separately and drifted (a "pool light" switch drew a lightbulb on
+ * an "others"-grey badge). Ordered: first match wins, most specific first.
+ * Only consulted when nothing more reliable (a user-set category, a
+ * device_class) applies.
+ */
+export const SWITCH_PURPOSE_HINTS: ReadonlyArray<readonly [RegExp, Category, string]> = [
+  [/motion|presence|occupan|detect/i, "access_control", "activity"],
+  [/\block|unlock|door|gate/i,        "access_control", "lock"],
+  [/light|lamp|\bled\b|spot/i,        "light",          "lightbulb"],
+  [/fan|vmc|extract|vent/i,           "comfort",        "fan"],
+  [/pump|filtr|filter|jet|jacuzzi|spa|pool/i, "energy",  "droplets"],
+  [/heat|boiler|water_?heater|thermo/i, "comfort",      "thermometer"],
+  [/camera|cctv/i,                    "access_control", "cctv"],
+  [/speaker|music|audio|sonos/i,      "others",         "music"],
+  [/plug|socket|outlet/i,             "energy",         "plug"],
+];
+
 /** Resolve the DEFAULT category for an entity: exception > device_class rule >
  *  entity_id hint > type default > "others". `deviceClass` (from the live HA
  *  state) makes the sensor/binary_sensor splits precise; when it isn't known
@@ -105,6 +126,19 @@ export function categoryForEntity(entityId: string, type: EntityType, deviceClas
   } else if (type === "binary_sensor") {
     // Motion / presence detectors belong with access control.
     if (ACCESS_BINARY_DC.has(dc) || /(^|[._])(motion|presence|occupancy|pir)([._]|$)/.test(id)) return "access_control";
+  }
+
+  // `switch`/`input_boolean` is HA's generic RELAY domain — a pool pump, a lamp
+  // relay and a gate release are all bare `switch.*` with no device_class, so
+  // the type default alone buckets every one of them into "others" (grey). The
+  // purpose is normally evident from the name, so fall back to the SHARED hint
+  // table — the same one that picks the glyph (see badgeIconKeys.iconKeyFor),
+  // so a switch can never end up with a lightbulb icon on a grey "others"
+  // badge: one table decides both.
+  if (type === "switch" || type === "input_boolean") {
+    for (const [re, category] of SWITCH_PURPOSE_HINTS) {
+      if (re.test(id)) return category;
+    }
   }
 
   return DEFAULT_CATEGORY_BY_TYPE[type] ?? "others";
