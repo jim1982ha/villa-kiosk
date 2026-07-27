@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.46
+
+### Changes
+- revert the grey desaturation for UNAVAILABLE badges — keep the category's own baseline colour, only alpha changes. The desaturation was a workaround for what turned out to be a different bug (v2.35.45's phantom-entity fix: updateLabel never ran at all for an entity_id absent from HA), not evidence that alpha-only dimming was visually too weak
+
+---
+
+
 ## 2.35.45
 
 ### Changes
