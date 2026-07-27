@@ -1709,14 +1709,27 @@ export class EntityVisuals {
     const iconKey = iconKeyFor(type, entity);
     const override = this.config.entityMap[entityId]?.badgeColor;
 
+    // UNAVAILABLE fades the glyph itself — baked into its PIXELS (see
+    // badgeIcons' DIM_ALPHA), not applied via the Babylon GUI Control's own
+    // `.alpha`. That property only cascades from a Rectangle to its child
+    // Image when BOTH explicitly set their own alpha (an internal Babylon
+    // behaviour this file can't unit-test), so relying on it here was
+    // fragile and — for at least one confirmed case — rendered a fully
+    // opaque, undimmed badge instead of a faded one. A baked-in-pixels fade
+    // can't fail to render regardless of any Control-alpha subtlety.
+    const dim = kind === "unavailable";
+    lbl.glyph.alpha = 1; // never set elsewhere now — no cascading ambiguity
+
     if (this.config.badgeStyle === "card") {
       // CATEGORY-COLOURED card (or per-entity override) + the GRADIENT squircle
-      // glyph (the app's one gradient icon square). State shows as the outline
-      // ring; "unavailable" dims the badge (see the alpha block below).
+      // glyph (the app's one gradient icon square). The card's own solid fill
+      // is a plain colour (not baked pixels), so IT still uses badge.alpha
+      // below — a Rectangle dimming its own direct fill has no children to
+      // cascade through, so that specific case is safe.
       lbl.badge.background = override ?? CATEGORY_COLORS[lbl.category].bottom;
       lbl.badge.thickness = ring.color ? BADGE_RING_THICKNESS : 0;
       lbl.badge.color = ring.color ?? "transparent";
-      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, override, BADGE_INSET_CARD);
+      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, override, BADGE_INSET_CARD, dim);
     } else {
       // The squircle's own fill never changes — only this outline ring (state)
       // and the glyph (device type / device_class, honouring live device_class
@@ -1724,19 +1737,12 @@ export class EntityVisuals {
       lbl.badge.background = "transparent";
       lbl.badge.thickness = ring.color ? BADGE_RING_THICKNESS : 0;
       lbl.badge.color = ring.color ?? "transparent";
-      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, override);
+      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, override, 0, dim);
     }
-
-    // Dim an UNAVAILABLE device's badge (the legend's "the badge fades").
-    // Applied to EVERY visible part, not just the badge Rectangle: Babylon GUI
-    // doesn't propagate a parent control's alpha to its children, and in the
-    // classic style that Rectangle is fully transparent anyway — the pixels you
-    // actually see are the glyph Image and the value pill. Setting alpha only
-    // on the badge therefore dimmed nothing at all, and an offline device kept
-    // rendering at full strength (contradicting the legend).
     lbl.badge.alpha = ring.alpha;
-    lbl.glyph.alpha = ring.alpha;
-    lbl.valueWrap.alpha = ring.alpha;
+    // The value pill is never shown for an unavailable entity anyway
+    // (compactValue short-circuits to "" for every type when state is
+    // unavailable/unknown — see below), so it needs no alpha of its own.
 
     const value = this.groupedValue(entityId, this.compactValue(type, entity));
     lbl.valueText.text = value;

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.43
+
+### Changes
+- make the UNAVAILABLE badge fade robust: bake the dim directly into the glyph's own pixel alpha (canvas globalAlpha at draw time) instead of relying on the Babylon GUI Control.alpha parent->child cascade, which only propagates when both explicitly set their own alpha (an internal Babylon behaviour) and produced a fully opaque, undimmed badge in at least one confirmed case. A baked-in-pixels fade can't fail to render
+
+---
+
+
 ## 2.35.42
 
 ### Changes

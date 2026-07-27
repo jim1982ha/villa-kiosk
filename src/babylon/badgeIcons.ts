@@ -95,6 +95,19 @@ function shade(hex: string, amt: number): string {
 // padding + the value's right padding, so left/right stay roomy.
 export const BADGE_INSET_CARD = 0.10;
 
+// UNAVAILABLE badges bake their fade directly into these pixels (via
+// ctx.globalAlpha at draw time), instead of relying on the Babylon GUI
+// Control's OWN `.alpha` property at render time. Deliberate: this badge
+// nests a Rectangle → Image, and Babylon's Control.alpha only cascades from
+// parent to child when BOTH explicitly set their own `.alpha` (Control.
+// AllowAlphaInheritance defaults false — see node_modules/@babylonjs/gui/2D/
+// controls/control.js's _applyStates), an easy-to-get-wrong internal detail
+// this file has no way to unit-test. Baking the fade into the PNG's own alpha
+// channel sidesteps that entirely: whatever composites this image, at
+// whatever Control.alpha it happens to be drawn with, the pixels are already
+// faded — impossible to render as if nothing changed.
+const DIM_ALPHA = 0.4;
+
 /** Render (and cache) the composited GRADIENT squircle badge for a category +
  *  glyph — the single source of the app's gradient icon squares (top bar,
  *  bottom bar and both badge styles all resolve to this same look).
@@ -102,11 +115,11 @@ export const BADGE_INSET_CARD = 0.10;
  *  derived from that single colour — the per-entity badge colour a user sets
  *  from the device panel (persisted on EntityMapping.badgeColor). `inset` bakes
  *  a transparent margin so the squircle can sit padded inside a larger control
- *  (see BADGE_INSET_CARD). */
+ *  (see BADGE_INSET_CARD). `dim` bakes the UNAVAILABLE fade (see DIM_ALPHA). */
 export function badgeImageDataUrl(
-  category: Category, iconKey: string, colorOverride?: string, inset = 0,
+  category: Category, iconKey: string, colorOverride?: string, inset = 0, dim = false,
 ): string {
-  const cacheKey = `${category}:${iconKey}:${colorOverride ?? ""}:${inset}`;
+  const cacheKey = `${category}:${iconKey}:${colorOverride ?? ""}:${inset}:${dim ? 1 : 0}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -116,6 +129,7 @@ export function badgeImageDataUrl(
   const ctx = canvas.getContext("2d");
   let url = "";
   if (ctx) {
+    if (dim) ctx.globalAlpha = DIM_ALPHA; // applies to every fill/draw below
     const colors = colorOverride
       ? { top: shade(colorOverride, 0.12), bottom: shade(colorOverride, -0.12) }
       : CATEGORY_COLORS[category];
