@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.57
+
+### Changes
+- SummaryBar (bottom tile row) now reserves an 80px gutter on each side so its own width caps before reaching the bottom-left view-controls corner (bird's-eye/default-view icons), instead of relying on z-index alone to keep them clickable while visually overlapping the tiles underneath on a narrow phone
+
+---
+
+
 ## 2.35.56
 
 ### Changes

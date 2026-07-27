@@ -505,7 +505,17 @@ button {
      clipped. Forcing the width to the tiles' own size (capped at 99vw) lets
      the bar use the FULL viewport before any scroll kicks in. */
   width: max-content;
-  max-width: min(99vw, 1900px);
+  /* Reserve an 80px gutter on EACH side — the .bottom-bar view-controls
+     corner (.hud-stack: ~48px + 20px padding ≈ 68px, plus a little breathing
+     room) on the left, and the same on the right for whatever sits there
+     (the first-person joystick). z-index alone (.bottom-bar is above this)
+     used to just make the corner controls paint ON TOP when the tile row
+     was wide enough to reach them — clickable, but visually overlapping the
+     tiles underneath on a narrow phone. Capping the width so the bar's own
+     edge stops short of the corner fixes the overlap at the source instead
+     of only fixing which layer wins it. Bar stays scrollable (overflow-x)
+     for whatever tiles don't fit in what's left. */
+  max-width: min(calc(99vw - 160px), 1900px);
   padding: 6px; border-radius: 22px;
   backdrop-filter: blur(8px); /* background: shared HUD-section glass, above */
   border: 1px solid var(--hairline); box-shadow: 0 8px 28px var(--shadow);
@@ -641,7 +651,9 @@ button {
 .summary-entity-toggle.on .knob { transform: translateX(20px); }
 
 @media (max-width: 720px) {
-  .summary-bar { max-width: 92vw; bottom: 14px; gap: 8px; padding: 7px; }
+  /* max-width no longer set here — the base rule's gutter-aware calc()
+     already shrinks correctly at any width, including this one. */
+  .summary-bar { bottom: 14px; gap: 8px; padding: 7px; }
   .summary-tile { min-width: 96px; padding: 9px 14px 9px 9px; gap: 10px; }
   .summary-tile-icon { width: 40px; height: 40px; }
   .summary-tile-icon svg { width: 21px; height: 21px; }
