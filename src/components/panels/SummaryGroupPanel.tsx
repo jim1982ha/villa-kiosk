@@ -67,7 +67,12 @@ export default function SummaryGroupPanel({
   const Icon = group.icon;
 
   return (
-    <BasePanel title={group.title} icon={<Icon size={22} />} onClose={onClose}>
+    <BasePanel
+      title={group.title}
+      icon={<Icon size={22} />}
+      className="summary-group-modal"
+      onClose={onClose}
+    >
       {canControl && toggleables.length > 1 && (
         <button
           className="btn ghost"

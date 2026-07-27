@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.36
+
+### Changes
+- (5) group modal now uses the Settings width (780px) with a 2-column device grid, collapsing to 1 on phones; (6) DeviceGroupPanel reuses the shared UnavailableNotice/status-pill instead of its own 'Unavailable' text; (8) placeholder light markers (bulbs/spots) fade out when off, same as inflated LED strips
+
+---
+
+
 ## 2.35.35
 
 ### Changes

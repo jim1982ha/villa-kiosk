@@ -11,6 +11,7 @@ import { Layers } from "lucide-react";
 import BasePanel from "./BasePanel";
 import Sparkline from "./Sparkline";
 import DualSparkline from "./DualSparkline";
+import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { fetchHistory } from "@/ha/HAHistoryAPI";
@@ -70,16 +71,28 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       icon={<Layers size={22} />}
       onClose={onClose}
     >
-      <div className="row-buttons" style={{ marginBottom: 18 }}>
-        {rows.map((r) => (
-          <div key={r.id} className="center" style={{ flex: 1, minWidth: 90 }}>
-            <div className="value-large" style={{ fontSize: 26, color: r.unavailable ? "var(--status-warning)" : undefined }}>
-              {r.unavailable ? "Unavailable" : r.value}
+      {/* EVERY member offline → the same shared notice every other panel shows
+          (UnavailableNotice), instead of this panel's own "Unavailable" text —
+          one presentation of "HA lost contact" across the whole app. */}
+      {rows.length > 0 && rows.every((r) => r.unavailable) ? (
+        <UnavailableNotice device="device" />
+      ) : (
+        <div className="row-buttons" style={{ marginBottom: 18 }}>
+          {rows.map((r) => (
+            <div key={r.id} className="center" style={{ flex: 1, minWidth: 90 }}>
+              <div className="value-large" style={{ fontSize: 26 }}>
+                {/* A SINGLE offline member inside an otherwise-live group can't
+                    take over the whole panel, so it shows the shared pill
+                    inline — same wording/styling, just scoped to that reading. */}
+                {r.unavailable
+                  ? <span className="status-pill unavailable">UNAVAILABLE</span>
+                  : r.value}
+              </div>
+              <div className="muted body-text">{r.unit || r.label}</div>
             </div>
-            <div className="muted body-text">{r.unit || r.label}</div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {numericRows.length === 2 ? (
         <div className="field">

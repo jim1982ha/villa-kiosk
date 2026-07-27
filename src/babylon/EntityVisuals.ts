@@ -738,6 +738,17 @@ export class EntityVisuals {
         // actual 3D location is encoded only in vertex data.
         m.computeWorldMatrix(true);
         this.inflateThinStrip(m);
+        // A geometry-less "virtual light" MARKER (the small placeholder sphere
+        // the pipeline emits for a ceiling spot / bulb that has no modelled
+        // fixture) is, like an inflated strip, only meaningful while the light
+        // is ON — off, an opaque ball hanging at the ceiling reads as a solid
+        // object that isn't really there. Tag it so applyToMesh gives it the
+        // SAME off-state transparency the strips get (see STRIP_OFF_ALPHA):
+        // the two are the same kind of stand-in geometry and shouldn't look
+        // like different things. Real modelled lamp geometry is untouched.
+        if (this.isLightMarker(m)) {
+          m.metadata = { ...(m.metadata ?? {}), __lightMarker: true };
+        }
         // A real (diffuse-only, shadowless) PointLight at the fixture — created
         // in BOTH modes now. In non-baked mode it lights the whole room. In
         // BAKED mode the structure renders unlit (ModelLoader sets mat.unlit =
@@ -1032,6 +1043,23 @@ export class EntityVisuals {
    *  artifact, not a lighting bug at all, just this function over-stretching
    *  the mesh it was supposed to gently thicken. A fixed target offset is
    *  bounded for any input, including exactly zero, so it can't recur. */
+  /** A geometry-less "virtual light" placeholder (the pipeline's small marker
+   *  sphere for a spot/bulb with no modelled fixture) rather than real lamp
+   *  geometry. Detected by its baked marker material (VillaLightMarker) or, for
+   *  older GLBs with no material, by being a tiny near-cubic blob — the same
+   *  two signals the marker's own styling above keys off. */
+  private isLightMarker(mesh: AbstractMesh): boolean {
+    if (/villalightmarker|litemarker/i.test(mesh.material?.name ?? "")) return true;
+    const bb = mesh.getBoundingInfo().boundingBox;
+    const s = bb.maximum.subtract(bb.minimum);
+    const u = axisWorldScale(mesh);
+    const w = { x: Math.abs(s.x * u.x), y: Math.abs(s.y * u.y), z: Math.abs(s.z * u.z) };
+    const max = Math.max(w.x, w.y, w.z);
+    const min = Math.min(w.x, w.y, w.z);
+    // ≤25 cm on every axis and roughly isotropic (a blob, not a strip/lamp).
+    return max <= 0.25 && min > 0 && max / min < 2.5;
+  }
+
   private inflateThinStrip(mesh: AbstractMesh): void {
     const bb = mesh.getBoundingInfo().boundingBox;
     const size = bb.maximum.subtract(bb.minimum);
@@ -2198,7 +2226,10 @@ export class EntityVisuals {
         // instead of sitting at the ceiling as a solid 6cm slab; on, it's
         // fully opaque again so the glow renders exactly as always (see
         // STRIP_OFF_ALPHA for why material alpha, not mesh.visibility).
-        if (mesh.metadata?.__inflatedStrip) {
+        // Placeholder MARKERS (bulbs/spots with no modelled fixture) get the
+        // same treatment as inflated strips — both are stand-in geometry that
+        // should fade out when the light is off rather than sit there solid.
+        if (mesh.metadata?.__inflatedStrip || mesh.metadata?.__lightMarker) {
           const stripMat = mesh.material;
           if (stripMat) {
             stripMat.alpha = on ? 1 : STRIP_OFF_ALPHA;

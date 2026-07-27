@@ -558,14 +558,16 @@ button {
 .summary-scene-item svg { color: var(--text-secondary); flex: 0 0 auto; }
 
 /* --- SummaryGroupPanel: the modal a bottom-bar tile opens (entity list) --- */
-/* The group modal keeps the SAME width as every other panel (.panel-modal) —
-   consistency across dialogs beats a bespoke wide layout. The columns below
-   simply fit within that shared width. */
-/* Responsive columns: as many ~200px tracks as fit the shared modal width, so
-   desktop/tablet get 2 across and a phone collapses to 1 — no breakpoints. */
+/* The group modal matches the SETTINGS/Advanced-Settings width (780px), not
+   the narrow single-device panel — it lists a whole group two-across, so it
+   shares the width of the app's other "wide" dialogs rather than inventing a
+   third size. */
+.modal.panel-modal.summary-group-modal { max-width: 780px; }
+/* Two columns on desktop/tablet, collapsing to one when the tracks no longer
+   fit (phones) — no breakpoint juggling. */
 .summary-entity-grid {
   display: grid; gap: 8px;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 /* HA-only devices (no geometry in this villa model) — listed after the mapped
    ones under this heading and tinted, so it's clear they're not on the map. */
