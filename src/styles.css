@@ -597,7 +597,16 @@ button {
 .summary-entity-grid {
   display: grid; gap: 8px;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  margin-bottom: 14px;
 }
+/* Room sub-heading within a section (on-map / not-on-map) — quieter than
+   .summary-offmap-heading (a sub-level of it, not a peer): no border/accent
+   colour, just enough weight to separate one room's devices from the next. */
+.summary-room-heading {
+  margin: 10px 2px 6px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim);
+}
+.summary-room-heading:first-child { margin-top: 0; }
 /* HA-only devices (no geometry in this villa model) — listed after the mapped
    ones under this heading and tinted, so it's clear they're not on the map. */
 .summary-offmap-heading {
@@ -685,6 +694,11 @@ button {
    (the bug report this fixes: the buttons got pushed off-screen). */
 .panel-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
 .panel-header .title { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
+/* A panel's one or two most-used actions (e.g. SummaryGroupPanel's "Turn all
+   on/off") — same idea as Settings' theme buttons living in ITS header. Top-
+   aligned with the close button, which .panel-header already is via
+   align-items:flex-start above. */
+.panel-header-actions { flex: 0 0 auto; }
 /* Single line, truncated with an ellipsis — same treatment as .panel-entity-id
    below it — instead of wrapping a long device name onto a second line. */
 .panel-header .title h2 {
@@ -699,7 +713,12 @@ button {
 }
 .panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
 /* Real map badge shown in the panel header. As a button it's a colour editor. */
-.panel-icon .panel-badge-img, .panel-badge-btn .panel-badge-img { width: 44px; height: 44px; display: block; }
+.panel-icon .panel-badge-img, .panel-badge-btn .panel-badge-img { width: 44px; height: 44px; display: block; border-radius: 12px; }
+/* Same red alert ring the map badge shows for an active/alerting device (a
+   camera whose linked motion sensor is on) — see PanelActionsContext's
+   badge.alertRing. Outline, not a recolour, so the badge's own category
+   colour/glyph stay exactly as on the map. */
+.panel-badge-img.is-alert { box-shadow: 0 0 0 3px var(--status-danger); }
 .panel-badge-btn { position: relative; padding: 0; border: none; background: none; cursor: pointer; flex-shrink: 0; border-radius: 12px; line-height: 0; }
 .panel-badge-btn:hover { filter: brightness(1.05); }
 .panel-badge-btn::after {

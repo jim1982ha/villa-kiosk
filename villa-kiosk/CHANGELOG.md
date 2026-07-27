@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.53
+
+### Changes
+- bottom-bar group modals: move 'Turn all on/off' into the header (next to close, like Settings' theme buttons) instead of the body; group entities by ROOM within both the on-map and not-on-map sections; hide the not-on-map section entirely for the Guest role. Add BasePanel headerActions slot (reusable by any panel) and a badge.alertRing flag (red ring on the panel header icon, mirrors the map's badge outline) -- wired for a camera whose linked motion sensor is currently on
+
+---
+
+
 ## 2.35.52
 
 ### Changes

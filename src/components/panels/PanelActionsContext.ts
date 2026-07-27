@@ -29,6 +29,14 @@ export interface PanelActions {
      *  step with both the map (which fades) and the pill right below it
      *  (which turns amber). */
     unavailable?: boolean;
+    /** Draws the same red alert ring the map badge shows for an active/
+     *  alerting device (see EntityVisuals' BADGE_RING) — currently only set
+     *  for a camera whose LINKED motion sensor (EntityMapping.motionEntityId,
+     *  set in Advanced Settings) is presently "on". The map already does this
+     *  via a Babylon GUI outline; this is the DOM/CSS equivalent for the same
+     *  camera's panel header icon, computed the same way (live entity state,
+     *  no separate lookup). */
+    alertRing?: boolean;
   };
   /** Persist a new badge colour for the open entity (null = category default).
    *  Undefined when the profile may not edit config — the badge is then a plain,

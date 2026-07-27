@@ -13,11 +13,13 @@ import { ChevronRight } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
+import { useProfile } from "@/auth/ProfileContext";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { inferTypeFromEntityId, displayLabelFor } from "@/config/EntityMap";
 import { isUnavailable } from "@/utils/stateColors";
+import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityType } from "@/types/scene.types";
 
 export interface SummaryGroup {
@@ -43,20 +45,49 @@ interface Props {
 
 const OFF = new Set(["off", "unavailable", "unknown", ""]);
 const TOGGLEABLE = new Set(["light", "switch", "input_boolean", "fan"]);
+const NO_ROOM = "Other";
 
 const pretty = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
+
+/** Bucket a list of entities by their configured room (EntityMapping.room),
+ *  alphabetical with the no-room bucket always last — so scanning a long
+ *  device group (e.g. every light in the villa) reads by physical location
+ *  instead of one long flat list. */
+function groupByRoom(
+  rows: HassEntity[], roomOf: (id: string) => string,
+): [string, HassEntity[]][] {
+  const buckets = new Map<string, HassEntity[]>();
+  for (const e of rows) {
+    const room = roomOf(e.entity_id) || NO_ROOM;
+    const list = buckets.get(room) ?? [];
+    list.push(e);
+    buckets.set(room, list);
+  }
+  return [...buckets.entries()].sort(([a], [b]) => {
+    if (a === NO_ROOM) return b === NO_ROOM ? 0 : 1;
+    if (b === NO_ROOM) return -1;
+    return a.localeCompare(b);
+  });
+}
 
 export default function SummaryGroupPanel({
   group, canControl, mappedEntityIds, onClose, onOpenEntity,
 }: Props) {
   const { entities, callService } = useHA();
   const { config } = useConfig();
+  const { role } = useProfile();
+
+  const roomOf = (id: string) => config.entityMap[id]?.room?.trim() ?? "";
 
   const all = group.entityIds.map((id) => entities[id]).filter((e): e is NonNullable<typeof e> => !!e);
   // Devices you can see in the villa first; HA-only ones (no geometry in this
-  // model) grouped after them under their own heading.
+  // model) grouped after them under their own heading — HIDDEN entirely for
+  // Guest: a device with no map presence is exactly the kind of "behind the
+  // scenes" plumbing (a relay, a spare contact sensor…) a guest profile has
+  // no reason to see or toggle, on top of the RBAC control gating already
+  // covering whether they could act on it.
   const onMap = all.filter((e) => mappedEntityIds.has(e.entity_id));
-  const offMap = all.filter((e) => !mappedEntityIds.has(e.entity_id));
+  const offMap = role === "guest" ? [] : all.filter((e) => !mappedEntityIds.has(e.entity_id));
   const rows = [...onMap, ...offMap];
   const toggleables = rows.filter((e) => TOGGLEABLE.has(e.entity_id.split(".")[0]));
   const anyOn = toggleables.some((e) => !OFF.has(e.state));
@@ -72,11 +103,12 @@ export default function SummaryGroupPanel({
       icon={<Icon size={22} />}
       className="summary-group-modal"
       onClose={onClose}
-    >
-      {canControl && toggleables.length > 1 && (
+      // Same idea as Settings' theme buttons living in ITS header: the one
+      // action that applies to the WHOLE group belongs where it's always
+      // visible, not scrolled past a long, room-grouped device list.
+      headerActions={canControl && toggleables.length > 1 && (
         <button
           className="btn ghost"
-          style={{ marginBottom: 14 }}
           onClick={() =>
             callService(
               toggleables[0].entity_id.split(".")[0],
@@ -89,18 +121,29 @@ export default function SummaryGroupPanel({
           {anyOn ? "Turn all off" : "Turn all on"}
         </button>
       )}
-
+    >
       {rows.length === 0 && <div className="muted body-text">No devices in this group.</div>}
 
-      {/* On-map devices first, then (if any) the HA-only ones under their own
-          heading — one renderer for both, so the two lists can't drift. */}
-      {onMap.length > 0 && <div className="summary-entity-grid">{onMap.map(renderRow)}</div>}
+      {/* On-map devices first, ROOM-grouped, then (if any, and not Guest) the
+          HA-only ones under their own heading, ALSO room-grouped — one
+          renderer for both, so the two lists can't drift. */}
+      {onMap.length > 0 && groupByRoom(onMap, roomOf).map(([room, list]) => (
+        <div key={room}>
+          <div className="summary-room-heading">{room}</div>
+          <div className="summary-entity-grid">{list.map(renderRow)}</div>
+        </div>
+      ))}
       {offMap.length > 0 && (
         <>
           <div className="summary-offmap-heading" title="These devices exist in Home Assistant but have no 3D geometry in this villa model">
             Not on the map
           </div>
-          <div className="summary-entity-grid">{offMap.map(renderRow)}</div>
+          {groupByRoom(offMap, roomOf).map(([room, list]) => (
+            <div key={room}>
+              <div className="summary-room-heading">{room}</div>
+              <div className="summary-entity-grid">{list.map(renderRow)}</div>
+            </div>
+          ))}
         </>
       )}
     </BasePanel>

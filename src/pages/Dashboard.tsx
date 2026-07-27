@@ -493,6 +493,15 @@ export default function Dashboard() {
                 // instead of always rendering full-strength regardless of
                 // live state (the map badge already fades; this icon didn't).
                 unavailable: isUnavailable(ent),
+                // A camera's linked motion sensor firing — the panel-header
+                // equivalent of the map badge's red ring for the same
+                // condition (see EntityVisuals' motionActiveCameras). Reads
+                // straight off live entities + the mapping's own
+                // motionEntityId, no separate lookup needed.
+                alertRing:
+                  liveMapping.type === "camera" && !!liveMapping.motionEntityId
+                    ? entities[liveMapping.motionEntityId]?.state === "on"
+                    : false,
               };
             })(),
             onSetBadgeColor: canEditConfig

@@ -18,11 +18,17 @@ interface Props {
   /** Extra class on the modal card, for a panel that needs one of the app's
    *  OTHER standard widths (e.g. the group panel uses the Settings width). */
   className?: string;
+  /** Small header-row action(s) — e.g. SummaryGroupPanel's "Turn all on/off"
+   *  — right-aligned, LEFT of the close button. Same idea as Settings' theme
+   *  buttons sitting in ITS header instead of buried in the body: a panel's
+   *  one or two most-used actions belong where they're always visible, not
+   *  scrolled past. */
+  headerActions?: ReactNode;
   onClose: () => void;
   children: ReactNode;
 }
 
-export default function BasePanel({ title, room, icon, className, onClose, children }: Props) {
+export default function BasePanel({ title, room, icon, className, headerActions, onClose, children }: Props) {
   const { entityId, onEdit, badge, onSetBadgeColor } = usePanelActions();
   const [colorOpen, setColorOpen] = useState(false);
 
@@ -37,7 +43,11 @@ export default function BasePanel({ title, room, icon, className, onClose, child
   const canRecolor = badge && onSetBadgeColor;
   const badgeImg = badge && (
     <img
-      className="panel-badge-img"
+      // .is-alert draws the same red ring the map badge gets for an
+      // active/alerting device (see badge.alertRing's docstring in
+      // PanelActionsContext) — a camera whose linked motion sensor is
+      // currently on, so far the only producer of this flag.
+      className={`panel-badge-img${badge.alertRing ? " is-alert" : ""}`}
       src={badgeImageDataUrl(badge.category, badge.iconKey, badge.color, 0, badge.unavailable)}
       alt=""
       draggable={false}
@@ -70,6 +80,7 @@ export default function BasePanel({ title, room, icon, className, onClose, child
               {entityId && <div className="panel-entity-id" title={entityId}>{entityId}</div>}
             </div>
           </div>
+          {headerActions && <div className="panel-header-actions">{headerActions}</div>}
           <button className="panel-close-btn" onClick={onClose} aria-label="Close">
             <X size={20} />
           </button>
