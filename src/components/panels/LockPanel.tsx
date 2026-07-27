@@ -35,12 +35,10 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
         </span>
       </div>
 
-      {unavailable ? (
-        <p className="muted body-text center">
-          Home Assistant has lost contact with this lock — its real state isn't
-          known, so lock/unlock controls are disabled until it reports in again.
-        </p>
-      ) : locked ? (
+      {/* The UNAVAILABLE pill above says it; the explanatory paragraph that
+          used to sit here is now the pill's hover/assistive text, so every
+          panel presents an offline device identically (UnavailableNotice). */}
+      {unavailable ? null : locked ? (
         <button className="big-toggle" onClick={() => HAServices.lockDoor(ws, mapping.entityId)}>
           <Lock size={22} /> Already locked — re-lock
         </button>

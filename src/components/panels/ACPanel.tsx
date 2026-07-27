@@ -8,6 +8,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { climateLimits } from "@/auth/permissions";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { isUnavailable } from "@/utils/stateColors";
+import UnavailableNotice from "./UnavailableNotice";
 
 const MODE_LABELS: Record<string, string> = {
   cool: "Cool", heat: "Heat", fan_only: "Fan", auto: "Auto", off: "Off",
@@ -42,16 +43,7 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} room={mapping.room} icon={<Snowflake size={22} />} onClose={onClose}>
-      {unavailable && (
-        <div className="center" style={{ marginBottom: 16 }}>
-          <span className="status-pill unavailable">UNAVAILABLE</span>
-          <p className="muted body-text mt" style={{ maxWidth: 320 }}>
-            Home Assistant has lost contact with this AC — its real
-            temperature/mode isn't known, so controls are disabled until it
-            reports in again.
-          </p>
-        </div>
-      )}
+      {unavailable && <UnavailableNotice device="AC" />}
 
       <div className="temp-display">
         <span className="value-unit">Current</span>

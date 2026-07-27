@@ -11,21 +11,24 @@
 import { AlertTriangle } from "lucide-react";
 
 interface Props {
-  /** Noun for the device kind, e.g. "light", "fan", "switch". */
-  device: string;
+  /** Noun for the device kind, e.g. "light", "fan", "switch" — now used for
+   *  the hover/assistive description rather than an on-screen paragraph. */
+  device?: string;
 }
 
-export default function UnavailableNotice({ device }: Props) {
+export default function UnavailableNotice({ device = "device" }: Props) {
+  // The pill alone carries the message. The paragraph that used to sit under
+  // it just restated the word above it and tripled the height of an otherwise
+  // tiny panel, so it survives only as the title / accessible description.
+  const detail =
+    `Home Assistant has lost contact with this ${device} — its real state isn't `
+    + "known, so controls are disabled until it reports in again.";
   return (
     <div className="center" style={{ margin: "8px 0 20px" }}>
-      <span className="status-pill unavailable">
+      <span className="status-pill unavailable" title={detail} aria-label={detail}>
         <AlertTriangle size={16} />
         UNAVAILABLE
       </span>
-      <p className="muted body-text mt" style={{ maxWidth: 320 }}>
-        Home Assistant has lost contact with this {device} — its real state
-        isn't known, so controls are disabled until it reports in again.
-      </p>
     </div>
   );
 }

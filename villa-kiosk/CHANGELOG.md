@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.41
+
+### Changes
+- motion toast now sits in the villa-map layer (below the fullscreen camera) instead of drawing over a live feed; FIX the unavailable badge fade — alpha was only set on the transparent badge rect, but Babylon GUI doesn't cascade it, so the glyph/pill stayed opaque and an offline device rendered full-strength (contradicting the legend); drop the redundant paragraph under the UNAVAILABLE pill and route AC/Cover/Lock through the one shared UnavailableNotice
+
+---
+
+
 ## 2.35.40
 
 ### Changes

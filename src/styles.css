@@ -438,7 +438,15 @@ button {
 /* Neutral variant (AppNotice) — a general "heads up", not a failure, so it
    doesn't borrow the danger-red tone the plain .service-toast uses for a
    failed HA service call. */
-.service-toast.app-notice { border-color: var(--hairline-strong); color: var(--text-primary); background: var(--bg-panel); }
+/* App notices (e.g. "Motion detected · Kitchen") belong to the VILLA MAP, so
+   they sit BELOW the fullscreen camera viewer (z-index 60) instead of the
+   shared toast's 70 — a motion alert was drawing on top of the live feed you
+   were watching. The error toast keeps the higher z-index on purpose: a
+   service failure still has to reach you over anything. */
+.service-toast.app-notice {
+  border-color: var(--hairline-strong); color: var(--text-primary);
+  background: var(--bg-panel); z-index: 55;
+}
 
 /* Instant tap-acknowledgment ring for the in-scene quick-toggle gesture (see
    TapRipple.tsx) — fixed layer over the whole viewport, never intercepts

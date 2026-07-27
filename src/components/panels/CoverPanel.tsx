@@ -41,12 +41,8 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
         <span className={`status-pill ${unavailable ? "unavailable" : "off"}`}>{stateLabel}</span>
       </div>
 
-      {unavailable && (
-        <p className="muted body-text center" style={{ marginBottom: 16 }}>
-          Home Assistant has lost contact with this cover — its real position
-          isn't known, so controls are disabled until it reports in again.
-        </p>
-      )}
+      {/* The pill above already reads UNAVAILABLE — the shared component's
+          hover/assistive text carries the detail (see UnavailableNotice). */}
 
       <div className="row-buttons" style={unavailable ? { opacity: 0.5, pointerEvents: "none" } : undefined}>
         <button className="btn" style={{ flex: 1 }} disabled={unavailable} onClick={() => HAServices.openCover(ws, mapping.entityId)}>
