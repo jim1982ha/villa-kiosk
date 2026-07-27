@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.54
+
+### Changes
+- camera panel: (bottom status bar) a thin full-width strip pinned to the screen edge shows this camera's last 24h as one composite timeline -- green while online, red the instant its linked motion sensor (Advanced Settings) trips, black across any real online/offline gap -- via a new mergeStateHistories() utility feeding the SAME StateTimeline component every other panel's history chart already uses, not a bespoke chart
+
+---
+
+
 ## 2.35.53
 
 ### Changes

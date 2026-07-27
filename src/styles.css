@@ -851,6 +851,20 @@ input[type="range"]::-moz-range-thumb {
 }
 .camera-controls .icon-btn { width: 56px; height: 56px; }
 .camera-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+/* Bottom status strip (online/offline/motion — see CameraPanel's
+   statusHistory) — full-bleed at the very screen edge, well clear of the
+   bottom-right control cluster (which sits 20px+ up from the bottom, this
+   bar is only ~7px tall). Reuses StateTimeline unmodified; only the container
+   is camera-specific (full width, no rounding, a translucent dark track so
+   the bar reads against whatever the live feed looks like behind it). */
+.camera-status-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.camera-status-bar .state-timeline,
+.camera-status-bar .state-timeline-skeleton {
+  border-radius: 0; background: rgba(255,255,255,0.12);
+}
 /* Wraps the HLS <video> together with its instant snapshot preview so the two
    overlap regardless of the video's own (pre-metadata) intrinsic size. */
 /* pointer-events: none — this spans the WHOLE panel (inset: 0), including

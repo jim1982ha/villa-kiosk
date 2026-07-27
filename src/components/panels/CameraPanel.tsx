@@ -25,6 +25,10 @@ import { useHA } from "@/ha/HAStateStore";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { devLog } from "@/utils/devLog";
+import { fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { mergeStateHistories } from "./chartUtils";
+import StateTimeline from "./StateTimeline";
+import type { StateHistoryPoint } from "@/types/ha.types";
 
 interface Props extends PanelProps {
   /** Lets the camera pin continuous rendering while the stream is open. */
@@ -134,6 +138,37 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
       el.removeEventListener("pointercancel", onCancel);
     };
   }, [canCycle, zoom.ref]);
+
+  // Bottom status bar: this camera's own online/offline history, layered with
+  // its linked motion sensor's (mapping.motionEntityId, set in Advanced
+  // Settings) on/off history — merged into ONE composite timeline (see
+  // mergeStateHistories) and rendered through the SAME StateTimeline every
+  // other panel's "Last 24 hours" chart uses, just slim and pinned to the
+  // screen edge instead of sitting in a scrollable panel body.
+  const [statusHistory, setStatusHistory] = useState<StateHistoryPoint[]>([]);
+  const [statusLoading, setStatusLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setStatusLoading(true);
+    const motionId = mapping.motionEntityId;
+    Promise.all([
+      fetchStateHistory(mapping.entityId, 24),
+      motionId ? fetchStateHistory(motionId, 24) : Promise.resolve<StateHistoryPoint[]>([]),
+    ]).then(([camHist, motionHist]) => {
+      if (cancelled) return;
+      setStatusHistory(mergeStateHistories(
+        { camera: camHist, motion: motionHist },
+        (cur) => {
+          if (!cur.camera || cur.camera === "unavailable" || cur.camera === "unknown") return "offline";
+          if (motionId && cur.motion === "on") return "motion";
+          return "online";
+        },
+      ));
+      setStatusLoading(false);
+    }).catch(() => { if (!cancelled) setStatusLoading(false); });
+    return () => { cancelled = true; };
+  }, [mapping.entityId, mapping.motionEntityId]);
+
   // Whether the current tier has painted a real frame yet — drives the loading
   // spinner so an empty <video>/<img> mid-setup reads as "loading", not "broken".
   const [frameReady, setFrameReady] = useState(false);
@@ -497,6 +532,18 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
             <div className="spinner" />
           </div>
         )}
+
+      {/* Bottom status strip — green while online, red the instant the
+          linked motion sensor trips, black across any gap this camera was
+          genuinely unreachable. See the statusHistory effect above. */}
+      <div className="camera-status-bar">
+        <StateTimeline
+          data={statusHistory}
+          loading={statusLoading}
+          height={7}
+          colorFor={(s) => (s === "motion" ? "var(--status-danger)" : s === "offline" ? "#000" : "var(--status-on)")}
+        />
+      </div>
     </div>
   );
 }
