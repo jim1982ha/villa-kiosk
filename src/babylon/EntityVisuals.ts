@@ -455,6 +455,9 @@ export class EntityVisuals {
    *  EntityMapping.motionEntityId). Rebuilt from config.entityMap on every
    *  indexMeshes() (structural entityMap edits re-trigger that already). */
   private motionToCameraIds = new Map<string, string[]>();
+  /** Cameras whose linked motion sensor is currently firing — their badge
+   *  shows the shared red alert ring while they're in here (see badgeKind). */
+  private motionActiveCameras = new Set<string>();
   /** Floor-glow overlay for physical (non-camera) motion/presence sensors —
    *  a room, not a direction, is the natural signal for those. */
   private roomHighlight: RoomHighlight;
@@ -1444,6 +1447,15 @@ export class EntityVisuals {
     if (cameraIds) {
       let anyBeam = false;
       for (const camId of cameraIds) {
+        // The camera's OWN badge rings red while its linked motion sensor is
+        // active — the same alert outline any active/alerting device gets, so
+        // "there's movement on this camera" reads at a glance on the map
+        // (a camera entity is otherwise almost always just "idle").
+        if (on) this.motionActiveCameras.add(camId);
+        else this.motionActiveCameras.delete(camId);
+        const camState = this.lastState.get(camId);
+        const camMap = this.mapping.get(camId);
+        if (camState && camMap) this.updateLabel(camId, camMap.type, camState);
         if (this.setBeamActive(camId, on)) anyBeam = true;
       }
       if (!anyBeam) {
@@ -1989,7 +2001,11 @@ export class EntityVisuals {
         return s.state === "closed" ? "off" : "on";
       }
       case "media_player":  return s.state === "playing" || s.state === "buffering" ? "on" : "off";
-      case "camera":        return s.state === "recording" || s.state === "streaming" ? "on" : "off";
+      case "camera":
+        // Motion on this camera's linked sensor outranks its own idle/streaming
+        // state — that's the thing worth flagging on the map.
+        if (this.motionActiveCameras.has(s.entity_id)) return "alert";
+        return s.state === "recording" || s.state === "streaming" ? "on" : "off";
       case "assist_satellite": return s.state === "idle" ? "off" : "on"; // listening/processing/responding
       case "sensor":
         // A status/enum sensor reading a known-bad state (disconnected, error…)

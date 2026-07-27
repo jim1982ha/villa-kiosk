@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.40
+
+### Changes
+- (1) motion alerts: a brief toast names the room + device the moment any motion/presence sensor trips (off->on edges only), and a camera whose linked motion sensor is firing now shows the shared red alert ring on its map badge
+
+---
+
+
 ## 2.35.39
 
 ### Changes

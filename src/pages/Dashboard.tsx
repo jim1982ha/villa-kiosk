@@ -30,10 +30,15 @@ import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
 
+/** binary_sensor device_classes that mean "someone/something moved" — the
+ *  motion toast below announces these. Mirrors the ACCESS_BINARY_DC set
+ *  EntityCategories uses to bucket the same sensors. */
+const MOTION_DEVICE_CLASSES = new Set(["motion", "presence", "occupancy", "moving"]);
+
 export default function Dashboard() {
   const { config, update } = useConfig();
   const { role } = useProfile();
-  const { connect, entities, ws, haConfig } = useHA();
+  const { connect, entities, ws, haConfig, subscribeAll } = useHA();
   // ProfileGate does NOT guarantee a signed-in role before this page mounts
   // (v2.30.2's early scene preload — an explicit, informed trade-off, see
   // ProfileGate's modelPreloadable — mounts it pre-login on non-iOS
@@ -207,6 +212,35 @@ export default function Dashboard() {
     },
     [config.entityMap, role, canControl],
   );
+
+  // Announce motion the moment it's detected, wherever it happens: a brief
+  // toast naming the room and the device that saw it. Subscribes to the raw
+  // state stream (not `entities`) so it fires exactly once per transition
+  // rather than on every unrelated re-render. Only OFF->ON edges announce;
+  // a sensor already "on" when the page loads doesn't fire a stale alert.
+  useEffect(() => {
+    const wasOn = new Map<string, boolean>();
+    return subscribeAll((e) => {
+      const id = e.entity_id;
+      if (!id.startsWith("binary_sensor.")) return;
+      const map = configRef.current.entityMap[id];
+      const deviceClass = e.attributes?.device_class as string | undefined;
+      // A motion/presence detector, by device_class or (when HA doesn't report
+      // one) by the same id hints categoryForEntity uses.
+      const isMotion = MOTION_DEVICE_CLASSES.has(deviceClass ?? "")
+        || /(^|[._])(motion|presence|occupancy|pir)([._]|$)/.test(id);
+      if (!isMotion) return;
+
+      const on = e.state === "on";
+      const prev = wasOn.get(id);
+      wasOn.set(id, on);
+      if (!on || prev === undefined || prev) return; // only a fresh off->on edge
+
+      const label = map?.label ?? (e.attributes?.friendly_name as string | undefined) ?? id;
+      const room = map?.room;
+      setNotice(room ? `Motion detected · ${room} — ${label}` : `Motion detected · ${label}`);
+    });
+  }, [subscribeAll]);
 
   // Open an entity's control panel from a SummaryBar tile (a lock/climate
   // "open" tile). The tile already gates on category permission before calling
