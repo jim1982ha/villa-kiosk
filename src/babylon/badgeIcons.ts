@@ -83,6 +83,29 @@ function shade(hex: string, amt: number): string {
   return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 }
 
+// Mid grey used for the UNAVAILABLE desaturation below — matches --text-dim's
+// approximate luminance, so a faded badge reads the same "muted" as the app's
+// other disabled-looking UI, not an arbitrary one-off tone.
+const DESATURATE_GREY = "#8a93a3";
+
+/** Blend `hex` toward DESATURATE_GREY by `ratio` (0 = unchanged, 1 = pure
+ *  grey). Reducing SATURATION rather than only opacity is what a UI "this is
+ *  disabled" convention normally relies on: alpha alone blends toward
+ *  whatever's BEHIND the badge, so a vivid gradient at even 40% alpha over a
+ *  bright, warm-lit wall can still read as "fully coloured, just a bit
+ *  lighter" — background-dependent and easy to miss. Desaturating removes the
+ *  category's hue entirely, so "this device is unavailable" is unambiguous
+ *  regardless of whatever the 3D scene behind it looks like. */
+function desaturate(hex: string, ratio: number): string {
+  const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(hex.trim());
+  const g = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(DESATURATE_GREY);
+  if (!m || !g) return hex;
+  const mix = (a: string, b: string) =>
+    Math.round(parseInt(a, 16) * (1 - ratio) + parseInt(b, 16) * ratio);
+  const r = mix(m[1], g[1]), gg = mix(m[2], g[2]), b = mix(m[3], g[3]);
+  return `#${[r, gg, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
 // Baking an INSET (a transparent margin on every side) into the image is a
 // deterministic way to pad the glyph — used by the "card" badge style, whose
 // gradient squircle sits on a neutral card and needs even breathing room the
@@ -130,9 +153,13 @@ export function badgeImageDataUrl(
   let url = "";
   if (ctx) {
     if (dim) ctx.globalAlpha = DIM_ALPHA; // applies to every fill/draw below
-    const colors = colorOverride
+    let colors = colorOverride
       ? { top: shade(colorOverride, 0.12), bottom: shade(colorOverride, -0.12) }
       : CATEGORY_COLORS[category];
+    // Desaturate toward grey ON TOP OF the alpha reduction above — see
+    // desaturate()'s docstring for why alpha alone isn't a reliable "this is
+    // unavailable" signal against an arbitrary, often bright/warm 3D scene.
+    if (dim) colors = { top: desaturate(colors.top, 0.7), bottom: desaturate(colors.bottom, 0.7) };
     const m = CANVAS_PX * inset;            // transparent margin
     const size = CANVAS_PX - 2 * m;         // the squircle itself
     const corner = size * BADGE_CORNER_FRACTION;

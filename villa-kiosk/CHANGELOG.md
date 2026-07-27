@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.44
+
+### Changes
+- UNAVAILABLE badge: after 3 independent code traces confirmed the alpha-baking logic was firing correctly, switch the visual treatment itself — alpha alone blends toward whatever's BEHIND the badge, so a vivid gradient at 40% alpha over a bright/warm 3D scene can still read as fully coloured (background-dependent, easy to miss). Now DESATURATES the gradient toward grey (70%) on top of the alpha cut, the standard disabled-UI convention, so it reads unambiguously regardless of scene lighting
+
+---
+
+
 ## 2.35.43
 
 ### Changes
