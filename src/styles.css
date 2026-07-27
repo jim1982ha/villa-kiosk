@@ -864,10 +864,31 @@ input[type="range"]::-moz-range-thumb {
    (per spec: "75% of the width between the left side of the screen and the
    first control button") and matches the controls' 56px height/rounding so
    it reads as one aligned toolbar rather than a separate full-bleed strip. */
-.camera-status-bar { flex: 1 1 auto; min-width: 0; display: flex; }
+/* NOT display:flex here — StateTimeline's own root (.spark-wrap, width:100%)
+   is a plain block, so its percentage width resolves against this element's
+   already flex-grown content box via normal block layout. Nesting ANOTHER
+   flex context here instead (tried first) left that 100%-width child with no
+   definite size to resolve against and it collapsed to a tiny intrinsic
+   square rather than stretching — a real bug on mobile, not just a cosmetic
+   one, since the tiny square is roughly the SAME footprint as the control
+   buttons next to it and reads as a stray extra button. */
+.camera-status-bar { flex: 1 1 auto; min-width: 0; }
 .camera-status-bar .state-timeline,
 .camera-status-bar .state-timeline-skeleton {
   width: 75%; border-radius: 14px; background: rgba(255,255,255,0.12);
+}
+@media (max-width: 720px) {
+  /* On a phone the row layout leaves too little width for the bar to read
+     gracefully next to 3-4 56px buttons. Stack instead: status bar on its
+     own full-width row above the controls, which stay anchored at the true
+     bottom edge exactly as before. */
+  .camera-bottom-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  .camera-status-bar { flex: 0 0 auto; }
+  .camera-status-bar .state-timeline,
+  .camera-status-bar .state-timeline-skeleton {
+    width: 100%;
+  }
+  .camera-controls { margin-left: 0; }
 }
 /* Wraps the HLS <video> together with its instant snapshot preview so the two
    overlap regardless of the video's own (pre-metadata) intrinsic size. */

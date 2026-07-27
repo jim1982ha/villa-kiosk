@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.58
+
+### Changes
+- Fixed the camera feed's status bar collapsing to a tiny square instead of a bar on real devices — its StateTimeline child is a plain 100%-width block, and nesting it inside another flex context (.camera-status-bar) left it with no definite size to resolve that percentage against. Also redesigned the mobile (<=720px) layout: the status bar now stacks on its own full-width row above the control buttons instead of squeezed into a shared row with them
+
+---
+
+
 ## 2.35.57
 
 ### Changes
