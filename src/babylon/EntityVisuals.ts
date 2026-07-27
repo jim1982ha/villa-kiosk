@@ -468,9 +468,10 @@ export class EntityVisuals {
   /** Camera motion-detection cones — mesh lifecycle owned by CameraBeams;
    *  this class only decides WHICH cameras get a beam and when it pulses. */
   private beams: CameraBeams;
-  /** motion binary_sensor entity_id -> camera entity_ids it drives (see
-   *  EntityMapping.motionEntityId). Rebuilt from config.entityMap on every
-   *  indexMeshes() (structural entityMap edits re-trigger that already). */
+  /** linkedEntityId (typically a motion binary_sensor) -> camera entity_ids
+   *  it drives (see EntityMapping.linkedEntityId). Rebuilt from
+   *  config.entityMap on every indexMeshes() (structural entityMap edits
+   *  re-trigger that already). */
   private motionToCameraIds = new Map<string, string[]>();
   /** Linked entity -> device(s) that reference it via
    *  EntityMapping.linkedEntityId. Mirrors motionToCameraIds but keyed the
@@ -1020,16 +1021,17 @@ export class EntityVisuals {
     }
   }
 
-  /** motion binary_sensor -> camera(s) it drives, from the FULL entityMap (not
-   *  just meshes indexed in THIS glb) so the link works regardless of which
-   *  side has a 3D mesh. Cheap lookup rebuild — safe to redo on every index. */
+  /** A camera's linkedEntityId (typically its motion/occupancy sensor) ->
+   *  camera(s) it drives, from the FULL entityMap (not just meshes indexed in
+   *  THIS glb) so the link works regardless of which side has a 3D mesh.
+   *  Cheap lookup rebuild — safe to redo on every index. */
   private buildMotionToCameraIndex(): void {
     this.motionToCameraIds.clear();
     for (const map of Object.values(this.config.entityMap)) {
-      if (map.type !== "camera" || !map.motionEntityId) continue;
-      const list = this.motionToCameraIds.get(map.motionEntityId) ?? [];
+      if (map.type !== "camera" || !map.linkedEntityId) continue;
+      const list = this.motionToCameraIds.get(map.linkedEntityId) ?? [];
       list.push(map.entityId);
-      this.motionToCameraIds.set(map.motionEntityId, list);
+      this.motionToCameraIds.set(map.linkedEntityId, list);
     }
   }
 
@@ -1455,7 +1457,7 @@ export class EntityVisuals {
   }
 
   /** Route a state change to whichever motion-driven visual it feeds:
-   *  - linked to a camera's motionEntityId  -> that camera's detection beam
+   *  - linked to a camera's linkedEntityId  -> that camera's detection beam
    *  - otherwise, a binary_sensor with a Room set -> that room's floor glow
    *  A sensor already driving a camera beam does NOT also glow its room —
    *  the two are separate treatments for separate device kinds (see the
@@ -1470,7 +1472,7 @@ export class EntityVisuals {
    *  on that camera would otherwise show NOTHING at all. Fall back to glowing
    *  the CAMERA's own room instead (not the sensor's — a camera's built-in
    *  motion detector is typically only ever referenced by entity_id via
-   *  motionEntityId, not separately added as its own mapped/roomed entity,
+   *  linkedEntityId, not separately added as its own mapped/roomed entity,
    *  so the sensor's own fallback below usually has nothing to work with
    *  either). Still real, still opt-in (only fires when the camera's own
    *  Room is set), never a guess about WHERE the camera is aiming. */
@@ -1508,10 +1510,11 @@ export class EntityVisuals {
   /** Mirror of applyMotionRouting for EntityMapping.linkedEntityId: when a
    *  linked entity changes state, ring red every device that links to it
    *  (its own badge, not the linked entity's — e.g. a motion sensor whose
-   *  linked porch light just turned on). Independent of applyMotionRouting's
-   *  beam/room-glow path; a device can have both a motionEntityId (camera
-   *  beam) AND a linkedEntityId (ring, plus a long-press toggle target on
-   *  camera/binary_sensor) at once. */
+   *  linked porch light just turned on). Runs independently of
+   *  applyMotionRouting's beam/room-glow path even though a camera's
+   *  linkedEntityId now feeds BOTH: one field, two consumers (the beam
+   *  keys off it by camera entity_id via motionToCameraIds; this keys off
+   *  it by linked entity_id via linkedEntityIndex). */
   private applyLightLinkRouting(entity: HassEntity): void {
     const linkedIds = this.linkedEntityIndex.get(entity.entity_id);
     if (!linkedIds) return;
@@ -1756,6 +1759,25 @@ export class EntityVisuals {
       // (entity == null counts as unavailable), just applied here too.
       const cached = this.lastState.get(entityId) ?? PHANTOM_ENTITY(entityId);
       this.updateLabel(entityId, type, cached);
+      // Same reasoning, but for the MESH itself (emissive glow, on/off alpha
+      // fade — see applyToMesh): that only ever runs from apply(), which
+      // fires exclusively off real HA state events. A light whose entity_id
+      // has never once received one (freshly added in SweetHome, not yet
+      // wired up in HA, or just never toggled since the app started) sat at
+      // this constructor's plain opaque baseline forever — indistinguishable
+      // from a genuinely broken fixture, and exactly why newly added light
+      // assets looked "stuck" solid-coloured while identical, already-toggled
+      // fixtures correctly went translucent when off. Replaying against the
+      // same cached-or-phantom state used for the badge above means a mesh's
+      // FIRST paint is already correct, with no live event required.
+      const meshesForEntity = this.byEntity.get(entityId);
+      const mapForEntity = this.mapping.get(entityId);
+      if (meshesForEntity?.length && mapForEntity) {
+        const lightShare = mapForEntity.type === "light"
+          ? new Set(meshesForEntity.map((m) => this.meshLights.get(m.uniqueId)).filter(Boolean)).size || 1
+          : 1;
+        for (const mesh of meshesForEntity) this.applyToMesh(mesh, mapForEntity, cached, lightShare);
+      }
     }
     this.applyIconScale(); // honour current size + zoom on freshly built badges
   }

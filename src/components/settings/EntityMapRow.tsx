@@ -225,30 +225,13 @@ function EntityMapRow({
               </td>
             );
           })()}
-          <td data-label="Motion sensor" style={{ minWidth: 180 }}>
-            {m.type === "camera" ? (
-              <EntityPicker
-                value={m.motionEntityId}
-                onChange={(id) => draftField({ motionEntityId: id })}
-                domains={["binary_sensor"]}
-                allowCustom
-                hideCurrentLabel
-              />
-            ) : (
-              <span className="muted" style={{ fontSize: 12 }}>—</span>
-            )}
-          </td>
           <td data-label="Linked entity" style={{ minWidth: 180 }}>
             <EntityPicker
               value={m.linkedEntityId}
               onChange={(id) => draftField({ linkedEntityId: id })}
               allowCustom
               hideCurrentLabel
-              placeholder={
-                m.type === "camera" || m.type === "binary_sensor"
-                  ? "Long-press toggle…"
-                  : "Ring only…"
-              }
+              placeholder={m.type === "camera" ? "Motion sensor, long-press toggle…" : "Ring only…"}
             />
           </td>
         </>

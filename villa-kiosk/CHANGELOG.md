@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.56
+
+### Changes
+- (1) Map colours (Legend) modal now uses the standard 780px modal width, same shell as Settings/Config Editor, instead of a one-off narrow card; (2) EntityMapping.motionEntityId is fully merged into linkedEntityId — one 'additional entity' field per device everywhere (UI + backend), with a one-time migration so already-configured cameras keep their motion sensor; only camera long-press toggles it (reverted for binary_sensor, which keeps opening its detail panel like every other type); (3) fixed the Config Editor's 'Linked entity' picker painting two nested grey boxes (a table-wide input rule was outranking the search-pill's own transparent background); (4) root-caused why newly added light assets never got the LED-strip transparent/glow treatment even after the previous fix — the mesh material logic only ever ran from a live HA state event, so an entity that had never once received one stayed at its opaque construction-time default forever; replayed against cached-or-phantom state on every rebuild so a light's first paint is already correct, mirroring the earlier badge-label phantom-entity fix
+
+---
+
+
 ## 2.35.55
 
 ### Changes

@@ -19,22 +19,20 @@ export interface EntityMapping {
    *  modelled ahead of their Home Assistant integration (e.g. ceiling fans not
    *  yet controllable). Toggled per-device in Advanced Settings. */
   disabled?: boolean;
-  /** For type "camera": the HA motion/occupancy binary_sensor that goes "on"
-   *  when this camera detects motion. Drives the simulated detection beam
-   *  (EntityVisuals). Not inferred from naming (camera integrations name
-   *  these too inconsistently) — set once per camera in the Config Editor. */
-  motionEntityId?: string;
-  /** Any other entity to associate with THIS device — no domain or type
-   *  restriction (a light, a switch, another sensor…), configurable on every
-   *  entity type. Universally drives one thing: the badge rings red (the
-   *  same alert outline any active device gets) while the linked entity's
-   *  state is "on". On a camera or a binary_sensor specifically, it ALSO
-   *  becomes a long-press target — long-pressing the badge toggles the
-   *  linked entity instead of opening a panel, since those two types often
-   *  have nothing sensible to toggle on themselves (a binary_sensor has no
-   *  HA turn_on/off service at all). Every other type keeps long-press
-   *  opening its detail panel as before, even with this set — set once per
-   *  device in the Config Editor / Advanced Settings. */
+  /** THE single "additional entity" for this device — no domain or type
+   *  restriction (a light, a switch, a motion/occupancy sensor…), one field,
+   *  configurable on every entity type (replaces the old camera-only
+   *  motionEntityId, which this superseded). Universally drives one thing:
+   *  the badge rings red (the same alert outline any active device gets)
+   *  while the linked entity's state is "on" — for type "camera" this is
+   *  also what drives the simulated detection beam (EntityVisuals), so
+   *  pointing a camera's linkedEntityId at its motion/occupancy sensor keeps
+   *  that working exactly as before. On a camera SPECIFICALLY, it's also a
+   *  long-press target — long-pressing the badge toggles the linked entity
+   *  instead of opening the detail panel (a camera's tap already IS its
+   *  panel/feed). Every other type keeps long-press opening its detail panel
+   *  as before, even with this set — set once per device in the Config
+   *  Editor / Advanced Settings. */
   linkedEntityId?: string;
   /** For type "light": a per-fixture override, -1..1 (Advanced Settings shows
    *  it as a -100%..+100% slider), applied ON TOP of the entity's live HA

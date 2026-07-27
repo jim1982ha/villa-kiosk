@@ -119,20 +119,13 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
               </div>
             );
           })()}
-          {meta.type === "camera" && (
-            <div style={{ flex: "1 1 220px", minWidth: 180 }}>
-              <EntityPicker
-                value={meta.motionEntityId}
-                onChange={(id) => draftField({ motionEntityId: id })}
-                domains={["binary_sensor"]}
-                allowCustom
-                hideCurrentLabel
-              />
-            </div>
-          )}
-          {/* Generic over every type — see EntityMapping.linkedEntityId.
-              Always drives the red ring; only toggled by long-press on
-              camera/binary_sensor (noted in the placeholder as a hint). */}
+          {/* THE one "additional entity" field for every type — see
+              EntityMapping.linkedEntityId. Always drives the red ring; on a
+              camera it's also the motion/occupancy sensor that drives the
+              detection beam AND the long-press toggle target (both unique
+              to cameras — every other type's placeholder just says "ring
+              only", including binary_sensor, whose long-press still opens
+              its detail panel like any other device). */}
           <div style={{ flex: "1 1 220px", minWidth: 180 }}>
             <EntityPicker
               value={meta.linkedEntityId}
@@ -140,8 +133,8 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
               allowCustom
               hideCurrentLabel
               placeholder={
-                meta.type === "camera" || meta.type === "binary_sensor"
-                  ? "Linked entity (long-press toggle)…"
+                meta.type === "camera"
+                  ? "Linked entity (motion sensor, long-press toggle)…"
                   : "Linked entity (ring only)…"
               }
             />

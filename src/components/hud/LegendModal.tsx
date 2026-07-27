@@ -34,12 +34,13 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
 
 export default function LegendModal({ onClose }: { onClose: () => void }) {
   return (
-    // panel-modal-backdrop/panel-modal: short content → the same small centered
-    // rounded card as the device panel on mobile, instead of the base
-    // top-anchored full-screen sheet meant for long Settings forms. See
-    // FirstRunTips for the same fix.
-    <div className="modal-backdrop panel-modal-backdrop" onClick={onClose}>
-      <div className="modal panel-modal legend-modal" onClick={(e) => e.stopPropagation()}>
+    // Same shell as every other full modal (Settings, Config Editor, group
+    // panels) — .settings-modal's 780px width, not the narrow device-panel
+    // card. It already reuses .settings-header/-body/-footer below; sharing
+    // the outer width too means this is a genuine "same modal, different
+    // content" reuse instead of its own one-off sizing.
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal settings-modal legend-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <h2>Map colours</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">

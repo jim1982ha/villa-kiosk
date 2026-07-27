@@ -283,12 +283,37 @@ function stripStaleVariantEntities(config: AppConfig): AppConfig {
   return { ...config, entityMap, meshBindings };
 }
 
+/** v2.35.55 shipped EntityMapping.motionEntityId (camera-only) and
+ *  linkedEntityId (generic) as TWO separate fields; this session merged them
+ *  into linkedEntityId alone, and motionEntityId no longer exists on the
+ *  type. A camera already configured under the old field (e.g. "Living Room
+ *  Motion") would otherwise silently lose its beam/ring/long-press target on
+ *  load — the value is still sitting in localStorage, just under a key the
+ *  app no longer reads. Copy it across once, only when linkedEntityId isn't
+ *  already set (so a value picked under the new field always wins), same
+ *  one-time-migration shape as stripStaleVariantEntities above. Reads
+ *  motionEntityId via an index signature since JSON.parse has no knowledge
+ *  of the (now gone) TypeScript field. */
+function migrateMotionEntityId(config: AppConfig): AppConfig {
+  let changed = false;
+  const entityMap = Object.fromEntries(
+    Object.entries(config.entityMap).map(([id, map]) => {
+      const legacy = (map as unknown as Record<string, unknown>).motionEntityId;
+      if (typeof legacy !== "string" || !legacy || map.linkedEntityId) return [id, map];
+      changed = true;
+      const { motionEntityId: _drop, ...rest } = map as EntityMapping & { motionEntityId?: string };
+      return [id, { ...rest, linkedEntityId: legacy }];
+    }),
+  );
+  return changed ? { ...config, entityMap } : config;
+}
+
 export function loadConfig(): AppConfig {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
     if (!raw) return { ...DEFAULT_CONFIG };
     const stored = JSON.parse(raw) as Partial<AppConfig>;
-    return stripStaleVariantEntities({
+    return migrateMotionEntityId(stripStaleVariantEntities({
       ...DEFAULT_CONFIG,
       ...stored,
       entityMap: { ...DEFAULT_CONFIG.entityMap, ...(stored.entityMap ?? {}) },
@@ -297,7 +322,7 @@ export function loadConfig(): AppConfig {
       modelTransform: { ...DEFAULT_CONFIG.modelTransform, ...(stored.modelTransform ?? {}) },
       render: { ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) },
       teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
-    });
+    }));
   } catch (err) {
     console.warn("[AppConfig] failed to load, using defaults", err);
     return { ...DEFAULT_CONFIG };

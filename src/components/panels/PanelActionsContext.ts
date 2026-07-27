@@ -30,12 +30,12 @@ export interface PanelActions {
      *  (which turns amber). */
     unavailable?: boolean;
     /** Draws the same red alert ring the map badge shows for an active/
-     *  alerting device (see EntityVisuals' BADGE_RING) — currently only set
-     *  for a camera whose LINKED motion sensor (EntityMapping.motionEntityId,
-     *  set in Advanced Settings) is presently "on". The map already does this
-     *  via a Babylon GUI outline; this is the DOM/CSS equivalent for the same
-     *  camera's panel header icon, computed the same way (live entity state,
-     *  no separate lookup). */
+     *  alerting device (see EntityVisuals' BADGE_RING) — set whenever this
+     *  device's linked entity (EntityMapping.linkedEntityId, set in Advanced
+     *  Settings) is presently "on", plus a binary_sensor's own "on" state.
+     *  The map already does this via a Babylon GUI outline; this is the
+     *  DOM/CSS equivalent for the panel header icon, computed the same way
+     *  (live entity state, no separate lookup). */
     alertRing?: boolean;
   };
   /** Persist a new badge colour for the open entity (null = category default).

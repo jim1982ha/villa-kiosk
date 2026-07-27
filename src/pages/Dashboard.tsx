@@ -206,14 +206,13 @@ export default function Dashboard() {
       if (!mapping) return;
       if (!canControl || !role || !isMappingAllowed(role, entityId, mapping)) return;
       // linkedEntityId is configurable on every type (it universally drives
-      // the badge's red ring — see EntityVisuals.badgeKind), but only
-      // camera/binary_sensor use long-press to TOGGLE it: those two often
-      // have nothing sensible to toggle on themselves (a binary_sensor has
-      // no HA turn_on/off service at all; a camera's tap already IS its
-      // panel). Every other type keeps long-press opening its detail panel
-      // as before, even with a linkedEntityId set — that field is ring-only
-      // for them, for now.
-      if ((mapping.type === "camera" || mapping.type === "binary_sensor") && mapping.linkedEntityId) {
+      // the badge's red ring — see EntityVisuals.badgeKind), but ONLY a
+      // camera uses long-press to TOGGLE it — a camera's tap already IS its
+      // panel (the fullscreen feed), so long-press is free to do something
+      // else entirely. Every other type, including binary_sensor, keeps
+      // long-press opening its detail panel exactly as before, even with a
+      // linkedEntityId set — that field is ring-only for them.
+      if (mapping.type === "camera" && mapping.linkedEntityId) {
         HAServices.toggleEntity(ws, mapping.linkedEntityId);
         return;
       }
@@ -487,12 +486,12 @@ export default function Dashboard() {
               const category = effectiveCategory(
                 entityId, mapping.type, liveMapping.category ?? mapping.category,
                 ent?.attributes.device_class as string | undefined);
-              // Same three alert sources as EntityVisuals' badgeKind (map
+              // Same two alert sources as EntityVisuals' badgeKind (map
               // badge), mirrored here so the panel header ring never
-              // disagrees with the badge that was just tapped to open it.
-              const motionAlert =
-                liveMapping.type === "camera" && !!liveMapping.motionEntityId
-                  && entities[liveMapping.motionEntityId]?.state === "on";
+              // disagrees with the badge that was just tapped to open it. A
+              // camera's own beam/ring-driving sensor IS liveMapping.linkedEntityId
+              // now (the two fields merged into one), so this single check
+              // covers it — no separate camera-only branch needed anymore.
               const lightLinkAlert =
                 !!liveMapping.linkedEntityId
                   && entities[liveMapping.linkedEntityId]?.state === "on";
@@ -508,7 +507,7 @@ export default function Dashboard() {
                 // instead of always rendering full-strength regardless of
                 // live state (the map badge already fades; this icon didn't).
                 unavailable: isUnavailable(ent),
-                alertRing: motionAlert || lightLinkAlert || sensorOwnAlert,
+                alertRing: lightLinkAlert || sensorOwnAlert,
               };
             })(),
             onSetBadgeColor: canEditConfig

@@ -1159,6 +1159,18 @@ label.toggle span { user-select: none; line-height: 1.4; }
   padding: 10px 0; color: var(--text-primary); font-size: 14px;
 }
 .config-search input:focus { outline: none; }
+/* Inside the Config Editor's entity table/cards, the generic
+   ".config-table input:not([type=checkbox])" rule (background: var(--bg-input))
+   outranks ".config-search input"'s own transparent background — same class
+   count, but one extra type selector via :not([type="checkbox"]) — so an
+   EntityPicker used as a table cell (e.g. "Linked entity") painted its INNER
+   input grey a second time inside the already-grey .config-search pill,
+   showing as two nested grey boxes. Scope a matching-specificity override
+   back to transparent so the pill is the ONLY background, same as every
+   other cell's plain select/input. */
+.config-table .config-search input {
+  background: transparent; padding: 10px 0; border-radius: 0;
+}
 
 /* Entity ID cell: id text on the left, action icons (edit + delete) pinned right
    so every card lines up identically. */
@@ -1423,12 +1435,14 @@ label.toggle span { user-select: none; line-height: 1.4; }
     border: 1px solid var(--hairline-strong);
     padding: 20px;
   }
-  /* These two borrow panel-modal's centered-card SHAPE but bring their own
-     header/body/footer padding (they're built on the .settings-* structure,
-     unlike the badge/device panels which have no inner padding) — so drop the
-     card's own 20px to avoid doubling it up on every side. */
-  .modal.panel-modal.first-run-tips,
-  .modal.panel-modal.legend-modal {
+  /* first-run-tips borrows panel-modal's centered-card SHAPE but brings its
+     own header/body/footer padding (built on the .settings-* structure,
+     unlike the badge/device panels which have no inner padding) — so drop
+     the card's own 20px to avoid doubling it up on every side. legend-modal
+     no longer needs this: it's a plain .settings-modal now, same as
+     Settings/Config Editor, so it already gets their standard mobile
+     full-screen-sheet treatment with no special-casing here. */
+  .modal.panel-modal.first-run-tips {
     padding: 0;
   }
 
