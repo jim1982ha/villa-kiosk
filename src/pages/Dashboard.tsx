@@ -22,6 +22,7 @@ import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId } from "@/config/EntityMap";
 import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
+import { isUnavailable } from "@/utils/stateColors";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
 import { HAServices } from "@/ha/HAServiceCalls";
@@ -486,6 +487,12 @@ export default function Dashboard() {
                 iconKey: iconKeyFor(mapping.type, ent),
                 color: liveMapping.badgeColor,
                 categoryColor: CATEGORY_COLORS[category].bottom,
+                // Same isUnavailable() every status pill (UnavailableNotice,
+                // LockPanel, CoverPanel, SensorPanel…) already uses — so the
+                // header badge fades in step with the pill right below it,
+                // instead of always rendering full-strength regardless of
+                // live state (the map badge already fades; this icon didn't).
+                unavailable: isUnavailable(ent),
               };
             })(),
             onSetBadgeColor: canEditConfig

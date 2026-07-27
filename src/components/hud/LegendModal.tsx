@@ -19,7 +19,8 @@ const BADGE_ITEMS: { label: string; note: string; ring?: string; dim?: boolean }
     note: "Red outline — the device is on, or needs attention (unlocked door, leak…)" },
   { label: "Off / idle", note: "No outline — the device is off or resting" },
   { label: "Unavailable", dim: true,
-    note: "The badge fades — Home Assistant has lost contact, so its state is unknown" },
+    note: "The badge keeps its own category colour but fades — there's no separate "
+      + "\"unavailable colour\" on the map the way the panel pill below has amber" },
 ];
 
 /** The coloured status pill each device PANEL shows (a different vocabulary
@@ -66,7 +67,10 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
 
           <div className="settings-section-title">On the map (badge outline)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
-            How a device's own badge shows its state in the 3D view.
+            How a device's own badge shows its state in the 3D view — a
+            different, simpler vocabulary than the panel pill below: the map
+            only ever changes the RING colour and the badge's OPACITY, never
+            its category colour.
           </p>
           <div className="legend-grid">
             {BADGE_ITEMS.map((b) => (

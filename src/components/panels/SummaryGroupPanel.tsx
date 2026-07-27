@@ -138,7 +138,7 @@ export default function SummaryGroupPanel({
         >
           <img
             className="summary-entity-badge"
-            src={badgeImageDataUrl(cat, iconKeyFor(type, e), config.entityMap[id]?.badgeColor)}
+            src={badgeImageDataUrl(cat, iconKeyFor(type, e), config.entityMap[id]?.badgeColor, 0, isUnavailable(e))}
             alt=""
             draggable={false}
           />

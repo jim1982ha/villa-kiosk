@@ -23,6 +23,12 @@ export interface PanelActions {
     color?: string;
     /** Representative category colour, for the picker's "default" chip. */
     categoryColor: string;
+    /** Fades the header icon exactly like its map badge — the SAME
+     *  isUnavailable() every status pill already reads. Without this the
+     *  header badge rendered full-strength regardless of live state, out of
+     *  step with both the map (which fades) and the pill right below it
+     *  (which turns amber). */
+    unavailable?: boolean;
   };
   /** Persist a new badge colour for the open entity (null = category default).
    *  Undefined when the profile may not edit config — the badge is then a plain,

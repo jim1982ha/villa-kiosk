@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.47
+
+### Changes
+- panel header badge (the small icon next to a device's title/room/entity_id) now fades for an unavailable device too, matching both its map badge and the status pill right below it — it previously always rendered full-strength regardless of live state, the actual 'no status icon' gap. Same fix applied to the group-modal's per-row badges (SummaryGroupPanel). Clarify in the (?) legend that the map's fade keeps the device's own category colour (no separate 'unavailable colour' the way the panel pill has amber) — a different, simpler vocabulary by design
+
+---
+
+
 ## 2.35.46
 
 ### Changes

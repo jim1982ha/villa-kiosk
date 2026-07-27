@@ -38,7 +38,7 @@ export default function BasePanel({ title, room, icon, className, onClose, child
   const badgeImg = badge && (
     <img
       className="panel-badge-img"
-      src={badgeImageDataUrl(badge.category, badge.iconKey, badge.color)}
+      src={badgeImageDataUrl(badge.category, badge.iconKey, badge.color, 0, badge.unavailable)}
       alt=""
       draggable={false}
     />
