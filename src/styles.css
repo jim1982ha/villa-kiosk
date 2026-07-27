@@ -651,9 +651,22 @@ button {
 .summary-entity-toggle.on .knob { transform: translateX(20px); }
 
 @media (max-width: 720px) {
-  /* max-width no longer set here — the base rule's gutter-aware calc()
-     already shrinks correctly at any width, including this one. */
-  .summary-bar { bottom: 14px; gap: 8px; padding: 7px; }
+  /* On a phone there's only ever real content in the bottom-LEFT corner
+     (the view-controls) — the desktop rule's symmetric 80px-each-side
+     centering wastes the whole right side as dead space while still
+     clipping tiles against the reserved-but-empty left gutter (the actual
+     bug reported: "DOOR LOCK" clipped to "OCK" with a big empty strip on
+     the right). Anchor to the left edge of the AVAILABLE space instead —
+     flush next to the view-controls — and let the bar grow rightward to
+     use the rest of the screen, capped only so it can't run under the
+     right edge. transform/50% centering no longer applies once left is a
+     fixed offset instead of 50%. */
+  .summary-bar {
+    bottom: 14px; gap: 8px; padding: 7px;
+    left: calc(80px + env(safe-area-inset-left, 0px));
+    transform: none;
+    max-width: calc(100vw - 92px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  }
   .summary-tile { min-width: 96px; padding: 9px 14px 9px 9px; gap: 10px; }
   .summary-tile-icon { width: 40px; height: 40px; }
   .summary-tile-icon svg { width: 21px; height: 21px; }

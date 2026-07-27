@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.60
+
+### Changes
+- On mobile (<=720px), the bottom tile bar now anchors flush to the left, right next to the view-controls corner, and grows rightward to use the rest of the screen width — replacing the symmetric 80px-each-side centering that wasted the whole right side as empty space while still clipping the first tile against the (now pointless, since nothing sits there on mobile) left gutter
+
+---
+
+
 ## 2.35.59
 
 ### Changes
