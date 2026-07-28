@@ -41,9 +41,17 @@ function shortUA(ua = ""): string {
  *  that kind, rather than a raw JSON dump nobody reads. */
 function summarise(e: TelemetryEvent): string {
   switch (e.kind) {
-    case "load":
+    case "load": {
+      // Post-phase step timings arrive as loose keys on the event (see
+      // BabylonCanvas) — surface the biggest, since that's the actionable one.
+      const steps = ["indexMeshes", "applyStructure", "pickIndex", "spawn"]
+        .filter((k) => typeof e[k] === "number")
+        .map((k) => [k, e[k] as number] as const)
+        .sort((a, b) => b[1] - a[1]);
+      const worst = steps.length ? ` · slowest step ${steps[0][0]} ${steps[0][1]}ms` : "";
       return `${e.parseMs}ms parse (import ${e.importMs} · post ${e.postMs}), `
-        + `fetch ${e.fetchMs}ms, ${e.meshes} meshes`;
+        + `fetch ${e.fetchMs}ms, ${e.meshes} meshes${worst}`;
+    }
     case "error":
       return `${e.code}: ${String(e.message ?? "").slice(0, 120)}`;
     case "lifecycle":

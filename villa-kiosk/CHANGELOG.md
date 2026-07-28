@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.77
+
+### Changes
+- Load time: found and cut the dominant cost in the post-processing phase. Measured on the villa, 'post' (our own work) was 3363ms vs Babylon's own import at 1798ms — so the bottleneck was never the download (fetch was 248ms) or Draco. Root cause: light placement fires scene.pickWithRay once per fixture to find the surface below it, plus up to THREE more per strip for its light-pool spots — a few hundred casts, each a linear triangle scan because the baked villa's structure is a single ~1.43M-triangle mesh with no picking octree. All of it ran synchronously before the villa could be shown. Fix: all three call sites now funnel through one memoised surfaceBelow() probe. Bucketing is sound rather than convenient — every probe casts straight DOWN looking for a floor, floors are flat within a room, so two fixtures in the same room at the same ceiling height have the same answer by construction. Grid is room-scale in x/z (4m) and storey-scale in y (1m): measured against this villa's fixture layout that collapses ~220 probe calls to ~40 real rays (5.6x, ~319M -> ~57M triangle tests), where 2m only reached 2.6x and 8m starts merging genuinely separate rooms. The y term keeps storeys apart and also separates a lower terrace from an adjacent room. A boundary straddle costs one extra ray, never a wrong answer, since every bucket does its own real probe. Also added per-step timing of the post phase (pickIndex/indexMeshes/applyStructure/spawn), logged with ?debug and reported through telemetry with the slowest step surfaced in the panel — so the remaining time is attributable rather than guessed at, and so the same mistake isn't repeated on the next slow phase. Verified: 9 memoisation assertions, 25 FM engine assertions still green
+
+---
+
+
 ## 2.35.76
 
 ### Changes

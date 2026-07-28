@@ -244,7 +244,7 @@ export default function BabylonCanvas({
         // The heavy step and the usual iOS OOM point: Draco decode + texture
         // decode + GPU upload of the whole villa.
         noteLoadPhase("import-mesh");
-        const { importMs, postMs } = await manager.loadModel(data);
+        const { importMs, postMs, phases } = await manager.loadModel(data);
         if (cancelled) return;
         noteLoadPhase("post-process");
         const tParseDone = performance.now();
@@ -276,6 +276,9 @@ export default function BabylonCanvas({
           importMs: Math.round(importMs),
           postMs: Math.round(postMs),
           source: fromAddon ? "addon" : "indexeddb",
+          // Which STEP of our own post-processing dominates. Without this a
+          // slow load is only ever "post was 3.4s" with no way to act on it.
+          ...phases,
         });
 
         // Expose mesh names for the binding UI.

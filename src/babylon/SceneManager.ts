@@ -912,10 +912,22 @@ export class SceneManager {
    * Worker, a separate, much larger undertaking. This only shortens the
    * longest unbroken freeze and gives input a few more chances to land.
    */
-  async loadModel(data: ArrayBuffer): Promise<{ importMs: number; postMs: number }> {
+  async loadModel(data: ArrayBuffer): Promise<{
+    importMs: number; postMs: number; phases?: Record<string, number>;
+  }> {
     const result = await loadModelInto(this.scene, data, this.config.extraGlassHints ?? []);
     if (this.disposed) return { importMs: result.importMs, postMs: 0 }; // unmounted mid-load
     const tPostStart = performance.now();
+    // Per-step timings for the post phase. "post" was measured at ~3.4s on a
+    // desktop — bigger than Babylon's own import — so attributing it to a
+    // specific step is the difference between fixing it and guessing at it.
+    const phases: Record<string, number> = {};
+    let tStep = tPostStart;
+    const mark = (name: string) => {
+      const now = performance.now();
+      phases[name] = Math.round(now - tStep);
+      tStep = now;
+    };
     this.loadedMeshes = result.meshes;
 
     // Baked-lighting GLB (blender_pipeline --bake): the structure carries its
@@ -938,14 +950,17 @@ export class SceneManager {
     this.recenterModel(result.meshes); // align to origin BEFORE indexing positions
     this.floors.indexFloors(result.meshes);
     this.pick.indexInteractiveMeshes(result.meshes); // taps work immediately
+    mark("pickIndex");
 
     await this.yieldFrame();
     if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
     this.visuals.indexMeshes(result.meshes); // entity badges/lights/state visuals — the single heaviest step
+    mark("indexMeshes");
 
     await this.yieldFrame();
     if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
     this.applyStructure(result.meshes); // solid walls + collisions + hidden ceilings
+    mark("applyStructure");
 
     // Spawn at the default first-person pose (foot of the staircase on the ground
     // floor). Uses the stair GEOMETRY, so it doesn't need calibration to have run.
@@ -954,7 +969,9 @@ export class SceneManager {
     // The villa is correct and interactive now — reveal it.
     this.markReady();
     this.requestRender(1000);
+    mark("spawn");
     const postMs = performance.now() - tPostStart;
+    devLog("[SceneManager] post-processing breakdown (ms):", phases);
 
     // --- Deferred: raycast-heavy / cosmetic passes that need not block the first
     // paint. Running them AFTER the first rendered frame is what stops "Loading
@@ -968,7 +985,7 @@ export class SceneManager {
       this.requestRender();
     });
 
-    return { importMs: result.importMs, postMs };
+    return { importMs: result.importMs, postMs, phases };
   }
 
   /**
