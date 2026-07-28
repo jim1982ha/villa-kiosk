@@ -11,7 +11,6 @@ style rule moved:
   * the lockout DoS (one caller could lock everyone out of a profile)
   * path traversal into the evidence store and the upload target
   * the fail-OPEN REST allowlist (SERVICES/lock/unlock, ./template, ...)
-  * an un-PIN'd guest opening physical barriers
   * websocket frames that bypass the service allowlist (execute_script)
 
 It imports the real module rather than re-implementing its logic, so it
@@ -135,7 +134,7 @@ for kind in ("glb", "rooms"):
 
 # ------------------------------------------------------- REST allowlist
 section("REST allowlist must FAIL CLOSED (these all reached Core before)")
-proxy._read_options = lambda: {}  # no PINs configured -> guest is un-PIN'd
+proxy._read_options = lambda: {"guest_pin": "1234"}
 for path in ("SERVICES/lock/unlock", "./services/lock/unlock", "services//lock/unlock",
              "services/../services/lock/unlock", "services/lock/unlock%00",
              "services/lock/unlock;a=b", "services/lock%2funlock", "./template",
@@ -144,15 +143,13 @@ for path in ("SERVICES/lock/unlock", "./services/lock/unlock", "services//lock/u
              "services/light/turn_on\n"):
     t(f"blocked {path!r}", proxy._rest_call_allowed("guest", path), False)
 
-section("un-PIN'd guest must not open physical barriers")
-for domain, service in (("lock", "unlock"), ("lock", "open"), ("cover", "open_cover")):
-    t(f"blocked {domain}/{service}",
-      proxy._rest_call_allowed("guest", f"services/{domain}/{service}"), False)
-
-section("a PIN'd guest keeps that capability (deliberate: they live there)")
+section("guests open doors — deliberate; the PIN is what authenticates them")
+# A guest is the person staying in the villa. This is intended behaviour and is
+# asserted here so a future 'hardening' pass does not quietly take it away and
+# lock a paying guest out of the house.
 proxy._read_options = lambda: {"guest_pin": "1234"}
-for domain, service in (("lock", "unlock"), ("cover", "open_cover")):
-    t(f"allowed {domain}/{service}",
+for domain, service in (("lock", "unlock"), ("lock", "open"), ("cover", "open_cover")):
+    t(f"PIN'd guest allowed {domain}/{service}",
       proxy._rest_call_allowed("guest", f"services/{domain}/{service}"), True)
 
 section("legitimate kiosk traffic still works")

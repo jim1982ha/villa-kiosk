@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.82
+
+### Changes
+- Revert the un-PIN'd-guest restriction on lock/cover — the owner's call, and the right one. Guests unlock doors deliberately: a guest is the person staying in the villa, and permissions.ts puts access_control in their categories for exactly that reason. The guest profile is PIN-protected in this deployment, so the PIN is what authenticates them and a second gate on top of it buys nothing while risking the worst possible failure mode for a rental — a paying guest locked out of the house because a config field was blank. Note the restriction only ever applied when guest_pin was EMPTY, so a PIN'd install was never affected either way. What stays from the audit is everything that was an unambiguous bug rather than a policy opinion: the fail-open REST allowlist, the websocket default-deny that closes the execute_script bypass, server-side logout plus epoch revocation, owner/ops-only evidence photos, the per-client rate limiter that stops one caller locking everyone else out, HSTS, and the Report-Only CSP. The test suite now ASSERTS that a guest can call lock/unlock and cover/open_cover, so a future hardening pass cannot quietly take it away again — the behaviour is pinned as intended, not merely left un-blocked. README's access-control table corrected to match, and it now says plainly to set a guest_pin on any install reachable from outside the LAN, since that is the one configuration where the guest profile authenticates nobody
+
+---
+
+
 ## 2.35.81
 
 ### Changes

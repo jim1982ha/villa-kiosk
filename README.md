@@ -147,7 +147,7 @@ matters is also enforced in `rootfs/usr/bin/supervisor-proxy.py`.
 | Sessions | HMAC-signed cookie (`HttpOnly`, `Secure`, `SameSite=Lax`), 30-day life, key persisted 0600 in `/data` |
 | Log out | `POST /auth/logout` clears this browser's cookie; `POST /auth/logout-all` (owner) bumps a signing epoch that invalidates **every** outstanding session |
 | PIN entry | 4 digits, constant-time compare, rate-limited per client IP **and** globally per role |
-| Unset PIN | `owner`/`ops` with no PIN are unavailable, never open. `guest` may be PIN-less, but then cannot touch `lock` or `cover` |
+| Unset PIN | `owner`/`ops` with no PIN are unavailable, never open. `guest` may be left PIN-less on purpose (a "just look around" villa) — but that profile can unlock doors, so set a `guest_pin` on any install reachable from outside the LAN |
 | HA REST (`/core/api/*`) | Default **deny** for non-owners: ambiguous paths refused outright, then an allowlist of what the kiosk actually calls |
 | HA websocket | Default **deny** for non-owners: only the seven frame types the kiosk sends. Blocks `execute_script`, which otherwise wraps a forbidden service call and walks straight past the service allowlist |
 | Facility data + evidence photos | `owner`/`ops` only, on both read and write |

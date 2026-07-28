@@ -274,14 +274,6 @@ def _service_call_allowed(role: str, domain: str, service: str) -> bool:
     permissions.ts's category/type matrix would otherwise show them."""
     if role == "owner":
         return True
-    # An un-PIN'd guest profile is a deliberate "just look around" mode, and it
-    # authenticates nobody: whoever reaches the URL gets it. permissions.ts
-    # puts access_control in guest's categories, which is right for a PAYING
-    # guest who must open the door they are staying behind — but it cannot mean
-    # that an anonymous caller may unlock the villa or open the gate. A guest
-    # with a PIN keeps the capability; a guest without one does not.
-    if role == "guest" and domain in PHYSICAL_ACCESS_DOMAINS and not _configured_pin("guest"):
-        return False
     if domain == "homeassistant":
         return service in ALLOWED_HOMEASSISTANT_SERVICES
     return domain in ALLOWED_SERVICE_DOMAINS
@@ -446,9 +438,15 @@ _SAFE_TAIL_RE = re.compile(r"^[A-Za-z0-9_\-./:+]+$")
 # src/ha/HAHistoryAPI.ts and HACameraProxy.ts). Everything else a non-owner
 # might ask for is denied by default.
 _NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_stream/")
-# Domains that move physical barriers. An un-PIN'd profile is by definition
-# unauthenticated, and unauthenticated callers do not open buildings.
-PHYSICAL_ACCESS_DOMAINS = frozenset({"lock", "cover"})
+# Guests unlock doors — deliberately. A guest is the person staying in the
+# villa, and permissions.ts puts access_control in their categories for exactly
+# that reason. The guest profile is PIN-protected in this deployment, so the
+# PIN is what authenticates them; there is no separate gate on lock/cover.
+#
+# The one configuration where that reasoning breaks is a guest profile with NO
+# PIN set, which grants a session to whoever reaches the URL. config.yaml ships
+# every PIN empty, so a fresh install is in that state until the operator sets
+# one. See the Access control notes in this module's docstring.
 # Websocket frame types the kiosk itself ever sends (src/ha/HAWebSocket.ts,
 # HACameraProxy.ts). Non-owner sessions may send NOTHING else.
 #
