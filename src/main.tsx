@@ -1,6 +1,5 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { HashRouter } from "react-router-dom";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { installGlobalErrorCapture } from "./utils/diagnostics";
@@ -31,12 +30,13 @@ if ("serviceWorker" in navigator && !underIngress) {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {/* HashRouter so deep links work under the HA Ingress prefix and on the
-        add-on's own hostname alike, without server-side route config. */}
-    <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    </HashRouter>
+    {/* No router: the kiosk is a single screen. HashRouter existed so deep
+        links survived the HA Ingress path prefix, but nothing ever linked to a
+        second route — there are no route params, no useLocation, no #/ links.
+        Serving one component directly keeps working identically under both the
+        Ingress prefix and the add-on's own hostname. */}
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );

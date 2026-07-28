@@ -10,6 +10,7 @@ import {
   createContext, useCallback, useContext, useMemo, useState, type ReactNode,
 } from "react";
 import { isRole, type Role } from "./roles";
+import { ingressPath } from "@/ha/ingress";
 
 const SESSION_KEY = "villa-kiosk:profile:v1";
 
@@ -63,6 +64,20 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Tell the SERVER, not just this tab. Logging out used to clear
+    // sessionStorage and React state only — the signed vk_session cookie
+    // survived, still authorizing /core, /model, /fm-data and the config
+    // stores for its full 30-day life. "Log out" that leaves the session
+    // valid is not a log out; the next person to open this browser was still
+    // authenticated at whatever role had just "left".
+    //
+    // keepalive so the request still goes out if this is the last thing the
+    // page does before navigating away, and best-effort because a failed
+    // network call must not trap the user in a session they asked to end —
+    // the local state is cleared either way, and the cookie has an expiry.
+    void fetch(ingressPath("auth/logout"), {
+      method: "POST", credentials: "include", keepalive: true,
+    }).catch(() => { /* offline: local state is still cleared below */ });
     try {
       sessionStorage.removeItem(SESSION_KEY);
     } catch {

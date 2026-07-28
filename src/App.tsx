@@ -1,4 +1,3 @@
-import { Routes, Route, Navigate } from "react-router-dom";
 import { ConfigProvider } from "@/config/ConfigContext";
 import { ScenesProvider } from "@/config/ScenesContext";
 import DeviceConfigSync from "@/config/DeviceConfigSync";
@@ -33,10 +32,16 @@ export default function App() {
                     reason as ScenesProvider: /fm-data needs the session the gate
                     establishes. */}
                 <FmDataProvider>
-                  <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
+                  {/* One screen, rendered directly. This was a react-router
+                      <Routes> with a single "/" route and a catch-all redirect
+                      back to it — a routing library for an app with nowhere to
+                      route. Dropping it removed two advisories (GHSA-wrjc-x8rr-h8h6
+                      open redirect, GHSA-337j-9hxr-rhxg constructor injection)
+                      by removing the dependency rather than tracking its
+                      versions. Neither was exploitable here (no useNavigate, no
+                      <Link>, no SSR), but an unused dependency is pure
+                      supply-chain surface. */}
+                  <Dashboard />
                 </FmDataProvider>
               </ScenesProvider>
             </ProfileGate>

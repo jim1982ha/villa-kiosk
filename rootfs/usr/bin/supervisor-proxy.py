@@ -132,6 +132,7 @@ MANAGED_PATH = {"glb": "villa.glb"}
 
 # ── Session auth ─────────────────────────────────────────────────────────────
 SESSION_COOKIE = "vk_session"
+SESSION_EPOCH_FILE = "/data/session-epoch"
 SESSION_SECRET_FILE = "/data/.session_secret"
 SESSION_TTL = 30 * 24 * 3600  # 30 days — a kiosk stays "logged in" a long time.
 _session_secret_cache: bytes | None = None
@@ -165,8 +166,40 @@ def _session_secret() -> bytes:
     return fresh
 
 
+def _session_epoch() -> int:
+    """Monotonic counter mixed into every session signature.
+
+    Sessions are stateless signed tokens with a 30-day life, which is right for
+    a kiosk that should not re-prompt daily — but it also meant a token that
+    leaked (a browser left open, a shoulder-surfed PIN) stayed valid for a
+    month with no way to invalidate it short of destroying the signing key.
+    Bumping this epoch invalidates every outstanding session at once while
+    KEEPING the signing key, so /auth/logout-all is a supported operation
+    rather than a filesystem intervention."""
+    try:
+        with open(SESSION_EPOCH_FILE, "r", encoding="utf-8") as f:
+            return int(f.read().strip() or "0")
+    except (OSError, ValueError):
+        return 0
+
+
+def _bump_session_epoch() -> int:
+    nxt = _session_epoch() + 1
+    try:
+        with open(SESSION_EPOCH_FILE, "w", encoding="utf-8") as f:
+            f.write(str(nxt))
+        os.chmod(SESSION_EPOCH_FILE, 0o600)
+    except OSError as err:
+        print(f"[supervisor-proxy] could not persist session epoch: {err}", flush=True)
+    return nxt
+
+
 def _sign_session(role: str, exp: int) -> str:
-    return hmac.new(_session_secret(), f"{role}.{exp}".encode(), hashlib.sha256).hexdigest()
+    return hmac.new(
+        _session_secret(),
+        f"{role}.{exp}.{_session_epoch()}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 def _make_session_token(role: str) -> str:
@@ -241,6 +274,14 @@ def _service_call_allowed(role: str, domain: str, service: str) -> bool:
     permissions.ts's category/type matrix would otherwise show them."""
     if role == "owner":
         return True
+    # An un-PIN'd guest profile is a deliberate "just look around" mode, and it
+    # authenticates nobody: whoever reaches the URL gets it. permissions.ts
+    # puts access_control in guest's categories, which is right for a PAYING
+    # guest who must open the door they are staying behind — but it cannot mean
+    # that an anonymous caller may unlock the villa or open the gate. A guest
+    # with a PIN keeps the capability; a guest without one does not.
+    if role == "guest" and domain in PHYSICAL_ACCESS_DOMAINS and not _configured_pin("guest"):
+        return False
     if domain == "homeassistant":
         return service in ALLOWED_HOMEASSISTANT_SERVICES
     return domain in ALLOWED_SERVICE_DOMAINS
@@ -323,6 +364,30 @@ async def ws_handler(request: web.Request):
                         if obj.get("type") == "auth":
                             obj["access_token"] = TOKEN
                             data = json.dumps(obj)
+                        elif role != "owner" and str(obj.get("type", "")) not in ALLOWED_WS_TYPES:
+                            # Default deny — see ALLOWED_WS_TYPES.
+                            await client.send_json({
+                                "id": obj.get("id"),
+                                "type": "result",
+                                "success": False,
+                                "error": {
+                                    "code": "unauthorized",
+                                    "message": "This profile may not send this command.",
+                                },
+                            })
+                            continue
+                        elif (role == "guest" and str(obj.get("type", "")) == "camera/stream"):
+                            # Mirrors the camera_proxy denial for guest on REST.
+                            await client.send_json({
+                                "id": obj.get("id"),
+                                "type": "result",
+                                "success": False,
+                                "error": {
+                                    "code": "unauthorized",
+                                    "message": "This profile may not view cameras.",
+                                },
+                            })
+                            continue
                         elif obj.get("type") == "call_service" and not _service_call_allowed(
                             role, str(obj.get("domain", "")), str(obj.get("service", "")),
                         ):
@@ -365,28 +430,82 @@ async def ws_handler(request: web.Request):
 
 
 _SERVICES_PATH_RE = re.compile(r"^services/([^/]+)/([^/]+)/?$")
+# A tail we are willing to reason about at all. Anything with %-encoding, a
+# semicolon, a backslash, whitespace or a null is ambiguous — it may mean one
+# thing to this regex and another to Core — so it is refused rather than
+# interpreted. Refusing the ambiguous input is the whole point; trying to
+# normalise it is how bypasses get written.
+# ":" and "+" are here because history/period takes an ISO-8601 timestamp
+# ("2026-01-01T00:00:00+08:00"). aiohttp decodes the path before match_info, so
+# the client's encodeURIComponent output arrives as those literal characters.
+# Neither can create a path segment or escape a directory, so admitting them
+# costs nothing; omitting them silently broke every history chart for guest and
+# facility-manager sessions, which is how this was caught.
+_SAFE_TAIL_RE = re.compile(r"^[A-Za-z0-9_\-./:+]+$")
+# The ONLY non-service REST paths the kiosk itself requests (see
+# src/ha/HAHistoryAPI.ts and HACameraProxy.ts). Everything else a non-owner
+# might ask for is denied by default.
+_NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_stream/")
+# Domains that move physical barriers. An un-PIN'd profile is by definition
+# unauthenticated, and unauthenticated callers do not open buildings.
+PHYSICAL_ACCESS_DOMAINS = frozenset({"lock", "cover"})
+# Websocket frame types the kiosk itself ever sends (src/ha/HAWebSocket.ts,
+# HACameraProxy.ts). Non-owner sessions may send NOTHING else.
+#
+# The websocket previously inspected only "call_service" and forwarded every
+# other frame untouched — but the browser is not a boundary, and a session can
+# send any frame it likes. HA's websocket API accepts "execute_script", which
+# runs a sequence of script actions INCLUDING service calls: a guest could have
+# wrapped lock.unlock in one and stepped straight past the service allowlist
+# that the call_service branch exists to enforce. "render_template" is the same
+# arbitrary-Jinja2 exposure that the REST "template" path already blocks, and
+# "supervisor/api" reaches the Supervisor itself. Enumerating the dangerous
+# frames would have repeated the REST mistake, so this is an allowlist.
+ALLOWED_WS_TYPES = frozenset({
+    "auth", "ping", "pong",
+    "subscribe_events", "unsubscribe_events",
+    "get_states", "call_service", "camera/stream",
+})
 
 
 def _rest_call_allowed(role: str, tail: str) -> bool:
-    """Whether a non-owner session's REST call may reach Core. Owner is exempt
-    (mirrors _service_call_allowed)."""
+    """Whether a non-owner session's REST call may reach Core. Owner is exempt.
+
+    DEFAULT DENY. This function used to end in `return True`, so it only
+    blocked the paths someone had thought to name — and a path that merely
+    LOOKED different from the pattern sailed through. Every one of these
+    reached Core from a guest session, because none matched the services regex
+    and none started with the literal strings being checked:
+
+        SERVICES/lock/unlock            (capitals)
+        ./services/lock/unlock          (dot-relative)
+        services//lock/unlock           (empty segment)
+        services/../services/lock/unlock
+        services/lock/unlock%00 , ...;a=b
+
+    The same hole let `./template` past the template block, which is arbitrary
+    Jinja2 evaluation against the entire HA instance. An allowlist that fails
+    open is not an allowlist. Now: refuse anything ambiguous, then permit only
+    what the kiosk actually asks for."""
     if role == "owner":
         return True
-    m = _SERVICES_PATH_RE.match(tail)
+    if not tail or not _SAFE_TAIL_RE.fullmatch(tail):
+        return False
+    if ".." in tail or "//" in tail or tail.startswith(("./", "/")):
+        return False
+
+    t = tail.rstrip("/")
+    m = _SERVICES_PATH_RE.match(t)
     if m:
         # HA's REST API accepts POST /api/services/<domain>/<service> as an
         # exact equivalent of the websocket's call_service — same allowlist.
         return _service_call_allowed(role, m.group(1), m.group(2))
-    if tail.startswith("template"):
-        # Arbitrary Jinja2 template rendering — never called by the kiosk UI;
-        # can read entity/attribute data across the WHOLE HA instance.
-        return False
-    if role == "guest" and tail.startswith("camera_proxy"):
+    if role == "guest" and t.startswith(("camera_proxy/", "camera_proxy_stream/")):
         # permissions.ts denies the "camera" type to guest, but that's a
         # client-side render filter — mirror the intent here since a camera
         # image request needs no entity-metadata lookup to recognise.
         return False
-    return True
+    return t.startswith(_NON_OWNER_REST_PREFIXES)
 
 
 async def rest_handler(request: web.Request) -> web.StreamResponse:
@@ -570,12 +689,59 @@ async def auth_check_handler(request: web.Request) -> web.Response:
 AUTH_ROLES = ("guest", "owner", "ops")
 PIN_OPTION = {"guest": "guest_pin", "owner": "owner_pin", "ops": "ops_pin"}
 PIN_RE = re.compile(r"^[0-9]{4}$")
-# Brute-force limiter: after this many consecutive failures for a role, verify
-# refuses (HTTP 429) until the window has passed since the last failure. State
-# is a fixed-size dict keyed by the three role names — bounded memory forever.
-AUTH_MAX_FAILURES = 5
+# Brute-force limiter. Two tiers, because one alone is wrong in a different way.
+#
+# PER-CLIENT (role + source IP) is the primary gate. The limiter used to be
+# keyed by ROLE ALONE, shared across every caller — which meant anyone on the
+# internet could send five wrong PINs and lock the real owner out of their own
+# villa for five minutes, repeatedly and indefinitely. A lockout must punish
+# the guesser, not the victim.
+#
+# PER-ROLE (global) is kept as a much looser backstop, because per-client
+# limiting alone is defeated by rotating source IPs. A 4-digit PIN is only
+# 10,000 possibilities, so the global tier is what bounds a distributed guess.
+#
+# Both dicts are pruned (see _prune_auth_failures) so an attacker cycling
+# source addresses cannot grow them without limit — the fixed-size-by-
+# construction property of the old role-keyed dict had to be replaced with an
+# explicit bound, not dropped.
+AUTH_MAX_FAILURES = 5            # per client IP, per role
 AUTH_LOCKOUT_SECONDS = 300
-_auth_failures: dict = {r: {"count": 0, "last": 0.0} for r in AUTH_ROLES}
+AUTH_GLOBAL_MAX_FAILURES = 50    # per role, all clients combined
+AUTH_GLOBAL_LOCKOUT_SECONDS = 900
+AUTH_TRACK_MAX_CLIENTS = 2048    # hard cap on tracked (role, ip) pairs
+_auth_failures: dict = {}                                    # (role, ip) -> state
+_auth_failures_global: dict = {r: {"count": 0, "last": 0.0} for r in AUTH_ROLES}
+
+
+def _client_ip(request: web.Request) -> str:
+    """Best-effort source address for rate-limiting.
+
+    Behind Cloudflare + nginx the socket peer is always 127.0.0.1, so the
+    forwarded header is what distinguishes callers. It is client-controllable,
+    which is precisely why it is used ONLY to make the limiter finer-grained
+    and never to grant anything: a forged header can at worst give the forger
+    their own bucket, and the global tier still bounds the total. Falls back to
+    the peer address when the header is absent."""
+    fwd = request.headers.get("X-Forwarded-For", "")
+    if fwd:
+        return fwd.split(",")[0].strip()[:64]
+    peer = request.remote or "?"
+    return str(peer)[:64]
+
+
+def _prune_auth_failures(now: float) -> None:
+    """Drop expired per-client entries, and hard-trim if still oversized."""
+    for key in [k for k, st in _auth_failures.items()
+                if now - st["last"] > AUTH_LOCKOUT_SECONDS]:
+        _auth_failures.pop(key, None)
+    if len(_auth_failures) > AUTH_TRACK_MAX_CLIENTS:
+        # Oldest-first eviction. Evicting a still-locked attacker is acceptable:
+        # the global tier remains, and the alternative (unbounded growth) is a
+        # memory-exhaustion vector that is strictly worse.
+        for key, _ in sorted(_auth_failures.items(), key=lambda kv: kv[1]["last"])[
+                :len(_auth_failures) - AUTH_TRACK_MAX_CLIENTS]:
+            _auth_failures.pop(key, None)
 
 
 def _configured_pin(role: str) -> str:
@@ -589,15 +755,23 @@ def _configured_pin(role: str) -> str:
     return raw if PIN_RE.fullmatch(raw) else ""
 
 
-def _lockout_remaining(role: str) -> int:
-    st = _auth_failures[role]
-    if st["count"] < AUTH_MAX_FAILURES:
-        return 0
-    remaining = AUTH_LOCKOUT_SECONDS - (time.monotonic() - st["last"])
-    if remaining <= 0:
-        st["count"] = 0
-        return 0
-    return int(remaining) + 1
+def _lockout_remaining(role: str, ip: str) -> int:
+    """Seconds this caller must wait, from whichever tier is stricter."""
+    now = time.monotonic()
+    _prune_auth_failures(now)
+    worst = 0
+    for st, limit, window in (
+        (_auth_failures.get((role, ip)), AUTH_MAX_FAILURES, AUTH_LOCKOUT_SECONDS),
+        (_auth_failures_global[role], AUTH_GLOBAL_MAX_FAILURES, AUTH_GLOBAL_LOCKOUT_SECONDS),
+    ):
+        if not st or st["count"] < limit:
+            continue
+        remaining = window - (now - st["last"])
+        if remaining <= 0:
+            st["count"] = 0
+            continue
+        worst = max(worst, int(remaining) + 1)
+    return worst
 
 
 async def auth_roles_handler(request: web.Request) -> web.Response:
@@ -651,22 +825,56 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
     if not isinstance(pin, str) or not PIN_RE.fullmatch(pin):
         return web.json_response({"error": "pin must be 4 digits"}, status=400)
 
-    retry_after = _lockout_remaining(role)
+    ip = _client_ip(request)
+    retry_after = _lockout_remaining(role, ip)
     if retry_after > 0:
         return web.json_response(
             {"ok": False, "locked": True, "retryAfter": retry_after}, status=429,
         )
 
     ok = hmac.compare_digest(pin, configured)
-    st = _auth_failures[role]
+    now = time.monotonic()
+    st = _auth_failures.setdefault((role, ip), {"count": 0, "last": 0.0})
+    gst = _auth_failures_global[role]
     if ok:
+        # Clear only THIS client's counter. The global tier is left to decay on
+        # its own window, so one correct PIN cannot reset a distributed guess.
         st["count"] = 0
     else:
         st["count"] += 1
-        st["last"] = time.monotonic()
+        st["last"] = now
+        gst["count"] += 1
+        gst["last"] = now
     resp = web.json_response({"ok": ok})
     if ok:
         _set_session_cookie(resp, role)
+    return resp
+
+
+async def auth_logout_handler(request: web.Request) -> web.Response:
+    """End THIS browser's session by clearing its cookie.
+
+    The token stays cryptographically valid until it expires — that is inherent
+    to stateless sessions — so this is the ordinary "I'm done on this device"
+    path, not a revocation. For a token believed to be COMPROMISED, use
+    /auth/logout-all, which invalidates every session everywhere."""
+    resp = web.json_response({"ok": True})
+    resp.del_cookie(SESSION_COOKIE, path="/")
+    return resp
+
+
+async def auth_logout_all_handler(request: web.Request) -> web.Response:
+    """Invalidate every outstanding session on this install (owner-only).
+
+    Bumps the session epoch, which is mixed into every signature, so all
+    previously issued cookies stop verifying — including the caller's own.
+    This is the answer to "a device was lost / a PIN was seen"."""
+    if not _authorized(request) or _role_for(request) != "owner":
+        return _unauthorized() if not _authorized(request) else web.json_response(
+            {"error": "forbidden"}, status=403)
+    epoch = _bump_session_epoch()
+    resp = web.json_response({"ok": True, "epoch": epoch})
+    resp.del_cookie(SESSION_COOKIE, path="/")
     return resp
 
 
@@ -830,7 +1038,11 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     try:
         dest = _resolve_upload_target(kind)
     except ValueError as err:
-        return web.json_response({"error": str(err)}, status=400)
+        # Detail to the log, generic message to the caller. The current text is
+        # our own fixed string and leaks nothing, but returning exception text
+        # verbatim is the habit that eventually leaks a filesystem path.
+        print(f"[supervisor-proxy] upload target rejected: {err}", flush=True)
+        return web.json_response({"error": "invalid upload target"}, status=400)
     os.makedirs(os.path.dirname(dest), exist_ok=True)
 
     upload_id = request.query.get("upload_id", "").strip()
@@ -1084,10 +1296,20 @@ async def fm_evidence_post_handler(request: web.Request) -> web.Response:
 
 
 async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
-    """Serve one evidence photo back. Readable by any authorized session so a
-    report opened by the owner can show the pictures behind each claim."""
+    """Serve one evidence photo back — owner/ops only.
+
+    These are maintenance photographs of the villa's interior, and they were
+    readable by ANY authorized session. That included "guest", which on a villa
+    configured for a no-PIN look-around mode means anybody who can reach the
+    add-on. Confidentiality rested entirely on the photo id being unguessable,
+    which is an accident of the id format rather than an access-control
+    decision. The stated reason for the open rule — "so a report can show the
+    pictures behind each claim" — is unaffected: reports are opened by owner
+    and facility-manager profiles, both of which still pass."""
     if not _authorized(request):
         return _unauthorized()
+    if _role_for(request) not in ("owner", "ops"):
+        return web.json_response({"error": "forbidden"}, status=403)
     photo_id = request.match_info.get("id", "")
     if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
         return web.json_response({"error": "bad photo id"}, status=400)
@@ -1162,6 +1384,8 @@ def main() -> None:
     app.router.add_put("/device-config", device_config_put_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
     app.router.add_post("/auth/verify", auth_verify_handler)
+    app.router.add_post("/auth/logout", auth_logout_handler)
+    app.router.add_post("/auth/logout-all", auth_logout_all_handler)
     app.router.add_get("/auth/check", auth_check_handler)
     app.router.add_get("/core/websocket", ws_handler)
     app.router.add_route("*", "/core/api/{path:.*}", rest_handler)

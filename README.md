@@ -135,6 +135,38 @@ npm run build       # type-check + Vite → dist/  (baked into the add-on image)
 
 ---
 
+## Security model
+
+The add-on's proxy is the security boundary — **not** the React UI. Anything
+the client enforces (`permissions.ts` categories, hidden buttons) is a
+rendering convenience; a browser can send whatever it likes, so every rule that
+matters is also enforced in `rootfs/usr/bin/supervisor-proxy.py`.
+
+| Surface | Rule |
+|---|---|
+| Sessions | HMAC-signed cookie (`HttpOnly`, `Secure`, `SameSite=Lax`), 30-day life, key persisted 0600 in `/data` |
+| Log out | `POST /auth/logout` clears this browser's cookie; `POST /auth/logout-all` (owner) bumps a signing epoch that invalidates **every** outstanding session |
+| PIN entry | 4 digits, constant-time compare, rate-limited per client IP **and** globally per role |
+| Unset PIN | `owner`/`ops` with no PIN are unavailable, never open. `guest` may be PIN-less, but then cannot touch `lock` or `cover` |
+| HA REST (`/core/api/*`) | Default **deny** for non-owners: ambiguous paths refused outright, then an allowlist of what the kiosk actually calls |
+| HA websocket | Default **deny** for non-owners: only the seven frame types the kiosk sends. Blocks `execute_script`, which otherwise wraps a forbidden service call and walks straight past the service allowlist |
+| Facility data + evidence photos | `owner`/`ops` only, on both read and write |
+| Uploads | Owner only, magic-byte checked, size-capped, destination path traversal-checked |
+
+Run the regression suite — every assertion is a hole that was once open:
+
+```bash
+python3 tests/security_test.py
+```
+
+### Reviewing the Content-Security-Policy
+
+The CSP ships as `Content-Security-Policy-Report-Only`. A wrong CSP bricks a
+kiosk someone has to be physically present to recover, so it reports before it
+enforces. To promote it: load the kiosk on a phone and a laptop, exercise
+cameras, uploads and the 3D view, and if the console reports no violations,
+rename that one header in `nginx.conf` to `Content-Security-Policy`.
+
 ## Development
 
 ```bash
