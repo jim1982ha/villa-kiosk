@@ -25,6 +25,7 @@ import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
 import { isUnavailable } from "@/utils/stateColors";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
+import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
@@ -268,6 +269,24 @@ export default function Dashboard() {
     [config.entityMap],
   );
 
+  // The open panel's LINKED entity (EntityMapping.linkedEntityId) — resolved
+  // at top level rather than inside the provider's value below, because its
+  // switch is optimistic and hooks can't run inside that conditional IIFE.
+  // Optimistic because the switch otherwise can't move until the device
+  // itself confirms, which for some integrations (an AP LED, say) genuinely
+  // takes seconds — see useOptimisticToggle for the full reasoning.
+  const linkedEntityId = activePanel
+    ? (config.entityMap[activePanel.entityId] ?? activePanel.mapping).linkedEntityId
+    : undefined;
+  const linkedSend = useCallback(() => {
+    if (linkedEntityId) HAServices.toggleEntity(ws, linkedEntityId);
+  }, [ws, linkedEntityId]);
+  const linkedToggle = useOptimisticToggle(
+    linkedEntityId,
+    linkedEntityId ? entities[linkedEntityId]?.state === "on" : false,
+    linkedSend,
+  );
+
   // Open the app in the bird's-eye overview by default — seeing the whole villa
   // at a glance is the natural landing view. One-shot: fires the first time the
   // scene becomes ready (model loaded + fitted) and never overrides the user's
@@ -496,9 +515,14 @@ export default function Dashboard() {
               // disagrees with the badge that was just tapped to open it.
               // motionEntityId is deliberately NOT one of them — it drives
               // the map's detection beam, never a ring (see badgeKind).
-              const linkedAlert =
-                !!liveMapping.linkedEntityId
-                  && entities[liveMapping.linkedEntityId]?.state === "on";
+              // Reads the OPTIMISTIC value, the same one the switch below
+              // renders: within this panel the ring and the switch describe
+              // one thing, so they must move together — a ring that lagged
+              // seconds behind its own switch would look like the bug this
+              // was meant to fix. The MAP badge stays on confirmed state
+              // only (it's Babylon-side, and predicting scene appearance is
+              // the thing that was rightly reverted before).
+              const linkedAlert = !!liveMapping.linkedEntityId && linkedToggle.isOn;
               const sensorOwnAlert = liveMapping.type === "binary_sensor" && ent?.state === "on";
               return {
                 category,
@@ -526,24 +550,21 @@ export default function Dashboard() {
                   });
                 }
               : undefined,
-            // The linked-entity on/off switch, resolved once here and rendered
-            // by the shared panel chrome — so it appears on EVERY device type
-            // whose linkedEntityId is set, with no per-panel code. Same live
-            // state that drives the header ring above, so the switch and the
-            // ring can never disagree.
-            linked: (() => {
-              const linkedId = (config.entityMap[activePanel.entityId]
-                ?? activePanel.mapping).linkedEntityId;
-              if (!linkedId || !canControl) return undefined;
-              const linkedEnt = entities[linkedId];
-              return {
-                label: displayLabelFor(
-                  linkedId, config.entityMap[linkedId]?.label,
-                  linkedEnt?.attributes.friendly_name),
-                isOn: linkedEnt?.state === "on",
-                toggle: () => HAServices.toggleEntity(ws, linkedId),
-              };
-            })(),
+            // The linked-entity on/off switch, rendered by the shared panel
+            // chrome — so it appears on EVERY device type whose
+            // linkedEntityId is set, with no per-panel code. isOn/toggle come
+            // from the optimistic hook above (declared at top level, since
+            // hooks can't live inside this IIFE), so the switch moves the
+            // instant it's clicked instead of waiting on a slow device.
+            linked: linkedEntityId && canControl
+              ? {
+                  label: displayLabelFor(
+                    linkedEntityId, config.entityMap[linkedEntityId]?.label,
+                    entities[linkedEntityId]?.attributes.friendly_name),
+                  isOn: linkedToggle.isOn,
+                  toggle: linkedToggle.toggle,
+                }
+              : undefined,
           }}
         >
           <PanelRouter

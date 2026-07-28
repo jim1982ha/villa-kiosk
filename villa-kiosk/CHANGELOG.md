@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.66
+
+### Changes
+- Linked-entity switch lag: found the actual root cause. The switch rendered ONLY HA-confirmed state, so it could not move until the full round-trip completed INCLUDING the physical device's own confirmation — instant for a light (~100ms), genuinely seconds for something like an access-point LED whose integration calls its controller and polls back. Every previous attempt optimised the app's own render speed, which was already fast and was never the bottleneck; confirmed with the user that lights flip instantly while this device does not. Fix: new reusable useOptimisticToggle hook — paints intent on click, reconciles when real state matches, drops the override after a 10s timeout so a silently-failed call reverts to truth rather than lying, and resets when the panel's target entity changes. Distinct from the optimistic prediction reverted in ~v2.32.7-20: that predicted 3D mesh appearance with no bounded correction; this only overrides a DOM switch and self-corrects on every axis. Panel header ring reads the same optimistic value so ring and switch move together; the MAP badge deliberately stays on confirmed state only. State machine verified against 13 cases incl. the rapid double-toggle that broke the earlier attempt
+
+---
+
+
 ## 2.35.65
 
 ### Changes
