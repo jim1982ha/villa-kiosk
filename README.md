@@ -280,6 +280,44 @@ If your plan uses **detailed curtain/fabric geometry**, bake the lightmap at
 bleed (stray light smearing onto benches/frames) once the denser geometry re-packs
 the atlas. See [MODEL_PIPELINE.md](./MODEL_PIPELINE.md) for all bake flags.
 
+### 5. Geometry budget — why the GLB is big, and what actually helps
+
+A villa GLB is **~92 % geometry, ~6 % textures** — so shrinking images barely
+moves the needle, and a heavy source model is what makes both the pipeline and
+the app's load slow. The pipeline caps runaway meshes automatically:
+
+| Flag | Default | Applies to |
+|---|---|---|
+| `--max-object-faces` | 5 000 | structural geometry (walls, plants, plot) |
+| `--max-entity-faces` | 20 000 | bound devices (curtains, lamps, …) |
+
+Anything under its budget passes through byte-identical; only the runaway
+cases are collapse-decimated. The two worst offenders in practice, both from
+the SweetHome catalog:
+
+- **Cloth-sim curtains** — ~248 000 faces *per pose*. Eight multi-pose curtains
+  were 37 % of one villa's entire 29 MB GLB. Now capped by
+  `--max-entity-faces`; the gathered `__open` poses (a few hundred faces) are
+  left untouched.
+- **Plants/vegetation** — 20 k–70 k faces per *placed copy*, so a bushy garden
+  multiplies fast. Prefer low-poly plants in SweetHome where you can.
+
+The `.obj` handed to the pipeline is plain ASCII and will be **~1 GB** for a
+detailed villa — that's normal and only affects pipeline runtime, not the app.
+Only three things are actually needed from the export: the `.obj`, its `.mtl`,
+and the texture images the `.mtl` references. If you export from macOS onto a
+non-native filesystem you'll also get `._*` AppleDouble files and `.DS_Store` —
+pure noise, safe to delete.
+
+> **Always check the export completed.** A truncated `.obj` silently loses
+> whatever was still being written, and those devices then show up in the kiosk
+> as tiny placeholder spheres instead of real geometry:
+> ```bash
+> tail -3 YourHouse.obj   # must end with "f ..." lines,
+> ```
+> If it ends on a bare `g …` / `usemtl …` with no faces after it, the export was
+> cut short — re-export before running the pipeline.
+
 ---
 
 ## Project structure

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.73
+
+### Changes
+- README: document the geometry budget (--max-object-faces / --max-entity-faces), why a villa GLB is ~92% geometry and only ~6% textures, the two runaway cases (cloth-sim curtains at ~248k faces per pose, plants at 20-70k per placed copy), which OBJ export files are actually needed, and how to verify an export wasn't truncated. Pipeline v2.11.0 (untracked sources/): entity meshes are now decimated too, on their own far more generous budget — they were exempt entirely, which let 8 multi-pose curtains take 10.97 MB of a 29.2 MB GLB (37.6%). Same helper called twice, no duplicated logic; measured curtain faces 5,957,292 -> 488,800 and GLB ~29.2 -> ~19.1 MB with the low-poly __open poses untouched
+
+---
+
+
 ## 2.35.72
 
 ### Changes
