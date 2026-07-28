@@ -28,12 +28,11 @@
 // request entirely for other roles) — shared state is exactly what a guest
 // must not be able to rewrite for the whole house.
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConfig } from "./ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import {
-  fetchSharedConfig, saveSharedConfig, pickSharedConfig, sharedConfigEquals,
-  type SharedDeviceConfig,
+  fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
 } from "./deviceConfig";
 
 /** Debounce for outbound writes. Advanced Settings edits arrive in bursts (a
@@ -46,15 +45,27 @@ export default function DeviceConfigSync() {
   const { config, update } = useConfig();
   const { role } = useProfile();
 
-  const local = pickSharedConfig(config);
+  // Recompute the slice ONLY when one of the shared fields actually changes
+  // identity — not on every render. Config edits re-render this component
+  // constantly (every keystroke in Advanced Settings), and the slice feeds the
+  // serialisation below; rebuilding both unconditionally meant stringifying
+  // the entire entityMap on each of those renders, which is exactly the kind
+  // of per-keystroke work the rest of this app goes out of its way to avoid.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const local = useMemo(() => pickSharedConfig(config), SHARED_CONFIG_KEYS.map((k) => config[k]));
+  /** Serialised form of `local`, computed once per real change and reused for
+   *  every comparison — the push gate below is a string compare, not a fresh
+   *  deep-equal walk. */
+  const localJson = useMemo(() => JSON.stringify(local), [local]);
+
   // Read the latest local slice without making the callbacks depend on it
   // (which would re-register the focus listener on every single config edit).
   const localRef = useRef(local);
   localRef.current = local;
 
-  /** What the server is known to hold — the baseline both rules above compare
-   *  against. null until the first successful pull. */
-  const serverRef = useRef<SharedDeviceConfig | null>(null);
+  /** Serialised slice the server is known to hold — the baseline both ordering
+   *  rules compare against. null until the first successful pull. */
+  const serverJsonRef = useRef<string | null>(null);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pull = useCallback(async () => {
@@ -66,15 +77,16 @@ export default function DeviceConfigSync() {
       // the localStorage-only versions). Seed the store from whatever THIS
       // device already has rather than letting an empty pull blank it — the
       // same first-run migration ScenesProvider does.
-      serverRef.current = localRef.current;
+      serverJsonRef.current = JSON.stringify(localRef.current);
       if (role === "owner") void saveSharedConfig(localRef.current);
       return;
     }
     // Server wins for every field it actually carries; fields it omits keep
     // their current local value (an older store, or one written before a field
-    // existed, must not blank that field).
-    const merged = { ...localRef.current, ...server };
-    serverRef.current = merged;
+    // existed, must not blank that field). The baseline is that MERGED result,
+    // which is what the local slice will equal once `update` commits — so the
+    // push effect sees no change and the pull can't bounce straight back.
+    serverJsonRef.current = JSON.stringify({ ...localRef.current, ...server });
     update(server);
   }, [update, role]);
 
@@ -93,29 +105,32 @@ export default function DeviceConfigSync() {
 
   // Push local edits up, debounced. Gated on BOTH ordering rules above.
   useEffect(() => {
-    if (role !== "owner") return;              // non-owners never write
-    const known = serverRef.current;
-    if (known === null) return;                // rule 1: no pull yet
-    if (sharedConfigEquals(local, known)) return; // rule 2: nothing changed
+    if (role !== "owner") return;                 // non-owners never write
+    const known = serverJsonRef.current;
+    if (known === null) return;                   // rule 1: no pull yet
+    if (localJson === known) return;              // rule 2: nothing changed
 
     if (pushTimer.current) clearTimeout(pushTimer.current);
     pushTimer.current = setTimeout(() => {
       const next = localRef.current;
+      const nextJson = JSON.stringify(next);
       // Record the new baseline BEFORE awaiting: further edits made while the
       // request is in flight must compare against what we're sending, not
       // against the pre-edit state (which would re-send the same payload).
-      serverRef.current = next;
+      serverJsonRef.current = nextJson;
       void saveSharedConfig(next).then((ok) => {
         // Failed write — drop the baseline back so the next edit (or the next
-        // focus-pull) retries instead of assuming the server has it.
-        if (!ok) serverRef.current = known;
+        // focus-pull) retries instead of assuming the server has it. Guarded
+        // so a slow failed write can't clobber a newer baseline that landed
+        // while it was in flight.
+        if (!ok && serverJsonRef.current === nextJson) serverJsonRef.current = known;
       });
     }, PUSH_DEBOUNCE_MS);
 
     return () => {
       if (pushTimer.current) clearTimeout(pushTimer.current);
     };
-  }, [local, role]);
+  }, [localJson, role]);
 
   return null;
 }

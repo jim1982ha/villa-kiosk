@@ -68,14 +68,12 @@ export function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
   return out as Partial<SharedDeviceConfig>;
 }
 
-/** True when two shared slices are equivalent. Used to suppress no-op pushes
- *  (a pull writes the server's own data back into config, which would
- *  otherwise immediately look like a local edit worth pushing — an endless
- *  round-trip). Key order is stable because both sides are built from
- *  SHARED_CONFIG_KEYS in order. */
-export function sharedConfigEquals(a: SharedDeviceConfig, b: SharedDeviceConfig): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
+// NOTE: comparison of two slices is done by the caller as a plain string
+// compare of their JSON (see DeviceConfigSync) rather than by a helper here:
+// the serialised form is needed anyway and is cached across renders, so a
+// separate deep-equal function would just re-do that work on every render.
+// Key order is stable in both places because pickSharedConfig always builds
+// from SHARED_CONFIG_KEYS in order.
 
 /** Fetch the shared device config. Returns null on a transport/parse failure so
  *  the caller can distinguish "server has nothing yet" ({}) from "couldn't

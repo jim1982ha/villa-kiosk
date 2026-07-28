@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.62
+
+### Changes
+- Long-press latency: (1) ROOT CAUSE — long-press was only resolved on pointerUP, so holding gave zero feedback until release and the HA call didn't even start until you let go; TapRecognizer now fires it from its own hold timer the instant the 500ms threshold passes, mid-gesture, with double-fire and ghost-click both handled. (2) Every long-press now spawns the tap-acknowledgment ripple — it is plain DOM with no pointer-type gate, it was simply never spawned on this path, so a held mouse button gave no feedback on desktop at all. (3) Advanced Settings lag: generalised SceneManager's badgeColor-only fast path into a cosmetic-vs-structural entityMap diff (new pure, tested entityMapDiff.ts) — editing a label, room, category, linked/motion entity or light intensity now does a cheap badge repaint instead of a multi-second full mesh re-index; EntityVisuals rebuilds the link indexes itself so the ring/beam stay correct without that pass. (4) Fixed a perf regression from v2.35.61: DeviceConfigSync re-serialised the whole entityMap on every render (i.e. every keystroke) — the slice and its JSON are now memoised and compared as cached strings
+
+---
+
+
 ## 2.35.61
 
 ### Changes

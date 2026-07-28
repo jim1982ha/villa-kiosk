@@ -201,10 +201,18 @@ export default function Dashboard() {
   // entities (lights/switches) — so brightness/colour stay reachable without the
   // panel popping up on every casual tap.
   const onEntityLongPressed = useCallback(
-    (entityId: string) => {
+    (entityId: string, clientX: number, clientY: number) => {
       const mapping = mappingForEntityId(entityId, config.entityMap);
       if (!mapping) return;
       if (!canControl || !role || !isMappingAllowed(role, entityId, mapping)) return;
+      // Acknowledge the HOLD itself, the moment it's recognised (the gesture
+      // now fires mid-press, not on release — see TapRecognizer). Every
+      // long-press gets this, on desktop mouse as much as on touch: the ripple
+      // is plain DOM with no pointer-type gate, it was simply never spawned on
+      // this path before, so a held mouse button gave no feedback at all.
+      // Deliberately the SAME affordance the quick-toggle tap uses rather than
+      // a second bespoke one — one "your gesture registered" language.
+      spawnRipple(clientX, clientY);
       // linkedEntityId is configurable on every type (it universally drives
       // the badge's red ring — see EntityVisuals.badgeKind), but ONLY a
       // camera uses long-press to TOGGLE it — a camera's tap already IS its
@@ -222,7 +230,7 @@ export default function Dashboard() {
       // long-press does for every other entity type.
       setActivePanel({ entityId, mapping, detail: mapping.type === "camera" });
     },
-    [config.entityMap, role, canControl, ws],
+    [config.entityMap, role, canControl, ws, spawnRipple],
   );
 
   // Announce motion the moment it's detected, wherever it happens: a brief

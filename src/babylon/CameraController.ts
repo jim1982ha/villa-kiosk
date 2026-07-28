@@ -171,7 +171,9 @@ export class CameraController {
 
   // ── Single-tap detection (drives tap-to-pick) ──
   // A gesture is a tap if it stayed one pointer, barely moved, and was brief.
-  private readonly tap = new TapRecognizer();
+  // Long-press is delivered by the recognizer's own hold timer, mid-gesture —
+  // see TapRecognizer's constructor docs for why it no longer waits for release.
+  private readonly tap = new TapRecognizer((x, y) => this.cb.onLongPress?.(x, y));
 
   private onPointerDown = (e: PointerEvent): void => {
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
@@ -253,9 +255,9 @@ export class CameraController {
     // synthesized touch/pen ghost click that would otherwise dismiss whatever
     // the tap opens the instant React mounts it.
     if (this.pointers.size === 0) {
-      const kind = this.tap.complete(e);
-      if (kind === "tap") this.cb.onTap?.(e.clientX, e.clientY);
-      else if (kind === "longpress") this.cb.onLongPress?.(e.clientX, e.clientY);
+      // Only "tap" can come back now — a long-press already fired from the
+      // recognizer's hold timer while the finger was still down.
+      if (this.tap.complete(e) === "tap") this.cb.onTap?.(e.clientX, e.clientY);
     }
   };
 

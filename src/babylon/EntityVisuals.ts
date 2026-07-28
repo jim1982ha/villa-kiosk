@@ -536,7 +536,19 @@ export class EntityVisuals {
   updateConfig(config: AppConfig): void {
     const prevGroups = this.config.deviceGroups;
     const prevBadgeStyle = this.config.badgeStyle;
+    const prevEntityMap = this.config.entityMap;
     this.config = config;
+    // Both link indexes are otherwise only built by indexMeshes() — but
+    // editing linkedEntityId/motionEntityId is now classed as a COSMETIC
+    // change (see SceneManager's COSMETIC_MAPPING_FIELDS), which deliberately
+    // SKIPS that whole structural pass to keep Advanced Settings responsive.
+    // Rebuilding here keeps the badge ring and camera beam correct after such
+    // an edit; both are plain iterations over entityMap, orders of magnitude
+    // cheaper than a re-index, so doing it on any entityMap change is fine.
+    if (config.entityMap !== prevEntityMap) {
+      this.buildMotionToCameraIndex();
+      this.buildLinkedEntityIndex();
+    }
     // Entity-light wall occlusion is always-on: walls block lamp light out of
     // the box, so there is nothing to tear down here when config changes.
     // Apply the user's size multiplier.
