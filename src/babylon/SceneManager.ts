@@ -40,7 +40,7 @@ import { loadOverviewView, saveOverviewView } from "@/utils/storage";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
-import { cosmeticOnlyDiff } from "./entityMapDiff";
+import { entityMapDelta } from "./entityMapDiff";
 
 // Cosmetic-vs-structural entityMap diffing lives in its own pure module (no
 // Babylon, no scene state) — see entityMapDiff.ts for the full reasoning about
@@ -1505,17 +1505,23 @@ export class SceneManager {
     // laggy. Detect that case and route it to repaintBadges() below instead of
     // the structural branch. See COSMETIC_MAPPING_FIELDS for why these
     // specific fields are safe to skip re-indexing for.
+    // Three outcomes, not two — see entityMapDelta. A same-content replacement
+    // ("identical") must be neither cosmetic NOR structural, or every
+    // DeviceConfigSync focus-pull buys a full multi-second re-index for a
+    // config that did not change.
+    const mapDelta = prev.entityMap === config.entityMap
+      ? "identical"
+      : entityMapDelta(prev.entityMap, config.entityMap);
     const cosmeticOnly =
-      prev.entityMap !== config.entityMap &&
+      mapDelta === "cosmetic" &&
       prev.meshBindings === config.meshBindings &&
-      !sh3dChanged &&
-      cosmeticOnlyDiff(prev.entityMap, config.entityMap);
+      !sh3dChanged;
 
     // indexMeshes()/applyStructure() only read entity↔mesh bindings; everything
     // else (glass hints, grass, model transform) takes effect on the next
     // model load, not here.
     const structuralChanged =
-      (prev.entityMap !== config.entityMap && !cosmeticOnly) ||
+      mapDelta === "structural" ||
       prev.meshBindings !== config.meshBindings ||
       sh3dChanged;
 

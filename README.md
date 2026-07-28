@@ -274,14 +274,31 @@ see a hidden pose's shadow ghosted onto the floor. The rule:
   everything else** — falling back to the lowest-ranked authored pose if
   neither exists.
 
-### 4. Bake resolution
+### 4. Camera view cones (the red beam)
+
+A camera shows a red beam only when **all** of these hold:
+
+1. The entity maps to at least one mesh in the model.
+2. That piece carries a **rotation** in SweetHome 3D — the beam points where
+   the camera points, so a camera left at angle 0 gets no beam rather than a
+   guessed direction. Set the `angle` to aim it and the `pitch` to tilt it
+   (0°–90°; the beam clips against walls, so tilting past vertical shortens it
+   to a stub).
+3. The camera has a **motion sensor** wired to it (the optional linked-entity
+   field on the device card), and that sensor is `on`.
+
+Load the app with `?debug` and it prints which cameras qualified and, for the
+rest, exactly why they were skipped (`no mesh`, `no sh3d angle data`,
+`angle is 0`).
+
+### 5. Bake resolution
 
 If your plan uses **detailed curtain/fabric geometry**, bake the lightmap at
 **`--bake-size 2048`** (not 1024). The extra texel budget prevents lightmap-atlas
 bleed (stray light smearing onto benches/frames) once the denser geometry re-packs
 the atlas. See [MODEL_PIPELINE.md](./MODEL_PIPELINE.md) for all bake flags.
 
-### 5. Geometry budget — why the GLB is big, and what actually helps
+### 6. Geometry budget — why the GLB is big, and what actually helps
 
 A villa GLB is **~92 % geometry, ~6 % textures** — so shrinking images barely
 moves the needle, and a heavy source model is what makes both the pipeline and

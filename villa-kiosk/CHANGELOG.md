@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.78
+
+### Changes
+- Two real bugs found in the telemetry, one of them the cause of a long-standing 'sometimes I see a beam' report. FIRST: a same-content entityMap replacement was classified as STRUCTURAL and paid a full 1.3-1.8s indexMeshes. cosmeticOnlyDiff answered a boolean 'is this cosmetic?' and returned false when NOTHING had changed — correct for its own question, but the caller read false as 'structural'. That is not an edge case: DeviceConfigSync pulls the shared config on every window focus and parses fresh JSON, so a no-op replacement arrives every time the app is focused. Telemetry caught it directly — five full re-indexes in ninety seconds of idle use, two of them one second apart. Replaced with entityMapDelta returning identical | cosmetic | structural, so a no-op replacement now does no work at all. SECOND, and worse: indexMeshes disposes the camera beams at the top and never rebuilt them — only setCameraDirections built beams, and that runs once during post-load calibration. So the first re-index after load silently killed every beam for the rest of the session, which is exactly the reported symptom of a beam appearing at startup and never again. The debug log showed it plainly: '12 built' at 13:59:23, then 'NO BEAM MESH' for those same cameras two seconds later, right after a re-index. indexMeshes now rebuilds them; direction data survives on cameraDirections and byEntity has just been rebuilt, so the build has everything it needs. Note these two compounded: bug 1 made the re-index fire far more often than intended, which made bug 2 fire almost immediately in normal use. Also confirms the previous release's win with real numbers: desktop post-processing 2709ms median before, ~1740ms after (-36%). indexMeshes remains ~80% of what is left and is the next target. Docs: README gains the camera view-cone rule (mesh + authored rotation + motion sensor on), which was never written down despite being asked about. Verified: 10 delta-classification assertions, 9 memoisation assertions, 25 FM engine assertions
+
+---
+
+
 ## 2.35.77
 
 ### Changes

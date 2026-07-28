@@ -1063,6 +1063,14 @@ export class EntityVisuals {
 
     this.buildMotionToCameraIndex();
     this.buildLinkedEntityIndex();
+    // Rebuild the camera beams we disposed at the top of this method. Without
+    // this they were gone for good: only setCameraDirections built them, and
+    // that runs once, during calibration after the model loads. So the FIRST
+    // re-index after load silently killed every beam — which is why a beam
+    // would appear at startup and then never again in the same session. The
+    // direction data survives on this.cameraDirections, and byEntity has just
+    // been rebuilt above, so everything the build needs is in place.
+    this.buildCameraBeams();
     this.rebuildLabels(); // labels are always shown
   }
 

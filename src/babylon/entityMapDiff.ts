@@ -34,20 +34,33 @@ export const COSMETIC_MAPPING_FIELDS = [
   "linkedEntityId", "motionEntityId", "lightIntensityRatio",
 ] as const;
 
-/** True when two entityMaps differ ONLY in COSMETIC_MAPPING_FIELDS: identical
- *  key sets, every structural field equal, and at least one cosmetic field
- *  actually changed. Lets updateConfig route such an edit to a cheap badge
- *  repaint instead of a full structural re-index. */
-export function cosmeticOnlyDiff(
+/** How much work an entityMap replacement actually requires.
+ *
+ *  Three outcomes, not two, and the third is the important one: a replacement
+ *  can be a NEW OBJECT WITH IDENTICAL CONTENT. That is not a rare edge case —
+ *  DeviceConfigSync pulls the shared config on every window focus and parses
+ *  fresh JSON, so a no-op replacement arrives every time the app is focused.
+ *
+ *  The earlier boolean form answered "cosmetic?" and returned false for that
+ *  case (nothing cosmetic had changed), which the caller read as "structural"
+ *  and paid a full multi-second indexMeshes for a config that had not changed
+ *  at all. Telemetry caught it: five full re-indexes in ninety seconds of
+ *  idle use, two of them one second apart. */
+export type EntityMapDelta = "identical" | "cosmetic" | "structural";
+
+/** Classify a replacement. "cosmetic" means identical key sets with every
+ *  structural field equal and at least one COSMETIC_MAPPING_FIELD changed;
+ *  "identical" means no field differs anywhere. */
+export function entityMapDelta(
   a: Record<string, EntityMapping>,
   b: Record<string, EntityMapping>,
-): boolean {
+): EntityMapDelta {
   const ak = Object.keys(a);
-  if (ak.length !== Object.keys(b).length) return false;
+  if (ak.length !== Object.keys(b).length) return "structural";
   let cosmeticChanged = false;
   for (const k of ak) {
     const ea = a[k], eb = b[k];
-    if (!eb) return false;               // key set differs -> structural
+    if (!eb) return "structural";        // key set differs
     if (ea === eb) continue;             // untouched entry, cheap identity skip
     const ra: Record<string, unknown> = { ...ea };
     const rb: Record<string, unknown> = { ...eb };
@@ -56,7 +69,7 @@ export function cosmeticOnlyDiff(
       delete ra[f];
       delete rb[f];
     }
-    if (JSON.stringify(ra) !== JSON.stringify(rb)) return false; // structural field changed
+    if (JSON.stringify(ra) !== JSON.stringify(rb)) return "structural";
   }
-  return cosmeticChanged;
+  return cosmeticChanged ? "cosmetic" : "identical";
 }
