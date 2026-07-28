@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.75
+
+### Changes
+- Telemetry panel: add 'Copy all' and 'Download .json' so the raw events can actually be shared. Exports the FULL event objects (not the condensed one-liners the table renders), since the point of exporting is to hand over everything including fields this UI doesn't happen to show. Copy uses the same clipboard-with-textarea-fallback ErrorReport already relies on, so it still works in an insecure context / locked-down kiosk / on iOS
+
+---
+
+
 ## 2.35.74
 
 ### Changes
