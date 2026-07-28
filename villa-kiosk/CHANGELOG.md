@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.70
+
+### Changes
+- Pose-swap (mesh variant) support is now UNIVERSAL, not opt-in per type — my previous pass only wired it into cover/lock/binary_sensor/sensor, missing exactly what a user was already trying to use it for: switch. apply()'s type dispatch is now cover/lock/opening-binary_sensor (named vocab) else the fully generic state-is-the-pose-word path (applyStateNamedVariant), for every current and future type — light, switch, fan, climate, media_player, camera, assist_satellite, input_boolean included. variantWordsFor's resolver (used by both the construction-time default pass and every live update) widened to match, so the two can't disagree for a type that previously fell through as unhandled
+
+---
+
+
 ## 2.35.69
 
 ### Changes
