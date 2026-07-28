@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.63
+
+### Changes
+- Uniform long-press + linked-entity switch. (1) Removed the ActivePanel 'detail' flag and its PanelRouter branch entirely — long-press now opens the SAME panel a tap does, chosen purely by entity type, with GenericPanel's state+24h-history remaining the fallback for types that have no controls of their own. No per-type gesture branches left. (2) The camera-only long-press toggle is replaced by a linked-entity on/off switch resolved once in Dashboard and rendered by the shared BasePanel chrome, so EVERY device type gets it automatically whenever linkedEntityId is set; CameraPanel (the one panel that doesn't use BasePanel, being a fullscreen feed) reads the same context and shows it in its control cluster. Reuses the existing summary-entity-toggle switch rather than adding a second one. (3) Advanced Settings: Motion sensor is rendered only for camera entities instead of a dead '—' on every other type, and it now shares one line with Linked entity from tablet width up
+
+---
+
+
 ## 2.35.62
 
 ### Changes

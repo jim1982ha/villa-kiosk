@@ -50,13 +50,9 @@ export default function PanelRouter({ active, onClose, pinContinuous, onOpenEnti
     return <DeviceGroupPanel group={group} primaryMapping={mapping} onClose={onClose} />;
   }
 
-  // Explicit DETAIL request (long-press on a camera) — the shared state +
-  // history + Edit panel every other entity type shows, instead of this
-  // type's own experience (for a camera that's the fullscreen live feed).
-  if (active.detail) {
-    return <GenericPanel {...props} />;
-  }
-
+  // One panel per entity, chosen purely by type — tap and long-press both land
+  // here, so a badge always opens the same thing. Types with no controls of
+  // their own fall through to GenericPanel's state + 24h history (see default).
   switch (mapping.type) {
     case "light":
       return <LightPanel {...props} />;

@@ -213,24 +213,16 @@ export default function Dashboard() {
       // Deliberately the SAME affordance the quick-toggle tap uses rather than
       // a second bespoke one — one "your gesture registered" language.
       spawnRipple(clientX, clientY);
-      // linkedEntityId is configurable on every type (it universally drives
-      // the badge's red ring — see EntityVisuals.badgeKind), but ONLY a
-      // camera uses long-press to TOGGLE it — a camera's tap already IS its
-      // panel (the fullscreen feed), so long-press is free to do something
-      // else entirely. Every other type, including binary_sensor, keeps
-      // long-press opening its detail panel exactly as before, even with a
-      // linkedEntityId set — that field is ring-only for them.
-      if (mapping.type === "camera" && mapping.linkedEntityId) {
-        HAServices.toggleEntity(ws, mapping.linkedEntityId);
-        return;
-      }
-      // A camera's normal panel IS its fullscreen feed (that's what a TAP
-      // gives), so a long-press there would otherwise just repeat the tap.
-      // Route it to the shared detail/Edit panel instead, matching what a
-      // long-press does for every other entity type.
-      setActivePanel({ entityId, mapping, detail: mapping.type === "camera" });
+      // ONE rule for every badge: long-press opens that entity's panel. No
+      // per-type branches — a camera used to toggle its linked entity here,
+      // which meant the same gesture did different things depending on what
+      // you happened to be holding. Toggling a linked entity is now a switch
+      // INSIDE the panel (shared chrome, see BasePanel), so it's discoverable
+      // and works identically for every type without this call site knowing
+      // anything about types at all.
+      setActivePanel({ entityId, mapping });
     },
-    [config.entityMap, role, canControl, ws, spawnRipple],
+    [config.entityMap, role, canControl, spawnRipple],
   );
 
   // Announce motion the moment it's detected, wherever it happens: a brief
@@ -529,6 +521,24 @@ export default function Dashboard() {
                   });
                 }
               : undefined,
+            // The linked-entity on/off switch, resolved once here and rendered
+            // by the shared panel chrome — so it appears on EVERY device type
+            // whose linkedEntityId is set, with no per-panel code. Same live
+            // state that drives the header ring above, so the switch and the
+            // ring can never disagree.
+            linked: (() => {
+              const linkedId = (config.entityMap[activePanel.entityId]
+                ?? activePanel.mapping).linkedEntityId;
+              if (!linkedId || !canControl) return undefined;
+              const linkedEnt = entities[linkedId];
+              return {
+                label: displayLabelFor(
+                  linkedId, config.entityMap[linkedId]?.label,
+                  linkedEnt?.attributes.friendly_name),
+                isOn: linkedEnt?.state === "on",
+                toggle: () => HAServices.toggleEntity(ws, linkedId),
+              };
+            })(),
           }}
         >
           <PanelRouter

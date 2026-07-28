@@ -226,20 +226,23 @@ function EntityMapRow({
             );
           })()}
           {/* Two DISTINCT links — see EntityMapping. Linked entity = what the
-              user toggles (drives the red badge ring, long-press target on a
-              camera); Motion sensor = what HA reports (drives the map's beam
-              / room glow), camera-only and read-only. */}
-          <td data-label="Linked entity" style={{ minWidth: 180 }}>
+              user toggles (drives the red badge ring, and gets an on/off
+              switch in this device's panel); Motion sensor = what HA reports
+              (drives the map's detection beam / room glow) and is meaningful
+              ONLY for a camera — nothing else has a beam — so it isn't
+              rendered at all for other types rather than showing a dead "—".
+              config-cell-pair puts the two side by side on tablet/desktop. */}
+          <td data-label="Linked entity" className="config-cell-pair" style={{ minWidth: 180 }}>
             <EntityPicker
               value={m.linkedEntityId}
               onChange={(id) => draftField({ linkedEntityId: id })}
               allowCustom
               hideCurrentLabel
-              placeholder={m.type === "camera" ? "Arms detection, long-press…" : "Ring only…"}
+              placeholder="Adds an on/off switch…"
             />
           </td>
-          <td data-label="Motion sensor" style={{ minWidth: 180 }}>
-            {m.type === "camera" ? (
+          {m.type === "camera" && (
+            <td data-label="Motion sensor" className="config-cell-pair" style={{ minWidth: 180 }}>
               <EntityPicker
                 value={m.motionEntityId}
                 onChange={(id) => draftField({ motionEntityId: id })}
@@ -248,10 +251,8 @@ function EntityMapRow({
                 hideCurrentLabel
                 placeholder="Detection beam on the map…"
               />
-            ) : (
-              <span className="muted" style={{ fontSize: 12 }}>—</span>
-            )}
-          </td>
+            </td>
+          )}
         </>
       )}
     </tr>

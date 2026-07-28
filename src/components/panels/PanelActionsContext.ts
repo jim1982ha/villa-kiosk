@@ -42,6 +42,20 @@ export interface PanelActions {
    *  Undefined when the profile may not edit config — the badge is then a plain,
    *  non-interactive icon. */
   onSetBadgeColor?: (hex: string | null) => void;
+  /** The open device's LINKED entity (EntityMapping.linkedEntityId), when one
+   *  is configured and the profile may control it. Renders as an on/off switch
+   *  in the shared panel chrome, so EVERY device type gets it for free the
+   *  moment that field is set — no per-panel wiring, no type checks. Toggling
+   *  it is what drives the badge's red ring (see EntityVisuals' linkActiveIds),
+   *  which is why the two live and die together. Undefined = no linked entity
+   *  configured, or read-only profile: the switch is then not rendered. */
+  linked?: {
+    /** Resolved display name of the linked entity, for the switch's label. */
+    label: string;
+    /** Live state — drives both the switch position and the header ring. */
+    isOn: boolean;
+    toggle: () => void;
+  };
 }
 
 const PanelActionsContext = createContext<PanelActions>({});

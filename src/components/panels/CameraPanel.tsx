@@ -19,8 +19,9 @@ import { useEffect, useRef, useState } from "react";
 // setup effect's dynamic import() — so a kiosk that never opens a camera panel
 // never pays for it in the main bundle. This line compiles away entirely.
 import type Hls from "hls.js";
-import { X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
+import { usePanelActions } from "./PanelActionsContext";
 import { useHA } from "@/ha/HAStateStore";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
@@ -61,6 +62,11 @@ const HLS_WATCHDOG_MS = 15000;
 
 export default function CameraPanel({ entity, mapping, onClose, pinContinuous, onOpenEntity }: Props) {
   const { connected, ws, entities } = useHA();
+  // Same linked-entity switch every OTHER panel gets from the shared BasePanel
+  // chrome — this panel is the one that doesn't use BasePanel (it's a
+  // fullscreen feed, not a modal card), so it reads the identical context and
+  // renders the control in its own bottom bar instead of re-deriving anything.
+  const { linked } = usePanelActions();
   const [mode, setMode] = useState<Mode>("hls");
   const [tick, setTick] = useState(0);
   const snapErrors = useRef(0);
@@ -501,6 +507,22 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           />
         </div>
         <div className="camera-controls">
+          {/* Linked entity on/off — the camera's stand-in for the switch
+              BasePanel shows at the top of every other panel. Styled as an
+              icon-btn so it sits in this cluster naturally; .on marks the
+              live state, matching the badge's red ring. */}
+          {linked && (
+            <button
+              className={`icon-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
+              onClick={linked.toggle}
+              role="switch"
+              aria-checked={linked.isOn}
+              aria-label={`${linked.label}: ${linked.isOn ? "on" : "off"}`}
+              title={`${linked.label} — ${linked.isOn ? "turn off" : "turn on"}`}
+            >
+              <Power size={26} />
+            </button>
+          )}
           {zoom.zoomed && (
             <button
               className="icon-btn zoom-reset-btn"

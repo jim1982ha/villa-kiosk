@@ -29,7 +29,7 @@ interface Props {
 }
 
 export default function BasePanel({ title, room, icon, className, headerActions, onClose, children }: Props) {
-  const { entityId, onEdit, badge, onSetBadgeColor } = usePanelActions();
+  const { entityId, onEdit, badge, onSetBadgeColor, linked } = usePanelActions();
   const [colorOpen, setColorOpen] = useState(false);
 
   useEffect(() => {
@@ -85,7 +85,35 @@ export default function BasePanel({ title, room, icon, className, headerActions,
             <X size={20} />
           </button>
         </div>
-        <div className="panel-body">{children}</div>
+        <div className="panel-body">
+          {/* The device's linked entity, if one is configured (Advanced
+              Settings). Rendered HERE, in the shared chrome, so every panel
+              type gets it identically the moment that field is set — this is
+              what replaced the old camera-only long-press toggle. Reuses the
+              same switch as the group modal's per-device rows rather than a
+              second bespoke control. */}
+          {linked && (
+            <div className="panel-linked-row">
+              <button
+                className={`summary-entity-toggle${linked.isOn ? " on" : ""}`}
+                onClick={linked.toggle}
+                role="switch"
+                aria-checked={linked.isOn}
+                aria-label={`${linked.label}: ${linked.isOn ? "on" : "off"}`}
+                title={linked.isOn ? "Turn off" : "Turn on"}
+              >
+                <span className="knob" />
+              </button>
+              <div style={{ minWidth: 0 }}>
+                <div className="panel-linked-label" title={linked.label}>{linked.label}</div>
+                <div className="muted" style={{ fontSize: 11 }}>
+                  {linked.isOn ? "On" : "Off"} · linked entity
+                </div>
+              </div>
+            </div>
+          )}
+          {children}
+        </div>
         {onEdit && (
           <div className="panel-footer">
             <button className="btn ghost" onClick={onEdit}>Edit</button>
