@@ -213,14 +213,17 @@ export default function Dashboard() {
       // Deliberately the SAME affordance the quick-toggle tap uses rather than
       // a second bespoke one — one "your gesture registered" language.
       spawnRipple(clientX, clientY);
-      // ONE rule for every badge: long-press opens that entity's panel. No
-      // per-type branches — a camera used to toggle its linked entity here,
-      // which meant the same gesture did different things depending on what
-      // you happened to be holding. Toggling a linked entity is now a switch
-      // INSIDE the panel (shared chrome, see BasePanel), so it's discoverable
-      // and works identically for every type without this call site knowing
-      // anything about types at all.
-      setActivePanel({ entityId, mapping });
+      // Long-press opens the compact panel — the SAME one every device's
+      // long-press opens (state/controls + the linked-entity switch from
+      // shared BasePanel chrome, see PanelActionsContext). A camera's own tap
+      // already jumps into the live feed (its quick action, exactly like a
+      // light's tap is an instant toggle — see quickAction.ts), so a camera
+      // long-press asks PanelRouter for the compact panel explicitly
+      // (`detail`) instead of repeating the feed. Every other type has no
+      // distinct quick action, so tap and long-press already land on the same
+      // panel with no flag needed — see ActivePanel's docstring for the full
+      // reasoning.
+      setActivePanel({ entityId, mapping, detail: mapping.type === "camera" });
     },
     [config.entityMap, role, canControl, spawnRipple],
   );
@@ -443,6 +446,8 @@ export default function Dashboard() {
         hasOverviewDefault={hasOverviewDefault}
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
+        mappedEntityIds={mappedEntityIds}
+        onOpenEntity={openEntityPanel}
       />
 
       {/* Bottom dashboard strip — scene / quick-action / summary tiles,

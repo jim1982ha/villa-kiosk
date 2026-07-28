@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.64
+
+### Changes
+- (1) New 'unavailable devices' button in the top HUD category row (next to the colour legend help, always visible incl. on mobile — an error indicator earns more visibility than a reference button, not less): a red count badge appears the instant something goes offline/unknown/unreported, tapping it opens the SAME room-grouped list SummaryBar tiles already use (reused via SummaryGroupPanel, new hideBulkToggle prop since 'turn all off' makes no sense for an offline-devices view). (2) Reinstated camera's distinct long-press target, but this time as the deliberate mirror of isQuickToggle's tap/long-press split rather than an ad-hoc type check: light/switch/fan's TAP is their quick action (instant toggle, no panel) and long-press reaches their compact panel; camera's TAP is ITS quick action (jump into the live feed) so long-press must explicitly ask PanelRouter for the compact panel (ActivePanel.detail) instead of resolving to the feed again. Every other type has no quick action distinct from its panel, so tap and long-press correctly still coincide there with no flag at all — documented at the one place (ActivePanel) so this isn't rediscovered as a mystery exception next time
+
+---
+
+
 ## 2.35.63
 
 ### Changes

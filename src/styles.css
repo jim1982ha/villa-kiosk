@@ -246,6 +246,18 @@ button {
 }
 /* Lit state for toggle / open icon buttons (view mode, display toggles, menus). */
 .icon-btn.active { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
+/* Unavailable-devices button (HUD category row): quiet at zero, red the
+   instant something's offline — same colour language as the map badge ring
+   and the status pill's "Unavailable" state, so it reads as the same signal. */
+.icon-btn.has-alert { color: var(--status-danger); border-color: var(--status-danger); }
+.icon-btn { position: relative; }
+.icon-btn-count {
+  position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px;
+  padding: 0 3px; border-radius: 999px;
+  background: var(--status-danger); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+  box-shadow: 0 0 0 2px var(--bg-overlay);
+}
 
 /* Grouped icon "sections" in the top bar — each set of related buttons sits in
    its own pill, so the categories read clearly without any text labels. */

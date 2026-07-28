@@ -41,6 +41,11 @@ interface Props {
    *  Dashboard's setActivePanel, so it opens the exact same rich panel a 3D
    *  badge tap does. */
   onOpenEntity: (entityId: string) => void;
+  /** Suppress the header's "Turn all on/off" bulk action — for a group that
+   *  isn't really "all the X devices" (e.g. HUD's unavailable-devices list,
+   *  a cross-category diagnostic view), bulk-toggling makes no sense even
+   *  when the list happens to contain toggleable domains. */
+  hideBulkToggle?: boolean;
 }
 
 const OFF = new Set(["off", "unavailable", "unknown", ""]);
@@ -71,7 +76,7 @@ function groupByRoom(
 }
 
 export default function SummaryGroupPanel({
-  group, canControl, mappedEntityIds, onClose, onOpenEntity,
+  group, canControl, mappedEntityIds, onClose, onOpenEntity, hideBulkToggle,
 }: Props) {
   const { entities, callService } = useHA();
   const { config } = useConfig();
@@ -120,7 +125,7 @@ export default function SummaryGroupPanel({
       // Same idea as Settings' theme buttons living in ITS header: the one
       // action that applies to the WHOLE group belongs where it's always
       // visible, not scrolled past a long, room-grouped device list.
-      headerActions={canControl && toggleables.length > 1 && (
+      headerActions={!hideBulkToggle && canControl && toggleables.length > 1 && (
         confirming ? (
           <div className="modal-actions" style={{ margin: 0 }}>
             <button className="btn ghost" onClick={() => setConfirming(false)}>Cancel</button>

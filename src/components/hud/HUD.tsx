@@ -13,24 +13,26 @@
 // toggle, with the view-default (Anchor) button right below it while in
 // overview; bottom-right shows the first-person movement joystick.
 
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   Home, Compass, Settings, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
-  EllipsisVertical, Minus, Plus, CircleHelp,
+  EllipsisVertical, Minus, Plus, CircleHelp, TriangleAlert,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { isCategoryAllowed } from "@/auth/permissions";
+import { isCategoryAllowed, hasCapability } from "@/auth/permissions";
 import { ROLE_LABELS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
+import { isUnavailable } from "@/utils/stateColors";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
 import ViewControls from "./ViewControls";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 import LegendModal from "./LegendModal";
+import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 
 type IconType = ComponentType<{ size?: number | string }>;
 
@@ -81,6 +83,13 @@ interface Props {
    *  camera's current angle/tilt/zoom/pan — reapplied every time the app
    *  lands in overview from now on. */
   onSaveOverviewDefault: () => void;
+  /** Entities with real geometry in the loaded model (see
+   *  manager.mappedEntityIds) — same set SummaryBar uses, for the
+   *  unavailable-devices list's "not on the map" section. */
+  mappedEntityIds: Set<string>;
+  /** Drill into an entity's full panel from the unavailable-devices list —
+   *  wired to Dashboard's setActivePanel, same callback SummaryBar uses. */
+  onOpenEntity: (entityId: string) => void;
 }
 
 function useClock(): string {
@@ -97,13 +106,29 @@ export default function HUD({
   onOpenSettings, canOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
+  mappedEntityIds, onOpenEntity,
 }: Props) {
-  const { connection, haConfig } = useHA();
+  const { connection, haConfig, entities } = useHA();
   const { config, update } = useConfig();
   const { role, beginSwitch } = useProfile();
   const clock = useClock();
   const title = resolveSiteTitle(config, haConfig?.location_name);
   const floors = [1, 2];
+
+  // Every configured, non-disabled device HA currently reports as
+  // unavailable/unknown (or hasn't reported at all — isUnavailable treats a
+  // missing live entity the same way, same convention the map badges and
+  // status pills already use). A disabled device is deliberately hidden
+  // everywhere else in the app, so it's excluded here too rather than
+  // surfacing something the user already chose not to see.
+  const unavailableIds = useMemo(
+    () => Object.values(config.entityMap)
+      .filter((m) => !m.disabled && isUnavailable(entities[m.entityId]))
+      .map((m) => m.entityId),
+    [config.entityMap, entities],
+  );
+  const [unavailableOpen, setUnavailableOpen] = useState(false);
+  const canControlAny = role != null && hasCapability(role, "controlEntities");
 
   // ── Rooms dial: SINGLE TAP opens the radial floor/room quick-nav (a tapped
   // popup, not a hold-and-slide); LONG-PRESS opens the full Rooms list for
@@ -357,6 +382,30 @@ export default function HUD({
                 </button>
               );
             })}
+            {/* Unavailable devices — placed BEFORE the colour-legend help (and,
+                unlike it, never collapsed into the mobile overflow menu: an
+                error indicator earns a persistent, glanceable spot even on a
+                phone, where CircleHelp is a rarely-needed reference). Always
+                rendered, not only when count > 0, so its position is stable —
+                a button that appears/disappears is easy to miss the one time
+                it matters. Quiet (plain icon-btn) at zero; a red count badge
+                takes over the instant something goes offline. */}
+            <span className="hud-cat-sep" aria-hidden="true" />
+            <button
+              className={`icon-btn${unavailableIds.length > 0 ? " has-alert" : ""}`}
+              onClick={() => setUnavailableOpen(true)}
+              title={unavailableIds.length > 0
+                ? `${unavailableIds.length} device${unavailableIds.length === 1 ? "" : "s"} unavailable`
+                : "No unavailable devices"}
+              aria-label="Show unavailable devices"
+            >
+              <TriangleAlert size={18} />
+              {unavailableIds.length > 0 && (
+                <span className="icon-btn-count" aria-hidden="true">
+                  {unavailableIds.length > 99 ? "99+" : unavailableIds.length}
+                </span>
+              )}
+            </button>
             {/* The colour-legend (?) lives INSIDE the category row — it explains
                 exactly these colours, so it belongs with them — fenced off by a
                 separator. Roomy screens only: on a phone it stays in the
@@ -496,6 +545,17 @@ export default function HUD({
       </div>
 
       {legendOpen && <LegendModal onClose={() => setLegendOpen(false)} />}
+
+      {unavailableOpen && (
+        <SummaryGroupPanel
+          group={{ title: "Unavailable devices", icon: TriangleAlert, entityIds: unavailableIds }}
+          canControl={canControlAny}
+          mappedEntityIds={mappedEntityIds}
+          onClose={() => setUnavailableOpen(false)}
+          onOpenEntity={(id) => { setUnavailableOpen(false); onOpenEntity(id); }}
+          hideBulkToggle
+        />
+      )}
 
       {/* Left column: the floor toggle (1F / 2F) plus the Rooms dial button.
           Tapping a floor switches to it (and frames it in the bird's-eye); the

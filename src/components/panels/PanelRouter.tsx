@@ -50,8 +50,15 @@ export default function PanelRouter({ active, onClose, pinContinuous, onOpenEnti
     return <DeviceGroupPanel group={group} primaryMapping={mapping} onClose={onClose} />;
   }
 
-  // One panel per entity, chosen purely by type — tap and long-press both land
-  // here, so a badge always opens the same thing. Types with no controls of
+  // Explicit request for the compact panel over the type's own experience —
+  // set ONLY by a camera long-press (see ActivePanel.detail's docstring for
+  // why this is the same quick-action/compact-panel split isQuickToggle makes
+  // for light/switch/fan, not an arbitrary type check).
+  if (active.detail) {
+    return <GenericPanel {...props} />;
+  }
+
+  // One panel per entity, chosen purely by type. Types with no controls of
   // their own fall through to GenericPanel's state + 24h history (see default).
   switch (mapping.type) {
     case "light":
