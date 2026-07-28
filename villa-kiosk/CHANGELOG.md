@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.69
+
+### Changes
+- (1) Camera pose-swap generalised beyond binary_sensor door/window: any 'sensor' entity can now drive a mesh pose swap purely from its live state (sanitised the same way a mesh __suffix is parsed, no fixed vocabulary at all — author __<state> poses for any enum-like sensor), and a non-opening-class binary_sensor (motion/problem/smoke/presence/custom/none) can use __on/__off poses instead of being limited to door/window device_classes. Door/window classes keep their existing named open/closed translation unchanged. Shared variantWordsFor() resolver used by both the construction-time default pass and every live update so the two can never disagree. (2) Desktop camera panel: video feed now sits in its own non-overlapping region above a real (not absolutely-positioned-overlay) status+controls bar, via a new .camera-viewport wrapper — mobile is unaffected (same DOM, the desktop-only media query is what changes the layout)
+
+---
+
+
 ## 2.35.68
 
 ### Changes

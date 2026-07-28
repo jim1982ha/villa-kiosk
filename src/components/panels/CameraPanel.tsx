@@ -457,40 +457,50 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
 
   return (
     <div className="camera-fullscreen" ref={rootRef}>
-      {/* Zoom/pan layer — FIRST child so the controls below paint on top of it
-          and stay clickable while it captures pinch/wheel/drag gestures. */}
-      <div className="camera-zoom" ref={zoom.ref} style={zoom.style}>
-        {renderView()}
-      </div>
-
-      {/* Title only now — the controls used to share this header (stacking
-          into a second row on mobile), but now live in their OWN cluster at
-          the bottom-right instead (see .camera-controls below): easier
-          one-handed thumb reach, and it fully sidesteps the title ever
-          overlapping a button regardless of screen size. */}
-      <div className="camera-header">
-        <div className="label">
-          {mapping.label}
-          {lastMotion && (
-            <span className="muted" style={{ marginLeft: 10, fontSize: 13 }}>
-              updated {new Date(lastMotion as string).toLocaleTimeString()}
-            </span>
-          )}
+      {/* Everything that visually belongs to "the live feed" (video, title
+          watermark, loading spinner) is grouped under ONE wrapper so a
+          desktop layout can size it as a distinct region — flex:1 above the
+          status/controls row (see .camera-viewport's desktop media query) —
+          instead of every layer sharing the SAME full-bleed box the bottom
+          row also overlaps. On mobile .camera-viewport stays inset:0 (its
+          base rule), so this wrapper is a no-op there: identical DOM, only
+          the desktop CSS actually changes behaviour. */}
+      <div className="camera-viewport">
+        {/* Zoom/pan layer — FIRST child so the controls below paint on top of
+            it and stay clickable while it captures pinch/wheel/drag gestures. */}
+        <div className="camera-zoom" ref={zoom.ref} style={zoom.style}>
+          {renderView()}
         </div>
-      </div>
 
-      {/* An empty <video>/<img> mid-setup reads as "broken" rather than
-          "loading" — cover it with a spinner until a real frame arrives.
-          Skipped on the hls tier once the instant snapshot preview is up:
-          that already reads as "live", not "loading". */}
-      {connected &&
-        mode !== "failed" &&
-        !frameReady &&
-        !(mode === "hls" && previewReady) && (
-          <div className="camera-loading">
-            <div className="spinner" />
+        {/* Title only now — the controls used to share this header (stacking
+            into a second row on mobile), but now live in their OWN cluster at
+            the bottom-right instead (see .camera-controls below): easier
+            one-handed thumb reach, and it fully sidesteps the title ever
+            overlapping a button regardless of screen size. */}
+        <div className="camera-header">
+          <div className="label">
+            {mapping.label}
+            {lastMotion && (
+              <span className="muted" style={{ marginLeft: 10, fontSize: 13 }}>
+                updated {new Date(lastMotion as string).toLocaleTimeString()}
+              </span>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* An empty <video>/<img> mid-setup reads as "broken" rather than
+            "loading" — cover it with a spinner until a real frame arrives.
+            Skipped on the hls tier once the instant snapshot preview is up:
+            that already reads as "live", not "loading". */}
+        {connected &&
+          mode !== "failed" &&
+          !frameReady &&
+          !(mode === "hls" && previewReady) && (
+            <div className="camera-loading">
+              <div className="spinner" />
+            </div>
+          )}
+      </div>
 
       {/* Bottom row: status strip (green online / red motion / black gap)
           sharing the same offset + height as the control cluster, sized to
