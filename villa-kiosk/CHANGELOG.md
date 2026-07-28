@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.68
+
+### Changes
+- (1) Scene tile now shows the CURRENTLY APPLIED scene, or 'Live' when the villa matches none — new sceneMatchesCurrent/activeSceneName in scenes.ts, which re-derives current state through the same callsForEntity() encoding a scene was captured with (so capture and compare cannot drift) with numeric tolerances for dimmer/thermostat round-trip. (2) New shared onOffSummary() gives every count tile one phrasing — AC now says 'All Off' like Lights beside it instead of a bare 'Off'; Pool/Lights/AC all route through it. (3) Narrow desktop windows: the brand chip's villa name wrapped over three lines and covered the floor switch because nothing degraded between full desktop and the 640px phone breakpoint — brand no longer wraps, and the bar now sheds one thing at a time (clock at 1180px, profile name + padding at 1000px, villa name at 860px). (4) Camera beam consistency bug: SceneManager's facing-direction loop required an entityMap entry typed 'camera', so a camera resolved purely by mesh name-inference silently got no direction, hence no beam, hence the room-glow fallback — it now also accepts the camera. entity_id domain. That is why the beam appeared only 'sometimes': it depended on whether the device had happened to be edited in Advanced Settings
+
+---
+
+
 ## 2.35.67
 
 ### Changes

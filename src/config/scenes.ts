@@ -105,6 +105,62 @@ export function captureScene(name: string, entities: Record<string, HassEntity>)
   };
 }
 
+/** How far a captured numeric value may drift and still count as "this scene
+ *  is still applied". Dimmers and thermostats round-trip through hardware and
+ *  rarely land on the exact captured integer, so an exact compare would report
+ *  every scene as diverged the instant it was applied — which would make the
+ *  SummaryBar's scene tile permanently useless. Keys are the ones
+ *  callsForEntity actually emits. */
+const MATCH_TOLERANCE: Record<string, number> = {
+  brightness: 3, color_temp: 10, percentage: 2, position: 2, temperature: 0.5,
+};
+
+function callEquals(a: SceneCall, b: SceneCall): boolean {
+  if (a.domain !== b.domain || a.service !== b.service || a.entityId !== b.entityId) return false;
+  const ad = a.data ?? {};
+  const bd = b.data ?? {};
+  for (const k of new Set([...Object.keys(ad), ...Object.keys(bd)])) {
+    const av = ad[k];
+    const bv = bd[k];
+    if (typeof av === "number" && typeof bv === "number") {
+      if (Math.abs(av - bv) > (MATCH_TOLERANCE[k] ?? 0)) return false;
+    } else if (JSON.stringify(av) !== JSON.stringify(bv)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Is every entity this scene captured currently in the state it captured?
+ *
+ *  Deliberately re-derives the CURRENT state through the same callsForEntity()
+ *  encoding the scene was captured with, rather than a separate comparison
+ *  routine — so the two can't drift, and a new captured attribute is compared
+ *  automatically without touching this function. An entity the scene mentions
+ *  but HA no longer reports counts as diverged: the villa is demonstrably not
+ *  in that scene any more. */
+export function sceneMatchesCurrent(
+  scene: KioskScene, entities: Record<string, HassEntity>,
+): boolean {
+  for (const call of scene.calls) {
+    const e = entities[call.entityId];
+    if (!e) return false;
+    if (!callsForEntity(e).some((c) => callEquals(c, call))) return false;
+  }
+  return true;
+}
+
+/** The scene the villa is currently in, or null when it matches none of them
+ *  ("Live" — the state has been changed by hand since any scene was applied).
+ *  First match wins; scenes specific enough to overlap are the user's own
+ *  choice, and picking the first keeps this O(scenes) and stable. */
+export function activeSceneName(
+  scenes: KioskScene[], entities: Record<string, HassEntity>,
+): string | null {
+  for (const s of scenes) if (sceneMatchesCurrent(s, entities)) return s.name;
+  return null;
+}
+
 /** Fire a scene's calls (best-effort, in parallel) — one failing device never
  *  aborts the rest. */
 export async function applyScene(

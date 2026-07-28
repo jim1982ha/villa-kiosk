@@ -28,7 +28,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
 import { CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient } from "@/config/EntityCategories";
-import { applyScene } from "@/config/scenes";
+import { applyScene, activeSceneName } from "@/config/scenes";
 import type { KioskScene } from "@/config/scenes";
 import { prettifyEntitySlug } from "@/config/EntityMap";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -55,6 +55,23 @@ interface SummaryTile {
 
 const OFF_STATES = new Set(["off", "unavailable", "unknown", ""]);
 const isOn = (e: HassEntity | undefined) => !!e && !OFF_STATES.has(e.state);
+
+/** The ONE phrasing every "how many of these are on?" tile uses:
+ *    all on   -> "All On"      none on -> "All Off"
+ *    some on  -> "3 On"        single  -> plain "On" / "Off"
+ *
+ *  Written once because these tiles are read as a row and any drift between
+ *  them looks like a bug: AC said a bare "Off" while Lights right next to it
+ *  said "All Off" for the identical situation. A single device says just
+ *  "On"/"Off" — "All Off" for one AC unit would be odd. Callers with a
+ *  richer value to show when active (Climate's average temperature) still
+ *  override the ON side; the OFF side stays shared so it can't drift again. */
+function onOffSummary(onCount: number, total: number): string {
+  if (total === 0) return "None";
+  if (onCount === 0) return total === 1 ? "Off" : "All Off";
+  if (onCount === total) return total === 1 ? "On" : "All On";
+  return `${onCount} On`;
+}
 
 // Same fallback prettifier every other display surface uses (dedupe a
 // repeated leading phrase, then Title Case) instead of a separate, simpler
@@ -105,7 +122,8 @@ function deriveTiles(
     const on = poolSwitches.some(isOn);
     tiles.push({
       id: "__pool", icon: Waves, label: "Pool",
-      value: on ? "On" : "Off", tone: on ? "on" : "off", category: "energy",
+      value: onOffSummary(poolSwitches.filter(isOn).length, poolSwitches.length),
+      tone: on ? "on" : "off", category: "energy",
       entityIds: poolSwitches.map((e) => e.entity_id), title: "Pool", canControl: can("energy"),
     });
   }
@@ -116,7 +134,7 @@ function deriveTiles(
     const n = lights.filter(isOn).length;
     tiles.push({
       id: "__lights", icon: Lightbulb, label: "Lights",
-      value: n === lights.length ? "All On" : n > 0 ? `${n} On` : "All Off",
+      value: onOffSummary(n, lights.length),
       tone: n > 0 ? "on" : "off", category: "light",
       entityIds: lights.map((e) => e.entity_id), title: "Lights", canControl: can("light"),
     });
@@ -132,7 +150,12 @@ function deriveTiles(
     const avg = temps.length ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : null;
     tiles.push({
       id: "__climate", icon: Snowflake, label: "AC",
-      value: active.length === 0 ? "Off" : avg !== null ? `${avg}°C` : `${active.length} On`,
+      // Average temperature is the more useful glance value while anything is
+      // running; otherwise defer to the shared phrasing so "All Off" here
+      // matches "All Off" on the Lights tile beside it.
+      value: active.length && avg !== null
+        ? `${avg}°C`
+        : onOffSummary(active.length, climates.length),
       tone: active.length ? "on" : "off", category: "comfort",
       entityIds: climates.map((e) => e.entity_id), title: "Climate", canControl: can("comfort"),
     });
@@ -193,10 +216,12 @@ function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void 
 
 /** ONE "Scene" tile for however many scenes exist. A single scene applies on
  *  tap; two or more open a pop-up picker above the tile. */
-function SceneMenu({ scenes, canRun, apply }: {
+function SceneMenu({ scenes, canRun, apply, activeName }: {
   scenes: KioskScene[];
   canRun: boolean;
   apply: (s: KioskScene) => void;
+  /** Name of the scene the villa currently matches, or null for "Live". */
+  activeName: string | null;
 }) {
   const [open, setOpen] = useState(false);
   // The pop-up is PORTALED to <body>: the summary-bar has a transform +
@@ -222,8 +247,6 @@ function SceneMenu({ scenes, canRun, apply }: {
     };
   }, [open]);
 
-  const single = scenes.length === 1;
-
   const toggle = () => {
     // Tapping the tile NEVER applies a scene directly (even with just one) —
     // it always opens the menu; a scene is only applied when SELECTED from it.
@@ -248,15 +271,20 @@ function SceneMenu({ scenes, canRun, apply }: {
         disabled={!canRun}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Choose a scene to apply"
+        title={activeName
+          ? `Currently in "${activeName}" — tap to choose another scene`
+          : "Live — the villa doesn't match any saved scene. Tap to apply one."}
         onClick={toggle}
       >
         <span className="summary-tile-icon"><Sparkles size={24} /></span>
         <span className="summary-tile-text">
           <span className="summary-tile-label">Scene</span>
-          <span className="summary-tile-value">
-            {single ? scenes[0].name : `${scenes.length} scenes`}
-          </span>
+          {/* What the villa IS right now, not how many scenes happen to be
+              saved (a count told you nothing about the villa's state, which
+              is what every other tile in this bar reports). "Live" = the
+              current state matches no saved scene, i.e. something has been
+              changed by hand since one was applied. */}
+          <span className="summary-tile-value">{activeName ?? "Live"}</span>
         </span>
       </button>
       {open && pos && createPortal(
@@ -300,6 +328,10 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
   const scenes = config.kioskScenes ?? [];
   // A scene spans categories — allow running one if the profile may control ANY.
   const canRunScenes = !!role && CATEGORY_ORDER.some((c) => isCategoryAllowed(role, c));
+  // Which saved scene (if any) the villa currently matches. Memoised on the
+  // same inputs the tiles use: it walks every scene's captured calls against
+  // live state, so it must not re-run on unrelated renders.
+  const activeScene = useMemo(() => activeSceneName(scenes, entities), [scenes, entities]);
 
   // Hidden via Settings, or nothing to show. (The view-mode/default-view
   // buttons used to live in a left section here — they're back to always
@@ -315,6 +347,7 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
           <SceneMenu
             scenes={scenes}
             canRun={canRunScenes}
+            activeName={activeScene}
             apply={(s) => { void applyScene(s, callService); }}
           />
         )}

@@ -319,7 +319,15 @@ button {
   font-family: var(--font-display); font-size: 22px; font-weight: 500;
   border: 1px solid var(--hairline); border-radius: 999px;
   padding: 6px 16px 6px 10px;
+  /* Never let the villa name WRAP as its 1fr grid track is squeezed. Without
+     this a long name ("The Lys House") broke onto three lines on a narrowed
+     desktop window, ballooning the chip vertically until it covered the floor
+     switch below the bar. It truncates instead (see .hud-title), and the
+     progressive rules further down drop the clock, then the name entirely,
+     before it can get that tight. */
+  white-space: nowrap; min-width: 0; overflow: hidden;
 }
+.hud-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .hud-brand svg { color: var(--accent); flex: 0 0 auto; }
 .hud-center { justify-self: center; display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%; }
 .hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
@@ -1446,6 +1454,33 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .config-editor-modal { max-width: 780px; }
   .teleport-grid .tp-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
   .hud-topbar { padding-left: calc(24px + env(safe-area-inset-left, 0px)); padding-right: calc(24px + env(safe-area-inset-right, 0px)); }
+}
+
+/* --- Narrow DESKTOP window: shed the top bar's optional parts in order of
+   how little they're needed, well before the phone breakpoint takes over.
+   Previously nothing happened between "full desktop" and 640px, so a
+   half-width browser window squeezed the brand chip until the villa name
+   wrapped over three lines and covered the floor switch. Each step below
+   removes exactly one thing, so the bar degrades predictably instead of
+   collapsing all at once at one threshold. --- */
+@media (max-width: 1180px) {
+  /* Clock first: the OS already shows one, and it's the least load-bearing
+     thing in the bar. */
+  .hud-clock { display: none; }
+}
+@media (max-width: 1000px) {
+  /* Then the profile's NAME (the logout icon beside it stays, so switching
+     profiles is still one click) and some chrome padding. */
+  .hud-profile .hud-profile-name { display: none; }
+  .hud-topbar { padding: 0 10px; gap: 8px; }
+  .hud-center { gap: 8px; }
+}
+@media (max-width: 860px) {
+  /* Then the villa NAME itself — the home icon + connection dot still
+     identify the chip, and the name is also the document title. This is the
+     last step before the phone layout hides the brand outright. */
+  .hud-title { display: none; }
+  .hud-brand { padding: 6px 10px; gap: 8px; }
 }
 
 @media (max-width: 640px), (max-height: 560px) {

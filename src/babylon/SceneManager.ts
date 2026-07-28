@@ -1056,8 +1056,18 @@ export class SceneManager {
     const cameraDirections = new Map<string, { x: number; y: number; z: number }>();
     if (this.config.sh3dEntities?.length) {
       for (const e of this.config.sh3dEntities) {
+        // A camera by CONFIG (an entityMap entry typed "camera") or by its
+        // entity_id's own domain. The domain fallback matters: a mesh literally
+        // named after its entity_id resolves to a working camera badge/panel
+        // through resolveMeshToMapping's name inference WITHOUT ever getting a
+        // saved entityMap entry — so requiring that entry here silently denied
+        // those cameras a direction, hence no beam, hence the room-glow
+        // fallback instead. That looked like "the beam works sometimes",
+        // because it depended on whether a device had happened to be edited in
+        // Advanced Settings (which is what creates the entry).
         const map = this.config.entityMap[e.entityId];
-        if (!map || map.type !== "camera") continue;
+        const isCamera = map ? map.type === "camera" : e.entityId.startsWith("camera.");
+        if (!isCamera) continue;
         const d = planAngleToDir(e.angle);
         const p0 = planToWorld(e.x, e.y);
         const p1 = planToWorld(e.x + d.px, e.y + d.py);
