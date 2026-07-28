@@ -27,6 +27,7 @@ import { ROLE_LABELS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
 import { isUnavailable } from "@/utils/stateColors";
+import { suggestDeviceGroups } from "@/config/deviceGroups";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
 import ViewControls from "./ViewControls";
@@ -115,18 +116,49 @@ export default function HUD({
   const title = resolveSiteTitle(config, haConfig?.location_name);
   const floors = [1, 2];
 
-  // Every configured, non-disabled device HA currently reports as
-  // unavailable/unknown (or hasn't reported at all — isUnavailable treats a
-  // missing live entity the same way, same convention the map badges and
-  // status pills already use). A disabled device is deliberately hidden
-  // everywhere else in the app, so it's excluded here too rather than
-  // surfacing something the user already chose not to see.
-  const unavailableIds = useMemo(
-    () => Object.values(config.entityMap)
-      .filter((m) => !m.disabled && isUnavailable(entities[m.entityId]))
-      .map((m) => m.entityId),
-    [config.entityMap, entities],
-  );
+  // Every DEVICE HA currently reports as unavailable/unknown/never-reported —
+  // "device", not "entity": see the two folds below.
+  const unavailableIds = useMemo(() => {
+    // Candidate set is the UNION of config.entityMap's keys and mappedEntityIds
+    // (every entity that resolved to real geometry on the map — see
+    // manager.mappedEntityIds), not entityMap alone. A mesh literally NAMED
+    // after its entity_id resolves to a working badge/panel via
+    // resolveMeshToMapping's name-inference fallback WITHOUT ever getting a
+    // saved entityMap entry — exactly the case of a device that no longer
+    // exists in Home Assistant at all: there was never an edit to create that
+    // entry. entityMap alone would silently miss it despite it being visibly
+    // "in error" on the map right now.
+    const candidates = new Set([...mappedEntityIds, ...Object.keys(config.entityMap)]);
+
+    // Fold multi-entity physical devices down to ONE representative id, so
+    // the count/list reflects DEVICES, not raw HA entities (e.g. one
+    // combo sensor's separate _temperature/_humidity entities counting as
+    // two). Two sources of "these are the same device": entities the owner
+    // has explicitly grouped (config.deviceGroups), and same-device sensor
+    // pairs the app can already recognise on its own by name pattern (see
+    // suggestDeviceGroups) but that haven't been formally grouped yet — for
+    // a diagnostic "what's broken" glance, requiring that manual step first
+    // would just make the count look wrong for no good reason.
+    const repOf = new Map<string, string>();
+    for (const g of config.deviceGroups) {
+      for (const memberId of g.memberEntityIds) repOf.set(memberId, g.primaryEntityId);
+    }
+    for (const s of suggestDeviceGroups(config.entityMap, config.deviceGroups)) {
+      if (!repOf.has(s.memberEntityId)) repOf.set(s.memberEntityId, s.primaryEntityId);
+    }
+
+    // isUnavailable treats a missing live entity the same as a reported
+    // unavailable/unknown state — same convention the map badges and status
+    // pills already use. A disabled device is hidden everywhere else in the
+    // app, so it's excluded here too.
+    const reps = new Set<string>();
+    for (const id of candidates) {
+      if (config.entityMap[id]?.disabled) continue;
+      if (!isUnavailable(entities[id])) continue;
+      reps.add(repOf.get(id) ?? id);
+    }
+    return [...reps];
+  }, [config.entityMap, config.deviceGroups, mappedEntityIds, entities]);
   const [unavailableOpen, setUnavailableOpen] = useState(false);
   const canControlAny = role != null && hasCapability(role, "controlEntities");
 
@@ -423,10 +455,15 @@ export default function HUD({
           </div>
 
           {/* Label size: steps the in-scene badge scale by 0.25 per click,
-              down to 0 (hidden). Replaces the old Settings slider. */}
+              down to 0 (hidden). Replaces the old Settings slider. Hidden on
+              a phone (.hud-labelsize-btn, same breakpoint as .hud-cat-help) —
+              a scrollable category row plus this pill was more than a narrow
+              screen can show without scrolling to reach it; the SAME control
+              lives in the overflow dropdown below instead, always reachable
+              with no scroll. */}
           <div className="hud-group" role="toolbar" aria-label="Label size">
             <button
-              className="icon-btn"
+              className="icon-btn hud-labelsize-btn"
               onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
               disabled={labelScale <= 0}
               title="Decrease label size"
@@ -435,7 +472,7 @@ export default function HUD({
               <Minus size={18} />
             </button>
             <button
-              className="icon-btn"
+              className="icon-btn hud-labelsize-btn"
               onClick={() => stepLabelScale(LABEL_SCALE_STEP)}
               disabled={labelScale >= LABEL_SCALE_MAX}
               title="Increase label size"
@@ -479,6 +516,36 @@ export default function HUD({
                     >
                       <span className="dot" />
                     </span>
+                  </div>
+                  {/* Same control as the (hidden-on-mobile) inline Minus/Plus
+                      — one row, not two menu items, since it's a single
+                      stepper rather than two independent actions. Doesn't
+                      close the menu on click (unlike every other item here):
+                      stepping size is inherently a repeated action, and
+                      re-opening the dropdown after every click would be far
+                      more annoying than leaving it open. */}
+                  <div className="hud-menu-item hud-menu-stepper" role="none">
+                    <span>Label size</span>
+                    <div className="row" style={{ gap: 6 }}>
+                      <button
+                        className="icon-btn"
+                        onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
+                        disabled={labelScale <= 0}
+                        title="Decrease label size"
+                        aria-label="Decrease label size"
+                      >
+                        <Minus size={16} />
+                      </button>
+                      <button
+                        className="icon-btn"
+                        onClick={() => stepLabelScale(LABEL_SCALE_STEP)}
+                        disabled={labelScale >= LABEL_SCALE_MAX}
+                        title="Increase label size"
+                        aria-label="Increase label size"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
                   </div>
                   {canOpenSettings && (
                     <button

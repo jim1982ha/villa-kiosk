@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.65
+
+### Changes
+- Unavailable-devices button, 4 fixes. (1) Badge/list now count DEVICES not entities: candidate ids are the UNION of config.entityMap and mappedEntityIds (catches a mesh literally named after an entity_id that no longer exists in HA, so it never got a saved entityMap entry via an edit — exactly the reported binary_sensor.door_network_contact case), and multi-entity physical devices (e.g. a combo sensor's _temperature/_humidity pair) fold to one representative id via BOTH confirmed config.deviceGroups AND the existing suggestDeviceGroups name-pattern heuristic for pairs not yet formally grouped — verified against a scripted scenario covering all four cases (confirmed pair, unconfirmed pair, phantom mesh-only entity, disabled device excluded). (2) Fixed the '(?) shows twice on mobile' bug: .hud-cat-help's hide rule was width-only (max-width:640px) while the layout switch that reveals the overflow dropdown's OWN 'Map colours' entry also fires on short height (max-width:640px OR max-height:560px) — a device satisfying only the height half showed both. Unified to the same combined query. (3) Applied the identical fix to hide the inline label-size +/- on mobile (new .hud-labelsize-btn class) and added the same stepper as a non-closing row inside the overflow dropdown, always reachable there with no horizontal scroll needed
+
+---
+
+
 ## 2.35.64
 
 ### Changes
