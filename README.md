@@ -22,6 +22,7 @@ Built with **React + TypeScript + Babylon.js**.
 | **Render quality** | Live, per-effect look controls (Settings → *Render quality*): tone mapping, exposure/contrast, light balance, ambient occlusion, sun shadows, environment lighting — tune for quality or tablet performance with no rebuild. |
 | **On-demand rendering** | The GPU idles when nothing moves — essential for a 24/7 tablet. |
 | **Runtime config** | Map meshes → entities, calibrate teleport points, set thresholds — all in-app, no code edits. |
+| **Facility workspace** | Maintenance schedule with photo evidence, guest-readiness check, fault queue with resolution times, maintenance spend against a monthly cap, and a one-click monthly operations report — see [Facility Manager](#facility-manager) below. |
 | **PWA + backup** | Installable, works briefly offline, export/import a JSON config backup (device↔room bindings, room viewpoints, device icons, render/UI settings — deliberately not the model or HA credentials) from Advanced Settings. |
 
 ---
@@ -317,6 +318,57 @@ pure noise, safe to delete.
 > ```
 > If it ends on a bare `g …` / `usemtl …` with no faces after it, the export was
 > cut short — re-export before running the pipeline.
+
+---
+
+## Facility Manager
+
+The kiosk ships three profiles — **Guest**, **Owner** and **Facility manager**
+(`ops`). The Facility manager and the Owner both get a **Facility** workspace,
+opened from the clipboard icon in the top bar.
+
+It exists because a villa under professional management has obligations that
+have to be *evidenced*, not just performed. The tabs map to that:
+
+| Tab | What it answers |
+|---|---|
+| **Today** | What maintenance is due or overdue, worst first. Logging a completion records who did it, when, an optional cost, and photo evidence. |
+| **Readiness** | Is the villa fit for the next guest? Every check is derived from live device state — devices reporting, doors locked, lights off, AC reachable, cameras online, pool serviced, no open faults — so it can't be ticked off without being true. |
+| **Faults** | The work queue. Devices Home Assistant already reports as offline can be turned into a fault in one tap; the app stamps the resolution time itself, which is what makes mean-time-to-resolution meaningful. |
+| **Spend** | Maintenance spend this month against a configurable monthly cap, with the projected total shown *before* an entry is saved — the point at which the decision is still open. |
+| **Report** | A Markdown operations report for any month: maintenance performed, standing against schedule, spend, faults and response times, device availability and a readiness snapshot. Copy or download it. |
+| **Schedule** | Add, edit, pause or remove maintenance tasks — interval (with presets like "twice a month"), optional room, optional contract reference. Removing a task keeps the completions already logged against it. |
+
+### Where the defaults come from
+
+The built-in maintenance schedule is seeded from a typical Bali villa
+management agreement — air conditioning every 3 months, pest control twice a
+month, hydrowash every 3 months (soft furnishings) and 12 months (mattresses),
+pool and landscaping twice a week — and the spend cap from the same kind of
+"minor maintenance" threshold such agreements use. Every interval and the cap
+are editable, and tasks can be added or removed: nothing here is specific to
+one contract, it is just a sensible starting point rather than an empty screen.
+
+Intervals that aren't whole days round **down** (twice a week → every 3 days),
+so a genuinely late task can never read as compliant.
+
+Overdue tasks and unresolved faults show as a red count on the Facility icon in
+the top bar, so being late is visible without opening anything.
+
+### Evidence storage
+
+Photos are downscaled in the browser to ~1600 px JPEG before upload, then
+stored in the add-on's own `/data` volume alongside the maintenance record.
+They're pruned automatically after ~18 months. A year of routine evidence is
+tens of megabytes, which is why this is local rather than pushed to a cloud
+album: it keeps the evidence with the data it belongs to, and works when the
+villa's uplink doesn't.
+
+### What it deliberately does not do
+
+No bookings, pricing or guest messaging, and no financial reporting — those
+belong to whoever manages the property. This produces the *operational* record
+that sits alongside their financial one.
 
 ---
 

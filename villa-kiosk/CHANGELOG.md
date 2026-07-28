@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.76
+
+### Changes
+- Facility Manager workspace — Phase 1 + Phase 2. Extends the EXISTING ops role (already labelled 'Facility manager') with a new manageFacility capability held by ops and owner; guest never sees it. BACKEND: /fm-data store (schedules, completions, costs, tickets) reusing the shared JSON-store pattern with a PUT that admits ops as well as owner, plus /fm-evidence for photos — deliberately NOT chunked like the GLB upload since the client downscales to ~1600px JPEG (~200KB) first; JPEG magic-byte validated, ~18-month automatic pruning on the write path. ENGINES (pure + tested, 25 assertions): due/overdue with a proportional due-soon window so one threshold works for both a 3-day and a 365-day interval; monthly maintenance cap with a projection shown BEFORE an entry is saved, which is when the minor-vs-major decision is still open; resolution-time stats; LOCAL-time month keys so a Bali evening never lands in the previous UTC month; readiness derived entirely from live device state so it cannot be ticked off without being true; Markdown report builder. UI: one Facility modal — Today, Readiness, Faults, Spend, Report, Schedule. Storage is local rather than Google Drive on purpose: HA's Drive integration is backup-scoped with no add-on upload API, and a year of evidence is ~25MB, so local keeps evidence with its data and works when the uplink doesn't. Self-audit against the plan caught three gaps, now closed: schedule editing had NO UI despite the context exposing add/update/remove (and the README already claiming intervals were editable — that claim was false until this commit); there was no alerting outside the modal, so overdue work was only discoverable by going to look for it (now a red count on the HUD icon); and schedules could not bind to a room. Docs: README Facility Manager section, DOCS.md Facility workspace section with the /data file map
+
+---
+
+
 ## 2.35.75
 
 ### Changes

@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from "react"
 import {
   Home, Compass, Settings, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
-  EllipsisVertical, Minus, Plus, CircleHelp, TriangleAlert,
+  EllipsisVertical, Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -34,6 +34,8 @@ import ViewControls from "./ViewControls";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 import LegendModal from "./LegendModal";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
+import { useFmData } from "@/fm/FmDataContext";
+import { scheduleBoard } from "@/fm/fmEngine";
 
 type IconType = ComponentType<{ size?: number | string }>;
 
@@ -91,6 +93,9 @@ interface Props {
   /** Drill into an entity's full panel from the unavailable-devices list —
    *  wired to Dashboard's setActivePanel, same callback SummaryBar uses. */
   onOpenEntity: (entityId: string) => void;
+  /** Open the Facility Manager workspace. Undefined when the profile lacks
+   *  `manageFacility` — the button is then not rendered at all. */
+  onOpenFacility?: () => void;
 }
 
 function useClock(): string {
@@ -107,7 +112,7 @@ export default function HUD({
   onOpenSettings, canOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  mappedEntityIds, onOpenEntity,
+  mappedEntityIds, onOpenEntity, onOpenFacility,
 }: Props) {
   const { connection, haConfig, entities } = useHA();
   const { config, update } = useConfig();
@@ -168,6 +173,18 @@ export default function HUD({
     return [...reps];
   }, [config.entityMap, config.deviceGroups, mappedEntityIds, entities]);
   const [unavailableOpen, setUnavailableOpen] = useState(false);
+
+  // Facility attention count: overdue/never-recorded maintenance plus unresolved
+  // faults. Surfaced ON the button because the whole point of a schedule is
+  // that you find out you're late WITHOUT having to go looking — an operator
+  // who must open a modal to discover overdue work will discover it late.
+  const { data: fmData } = useFmData();
+  const facilityAttention = useMemo(() => {
+    const lateTasks = scheduleBoard(fmData).filter(
+      (s) => s.state === "overdue" || s.state === "never").length;
+    const openFaults = fmData.tickets.filter((t) => t.status !== "resolved").length;
+    return lateTasks + openFaults;
+  }, [fmData]);
   const canControlAny = role != null && hasCapability(role, "controlEntities");
 
   // ── Rooms dial: SINGLE TAP opens the radial floor/room quick-nav (a tapped
@@ -446,6 +463,27 @@ export default function HUD({
                 </span>
               )}
             </button>
+            {/* Facility workspace — maintenance, readiness, faults, spend.
+                Sits beside the unavailable-devices alert because they are the
+                same job: both answer "what needs me". Only rendered for a
+                profile holding manageFacility. */}
+            {onOpenFacility && (
+              <button
+                className={`icon-btn${facilityAttention > 0 ? " has-alert" : ""}`}
+                onClick={onOpenFacility}
+                title={facilityAttention > 0
+                  ? `${facilityAttention} maintenance item${facilityAttention === 1 ? "" : "s"} need attention`
+                  : "Facility — maintenance, readiness, faults"}
+                aria-label="Open the facility workspace"
+              >
+                <ClipboardList size={18} />
+                {facilityAttention > 0 && (
+                  <span className="icon-btn-count" aria-hidden="true">
+                    {facilityAttention > 99 ? "99+" : facilityAttention}
+                  </span>
+                )}
+              </button>
+            )}
             {/* The colour-legend (?) lives INSIDE the category row — it explains
                 exactly these colours, so it belongs with them — fenced off by a
                 separator. Roomy screens only: on a phone it stays in the

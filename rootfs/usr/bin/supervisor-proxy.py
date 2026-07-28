@@ -1002,10 +1002,136 @@ async def telemetry_get_handler(request: web.Request) -> web.Response:
     return web.json_response({"events": events, "count": len(events)})
 
 
+# ── Facility Manager data + photo evidence ───────────────────────────────────
+# One store holds the whole FM working set (maintenance schedules, completions,
+# cost entries, fault tickets). It is a single JSON document rather than four
+# because every write comes from one operator on one device at a time, and an
+# atomic whole-document replace is far easier to reason about than four stores
+# that can disagree with each other mid-edit.
+FM_DATA_FILE = "/data/fm-data.json"
+FM_DATA_MAX_BYTES = 4_000_000
+
+# Evidence photos back the compliance record — a maintenance completion or a
+# resolved fault is much weaker without one. Stored as plain files beside the
+# data rather than base64 inside it, so the JSON stays small and a photo can be
+# served with normal HTTP caching.
+#
+# Deliberately NOT chunked (unlike the GLB upload): the client downscales to
+# ~1600px JPEG before sending, which lands around 200 KB — comfortably inside
+# the Supervisor ingress body cap, so the chunking machinery would be pure
+# complexity for no benefit.
+FM_EVIDENCE_DIR = "/data/fm-evidence"
+FM_EVIDENCE_MAX_BYTES = 3_000_000     # generous headroom over a downscaled JPEG
+FM_EVIDENCE_RETENTION_DAYS = 550      # ~18 months: covers a 12-month agreement
+                                      # plus the yield-up/dispute window after it
+FM_EVIDENCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
+_JPEG_MAGIC = b"\xff\xd8\xff"
+
+
+def _prune_fm_evidence() -> int:
+    """Delete evidence older than the retention window. Called opportunistically
+    on upload — there is no scheduler in this process, and piggybacking on the
+    write path means storage can only grow while it is actively being used."""
+    cutoff = time.time() - FM_EVIDENCE_RETENTION_DAYS * 86400
+    removed = 0
+    try:
+        for name in os.listdir(FM_EVIDENCE_DIR):
+            path = os.path.join(FM_EVIDENCE_DIR, name)
+            try:
+                if os.path.isfile(path) and os.path.getmtime(path) < cutoff:
+                    os.unlink(path)
+                    removed += 1
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return removed
+
+
+async def fm_evidence_post_handler(request: web.Request) -> web.Response:
+    """Store one evidence photo. Owner or facility manager only — this is an
+    operator action, never a guest one."""
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in ("owner", "ops"):
+        return _forbidden("Only the owner or facility manager may add evidence.")
+    photo_id = request.query.get("id", "")
+    if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
+        return web.json_response({"error": "bad photo id"}, status=400)
+
+    os.makedirs(FM_EVIDENCE_DIR, exist_ok=True)
+    dest = os.path.join(FM_EVIDENCE_DIR, f"{photo_id}.jpg")
+    if os.path.realpath(os.path.dirname(dest)) != os.path.realpath(FM_EVIDENCE_DIR):
+        return web.json_response({"error": "bad path"}, status=400)
+
+    body = bytearray()
+    async for chunk in request.content.iter_chunked(64 * 1024):
+        body.extend(chunk)
+        if len(body) > FM_EVIDENCE_MAX_BYTES:
+            return web.json_response({"error": "photo too large"}, status=413)
+    # Same defence as the GLB upload: validate the stream head so this endpoint
+    # can't be used to publish an arbitrary file type into /data.
+    if not bytes(body).startswith(_JPEG_MAGIC):
+        return web.json_response({"error": "not a JPEG"}, status=400)
+
+    tmp = f"{dest}.part"
+    with open(tmp, "wb") as out:
+        out.write(body)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, dest)
+    pruned = _prune_fm_evidence()
+    return web.json_response({"ok": True, "id": photo_id, "bytes": len(body), "pruned": pruned})
+
+
+async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
+    """Serve one evidence photo back. Readable by any authorized session so a
+    report opened by the owner can show the pictures behind each claim."""
+    if not _authorized(request):
+        return _unauthorized()
+    photo_id = request.match_info.get("id", "")
+    if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
+        return web.json_response({"error": "bad photo id"}, status=400)
+    path = os.path.join(FM_EVIDENCE_DIR, f"{photo_id}.jpg")
+    if not os.path.isfile(path):
+        return web.json_response({"error": "not found"}, status=404)
+    return web.FileResponse(path, headers={
+        # Content-addressed by a random id that is never reused, so this can be
+        # cached hard — an evidence photo never changes once written.
+        "Cache-Control": "private, max-age=31536000, immutable",
+        "Content-Type": "image/jpeg",
+    })
+
+
 scenes_get_handler, scenes_put_handler = _json_store_handlers(
     SCENES_FILE, "scenes", [], SCENES_MAX_BYTES, "scenes")
 device_config_get_handler, device_config_put_handler = _json_store_handlers(
     DEVICE_CONFIG_FILE, "config", {}, DEVICE_CONFIG_MAX_BYTES, "device configuration")
+# Facility Manager working set. PUT is owner-only by the shared factory's rule;
+# overridden below to also admit "ops", since the facility manager is precisely
+# who maintains this data.
+fm_data_get_handler, _fm_data_put_owner_only = _json_store_handlers(
+    FM_DATA_FILE, "data", {}, FM_DATA_MAX_BYTES, "facility manager data")
+
+
+async def fm_data_put_handler(request: web.Request) -> web.Response:
+    """Replace the FM working set. Unlike the other shared stores this admits
+    the facility manager as well as the owner — maintaining it IS their job."""
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in ("owner", "ops"):
+        return _forbidden("Only the owner or facility manager may edit this.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    value = body.get("data") if isinstance(body, dict) else body
+    if not isinstance(value, dict):
+        return web.json_response({"error": "data must be an object"}, status=400)
+    payload = json.dumps(value)
+    if len(payload.encode("utf-8")) > FM_DATA_MAX_BYTES:
+        return web.json_response({"error": "payload too large"}, status=413)
+    _write_json_store(FM_DATA_FILE, payload)
+    return web.json_response({"ok": True, "count": len(value)})
 
 
 def main() -> None:
@@ -1027,6 +1153,10 @@ def main() -> None:
     app.router.add_get("/scenes", scenes_get_handler)
     app.router.add_put("/scenes", scenes_put_handler)
     app.router.add_get("/device-config", device_config_get_handler)
+    app.router.add_get("/fm-data", fm_data_get_handler)
+    app.router.add_put("/fm-data", fm_data_put_handler)
+    app.router.add_post("/fm-evidence", fm_evidence_post_handler)
+    app.router.add_get("/fm-evidence/{id}", fm_evidence_get_handler)
     app.router.add_post("/telemetry", telemetry_post_handler)
     app.router.add_get("/telemetry", telemetry_get_handler)
     app.router.add_put("/device-config", device_config_put_handler)

@@ -1730,3 +1730,168 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .hud-profile .hud-profile-name { display: none; }
   .hud-profile { padding: 0 6px; }
 }
+
+/* ── Facility Manager workspace ──────────────────────────────────────────
+   Shares the Settings modal shell (.settings-modal) so it inherits the app's
+   width/scroll/mobile behaviour for free; only what's specific to an
+   operator worklist is defined here. Colour is semantic throughout — an
+   overdue task must read as overdue before anything is actually read. */
+.fm-tabs {
+  display: flex; gap: 4px; padding: 0 22px 10px; overflow-x: auto;
+  scrollbar-width: none; border-bottom: 1px solid var(--hairline);
+}
+.fm-tabs::-webkit-scrollbar { display: none; }
+.fm-tab {
+  display: flex; align-items: center; gap: 7px; flex: 0 0 auto;
+  padding: 8px 13px; border-radius: 10px; border: 1px solid transparent;
+  background: transparent; color: var(--text-secondary);
+  font-size: 14px; cursor: pointer;
+}
+.fm-tab:hover { background: var(--bg-input); }
+.fm-tab.active { background: var(--accent); color: var(--text-on-accent); }
+
+.fm-stack { display: flex; flex-direction: column; gap: 16px; }
+
+/* Summary numbers — the glance layer above the detail. */
+.fm-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.fm-stat {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 14px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--hairline);
+}
+.fm-stat .n { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.fm-stat .l { font-size: 12px; color: var(--text-dim); }
+.fm-stat.good .n { color: var(--status-on); }
+.fm-stat.warn .n { color: var(--status-warning); }
+.fm-stat.bad  .n { color: var(--status-danger); }
+
+/* Rows: a left severity stripe carries state without relying on the badge. */
+.fm-list { display: flex; flex-direction: column; gap: 8px; }
+.fm-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--hairline);
+  border-left: 3px solid var(--hairline-strong);
+}
+.fm-row.state-overdue  { border-left-color: var(--status-danger); }
+.fm-row.state-never    { border-left-color: var(--status-danger); }
+.fm-row.state-due-soon { border-left-color: var(--status-warning); }
+.fm-row.state-ok       { border-left-color: var(--status-on); }
+.fm-row-main { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.fm-row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.fm-row-sub { font-size: 12.5px; }
+.fm-amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+
+.fm-clause {
+  font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  background: var(--bg-input); color: var(--text-dim); white-space: nowrap;
+}
+.fm-badge {
+  font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+  white-space: nowrap; background: var(--bg-input); color: var(--text-secondary);
+}
+.fm-badge.overdue, .fm-badge.never { background: var(--status-danger); color: #fff; }
+.fm-badge.due-soon { background: var(--status-warning); color: #fff; }
+.fm-badge.ok { background: var(--status-on); color: #fff; }
+
+.fm-check-icon { flex: 0 0 auto; display: flex; }
+.fm-check-icon.pass { color: var(--status-on); }
+.fm-check-icon.warn { color: var(--status-warning); }
+.fm-check-icon.fail { color: var(--status-danger); }
+
+.fm-headline {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 14px 16px; border-radius: 12px; border: 1px solid var(--hairline);
+  border-left: 3px solid var(--status-on); background: var(--bg-card);
+}
+.fm-headline strong { font-size: 17px; }
+.fm-headline.warn { border-left-color: var(--status-warning); }
+.fm-headline.fail { border-left-color: var(--status-danger); }
+
+/* Chips that jump to a device — interactive, so they look interactive. */
+.fm-chiprow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.fm-entity-chip {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--hairline);
+}
+.fm-entity-chip:hover { border-color: var(--accent); }
+.fm-entity-chip.on { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
+
+.fm-form {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 16px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--hairline-strong);
+}
+.fm-form h3 { margin: 0; font-size: 16px; }
+.fm-field { display: flex; flex-direction: column; gap: 5px; }
+.fm-field > span { font-size: 12px; color: var(--text-secondary); }
+.fm-field input, .fm-field select {
+  padding: 10px 12px; border-radius: 10px; font-size: 15px;
+  background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline);
+}
+.fm-field input:focus, .fm-field select:focus { border-color: var(--accent); outline: none; }
+
+.fm-banner {
+  padding: 10px 12px; border-radius: 10px; font-size: 13.5px;
+  background: var(--bg-input); color: var(--text-secondary);
+}
+.fm-banner.warn {
+  background: color-mix(in srgb, var(--status-warning) 15%, transparent);
+  color: var(--text-primary);
+  border: 1px solid var(--status-warning);
+}
+.fm-inline-error { font-size: 12.5px; color: var(--status-danger); }
+
+/* Spend-vs-cap meter. The bar is the point: a number alone doesn't convey
+   "how close am I" at a glance, and that proximity is the whole decision. */
+.fm-cap {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 16px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--hairline);
+  border-left: 3px solid var(--status-on);
+}
+.fm-cap.approaching { border-left-color: var(--status-warning); }
+.fm-cap.exceeded { border-left-color: var(--status-danger); }
+.fm-cap-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.fm-cap-head strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.fm-cap-bar { height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
+.fm-cap-bar > span { display: block; height: 100%; background: var(--status-on); }
+.fm-cap.approaching .fm-cap-bar > span { background: var(--status-warning); }
+.fm-cap.exceeded .fm-cap-bar > span { background: var(--status-danger); }
+.fm-cap-note { margin: 0; font-size: 13px; color: var(--text-secondary); }
+
+/* Evidence thumbnails */
+.fm-evidence { display: flex; flex-direction: column; gap: 6px; }
+.fm-evidence-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.fm-thumb {
+  position: relative; width: 68px; height: 68px; border-radius: 10px;
+  overflow: hidden; background: var(--bg-input); border: 1px solid var(--hairline);
+  flex: 0 0 auto;
+}
+.fm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fm-thumb-x {
+  position: absolute; top: 3px; right: 3px; width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(0,0,0,.6); color: #fff;
+}
+.fm-thumb-add {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; cursor: pointer; color: var(--text-secondary);
+  border-style: dashed; font-size: 11px;
+}
+.fm-thumb-add:hover { border-color: var(--accent); color: var(--accent); }
+
+.fm-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 32px 20px; text-align: center; color: var(--text-dim);
+}
+.fm-empty h3 { margin: 0; font-size: 17px; color: var(--text-primary); }
+.fm-empty p { max-width: 46ch; }
+
+.fm-report-preview {
+  margin: 0; padding: 14px; border-radius: 12px; max-height: 45vh; overflow: auto;
+  background: var(--bg-input); border: 1px solid var(--hairline);
+  font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+}

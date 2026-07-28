@@ -85,6 +85,30 @@ reaches the hostname directly, with no PIN at all. Meaningless (and
 unnecessary) for Ingress, which is already auto-trusted, and irrelevant if you
 never expose port 8099.
 
+## Facility workspace
+
+The **Owner** and **Facility manager** profiles get a clipboard icon in the top
+bar that opens a maintenance workspace: what's due, whether the villa is ready
+for the next guest, the fault queue, spend against a monthly cap, and a
+copy/download monthly operations report.
+
+Everything it records lives in the add-on's own `/data` volume, so every device
+that opens the kiosk sees the same record:
+
+| File | What it holds |
+|---|---|
+| `/data/fm-data.json` | Maintenance schedule, completions, spend entries, faults |
+| `/data/fm-evidence/` | Photo evidence, downscaled in the browser before upload, pruned after ~18 months |
+
+The maintenance schedule starts empty — press **Load the schedule** on first
+open to seed a typical Bali villa management schedule (AC every 3 months, pest
+control twice monthly, hydrowash every 3/12 months, pool twice weekly). Every
+interval is editable afterwards.
+
+The **Guest** profile has no access to any of this.
+
+---
+
 ## Notes
 
 - Requires **Home Assistant OS** or **Supervised** (add-ons need the Supervisor).

@@ -19,6 +19,7 @@ import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed } from "@/auth/permissions";
+import FacilityModal from "@/components/fm/FacilityModal";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor } from "@/config/EntityMap";
 import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
@@ -48,6 +49,9 @@ export default function Dashboard() {
   // check below must (and does) treat that as "nothing allowed," same as an
   // unrecognised role would.
   const canControl = role != null && hasCapability(role, "controlEntities");
+  // Facility workspace: the facility manager (whose job it is) and the owner
+  // (accountable for the property, signs off the monthly report).
+  const canManageFacility = role != null && hasCapability(role, "manageFacility");
   const canOpenSettings = role != null && hasCapability(role, "openSettings");
   const canEditConfig = role != null && hasCapability(role, "editConfig");
   // Read inside the onCalibrated/onReady effect below (which intentionally
@@ -61,6 +65,7 @@ export default function Dashboard() {
   const [teleportOpen, setTeleportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [configEditorOpen, setConfigEditorOpen] = useState(false);
+  const [facilityOpen, setFacilityOpen] = useState(false);
   // When Advanced Settings is opened from a device panel's edit shortcut, this
   // holds the entity_id to pre-filter the entity table on (null = opened from
   // Settings, so "Back" returns to Settings rather than just closing).
@@ -112,8 +117,8 @@ export default function Dashboard() {
   // whatever's most recently rendered.
   const modalOpenRef = useRef(false);
   useEffect(() => {
-    modalOpenRef.current = !!activePanel || teleportOpen || settingsOpen || configEditorOpen;
-  }, [activePanel, teleportOpen, settingsOpen, configEditorOpen]);
+    modalOpenRef.current = !!activePanel || teleportOpen || settingsOpen || configEditorOpen || facilityOpen;
+  }, [activePanel, teleportOpen, settingsOpen, configEditorOpen, facilityOpen]);
   const lastInteractionRef = useRef(Date.now());
   useEffect(() => {
     const mark = () => { lastInteractionRef.current = Date.now(); };
@@ -467,6 +472,7 @@ export default function Dashboard() {
         onSaveOverviewDefault={saveOverviewDefault}
         mappedEntityIds={mappedEntityIds}
         onOpenEntity={openEntityPanel}
+        onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
       />
 
       {/* Bottom dashboard strip — scene / quick-action / summary tiles,
@@ -574,6 +580,14 @@ export default function Dashboard() {
             onOpenEntity={openEntityPanel}
           />
         </PanelActionsProvider>
+      )}
+
+      {facilityOpen && canManageFacility && (
+        <FacilityModal
+          onClose={() => setFacilityOpen(false)}
+          mappedEntityIds={mappedEntityIds}
+          onOpenEntity={(id) => { setFacilityOpen(false); openEntityPanel(id); }}
+        />
       )}
 
       {settingsOpen && canOpenSettings && (

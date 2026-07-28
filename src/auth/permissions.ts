@@ -27,7 +27,13 @@ export type Capability =
   /** The full Config Editor modal: villa coordinates, bindings, entity metadata. */
   | "editConfig"
   /** Upload / replace / reset the central 3D model and SH3D plan. */
-  | "manageModel";
+  | "manageModel"
+  /** The Facility Manager workspace: maintenance schedule, completions with
+   *  photo evidence, maintenance spend against the Clause 3.3(i) cap, and
+   *  fault tickets. Held by BOTH the facility manager (whose job it is) and
+   *  the owner (who is accountable for the property and signs off the monthly
+   *  report), so this is not simply "ops-only". */
+  | "manageFacility";
 
 export interface RolePermissions {
   /** Device categories this profile sees on the map. "all" = every category. */
@@ -49,8 +55,10 @@ export interface RolePermissions {
  *             model or config administration.
  *  - owner  — sees everything and administers the kiosk (the owner is the
  *             only profile that validates and customises).
- *  - ops    — sees everything to find their way around on site, but the
- *             kiosk is consultation + control only: no settings, no config.
+ *  - ops    — the facility manager. Sees everything to find their way around
+ *             on site, controls devices, and owns the Facility workspace
+ *             (maintenance schedule, evidence, spend, faults). Still no
+ *             config/model administration — that stays with the owner.
  */
 export const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
   guest: {
@@ -64,6 +72,7 @@ export const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
     deniedTypes: [],
     capabilities: [
       "controlEntities", "openSettings", "customizeAppearance", "editConfig", "manageModel",
+      "manageFacility",
     ],
   },
   ops: {
@@ -71,8 +80,10 @@ export const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
     deniedTypes: [],
     // Facility managers get Settings access (open + personal appearance/comfort
     // tweaks), same as a guest — the admin-only sections (editConfig,
-    // manageModel) stay gated to the owner.
-    capabilities: ["controlEntities", "openSettings", "customizeAppearance"],
+    // manageModel) stay gated to the owner. manageFacility is the one thing
+    // they hold that the guest does not: the maintenance/fault workspace that
+    // evidences Kozystay's Clause 3.7 and 1.1(iv)(b) obligations.
+    capabilities: ["controlEntities", "openSettings", "customizeAppearance", "manageFacility"],
   },
 };
 
