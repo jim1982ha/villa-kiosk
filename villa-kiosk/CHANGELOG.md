@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.61
+
+### Changes
+- Device configuration is now stored CENTRALLY by the add-on (/data/device-config.json, new GET/PUT /device-config endpoint) instead of per-browser localStorage, so entity/mesh bindings, per-device metadata (label, room, type, category, linked + motion entity, badge colour, disabled), rooms and device groups configured on one client apply to every client — same model as the shared GLB and scenes. DRY: the scenes store's read/write/handler code was factored into one _read_json_store/_write_json_store/_json_store_handlers trio now serving both stores; the shared-vs-per-device field split lives in one SHARED_CONFIG_KEYS list (render quality, theme, eyeHeight/walkSpeed, badgeStyle and other look/feel prefs stay per-device on purpose). Safe by construction: pushes only ever happen after the first pull completes (so a client's freshly auto-detected entityMap can't wipe the owner's edits), only when the slice genuinely changed (no pull/push round-trip loop), and only for the owner role (server 403s the rest)
+
+---
+
+
 ## 2.35.60
 
 ### Changes

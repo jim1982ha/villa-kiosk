@@ -862,63 +862,96 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     return web.json_response({"path": rel, "size": total})
 
 
-# ── Shared kiosk scenes ──────────────────────────────────────────────────────
-# User-defined "scenes" (config/scenes.ts KioskScene[]) are stored HERE, in the
-# add-on's own persistent /data volume, rather than each browser's localStorage
-# — so a scene saved on one device is immediately available (read, activate,
-# and — for the owner — edit) on every other device that connects. Same
-# durable-shared-storage pattern the model upload above already uses.
+# ── Shared JSON stores (kiosk scenes, device configuration) ──────────────────
+# Both of these live HERE, in the add-on's own persistent /data volume, rather
+# than in each browser's localStorage — so what one device saves is immediately
+# available on every other device that connects, exactly like the uploaded GLB
+# model above. They differ ONLY in filename, JSON key, empty shape and size
+# cap, so one read/write pair and one handler factory serves both instead of
+# two near-identical copies.
 SCENES_FILE = "/data/scenes.json"
 SCENES_MAX_BYTES = 1_000_000  # scenes are tiny; cap so a bad body can't fill /data
+# The villa's DEVICE configuration: entity<->mesh bindings, per-device metadata
+# (label, room, type, category, linked/motion entity, badge colour…), room
+# definitions and device groups. Bigger than scenes (one entry per entity, plus
+# room polygons), hence the roomier cap — still bounded so a bad body can't
+# fill /data. See the frontend's config/deviceConfig.ts for exactly which
+# AppConfig fields are shared (site-wide) vs kept per-device (look/feel).
+DEVICE_CONFIG_FILE = "/data/device-config.json"
+DEVICE_CONFIG_MAX_BYTES = 8_000_000
 
 
-async def scenes_get_handler(request: web.Request) -> web.Response:
-    """Return the shared scenes list. Any authorized session may READ (a guest
-    still needs to see + activate scenes); an absent/corrupt file reads as []."""
-    if not _authorized(request):
-        return _unauthorized()
+def _read_json_store(path: str, empty):
+    """Parse a shared store, degrading to `empty` for absent/corrupt/wrong-typed
+    files — a store that can't be read must never take the kiosk down, it just
+    reads as "nothing configured yet"."""
     try:
-        with open(SCENES_FILE, encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError, OSError):
-        data = []
-    if not isinstance(data, list):
-        data = []
-    return web.json_response({"scenes": data})
+        return empty
+    return data if isinstance(data, type(empty)) else empty
 
 
-async def scenes_put_handler(request: web.Request) -> web.Response:
-    """Replace the shared scenes list (owner only — editing scenes is an owner
-    capability, matching the Settings UI's gating). Atomic overwrite so a
-    partial write never corrupts the live file."""
-    if not _authorized(request):
-        return _unauthorized()
-    if _role_for(request) != "owner":
-        return _forbidden("Only the owner profile may edit scenes.")
-    try:
-        body = await request.json()
-    except (json.JSONDecodeError, ValueError):
-        return web.json_response({"error": "invalid JSON"}, status=400)
-    scenes = body.get("scenes") if isinstance(body, dict) else body
-    if not isinstance(scenes, list):
-        return web.json_response({"error": "scenes must be a list"}, status=400)
-    payload = json.dumps(scenes)
-    if len(payload.encode("utf-8")) > SCENES_MAX_BYTES:
-        return web.json_response({"error": "scenes payload too large"}, status=413)
-    os.makedirs(os.path.dirname(SCENES_FILE), exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(SCENES_FILE), suffix=".part")
+def _write_json_store(path: str, payload: str) -> None:
+    """Atomic overwrite (temp file + os.replace) so a partial or failed write
+    can never leave the live store truncated — readers either see the whole
+    previous version or the whole new one."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".part")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as out:
             out.write(payload)
         os.chmod(tmp, 0o644)
-        os.replace(tmp, SCENES_FILE)
+        os.replace(tmp, path)
     except BaseException:
         try:
             os.unlink(tmp)
         except OSError:
             pass
         raise
-    return web.json_response({"ok": True, "count": len(scenes)})
+
+
+def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str):
+    """Build the (GET, PUT) handler pair for one shared store.
+
+    GET is open to any authorized session — a guest still has to READ scenes to
+    activate them, and read the device config to see the right badges/rooms at
+    all. PUT is owner-only, matching the Settings UI's own gating: shared state
+    is exactly what a non-owner profile must not be able to rewrite for
+    everyone else.
+    """
+    async def get_handler(request: web.Request) -> web.Response:
+        if not _authorized(request):
+            return _unauthorized()
+        return web.json_response({key: _read_json_store(path, empty)})
+
+    async def put_handler(request: web.Request) -> web.Response:
+        if not _authorized(request):
+            return _unauthorized()
+        if _role_for(request) != "owner":
+            return _forbidden(f"Only the owner profile may edit {what}.")
+        try:
+            body = await request.json()
+        except (json.JSONDecodeError, ValueError):
+            return web.json_response({"error": "invalid JSON"}, status=400)
+        value = body.get(key) if isinstance(body, dict) else body
+        if not isinstance(value, type(empty)):
+            return web.json_response(
+                {"error": f"{key} must be a {type(empty).__name__}"}, status=400)
+        payload = json.dumps(value)
+        if len(payload.encode("utf-8")) > max_bytes:
+            return web.json_response({"error": f"{key} payload too large"}, status=413)
+        _write_json_store(path, payload)
+        return web.json_response({"ok": True, "count": len(value)})
+
+    return get_handler, put_handler
+
+
+scenes_get_handler, scenes_put_handler = _json_store_handlers(
+    SCENES_FILE, "scenes", [], SCENES_MAX_BYTES, "scenes")
+device_config_get_handler, device_config_put_handler = _json_store_handlers(
+    DEVICE_CONFIG_FILE, "config", {}, DEVICE_CONFIG_MAX_BYTES, "device configuration")
 
 
 def main() -> None:
@@ -939,6 +972,8 @@ def main() -> None:
     app.router.add_post("/model-upload", model_upload_handler)
     app.router.add_get("/scenes", scenes_get_handler)
     app.router.add_put("/scenes", scenes_put_handler)
+    app.router.add_get("/device-config", device_config_get_handler)
+    app.router.add_put("/device-config", device_config_put_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
     app.router.add_post("/auth/verify", auth_verify_handler)
     app.router.add_get("/auth/check", auth_check_handler)

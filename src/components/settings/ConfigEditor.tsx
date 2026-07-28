@@ -160,7 +160,10 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
         Entities listed here are auto-detected because their 3D object in the
         model is already named with the entity ID (e.g.{" "}
         <code style={{ fontSize: 11 }}>camera.patio_1f_cam</code>). Edit the
-        display name, room or panel type without reloading the model.
+        display name, room or panel type without reloading the model.{" "}
+        <strong>Changes here apply to every device</strong> that opens the
+        kiosk — this configuration is stored centrally by the add-on, like the
+        3D model itself, not per browser.
       </p>
 
       {allEntries.length > 0 && (
