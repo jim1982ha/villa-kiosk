@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.72
+
+### Changes
+- Pose-swap is now fully vocabulary-free and exception-free. App: VARIANT_VOCAB, coverVisualBucket and lockVisualBucket are DELETED — every entity type resolves its pose identically via desiredVariantWord() (the entity's own sanitised HA state), and the virtual 'half' word is available to EVERY type, not just cover: a numeric level attribute mid-range (current_position/brightness/percentage/volume_level, 15-85%) or a transitional state resolves to 'half', so cover.x__half and light.y__half work through the same code. WORD_RANK orders authored poses rest -> part-way -> active purely for the nearest-available fallback (it never gates which words are legal), and an unauthored/uncertain state (unavailable, unknown, a lock's jammed) resolves to the lowest-ranked pose — one rule replacing every previous per-type fail-safe. 'half' always gets a virtual slot in that ordering so a part-way device with only two authored poses falls to the active neighbour instead of collapsing to the rest pose. Verified against 25 cases incl. exact parity with the old cover-only bucket. Pipeline v2.10.0: matching rewrite — any domain can carry poses, and the single shadow-casting mesh per device is chosen by explicit rules (unsuffixed base mesh casts if present, else __open for cover / __off for anything else); 17 scripted cases. README rewritten for the one-rule model
+
+---
+
+
 ## 2.35.71
 
 ### Changes

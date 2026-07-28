@@ -194,40 +194,57 @@ import the mesh binds to that entity automatically — no tapping needed. The
 pipeline matches by **3D position**, not the internal OBJ part names, so it works
 even though SweetHome renames parts to things like `Sphere_1_1017`.
 
-### 2. Covers, locks & door/window contacts — real position feedback via pose copies
+### 2. Any device — real state feedback via pose copies
 
-A `cover` (curtain/blind), `lock`, or `binary_sensor` door/window **contact
-sensor** can show its **live position** by giving you one mesh per state.
-Place the **same object 2–3 times in the same spot**, each copy posed
-differently, and suffix each Name with its pose:
+**Any** entity — a `cover`, `lock`, `switch`, `light`, `fan`, `binary_sensor`,
+`sensor`, anything — can show its **live state** by giving it one mesh per
+state. Place the **same object 2+ times in the same spot**, each copy posed
+differently, and suffix each Name with the state it represents:
 
 ```
-cover.living_room_curtain__open      cover.living_room_curtain__half   (half is optional)
-cover.living_room_curtain__closed
+cover.living_room_curtain__open      cover.living_room_curtain__closed
+cover.living_room_curtain__half      (optional — see "half" below)
 
 lock.front_door__locked              lock.front_door__unlocked
 
-binary_sensor.front_door_contact__closed   binary_sensor.front_door_contact__open
+switch.gate_relay__on                switch.gate_relay__off
+
+binary_sensor.front_door_contact__on binary_sensor.front_door_contact__off
+
+sensor.pool_status__clean            sensor.pool_status__dirty
 ```
 
-| Domain | Pose words (rest pose **bold**) |
-|---|---|
-| `cover` | `closed` · `half` (optional) · **`open`** |
-| `lock` | **`locked`** · `unlocked` |
-| `binary_sensor` (door/window contact only — see below) | **`closed`** · `open` |
+**One rule, no per-domain table: the suffix is the entity's own Home Assistant
+state**, lowercased with anything that isn't a letter or digit removed. So a
+`switch` uses `__on`/`__off` (that's what HA reports), a `cover` uses
+`__open`/`__closed`, a `lock` uses `__locked`/`__unlocked`, and a sensor
+reporting `not_home` uses `__nothome`. If you're unsure what to name a pose,
+look at the entity's current state in Home Assistant — that's the word.
+
+> Earlier versions had per-domain vocabularies (notably `__open`/`__closed` for
+> door/window `binary_sensor` contacts). That translation is gone: a
+> `binary_sensor` now uses `__on`/`__off` like everything else. If you authored
+> contact poses under the old names, rename them.
+
+**`half` — the one special word.** No entity ever reports "half" as a state, so
+it's provided as a **virtual** pose available to **every** type. A device counts
+as part-way when either:
+- a numeric level attribute sits between its extremes — `current_position` (a
+  cover), `brightness` (a light), `percentage` (a fan), `volume_level` (a media
+  player); the band is 15 %–85 %, or
+- its state is transitional (`opening`, `closing`, `locking`, …).
+
+So `cover.x__half` (a half-drawn curtain) and `light.y__half` (a dimmed lamp)
+work identically. `__half` is always optional — with only two poses authored,
+a part-way device falls back to the nearer one.
+
+**Unknown / offline states fall back to the rest pose.** A state you didn't
+author a mesh for — including `unavailable`, `unknown`, or a lock's `jammed` —
+shows the lowest-ranked authored pose (`off` / `closed` / `locked` / `idle`).
+A lock never implies a door is open when its real state isn't known.
 
 - All suffixed copies are treated as **one entity** (the suffix never affects
-  binding, tapping, or RBAC) — the kiosk shows whichever pose matches the live
-  state:
-  - `cover` uses `current_position` (0–100 %) when reported, else falls back
-    to plain open/closed/opening/closing state.
-  - `lock` shows the locked pose for anything uncertain too (jammed,
-    mid-transition, offline) — never implying a door is open when its real
-    state genuinely isn't known.
-  - `binary_sensor` only does this for a door/window/garage-door **contact**
-    (its HA `device_class` must be `door`, `window`, `garage_door`, or
-    `opening` — a leak/motion/smoke sensor is never affected, even if you
-    happened to suffix its mesh names). `on` = open, `off` = closed.
+  binding, tapping, or RBAC).
 - **Every pose needs an explicit `__word` suffix — including the rest one.**
   An **unsuffixed** piece is *never* treated as a pose; it's always-visible
   base/detail geometry that coexists alongside the suffixed poses (e.g. the
@@ -238,7 +255,7 @@ binary_sensor.front_door_contact__closed   binary_sensor.front_door_contact__ope
   leave its name unsuffixed and skip pose authoring entirely — it behaves
   exactly as a plain bound object.
 - Multi-pose authoring is fully opt-in and **per-device**: mix multi-pose
-  covers/locks/contacts with plain single-mesh ones freely in the same villa.
+  devices with plain single-mesh ones freely in the same villa.
 - You can use **different catalog models per pose** (e.g. a slim gathered curtain
   for `__open`, a full-width one for `__closed`) and different widths — the
   pipeline handles it. Detailed/high-poly catalog assets are fine.
@@ -248,10 +265,13 @@ binary_sensor.front_door_contact__closed   binary_sensor.front_door_contact__ope
 Place curtains (or a door's frame/glass) **directly over their window**; the
 pipeline keeps the window's glass/frame in the structural shell (so it stays
 transparent and correctly lit) and never lets the curtain/door "absorb" it.
-Only the poses that are **hidden at rest** (a closed/half curtain when the
-default is open; an unlocked/open-contact pose when the default is
-locked/closed) are excluded from the light bake, so you won't see a hidden
-pose's shadow ghosted onto the floor in the default view.
+Only **one pose per device casts a shadow** into the light bake, so you won't
+see a hidden pose's shadow ghosted onto the floor. The rule:
+- if you also modelled an **unsuffixed** base mesh for that device, that's the
+  one that bakes (every `__word` pose is excluded);
+- otherwise the baked pose is **`__open` for a `cover`**, and **`__off` for
+  everything else** — falling back to the lowest-ranked authored pose if
+  neither exists.
 
 ### 4. Bake resolution
 

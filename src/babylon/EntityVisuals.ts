@@ -16,33 +16,34 @@
 //                    skipped on a pose mesh for the same reason lock's tint
 //                    is.
 //
-// POSE SWAP (mesh variants) — UNIVERSAL, not a per-type feature:
+// POSE SWAP (mesh variants) — ONE rule, every entity type, no exceptions:
 //   OPT-IN: if an object was authored as 2+ alternate meshes named
 //   "<entity_id>__<word>" (see EntityMap.extractVariantSuffix), the one
-//   matching live state is shown and the rest hidden (see VARIANT_VOCAB /
-//   applyMeshVariant / applyStateNamedVariant below). A villa with just the
+//   matching live state is shown and the rest hidden. A villa with just the
 //   plain, unsuffixed mesh is unaffected — that mesh stays visible always,
-//   exactly as if this didn't exist. Applies to EVERY type — light, switch,
-//   fan, climate, media_player, sensor, binary_sensor, cover, lock, camera,
-//   anything current or future — via one of two resolutions:
-//     - NAMED vocabulary (VARIANT_VOCAB), only where a fixed translation
-//       genuinely derives something a raw HA state string can't express:
-//       cover's ordinal "closed"/"half"/"open" ("half" comes from
-//       current_position, a number — there is no raw state word for it),
-//       and lock's "unlocked"/"locked" fail-safe default. That's it — two
-//       types, both for a real reason, not because pose-swap is "for" them
-//       specifically.
-//     - GENERIC, for every OTHER type, including binary_sensor: the entity's
-//       own live STATE IS the pose word, sanitised the same way a mesh
-//       suffix is parsed (lowercased, non-alphanumeric stripped —
-//       sanitizeVariantWord), no fixed vocabulary at all. A switch authored
-//       "__on"/"__off", a door/window binary_sensor ALSO authored
-//       "__on"/"__off" (not "__open"/"__closed" — there is no translation
-//       any more), a pool-state sensor authored "__clean"/"__dirty", an
-//       enum-like text
-//       sensor with one pose per value — the available words come entirely
-//       from whichever "__word" meshes were actually authored (see
-//       applyStateNamedVariant).
+//   exactly as if this didn't exist.
+//
+//   The word is simply the entity's LIVE STATE, sanitised the same way a mesh
+//   suffix is parsed (lowercased, non-alphanumerics stripped —
+//   sanitizeVariantWord), so "__on"/"__off" for a switch or binary_sensor,
+//   "__open"/"__closed" for a cover, "__locked"/"__unlocked" for a lock,
+//   "__clean"/"__dirty" for a pool sensor, one pose per value for any
+//   enum-like sensor. There is NO per-type vocabulary and no translation
+//   table: what HA reports is what you name the mesh.
+//
+//   "half" is the single VIRTUAL word — no HA state string produces it — and
+//   it is available to EVERY type, not just cover: an entity is "part-way"
+//   when a numeric level attribute (current_position / brightness /
+//   percentage / volume_level) sits between its extremes, or when its state
+//   is transitional (opening/closing/locking/…). So "cover.x__half" and
+//   "light.y__half" mean the same thing through the same code.
+//
+//   A state nobody authored a mesh for — including "unavailable"/"unknown"
+//   and a lock's "jammed" — resolves to the LOWEST-ranked authored pose (see
+//   WORD_RANK), i.e. the rest/off/closed/locked one. That one rule replaces
+//   every previous per-type fail-safe.
+//
+//   See desiredVariantWord / orderVariantWords / applyStateNamedVariant.
 
 import {
   Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
@@ -59,7 +60,7 @@ import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } fro
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
-import { isUnavailable, coverVisualBucket, lockVisualBucket } from "@/utils/stateColors";
+import { isUnavailable } from "@/utils/stateColors";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
@@ -104,39 +105,66 @@ function clampRatio(ratio: number | undefined): number {
 
 // ── Multi-mesh visual variants (e.g. a curtain's closed/half/open poses) ────
 // See EntityMap.extractVariantSuffix's docstring for the "__<variant>" mesh-
-// naming convention this reads. Per-type "vocabulary": the ordered list of
-// recognised variant words for that type (order also drives the nearest-
-// available fallback in pickNearestVariant, for a villa that only bothered
-// authoring SOME of them) and which word an unsuffixed — or unrecognised-
-// suffix — mesh defaults to.
+// naming convention this reads.
 //
-// ONLY cover and lock have an entry — these are the two types with a genuine
-// FIXED, ordinal-or-named meaning worth translating: cover's "half" is a real
-// intermediate position that doesn't exist as a raw HA state string at all
-// (it's derived from current_position, a number), and lock's default leans
-// "locked" (fail-safe) rather than whatever the raw state happens to be.
-// binary_sensor USED to have an entry too (translating on/off to open/closed
-// for door/window device_classes), but that was a PURE rename with no derived
-// data behind it — openingVisualBucket did nothing but
-// `state === "on" ? "open" : "closed"` — so it added a naming convenience at
-// the cost of being an exception. Removed: a binary_sensor (of ANY
-// device_class) is now just another generic type, same as switch/light/fan/
-// climate/media_player/sensor/anything — see applyStateNamedVariant. Author
-// "__on"/"__off" poses, not "__open"/"__closed".
+// There is NO per-type vocabulary any more — not one table, not one exception.
+// The rule is uniform for every entity type, current or future:
 //
-// Every type WITHOUT an entry here still gets pose-swap for free through the
-// generic path — this table is only consulted for the two types that need a
-// translation, not a gate on which types are "allowed" to have poses at all
-// (see indexMeshes' grouping, which groups by suffix presence alone).
-const VARIANT_VOCAB: Partial<Record<EntityType, { words: string[]; default: string }>> = {
-  cover: { words: ["closed", "half", "open"], default: "open" },
-  // default "locked": rest/pre-state pose is the CLOSED door (sensible for a
-  // front door) AND the pose the pipeline bake keeps as its shadow-caster —
-  // "unlocked" is the door swung open, whose big floor shadow must NOT bake in
-  // and linger when the door is actually locked. MUST stay equal to
-  // blender_pipeline _VARIANT_VOCAB["lock"]["default"].
-  lock: { words: ["unlocked", "locked"], default: "locked" },
+//   desired pose word = the entity's own live STATE, sanitised
+//                       (sanitizeVariantWord), EXCEPT that anything
+//                       recognisably "part-way" resolves to "half".
+//
+// "half" is the one VIRTUAL word — it has no HA state string of its own — and
+// it is available to EVERY type, not just cover. Two universal ways to be
+// part-way, neither type-specific:
+//   * a numeric level attribute strictly between its extremes — a cover at
+//     current_position 50, a light at brightness 128, a fan at percentage 40;
+//   * a transitional state (opening/closing/locking/…) — a device
+//     mid-movement is by definition between its two rest poses.
+// So "cover.x__half" and "light.y__half" now mean exactly the same thing and
+// go through exactly the same code. Authoring "__half" is always optional: an
+// entity with only two poses just falls back to the nearest one it does have.
+//
+// WORD_RANK is the ordering used for that nearest-available fallback — NOT a
+// vocabulary (it never decides which words are legal, and an unlisted word is
+// perfectly authorable, it just sorts to the middle). It exists so "nearest"
+// means something: the authored words are ordered rest → part-way → active,
+// which is what makes a missing "__half" fall to a sensible neighbour instead
+// of to whatever order the meshes happened to be indexed in.
+//
+// A desired word that ISN'T authored resolves to the LOWEST-ranked pose (see
+// pickNearestVariant with an index of -1), i.e. the rest/off/closed/locked
+// one. That single rule replaces every previous per-type fail-safe: a lock
+// reporting "jammed", any entity reporting "unavailable"/"unknown", a state
+// nobody authored a mesh for — all land on the safe, closed, at-rest pose
+// rather than implying a door is open or a device is running.
+const WORD_RANK: Record<string, number> = {
+  // rest / inactive / safe — also the fallback for any unauthored state
+  closed: 0, off: 0, locked: 0, idle: 0, standby: 0, docked: 0,
+  // the virtual part-way pose
+  half: 1,
+  // active
+  open: 2, on: 2, unlocked: 2, playing: 2, running: 2, cleaning: 2,
 };
+const UNRANKED_WORD = 1; // unknown/custom words sort with "half", in the middle
+
+/** Numeric "how far along is it" attributes, with the value that means 100%.
+ *  Any entity exposing one of these can express the virtual "half" pose. */
+const LEVEL_ATTRS: ReadonlyArray<readonly [string, number]> = [
+  ["current_position", 100], // cover
+  ["brightness", 255],       // light
+  ["percentage", 100],       // fan
+  ["volume_level", 1],       // media_player
+];
+/** Outside these bounds a level reads as fully at one end, not part-way.
+ *  Matches the old cover-specific 15/85 split, now applied to every type. */
+const HALF_LOW = 0.15;
+const HALF_HIGH = 0.85;
+/** States that mean "mid-transition" — part-way by definition, whatever the
+ *  device is. Not a vocabulary: purely extra ways to reach the "half" pose. */
+const TRANSITIONAL_STATES = new Set([
+  "opening", "closing", "locking", "unlocking", "arming", "pending", "buffering",
+]);
 
 /** The available variant word nearest `desired` in `order` (by index
  *  distance) — e.g. a cover authored with only "closed"/"open" meshes (no
@@ -173,6 +201,46 @@ function pickNearestVariant(order: string[], desired: string, available: Iterabl
  *  just as one run with no separator. */
 function sanitizeVariantWord(rawState: string): string {
   return rawState.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** The pose word an entity's CURRENT state asks for — universal, no type
+ *  branch. Its live state, sanitised, except that anything part-way (a
+ *  mid-range level attribute, or a transitional state) asks for the virtual
+ *  "half" instead. Callers never need to know the entity's type. */
+function desiredVariantWord(entity: HassEntity): string {
+  for (const [attr, full] of LEVEL_ATTRS) {
+    const v = entity.attributes?.[attr];
+    if (typeof v === "number" && Number.isFinite(v) && full > 0) {
+      const f = v / full;
+      // Only a level that's genuinely mid-range means "half"; at either end
+      // the entity's own state word (open/closed/on/off/…) is the truth.
+      if (f > HALF_LOW && f < HALF_HIGH) return "half";
+      break; // one level attribute is enough; at an extreme, fall through
+    }
+  }
+  const word = sanitizeVariantWord(entity.state);
+  return TRANSITIONAL_STATES.has(word) ? "half" : word;
+}
+
+/** Pose words ordered rest → part-way → active, so pickNearestVariant's
+ *  "nearest" is meaningful. Stable for equal ranks so two custom words keep a
+ *  deterministic order rather than depending on mesh indexing.
+ *
+ *  "half" is ALWAYS included even when no "__half" mesh was authored: it needs
+ *  a position in this list for distance to be measurable from it. Without the
+ *  virtual slot, a curtain at 50% (or a light at half brightness) authored
+ *  with only two poses measured "half" at index -1 and collapsed to the rest
+ *  pose — a half-open curtain rendering as fully CLOSED. With it, the two
+ *  neighbours are equidistant and the tie breaks toward the later/active one
+ *  (open, on), which is the sane read for "it's partly on". Callers pick their
+ *  default from the AUTHORED words only (see variantWordsFor) so this virtual
+ *  entry can never itself be chosen as a pose. */
+function orderVariantWords(words: Iterable<string>): string[] {
+  return [...new Set([...words, "half"])].sort((a, b) => {
+    const ra = WORD_RANK[a] ?? UNRANKED_WORD;
+    const rb = WORD_RANK[b] ?? UNRANKED_WORD;
+    return ra !== rb ? ra - rb : a.localeCompare(b);
+  });
 }
 
 // A SweetHome "line light" (the Sweet Home Light plugin's linear LED strip) is
@@ -386,7 +454,7 @@ export class EntityVisuals {
   /** entity_id -> meshes (one entity can drive several meshes, e.g. curtains). */
   private byEntity = new Map<string, AbstractMesh[]>();
   private mapping = new Map<string, EntityMapping>();
-  /** entity_id -> variant word -> its mesh(es) — see VARIANT_VOCAB/
+  /** entity_id -> variant word -> its mesh(es) — see desiredVariantWord/
    *  applyMeshVariant. ONLY meshes with a recognised "__<word>" pose suffix are
    *  registered here; an unsuffixed base mesh (e.g. a physical lock device) is
    *  never a pose and is left out entirely. So this has 2+ words only for an
@@ -700,9 +768,10 @@ export class EntityVisuals {
       this.byEntity.set(map.entityId, list);
       this.mapping.set(map.entityId, map);
 
-      // Multi-mesh visual variants (see VARIANT_VOCAB above) — UNIVERSAL:
-      // grouped purely by suffix presence, for EVERY type, not gated on
-      // having a VARIANT_VOCAB entry. (That gate used to mean "no entry for
+      // Multi-mesh visual variants (see the pose-swap notes at the top of
+      // this file) — UNIVERSAL: grouped purely by suffix presence, for EVERY
+      // type. (There used to be a per-type vocabulary gate here, meaning "no
+      // entry for
       // this type = never grouped at all", which is what silently no-op'd
       // pose-swap for switch/light/fan/etc even after apply()'s DISPATCH
       // logic was generalised to handle them — dispatch and grouping have to
@@ -894,7 +963,7 @@ export class EntityVisuals {
 
     this.buildLabelAnchors();
 
-    // Safety net for multi-variant entities (see VARIANT_VOCAB/meshVariants):
+    // Safety net for multi-variant entities (see meshVariants):
     // default each one to its type's default pose RIGHT NOW, rather than
     // leaving every authored pose visible at once — their raw as-imported
     // visibility — until a live HA state arrives for it. applyMeshVariant is
@@ -1404,26 +1473,11 @@ export class EntityVisuals {
     if (map.type === "light") {
       this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
     }
-    // Pose selection — UNIVERSAL, not opt-in per type. Only cover and lock
-    // keep a fixed, NAMED vocabulary (a real ordinal position / a fail-safe
-    // lock default — see VARIANT_VOCAB's docstring for why binary_sensor is
-    // deliberately NOT a third exception here any more); every other type —
-    // light, switch, fan, climate, media_player, sensor, EVERY binary_sensor
-    // regardless of device_class, camera, assist_satellite, input_boolean,
-    // and any FUTURE type this app ever adds — falls through to the fully
-    // generic path: the entity's own live state IS the pose word (see
-    // applyStateNamedVariant), no fixed vocabulary, no type-based exception
-    // to maintain. All of this is a pure no-op for the overwhelming common
-    // case (a plain mesh with no "__word" siblings at all).
-    if (map.type === "cover") {
-      const bucket = coverVisualBucket(entity);
-      tapDebug(`apply(${entity.entity_id}): state="${entity.state}" current_position=${entity.attributes?.current_position} -> bucket="${bucket}"`);
-      this.applyMeshVariant(entity.entity_id, VARIANT_VOCAB.cover!.words, bucket);
-    } else if (map.type === "lock") {
-      this.applyMeshVariant(entity.entity_id, VARIANT_VOCAB.lock!.words, lockVisualBucket(entity));
-    } else {
-      this.applyStateNamedVariant(entity.entity_id, entity.state);
-    }
+    // Pose selection — ONE call, no type branch at all. A cover, a lock, a
+    // switch, a sensor and any future type all resolve their pose the same
+    // way (see desiredVariantWord). A pure no-op for the overwhelming common
+    // case: a plain mesh with no "__word" siblings.
+    this.applyStateNamedVariant(entity.entity_id, entity);
     this.updateLabel(entity.entity_id, map.type, entity);
     this.requestRender();
   }
@@ -1434,42 +1488,37 @@ export class EntityVisuals {
    *  has 2+ DISTINCT variant meshes registered (see indexMeshes): the common
    *  case — one plain mesh, or none at all — is left completely untouched,
    *  which is what makes this fully opt-in. `order` is the type's full
-   *  vocabulary (see VARIANT_VOCAB), used only for the nearest-available
+   *  ordering (see orderVariantWords), used only for the nearest-available
    *  fallback when `active`'s exact mesh wasn't authored. */
-  /** Which vocabulary (for the nearest-fallback) an entity's poses resolve
-   *  against — cover/lock use their real, named, ordered vocab
-   *  (VARIANT_VOCAB); every OTHER type (including any future one, and every
-   *  binary_sensor now) has no fixed vocabulary, so "order" is just whatever
-   *  words were actually authored, defaulting to whichever sorts first.
-   *  Mirrors apply()'s own cover/lock/else structure exactly — shared by the
+  /** This entity's authored pose words, ordered rest → part-way → active
+   *  (orderVariantWords), plus the word to show before any live state has
+   *  arrived: the rest pose, i.e. order[0]. No type branch — identical for a
+   *  cover, a lock, a switch and anything future. Shared by the
    *  construction-time default pass and applyStateNamedVariant so the two
-   *  can never resolve a different vocabulary for the same entity. */
+   *  can never resolve a different ordering for the same entity. */
   private variantWordsFor(entityId: string): { order: string[]; default: string } | null {
     const byWord = this.meshVariants.get(entityId);
     if (!byWord) return null;
-    const type = this.mapping.get(entityId)?.type;
-    if (type === "cover" || type === "lock") {
-      const vocab = VARIANT_VOCAB[type]!;
-      return { order: vocab.words, default: vocab.default };
-    }
-    const order = [...byWord.keys()];
-    return { order, default: [...order].sort()[0] };
+    const order = orderVariantWords(byWord.keys());
+    // The default is the lowest-ranked AUTHORED word — order can contain the
+    // virtual "half" slot (see orderVariantWords), which has no mesh and so
+    // must never be handed out as a pose to show.
+    const first = order.find((w) => byWord.has(w));
+    return first ? { order, default: first } : null;
   }
 
-  /** Generic, data-driven pose selection for `sensor` (any domain) and a
-   *  non-opening `binary_sensor`: the live HA STATE itself IS the desired
-   *  pose word (sanitised — see sanitizeVariantWord), with NO fixed
-   *  vocabulary at all. The available words come entirely from whatever
-   *  "__word" meshes were actually authored for this entity — a pool-state
-   *  sensor with "clean"/"dirty" poses, a generic binary_sensor authored
-   *  "__on"/"__off", a text sensor with one pose per possible value, all work
-   *  with zero code changes. Same opt-in contract as cover/lock: an entity
-   *  with fewer than 2 registered poses is untouched (applyMeshVariant's own
-   *  no-op), so this is safe to call unconditionally for every sensor. */
-  private applyStateNamedVariant(entityId: string, rawState: string): void {
+  /** Pose selection for ANY entity: desiredVariantWord() turns its live state
+   *  (or a part-way level / transitional state) into the wanted word, and the
+   *  available words come entirely from whichever "__word" meshes were
+   *  actually authored — a curtain with closed/half/open, a switch with
+   *  on/off, a light with a "__half" dimmed pose, a pool sensor with
+   *  clean/dirty. Opt-in throughout: an entity with fewer than 2 registered
+   *  poses is untouched (applyMeshVariant's own no-op), so this is safe to
+   *  call unconditionally for every entity. */
+  private applyStateNamedVariant(entityId: string, entity: HassEntity): void {
     const resolved = this.variantWordsFor(entityId);
     if (!resolved) return;
-    this.applyMeshVariant(entityId, resolved.order, sanitizeVariantWord(rawState));
+    this.applyMeshVariant(entityId, resolved.order, desiredVariantWord(entity));
   }
 
   private applyMeshVariant(entityId: string, order: string[], active: string): void {
@@ -2463,12 +2512,14 @@ export class EntityVisuals {
         // material; the state is already legible from the open/closed pose.
         // A plain, single-mesh lock (lock.foo, no "__word" suffix) has no
         // pose to read, so it still relies on the tint below — that's the
-        // one that stays coloured. Name-based on purpose (mirrors the user's
-        // model: the suffix is what marks a mesh as a pose). VARIANT_VOCAB
-        // gates it so only a RECOGNISED lock pose word suppresses the tint,
-        // never some unrelated "__x" suffix.
+        // one that stays coloured. Checked against THIS entity's own
+        // registered poses (meshVariants), not a fixed word list: there is no
+        // per-type vocabulary any more, so "is this mesh actually one of its
+        // poses" is both the only question that still makes sense and a
+        // strictly tighter test than the old list (an unrelated "__x" suffix
+        // that never grouped as a pose can't match).
         const poseWord = extractVariantSuffix(mesh.name);
-        if (poseWord && VARIANT_VOCAB.lock!.words.includes(poseWord)) break;
+        if (poseWord && this.meshVariants.get(state.entity_id)?.has(poseWord)) break;
 
         // unavailable MUST win over the locked/unlocked colouring below —
         // colouring the mesh confirmed-red for a lock HA has actually lost
@@ -2495,7 +2546,7 @@ export class EntityVisuals {
         // misleading — it'd read as an alert the device_class says it
         // isn't). Checked against THIS entity's actually-registered pose
         // words (meshVariants), not a fixed list — binary_sensor has no
-        // fixed vocabulary any more (see VARIANT_VOCAB), so "is this mesh
+        // fixed vocabulary any more, so "is this mesh
         // really one of ITS poses" is the only question that still makes
         // sense. The plain, single-mesh case (the overwhelming majority of
         // binary_sensors — leak/motion/smoke/… — never authored with poses)
@@ -2542,7 +2593,7 @@ export class EntityVisuals {
       // like a rigid body, and there's no reliable way to infer a gather
       // pivot from arbitrary SweetHome3D geometry). Position IS reflected
       // now, but as a whole-mesh SWAP between up to 3 alternate, pre-posed
-      // meshes (see VARIANT_VOCAB / applyMeshVariant) — that's an
+      // meshes (see applyMeshVariant) — that's an
       // entity-level decision (which mesh to show), not a per-mesh one, so
       // it happens once in apply(), not here. Kept as an explicit case (not
       // falling to default) so a cover doesn't get treated as something else.

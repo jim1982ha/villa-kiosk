@@ -40,61 +40,10 @@ export function lockColor(state: string): string {
   return WARN_COLOR; // jammed / opening / unknown
 }
 
-/**
- * A lock's discrete 2-way VISUAL bucket — "unlocked"/"locked" — used to pick
- * which of a door lock's alternate meshes to show in the 3D scene (see
- * EntityVisuals' lock handling / VARIANT_VOCAB). Distinct from the mesh-
- * NAMING default: an UNSUFFIXED mesh defaults to "unlocked" (VARIANT_VOCAB.
- * lock), mirroring cover's "no suffix = open/accessible state" convention —
- * that only matters for how a bare mesh is CLASSIFIED when grouped alongside
- * an authored second pose. THIS function instead interprets live HA state,
- * and deliberately leans the OTHER way for anything uncertain (jammed,
- * mid-transition, unavailable) — showing the locked pose rather than a
- * lock's 3D model implying a door is open when its real state genuinely
- * isn't known. Not a contradiction: one is a naming convention, the other a
- * fail-safe default for uncertain live data.
- */
-export function lockVisualBucket(entity: HassEntity | undefined): "unlocked" | "locked" {
-  if (entity?.state === "unlocked" || entity?.state === "open") return "unlocked";
-  return "locked"; // locked / jammed / locking / unlocking / unavailable / unknown / missing
-}
-
 export function coverColor(state: string): string {
   if (state === "open") return ON_COLOR;
   if (state === "closed") return OFF_COLOR;
   return WARN_COLOR; // opening / closing
-}
-
-/**
- * A cover's discrete 3-way VISUAL bucket — "closed"/"half"/"open" — used to
- * pick which of a curtain's alternate meshes to show in the 3D scene (see
- * EntityVisuals' cover handling / VARIANT_VOCAB). Deliberately mirrors
- * coverColor's own open/closed/in-between split above, just with position-%
- * awareness added: current_position (0-100, HA convention: 0=closed,
- * 100=open) wins when the device reports it, with a tolerance band since
- * real motors rarely stop at EXACTLY 0/100; devices that only report bare
- * open/closed state (most curtain motors don't report a position at all)
- * fall back to that — opening/closing (actively in transit) reads as "half",
- * the same "something's in between" bucket coverColor already gives it.
- * Anything else genuinely uncertain (unavailable, unknown, a state this
- * function doesn't recognise) falls back to "open" — the SAME default an
- * unsuffixed mesh gets and the index-time safety net applies before any live
- * state is even known (see VARIANT_VOCAB.cover / EntityVisuals' indexMeshes)
- * — so "we don't actually know" reads consistently as "open" everywhere in
- * this feature, never as the half-open bucket (which is reserved for the
- * cases that DO indicate something is genuinely happening: opening/closing).
- */
-export function coverVisualBucket(entity: HassEntity | undefined): "closed" | "half" | "open" {
-  if (!entity) return "open";
-  const pos = entity.attributes.current_position;
-  if (typeof pos === "number" && Number.isFinite(pos)) {
-    if (pos <= 15) return "closed";
-    if (pos >= 85) return "open";
-    return "half";
-  }
-  if (entity.state === "closed") return "closed";
-  if (entity.state === "opening" || entity.state === "closing") return "half";
-  return "open"; // "open" itself, unavailable, unknown, or anything else
 }
 
 const PALETTE = [ON_COLOR, "var(--accent)", WARN_COLOR, DANGER_COLOR, "var(--accent-strong)"];
