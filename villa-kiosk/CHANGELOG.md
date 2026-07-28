@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.71
+
+### Changes
+- Removed binary_sensor's special-cased open/closed pose vocabulary — it was a PURE rename (openingVisualBucket did nothing but state==='on'?'open':'closed', no derived data behind it, unlike cover's real current_position-derived 'half' or lock's fail-safe default), so every binary_sensor now uses the same generic state-is-the-pose-word path as switch/light/fan/etc: author __on/__off poses, not __open/__closed. Only cover and lock keep a fixed vocabulary now, both for a real reason. Also fixed a deeper bug this surfaced: indexMeshes' pose GROUPING was still gated on having a VARIANT_VOCAB entry for the type, so switch/light/fan/etc meshes were never grouped into meshVariants at all even after apply()'s DISPATCH logic was generalised last release — the two have to agree, and grouping is what actually decides whether a pose is recognised in the first place. Grouping is now purely suffix-presence-based for every type. Binary_sensor's pose-vs-pulse-tint check now asks 'is this mesh actually a registered pose for this entity' (meshVariants) instead of checking against the removed fixed word list — strictly more correct than the list it replaces. openingVisualBucket deleted from stateColors.ts (unused elsewhere)
+
+---
+
+
 ## 2.35.70
 
 ### Changes

@@ -59,21 +59,6 @@ export function lockVisualBucket(entity: HassEntity | undefined): "unlocked" | "
   return "locked"; // locked / jammed / locking / unlocking / unavailable / unknown / missing
 }
 
-/**
- * A door/window CONTACT sensor's 2-way VISUAL bucket — "closed"/"open" —
- * used to pick which of its alternate meshes to show in the 3D scene (see
- * EntityVisuals' binary_sensor handling / VARIANT_VOCAB). Only ever consulted
- * for a device_class HA reports as a physical opening (OPENING_DEVICE_CLASSES
- * in BinarySensorClasses.ts); the standard convention for those is "on" =
- * open, "off" = closed. Mirrors lockVisualBucket's fail-safe lean: anything
- * uncertain (unavailable/unknown) falls back to "closed", the SAME default an
- * unsuffixed mesh gets (VARIANT_VOCAB.binary_sensor) — never implying a real
- * door/window is open when its live state genuinely isn't known.
- */
-export function openingVisualBucket(entity: HassEntity | undefined): "closed" | "open" {
-  return entity?.state === "on" ? "open" : "closed"; // off / unavailable / unknown / missing -> closed
-}
-
 export function coverColor(state: string): string {
   if (state === "open") return ON_COLOR;
   if (state === "closed") return OFF_COLOR;
