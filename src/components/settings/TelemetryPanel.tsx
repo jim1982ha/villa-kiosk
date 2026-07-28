@@ -49,8 +49,12 @@ function summarise(e: TelemetryEvent): string {
         .map((k) => [k, e[k] as number] as const)
         .sort((a, b) => b[1] - a[1]);
       const worst = steps.length ? ` · slowest step ${steps[0][0]} ${steps[0][1]}ms` : "";
+      // A big yield figure means the tab was BACKGROUNDED mid-load, not that
+      // anything was slow — call that out so it isn't read as a regression.
+      const parked = typeof e.yield === "number" && e.yield > 1000
+        ? ` · ${(e.yield / 1000).toFixed(1)}s parked (tab was hidden)` : "";
       return `${e.parseMs}ms parse (import ${e.importMs} · post ${e.postMs}), `
-        + `fetch ${e.fetchMs}ms, ${e.meshes} meshes${worst}`;
+        + `fetch ${e.fetchMs}ms, ${e.meshes} meshes${worst}${parked}`;
     }
     case "error":
       return `${e.code}: ${String(e.message ?? "").slice(0, 120)}`;

@@ -221,15 +221,37 @@ export function clearAddonConfigCache(): void {
 const SINGLE_SHOT_MAX_BYTES = 12 * 1024 * 1024;
 const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 
+/** Per-chunk ceiling. An 8 MB chunk over a slow uplink to Bali can legitimately
+ *  take a while, so this is generous — it exists to turn a HUNG request into a
+ *  readable error rather than to police speed. Without it a stalled chunk left
+ *  the button reading "Uploading…" forever with nothing logged and no way to
+ *  tell a slow upload from a dead one. */
+const UPLOAD_CHUNK_TIMEOUT_MS = 120_000;
+
 async function postUploadRequest(
   query: string,
   body: Blob,
 ): Promise<{ path: string; size: number }> {
-  const resp = await fetch(ingressPath(`model-upload?${query}`), {
-    method: "POST",
-    headers: { "Content-Type": "application/octet-stream" },
-    body,
-  });
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), UPLOAD_CHUNK_TIMEOUT_MS);
+  let resp: Response;
+  try {
+    resp = await fetch(ingressPath(`model-upload?${query}`), {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body,
+      signal: ctl.signal,
+    });
+  } catch (e) {
+    throw new Error(
+      (e as Error)?.name === "AbortError"
+        ? `Upload timed out after ${UPLOAD_CHUNK_TIMEOUT_MS / 1000}s with no response from the add-on. `
+          + "The connection stalled — check the network and try again."
+        : `Upload failed: ${(e as Error)?.message || "network error"}`,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
   if (!resp.ok) {
     let msg = `Upload failed (HTTP ${resp.status})`;
     try {
@@ -253,6 +275,10 @@ export async function uploadCentralModel(
   file: Blob,
   kind: "glb" | "rooms",
   originalName?: string,
+  /** Called as each chunk lands, so a multi-chunk upload can show real
+   *  progress. A 19 MB GLB is three round trips; without this the UI cannot
+   *  distinguish "chunk 2 of 3 in flight" from "wedged". */
+  onProgress?: (sentBytes: number, totalBytes: number) => void,
 ): Promise<{ path: string; size: number }> {
   // The original filename rides along so the add-on can record WHAT was
   // uploaded (the destination file keeps the configured name forever).
@@ -262,6 +288,7 @@ export async function uploadCentralModel(
   let result: { path: string; size: number };
   if (file.size <= SINGLE_SHOT_MAX_BYTES) {
     result = await postUploadRequest(base, file);
+    onProgress?.(file.size, file.size);
   } else {
     const uploadId =
       typeof crypto?.randomUUID === "function"
@@ -275,6 +302,7 @@ export async function uploadCentralModel(
         `${base}&upload_id=${uploadId}&offset=${offset}${last ? "&last=1" : ""}`,
         piece,
       );
+      onProgress?.(Math.min(offset + UPLOAD_CHUNK_BYTES, file.size), file.size);
     }
   }
   _addonConfigCache = null;

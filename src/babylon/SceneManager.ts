@@ -893,7 +893,21 @@ export class SceneManager {
    *  sequence into several. See loadModel's docstring for the full context;
    *  this is a deliberate, partial mitigation, not a fix. */
   private yieldFrame(): Promise<void> {
-    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    // Races the animation frame against a timer, and that is not belt-and-
+    // braces — it is the whole point. Browsers do NOT fire rAF in a hidden
+    // tab, so an rAF-only yield does not "give the browser a frame", it STOPS
+    // the load until someone looks at the tab again. A villa preloading in a
+    // background tab would sit unfinished indefinitely; field telemetry caught
+    // one at post = 51533ms against a normal ~1600ms, which is not slow work,
+    // it is ~50s of nobody watching. When visible, rAF still wins the race and
+    // the paint-before-the-next-step behaviour is unchanged; when hidden there
+    // is no paint to wait for anyway, so the timer is the correct answer.
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      requestAnimationFrame(finish);
+      setTimeout(finish, 32);
+    });
   }
 
   /**
@@ -923,10 +937,21 @@ export class SceneManager {
     // specific step is the difference between fixing it and guessing at it.
     const phases: Record<string, number> = {};
     let tStep = tPostStart;
+    let yieldMs = 0;
     const mark = (name: string) => {
       const now = performance.now();
       phases[name] = Math.round(now - tStep);
       tStep = now;
+    };
+    // Waiting is not working. Without this the time parked in a yield was
+    // billed to whichever step came next, so a backgrounded tab read as
+    // "indexMeshes took 50 seconds" and sent us hunting a phantom.
+    const yieldAndDiscount = async () => {
+      const t0 = performance.now();
+      await yieldAndDiscount();
+      const waited = performance.now() - t0;
+      yieldMs += waited;
+      tStep += waited;
     };
     this.loadedMeshes = result.meshes;
 
@@ -952,12 +977,12 @@ export class SceneManager {
     this.pick.indexInteractiveMeshes(result.meshes); // taps work immediately
     mark("pickIndex");
 
-    await this.yieldFrame();
+    await yieldAndDiscount();
     if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
     this.visuals.indexMeshes(result.meshes); // entity badges/lights/state visuals — the single heaviest step
     mark("indexMeshes");
 
-    await this.yieldFrame();
+    await yieldAndDiscount();
     if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
     this.applyStructure(result.meshes); // solid walls + collisions + hidden ceilings
     mark("applyStructure");
@@ -970,6 +995,7 @@ export class SceneManager {
     this.markReady();
     this.requestRender(1000);
     mark("spawn");
+    phases.yield = Math.round(yieldMs);
     const postMs = performance.now() - tPostStart;
     devLog("[SceneManager] post-processing breakdown (ms):", phases);
 

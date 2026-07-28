@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.79
+
+### Changes
+- Fix a load that stalls in a background tab, and a model upload that can hang with no error. BACKGROUND-TAB STALL: loadModel yields between its heavy steps via requestAnimationFrame, and browsers do not fire rAF in a hidden tab — so the yield did not 'give the browser a frame', it STOPPED the load until someone looked at the tab again. A villa preloading in a background tab sat unfinished indefinitely. The Advanced Settings panel showed it plainly at post = 51533ms against a normal ~1600ms: that is not slow work, it is ~50s of nobody watching. yieldFrame now races rAF against a 32ms timer — when visible rAF still wins and the paint-before-the-next-step behaviour is unchanged; when hidden there is no paint to wait for, so the timer is the correct answer. This also silently corrupted our own measurements, because time parked in a yield was billed to whichever step ran next: every 'indexMeshes' number I have been reading included any stall before it, and the iPhone figures (1840-1990ms) are the most suspect since that device backgrounds most. Yields are now timed separately and reported as their own phase, and the telemetry panel flags a load that was parked rather than slow, so a hidden-tab load is never read as a regression again. UPLOAD HANG: postUploadRequest had no timeout, so a stalled chunk left the button reading 'Uploading...' forever with nothing logged and no way to tell a slow upload from a dead one — reported from the field with a GLB upload that never completed. Added a 120s per-chunk abort with a readable error (generous on purpose: an 8MB chunk to Bali can legitimately be slow, the timeout exists to surface a hang, not to police speed), plus real per-chunk progress so 'Uploading 67%' distinguishes in-flight from wedged. A 19MB GLB is three round trips and the UI previously showed nothing across all three. Verified: 5 yield/accounting assertions, 10 delta, 9 memoisation, 25 FM engine
+
+---
+
+
 ## 2.35.78
 
 ### Changes

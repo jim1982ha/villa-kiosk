@@ -168,12 +168,13 @@ function CentralModelInfo({
  * Kept as one component so standalone and Ingress can't drift apart here.
  */
 function ModelActionsRow({
-  canUploadCentrally, uploadBusy, uploadMsg, backupMsg,
+  canUploadCentrally, uploadBusy, uploadPct, uploadMsg, backupMsg,
   glbUploadRef, roomsUploadRef, configFileRef,
   onGlbFile, onRoomsFile, onConfigFile, onExport,
 }: {
   canUploadCentrally: boolean;
   uploadBusy: "glb" | "rooms" | null;
+  uploadPct: number | null;
   uploadMsg: { text: string; ok: boolean } | null;
   backupMsg: { text: string; ok: boolean } | null;
   glbUploadRef: RefObject<HTMLInputElement>;
@@ -205,11 +206,15 @@ function ModelActionsRow({
           <>
             <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
               onClick={() => glbUploadRef.current?.click()}>
-              <Upload size={15} /> {uploadBusy === "glb" ? "Uploading…" : "Upload central GLB"}
+              <Upload size={15} /> {uploadBusy === "glb"
+                ? (uploadPct === null ? "Uploading…" : `Uploading ${uploadPct}%`)
+                : "Upload central GLB"}
             </button>
             <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
               onClick={() => roomsUploadRef.current?.click()}>
-              <Upload size={15} /> {uploadBusy === "rooms" ? "Uploading…" : "Upload room data"}
+              <Upload size={15} /> {uploadBusy === "rooms"
+                ? (uploadPct === null ? "Uploading…" : `Uploading ${uploadPct}%`)
+                : "Upload room data"}
             </button>
           </>
         )}
@@ -306,6 +311,8 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
   const roomsUploadRef = useRef<HTMLInputElement>(null);
   const [uploadBusy, setUploadBusy] = useState<null | "glb" | "rooms">(null);
   const [uploadMsg, setUploadMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  /** 0-100 while a chunked upload is in flight, null otherwise. */
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
 
   const uploadCentral = async (file: File, kind: "glb" | "rooms") => {
     const okExt = kind === "glb" ? [".glb"] : [".json"];
@@ -315,8 +322,12 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
     }
     setUploadBusy(kind);
     setUploadMsg(null);
+    setUploadPct(0);
     try {
-      const { path, size } = await uploadCentralModel(file, kind, file.name);
+      const { path, size } = await uploadCentralModel(
+        file, kind, file.name,
+        (sent, total) => setUploadPct(Math.round((sent / total) * 100)),
+      );
       // For the room-data sidecar, ALSO adopt it into this running client's
       // config so its rooms/beams take effect immediately (not just for other
       // clients on their next open).
@@ -327,6 +338,7 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
       setUploadMsg({ text: `Uploaded ${mb < 1 ? `${(size / 1000).toFixed(0)} KB` : `${mb.toFixed(1)} MB`} → ${path}. Reloading…`, ok: true });
       setTimeout(() => onModelChanged(), 600); // remount to load the new central model
     } catch (err) {
+      setUploadPct(null);
       setUploadMsg({ text: (err as Error).message, ok: false });
     } finally {
       setUploadBusy(null);
@@ -364,7 +376,7 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
             </div>
           )}
           <ModelActionsRow
-            canUploadCentrally uploadBusy={uploadBusy} uploadMsg={uploadMsg} backupMsg={backupMsg}
+            canUploadCentrally uploadBusy={uploadBusy} uploadPct={uploadPct} uploadMsg={uploadMsg} backupMsg={backupMsg}
             glbUploadRef={glbUploadRef} roomsUploadRef={roomsUploadRef} configFileRef={configFileRef}
             onGlbFile={(f) => uploadCentral(f, "glb")} onRoomsFile={(f) => uploadCentral(f, "rooms")}
             onConfigFile={importConfig} onExport={exportConfig}
