@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.74
+
+### Changes
+- iOS white-screen root cause + backend telemetry. (1) ROOT CAUSE of the iPhone 'switch to WhatsApp, come back, white unresponsive screen': SceneManager.handlePageHide disposed the whole scene whenever pagehide fired with persisted=false. On iOS that heuristic is simply wrong — Safari/WKWebView fires pagehide with persisted=FALSE when the app is merely backgrounded, then restores the SAME document on return without reloading, so React never remounts and nothing ever rebuilt the scene we just tore down; the canvas stayed dead until a force-quit. iOS reclaims GPU memory from a backgrounded tab itself (that's what the existing context-lost path handles), so the eager dispose bought nothing there. Now skipped on iOS, and a new handlePageShow safety net covers every platform: if the page is restored onto an already-disposed scene whose canvas is still in the DOM, reload once (one-shot guarded so it can never loop). The Chrome/HA-Ingress iframe case the dispose exists for is unaffected. (2) New telemetry backend: bounded 500-event ring in /data/telemetry.json via POST/GET /telemetry (POST open to any authorized session — a guest's failing iPhone is exactly the case worth capturing; GET owner-only since it carries other people's user-agents and error text). Client reports load phase timings, JS errors/unhandled rejections (wired into the existing captureError so nothing is duplicated), WebGL context loss/restore, and page-lifecycle transitions incl. the pagehide 'persisted' flag that misleads on iOS — sent via sendBeacon/keepalive so events fired AS the page is torn down still leave the device. New owner-only Device telemetry panel in Advanced Settings. Ring bounds verified (keeps newest 500, survives a corrupt file)
+
+---
+
+
 ## 2.35.73
 
 ### Changes

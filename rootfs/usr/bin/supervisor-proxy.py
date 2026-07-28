@@ -948,6 +948,60 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str):
     return get_handler, put_handler
 
 
+# ── Telemetry ────────────────────────────────────────────────────────────────
+# A bounded, append-only ring of events reported BY the clients (load timings,
+# JS errors, WebGL context loss, iOS background/restore). Exists because the
+# failures that matter here only ever reproduce on someone else's device — an
+# iPhone in another country going white after an app switch is not something
+# any amount of local testing finds. Kept deliberately small and dumb: newest
+# N events in one JSON file, no rotation logic, no index, no PII beyond the
+# user-agent the browser already sends on every request.
+TELEMETRY_FILE = "/data/telemetry.json"
+TELEMETRY_MAX_EVENTS = 500
+TELEMETRY_MAX_BODY = 64_000
+
+
+async def telemetry_post_handler(request: web.Request) -> web.Response:
+    """Append one client event. Open to ANY authorized session (a guest's
+    iPhone failing is exactly the case worth capturing), unlike the owner-only
+    config stores. Silently bounded so a looping client can't fill /data."""
+    if not _authorized(request):
+        return _unauthorized()
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return web.json_response({"error": "event must be an object"}, status=400)
+    if len(json.dumps(body).encode("utf-8")) > TELEMETRY_MAX_BODY:
+        return web.json_response({"error": "event too large"}, status=413)
+
+    # Server-stamped fields win over anything the client sent, so a bad/spoofed
+    # client can't forge them.
+    body["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    body["ua"] = request.headers.get("User-Agent", "")[:300]
+    body["role"] = _role_for(request)
+
+    events = _read_json_store(TELEMETRY_FILE, [])
+    events.append(body)
+    del events[:-TELEMETRY_MAX_EVENTS]          # keep only the newest N
+    _write_json_store(TELEMETRY_FILE, json.dumps(events))
+    return web.json_response({"ok": True, "stored": len(events)})
+
+
+async def telemetry_get_handler(request: web.Request) -> web.Response:
+    """Read the ring back (owner only — it carries other people's user-agents
+    and error text). `?clear=1` empties it after reading."""
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may read telemetry.")
+    events = _read_json_store(TELEMETRY_FILE, [])
+    if request.query.get("clear") == "1":
+        _write_json_store(TELEMETRY_FILE, json.dumps([]))
+    return web.json_response({"events": events, "count": len(events)})
+
+
 scenes_get_handler, scenes_put_handler = _json_store_handlers(
     SCENES_FILE, "scenes", [], SCENES_MAX_BYTES, "scenes")
 device_config_get_handler, device_config_put_handler = _json_store_handlers(
@@ -973,6 +1027,8 @@ def main() -> None:
     app.router.add_get("/scenes", scenes_get_handler)
     app.router.add_put("/scenes", scenes_put_handler)
     app.router.add_get("/device-config", device_config_get_handler)
+    app.router.add_post("/telemetry", telemetry_post_handler)
+    app.router.add_get("/telemetry", telemetry_get_handler)
     app.router.add_put("/device-config", device_config_put_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
     app.router.add_post("/auth/verify", auth_verify_handler)

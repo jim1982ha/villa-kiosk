@@ -28,6 +28,7 @@ import { resetLightPoolTextureCache } from "./LightPools";
 import { resolveMeshToMapping, inferTypeFromEntityId, normaliseMeshName } from "@/config/EntityMap";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { isIOS as detectIOS } from "@/utils/diagnostics";
+import { report as reportTelemetry } from "@/utils/telemetry";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
@@ -99,7 +100,13 @@ export class SceneManager {
    *  from config.teleportPoints (a real room polygon always wins). */
   private lastRoomPolyNames = new Set<string>();
 
+  /** Kept so handlePageShow can ask "is this canvas still on screen?" — the
+   *  test that distinguishes a real React unmount from an iOS
+   *  background/restore of the same document. */
+  private readonly canvas: HTMLCanvasElement;
+
   constructor(canvas: HTMLCanvasElement, opts: SceneManagerOptions) {
+    this.canvas = canvas;
     this.config = opts.config;
 
     // iOS Safari / the HA companion app's WKWebView enforces a hard, low ceiling
@@ -289,6 +296,7 @@ export class SceneManager {
     });
     this.engine.onContextRestoredObservable.add(() => {
       console.warn("[SceneManager] WebGL context restored — forcing repaint");
+      reportTelemetry("context-restored", {});
       this.requestRender(2000);
     });
     document.addEventListener("visibilitychange", this.handleVisibility);
@@ -302,6 +310,8 @@ export class SceneManager {
     // when a document is being discarded/frozen — dispose here so the GPU
     // context is released immediately instead of waiting for GC.
     window.addEventListener("pagehide", this.handlePageHide);
+    // Recovery net for the disposal above — see handlePageShow.
+    window.addEventListener("pageshow", this.handlePageShow);
   }
 
   private handlePageHide = (e: PageTransitionEvent) => {
@@ -309,8 +319,41 @@ export class SceneManager {
     // intact — disposing then would leave a dead canvas on return. Only tear
     // down on a true discard (persisted === false), which is the iframe-
     // navigation / tab-close case we actually need to release the GPU for.
-    // (A WebGL-heavy page is rarely bfcache-eligible anyway, but be safe.)
-    if (!e.persisted) this.dispose();
+    //
+    // EXCEPT on iOS, where this heuristic is simply wrong and caused the
+    // "switch to WhatsApp, come back, white unresponsive screen" bug: iOS
+    // Safari/WKWebView fires pagehide with persisted=FALSE when the app is
+    // merely backgrounded, then restores the SAME document on return without
+    // reloading. React never remounts, so nothing ever rebuilt the scene we
+    // had just disposed — the canvas stayed dead until the user force-quit
+    // the app. iOS reclaims GPU memory from a backgrounded tab by itself
+    // (that's what the context-lost path above is for), so the eager dispose
+    // buys nothing there while costing everything. The Chrome/HA-Ingress
+    // iframe case this exists for is unaffected.
+    if (!e.persisted && !this.isIOS) this.dispose();
+  };
+
+  /**
+   * If we come back to a document we already tore down, get it working again.
+   *
+   * Belt-and-braces for the disposal above: `persisted` is not reliable across
+   * browsers (that's the iOS bug in handlePageHide), so rather than trust it a
+   * second time, this asks the only question that actually matters — "is this
+   * scene dead while its canvas is still on screen?" — and forces a reload if
+   * so. A reload costs a few seconds; the alternative is the permanently blank,
+   * unresponsive canvas that made the app unusable on iPhone. Guarded so it can
+   * only ever fire once per document, so a reload can never loop.
+   */
+  private handlePageShow = () => {
+    if (!this.disposed || this.reloadedAfterDispose) return;
+    if (!this.canvas.isConnected) return; // genuinely unmounted — React owns it
+    this.reloadedAfterDispose = true;
+    console.warn("[SceneManager] page restored onto a disposed scene — reloading");
+    // Fire BEFORE the reload (sendBeacon survives teardown). If this ever
+    // shows up in telemetry it means handlePageHide tore down a document that
+    // then came back — i.e. the iOS bug recurring on some other platform.
+    reportTelemetry("recovered", { reason: "pageshow-on-disposed-scene" });
+    window.location.reload();
   };
 
   private startRenderLoop() {
@@ -1540,6 +1583,8 @@ export class SceneManager {
   }
 
   private disposed = false;
+  /** One-shot guard so handlePageShow's reload can never loop. */
+  private reloadedAfterDispose = false;
 
   dispose(): void {
     // Idempotent: both React unmount AND the pagehide safety net can call
@@ -1553,6 +1598,7 @@ export class SceneManager {
     this.resizeObserver?.disconnect();
     document.removeEventListener("visibilitychange", this.handleVisibility);
     window.removeEventListener("pagehide", this.handlePageHide);
+    window.removeEventListener("pageshow", this.handlePageShow);
     this.engine.stopRenderLoop(); // stop first — no frames render during teardown
 
     // Subsystems own DOM listeners / timers / GUI textures that scene.dispose()

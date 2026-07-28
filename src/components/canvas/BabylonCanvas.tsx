@@ -13,6 +13,7 @@ import { claimPrefetch } from "@/utils/modelPrefetch";
 import { fetchModelWithRetry } from "@/utils/fetchProgress";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { parseRoomData } from "@/utils/sh3dParser";
+import { report as reportTelemetry } from "@/utils/telemetry";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
 import ModelUploader from "@/components/settings/ModelUploader";
 import ErrorReport from "@/components/ErrorReport";
@@ -261,6 +262,20 @@ export default function BabylonCanvas({
           parseMs: Math.round(tParseDone - tFetchDone),
           importMs: Math.round(importMs),
           postMs: Math.round(postMs),
+        });
+
+        // Ship the phase split to the add-on. This is the measurement that
+        // turns "the app is slow" into an actionable number — and it's per
+        // DEVICE, so a phone that parses 5x slower than the desktop shows up
+        // as itself rather than as an anecdote.
+        reportTelemetry("load", {
+          bytes: data.byteLength,
+          meshes: meshNames.length,
+          fetchMs: Math.round(tFetchDone - tFetchStart),
+          parseMs: Math.round(tParseDone - tFetchDone),
+          importMs: Math.round(importMs),
+          postMs: Math.round(postMs),
+          source: fromAddon ? "addon" : "indexeddb",
         });
 
         // Expose mesh names for the binding UI.

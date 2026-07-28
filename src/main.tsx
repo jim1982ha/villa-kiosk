@@ -4,11 +4,15 @@ import { HashRouter } from "react-router-dom";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { installGlobalErrorCapture } from "./utils/diagnostics";
+import { installLifecycleTelemetry } from "./utils/telemetry";
 import "./styles.css";
 
 // Record uncaught errors / rejections to localStorage so one that fires just
 // before a reload still surfaces in the next load's diagnostics report.
 installGlobalErrorCapture();
+// Page-lifecycle + WebGL signals — the trail that explains an iOS white
+// screen after an app switch (see telemetry.ts / SceneManager.handlePageHide).
+installLifecycleTelemetry();
 
 // Register the PWA service worker (best-effort). Skip it under HA Ingress: the
 // add-on is served from a per-session path (/api/hassio_ingress/<token>/), so a

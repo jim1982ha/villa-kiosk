@@ -16,6 +16,7 @@ import { fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type Addon
 import { getLoadedModelInfo } from "@/utils/modelInfo";
 import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
+import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 
 interface Props {
@@ -410,6 +411,18 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
             Bound 3D objects
           </div>
           <BindingsTable />
+
+          {/* Owner only: the endpoint itself 403s other roles (it carries
+              other people's user-agents and error text), so don't render a
+              panel that could only ever show an error for them. */}
+          {role === "owner" && (
+            <>
+              <div className="settings-section-title" style={{ marginTop: 28 }}>
+                Device telemetry
+              </div>
+              <TelemetryPanel />
+            </>
+          )}
         </div>
 
         <div className="settings-footer" style={{ justifyContent: "space-between" }}>

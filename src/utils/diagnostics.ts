@@ -20,6 +20,7 @@
 //      paste back for troubleshooting.
 
 import { getLoadedModelInfo } from "./modelInfo";
+import { report } from "./telemetry";
 
 const DIAG_KEY = "villa-kiosk:diag";
 // Two rapid failed attempts already in the window → the next mount is the 3rd,
@@ -122,11 +123,17 @@ export function captureError(code: string, err: unknown, source?: string): Captu
     at: Date.now(),
   };
   write({ lastError: captured });
+  // Also ship it to the add-on. Local capture only ever helps someone who can
+  // reach THIS device's storage; the errors worth fixing happen on a guest's
+  // phone. Stack is truncated — the server caps event size and a full stack
+  // is rarely the interesting part next to code+message+source.
+  report("error", { code, message: e.message, source, stack: e.stack?.slice(0, 1200) });
   return captured;
 }
 
 export function noteContextLoss(): void {
   write({ contextLosses: (read().contextLosses ?? 0) + 1 });
+  report("context-lost", { total: read().contextLosses ?? 0 });
 }
 
 /** Install global handlers so an error that fires *just before* a reload is
