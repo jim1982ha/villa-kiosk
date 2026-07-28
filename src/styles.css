@@ -224,21 +224,17 @@ button {
   background: var(--chip-bg);
 }
 
-/* Colour-legend (?) button living at the END of the category row, behind a
-   hairline separator. Roomy screens only — on a phone the right-hand cluster
-   (incl. this) collapses into the overflow menu, so both hide here. Same
-   .hud-labelsize-btn treatment, same reasoning. MUST use the exact same
-   media query as the one below that switches .hud-overflow to display:block
-   — these two used to disagree (this one was width-only, the layout switch
-   was "width OR short height"), so a device satisfying only the height half
-   showed the overflow menu (with its OWN "Map colours" entry) while this
-   inline button stayed visible too — the (?) appearing twice bug. */
+/* Colour-legend (?) separator at the END of the category row. The buttons it
+   fences off (.hud-cat-help, .hud-labelsize-btn) are hidden on phones — where
+   the overflow menu carries the same actions — but that rule CANNOT live here:
+   `.icon-btn { display: flex }` is declared just below at equal specificity
+   (0,1,0), so a `display: none` written above it silently loses the cascade and
+   the buttons stay visible. It lives in the compact-bar media query far below
+   instead, after .icon-btn, and scoped through .hud-center to outrank it
+   outright. */
 .hud-cat-sep {
   flex: 0 0 auto; width: 1px; align-self: stretch; margin: 3px 4px;
   background: var(--hairline-strong);
-}
-@media (max-width: 640px), (max-height: 560px) {
-  .hud-cat-help, .hud-labelsize-btn { display: none; }
 }
 
 .icon-btn {
@@ -257,12 +253,18 @@ button {
    and the status pill's "Unavailable" state, so it reads as the same signal. */
 .icon-btn.has-alert { color: var(--status-danger); border-color: var(--status-danger); }
 .icon-btn { position: relative; }
+/* Count sits fully INSIDE the button's box, not hanging off its corner: this
+   button lives in .hud-group-scroll, whose `overflow-x: auto` also clips
+   vertically (CSS forces a non-visible overflow-y once one axis is auto), so
+   a negatively-offset badge got its top sliced off. Tucked to the top-right
+   corner within bounds instead — it overlaps the glyph slightly, which is the
+   normal look for a count badge and costs nothing legibility-wise. */
 .icon-btn-count {
-  position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px;
+  position: absolute; top: 1px; right: 1px; min-width: 14px; height: 14px;
   padding: 0 3px; border-radius: 999px;
   background: var(--status-danger); color: #fff;
-  font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
-  box-shadow: 0 0 0 2px var(--bg-overlay);
+  font-size: 9px; font-weight: 700; line-height: 14px; text-align: center;
+  box-shadow: 0 0 0 1.5px var(--bg-overlay);
 }
 
 /* Grouped icon "sections" in the top bar — each set of related buttons sits in
@@ -1482,6 +1484,13 @@ label.toggle span { user-select: none; line-height: 1.4; }
      inherits sizing/shape from .hud-group .icon-btn + the .hud-center rule
      above like its Minus/Plus neighbours — no separate override needed. */
   .hud-right-inline { display: none; }
+  /* Inline colour-legend (?) and label-size +/- collapse into the overflow
+     dropdown, which carries both. Declared HERE (not next to .hud-cat-sep,
+     where it reads more naturally) because .icon-btn's `display: flex` sits
+     below that spot at equal specificity and would win the cascade; the
+     .hud-center prefix also raises specificity so this can't be re-broken by
+     another equal-weight rule later. */
+  .hud-center .hud-cat-help, .hud-center .hud-labelsize-btn { display: none; }
   .hud-overflow { display: block; }
   /* Left control stack: slightly narrower icon buttons to save width. */
   .hud-stack .icon-btn { width: 36px; }

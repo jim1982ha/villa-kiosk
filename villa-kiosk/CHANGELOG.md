@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.67
+
+### Changes
+- Three top-bar fixes. (1) Inline +/- and (?) still showed on mobile: the real blocker was CSS ORDER, not the media query — the hide rule sat ABOVE '.icon-btn { display: flex }' at equal specificity (0,1,0), so display:flex won the cascade. Moved into the compact-bar block below .icon-btn and scoped through .hud-center so it outranks outright. (2) Badge count said 30 while the list showed 3 — two separate causes, both fixed: SummaryGroupPanel DROPPED any id with no live HA entity, so phantom devices (renamed/deleted in HA but still in the villa model, e.g. binary_sensor.door_network_contact) silently vanished from the list while still being counted; it now substitutes the same phantom stand-in the 3D badge layer uses, so a device faded on the map is guaranteed to appear in the list. And the count now ignores config debris — an entityMap key HA never heard of that ALSO has no map geometry is a leftover, not a broken device; a phantom that IS on the map still counts, which is exactly the door_network_contact case. Count and list are now built from one id set and cannot disagree. PHANTOM_ENTITY extracted from EntityVisuals into shared utils/phantomEntity.ts so both surfaces use one definition. (3) Count badge was clipped at the top: its parent .hud-group-scroll sets overflow-x:auto, which forces vertical clipping too, so the negatively-offset badge lost its top — now tucked fully inside the button bounds
+
+---
+
+
 ## 2.35.66
 
 ### Changes

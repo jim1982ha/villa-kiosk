@@ -57,6 +57,7 @@ import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable, coverVisualBucket, lockVisualBucket, openingVisualBucket } from "@/utils/stateColors";
+import { phantomEntity } from "@/utils/phantomEntity";
 import { OPENING_DEVICE_CLASSES } from "@/config/BinarySensorClasses";
 import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
@@ -357,21 +358,6 @@ const BADGE_RING: Record<BadgeKind, { color: string | null; alpha: number }> = {
   unavailable: { color: null, alpha: 0.5 },
 };
 const BADGE_RING_THICKNESS = 3;
-
-/** A minimal, well-typed stand-in HassEntity for a mesh-bound entity_id that
- *  has NEVER reported a real state — see rebuildLabels' construction-time
- *  fallback. state: "unavailable" is what routes it through the existing
- *  dim/desaturated badge treatment; every other field is a harmless, unused
- *  placeholder (no code path reads them for an "unavailable"-kind badge). */
-function PHANTOM_ENTITY(entityId: string): HassEntity {
-  return {
-    entity_id: entityId,
-    state: "unavailable",
-    attributes: {},
-    last_changed: "", last_updated: "",
-    context: { id: "", parent_id: null, user_id: null },
-  };
-}
 
 export class EntityVisuals {
   private scene: Scene;
@@ -1767,7 +1753,7 @@ export class EntityVisuals {
       // (dim/desaturated glyph, no ring) as a real device HA lost contact
       // with — the SAME convention isUnavailable() already uses elsewhere
       // (entity == null counts as unavailable), just applied here too.
-      const cached = this.lastState.get(entityId) ?? PHANTOM_ENTITY(entityId);
+      const cached = this.lastState.get(entityId) ?? phantomEntity(entityId);
       this.updateLabel(entityId, type, cached);
       // Same reasoning, but for the MESH itself (emissive glow, on/off alpha
       // fade — see applyToMesh): that only ever runs from apply(), which

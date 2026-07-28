@@ -19,6 +19,7 @@ import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { inferTypeFromEntityId, displayLabelFor } from "@/config/EntityMap";
 import { isUnavailable } from "@/utils/stateColors";
+import { phantomEntity } from "@/utils/phantomEntity";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityType } from "@/types/scene.types";
 
@@ -88,7 +89,14 @@ export default function SummaryGroupPanel({
 
   const roomOf = (id: string) => config.entityMap[id]?.room?.trim() ?? "";
 
-  const all = group.entityIds.map((id) => entities[id]).filter((e): e is NonNullable<typeof e> => !!e);
+  // Substitute a phantom "unavailable" stand-in for any id Home Assistant has
+  // no live entity for, rather than dropping it. Dropping was silently hiding
+  // exactly the devices most worth showing — one renamed/deleted in HA while
+  // the villa model still references it. It also made this list disagree with
+  // the count that opened it (badge said 30, list showed 3), since the caller
+  // counts ids and this counted live entities. Same stand-in the 3D badge
+  // layer uses, so a device faded on the map is now guaranteed to appear here.
+  const all = group.entityIds.map((id) => entities[id] ?? phantomEntity(id));
   // Devices you can see in the villa first; HA-only ones (no geometry in this
   // model) grouped after them under their own heading — HIDDEN entirely for
   // Guest: a device with no map presence is exactly the kind of "behind the

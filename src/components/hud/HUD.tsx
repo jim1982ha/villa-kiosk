@@ -154,6 +154,14 @@ export default function HUD({
     const reps = new Set<string>();
     for (const id of candidates) {
       if (config.entityMap[id]?.disabled) continue;
+      // Ignore CONFIG DEBRIS: an entityMap entry that HA has never heard of
+      // AND that has no geometry on the map is not a device in error, it's a
+      // leftover key from a renamed entity or an older model — counting those
+      // buried the handful of genuinely-broken devices under a pile of noise
+      // (the reported "30" when only a few were actually wrong). A phantom
+      // that IS on the map stays: that's a device you can see, faded, right
+      // now, and is exactly the case this button has to report.
+      if (!mappedEntityIds.has(id) && !entities[id]) continue;
       if (!isUnavailable(entities[id])) continue;
       reps.add(repOf.get(id) ?? id);
     }
