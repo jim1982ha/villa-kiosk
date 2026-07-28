@@ -1744,10 +1744,37 @@ export class EntityVisuals {
   }
 
   private rebuildLabels(): void {
+    // Bail if the engine is gone. rebuildLabels can be reached from
+    // updateConfig on a React commit that lands AFTER a WebGL context loss has
+    // torn the engine down, and the first `new Image(...)` below then throws
+    // "Invalid engine. Unable to create a canvas." out of a promise nobody
+    // awaits — an unhandled rejection, seen in the field.
+    const engine = this.scene.getEngine();
+    if (!engine || engine.isDisposed) return;
+
     // Ensure the GUI layer exists.
     if (!this.labelLayer) {
       this.labelLayer = AdvancedDynamicTexture.CreateFullscreenUI("entityLabels", true, this.scene);
     } else {
+      // DISPOSE the previous controls — do not merely detach them.
+      //
+      // This was a substantial memory leak. clearControls() only removes
+      // controls from the container; it releases nothing. Every rebuild
+      // orphaned roughly five controls per entity (panel, badge, glyph Image,
+      // value wrapper, value text) — around 420 of them on this villa — and
+      // each GUI Image carries its own backing canvas. Nothing referenced them
+      // afterwards, but Babylon still held them, so they were never collected.
+      //
+      // Rebuilds are frequent: every indexMeshes, and every repaintBadges,
+      // which until the entityMapDelta fix ran on each window focus. Field
+      // telemetry showed a tab climbing from ~400MB to over 2GB across a
+      // session of ordinary use, ending in a WebGL context loss and a failed
+      // load. Container.dispose() is recursive over children, so disposing the
+      // direct children of the root releases the whole tree; the array is
+      // copied first because dispose() mutates it as it goes.
+      for (const child of this.labelLayer.rootContainer.children.slice()) {
+        child.dispose();
+      }
       this.labelLayer.rootContainer.clearControls();
     }
     this.labels.clear();

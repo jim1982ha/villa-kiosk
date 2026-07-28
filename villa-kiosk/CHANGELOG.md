@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.80
+
+### Changes
+- HOTFIX my own v2.35.79 regression, plus the real memory leak. THE REGRESSION: yieldAndDiscount() awaited ITSELF instead of this.yieldFrame(), so loadModel recursed until the stack blew — MODEL_LOAD_FAILED / 'Maximum call stack size exceeded' at the import-mesh phase, on every load. I caused it with a scripted edit that rewrote 'await this.yieldFrame()' to 'await yieldAndDiscount()' across the whole method tail, including inside the helper I had just written, whose body contained that exact line. The field report proved it was not memory pressure: a fresh tab using 256MB of a 4396MB limit still failed instantly. Confirmed by reading the built bundle at the offset from the minified stack trace, and the fix is verified the same way rather than assumed. THE LEAK: rebuildLabels() called clearControls(), which only DETACHES controls — it disposes nothing. Every rebuild orphaned about five controls per entity (panel, badge, glyph Image, value wrapper, value text), roughly 420 on this villa, and each GUI Image carries its own backing canvas. Nothing referenced them but Babylon still held them, so they were never collected. Rebuilds are frequent: every indexMeshes and every repaintBadges, which until the entityMapDelta fix ran on each window focus. Telemetry showed a tab climbing 403MB to 1538MB over thirteen minutes of ordinary use, ending in a WebGL context loss (31 of them) and a failed load; the user confirmed 2.4GB in Chrome. Now disposes the previous control tree — Container.dispose() is recursive over children, and the child array is copied first because dispose() mutates it. Also guards rebuildLabels against a disposed engine: it is reachable from updateConfig on a React commit landing after a context loss, where 'new Image' threw 'Invalid engine. Unable to create a canvas' out of an unawaited promise
+
+---
+
+
 ## 2.35.79
 
 ### Changes

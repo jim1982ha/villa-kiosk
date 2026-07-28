@@ -948,7 +948,12 @@ export class SceneManager {
     // "indexMeshes took 50 seconds" and sent us hunting a phantom.
     const yieldAndDiscount = async () => {
       const t0 = performance.now();
-      await yieldAndDiscount();
+      // MUST be this.yieldFrame(). Calling yieldAndDiscount() here recurses
+      // forever and blows the stack before the villa can load — shipped as
+      // v2.35.79, caught in the field as MODEL_LOAD_FAILED / "Maximum call
+      // stack size exceeded" at the import-mesh phase, on a tab using only
+      // 256MB of a 4.4GB heap. It was never memory pressure.
+      await this.yieldFrame();
       const waited = performance.now() - t0;
       yieldMs += waited;
       tStep += waited;
