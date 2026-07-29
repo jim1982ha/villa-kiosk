@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.36.4
+
+### Changes
+- View-mode toggle (the walking-person/map icon in its own left-column section, see 2.36.3): dropped its `.active` accent styling — it's a plain mode SWITCH, not a state indicator like the floor/anchor buttons above it, so it now stays visually neutral in both first-person and overview mode instead of lighting up blue.
+- Top-bar right zone: the Unavailable-devices and Facility alert buttons, moved next to the profile chip in 2.36.3, now share ONE pill background with the profile chip and Settings button (`.hud-right-inline` reuses the same `.hud-group` chrome the category-filter row and label-size stepper already use) instead of each rendering as its own separately-bordered white square. This also fixes a height/alignment mismatch: outside `.hud-group`, a standalone `.icon-btn` is a full 48px glass button with its own border, and once the alert button moved out of the category row its `has-alert` red border rule — previously silently overridden by that row's own icon-btn reset — started actually applying, on top of the size difference, making it read as bigger and higher than its neighbours. Inside the shared pill every button (including the profile chip's own logout button) resets to the same flat 38px sizing, matching the rest of the row. Typecheck and production build clean.
+
+---
+
+
 ## 2.36.3
 
 ### Changes

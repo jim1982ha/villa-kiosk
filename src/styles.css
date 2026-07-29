@@ -1854,22 +1854,20 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .pinpad-key:disabled { opacity: 0.45; cursor: default; }
 .pinpad-key.spacer { visibility: hidden; }
 
-/* Profile chip in the HUD (current role + switch-profile action). */
+/* Profile label (current role + switch-profile action) — lives inside the
+   shared .hud-right-inline.hud-group pill now (see HUD.tsx), alongside the
+   Unavailable/Facility/Settings buttons, so it no longer needs its own
+   separate chip background/border; just the text + nested button layout. */
 .hud-profile {
   display: inline-flex; align-items: center; gap: 8px;
-  height: 48px; /* match the standalone icon buttons beside it */
-  padding: 0 6px 0 14px; /* room for the name on the left, snug on the button */
+  padding: 0 4px 0 8px; /* room for the name on the left, snug on the button */
   font-size: 13px; color: var(--text-secondary);
-  border-radius: 14px; background: var(--chip-bg);
-  border: 1px solid var(--hairline); white-space: nowrap;
+  white-space: nowrap;
 }
-/* The logout button nests INSIDE the chip, so it's smaller than a standalone
-   icon button and squared to match. */
-.hud-profile .icon-btn {
-  width: 36px; height: 36px; border-radius: 10px;
-  background: transparent; border: none; backdrop-filter: none;
-}
-.hud-profile .icon-btn:hover { background: var(--bg-input); }
+/* .hud-group .icon-btn already resets size/chrome for every button in the
+   shared pill (see that rule) — this just re-squares the logout button to
+   the same 38px so it doesn't read as a mismatched size next to it. */
+.hud-profile .icon-btn { width: 38px; height: 38px; }
 
 @media (max-width: 640px), (max-height: 560px) {
   .profile-title { font-size: 30px; }

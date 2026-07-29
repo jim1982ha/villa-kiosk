@@ -574,9 +574,15 @@ export default function HUD({
             attention right now", same reasoning that used to keep them beside
             the category filter — just relocated so that row stays purely
             about map categories. The first-person/bird's-eye toggle lives in
-            the left column now (see hud-left-col). */}
+            the left column now (see hud-left-col). ONE shared pill (the same
+            .hud-group chrome the category row and label-size stepper use),
+            not four separately-bordered buttons — .hud-group's own icon-btn
+            reset also guarantees every button here is the same 38px height,
+            so the alert button (which briefly had its OWN 48px glass button
+            plus a genuinely-applied has-alert border once it left the old
+            category row) can't read as bigger/higher than its neighbours. */}
         <div className="hud-right">
-          <div className="hud-right-inline">
+          <div className="hud-right-inline hud-group">
             <button
               className={`icon-btn${unavailableIds.length > 0 ? " has-alert" : ""}`}
               onClick={() => setUnavailableOpen(true)}

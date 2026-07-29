@@ -26,8 +26,11 @@ export default function ViewControls({ viewMode, onToggleViewMode, stacked }: Vi
   const overviewActive = viewMode === "overview";
   return (
     <div className={`overview-help-buttons${stacked ? " hud-stack" : ""}`}>
+      {/* No `.active` (accent) styling — unlike the floor/rooms/anchor
+          buttons above it, this is a plain mode SWITCH, not a lit "this is
+          on" state indicator, so it stays neutral in both modes. */}
       <button
-        className={`icon-btn${overviewActive ? " active" : ""}`}
+        className="icon-btn"
         onClick={onToggleViewMode}
         title={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
         aria-label={overviewActive ? "Switch to first-person view" : "Switch to overview (bird's-eye) view"}
