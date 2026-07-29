@@ -5,13 +5,17 @@
 //              the right-side overflow menu instead — see hud-overflow) so
 //              the category row keeps its width
 //   • Center — category filter, then a label-size stepper (+/-)
-//   • Right  — Settings only
+//   • Right  — unavailable-devices + Facility alerts, then the profile chip
+//              and Settings — grouped together since they're all "who's
+//              signed in / what needs attention" info, not map controls
 // A left control column floats below the brand: the vertical floor toggle
-// (1F / 2F) + the Rooms dial button. (Device state labels are always shown;
-// "Highlight clickable objects" moved to Settings.)
-// Bottom bar: bottom-left always shows the first-person/bird's-eye view
-// toggle, with the view-default (Anchor) button right below it while in
-// overview; bottom-right shows the first-person movement joystick.
+// (1F / 2F) + the Rooms dial button, then — as its OWN section right below,
+// not merged into that stack — the first-person/bird's-eye view toggle
+// (previously a lone bottom-left corner button; moved here so the bottom bar
+// stays free for the summary tiles/joystick and nothing floats unlabelled in
+// a corner). (Device state labels are always shown; "Highlight clickable
+// objects" moved to Settings.)
+// Bottom bar: bottom-right shows the first-person movement joystick only.
 
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
@@ -395,51 +399,6 @@ export default function HUD({
                 </button>
               );
             })}
-            {/* Unavailable devices — placed BEFORE the colour-legend help (and,
-                unlike it, never collapsed into the mobile overflow menu: an
-                error indicator earns a persistent, glanceable spot even on a
-                phone, where CircleHelp is a rarely-needed reference). Always
-                rendered, not only when count > 0, so its position is stable —
-                a button that appears/disappears is easy to miss the one time
-                it matters. Quiet (plain icon-btn) at zero; a red count badge
-                takes over the instant something goes offline. */}
-            <span className="hud-cat-sep" aria-hidden="true" />
-            <button
-              className={`icon-btn${unavailableIds.length > 0 ? " has-alert" : ""}`}
-              onClick={() => setUnavailableOpen(true)}
-              title={unavailableIds.length > 0
-                ? `${unavailableIds.length} device${unavailableIds.length === 1 ? "" : "s"} unavailable`
-                : "No unavailable devices"}
-              aria-label="Show unavailable devices"
-            >
-              <TriangleAlert size={18} />
-              {unavailableIds.length > 0 && (
-                <span className="icon-btn-count" aria-hidden="true">
-                  {unavailableIds.length > 99 ? "99+" : unavailableIds.length}
-                </span>
-              )}
-            </button>
-            {/* Facility workspace — maintenance, readiness, faults, spend.
-                Sits beside the unavailable-devices alert because they are the
-                same job: both answer "what needs me". Only rendered for a
-                profile holding manageFacility. */}
-            {onOpenFacility && (
-              <button
-                className={`icon-btn${facilityAttention > 0 ? " has-alert" : ""}`}
-                onClick={onOpenFacility}
-                title={facilityAttention > 0
-                  ? `${facilityAttention} maintenance item${facilityAttention === 1 ? "" : "s"} need attention`
-                  : "Facility — maintenance, readiness, faults"}
-                aria-label="Open the facility workspace"
-              >
-                <ClipboardList size={18} />
-                {facilityAttention > 0 && (
-                  <span className="icon-btn-count" aria-hidden="true">
-                    {facilityAttention > 99 ? "99+" : facilityAttention}
-                  </span>
-                )}
-              </button>
-            )}
             {/* The colour-legend (?) lives INSIDE the category row — it explains
                 exactly these colours, so it belongs with them — fenced off by a
                 separator. Roomy screens only: on a phone it stays in the
@@ -519,6 +478,30 @@ export default function HUD({
                       <span className="dot" />
                     </span>
                   </div>
+                  {/* Unavailable/Facility alerts — the same two buttons that
+                      sit beside the profile chip on a roomy screen (see
+                      .hud-right-inline), collapsed into menu items here so a
+                      phone doesn't lose access to either, just an extra tap
+                      to reach them. Count shown inline rather than as a
+                      floating badge — this is a text row, not an icon. */}
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    onClick={() => { setMenuOpen(false); setUnavailableOpen(true); }}
+                  >
+                    <TriangleAlert size={18} />
+                    <span>Unavailable devices{unavailableIds.length > 0 ? ` (${unavailableIds.length > 99 ? "99+" : unavailableIds.length})` : ""}</span>
+                  </button>
+                  {onOpenFacility && (
+                    <button
+                      role="menuitem"
+                      className="hud-menu-item"
+                      onClick={() => { setMenuOpen(false); onOpenFacility(); }}
+                    >
+                      <ClipboardList size={18} />
+                      <span>Facility{facilityAttention > 0 ? ` (${facilityAttention > 99 ? "99+" : facilityAttention})` : ""}</span>
+                    </button>
+                  )}
                   {/* Same control as the (hidden-on-mobile) inline Minus/Plus
                       — one row, not two menu items, since it's a single
                       stepper rather than two independent actions. Doesn't
@@ -583,12 +566,49 @@ export default function HUD({
           </div>
         </div>
 
-        {/* Profile chip, then Settings (when permitted) — roomy screens only;
-            a phone collapses these into the overflow menu above instead (see
-            .hud-right-inline's mobile display:none). The first-person/bird's-
-            eye toggle lives in the left column now (see hud-left-col). */}
+        {/* Unavailable/Facility alerts, then the profile chip and Settings —
+            roomy screens only; a phone collapses all of this into the
+            overflow menu above instead (see .hud-right-inline's mobile
+            display:none and the matching menu items further up). Alerts sit
+            right before the profile chip since both answer "what needs my
+            attention right now", same reasoning that used to keep them beside
+            the category filter — just relocated so that row stays purely
+            about map categories. The first-person/bird's-eye toggle lives in
+            the left column now (see hud-left-col). */}
         <div className="hud-right">
           <div className="hud-right-inline">
+            <button
+              className={`icon-btn${unavailableIds.length > 0 ? " has-alert" : ""}`}
+              onClick={() => setUnavailableOpen(true)}
+              title={unavailableIds.length > 0
+                ? `${unavailableIds.length} device${unavailableIds.length === 1 ? "" : "s"} unavailable`
+                : "No unavailable devices"}
+              aria-label="Show unavailable devices"
+            >
+              <TriangleAlert size={18} />
+              {unavailableIds.length > 0 && (
+                <span className="icon-btn-count" aria-hidden="true">
+                  {unavailableIds.length > 99 ? "99+" : unavailableIds.length}
+                </span>
+              )}
+            </button>
+            {onOpenFacility && (
+              <button
+                className={`icon-btn${facilityAttention > 0 ? " has-alert" : ""}`}
+                onClick={onOpenFacility}
+                title={facilityAttention > 0
+                  ? `${facilityAttention} maintenance item${facilityAttention === 1 ? "" : "s"} need attention`
+                  : "Facility — maintenance, readiness, faults"}
+                aria-label="Open the facility workspace"
+              >
+                <ClipboardList size={18} />
+                {facilityAttention > 0 && (
+                  <span className="icon-btn-count" aria-hidden="true">
+                    {facilityAttention > 99 ? "99+" : facilityAttention}
+                  </span>
+                )}
+              </button>
+            )}
             {role && (
               <span className="hud-profile" title={`Signed in as ${ROLE_LABELS[role]}`}>
                 <span className="hud-profile-name">{ROLE_LABELS[role]}</span>
@@ -623,6 +643,11 @@ export default function HUD({
           onClose={() => setUnavailableOpen(false)}
           onOpenEntity={(id) => { setUnavailableOpen(false); onOpenEntity(id); }}
           hideBulkToggle
+          // This is a troubleshooting list, not a device-control summary — a
+          // hidden or "diagnostic" (RSSI, battery…) entity going offline is
+          // exactly what it exists to surface, and filtering it here would
+          // make this modal's row count disagree with the badge's number.
+          filterSuppressed={false}
         />
       )}
 
@@ -634,10 +659,15 @@ export default function HUD({
           the bird's-eye); the Rooms button taps to a quick floor/room dial,
           long-press for the full Rooms list to add/edit; the anchor button
           taps to jump to this device's saved default view, long-press/
-          right-click to (re)define it. The first-person/bird's-eye TOGGLE
-          still lives in the bottom-left stack (see bottom-bar) — only the
-          anchor moved, since the toggle isn't about "which view", just
-          first-person vs. overview. */}
+          right-click to (re)define it. Right below, as its OWN dedicated
+          section (not merged into this stack — it's a different kind of
+          control, "how am I looking" rather than "where"), the first-person/
+          bird's-eye view TOGGLE: it used to be a lone standalone button in
+          the bottom-left corner, with nothing else there to explain it and
+          nothing to stop the (separately, absolutely positioned) SummaryBar's
+          tile row from visually extending over it on a narrow phone. Neither
+          the bottom bar (kept free for the tiles + joystick) nor the top bar
+          (already tight on a phone) had room for a clearly-labelled home. */}
       <div className="hud-left-col">
         <div className="hud-stack">
           {availFloors.map((f) => (
@@ -677,21 +707,13 @@ export default function HUD({
             />
           )}
         </div>
+        <ViewControls stacked viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
       </div>
 
       <div className="bottom-bar">
-        {/* Bottom-left view controls — ALWAYS standalone here now, regardless
-            of whether the SummaryBar (device/scene tiles) is shown. It used
-            to move INTO that bar's own left section while the bar was
-            visible; kept purely standalone instead so it never has to share
-            width with however wide the tile row grows on a given screen —
-            see .bottom-bar's z-index note in styles.css for how this stays
-            clickable even when the (separately, absolutely positioned)
-            SummaryBar happens to visually extend over this corner on a
-            narrow phone. */}
-        <ViewControls stacked viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
-
-        {/* Bottom-right: the first-person movement joystick. */}
+        {/* Bottom-right: the first-person movement joystick — the ONLY thing
+            left in this bar now that the view-mode toggle moved to the left
+            column (see hud-left-col). */}
         {viewMode === "first-person" && <VirtualJoystick onMove={onMove} />}
       </div>
     </>

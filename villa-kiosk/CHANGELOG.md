@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.36.3
+
+### Changes
+- Narrowed the previous release's "hide config/diagnostic entities from kiosk lists" idea per feedback: it should NOT touch Home Assistant itself (an entity flagged entity_category config/diagnostic stays exactly as visible there as before), and it should ONLY apply to `SummaryGroupPanel`'s device-control-summary role, not its troubleshooting one. `SummaryGroupPanel` gained a `filterSuppressed` prop (default true); HUD's and FacilityModal's "Unavailable devices" modals — which share their entityIds AND count badge with the Facility Readiness tab's guest-readiness "All devices reporting" check — now pass `filterSuppressed={false}`, since a hidden or diagnostic (RSSI, battery…) sensor going offline is exactly the kind of thing that check exists to surface, and filtering it there would also have made the modal's row count silently disagree with its own badge number.
+- Layout: moved the first-person/bird's-eye view toggle out of its lone standalone spot in the bottom-left corner (nothing there explained it, and the SummaryBar's tile row could visually extend over it on a narrow phone) into its own dedicated section in HUD's left column, right below the existing floor/rooms/anchor stack — same left-edge vertical flow, no new CSS needed. The bottom bar now holds only the first-person joystick.
+- Layout: moved the "Unavailable devices" and "Facility" alert icons out of the category-filter row (top-bar centre) into the right-hand zone, right before the profile chip — grouped with "who's signed in" since both answer "what needs my attention". Added matching items to the phone overflow menu (⋮) so neither loses reachability once `.hud-right-inline` collapses there below 640px. Typecheck and production build clean.
+
+---
+
+
 ## 2.36.2
 
 ### Changes

@@ -577,17 +577,18 @@ button {
   padding: 16px calc(20px + env(safe-area-inset-right, 0px))
            calc(16px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
   z-index: 23; pointer-events: none;
-  /* ABOVE .summary-bar (21) on purpose: the view-mode toggle here lives in
-     the SAME bottom-left corner the summary bar's centred, near-full-width
-     tile row can visually extend over on a narrow phone — without this the
-     view button would be covered (and unclickable) whenever that overlap
-     happens, exactly the failure this bar existing standalone (not inside
-     the tile row any more) would otherwise reintroduce. */
+  /* ABOVE .summary-bar (21): the bottom-right joystick (the only thing left
+     in this bar — the view-mode toggle moved to .hud-left-col) can still sit
+     under the summary bar's centred, near-full-width tile row on a narrow
+     phone, so it needs to win that stacking fight the same way it always has. */
 }
 .bottom-bar > * { pointer-events: auto; }
 
-/* Bottom-left view controls: the first-person/bird's-eye toggle, and (only in
-   overview) the "jump to default view" button right below it. */
+/* The first-person/bird's-eye toggle's own layout (used both in its
+   .hud-left-col home and, "stacked" false, inside the SummaryBar in the past
+   — see ViewControls' docstring). (Only in overview) the "jump to default
+   view" button sits in a DIFFERENT section (hud-left-col's floor/rooms
+   stack) — not part of this class. */
 .overview-help { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .overview-help-buttons { display: flex; flex-direction: column; gap: 8px; }
 .overview-hint {

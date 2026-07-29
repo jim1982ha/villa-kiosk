@@ -332,23 +332,23 @@ function SceneMenu({ scenes, canRun, apply, activeName }: {
 }
 
 export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
-  const { entities, hiddenEntityIds, callService } = useHA();
+  const { entities, suppressedEntityIds, callService } = useHA();
   const { role } = useProfile();
   const { config } = useConfig();
 
   const [openGroup, setOpenGroup] = useState<SummaryTile | null>(null);
 
-  // Entities hidden in HA are excluded up front so a tile's "3 On" count
-  // never disagrees with the (also-filtered, see SummaryGroupPanel) list its
-  // tap opens.
+  // Entities hidden in HA, or filed under entity_category config/diagnostic,
+  // are excluded up front so a tile's "3 On" count never disagrees with the
+  // (also-filtered, see SummaryGroupPanel) list its tap opens.
   const visibleEntities = useMemo(() => {
-    if (hiddenEntityIds.size === 0) return entities;
+    if (suppressedEntityIds.size === 0) return entities;
     const out: Record<string, HassEntity> = {};
     for (const [id, e] of Object.entries(entities)) {
-      if (!hiddenEntityIds.has(id)) out[id] = e;
+      if (!suppressedEntityIds.has(id)) out[id] = e;
     }
     return out;
-  }, [entities, hiddenEntityIds]);
+  }, [entities, suppressedEntityIds]);
 
   const deviceTiles = useMemo(
     () => deriveTiles(visibleEntities, config.entityMap, (c) => (role ? isCategoryAllowed(role, c) : false)),

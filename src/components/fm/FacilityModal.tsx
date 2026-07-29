@@ -175,6 +175,9 @@ export default function FacilityModal({
           onClose={() => setUnavailableOpen(false)}
           onOpenEntity={(id) => { setUnavailableOpen(false); onOpenEntity(id); }}
           hideBulkToggle
+          // Same reasoning as HUD's identical modal (see its call site): a
+          // troubleshooting/readiness list, not a device-control summary.
+          filterSuppressed={false}
         />
       )}
 

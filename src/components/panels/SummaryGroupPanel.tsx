@@ -47,6 +47,16 @@ interface Props {
    *  a cross-category diagnostic view), bulk-toggling makes no sense even
    *  when the list happens to contain toggleable domains. */
   hideBulkToggle?: boolean;
+  /** Default true: drop entities the user hid in HA or that HA filed under
+   *  entity_category config/diagnostic (see useHA().suppressedEntityIds).
+   *  Set false for a genuine troubleshooting/health list — HUD's unavailable-
+   *  devices modal shares its entityIds (and count badge) with the Facility
+   *  Readiness tab's guest-readiness check, where a hidden or "diagnostic"
+   *  sensor going offline (RSSI, battery…) is exactly the kind of thing that
+   *  list exists to surface, not hide; it also keeps that modal's row count
+   *  always equal to the badge's number, since nothing here would filter it
+   *  down further. */
+  filterSuppressed?: boolean;
 }
 
 const OFF = new Set(["off", "unavailable", "unknown", ""]);
@@ -78,8 +88,9 @@ function groupByRoom(
 
 export default function SummaryGroupPanel({
   group, canControl, mappedEntityIds, onClose, onOpenEntity, hideBulkToggle,
+  filterSuppressed = true,
 }: Props) {
-  const { entities, hiddenEntityIds, callService } = useHA();
+  const { entities, suppressedEntityIds, callService } = useHA();
   const { config } = useConfig();
   const { role } = useProfile();
   // Bulk-toggling an entire group (potentially dozens of devices) from one
@@ -96,12 +107,13 @@ export default function SummaryGroupPanel({
   // the count that opened it (badge said 30, list showed 3), since the caller
   // counts ids and this counted live entities. Same stand-in the 3D badge
   // layer uses, so a device faded on the map is now guaranteed to appear here.
-  // Entities the user hid in HA (Settings > Entities > Visible) are excluded
-  // regardless of which caller built `group` — HA's own auto-populated
-  // dashboards honour this the same way, and this modal IS this app's
-  // auto-populated device list.
+  // Entities the user hid in HA, or that HA itself filed under Configuration/
+  // Diagnostics (entity_category), are excluded regardless of which caller
+  // built `group` — HA's own auto-populated dashboards honour both the same
+  // way, and this modal IS this app's auto-populated device list. Neither is
+  // touched in HA itself — the entity stays exactly as visible there as before.
   const all = group.entityIds
-    .filter((id) => !hiddenEntityIds.has(id))
+    .filter((id) => !filterSuppressed || !suppressedEntityIds.has(id))
     .map((id) => entities[id] ?? phantomEntity(id));
   // Devices you can see in the villa first; HA-only ones (no geometry in this
   // model) grouped after them under their own heading — HIDDEN entirely for

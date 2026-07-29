@@ -1,10 +1,14 @@
 // src/components/hud/ViewControls.tsx
-// The first-person / bird's-eye view toggle that lives at the bottom of the
-// screen. Its companion, the saved default-view "anchor" button, is
-// DefaultViewButton below — a separate export so HUD can embed it inline in
-// the left-column floor/rooms stack (as its 4th button) instead of pairing it
-// with the toggle here; the two used to be one component sharing a wrapper,
-// but the anchor's home moved and the toggle no longer needs to know about it.
+// The first-person / bird's-eye view toggle — its own dedicated section in
+// HUD's left column, right below the floor/rooms stack (previously a lone
+// standalone button pinned to the bottom-left corner, with nothing to
+// explain it and no protection from the SummaryBar's tile row visually
+// extending over that corner on a narrow phone). Its companion, the saved
+// default-view "anchor" button, is DefaultViewButton below — a separate
+// export so HUD can embed it inline in the left-column floor/rooms stack (as
+// its 4th button) instead of pairing it with the toggle here; the two used
+// to be one component sharing a wrapper, but the anchor's home moved and the
+// toggle no longer needs to know about it.
 
 import { useRef, useState } from "react";
 import { Map, PersonStanding, Anchor } from "lucide-react";
@@ -12,10 +16,9 @@ import { Map, PersonStanding, Anchor } from "lucide-react";
 export interface ViewControlsProps {
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
-  /** Standalone (bottom-left corner) mode: wrap the button in the shared
-   *  .hud-stack section — the same glass block the floor toggle uses — so it
-   *  reads as one HUD section rather than a loose button. Inside the
-   *  SummaryBar this is off: the bar is already that section. */
+  /** Wrap the button in the shared .hud-stack section — the same glass block
+   *  the floor toggle uses — so it reads as its own HUD section rather than a
+   *  loose button. Always on at the current (left-column) call site. */
   stacked?: boolean;
 }
 
