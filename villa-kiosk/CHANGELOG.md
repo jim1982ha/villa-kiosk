@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.97
+
+### Changes
+- Full audit of iOS Dynamic Island / notch safe-area coverage, prompted by a field report that the top bar was still obstructed on an iPhone despite the earlier (2.35.94) pass. This time covered EVERY `position: fixed`/`absolute` rule anchored to a screen edge (~47 candidates), not just the top bar, and found the real gaps: **`.auth-screen`** — the PIN/profile-picker gate, the very first screen a guest sees before ever reaching the dashboard — had ZERO safe-area awareness (a flat 24px padding, no `env()` at all); now inset on all four sides. **`.bottom-bar`** (the joystick/view-toggle corner controls) and **`.summary-bar`** (the bottom tile strip) had no `safe-area-inset-bottom`, so they could sit under the home-indicator gesture area. The mobile full-screen `.modal` sheet (Settings/Config Editor on a phone) only had top/bottom `env()` — no left/right — so in LANDSCAPE, where the Dynamic Island's clearance shows up as `inset-left`/`inset-right` instead of `inset-top` (the physical sensor housing doesn't move, but the page's logical top/bottom/left/right remap when the device rotates), its header/body/footer had zero protection on that side; the villa's manifest sets `orientation: "any"`, so this is a real, reachable case, not theoretical. All fixed using the exact same mechanism already correctly in place elsewhere (`.hud-topbar`, `.room-label`, `.camera-header`) — `env(safe-area-inset-*, 0px)` added to the relevant padding — which IS the professional/Apple-recommended standard (WebKit's own `viewport-fit=cover` + `env()` mechanism, already wired up correctly at the meta-tag level); this was a coverage gap on specific elements, not a wrong approach. Typecheck and production build clean.
+
+---
+
+
 ## 2.35.96
 
 ### Changes

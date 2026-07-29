@@ -549,7 +549,16 @@ button {
 .bottom-bar {
   position: absolute; bottom: 0; left: 0; right: 0; height: 96px;
   display: flex; align-items: flex-end; justify-content: space-between;
-  padding: 16px 20px; z-index: 23; pointer-events: none;
+  /* Safe-area on all three exposed edges: bottom for the home-indicator
+     gesture bar, left/right for a Dynamic-Island-class device rotated to
+     landscape (the island's clearance shows up as inset-left/right there,
+     not inset-top — see .hud-topbar for the same reasoning). Was a flat
+     16px/20px with no env() at all, so the joystick/view-toggle corner
+     controls could sit under the home indicator or, in landscape, under
+     the island itself. */
+  padding: 16px calc(20px + env(safe-area-inset-right, 0px))
+           calc(16px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
+  z-index: 23; pointer-events: none;
   /* ABOVE .summary-bar (21) on purpose: the view-mode toggle here lives in
      the SAME bottom-left corner the summary bar's centred, near-full-width
      tile row can visually extend over on a narrow phone — without this the
@@ -579,7 +588,10 @@ button {
    it never collides with the corner controls (view toggle / joystick). Own
    pointer-events since it's a sibling of the pointer-events:none bottom-bar. */
 .summary-bar {
-  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  /* bottom safe-area only — horizontally centred, so left/right insets
+     don't apply the way they do for an edge-anchored bar. Without this the
+     tile row could sit under the home-indicator gesture area on an iPhone. */
+  position: absolute; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
   z-index: 21; pointer-events: auto;
   display: flex; gap: 8px; align-items: stretch;
   /* width:max-content is ESSENTIAL: a centred (left:50%) absolutely-positioned
@@ -1660,20 +1672,29 @@ label.toggle span { user-select: none; line-height: 1.4; }
     /* Inset content from the notch / home indicator. */
     padding-top: env(safe-area-inset-top, 0px);
   }
-  .settings-header { padding: 16px 18px 12px; }
-  .settings-body { padding: 8px 18px 12px; }
+  /* left/right env() on every section (not just .modal's own padding-top)
+     since this sheet is full-bleed (width:100%): in landscape on a
+     Dynamic-Island-class phone, the island's clearance shows up as
+     inset-left/right, not inset-top, so a header/body/footer with only a
+     flat 18px had no protection from it on that side. */
+  .settings-header {
+    padding: 16px calc(18px + env(safe-area-inset-right, 0px)) 12px calc(18px + env(safe-area-inset-left, 0px));
+  }
+  .settings-body {
+    padding: 8px calc(18px + env(safe-area-inset-right, 0px)) 12px calc(18px + env(safe-area-inset-left, 0px));
+  }
   /* Keep the footer on one line — Config Editor left, Cancel/Save right — like
      desktop, instead of wrapping. */
   .settings-footer {
-    padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+    padding: 12px calc(18px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(18px + env(safe-area-inset-left, 0px));
     flex-wrap: nowrap;
   }
   .settings-footer .btn { padding-left: 12px; padding-right: 12px; }
   /* Plain (non-settings) modals scroll their own content on tiny screens. */
   .modal:not(.settings-modal) {
     overflow-y: auto;
-    padding: calc(20px + env(safe-area-inset-top, 0px)) 18px
-             calc(20px + env(safe-area-inset-bottom, 0px));
+    padding: calc(20px + env(safe-area-inset-top, 0px)) calc(18px + env(safe-area-inset-right, 0px))
+             calc(20px + env(safe-area-inset-bottom, 0px)) calc(18px + env(safe-area-inset-left, 0px));
   }
   /* The device panel is short (a few rows + a small graph) and reads far
      better as a small centered card than the full-screen top-anchored sheet
@@ -1719,7 +1740,16 @@ label.toggle span { user-select: none; line-height: 1.4; }
   display: flex; align-items: center; justify-content: center;
   background: var(--bg-base); color: var(--text-primary);
   font-family: var(--font-ui);
-  padding: 24px; overflow-y: auto;
+  /* This is the very FIRST screen a guest sees — a flat 24px padding had no
+     safe-area awareness at all, so on a short/notched device the title
+     ("Who's using the kiosk?") or the passcode pad could render under the
+     Dynamic Island / home indicator instead of clear of them. Centred
+     content is naturally less exposed than a top-pinned bar, but a tall
+     profile-card list or a short viewport still pushes content right up
+     against the edge. */
+  padding: calc(24px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px))
+           calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px));
+  overflow-y: auto;
 }
 
 .profile-select { width: min(920px, 100%); text-align: center; }
