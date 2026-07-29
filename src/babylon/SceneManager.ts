@@ -1144,6 +1144,32 @@ export class SceneManager {
     // it's applied AFTER the world-space yaw is known, scaling the horizontal
     // part by cos(pitch) and adding a vertical part, which keeps the result a
     // unit vector without needing its own world-transform trip.
+    //
+    // CAMERA_MODEL_FRONT_OFFSET_RAD corrects for which way the "71/CCTV.obj"
+    // catalog model itself faces at angle=0 — planAngleToDir assumes angle=0
+    // points along +Y in SweetHome's plan (the usual furniture convention),
+    // but that is a property of how THIS SPECIFIC model was authored/imported,
+    // not something derivable from the angle number alone. Field report
+    // (2026-07-29): with the villa's real cameras, the beam fanned out well
+    // away from the direction the mesh visibly faces — consistent with the
+    // model's lens actually pointing the opposite way from the convention
+    // above, i.e. a 180° offset. Applied to angle BEFORE planAngleToDir, so it
+    // corrects every camera at once rather than needing a per-device fix.
+    // If it is still off after this ships: the beam's actual world compass
+    // heading only ever differs from "correct" by a multiple of 90° once this
+    // constant is right for the MODEL (the affine world-transform itself is
+    // already proven correct — camera POSITIONS render correctly) — so the
+    // fix is to try Math.PI/2 or -Math.PI/2 here instead of Math.PI, not to
+    // touch anything else in this block.
+    const CAMERA_MODEL_FRONT_OFFSET_RAD = Math.PI;
+    // Cameras have no `pitch` set in this villa's sh3d file at all (checked
+    // directly against the file), so every beam sat perfectly level — the
+    // "aims across the room instead of down at the floor" report. 30° is the
+    // requested default: enough to visibly aim toward the floor for a
+    // typically ceiling/high-wall-mounted camera without folding all the way
+    // down onto the mount itself. An operator who sets a real `pitch` on a
+    // camera in SweetHome still overrides this per-device, as before.
+    const DEFAULT_CAMERA_PITCH_RAD = 30 * (Math.PI / 180);
     const cameraDirections = new Map<string, { x: number; y: number; z: number }>();
     if (this.config.sh3dEntities?.length) {
       for (const e of this.config.sh3dEntities) {
@@ -1159,13 +1185,13 @@ export class SceneManager {
         const map = this.config.entityMap[e.entityId];
         const isCamera = map ? map.type === "camera" : e.entityId.startsWith("camera.");
         if (!isCamera) continue;
-        const d = planAngleToDir(e.angle);
+        const d = planAngleToDir(e.angle + CAMERA_MODEL_FRONT_OFFSET_RAD);
         const p0 = planToWorld(e.x, e.y);
         const p1 = planToWorld(e.x + d.px, e.y + d.py);
         const wx = p1.x - p0.x, wz = p1.z - p0.z;
         const len = Math.hypot(wx, wz);
         if (len <= 1e-6) continue;
-        const pitch = e.pitch ?? 0;
+        const pitch = e.pitch ?? DEFAULT_CAMERA_PITCH_RAD;
         // CONFIRMED live (2026-07-03): positive pitch tilts the beam DOWN, as
         // expected for a ceiling-mounted security camera looking into the
         // room — no sign flip needed. Only sensible over roughly 0°..90°

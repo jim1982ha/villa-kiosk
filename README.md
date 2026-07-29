@@ -313,11 +313,23 @@ A camera shows a red beam only when **all** of these hold:
 1. The entity maps to at least one mesh in the model.
 2. That piece carries a **rotation** in SweetHome 3D — the beam points where
    the camera points, so a camera left at angle 0 gets no beam rather than a
-   guessed direction. Set the `angle` to aim it and the `pitch` to tilt it
-   (0°–90°; the beam clips against walls, so tilting past vertical shortens it
-   to a stub).
+   guessed direction. Set the `angle` to aim it; **`pitch` is optional** — if
+   you leave it unset the beam tilts **30° down by default**, since a
+   ceiling/high-wall-mounted camera aiming level (the old behaviour) put the
+   beam on the same horizontal plane as the mesh instead of toward the floor
+   it's actually watching. Set an explicit `pitch` (0°–90°) to override that
+   default per camera; the beam clips against walls, so tilting past vertical
+   shortens it to a stub.
 3. The camera has a **motion sensor** wired to it (the optional linked-entity
    field on the device card), and that sensor is `on`.
+
+The beam's compass heading is derived from `angle` plus a fixed correction for
+which way the catalog CCTV model itself faces at `angle=0` (see
+`CAMERA_MODEL_FRONT_OFFSET_RAD` in `SceneManager.ts`) — the affine world
+transform that places every camera is independently proven correct (camera
+*positions* always render correctly), so if a beam's heading is still off
+after aiming `angle` at the intended target, that constant is the one place
+to adjust, not the transform itself.
 
 Load the app with `?debug` and it prints which cameras qualified and, for the
 rest, exactly why they were skipped (`no mesh`, `no sh3d angle data`,
