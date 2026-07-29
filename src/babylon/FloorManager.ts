@@ -1,14 +1,15 @@
 // src/babylon/FloorManager.ts
 // Floor visibility and staircase trigger zones.
 //
-// Classification, in priority order:
-//  0. `Structure_Exterior` (blender_pipeline ≥ 2.5.0): the always-visible
-//     ground + garden + palm group. It is NEVER culled by a floor toggle, so
-//     the villa keeps its plot and the palms stay whole on every floor.
-//  1. Pipeline-split structure meshes (blender_pipeline ≥ 2.3.0): a
-//     multi-level GLB ships `Structure` (ground level) plus `Structure_L1`
-//     (`_L2`, …) sharing one baked atlas. Name decides the floor:
-//     `Structure` → 1, `Structure_L1` → 2, and so on.
+// Classification, in priority order — all of it via meshRoles.structureRole,
+// which reads the pipeline's own glTF `extras` metadata and only falls back to
+// the legacy name convention for a GLB built before that metadata existed:
+//  0. The always-visible exterior group (`vk_exterior`): ground + garden +
+//     palms. NEVER culled by a floor toggle, so the villa keeps its plot and
+//     the palms stay whole on every floor.
+//  1. Structure meshes (`vk_role: "structure"`), placed by their stamped
+//     `vk_level` — 0-based from the pipeline (0 = ground), +1 here because
+//     this app's floors are 1-based.
 //  2. Everything else — entity meshes, and the single fused Structure of
 //     older GLBs (which rule 1 pins to floor 1 so it can never vanish) — by
 //     elevation: bounding-box centre Y below FLOOR_SPLIT_Y is floor 1.
@@ -27,11 +28,9 @@
 
 import type { AbstractMesh, Scene } from "@babylonjs/core";
 import type { CameraController } from "./CameraController";
-import { normaliseMeshName } from "../config/EntityMap";
+import { structureRole } from "./meshRoles";
 
 const FLOOR_SPLIT_Y = 2.8; // metres; ground floor wall height is ~2.5 m
-const STRUCTURE_LEVEL = /^Structure(?:_L(\d+))?$/i;
-const STRUCTURE_EXTERIOR = /^Structure_Exterior$/i;
 
 export class FloorManager {
   private camera: CameraController | null = null;
@@ -88,24 +87,27 @@ export class FloorManager {
       // carrier is managed by the day/night crossfade, not by floors.
       if (m.getTotalVertices() === 0) continue;
       if (m.name === "BAKED_NightCarrier") continue;
-      // Babylon's glTF loader splits a multi-primitive mesh (one primitive per
-      // material slot — a baked Structure keeps ~150 slots all pointing at
-      // BAKED_Structure) into child meshes renamed `Structure_primitive<N>`.
-      // Match on the normalised base name, or every structure piece falls
-      // through to the bounding-box rule: the 2F floor slab (centre ~2.5 m,
-      // below FLOOR_SPLIT_Y) then lands on floor 1 — visible on 1F, missing
-      // on 2F — and the garden loses its always-on status.
-      const base = normaliseMeshName(m.name);
+      // Ask the mesh what it IS (pipeline metadata), not what it is CALLED —
+      // see meshRoles.ts. Falls back to the legacy name convention for a GLB
+      // built before the pipeline stamped that metadata, and that fallback
+      // still normalises the name first: Babylon's glTF loader splits a
+      // multi-primitive mesh (one primitive per material slot — a baked
+      // Structure keeps ~150 slots) into children renamed
+      // `Structure_primitive<N>`, and without normalising, every structure
+      // piece would fall through to the bounding-box rule below: the 2F floor
+      // slab (centre ~2.5 m, under FLOOR_SPLIT_Y) would land on floor 1 —
+      // visible on 1F, missing on 2F — and the garden would lose always-on.
+      const role = structureRole(m);
       // The exterior group (ground + garden + palms) is always visible — it
       // belongs to no floor and must survive every toggle.
-      if (STRUCTURE_EXTERIOR.test(base)) {
+      if (role.isExterior) {
         this.alwaysOnMeshes.push(m);
         if (!m.isEnabled(false)) m.setEnabled(true);
         continue;
       }
-      const lvl = STRUCTURE_LEVEL.exec(base);
-      const floor = lvl
-        ? (lvl[1] ? Number(lvl[1]) + 1 : 1)
+      // Pipeline level is 0-based (0 = ground); this app's floors are 1-based.
+      const floor = role.isStructure
+        ? role.level + 1
         : m.getBoundingInfo().boundingBox.centerWorld.y > FLOOR_SPLIT_Y
           ? 2
           : 1;

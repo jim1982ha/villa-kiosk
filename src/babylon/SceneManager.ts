@@ -25,14 +25,14 @@ import { EntityVisuals } from "./EntityVisuals";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
-import { resolveMeshToMapping, inferTypeFromEntityId, normaliseMeshName } from "@/config/EntityMap";
+import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { isIOS as detectIOS } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
-import { STRUCTURAL_NAME_RE } from "./meshPatterns";
+import { isStructureMesh } from "./meshRoles";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
@@ -1146,31 +1146,18 @@ export class SceneManager {
     // part by cos(pitch) and adding a vertical part, which keeps the result a
     // unit vector without needing its own world-transform trip.
     //
-    // CAMERA_MODEL_FRONT_OFFSET_RAD corrects for which way the "71/CCTV.obj"
-    // catalog model itself faces at angle=0 — planAngleToDir assumes angle=0
-    // points along +Y in SweetHome's plan (the usual furniture convention),
-    // but that is a property of how THIS SPECIFIC model was authored/imported,
-    // not something derivable from the angle number alone. Field report
-    // (2026-07-29): with the villa's real cameras, the beam fanned out well
-    // away from the direction the mesh visibly faces — consistent with the
-    // model's lens actually pointing the opposite way from the convention
-    // above, i.e. a 180° offset. Applied to angle BEFORE planAngleToDir, so it
-    // corrects every camera at once rather than needing a per-device fix.
-    // If it is still off after this ships: the beam's actual world compass
-    // heading only ever differs from "correct" by a multiple of 90° once this
-    // constant is right for the MODEL (the affine world-transform itself is
-    // already proven correct — camera POSITIONS render correctly) — so the
-    // fix is to try Math.PI/2 or -Math.PI/2 here instead of Math.PI, not to
-    // touch anything else in this block.
-    const CAMERA_MODEL_FRONT_OFFSET_RAD = Math.PI;
-    // Cameras have no `pitch` set in this villa's sh3d file at all (checked
-    // directly against the file), so every beam sat perfectly level — the
-    // "aims across the room instead of down at the floor" report. 30° is the
-    // requested default: enough to visibly aim toward the floor for a
-    // typically ceiling/high-wall-mounted camera without folding all the way
-    // down onto the mount itself. An operator who sets a real `pitch` on a
-    // camera in SweetHome still overrides this per-device, as before.
-    const DEFAULT_CAMERA_PITCH_RAD = 30 * (Math.PI / 180);
+    // The heading offset and the default tilt are CONFIGURATION, not constants
+    // — see AppConfig.cameraBeamOffsetDeg / cameraBeamPitchDeg for the full
+    // reasoning. In short: a plan's `angle` is measured against the furniture
+    // MODEL's own front axis, and which way a model faces at angle 0 depends
+    // on how that model was authored. That is not derivable from the angle
+    // number, and it differs between camera models — so hardcoding it here
+    // would bake one specific catalog asset into the engine and silently
+    // mis-aim every beam for any other villa. Being settings means a wrong
+    // heading is a value to change, not a code change.
+    const DEG = Math.PI / 180;
+    const beamOffsetRad = (this.config.cameraBeamOffsetDeg ?? 180) * DEG;
+    const defaultPitchRad = (this.config.cameraBeamPitchDeg ?? 30) * DEG;
     const cameraDirections = new Map<string, { x: number; y: number; z: number }>();
     if (this.config.sh3dEntities?.length) {
       for (const e of this.config.sh3dEntities) {
@@ -1186,13 +1173,13 @@ export class SceneManager {
         const map = this.config.entityMap[e.entityId];
         const isCamera = map ? map.type === "camera" : e.entityId.startsWith("camera.");
         if (!isCamera) continue;
-        const d = planAngleToDir(e.angle + CAMERA_MODEL_FRONT_OFFSET_RAD);
+        const d = planAngleToDir(e.angle + beamOffsetRad);
         const p0 = planToWorld(e.x, e.y);
         const p1 = planToWorld(e.x + d.px, e.y + d.py);
         const wx = p1.x - p0.x, wz = p1.z - p0.z;
         const len = Math.hypot(wx, wz);
         if (len <= 1e-6) continue;
-        const pitch = e.pitch ?? DEFAULT_CAMERA_PITCH_RAD;
+        const pitch = e.pitch ?? defaultPitchRad;
         // CONFIRMED live (2026-07-03): positive pitch tilts the beam DOWN, as
         // expected for a ceiling-mounted security camera looking into the
         // room — no sign flip needed. Only sensible over roughly 0°..90°
@@ -1286,9 +1273,16 @@ export class SceneManager {
    */
   private applyStructure(meshes: AbstractMesh[]): void {
     // Name patterns that are explicitly collidable (walls, railings, glass
-    // barriers) — shared with the camera beam's occluder classification, see
-    // meshPatterns.ts.
-    const structuralByName = STRUCTURAL_NAME_RE;
+    // barriers). Still NAME-based, and deliberately so for now: unlike the
+    // pipeline's own structure groups, these are individual SweetHome catalog
+    // pieces the pipeline never classified, so there is no metadata to read —
+    // this is a best-effort heuristic over whatever the plan's author named
+    // them, and it degrades gracefully (a miss just means that piece is not
+    // force-opaqued / not collidable, never a broken load). See meshRoles.ts
+    // for the parts that DO have real metadata, and the note in that file
+    // about not adding new behaviour to word lists like this one.
+    const structuralByName =
+      /wall|partition|cloison|railing|balustrade|banister|newel|column|pillar|fence|window|glass|slid|baie|vitr/i;
     // Stairs/steps in several languages — these must NEVER collide (you walk up
     // them via floor-following) and are tagged so the camera can climb them.
     const stairPat = /stair|step|escalier|marche|scala|treppe|stufe|trap\b/i;
@@ -1340,7 +1334,9 @@ export class SceneManager {
       // thin upper-storey slab (a 1 cm SweetHome "Box" floor patch at 2.56 m)
       // is a flat lone primitive that this heuristic ate, leaving a see-through
       // hole in the 2F floor. Name-matched ceilings are still hidden.
-      const isPipelineStructure = /^Structure(?:_L\d+|_Exterior)?$/i.test(normaliseMeshName(name));
+      // Classified from the mesh's own pipeline metadata, not its name —
+      // see meshRoles.ts (name matching survives only as a legacy fallback).
+      const isPipelineStructure = isStructureMesh(m);
       // Tag the load-bearing shell (floor slabs + walls + baked stairs) so the
       // camera can ground on the real FLOOR and never on furniture: these fused
       // meshes contain no furniture, so a downward ray against them alone finds

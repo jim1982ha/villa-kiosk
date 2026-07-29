@@ -4,7 +4,6 @@
 
 import { SceneLoader, Material, Color3, Vector3, HemisphericLight, DracoCompression, VertexBuffer, type AbstractMesh, type Scene } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
-import { normaliseMeshName } from "../config/EntityMap";
 // Bundle the Draco decoder from @babylonjs/core so a Draco-compressed GLB loads
 // WITHOUT hitting Babylon's default CDN — required for the offline HA-Ingress
 // kiosk. Vite's `?url` rewrites these to hashed, correctly-based build assets.
@@ -13,6 +12,7 @@ import dracoWasmUrl from "@babylonjs/core/assets/Draco/draco_decoder_gltf.wasm?u
 import dracoFallbackUrl from "@babylonjs/core/assets/Draco/draco_decoder_gltf.js?url";
 import { saveModelToIndexedDB } from "@/utils/storage";
 import { devLog } from "@/utils/devLog";
+import { isStructureMesh } from "./meshRoles";
 
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
 // still only instantiated lazily, when a model actually uses Draco — so an
@@ -96,7 +96,8 @@ const BAKED_LIGHTMAP_PREFIX = "BAKED_Lightmap";
 // Meshes whose materials receive the lightmap: the pipeline's structure
 // groups (it forks any material shared with entities to a private _ST copy,
 // so wiring these never leaks the lightmap onto UV2-less entity meshes).
-const STRUCTURE_MESH_RE = /^Structure(?:_L\d+|_Exterior)?$/i;
+// Identified via meshRoles.isStructureMesh — pipeline metadata first, legacy
+// name convention only as a fallback.
 
 // Babylon caps the lights a material's shader handles at once (default 4). A LED
 // strip is modelled as many co-located point lights, so a wall/floor near one can
@@ -340,7 +341,7 @@ export async function loadModelInto(
       const lmMats = new Set<LightmapMat>();
       let missingUv2 = 0;
       for (const m of result.meshes) {
-        if (!STRUCTURE_MESH_RE.test(normaliseMeshName(m.name))) continue;
+        if (!isStructureMesh(m)) continue;
         if (m.getTotalVertices() === 0) continue;
         // Blender's glTF exporter drops UV layers no material references —
         // pipeline < 2.7.1 lost BakeUV that way, and without TEXCOORD_1 the

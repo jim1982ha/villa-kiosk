@@ -185,6 +185,34 @@ export interface AppConfig {
    * Case-insensitive substring match; takes effect on the next model load.
    */
   extraGlassHints?: string[];
+  /**
+   * Degrees to rotate every camera's motion beam relative to the `angle` its
+   * piece carries in the floor plan. Default 180.
+   *
+   * This exists because a plan's `angle` is measured against the FURNITURE
+   * MODEL's own front axis, and which way a given 3D model faces at angle 0 is
+   * a property of how that model was authored — not something derivable from
+   * the angle number. So the correction is per-MODEL, and a villa using a
+   * different camera model from the catalog needs a different value. Making it
+   * configuration rather than a constant is what keeps this replicable across
+   * villas without a code change: if every beam points consistently wrong,
+   * rotate them all here (the usual answers are 0, 90, 180 or 270) instead of
+   * re-aiming every camera in the plan.
+   *
+   * Applies to the horizontal heading only; the downward tilt comes from each
+   * piece's own `pitch` (or cameraBeamPitchDeg below when it has none).
+   */
+  cameraBeamOffsetDeg?: number;
+  /**
+   * Downward tilt in degrees for a camera whose plan piece specifies no
+   * `pitch`. Default 30.
+   *
+   * Most catalog camera pieces are placed without a pitch, which left every
+   * beam perfectly level — pointing across the room at head height rather than
+   * at the floor area the camera actually watches. A per-piece `pitch` set in
+   * the plan still wins over this.
+   */
+  cameraBeamPitchDeg?: number;
   /** Global size multiplier for the in-scene state-icon badges (1 = default).
    *  In the bird's-eye view this is further scaled by the zoom level. */
   entityIconScale: number;

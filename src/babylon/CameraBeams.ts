@@ -42,6 +42,19 @@ const BEAM_PULSE_ALPHA = 0.4;
 // cost per beam rebuild (rebuilds only happen on room re-calibration, not
 // every frame).
 const EDGE_RAY_SAMPLES = 8;
+// How close to the apex an EDGE ray's hit is treated as the camera's own
+// mounting structure rather than something it is looking at. A camera is
+// fixed to a wall/ceiling, so the cone's apex is always within centimetres of
+// a large occluder and some edge rays necessarily point back into it — see
+// clippedLength. Generous enough to clear a mount, a soffit and a curtain
+// pelmet; well under the beam's own reach, so a genuinely enclosed camera
+// still gets a short beam via the CENTRELINE ray, which is not subject to
+// this and keeps its original tight 0.3m threshold.
+const MOUNT_CLEARANCE = 1.2;
+// |cos| between an edge ray and the surface normal it hits, below which the
+// hit is "grazing" — the beam is running alongside that surface (a wall it is
+// aimed parallel to), not into it. cos 75° ≈ 0.259.
+const GRAZING_MIN_COS = 0.259;
 // Where along the profile the cone finishes widening and starts rounding
 // into a soft dome instead of a hard flat disc (see roundedProfile below).
 const ROUND_CAP_FRACTION = 0.88;
@@ -83,6 +96,8 @@ export class CameraBeams {
     const predicate = (m: AbstractMesh) => occluders.has(m);
     const centreHit = this.scene.pickWithRay(
       new Ray(origin.add(direction.scale(0.15)), direction, BEAM_MAX_LENGTH), predicate);
+    // The CENTRELINE keeps the original tight threshold: a surface directly
+    // ahead genuinely does stop the beam, however close it is.
     let axialLen = centreHit?.hit && centreHit.distance > 0.3 ? centreHit.distance : BEAM_MAX_LENGTH;
 
     // Orthonormal basis perpendicular to `direction`, for sampling directions
@@ -102,12 +117,35 @@ export class CameraBeams {
         .normalize();
       const hit = this.scene.pickWithRay(
         new Ray(origin.add(edgeDir.scale(0.15)), edgeDir, edgeMaxDist), predicate);
-      if (hit?.hit && hit.distance > 0.3) {
-        // Convert this edge ray's hit distance back to an AXIAL equivalent
-        // (the edge ray travels further than the axis for the same axial
-        // depth, by 1/cosHalf), so it's comparable to the centreline hit.
-        axialLen = Math.min(axialLen, hit.distance * cosHalf);
-      }
+      if (!hit?.hit) continue;
+
+      // A camera is MOUNTED ON structure — a wall, a ceiling, or the corner
+      // where they meet. The cone's apex therefore sits within centimetres of
+      // a large occluding surface BY CONSTRUCTION, and edge rays fan out in
+      // every direction around the axis, so some of them necessarily point
+      // back into that mounting surface. With a flat `Math.min` over all
+      // hits, those rays defined the whole cone's reach: the beam collapsed to
+      // a stub the moment it was widened enough for its own mount to enter the
+      // sampled cone (field report 2026-07-29, a ceiling/wall-corner camera
+      // whose beam ended in mid-air with nothing in front of it). Anything an
+      // edge ray meets within MOUNT_CLEARANCE is the camera's own mounting
+      // structure, not the scene it is watching.
+      if (hit.distance < MOUNT_CLEARANCE) continue;
+
+      // A surface the beam runs ALONGSIDE (a wall the camera is aimed parallel
+      // to, the ceiling just above a level-ish beam) is not blocking it — the
+      // ray only meets it because the cone is wide, at a glancing angle. Skip
+      // grazing hits: keep only those where the surface genuinely faces the
+      // ray. Falls through to counting the hit when Babylon can't supply a
+      // normal, so an unknown case still errs toward clipping (the safe side —
+      // that is what stops a beam poking through a real wall).
+      const n = hit.getNormal(true);
+      if (n && Math.abs(Vector3.Dot(n, edgeDir)) < GRAZING_MIN_COS) continue;
+
+      // Convert this edge ray's hit distance back to an AXIAL equivalent
+      // (the edge ray travels further than the axis for the same axial
+      // depth, by 1/cosHalf), so it's comparable to the centreline hit.
+      axialLen = Math.min(axialLen, hit.distance * cosHalf);
     }
     return Math.max(0.3, axialLen * 0.95);
   }
