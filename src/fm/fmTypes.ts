@@ -98,15 +98,31 @@ export interface FmTicket {
   costId?: string;
 }
 
+/** A generated markdown document the operator chose to keep — the monthly
+ *  owner-report annex (ReportTab) or a spend statement (SpendTab). Kept
+ *  verbatim as generated (not recomputed live) so a saved document stays a
+ *  point-in-time record even if the underlying schedules/costs/tickets
+ *  change afterwards — the same reasoning ReportTab's own "Generate" button
+ *  (an explicit action, not a live re-render) already follows. */
+export interface FmSavedDocument {
+  id: string;
+  kind: "report" | "spend";
+  /** The period the document is ABOUT ("2026-06"), not when it was saved. */
+  month: string;
+  markdown: string;
+  generatedAt: string;
+}
+
 export interface FmData {
   schedules: FmSchedule[];
   completions: FmCompletion[];
   costs: FmCost[];
   tickets: FmTicket[];
+  savedDocuments: FmSavedDocument[];
 }
 
 export const EMPTY_FM_DATA: FmData = {
-  schedules: [], completions: [], costs: [], tickets: [],
+  schedules: [], completions: [], costs: [], tickets: [], savedDocuments: [],
 };
 
 /** Clause 3.3(i): "Minor Maintenance is the maintenance or repair expense with

@@ -19,13 +19,14 @@
 import { useMemo, useState } from "react";
 import {
   X, ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog, TriangleAlert,
+  DoorClosed, Lightbulb,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
 import { useFmData } from "@/fm/FmDataContext";
-import { buildReadiness } from "@/fm/readiness";
+import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
 import { unavailableDeviceIds } from "@/config/deviceGroups";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import TodayTab from "./TodayTab";
@@ -64,6 +65,13 @@ export default function FacilityModal({
   const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
   const [unavailableOpen, setUnavailableOpen] = useState(false);
+  // The Readiness tab's "View doors" / "View lights" shortcuts — same idea as
+  // unavailableOpen above, generalised to any readiness check that names its
+  // own entityIds (see ReadinessTab's SHORTCUT_LABEL), so a new check gets
+  // this shortcut for free by opting in there instead of a new state var and
+  // a new panel here each time.
+  const [checkPanel, setCheckPanel] = useState<ReadinessCheck | null>(null);
+  const CHECK_ICON: Partial<Record<string, typeof DoorClosed>> = { locks: DoorClosed, lights: Lightbulb };
 
   // Shared by the Readiness tab and the Report tab, so the report can never
   // disagree with what the operator just looked at.
@@ -129,6 +137,7 @@ export default function FacilityModal({
                 report={readiness}
                 onOpenEntity={onOpenEntity}
                 onOpenUnavailableDevices={() => setUnavailableOpen(true)}
+                onOpenCheckDevices={(check) => setCheckPanel(check)}
               />
             )}
             {ready && tab === "faults" && <FaultsTab onOpenEntity={onOpenEntity} />}
@@ -160,6 +169,20 @@ export default function FacilityModal({
           onClose={() => setUnavailableOpen(false)}
           onOpenEntity={(id) => { setUnavailableOpen(false); onOpenEntity(id); }}
           hideBulkToggle
+        />
+      )}
+
+      {checkPanel && (
+        <SummaryGroupPanel
+          group={{
+            title: checkPanel.label,
+            icon: CHECK_ICON[checkPanel.id] ?? TriangleAlert,
+            entityIds: checkPanel.entityIds ?? [],
+          }}
+          canControl={canControl}
+          mappedEntityIds={mappedEntityIds}
+          onClose={() => setCheckPanel(null)}
+          onOpenEntity={(id) => { setCheckPanel(null); onOpenEntity(id); }}
         />
       )}
     </>

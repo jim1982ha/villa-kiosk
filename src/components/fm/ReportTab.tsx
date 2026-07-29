@@ -18,7 +18,7 @@
 // someone asked for it, not "whenever this component happened to re-render".
 
 import { useState } from "react";
-import { Sparkles, Download } from "lucide-react";
+import { Sparkles, Download, Save } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { resolveSiteTitle } from "@/config/AppConfig";
@@ -26,7 +26,9 @@ import { useFmData } from "@/fm/FmDataContext";
 import { buildMonthlyReport } from "@/fm/fmReport";
 import { monthKey } from "@/fm/fmEngine";
 import type { ReadinessReport } from "@/fm/readiness";
+import type { FmSavedDocument } from "@/fm/fmTypes";
 import ReportPreview from "./ReportPreview";
+import SavedDocumentsList from "./SavedDocumentsList";
 
 /** Previous month by default: the report is written about a month that has
  *  finished, and it is due by the 10th of the one after it. */
@@ -44,7 +46,7 @@ export default function ReportTab({
   offlineDeviceCount: number;
   totalDeviceCount: number;
 }) {
-  const { data } = useFmData();
+  const { data, saveDocument } = useFmData();
   const { config } = useConfig();
   const { haConfig } = useHA();
   const [month, setMonth] = useState(defaultMonth());
@@ -53,6 +55,7 @@ export default function ReportTab({
   // the period changes underneath a previously generated one — a report for
   // June must never silently keep showing on screen once July is selected.
   const [markdown, setMarkdown] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const villaName = resolveSiteTitle(config, haConfig?.location_name);
 
@@ -66,6 +69,7 @@ export default function ReportTab({
     setMarkdown(buildMonthlyReport({
       fm: data, month, villaName, readiness, offlineDeviceCount, totalDeviceCount,
     }));
+    setSaved(false);
   };
 
   const download = () => {
@@ -76,6 +80,18 @@ export default function ReportTab({
     a.download = `${villaName.replace(/\s+/g, "-").toLowerCase()}-operations-${month}.md`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const save = async () => {
+    if (!markdown) return;
+    await saveDocument({ kind: "report", month, markdown });
+    setSaved(true);
+  };
+
+  const reopen = (doc: FmSavedDocument) => {
+    setMonth(doc.month);
+    setMarkdown(doc.markdown);
+    setSaved(true);
   };
 
   return (
@@ -90,29 +106,45 @@ export default function ReportTab({
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         <label className="fm-field" style={{ maxWidth: 200 }}>
           <span>Period</span>
-          <select value={month} onChange={(e) => { setMonth(e.target.value); setMarkdown(null); }}>
+          <select value={month} onChange={(e) => { setMonth(e.target.value); setMarkdown(null); setSaved(false); }}>
             {months.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
         </label>
       </div>
 
-      <div className="row" style={{ gap: 8 }}>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         <button className="btn primary" onClick={generate}>
           <Sparkles size={16} /> {markdown ? "Regenerate report" : "Generate report"}
+        </button>
+        <button className="btn ghost" onClick={() => void save()} disabled={!markdown || saved}>
+          <Save size={16} /> {saved ? "Saved" : "Save report"}
         </button>
         <button className="btn ghost" onClick={download} disabled={!markdown}>
           <Download size={16} /> Download .md
         </button>
       </div>
 
-      {markdown ? (
-        <ReportPreview markdown={markdown} />
-      ) : (
-        <p className="muted body-text">
-          Nothing generated yet for {month} — press "Generate report" to build it from
-          the villa's current Readiness, Faults, Spend and Schedule status.
-        </p>
-      )}
+      {/* min-height keeps this tab's OWN footprint roughly stable across the
+          empty-placeholder <-> full-report swap — without it, generating a
+          report (a couple lines -> a full formatted document) jumped this
+          tab's content height dramatically. On the desktop/tablet breakpoint
+          .modal-fixed-height absorbs that into a scroll, but below it the
+          whole modal resizes around the user, visibly shifting the header/
+          tabs row on screen between "before" and "after" (they never
+          actually change style — the whole dialog just grew and re-centred
+          under them). */}
+      <div className="fm-report-preview-area">
+        {markdown ? (
+          <ReportPreview markdown={markdown} />
+        ) : (
+          <p className="muted body-text">
+            Nothing generated yet for {month} — press "Generate report" to build it from
+            the villa's current Readiness, Faults, Spend and Schedule status.
+          </p>
+        )}
+      </div>
+
+      <SavedDocumentsList kind="report" onOpen={reopen} />
     </div>
   );
 }

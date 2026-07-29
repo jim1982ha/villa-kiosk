@@ -1,7 +1,7 @@
 // src/pages/Dashboard.tsx
 // Main page: 3D canvas + HUD + panels + teleport + settings + onboarding.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BabylonCanvas from "@/components/canvas/BabylonCanvas";
 import HUD from "@/components/hud/HUD";
 import RoomLabel from "@/components/hud/RoomLabel";
@@ -75,6 +75,24 @@ export default function Dashboard() {
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
   /** Entities with real geometry in the loaded model (see manager.mappedEntityIds). */
   const [mappedEntityIds, setMappedEntityIds] = useState<Set<string>>(new Set());
+  // A device with no badge/mesh of its own can still be represented ON the
+  // map INDIRECTLY: it's some other mapped device's linkedEntityId (its ring
+  // toggle) or motionEntityId (a camera's detection sensor, driving its
+  // beam). Every "not on the map" / "devices offline" surface (HUD, the
+  // SummaryBar group modals, Facility readiness) reads THIS augmented set
+  // rather than the raw one, so a device like "AP Living Room LED" — no
+  // geometry of its own, but the linkedEntityId of a mapped light switch —
+  // stops being reported as missing from the map it's actually reachable
+  // from. Recomputed from config, not baked into the raw set at load time,
+  // so re-linking a device in Settings takes effect without a model reload.
+  const effectiveMappedEntityIds = useMemo(() => {
+    const augmented = new Set(mappedEntityIds);
+    for (const mapping of Object.values(config.entityMap)) {
+      if (mapping.linkedEntityId) augmented.add(mapping.linkedEntityId);
+      if (mapping.motionEntityId) augmented.add(mapping.motionEntityId);
+    }
+    return augmented;
+  }, [mappedEntityIds, config.entityMap]);
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
   // Starts "overview" to match the actual landing view (see the one-shot
   // effect below): the HUD reads this to decide joystick vs. overview-help
@@ -259,7 +277,14 @@ export default function Dashboard() {
 
       const label = displayLabelFor(id, map?.label, e.attributes?.friendly_name as string | undefined);
       const room = map?.room;
-      setNotice(room ? `Motion detected · ${room} — ${label}` : `Motion detected · ${label}`);
+      // One phrasing for every source: the ROOM alone when known ("Motion
+      // detected · Guest Bathroom"), never room + device suffixed together —
+      // a camera's own motion entity has no `room` mapped and falls back to
+      // its label ("Parking Motion"), which already reads as a place. Used to
+      // append "— {label}" whenever a room WAS known too (a plain device
+      // occupancy sensor's label, e.g. "Motion4 Occupancy"), so the identical
+      // event read differently depending only on which entity fired it.
+      setNotice(room ? `Motion detected · ${room}` : `Motion detected · ${label}`);
     });
   }, [subscribeAll]);
 
@@ -470,7 +495,7 @@ export default function Dashboard() {
         hasOverviewDefault={hasOverviewDefault}
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
-        mappedEntityIds={mappedEntityIds}
+        mappedEntityIds={effectiveMappedEntityIds}
         onOpenEntity={openEntityPanel}
         onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
       />
@@ -480,7 +505,7 @@ export default function Dashboard() {
           bottom bar's corner controls (view toggle / joystick). */}
       <SummaryBar
         onOpenEntity={openEntityPanel}
-        mappedEntityIds={mappedEntityIds}
+        mappedEntityIds={effectiveMappedEntityIds}
       />
 
       {teleportOpen && (
@@ -585,7 +610,7 @@ export default function Dashboard() {
       {facilityOpen && canManageFacility && (
         <FacilityModal
           onClose={() => setFacilityOpen(false)}
-          mappedEntityIds={mappedEntityIds}
+          mappedEntityIds={effectiveMappedEntityIds}
           onOpenEntity={(id) => { setFacilityOpen(false); openEntityPanel(id); }}
         />
       )}

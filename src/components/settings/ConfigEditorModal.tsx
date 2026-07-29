@@ -170,7 +170,7 @@ function CentralModelInfo({
 function ModelActionsRow({
   canUploadCentrally, uploadBusy, uploadPct, uploadMsg, backupMsg,
   glbUploadRef, roomsUploadRef, configFileRef,
-  onGlbFile, onRoomsFile, onConfigFile, onExport,
+  onGlbFiles, onRoomsFile, onConfigFile, onExport,
 }: {
   canUploadCentrally: boolean;
   uploadBusy: "glb" | "rooms" | null;
@@ -180,7 +180,14 @@ function ModelActionsRow({
   glbUploadRef: RefObject<HTMLInputElement>;
   roomsUploadRef: RefObject<HTMLInputElement>;
   configFileRef: RefObject<HTMLInputElement>;
-  onGlbFile: (file: File) => void;
+  /** One or two files: just the .glb, or the .glb AND its .rooms.json
+   *  selected TOGETHER (multi-select in the OS file picker — ctrl/cmd+click
+   *  both, since they live in the same pipeline-output folder). A browser
+   *  can't reach out to disk and discover the sidecar file on its own (no
+   *  filesystem access from a plain <input type=file>), so this is as
+   *  "automatic" as the platform allows: one dialog, one action, instead of
+   *  two separate uploads through two separate buttons. */
+  onGlbFiles: (files: File[]) => void;
   onRoomsFile: (file: File) => void;
   onConfigFile: (file: File) => void;
   onExport: () => void;
@@ -193,8 +200,8 @@ function ModelActionsRow({
           non-functional button reads as broken, not as an explained state. */}
       {canUploadCentrally && (
         <>
-          <input ref={glbUploadRef} type="file" accept=".glb,model/gltf-binary" style={{ display: "none" }}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) onGlbFile(f); e.target.value = ""; }} />
+          <input ref={glbUploadRef} type="file" multiple accept=".glb,.json,application/json,model/gltf-binary" style={{ display: "none" }}
+            onChange={(e) => { const files = Array.from(e.target.files ?? []); e.target.value = ""; if (files.length) onGlbFiles(files); }} />
           <input ref={roomsUploadRef} type="file" accept=".json,application/json" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onRoomsFile(f); e.target.value = ""; }} />
         </>
@@ -208,7 +215,7 @@ function ModelActionsRow({
               onClick={() => glbUploadRef.current?.click()}>
               <Upload size={15} /> {uploadBusy === "glb"
                 ? (uploadPct === null ? "Uploading…" : `Uploading ${uploadPct}%`)
-                : "Upload central GLB"}
+                : "Upload GLB (+ room data)"}
             </button>
             <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
               onClick={() => roomsUploadRef.current?.click()}>
@@ -231,6 +238,11 @@ function ModelActionsRow({
           : "Upload a central GLB/room data from the Villa Kiosk add-on's Advanced Settings instead — a standalone page has no backend to write them. Room data is the small "}
         <code>.rooms.json</code> the Blender pipeline emits next to the GLB —
         it carries the room names, shapes and device positions used to label rooms and place devices.
+        {canUploadCentrally && (
+          <> Select both files together in "Upload GLB (+ room data)" (ctrl/cmd-click both in the file
+          picker) to send them in one go — or use the buttons separately, e.g. to update just the room
+          data without re-uploading the model.</>
+        )}{" "}
         Import/Export Configuration is a per-device backup of your device↔room bindings, room
         viewpoints, device icons and Settings preferences.
       </p>
@@ -314,7 +326,7 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
   /** 0-100 while a chunked upload is in flight, null otherwise. */
   const [uploadPct, setUploadPct] = useState<number | null>(null);
 
-  const uploadCentral = async (file: File, kind: "glb" | "rooms") => {
+  const uploadCentral = async (file: File, kind: "glb" | "rooms", opts?: { reload?: boolean }) => {
     const okExt = kind === "glb" ? [".glb"] : [".json"];
     if (!okExt.some((e) => file.name.toLowerCase().endsWith(e))) {
       setUploadMsg({ text: `Please choose a ${okExt.join(" / ")} file.`, ok: false });
@@ -336,13 +348,33 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
       setAddonCfg(await fetchAddonConfig());
       const mb = size / 1_000_000;
       setUploadMsg({ text: `Uploaded ${mb < 1 ? `${(size / 1000).toFixed(0)} KB` : `${mb.toFixed(1)} MB`} → ${path}. Reloading…`, ok: true });
-      setTimeout(() => onModelChanged(), 600); // remount to load the new central model
+      // Skippable so a combined GLB+rooms upload (see uploadGlbAndRooms) only
+      // reloads once, after the SECOND file lands — reloading after the
+      // first would tear down the canvas mid-sequence.
+      if (opts?.reload ?? true) setTimeout(() => onModelChanged(), 600);
     } catch (err) {
       setUploadPct(null);
       setUploadMsg({ text: (err as Error).message, ok: false });
     } finally {
       setUploadBusy(null);
     }
+  };
+
+  /** The GLB picker now accepts BOTH the .glb and its .rooms.json selected
+   *  together in one dialog (see ModelActionsRow's onGlbFiles) — uploads
+   *  whichever of the two is present, GLB first, sequentially (uploadBusy/
+   *  uploadPct are single-flight state, so these can't run concurrently),
+   *  and reloads only once at the end. A lone .glb (no rooms file selected)
+   *  behaves exactly as before. */
+  const uploadGlbAndRooms = async (files: File[]) => {
+    const glb = files.find((f) => f.name.toLowerCase().endsWith(".glb"));
+    const rooms = files.find((f) => f.name.toLowerCase().endsWith(".json"));
+    if (!glb && !rooms) {
+      setUploadMsg({ text: "Please choose a .glb file (and optionally its .rooms.json).", ok: false });
+      return;
+    }
+    if (glb) await uploadCentral(glb, "glb", { reload: !rooms });
+    if (rooms) await uploadCentral(rooms, "rooms", { reload: true });
   };
   const loadedModel = getLoadedModelInfo();
 
@@ -378,7 +410,7 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
           <ModelActionsRow
             canUploadCentrally uploadBusy={uploadBusy} uploadPct={uploadPct} uploadMsg={uploadMsg} backupMsg={backupMsg}
             glbUploadRef={glbUploadRef} roomsUploadRef={roomsUploadRef} configFileRef={configFileRef}
-            onGlbFile={(f) => uploadCentral(f, "glb")} onRoomsFile={(f) => uploadCentral(f, "rooms")}
+            onGlbFiles={(files) => void uploadGlbAndRooms(files)} onRoomsFile={(f) => uploadCentral(f, "rooms")}
             onConfigFile={importConfig} onExport={exportConfig}
           />
         </>

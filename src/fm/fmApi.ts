@@ -19,6 +19,9 @@ export function parseFmData(raw: unknown): FmData {
     completions: arr(b.completions),
     costs: arr(b.costs),
     tickets: arr(b.tickets),
+    // Absent on a store written before saved documents existed — defaults to
+    // empty rather than dropping the field, same as every array above.
+    savedDocuments: arr(b.savedDocuments),
   };
 }
 

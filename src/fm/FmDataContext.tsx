@@ -16,7 +16,7 @@ import {
 import { fetchFmData, saveFmData, fmId } from "./fmApi";
 import {
   DEFAULT_SCHEDULES, EMPTY_FM_DATA,
-  type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket,
+  type FmCompletion, type FmCost, type FmData, type FmSavedDocument, type FmSchedule, type FmTicket,
 } from "./fmTypes";
 
 interface FmDataContextValue {
@@ -48,6 +48,10 @@ interface FmDataContextValue {
   /** Seed Clause 3.7's schedule. Idempotent: only adds builtins not already
    *  present, so it can't duplicate on a second press. */
   seedDefaults: () => Promise<void>;
+  /** Keep a generated report/spend statement (see FmSavedDocument) so it can
+   *  be reopened or handed over later without regenerating it. */
+  saveDocument: (doc: Omit<FmSavedDocument, "id" | "generatedAt">) => Promise<void>;
+  removeDocument: (id: string) => Promise<void>;
 }
 
 const FmDataContext = createContext<FmDataContextValue | null>(null);
@@ -141,6 +145,18 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       }),
     })), [mutate]);
 
+  const saveDocument = useCallback((doc: Omit<FmSavedDocument, "id" | "generatedAt">) =>
+    mutate((d) => ({
+      ...d,
+      savedDocuments: [
+        ...d.savedDocuments,
+        { ...doc, id: fmId("doc"), generatedAt: new Date().toISOString() },
+      ],
+    })), [mutate]);
+
+  const removeDocument = useCallback((id: string) =>
+    mutate((d) => ({ ...d, savedDocuments: d.savedDocuments.filter((r) => r.id !== id) })), [mutate]);
+
   const seedDefaults = useCallback(() => mutate((d) => {
     const have = new Set(d.schedules.map((s) => s.builtinKey).filter(Boolean));
     const now = new Date().toISOString();
@@ -155,6 +171,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       data, ready, saveError, reload,
       addSchedule, updateSchedule, removeSchedule, removeAllSchedules,
       logCompletion, addCost, removeCost, addTicket, updateTicket, seedDefaults,
+      saveDocument, removeDocument,
     }}>
       {children}
     </FmDataContext.Provider>

@@ -9,7 +9,7 @@ import { CheckCircle2, AlertTriangle, XCircle, ChevronRight } from "lucide-react
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { displayLabelFor } from "@/config/EntityMap";
-import type { CheckState, ReadinessReport } from "@/fm/readiness";
+import type { CheckState, ReadinessCheck, ReadinessReport } from "@/fm/readiness";
 
 const ICON: Record<CheckState, typeof CheckCircle2> = {
   pass: CheckCircle2, warn: AlertTriangle, fail: XCircle,
@@ -24,14 +24,30 @@ const ICON: Record<CheckState, typeof CheckCircle2> = {
  *  straight to the one at fault is more useful there than a link to a list. */
 const DEVICE_LIST_CHECK_ID = "devices-online";
 
+/** Checks that ALSO get a one-tap "View …" shortcut (same idea as the
+ *  devices-online one above, opening a group panel via onOpenCheckDevices)
+ *  IN ADDITION to their inline chip row — unlike devices-online, these
+ *  usually name few enough devices that the chips stay useful on their own,
+ *  but the shortcut is still worth having for the same reason the map badge
+ *  and the SummaryBar tile have one: jumping straight to "every lock" /
+ *  "every light" beats hunting for the entity in a chip row one at a time.
+ *  Keyed by check id (see readiness.ts) -> the shortcut's button label. */
+const SHORTCUT_LABEL: Partial<Record<string, string>> = {
+  locks: "View doors",
+  lights: "View lights",
+};
+
 export default function ReadinessTab({
-  report, onOpenEntity, onOpenUnavailableDevices,
+  report, onOpenEntity, onOpenUnavailableDevices, onOpenCheckDevices,
 }: {
   report: ReadinessReport;
   onOpenEntity: (id: string) => void;
   /** Opens the shared Unavailable-devices panel — same list, same count as
    *  the HUD badge (see config/deviceGroups.unavailableDeviceIds). */
   onOpenUnavailableDevices: () => void;
+  /** Same idea, generalised to any other check in SHORTCUT_LABEL — opens a
+   *  group panel scoped to exactly that check's own entityIds. */
+  onOpenCheckDevices: (check: ReadinessCheck) => void;
 }) {
   const { config } = useConfig();
   const { entities } = useHA();
@@ -58,18 +74,29 @@ export default function ReadinessTab({
         {report.checks.map((c) => {
           const Icon = ICON[c.state];
           const isDeviceList = c.id === DEVICE_LIST_CHECK_ID;
+          const shortcutLabel = SHORTCUT_LABEL[c.id];
           return (
             <div key={c.id} className={`fm-row state-${c.state === "pass" ? "ok" : c.state === "warn" ? "due-soon" : "overdue"}`}>
               <span className={`fm-check-icon ${c.state}`}><Icon size={18} /></span>
               <div className="fm-row-main">
-                <div className="fm-row-title"><strong>{c.label}</strong></div>
+                <div className="fm-row-title">
+                  <strong>{c.label}</strong>
+                  {/* Same line as the title, not stacked below the detail —
+                      stacking it made ONE row taller than every other
+                      readiness row next to it (they're read as a grid of
+                      cards, and an outlier height there reads as a bug). */}
+                  {isDeviceList && !!c.entityIds?.length && (
+                    <button className="btn ghost fm-row-title-action" onClick={onOpenUnavailableDevices}>
+                      View unavailable devices <ChevronRight size={15} />
+                    </button>
+                  )}
+                  {!isDeviceList && shortcutLabel && !!c.entityIds?.length && (
+                    <button className="btn ghost fm-row-title-action" onClick={() => onOpenCheckDevices(c)}>
+                      {shortcutLabel} <ChevronRight size={15} />
+                    </button>
+                  )}
+                </div>
                 <div className="fm-row-sub muted">{c.detail}</div>
-                {isDeviceList && !!c.entityIds?.length && (
-                  <button className="btn ghost" style={{ marginTop: 6, alignSelf: "flex-start" }}
-                    onClick={onOpenUnavailableDevices}>
-                    View unavailable devices <ChevronRight size={15} />
-                  </button>
-                )}
                 {!isDeviceList && !!c.entityIds?.length && (
                   <div className="fm-chiprow">
                     {c.entityIds.slice(0, 8).map((id) => (

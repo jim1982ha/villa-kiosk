@@ -14,6 +14,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 import type { DeviceGroup } from "@/config/AppConfig";
 import { isUnavailable } from "@/utils/stateColors";
+import { isLockLikeSwitch, isLockSwitchSecured } from "@/config/EntityCategories";
 import { unavailableDeviceIds } from "@/config/deviceGroups";
 import { scheduleStatus } from "./fmEngine";
 import type { FmData } from "./fmTypes";
@@ -84,8 +85,12 @@ export function buildReadiness(
   });
 
   // ── Doors locked ─────────────────────────────────────────────────────────
-  const locks = byDomain("lock");
-  const unlocked = locks.filter((l) => l.state !== "locked");
+  // Native `lock.*` entities PLUS any relay `switch.*` that reads as a door
+  // lock (see isLockLikeSwitch) — same combined set the bottom-bar Door Lock
+  // tile uses, so a relay-modelled door (e.g. a doorbell/intercom strike)
+  // isn't silently ignored here just because it isn't HA's `lock` domain.
+  const locks = [...byDomain("lock"), ...byDomain("switch").filter((e) => isLockLikeSwitch(e.entity_id))];
+  const unlocked = locks.filter((l) => (l.entity_id.startsWith("lock.") ? l.state !== "locked" : !isLockSwitchSecured(l.state)));
   if (locks.length) {
     checks.push({
       id: "locks",

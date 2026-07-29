@@ -29,7 +29,7 @@ import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/Enti
 import { unavailableDeviceIds } from "@/config/deviceGroups";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
-import ViewControls from "./ViewControls";
+import ViewControls, { DefaultViewButton } from "./ViewControls";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 import LegendModal from "./LegendModal";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -626,12 +626,18 @@ export default function HUD({
         />
       )}
 
-      {/* Left column: the floor toggle (1F / 2F) plus the Rooms dial button.
-          Tapping a floor switches to it (and frames it in the bird's-eye); the
-          Rooms button taps to a quick floor/room dial, long-press for the full
-          Rooms list to add/edit. The first-person/bird's-eye toggle now lives
-          in the bottom-left stack (see bottom-bar), directly above the
-          view-default button it controls access to. */}
+      {/* Left column: the floor toggle (1F / 2F), the Rooms dial button, and
+          (overview only) the default-view anchor as a 4th button — same
+          section as the floor/rooms controls rather than off on its own in
+          the bottom-left corner, since it's the same kind of "where am I
+          looking" control. Tapping a floor switches to it (and frames it in
+          the bird's-eye); the Rooms button taps to a quick floor/room dial,
+          long-press for the full Rooms list to add/edit; the anchor button
+          taps to jump to this device's saved default view, long-press/
+          right-click to (re)define it. The first-person/bird's-eye TOGGLE
+          still lives in the bottom-left stack (see bottom-bar) — only the
+          anchor moved, since the toggle isn't about "which view", just
+          first-person vs. overview. */}
       <div className="hud-left-col">
         <div className="hud-stack">
           {availFloors.map((f) => (
@@ -663,6 +669,13 @@ export default function HUD({
             <Compass size={20} />
           </button>
           <span id="rooms-btn-hint" className="sr-only">Hold (or hold Enter/Space) to add or edit rooms</span>
+          {viewMode === "overview" && (
+            <DefaultViewButton
+              hasOverviewDefault={hasOverviewDefault}
+              onApplyOverviewDefault={onApplyOverviewDefault}
+              onSaveOverviewDefault={onSaveOverviewDefault}
+            />
+          )}
         </div>
       </div>
 
@@ -676,14 +689,7 @@ export default function HUD({
             clickable even when the (separately, absolutely positioned)
             SummaryBar happens to visually extend over this corner on a
             narrow phone. */}
-        <ViewControls
-          stacked
-          viewMode={viewMode}
-          onToggleViewMode={onToggleViewMode}
-          hasOverviewDefault={hasOverviewDefault}
-          onApplyOverviewDefault={onApplyOverviewDefault}
-          onSaveOverviewDefault={onSaveOverviewDefault}
-        />
+        <ViewControls stacked viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
 
         {/* Bottom-right: the first-person movement joystick. */}
         {viewMode === "first-person" && <VirtualJoystick onMove={onMove} />}

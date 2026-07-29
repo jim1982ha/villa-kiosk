@@ -6,6 +6,12 @@
  * expressed as a semantic variable so a whole theme swaps by redefining the block. */
 
 :root {
+  /* Not a light/dark concern — one shape constant for every standalone HUD
+     "section" chip (icon buttons, the floor/rooms stack, the category
+     group, the brand/title pill…), so they all read as the same family of
+     control regardless of which one a given rule happens to style. */
+  --radius-squircle: 14px;
+
   /* ---- Light theme (default) ---- */
   /* Surfaces */
   --bg-base: #eef2f8;
@@ -241,7 +247,7 @@ button {
   /* Squircle (not a circle) so every standalone control — Settings, view toggle,
      compass, anchor, (i), profile logout — matches the squircle buttons in the
      top-bar groups and the left stack. */
-  width: 48px; height: 48px; border-radius: 14px;
+  width: 48px; height: 48px; border-radius: var(--radius-squircle);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-primary);
   border: 1px solid var(--hairline);
@@ -271,14 +277,14 @@ button {
    its own pill, so the categories read clearly without any text labels. */
 .hud-group {
   display: flex; align-items: center; gap: 4px;
-  border-radius: 14px; padding: 4px;
+  border-radius: var(--radius-squircle); padding: 4px;
   border: 1px solid var(--hairline);
 }
 /* Vertically stacked HUD control block (Room + Switch View under the floor
    switch, on the left). Full-width rows inside a single rounded pill. */
 .hud-stack {
   display: flex; flex-direction: column; gap: 4px;
-  border-radius: 14px; padding: 4px;
+  border-radius: var(--radius-squircle); padding: 4px;
   border: 1px solid var(--hairline);
 }
 /* Both groups reset the shared .icon-btn glass chrome to a flat, borderless
@@ -317,7 +323,10 @@ button {
 .hud-brand {
   justify-self: start; display: flex; align-items: center; gap: 10px;
   font-family: var(--font-display); font-size: 22px; font-weight: 500;
-  border: 1px solid var(--hairline); border-radius: 999px;
+  /* Same squircle every other HUD section chip uses (icon buttons, the floor
+     stack, the category group) — this used to be a full capsule (999px),
+     the one section shape that didn't match the rest of the HUD. */
+  border: 1px solid var(--hairline); border-radius: var(--radius-squircle);
   padding: 6px 16px 6px 10px;
   /* Never let the villa name WRAP as its 1fr grid track is squeezed. Without
      this a long name ("The Lys House") broke onto three lines on a narrowed
@@ -446,13 +455,29 @@ button {
 .hud-left-col {
   position: absolute; z-index: 21;
   top: calc(52px + env(safe-area-inset-top, 0px) + 8px);
-  left: calc(14px + env(safe-area-inset-left, 0px));
+  /* Same 18px .hud-topbar itself pads its brand chip with, so the floor
+     stack's left edge lines up exactly under the villa-name chip's left
+     edge instead of sitting 4px off it. */
+  left: calc(18px + env(safe-area-inset-left, 0px));
   display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
 .hud-left-col > * { pointer-events: auto; }
+/* The floor/rooms stack now also hosts the default-view anchor button (its
+   4th row) — its confirmation flash (.hud-anchor-hint, DefaultViewButton)
+   used to sit in NORMAL FLOW above the standalone bottom-left button pair
+   (.overview-help's column layout); inside this stack a block child would
+   instead shove the button rows apart every time it appears, so it's
+   floated out to the right of the stack instead, same tooltip look
+   (.overview-hint), just positioned rather than flowed. */
+.hud-left-col .hud-stack { position: relative; }
+.hud-anchor-hint { position: absolute; left: calc(100% + 10px); bottom: 0; z-index: 5; }
 
 .room-label {
-  position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
+  /* Same safe-area treatment as .service-toast right below — this banner
+     used to sit at a flat 64px regardless of device, which on an iPhone with
+     a Dynamic Island (a taller inset than a plain notch) let it render
+     partially under/behind the island cutout instead of clear of it. */
+  position: absolute; top: calc(64px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
   padding: 8px 22px; border-radius: 999px; z-index: 15;
   animation: fadeSlide 0.4s ease-out;
   text-align: center; max-width: 86vw;
@@ -934,10 +959,16 @@ input[type="range"]::-moz-range-thumb {
 .camera-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 /* Status strip (online/offline/motion — see CameraPanel's statusHistory).
    The outer .camera-status-bar claims the full flex:1 space left of the
-   controls; the StateTimeline itself is capped to 75% width of that space
-   (per spec: "75% of the width between the left side of the screen and the
-   first control button") and matches the controls' 56px height/rounding so
-   it reads as one aligned toolbar rather than a separate full-bleed strip. */
+   controls, and the StateTimeline fills ALL of it (width: 100% — previously
+   capped at a fixed 75%, which made the bar's on-screen width track the
+   CONTROLS cluster's width instead of the panel: a camera with fewer buttons
+   in .camera-controls (no linked-entity toggle, no prev/next) left MORE
+   flex:1 space for .camera-status-bar, so 75% of a bigger number read as a
+   visibly wider bar on one camera than another for no reason a viewer could
+   see). Filling the space outright makes every camera's bar behave the same
+   way for the same reason: it always runs edge-to-edge up to the control
+   buttons, whatever their count. Matches the controls' 56px height/rounding
+   so it still reads as one aligned toolbar, not a separate full-bleed strip. */
 /* NOT display:flex here — StateTimeline's own root (.spark-wrap, width:100%)
    is a plain block, so its percentage width resolves against this element's
    already flex-grown content box via normal block layout. Nesting ANOTHER
@@ -949,7 +980,7 @@ input[type="range"]::-moz-range-thumb {
 .camera-status-bar { flex: 1 1 auto; min-width: 0; }
 .camera-status-bar .state-timeline,
 .camera-status-bar .state-timeline-skeleton {
-  width: 75%; border-radius: 14px; background: rgba(255,255,255,0.12);
+  width: 100%; border-radius: 14px; background: rgba(255,255,255,0.12);
 }
 @media (max-width: 720px) {
   /* On a phone the row layout leaves too little width for the bar to read
@@ -957,11 +988,10 @@ input[type="range"]::-moz-range-thumb {
      own full-width row above the controls, which stay anchored at the true
      bottom edge exactly as before. */
   .camera-bottom-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  /* width: 100% already the base rule now — only the flex basis needs to
+     change here, so the bar can stack on its own full-width row above the
+     controls instead of sharing a row with them. */
   .camera-status-bar { flex: 0 0 auto; }
-  .camera-status-bar .state-timeline,
-  .camera-status-bar .state-timeline-skeleton {
-    width: 100%;
-  }
   .camera-controls { margin-left: 0; }
 }
 /* Desktop: the feed gets its OWN region above a real (non-overlapping) status
@@ -1639,7 +1669,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   /* (Config table is card-styled at all widths now — see the base rules.) */
 
   /* Room badge: smaller display type so longer names stay on one centred line. */
-  .room-label { top: 58px; padding: 7px 18px; }
+  .room-label { top: calc(58px + env(safe-area-inset-top, 0px)); padding: 7px 18px; }
   .room-title { font-size: 20px; }
 }
 
@@ -1763,10 +1793,18 @@ label.toggle span { user-select: none; line-height: 1.4; }
   display: flex; align-items: center; gap: 7px; flex: 0 0 auto;
   padding: 8px 13px; border-radius: 10px; border: 1px solid transparent;
   background: transparent; color: var(--text-secondary);
-  font-size: 14px; cursor: pointer;
+  /* line-height:1 — without it the label's line box (taller than its glyphs,
+     per normal font metrics) added asymmetric space the 16px icon next to it
+     doesn't have, so align-items:center still read as the TEXT sitting a
+     couple px off-centre against the icon despite both being flex-centred. */
+  font-size: 14px; line-height: 1; cursor: pointer;
 }
 .fm-tab:hover { background: var(--bg-input); }
 .fm-tab.active { background: var(--accent); color: var(--text-on-accent); }
+/* Keeps the Report tab's own height roughly stable across the empty-
+   placeholder <-> generated-report swap — see ReportTab's docstring on the
+   button. */
+.fm-report-preview-area { min-height: 260px; }
 
 .fm-stack { display: flex; flex-direction: column; gap: 16px; }
 
@@ -1806,6 +1844,10 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 .fm-row-main { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .fm-row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+/* Pushed to the far right of the title line, same row as the label — see
+   ReadinessTab's "All devices reporting" card, the one check with an inline
+   action. */
+.fm-row-title-action { margin-left: auto; }
 .fm-row-sub { font-size: 12.5px; }
 .fm-amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 

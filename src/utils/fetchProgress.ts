@@ -88,7 +88,30 @@ export async function fetchModelWithRetry(
       devLog(`[fetchModelWithRetry] attempt ${attempt} failed (network), retrying in ${wait}ms…`, err);
       onProgress(0); // a retry re-fetches from scratch — clear any partial progress shown
       onRetrying?.(attempt, wait);
-      await new Promise((r) => setTimeout(r, wait));
+      await waitOrUntilOnline(wait);
     }
   }
+}
+
+/** Sit out the backoff delay — but wake up immediately if the browser itself
+ *  reports connectivity restored first. Diagnosed from a real field failure:
+ *  a device resuming from sleep/background can have its network stack down
+ *  for well over a minute reassociating Wi-Fi/VPN/DNS, so a fixed backoff
+ *  step sometimes sat idle for seconds after the network was ALREADY back,
+ *  eating into the fixed retry budget for no reason. Doesn't reset or extend
+ *  that budget — a flapping 'online' event on a genuinely broken connection
+ *  must not make this retry forever — it only shortens the wait in the
+ *  common case where the OS confirms the network is back before the timer
+ *  would have fired anyway. */
+function waitOrUntilOnline(ms: number): Promise<void> {
+  if (typeof window === "undefined") return new Promise((r) => setTimeout(r, ms));
+  return new Promise((resolve) => {
+    const timer = setTimeout(finish, ms);
+    function finish() {
+      clearTimeout(timer);
+      window.removeEventListener("online", finish);
+      resolve();
+    }
+    window.addEventListener("online", finish, { once: true });
+  });
 }

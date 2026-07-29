@@ -27,13 +27,15 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
-import { CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient } from "@/config/EntityCategories";
+import {
+  CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient, isLockLikeSwitch, isLockSwitchSecured,
+} from "@/config/EntityCategories";
 import { applyScene, activeSceneName } from "@/config/scenes";
 import type { KioskScene } from "@/config/scenes";
 import { prettifyEntitySlug } from "@/config/EntityMap";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
-import type { Category } from "@/types/scene.types";
+import type { Category, EntityMapping } from "@/types/scene.types";
 
 type IconType = ComponentType<{ size?: number | string }>;
 
@@ -82,6 +84,7 @@ const friendly = (e: HassEntity) => e.attributes.friendly_name?.trim() || pretti
  *  effects) so it's cheap to recompute on every state push via useMemo. */
 function deriveTiles(
   entities: Record<string, HassEntity>,
+  entityMap: Record<string, EntityMapping>,
   can: (c: Category) => boolean,
 ): SummaryTile[] {
   const all = Object.values(entities);
@@ -89,9 +92,15 @@ function deriveTiles(
   const tiles: SummaryTile[] = [];
 
   // ── Door locks ───────────────────────────────────────────────────────
-  const locks = byDomain("lock");
+  // Native `lock.*` entities PLUS any `switch.*` that reads as a door/gate
+  // relay (a doorbell/intercom door strike, say) — see isLockLikeSwitch. One
+  // combined tile so a relay-modelled door isn't invisible next to real locks.
+  const nativeLocks = byDomain("lock");
+  const lockSwitches = byDomain("switch").filter((e) => isLockLikeSwitch(e.entity_id));
+  const locks = [...nativeLocks, ...lockSwitches];
+  const isSecured = (e: HassEntity) => (e.entity_id.startsWith("lock.") ? e.state === "locked" : isLockSwitchSecured(e.state));
   if (locks.length) {
-    const lockedN = locks.filter((l) => l.state === "locked").length;
+    const lockedN = locks.filter(isSecured).length;
     const allLocked = lockedN === locks.length;
     const single = locks.length === 1;
     tiles.push({
@@ -106,7 +115,7 @@ function deriveTiles(
       // the real per-device name (title, further down) — it has the room.
       label: single ? "Door Lock" : "Locks",
       value: single
-        ? (locks[0].state === "locked" ? "Locked" : locks[0].state === "unlocked" ? "Unlocked" : locks[0].state)
+        ? (isSecured(locks[0]) ? "Locked" : "Unlocked")
         : `${lockedN}/${locks.length} locked`,
       tone: allLocked ? "neutral" : "warn",
       category: "access_control",
@@ -117,7 +126,15 @@ function deriveTiles(
   }
 
   // ── Pool / jacuzzi switches ──────────────────────────────────────────
-  const poolSwitches = byDomain("switch").filter((e) => /pool|jacuzzi|jaccuzi|spa/i.test(e.entity_id));
+  // Two independent rules, either one qualifies: the entity's own id/name
+  // reads as pool equipment, OR the ROOM it's configured against (entityMap —
+  // set from the villa's room mapping, not this switch's own name) is the
+  // pool room. The second rule is the more robust one: it catches a switch
+  // named nothing like "pool" (a generic "Filter Pump 2") as long as it's
+  // placed in the Swimming Pool room, without touching the first rule at all.
+  const poolSwitches = byDomain("switch").filter(
+    (e) => /pool|jacuzzi|jaccuzi|spa/i.test(e.entity_id) || /pool|jacuzzi|spa/i.test(entityMap[e.entity_id]?.room ?? ""),
+  );
   if (poolSwitches.length) {
     const on = poolSwitches.some(isOn);
     tiles.push({
@@ -321,8 +338,8 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
   const [openGroup, setOpenGroup] = useState<SummaryTile | null>(null);
 
   const deviceTiles = useMemo(
-    () => deriveTiles(entities, (c) => (role ? isCategoryAllowed(role, c) : false)),
-    [entities, role],
+    () => deriveTiles(entities, config.entityMap, (c) => (role ? isCategoryAllowed(role, c) : false)),
+    [entities, config.entityMap, role],
   );
 
   const scenes = config.kioskScenes ?? [];

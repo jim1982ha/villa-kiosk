@@ -9,19 +9,25 @@
 // why the entry form projects the new total as you type.
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Sparkles, Save, Download } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
+import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData } from "@/fm/FmDataContext";
 import { budgetStatus, formatIdr, monthKey, localStamp } from "@/fm/fmEngine";
+import { buildSpendStatement } from "@/fm/fmReport";
 import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
+import type { FmSavedDocument } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import DeviceSearchPicker, { buildDeviceOptions } from "./DeviceSearchPicker";
+import ReportPreview from "./ReportPreview";
+import SavedDocumentsList from "./SavedDocumentsList";
 
 export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string) => void }) {
-  const { data, addCost, removeCost } = useFmData();
+  const { data, addCost, removeCost, saveDocument } = useFmData();
   const { entities } = useHA();
   const { config } = useConfig();
+  const { haConfig } = useHA();
   const [month, setMonth] = useState(monthKey(Date.now()));
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
@@ -30,6 +36,13 @@ export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string)
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<"minor" | "major">("minor");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
+  // The saved-statement workflow — same "explicit Generate, then optionally
+  // Save" shape as ReportTab, so a statement is a point-in-time record of
+  // this month's spend rather than something that silently changes if an
+  // entry is edited or deleted afterwards.
+  const [statement, setStatement] = useState<string | null>(null);
+  const [statementSaved, setStatementSaved] = useState(false);
+  const villaName = resolveSiteTitle(config, haConfig?.location_name);
 
   const deviceOptions = buildDeviceOptions(config.entityMap, entities);
   const selectDevice = (id: string, name: string) => { setEntityId(id); setDeviceText(name); };
@@ -41,6 +54,30 @@ export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string)
 
   const b = budgetStatus(data.costs, month);
   const amountIdr = Number(amount.replace(/[^\d]/g, "")) || 0;
+
+  const generateStatement = () => {
+    setStatement(buildSpendStatement(data, month, villaName));
+    setStatementSaved(false);
+  };
+  const downloadStatement = () => {
+    if (!statement) return;
+    const url = URL.createObjectURL(new Blob([statement], { type: "text/markdown" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${villaName.replace(/\s+/g, "-").toLowerCase()}-spend-${month}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const saveStatement = async () => {
+    if (!statement) return;
+    await saveDocument({ kind: "spend", month, markdown: statement });
+    setStatementSaved(true);
+  };
+  const reopenStatement = (doc: FmSavedDocument) => {
+    setMonth(doc.month);
+    setStatement(doc.markdown);
+    setStatementSaved(true);
+  };
   const projected = b.minorIdr + (category === "minor" ? amountIdr : 0);
   const projectedOver = projected >= b.capIdr;
 
@@ -53,7 +90,7 @@ export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string)
     <div className="fm-stack">
       <label className="fm-field" style={{ maxWidth: 220 }}>
         <span>Month</span>
-        <select value={month} onChange={(e) => setMonth(e.target.value)}>
+        <select value={month} onChange={(e) => { setMonth(e.target.value); setStatement(null); setStatementSaved(false); }}>
           {months.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
       </label>
@@ -191,6 +228,27 @@ export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string)
           </div>
         ))}
       </div>
+
+      {/* A standalone statement for this month — same explicit Generate ->
+          Save shape as the Report tab (see fmReport.buildSpendStatement),
+          for handing THIS month's spend over on its own without the rest of
+          the operational annex, and for keeping a point-in-time copy even
+          after entries above are later edited or removed. */}
+      <div className="fm-row-sub muted" style={{ marginTop: 4 }}>Spend statement for {month}</div>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <button className="btn ghost" onClick={generateStatement}>
+          <Sparkles size={16} /> {statement ? "Regenerate statement" : "Generate statement"}
+        </button>
+        <button className="btn ghost" onClick={() => void saveStatement()} disabled={!statement || statementSaved}>
+          <Save size={16} /> {statementSaved ? "Saved" : "Save statement"}
+        </button>
+        <button className="btn ghost" onClick={downloadStatement} disabled={!statement}>
+          <Download size={16} /> Download .md
+        </button>
+      </div>
+      {statement && <ReportPreview markdown={statement} />}
+
+      <SavedDocumentsList kind="spend" onOpen={reopenStatement} />
     </div>
   );
 }
