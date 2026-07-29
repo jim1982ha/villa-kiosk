@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.83
+
+### Changes
+- Clarify the blank-PIN note in the README — the previous wording read as if a second, separate guest PIN needed adding, which is not the case and confused the owner. There is exactly one guest_pin, in the add-on options, alongside owner_pin and ops_pin. The point being made is narrower: config.yaml ships all three EMPTY, and empty means opposite things depending on the role. For owner and ops, no PIN makes the profile unavailable — auth_verify refuses it outright, so it fails closed. For guest, no PIN makes the profile open to anyone who reaches the URL, with no prompt at all, because a PIN-less guest is the deliberate 'just look around' mode. Since guest can unlock doors by design, that combination is worth stating plainly rather than leaving implied. Reworded as a Blank PIN row that contrasts the two behaviours and says outright that there is no second PIN to add. No behaviour change
+
+---
+
+
 ## 2.35.82
 
 ### Changes
