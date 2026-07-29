@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.36.1
+
+### Changes
+- Cleanup: removed the two TEMPORARY always-on `console.log` diagnostics added while investigating the "Invert day/night preview" toggle report (`SunController.applyDayNight` and `Dashboard`'s `sun.sun`-driven effect) — the user confirmed the toggle is now working correctly, closing that investigation without ever finding a code path that needed changing. No functional change. Typecheck and production build clean.
+
+---
+
+
 ## 2.36.0
 
 ### Changes

@@ -182,15 +182,6 @@ export default function Dashboard() {
   useEffect(() => {
     if (!manager) return;
     if (haSun) {
-      // TEMP diagnostic alongside SunController's — this effect re-fires on
-      // ANY sun.sun push (attribute-only updates included, not just a real
-      // above/below-horizon flip) and calls the CRUDER hard on/off day/night
-      // path, independent of the "Invert day/night" button's own direct
-      // SceneManager.setRenderConfig call. If the button "works once, then
-      // doesn't", this log will show whether a sun.sun push is landing right
-      // after a toggle and re-asserting a stale invert reading.
-      // eslint-disable-next-line no-console
-      console.log("[Dashboard] applyHaSunState", { state: haSun.state, invert: config.render?.dayNightInvert });
       manager.sun.applyHaSunState(haSun.state);
       return;
     }
