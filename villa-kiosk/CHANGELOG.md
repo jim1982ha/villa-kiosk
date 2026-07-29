@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.36.6
+
+### Changes
+- Fixed a regression from 2.36.5's full-width phone SummaryBar: with enough tiles to overflow (reported from a field screenshot: 4 tiles — Pool/Lights/AC/Energy — wider than the screen), the row's `justify-content: center` made the browser compute centred scroll bounds, so scrolling right reached the last tile fine but scrolling left couldn't reach the first one at all. This is a known CSS trap with `justify-content: center` on an overflowing scrollable flex container. Changed to `justify-content: safe center` (falls back to normal, fully-scrollable start-alignment the instant content overflows, while keeping the centred look when it fits) with the plain `center` declared first as a fallback for any engine that doesn't understand the `safe` keyword. Typecheck and production build clean.
+
+---
+
+
 ## 2.36.5
 
 ### Changes
