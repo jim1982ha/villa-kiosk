@@ -17,7 +17,7 @@
 // archived as plain text years later for a dispute.
 
 import {
-  budgetStatus, completionsInMonth, formatIdr, monthKey, scheduleStatus, ticketStats,
+  budgetStatus, completionsInMonth, formatIdr, monthKey, scheduleStatus, shortDate, ticketStats,
 } from "./fmEngine";
 import type { FmData } from "./fmTypes";
 import type { ReadinessReport } from "./readiness";
@@ -37,12 +37,6 @@ function monthLabel(month: string): string {
   const [y, m] = month.split("-").map(Number);
   return new Date(y, (m ?? 1) - 1, 1)
     .toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-}
-
-/** Human date, local time — see fmEngine.localStamp for why not toISOString. */
-function shortDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 export function buildMonthlyReport(input: ReportInput): string {
@@ -87,7 +81,12 @@ export function buildMonthlyReport(input: ReportInput): string {
         : st.state === "due-soon" ? "Due soon"
           : st.state === "overdue" ? `**Overdue by ${Math.abs(Math.round(st.daysUntilDue ?? 0))}d**`
             : "**Never recorded**";
-      L.push(`| ${s.title} | ${s.everyDays} days | ${st.last ? shortDate(st.last.at) : "—"} | ${status} |`);
+      // s.title is operator-entered free text (see ScheduleEditor) and, unlike
+      // every other table in this file, was never pipe-escaped — a task
+      // title containing "|" silently split into extra table columns. Caught
+      // by rendering this output as an actual table instead of raw text.
+      L.push(`| ${s.title.replace(/\|/g, "/")} | ${s.everyDays} days | `
+        + `${st.last ? shortDate(st.last.at) : "—"} | ${status} |`);
     }
   }
   L.push("");

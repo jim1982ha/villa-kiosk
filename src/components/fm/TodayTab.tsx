@@ -6,9 +6,9 @@
 // 3D map. Overdue work is what Appendix C §7(b) turns into a termination risk.
 
 import { useState } from "react";
-import { Plus, Check, CalendarClock } from "lucide-react";
+import { Plus, Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { scheduleBoard, formatIdr, localStamp, type ScheduleStatus } from "@/fm/fmEngine";
+import { scheduleBoard, formatIdr, localStamp, shortDate, type ScheduleStatus } from "@/fm/fmEngine";
 import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
 import { budgetStatus, wouldExceedCap } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
@@ -20,18 +20,28 @@ const STATE_LABEL: Record<ScheduleStatus["state"], string> = {
   ok: "On schedule",
 };
 
+/** Same wording either side of "never": a target date is shown regardless —
+ *  see fmEngine.scheduleStatus for why "never" now always carries a dueAt —
+ *  so the operator sees WHEN a task is due even before it's ever been logged
+ *  once, not just after. */
 function dueText(s: ScheduleStatus): string {
-  if (s.state === "never") return "No completion recorded yet";
+  const by = s.dueAt ? ` (by ${shortDate(s.dueAt)})` : "";
+  if (s.state === "never") return `No completion recorded yet${by}`;
   const d = Math.round(s.daysUntilDue ?? 0);
-  if (d < 0) return `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} overdue`;
-  if (d === 0) return "Due today";
-  return `Due in ${d} day${d === 1 ? "" : "s"}`;
+  if (d < 0) return `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} overdue${by}`;
+  if (d === 0) return `Due today${by}`;
+  return `Due in ${d} day${d === 1 ? "" : "s"}${by}`;
 }
 
 export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) => void }) {
-  const { data, logCompletion, seedDefaults } = useFmData();
+  const { data, logCompletion, seedDefaults, removeSchedule, removeAllSchedules } = useFmData();
   const board = scheduleBoard(data);
   const [openId, setOpenId] = useState<string | null>(null);
+  // Bulk delete is destructive across every task at once — require an
+  // explicit second tap before it fires, same pattern as the "Turn all
+  // on/off" confirm elsewhere (SummaryGroupPanel) and the Facility
+  // unavailable-devices bulk toggle.
+  const [confirmingDeleteAll, setConfirmingDeleteAll] = useState(false);
 
   if (data.schedules.length === 0) {
     return (
@@ -75,6 +85,28 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
         </div>
       </div>
 
+      <div className="row" style={{ justifyContent: "flex-end" }}>
+        {confirmingDeleteAll ? (
+          <div className="modal-actions" style={{ margin: 0 }}>
+            <button className="btn ghost" onClick={() => setConfirmingDeleteAll(false)}>Cancel</button>
+            <button
+              className="btn danger"
+              onClick={async () => { await removeAllSchedules(); setConfirmingDeleteAll(false); }}
+            >
+              {/* data.schedules.length, not board.length: the board only shows
+                  ENABLED tasks (scheduleBoard filters paused ones out), but
+                  removeAllSchedules clears every schedule regardless — the
+                  confirm count must match what actually gets deleted. */}
+              Delete all {data.schedules.length} tasks?
+            </button>
+          </div>
+        ) : (
+          <button className="btn ghost" onClick={() => setConfirmingDeleteAll(true)}>
+            <Trash2 size={15} /> Delete all
+          </button>
+        )}
+      </div>
+
       <div className="fm-list">
         {board.map((s) => (
           <div key={s.schedule.id} className={`fm-row state-${s.state}`}>
@@ -95,6 +127,14 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
               onClick={() => setOpenId(openId === s.schedule.id ? null : s.schedule.id)}
             >
               <Check size={16} /> Log
+            </button>
+            <button
+              className="icon-btn"
+              onClick={() => void removeSchedule(s.schedule.id)}
+              aria-label={`Remove ${s.schedule.title}`}
+              title="Remove this task. Completions already logged against it are kept."
+            >
+              <Trash2 size={15} />
             </button>
           </div>
         ))}

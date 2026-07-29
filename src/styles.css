@@ -1051,6 +1051,24 @@ input[type="range"]::-moz-range-thumb {
 /* The Config Editor holds full-width entity/binding cards — give it the most
    room the viewport allows. */
 .config-editor-modal { max-width: 780px; }
+/* Fixed height on desktop/tablet, for a modal whose BODY content varies a lot
+   between views (a tabbed workspace switching from a two-row list to a dozen
+   rows). `.modal` alone only caps height (max-height: 90vh) and otherwise
+   shrinks to content, so switching tabs visibly resized the whole dialog
+   around the user — jarring, and inconsistent with every other modal, which
+   only ever shows one view so this never showed up there. Composes with
+   `.modal`'s existing flex column + `.settings-body`'s own
+   `flex:1 1 auto; overflow-y:auto`: giving the CARD a real height (not just a
+   ceiling) is what makes that flex-basis resolve to a stable size, so the
+   body — not the dialog — is the only thing that scrolls. Mobile is
+   untouched on purpose: `.modal`'s mobile override below already makes every
+   modal a content-height, top-anchored full-screen sheet, and forcing a
+   short view to a tall fixed height there would leave a dead gap under the
+   footer (see that override's own comment). Reusable by any future tabbed
+   modal — not a Facility-only rule. */
+@media (min-width: 641px) and (min-height: 561px) {
+  .modal-fixed-height { height: min(680px, 90vh); }
+}
 /* Header is a row: title left, the icon-only theme selector right. */
 .settings-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px 16px; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
 /* Matches .segmented-icons' own rendered height exactly (34px button +
@@ -1890,8 +1908,34 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-empty h3 { margin: 0; font-size: 17px; color: var(--text-primary); }
 .fm-empty p { max-width: 46ch; }
 
-.fm-report-preview {
-  margin: 0; padding: 14px; border-radius: 12px; max-height: 45vh; overflow: auto;
+/* The generated report, rendered as a document (ReportPreview) rather than a
+   monospace dump of raw Markdown — the underlying string is unchanged and is
+   exactly what "Download .md" writes; only how it looks on screen differs. */
+.fm-report-doc {
+  padding: 16px 18px; border-radius: 12px; max-height: 45vh; overflow: auto;
   background: var(--bg-input); border: 1px solid var(--hairline);
-  font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+  font-size: 13.5px; line-height: 1.55; word-break: break-word;
 }
+.fm-report-h1 {
+  font-family: var(--font-display); font-weight: 400; font-size: 19px;
+  margin: 0 0 10px;
+}
+.fm-report-h2 {
+  font-size: 15px; font-weight: 700; margin: 20px 0 8px;
+  padding-top: 14px; border-top: 1px solid var(--hairline);
+}
+.fm-report-doc > .fm-report-h2:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.fm-report-h3 { font-size: 13.5px; font-weight: 600; margin: 14px 0 6px; color: var(--text-secondary); }
+.fm-report-p { margin: 0 0 8px; }
+.fm-report-note { margin: 0 0 8px; }
+.fm-report-hr { border: none; border-top: 1px solid var(--hairline); margin: 16px 0; }
+.fm-report-ul { margin: 0 0 10px; padding-left: 20px; }
+.fm-report-ul li { margin: 3px 0; }
+.fm-report-table-wrap { overflow-x: auto; margin: 0 0 12px; }
+.fm-report-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.fm-report-table th, .fm-report-table td {
+  text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+.fm-report-table th { color: var(--text-secondary); font-weight: 600; }
+.fm-report-table td:first-child, .fm-report-table th:first-child { padding-left: 0; }

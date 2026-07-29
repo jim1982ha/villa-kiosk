@@ -26,8 +26,7 @@ import { isCategoryAllowed, hasCapability } from "@/auth/permissions";
 import { ROLE_LABELS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
-import { isUnavailable } from "@/utils/stateColors";
-import { suggestDeviceGroups } from "@/config/deviceGroups";
+import { unavailableDeviceIds } from "@/config/deviceGroups";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
 import ViewControls from "./ViewControls";
@@ -121,57 +120,14 @@ export default function HUD({
   const title = resolveSiteTitle(config, haConfig?.location_name);
   const floors = [1, 2];
 
-  // Every DEVICE HA currently reports as unavailable/unknown/never-reported —
-  // "device", not "entity": see the two folds below.
-  const unavailableIds = useMemo(() => {
-    // Candidate set is the UNION of config.entityMap's keys and mappedEntityIds
-    // (every entity that resolved to real geometry on the map — see
-    // manager.mappedEntityIds), not entityMap alone. A mesh literally NAMED
-    // after its entity_id resolves to a working badge/panel via
-    // resolveMeshToMapping's name-inference fallback WITHOUT ever getting a
-    // saved entityMap entry — exactly the case of a device that no longer
-    // exists in Home Assistant at all: there was never an edit to create that
-    // entry. entityMap alone would silently miss it despite it being visibly
-    // "in error" on the map right now.
-    const candidates = new Set([...mappedEntityIds, ...Object.keys(config.entityMap)]);
-
-    // Fold multi-entity physical devices down to ONE representative id, so
-    // the count/list reflects DEVICES, not raw HA entities (e.g. one
-    // combo sensor's separate _temperature/_humidity entities counting as
-    // two). Two sources of "these are the same device": entities the owner
-    // has explicitly grouped (config.deviceGroups), and same-device sensor
-    // pairs the app can already recognise on its own by name pattern (see
-    // suggestDeviceGroups) but that haven't been formally grouped yet — for
-    // a diagnostic "what's broken" glance, requiring that manual step first
-    // would just make the count look wrong for no good reason.
-    const repOf = new Map<string, string>();
-    for (const g of config.deviceGroups) {
-      for (const memberId of g.memberEntityIds) repOf.set(memberId, g.primaryEntityId);
-    }
-    for (const s of suggestDeviceGroups(config.entityMap, config.deviceGroups)) {
-      if (!repOf.has(s.memberEntityId)) repOf.set(s.memberEntityId, s.primaryEntityId);
-    }
-
-    // isUnavailable treats a missing live entity the same as a reported
-    // unavailable/unknown state — same convention the map badges and status
-    // pills already use. A disabled device is hidden everywhere else in the
-    // app, so it's excluded here too.
-    const reps = new Set<string>();
-    for (const id of candidates) {
-      if (config.entityMap[id]?.disabled) continue;
-      // Ignore CONFIG DEBRIS: an entityMap entry that HA has never heard of
-      // AND that has no geometry on the map is not a device in error, it's a
-      // leftover key from a renamed entity or an older model — counting those
-      // buried the handful of genuinely-broken devices under a pile of noise
-      // (the reported "30" when only a few were actually wrong). A phantom
-      // that IS on the map stays: that's a device you can see, faded, right
-      // now, and is exactly the case this button has to report.
-      if (!mappedEntityIds.has(id) && !entities[id]) continue;
-      if (!isUnavailable(entities[id])) continue;
-      reps.add(repOf.get(id) ?? id);
-    }
-    return [...reps];
-  }, [config.entityMap, config.deviceGroups, mappedEntityIds, entities]);
+  // Every DEVICE HA currently reports as unavailable/unknown/never-reported.
+  // Shared with fm/readiness.ts's "All devices reporting" check — see
+  // unavailableDeviceIds's docstring for why that sharing is load-bearing,
+  // not just tidiness (the two used to disagree).
+  const unavailableIds = useMemo(
+    () => unavailableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds, entities),
+    [config.entityMap, config.deviceGroups, mappedEntityIds, entities],
+  );
   const [unavailableOpen, setUnavailableOpen] = useState(false);
 
   // Facility attention count: overdue/never-recorded maintenance plus unresolved

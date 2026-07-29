@@ -54,10 +54,21 @@ export function scheduleStatus(
 ): ScheduleStatus {
   const last = lastCompletion(completions, schedule.id);
   if (!last) {
-    // Never performed. Deliberately "never" rather than "overdue": the two need
-    // different words in the UI — one is a gap in the record, the other is a
-    // missed obligation — even though both demand action.
-    return { schedule, last: null, dueAt: null, daysUntilDue: null, state: "never" };
+    // Never performed. `state` is deliberately "never" rather than "overdue":
+    // the two need different words in the UI — one is a gap in the record,
+    // the other is a missed obligation — even though both demand action.
+    //
+    // dueAt/daysUntilDue are NOT null, though (a change from the original
+    // never-null contract, safe because every existing caller already treats
+    // both as "possibly absent" via `?? 0`/`?? Infinity`): a schedule with no
+    // completion yet still needs a target date to SHOW, so the UI isn't stuck
+    // saying only "no completion recorded" forever. The baseline is
+    // `createdAt` — the date the obligation started existing — falling back
+    // to `now` for schedules created before that field existed, which reads
+    // as "due in `everyDays`" rather than a wrong date.
+    const baseline = schedule.createdAt ? Date.parse(schedule.createdAt) : now;
+    const dueAt = baseline + schedule.everyDays * DAY_MS;
+    return { schedule, last: null, dueAt, daysUntilDue: (dueAt - now) / DAY_MS, state: "never" };
   }
   const dueAt = Date.parse(last.at) + schedule.everyDays * DAY_MS;
   const daysUntilDue = (dueAt - now) / DAY_MS;
@@ -191,4 +202,15 @@ export function localStamp(at: string | number | Date = Date.now()): string {
 
 export function formatIdr(n: number): string {
   return `IDR ${Math.round(n).toLocaleString("en-US")}`;
+}
+
+/** Short human date, local time (e.g. "24 Jul 2026") — for a target/due date
+ *  or a report table row, where the full time-of-day in localStamp() is more
+ *  precision than the reader needs. Was previously private to fmReport.ts;
+ *  moved here (and imported back from there) so TodayTab and ScheduleEditor
+ *  can show the exact same date format the report annex uses, rather than
+ *  each screen inventing its own. */
+export function shortDate(at: string | number | Date): string {
+  const d = new Date(at);
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }

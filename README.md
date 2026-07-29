@@ -381,12 +381,12 @@ have to be *evidenced*, not just performed. The tabs map to that:
 
 | Tab | What it answers |
 |---|---|
-| **Today** | What maintenance is due or overdue, worst first. Logging a completion records who did it, when, an optional cost, and photo evidence. |
-| **Readiness** | Is the villa fit for the next guest? Every check is derived from live device state — devices reporting, doors locked, lights off, AC reachable, cameras online, pool serviced, no open faults — so it can't be ticked off without being true. |
-| **Faults** | The work queue. Devices Home Assistant already reports as offline can be turned into a fault in one tap; the app stamps the resolution time itself, which is what makes mean-time-to-resolution meaningful. |
-| **Spend** | Maintenance spend this month against a configurable monthly cap, with the projected total shown *before* an entry is saved — the point at which the decision is still open. |
-| **Report** | A Markdown operations report for any month: maintenance performed, standing against schedule, spend, faults and response times, device availability and a readiness snapshot. Copy or download it. |
-| **Schedule** | Add, edit, pause or remove maintenance tasks — interval (with presets like "twice a month"), optional room, optional contract reference. Removing a task keeps the completions already logged against it. |
+| **Today** | What maintenance is due or overdue, worst first, each card showing the target date its interval implies. Logging a completion records who did it, when, an optional cost, and photo evidence. A task can be removed individually or all at once (with a confirm step). |
+| **Readiness** | Is the villa fit for the next guest? Every check is derived from live device state — devices reporting, doors locked, lights off, AC reachable, cameras online, pool serviced, no open faults — so it can't be ticked off without being true. "All devices reporting" links straight to the same Unavailable-devices list the HUD's own alert badge opens, so the two counts can never disagree. |
+| **Faults** | The work queue. Devices Home Assistant already reports as offline can be turned into a fault in one tap, or search across every configured device (with free text for one that isn't in the list — a spare part, something not yet in Home Assistant). The app stamps the resolution time itself, which is what makes mean-time-to-resolution meaningful. |
+| **Spend** | Maintenance spend this month against a configurable monthly cap, optionally tied to a device the same way Faults is, with the projected total shown *before* an entry is saved — the point at which the decision is still open. |
+| **Schedule** | Add, edit, pause or remove maintenance tasks — interval (with presets like "twice a month"), optional room, optional contract reference. Every task shows the target date its interval implies, from its last completion or (if never done) from when it was created — the same date the Today board shows. Removing a task keeps the completions already logged against it; "Delete all" clears the schedule the same way. |
+| **Report** | Press **Generate report** to snapshot the villa's current Readiness/Faults/Spend/Schedule status into a formatted preview for any month. **Download .md** saves the underlying Markdown unchanged. |
 
 ### Where the defaults come from
 

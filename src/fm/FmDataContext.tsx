@@ -27,9 +27,14 @@ interface FmDataContextValue {
   /** Set when the last write failed, so the UI can say so instead of pretending. */
   saveError: string | null;
   reload: () => Promise<void>;
-  addSchedule: (s: Omit<FmSchedule, "id">) => Promise<void>;
+  addSchedule: (s: Omit<FmSchedule, "id" | "createdAt">) => Promise<void>;
   updateSchedule: (id: string, patch: Partial<FmSchedule>) => Promise<void>;
   removeSchedule: (id: string) => Promise<void>;
+  /** Delete every schedule in one write — the Today tab's "delete all" action.
+   *  Same policy as a single removeSchedule: completions already logged stay
+   *  (they're evidence of work actually done, not of the task still existing),
+   *  only the schedule entries themselves go. */
+  removeAllSchedules: () => Promise<void>;
   /** Log a completion, optionally recording what it cost in the same action —
    *  the two belong together and splitting them loses the link. */
   logCompletion: (
@@ -76,8 +81,11 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     if (!ok) setSaveError("Couldn't save to the add-on — the change is only on this device.");
   }, []);
 
-  const addSchedule = useCallback((s: Omit<FmSchedule, "id">) =>
-    mutate((d) => ({ ...d, schedules: [...d.schedules, { ...s, id: fmId("sc") }] })), [mutate]);
+  const addSchedule = useCallback((s: Omit<FmSchedule, "id" | "createdAt">) =>
+    mutate((d) => ({
+      ...d,
+      schedules: [...d.schedules, { ...s, id: fmId("sc"), createdAt: new Date().toISOString() }],
+    })), [mutate]);
 
   const updateSchedule = useCallback((id: string, patch: Partial<FmSchedule>) =>
     mutate((d) => ({
@@ -86,6 +94,9 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
 
   const removeSchedule = useCallback((id: string) =>
     mutate((d) => ({ ...d, schedules: d.schedules.filter((s) => s.id !== id) })), [mutate]);
+
+  const removeAllSchedules = useCallback(() =>
+    mutate((d) => ({ ...d, schedules: [] })), [mutate]);
 
   const logCompletion = useCallback((
     c: Omit<FmCompletion, "id" | "costId">,
@@ -132,16 +143,17 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
 
   const seedDefaults = useCallback(() => mutate((d) => {
     const have = new Set(d.schedules.map((s) => s.builtinKey).filter(Boolean));
+    const now = new Date().toISOString();
     const additions = DEFAULT_SCHEDULES
       .filter((s) => !have.has(s.builtinKey))
-      .map((s) => ({ ...s, id: fmId("sc") }));
+      .map((s) => ({ ...s, id: fmId("sc"), createdAt: now }));
     return additions.length ? { ...d, schedules: [...d.schedules, ...additions] } : d;
   }), [mutate]);
 
   return (
     <FmDataContext.Provider value={{
       data, ready, saveError, reload,
-      addSchedule, updateSchedule, removeSchedule,
+      addSchedule, updateSchedule, removeSchedule, removeAllSchedules,
       logCompletion, addCost, removeCost, addTicket, updateTicket, seedDefaults,
     }}>
       {children}

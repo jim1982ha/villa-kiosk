@@ -1,5 +1,5 @@
 // src/components/fm/FacilityModal.tsx
-// The Facility Manager workspace — one modal, five tabs, opened from the HUD
+// The Facility Manager workspace — one modal, six tabs, opened from the HUD
 // by any profile holding the `manageFacility` capability (facility manager and
 // owner; see auth/permissions.ts for why both).
 //
@@ -8,14 +8,26 @@
 //   Readiness  is the villa fit for the next guest (Clause 1.1(iii)(a))
 //   Faults     the work queue (Clause 1.1(iv)(b))
 //   Spend      this month against the Minor Maintenance cap (Clause 3.3(i))
+//   Schedule   what the Today board measures against — configured, then acted on
 //   Report     the operational annex for the monthly owner report (Clause 3.11)
+//
+// Fixed height (.modal-fixed-height) on desktop/tablet: this modal switches
+// between views with wildly different content — Spend can be two rows,
+// Faults a dozen — and letting the dialog resize around every tab switch was
+// jarring. See that class's own comment in styles.css.
 
 import { useMemo, useState } from "react";
-import { X, ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog } from "lucide-react";
+import {
+  X, ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog, TriangleAlert,
+} from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
+import { useProfile } from "@/auth/ProfileContext";
+import { hasCapability } from "@/auth/permissions";
 import { useFmData } from "@/fm/FmDataContext";
 import { buildReadiness } from "@/fm/readiness";
+import { unavailableDeviceIds } from "@/config/deviceGroups";
+import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import TodayTab from "./TodayTab";
 import ReadinessTab from "./ReadinessTab";
 import FaultsTab from "./FaultsTab";
@@ -23,16 +35,18 @@ import SpendTab from "./SpendTab";
 import ReportTab from "./ReportTab";
 import ScheduleEditor from "./ScheduleEditor";
 
-type Tab = "today" | "readiness" | "faults" | "spend" | "report" | "schedule";
+type Tab = "today" | "readiness" | "faults" | "spend" | "schedule" | "report";
 
 const TABS: { id: Tab; label: string; icon: typeof ListChecks }[] = [
   { id: "today", label: "Today", icon: ListChecks },
   { id: "readiness", label: "Readiness", icon: ClipboardCheck },
   { id: "faults", label: "Faults", icon: Wrench },
   { id: "spend", label: "Spend", icon: Wallet },
-  { id: "report", label: "Report", icon: FileText },
-  // Last: configuring the schedule is a setup act, not a daily one.
+  // Before Report: configuring the schedule is what the report and the Today
+  // board both read from, so it belongs upstream of the annex that summarises
+  // them, not after it.
   { id: "schedule", label: "Schedule", icon: CalendarCog },
+  { id: "report", label: "Report", icon: FileText },
 ];
 
 export default function FacilityModal({
@@ -47,71 +61,107 @@ export default function FacilityModal({
   const [tab, setTab] = useState<Tab>("today");
   const { entities } = useHA();
   const { config } = useConfig();
+  const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
+  const [unavailableOpen, setUnavailableOpen] = useState(false);
 
   // Shared by the Readiness tab and the Report tab, so the report can never
   // disagree with what the operator just looked at.
   const readiness = useMemo(
-    () => buildReadiness(entities, config.entityMap, mappedEntityIds, data),
-    [entities, config.entityMap, mappedEntityIds, data],
+    () => buildReadiness(entities, config.entityMap, mappedEntityIds, data, config.deviceGroups),
+    [entities, config.entityMap, mappedEntityIds, data, config.deviceGroups],
   );
 
+  // Same list the HUD's own unavailable-devices badge shows (see
+  // unavailableDeviceIds) — the Readiness tab's quick-link opens this exact
+  // panel rather than a Facility-local reimplementation, so there is only
+  // ever one "unavailable devices" view in the app to keep in sync.
+  const unavailableIds = useMemo(
+    () => unavailableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds, entities),
+    [config.entityMap, config.deviceGroups, mappedEntityIds, entities],
+  );
+  const canControl = role != null && hasCapability(role, "controlEntities");
+
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div
-        className="modal settings-modal config-editor-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="settings-header">
-          <h2>Facility</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
-        </div>
+    // Fragment, not a shared wrapper: the Unavailable-devices panel below
+    // renders its OWN .modal-backdrop (via BasePanel), and nesting it inside
+    // this modal's backdrop would let a click meant to dismiss just the panel
+    // bubble up and close Facility too (the panel's backdrop has no reason to
+    // stopPropagation — normally it IS the outermost one). Kept as true
+    // siblings, both under Dashboard's tree, so each backdrop's click-to-close
+    // only ever closes its own modal.
+    <>
+      <div className="modal-backdrop" onClick={onClose}>
+        <div
+          className="modal settings-modal config-editor-modal modal-fixed-height"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="settings-header">
+            <h2>Facility</h2>
+            <button className="icon-btn" onClick={onClose} aria-label="Close">
+              <X size={18} />
+            </button>
+          </div>
 
-        <div className="fm-tabs" role="tablist" aria-label="Facility sections">
-          {TABS.map((t) => {
-            const Icon = t.icon;
-            return (
-              <button
-                key={t.id}
-                role="tab"
-                aria-selected={tab === t.id}
-                className={`fm-tab${tab === t.id ? " active" : ""}`}
-                onClick={() => setTab(t.id)}
-              >
-                <Icon size={16} /><span>{t.label}</span>
-              </button>
-            );
-          })}
-        </div>
+          <div className="fm-tabs" role="tablist" aria-label="Facility sections">
+            {TABS.map((t) => {
+              const Icon = t.icon;
+              return (
+                <button
+                  key={t.id}
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  className={`fm-tab${tab === t.id ? " active" : ""}`}
+                  onClick={() => setTab(t.id)}
+                >
+                  <Icon size={16} /><span>{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
 
-        <div className="settings-body">
-          {saveError && <div className="fm-banner warn">{saveError}</div>}
-          {!ready && <p className="muted body-text">Loading the maintenance record…</p>}
-          {ready && tab === "today" && <TodayTab onOpenEntity={onOpenEntity} />}
-          {ready && tab === "readiness" && (
-            <ReadinessTab report={readiness} onOpenEntity={onOpenEntity} />
-          )}
-          {ready && tab === "faults" && <FaultsTab onOpenEntity={onOpenEntity} />}
-          {ready && tab === "spend" && <SpendTab />}
-          {ready && tab === "schedule" && <ScheduleEditor />}
-          {ready && tab === "report" && (
-            <ReportTab
-              readiness={readiness}
-              offlineDeviceCount={readiness.checks.find((c) => c.id === "devices-online")?.entityIds?.length ?? 0}
-              totalDeviceCount={mappedEntityIds.size || Object.keys(config.entityMap).length}
-            />
-          )}
-        </div>
+          <div className="settings-body">
+            {saveError && <div className="fm-banner warn">{saveError}</div>}
+            {!ready && <p className="muted body-text">Loading the maintenance record…</p>}
+            {ready && tab === "today" && <TodayTab onOpenEntity={onOpenEntity} />}
+            {ready && tab === "readiness" && (
+              <ReadinessTab
+                report={readiness}
+                onOpenEntity={onOpenEntity}
+                onOpenUnavailableDevices={() => setUnavailableOpen(true)}
+              />
+            )}
+            {ready && tab === "faults" && <FaultsTab onOpenEntity={onOpenEntity} />}
+            {ready && tab === "spend" && <SpendTab onOpenEntity={onOpenEntity} />}
+            {ready && tab === "schedule" && <ScheduleEditor />}
+            {ready && tab === "report" && (
+              <ReportTab
+                readiness={readiness}
+                offlineDeviceCount={readiness.checks.find((c) => c.id === "devices-online")?.entityIds?.length ?? 0}
+                totalDeviceCount={mappedEntityIds.size || Object.keys(config.entityMap).length}
+              />
+            )}
+          </div>
 
-        <div className="settings-footer" style={{ justifyContent: "space-between" }}>
-          <span className="muted body-text" style={{ fontSize: 12 }}>
-            Maintenance intervals follow Clause 3.7 · cap follows Clause 3.3(i)
-          </span>
-          <button className="btn primary" onClick={onClose}>Close</button>
+          <div className="settings-footer" style={{ justifyContent: "space-between" }}>
+            <span className="muted body-text" style={{ fontSize: 12 }}>
+              Maintenance intervals follow Clause 3.7 · cap follows Clause 3.3(i)
+            </span>
+            <button className="btn primary" onClick={onClose}>Close</button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {unavailableOpen && (
+        <SummaryGroupPanel
+          group={{ title: "Unavailable devices", icon: TriangleAlert, entityIds: unavailableIds }}
+          canControl={canControl}
+          mappedEntityIds={mappedEntityIds}
+          onClose={() => setUnavailableOpen(false)}
+          onOpenEntity={(id) => { setUnavailableOpen(false); onOpenEntity(id); }}
+          hideBulkToggle
+        />
+      )}
+    </>
   );
 }

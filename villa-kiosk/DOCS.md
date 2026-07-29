@@ -88,9 +88,10 @@ never expose port 8099.
 ## Facility workspace
 
 The **Owner** and **Facility manager** profiles get a clipboard icon in the top
-bar that opens a maintenance workspace: what's due, whether the villa is ready
-for the next guest, the fault queue, spend against a monthly cap, and a
-copy/download monthly operations report.
+bar that opens a maintenance workspace, six tabs in the operator's own order of
+business: Today, Readiness, Faults, Spend, Schedule, Report. It opens at a
+fixed height on desktop/tablet, so switching between a two-row tab and a
+dozen-row one doesn't resize the dialog around you.
 
 Everything it records lives in the add-on's own `/data` volume, so every device
 that opens the kiosk sees the same record:
@@ -103,7 +104,27 @@ that opens the kiosk sees the same record:
 The maintenance schedule starts empty — press **Load the schedule** on first
 open to seed a typical Bali villa management schedule (AC every 3 months, pest
 control twice monthly, hydrowash every 3/12 months, pool twice weekly). Every
-interval is editable afterwards.
+interval is editable in the **Schedule** tab afterwards, which also shows the
+target date each task's interval implies (from its last completion, or from
+when the task was created if it's never been done) — the same date shown next
+to each card on the **Today** board. A task can be removed individually, or
+all at once (with a confirm step) from the Today tab.
+
+**Faults** and **Spend** entries can be tied to a specific device: search
+across every configured device, or type a description freehand if it isn't in
+the list (a spare part, something not yet in Home Assistant). The device stays
+attached to the record even if it's later renamed or removed.
+
+**Report** builds the monthly operational annex on demand — press **Generate
+report** to snapshot the villa's current Readiness/Faults/Spend/Schedule
+status into a formatted preview. Press it again for a fresh snapshot; changing
+the period clears the previous one so a stale month never lingers on screen.
+**Download .md** saves the underlying Markdown unchanged, for pasting into an
+email or archiving.
+
+**Readiness**'s "All devices reporting" check links straight to the same
+Unavailable-devices list the HUD's own alert badge opens — one shared count,
+so the two can never disagree.
 
 The **Guest** profile has no access to any of this.
 

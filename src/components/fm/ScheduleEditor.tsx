@@ -15,6 +15,7 @@ import { useState } from "react";
 import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
+import { scheduleStatus, shortDate } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
 
 /** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
@@ -145,34 +146,41 @@ export default function ScheduleEditor() {
         {data.schedules.length === 0 && (
           <p className="muted body-text">No tasks yet.</p>
         )}
-        {data.schedules.map((s) => (
-          <div key={s.id} className={`fm-row state-${s.enabled ? "ok" : ""}`}>
-            <div className="fm-row-main">
-              <div className="fm-row-title">
-                <strong>{s.title}</strong>
-                {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
-                {s.room && <span className="fm-clause">{s.room}</span>}
-                {!s.enabled && <span className="fm-clause">Paused</span>}
+        {data.schedules.map((s) => {
+          // Target date this task implies — from its last completion, or (if
+          // never done) from when it was created. See fmEngine.scheduleStatus.
+          const due = scheduleStatus(s, data.completions);
+          return (
+            <div key={s.id} className={`fm-row state-${s.enabled ? "ok" : ""}`}>
+              <div className="fm-row-main">
+                <div className="fm-row-title">
+                  <strong>{s.title}</strong>
+                  {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
+                  {s.room && <span className="fm-clause">{s.room}</span>}
+                  {!s.enabled && <span className="fm-clause">Paused</span>}
+                </div>
+                <div className="fm-row-sub muted">
+                  Every {s.everyDays} days · due by {due.dueAt ? shortDate(due.dueAt) : "—"}
+                </div>
               </div>
-              <div className="fm-row-sub muted">Every {s.everyDays} days</div>
+              <button
+                className="btn ghost"
+                onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}
+              >{s.enabled ? "Pause" : "Resume"}</button>
+              <button className="icon-btn" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
+                <Pencil size={15} />
+              </button>
+              <button
+                className="icon-btn"
+                onClick={() => void removeSchedule(s.id)}
+                aria-label={`Remove ${s.title}`}
+                title="Remove this task. Completions already logged against it are kept."
+              >
+                <Trash2 size={15} />
+              </button>
             </div>
-            <button
-              className="btn ghost"
-              onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}
-            >{s.enabled ? "Pause" : "Resume"}</button>
-            <button className="icon-btn" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
-              <Pencil size={15} />
-            </button>
-            <button
-              className="icon-btn"
-              onClick={() => void removeSchedule(s.id)}
-              aria-label={`Remove ${s.title}`}
-              title="Remove this task. Completions already logged against it are kept."
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

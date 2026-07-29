@@ -10,19 +10,34 @@
 
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { useHA } from "@/ha/HAStateStore";
+import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { budgetStatus, formatIdr, monthKey, localStamp } from "@/fm/fmEngine";
 import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
+import DeviceSearchPicker, { buildDeviceOptions } from "./DeviceSearchPicker";
 
-export default function SpendTab() {
+export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string) => void }) {
   const { data, addCost, removeCost } = useFmData();
+  const { entities } = useHA();
+  const { config } = useConfig();
   const [month, setMonth] = useState(monthKey(Date.now()));
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
+  const [deviceText, setDeviceText] = useState("");
+  const [entityId, setEntityId] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<"minor" | "major">("minor");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
+
+  const deviceOptions = buildDeviceOptions(config.entityMap, entities);
+  const selectDevice = (id: string, name: string) => { setEntityId(id); setDeviceText(name); };
+  const clearDevice = () => { setEntityId(""); setDeviceText(""); };
+  const resetForm = () => {
+    setAdding(false); setLabel(""); setDeviceText(""); setEntityId("");
+    setAmount(""); setPhotoIds([]);
+  };
 
   const b = budgetStatus(data.costs, month);
   const amountIdr = Number(amount.replace(/[^\d]/g, "")) || 0;
@@ -80,10 +95,21 @@ export default function SpendTab() {
       {adding && (
         <div className="fm-form">
           <h3>Record maintenance spend</h3>
+          <div className="fm-field">
+            <span>Device (search, or type one not listed — leave blank for a whole-villa expense)</span>
+            <DeviceSearchPicker
+              value={deviceText}
+              options={deviceOptions}
+              matchedEntityId={entityId || undefined}
+              onChangeText={(text) => { setDeviceText(text); setEntityId(""); }}
+              onSelect={(opt) => selectDevice(opt.entityId, opt.label)}
+              onClear={clearDevice}
+            />
+          </div>
           <label className="fm-field">
-            <span>What for</span>
+            <span>What the spend is about</span>
             <input value={label} onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. AC gas top-up, bedroom 2" />
+              placeholder="e.g. Gas top-up and filter clean" />
           </label>
           <label className="fm-field">
             <span>Amount (IDR)</span>
@@ -111,9 +137,7 @@ export default function SpendTab() {
           </div>
 
           <div className="modal-actions" style={{ marginTop: 8 }}>
-            <button className="btn ghost" onClick={() => {
-              setAdding(false); setLabel(""); setAmount(""); setPhotoIds([]);
-            }}>Cancel</button>
+            <button className="btn ghost" onClick={resetForm}>Cancel</button>
             <button
               className="btn primary"
               disabled={!label.trim() || amountIdr <= 0}
@@ -121,8 +145,11 @@ export default function SpendTab() {
                 await addCost({
                   at: new Date().toISOString(), amountIdr,
                   label: label.trim(), category, photoIds,
+                  entityId: entityId || undefined,
+                  deviceLabel: deviceText.trim() || undefined,
+                  room: entityId ? config.entityMap[entityId]?.room : undefined,
                 });
-                setAdding(false); setLabel(""); setAmount(""); setPhotoIds([]);
+                resetForm();
               }}
             >Save</button>
           </div>
@@ -143,6 +170,19 @@ export default function SpendTab() {
               <div className="fm-row-sub muted">
                 {localStamp(c.at)}{c.photoIds.length > 0 && ` · ${c.photoIds.length} photo(s)`}
               </div>
+              {(c.entityId || c.deviceLabel) && (
+                <div className="fm-chiprow">
+                  {c.entityId ? (
+                    <button className="fm-entity-chip" onClick={() => onOpenEntity?.(c.entityId!)}>
+                      {c.deviceLabel ?? c.entityId}
+                    </button>
+                  ) : (
+                    <span className="fm-entity-chip" style={{ cursor: "default" }}>
+                      {c.deviceLabel}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <span className="fm-amount">{formatIdr(c.amountIdr)}</span>
             <button className="icon-btn" onClick={() => void removeCost(c.id)} aria-label="Delete entry">

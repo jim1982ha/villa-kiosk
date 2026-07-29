@@ -12,7 +12,9 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
+import type { DeviceGroup } from "@/config/AppConfig";
 import { isUnavailable } from "@/utils/stateColors";
+import { unavailableDeviceIds } from "@/config/deviceGroups";
 import { scheduleStatus } from "./fmEngine";
 import type { FmData } from "./fmTypes";
 
@@ -50,6 +52,10 @@ export function buildReadiness(
   entityMap: Record<string, EntityMapping>,
   mappedEntityIds: Set<string>,
   fm: FmData,
+  /** Same folding/debris rules as the HUD's unavailable-devices badge — see
+   *  unavailableDeviceIds. Optional (defaults to none) only for a caller with
+   *  no groups configured yet; every real caller has config.deviceGroups. */
+  deviceGroups: readonly DeviceGroup[] = [],
   now = Date.now(),
 ): ReadinessReport {
   const checks: ReadinessCheck[] = [];
@@ -61,9 +67,12 @@ export function buildReadiness(
     Object.values(entities).filter((e) => e.entity_id.startsWith(`${d}.`) && relevant(e.entity_id));
 
   // ── Devices online ───────────────────────────────────────────────────────
-  const candidates = new Set<string>([...mappedEntityIds, ...Object.keys(entityMap)]);
-  const offline = [...candidates].filter(
-    (id) => relevant(id) && isUnavailable(entities[id]));
+  // Shared with the HUD's unavailable-devices badge — deliberately the SAME
+  // function, not a parallel reimplementation. They used to disagree (this
+  // check counted raw candidates with no device-folding or debris filtering,
+  // so a two-entity combo sensor could read as two broken devices here and
+  // one on the HUD badge); see unavailableDeviceIds's docstring.
+  const offline = unavailableDeviceIds(entityMap, [...deviceGroups], mappedEntityIds, entities);
   checks.push({
     id: "devices-online",
     label: "All devices reporting",

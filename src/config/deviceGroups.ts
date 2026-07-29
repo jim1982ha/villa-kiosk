@@ -6,6 +6,8 @@
 
 import type { AppConfig, DeviceGroup } from "./AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
+import type { HassEntity } from "@/types/ha.types";
+import { isUnavailable } from "@/utils/stateColors";
 
 /** Every entity_id folded into some group as a (non-primary) member — these
  *  never get their own badge; see EntityVisuals.rebuildLabels. */
@@ -93,4 +95,50 @@ export function suggestDeviceGroups(
     }
   }
   return suggestions;
+}
+
+/**
+ * Every DEVICE Home Assistant currently reports as unavailable/unknown/
+ * never-reported — "device", not "entity": multi-entity physical devices
+ * (see PAIRABLE_SUFFIXES/DeviceGroup above) fold to ONE representative id,
+ * and entries HA has never heard of and that have no map geometry are
+ * dropped as config debris rather than counted as broken devices.
+ *
+ * THE single source of truth for this count/list — it used to be computed
+ * twice (once inline in HUD's unavailable-devices button, once independently
+ * in fm/readiness.ts's "All devices reporting" check), and the two
+ * implementations disagreed: readiness counted raw entityMap candidates with
+ * no folding or debris filtering, so a two-entity combo sensor could count as
+ * two broken devices there while HUD's badge — reading straight off this
+ * function — said one. An operator seeing "3 offline" on the Facility tab and
+ * "1 offline" on the HUD badge has no way to know which number is real. Both
+ * callers now go through this one function, so they cannot disagree again.
+ */
+export function unavailableDeviceIds(
+  entityMap: Record<string, EntityMapping>,
+  deviceGroups: DeviceGroup[],
+  mappedEntityIds: ReadonlySet<string>,
+  entities: Record<string, HassEntity>,
+): string[] {
+  const candidates = new Set([...mappedEntityIds, ...Object.keys(entityMap)]);
+
+  const repOf = new Map<string, string>();
+  for (const g of deviceGroups) {
+    for (const memberId of g.memberEntityIds) repOf.set(memberId, g.primaryEntityId);
+  }
+  for (const s of suggestDeviceGroups(entityMap, deviceGroups)) {
+    if (!repOf.has(s.memberEntityId)) repOf.set(s.memberEntityId, s.primaryEntityId);
+  }
+
+  const reps = new Set<string>();
+  for (const id of candidates) {
+    if (entityMap[id]?.disabled) continue;
+    // Config debris: an entityMap entry HA has never heard of AND that has no
+    // geometry on the map is not a device in error, it's a leftover key from
+    // a renamed entity or an older model.
+    if (!mappedEntityIds.has(id) && !entities[id]) continue;
+    if (!isUnavailable(entities[id])) continue;
+    reps.add(repOf.get(id) ?? id);
+  }
+  return [...reps];
 }

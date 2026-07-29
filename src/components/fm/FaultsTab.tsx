@@ -5,7 +5,10 @@
 //
 // New faults can be raised straight from a device that Home Assistant reports
 // as unavailable, which is the common case: the villa already knows what is
-// broken, so the operator shouldn't have to retype it.
+// broken, so the operator shouldn't have to retype it. For anything else,
+// DeviceSearchPicker reaches every configured device (not just the offline
+// shortlist), with free text for a device that isn't in the villa's list at
+// all — a spare part, or something not yet wired into Home Assistant.
 
 import { useState } from "react";
 import { Plus, Wrench } from "lucide-react";
@@ -17,6 +20,7 @@ import { useFmData } from "@/fm/FmDataContext";
 import { localStamp, ticketStats } from "@/fm/fmEngine";
 import type { FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
+import DeviceSearchPicker, { buildDeviceOptions } from "./DeviceSearchPicker";
 
 const NEXT: Record<FmTicketStatus, FmTicketStatus | null> = {
   open: "in_progress", in_progress: "resolved", resolved: null,
@@ -31,8 +35,13 @@ export default function FaultsTab({ onOpenEntity }: { onOpenEntity: (id: string)
   const { config } = useConfig();
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
+  const [deviceText, setDeviceText] = useState("");
   const [entityId, setEntityId] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
+
+  const resetForm = () => {
+    setAdding(false); setTitle(""); setDeviceText(""); setEntityId(""); setPhotoIds([]);
+  };
 
   const stats = ticketStats(data.tickets);
   const openFirst = [...data.tickets].sort((a, b) => {
@@ -49,6 +58,17 @@ export default function FaultsTab({ onOpenEntity }: { onOpenEntity: (id: string)
 
   const label = (id: string) =>
     displayLabelFor(id, config.entityMap[id]?.label, entities[id]?.attributes.friendly_name);
+
+  const deviceOptions = buildDeviceOptions(config.entityMap, entities);
+
+  // One selection, two entry points (the offline shortlist and the search
+  // box) — both write here, so picking one never leaves the other showing a
+  // stale answer.
+  const selectDevice = (id: string, name: string) => {
+    setEntityId(id); setDeviceText(name);
+    if (!title) setTitle(`${name} offline`);
+  };
+  const clearDevice = () => { setEntityId(""); setDeviceText(""); };
 
   return (
     <div className="fm-stack">
@@ -82,14 +102,28 @@ export default function FaultsTab({ onOpenEntity }: { onOpenEntity: (id: string)
                   <button
                     key={id}
                     className={`fm-entity-chip${entityId === id ? " on" : ""}`}
-                    onClick={() => { setEntityId(id); if (!title) setTitle(`${label(id)} offline`); }}
+                    // Second click on the SAME chip un-selects it — the
+                    // original bug was that this only ever selected, so once
+                    // clicked a chip could never be released again.
+                    onClick={() => (entityId === id ? clearDevice() : selectDevice(id, label(id)))}
                   >{label(id)}</button>
                 ))}
               </div>
             </div>
           )}
+          <div className="fm-field">
+            <span>Device (search, or type one not listed)</span>
+            <DeviceSearchPicker
+              value={deviceText}
+              options={deviceOptions}
+              matchedEntityId={entityId || undefined}
+              onChangeText={(text) => { setDeviceText(text); setEntityId(""); }}
+              onSelect={(opt) => selectDevice(opt.entityId, opt.label)}
+              onClear={clearDevice}
+            />
+          </div>
           <label className="fm-field">
-            <span>What is wrong</span>
+            <span>Describe the problem</span>
             <input value={title} onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Pool pump not starting" />
           </label>
@@ -98,9 +132,7 @@ export default function FaultsTab({ onOpenEntity }: { onOpenEntity: (id: string)
             <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
           </div>
           <div className="modal-actions" style={{ marginTop: 8 }}>
-            <button className="btn ghost" onClick={() => {
-              setAdding(false); setTitle(""); setEntityId(""); setPhotoIds([]);
-            }}>Cancel</button>
+            <button className="btn ghost" onClick={resetForm}>Cancel</button>
             <button
               className="btn primary"
               disabled={!title.trim()}
@@ -108,10 +140,11 @@ export default function FaultsTab({ onOpenEntity }: { onOpenEntity: (id: string)
                 await addTicket({
                   title: title.trim(),
                   entityId: entityId || undefined,
+                  deviceLabel: deviceText.trim() || undefined,
                   room: entityId ? config.entityMap[entityId]?.room : undefined,
                   photoIds,
                 });
-                setAdding(false); setTitle(""); setEntityId(""); setPhotoIds([]);
+                resetForm();
               }}
             >Raise fault</button>
           </div>
@@ -141,11 +174,19 @@ export default function FaultsTab({ onOpenEntity }: { onOpenEntity: (id: string)
                 {t.resolvedAt && ` · resolved ${localStamp(t.resolvedAt)}`}
                 {t.photoIds.length > 0 && ` · ${t.photoIds.length} photo(s)`}
               </div>
-              {t.entityId && (
+              {(t.entityId || t.deviceLabel) && (
                 <div className="fm-chiprow">
-                  <button className="fm-entity-chip" onClick={() => onOpenEntity(t.entityId!)}>
-                    {label(t.entityId)}
-                  </button>
+                  {t.entityId ? (
+                    <button className="fm-entity-chip" onClick={() => onOpenEntity(t.entityId!)}>
+                      {t.deviceLabel ?? label(t.entityId)}
+                    </button>
+                  ) : (
+                    // Free-text device: nothing to open, so a plain (non-
+                    // clickable) chip rather than a button that does nothing.
+                    <span className="fm-entity-chip" style={{ cursor: "default" }}>
+                      {t.deviceLabel}
+                    </span>
+                  )}
                 </div>
               )}
             </div>

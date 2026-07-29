@@ -36,6 +36,15 @@ export interface FmSchedule {
   /** Seeded from DEFAULT_SCHEDULES — kept so the UI can explain where a task
    *  came from, and so a re-seed doesn't duplicate it. */
   builtinKey?: string;
+  /** ISO timestamp of when the task was created. The fallback baseline for its
+   *  first target date (see fmEngine.scheduleStatus): a task that has never
+   *  been completed still needs a "due by" date to show, and the only honest
+   *  anchor for that before anyone has done the work once is when the
+   *  obligation itself started existing. Optional only because schedules
+   *  created before this field existed don't have one — scheduleStatus falls
+   *  back to "now" for those, which reads as "due in `everyDays`" rather than
+   *  a wrong date. */
+  createdAt?: string;
 }
 
 /** One performance of a scheduled task. */
@@ -62,6 +71,12 @@ export interface FmCost {
   category: "minor" | "major";
   room?: string;
   entityId?: string;
+  /** The device this spend is against, as text — the entity's display name at
+   *  the time of entry when `entityId` resolved to a known device, or
+   *  whatever the operator typed when it didn't (a spare part, a device not
+   *  yet in Home Assistant). Denormalized on purpose: a device renamed or
+   *  removed later must not turn this record's device column blank. */
+  deviceLabel?: string;
   photoIds: string[];
 }
 
@@ -75,6 +90,8 @@ export interface FmTicket {
   openedAt: string;
   resolvedAt?: string;
   entityId?: string;
+  /** See FmCost.deviceLabel — same reasoning, same denormalization. */
+  deviceLabel?: string;
   room?: string;
   note?: string;
   photoIds: string[];
