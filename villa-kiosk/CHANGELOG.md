@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.96
+
+### Changes
+- Camera panel: hold either the prev/next arrow to open a picker listing every camera by name — jump straight to a specific feed instead of cycling through them one at a time. Same tap-vs-hold convention already used for the Rooms dial and the default-view anchor button (a plain tap still steps as before, only a HOLD opens the picker), including the same persistent "this button does more on hold" dot affordance, so this is purely additive and discoverable without adding any new visible chrome. The picker itself (`hud-menu camera-picker-menu`) reuses the existing glass-chip dropdown styling, positioned to grow upward from the bottom-right control cluster it's opened from (that cluster sits at the screen bottom in every layout, mobile overlay or the desktop in-flow row); dismiss via backdrop tap or Escape. The current camera is marked with a check and can't be re-selected into itself. Typecheck and production build clean.
+
+---
+
+
 ## 2.35.95
 
 ### Changes

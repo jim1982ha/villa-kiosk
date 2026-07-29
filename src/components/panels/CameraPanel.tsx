@@ -19,10 +19,12 @@ import { useEffect, useRef, useState } from "react";
 // setup effect's dynamic import() — so a kiosk that never opens a camera panel
 // never pays for it in the main bundle. This line compiles away entirely.
 import type Hls from "hls.js";
-import { X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power } from "lucide-react";
+import { X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { usePanelActions } from "./PanelActionsContext";
 import { useHA } from "@/ha/HAStateStore";
+import { useConfig } from "@/config/ConfigContext";
+import { displayLabelFor } from "@/config/EntityMap";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { devLog } from "@/utils/devLog";
@@ -62,6 +64,7 @@ const HLS_WATCHDOG_MS = 15000;
 
 export default function CameraPanel({ entity, mapping, onClose, pinContinuous, onOpenEntity }: Props) {
   const { connected, ws, entities } = useHA();
+  const { config } = useConfig();
   // Same linked-entity switch every OTHER panel gets from the shared BasePanel
   // chrome — this panel is the one that doesn't use BasePanel (it's a
   // fullscreen feed, not a modal card), so it reads the identical context and
@@ -105,6 +108,41 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
   zoomedRef.current = zoom.zoomed;
   const stepCameraRef = useRef(stepCamera);
   stepCameraRef.current = stepCamera;
+
+  // Long-press (or hold, on mouse) either prev/next arrow opens a picker
+  // listing every camera by name — jump straight to one instead of cycling
+  // through them one at a time. Same tap-vs-hold convention as the Rooms
+  // dial / default-view anchor buttons elsewhere in the app: a plain tap
+  // still steps as before; only a HOLD opens the picker, so this is purely
+  // additive and never intrudes on the existing gesture.
+  const CAMERA_PICKER_HOLD_MS = 480;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickerLongFired = useRef(false);
+  const onCycleBtnDown = () => {
+    pickerLongFired.current = false;
+    if (pickerPressTimer.current) clearTimeout(pickerPressTimer.current);
+    pickerPressTimer.current = setTimeout(() => {
+      pickerLongFired.current = true;
+      setPickerOpen(true);
+    }, CAMERA_PICKER_HOLD_MS);
+  };
+  const onCycleBtnUp = () => {
+    if (pickerPressTimer.current) { clearTimeout(pickerPressTimer.current); pickerPressTimer.current = null; }
+  };
+  const onCycleBtnClick = (delta: number) => {
+    // A hold that already opened the picker must not ALSO step to the next
+    // camera the instant the button is released (a held pointer still fires
+    // a native click on release) — swallow exactly that one click.
+    if (pickerLongFired.current) { pickerLongFired.current = false; return; }
+    stepCamera(delta);
+  };
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPickerOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [pickerOpen]);
 
   // Swipe left/right on the feed itself cycles cameras — the touch
   // equivalent of the prev/next buttons. Gated on NOT zoomed: a single-finger
@@ -546,18 +584,28 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           {canCycle && (
             <>
               <button
-                className="icon-btn cam-prev"
-                onClick={() => stepCamera(-1)}
-                title="Previous camera"
-                aria-label="Previous camera"
+                className="icon-btn cam-prev has-hold-action"
+                onPointerDown={onCycleBtnDown}
+                onPointerUp={onCycleBtnUp}
+                onPointerLeave={onCycleBtnUp}
+                onPointerCancel={onCycleBtnUp}
+                onContextMenu={(e) => e.preventDefault()}
+                onClick={() => onCycleBtnClick(-1)}
+                title="Previous camera — hold to pick a camera"
+                aria-label="Previous camera — hold to pick a camera"
               >
                 <ChevronLeft size={28} />
               </button>
               <button
-                className="icon-btn cam-next"
-                onClick={() => stepCamera(1)}
-                title="Next camera"
-                aria-label="Next camera"
+                className="icon-btn cam-next has-hold-action"
+                onPointerDown={onCycleBtnDown}
+                onPointerUp={onCycleBtnUp}
+                onPointerLeave={onCycleBtnUp}
+                onPointerCancel={onCycleBtnUp}
+                onContextMenu={(e) => e.preventDefault()}
+                onClick={() => onCycleBtnClick(1)}
+                title="Next camera — hold to pick a camera"
+                aria-label="Next camera — hold to pick a camera"
               >
                 <ChevronRight size={28} />
               </button>
@@ -576,6 +624,39 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           </button>
         </div>
       </div>
+
+      {/* Camera picker — opened by holding either prev/next arrow. A plain
+          list rather than a radial dial (the Rooms menu's style): this is a
+          flat list of names, nothing spatial about it. */}
+      {pickerOpen && (
+        <>
+          <div className="camera-picker-backdrop" onClick={() => setPickerOpen(false)} />
+          <div className="hud-menu camera-picker-menu" role="menu" aria-label="Choose a camera">
+            <div className="hud-menu-header">Cameras</div>
+            <div className="camera-picker-list">
+              {cameraIds.map((id) => {
+                const isCurrent = id === mapping.entityId;
+                const label = displayLabelFor(id, config.entityMap[id]?.label, entities[id]?.attributes.friendly_name);
+                return (
+                  <button
+                    key={id}
+                    role="menuitemradio"
+                    aria-checked={isCurrent}
+                    className={`hud-menu-item${isCurrent ? " active" : ""}`}
+                    onClick={() => {
+                      setPickerOpen(false);
+                      if (!isCurrent) onOpenEntity?.(id);
+                    }}
+                  >
+                    {isCurrent ? <Check size={16} /> : <Video size={16} />}
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

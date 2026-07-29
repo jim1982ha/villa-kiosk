@@ -378,6 +378,28 @@ button {
 .hud-menu-stepper { justify-content: space-between; cursor: default; }
 .hud-menu-stepper:hover, .hud-menu-stepper:active { background: transparent; }
 .hud-menu-stepper .icon-btn { width: 32px; height: 32px; }
+/* The currently-open camera's own row in .camera-picker-menu below — reused
+   nowhere else, so scoped there rather than added to the base .hud-menu-item
+   (every other menu in the app is a one-shot action list, nothing in it is
+   ever "the current selection"). */
+.hud-menu-item.active { background: var(--accent); color: var(--text-on-accent); }
+.hud-menu-item.active svg { color: inherit; }
+
+/* Camera picker — opened by holding either prev/next arrow in CameraPanel.
+   Built on .hud-menu (same glass chip, border, shadow) with its own
+   positioning: anchored near the bottom-right control cluster it's opened
+   from, growing UPWARD (the cluster sits at the bottom of the screen in
+   every layout — mobile overlay or the ≥900px in-flow row — so a menu that
+   dropped down like .hud-menu normally does would run straight off-screen). */
+.camera-picker-backdrop { position: absolute; inset: 0; z-index: 10; }
+.camera-picker-menu {
+  position: absolute; z-index: 11; top: auto;
+  right: calc(20px + env(safe-area-inset-right, 0px));
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  width: min(280px, calc(100vw - 40px));
+  max-height: min(60vh, 420px);
+}
+.camera-picker-list { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 
 /* Scrollable variant of a .hud-group (the category filter): however many
    buttons the profile/config produces, the pill never wraps and never grows
