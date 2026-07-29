@@ -620,13 +620,15 @@ button {
      clipped. Forcing the width to the tiles' own size (capped at 99vw) lets
      the bar use the FULL viewport before any scroll kicks in. */
   width: max-content;
-  /* Reserve an 80px gutter on EACH side — the .bottom-bar view-controls
-     corner (.hud-stack: ~48px + 20px padding ≈ 68px, plus a little breathing
-     room) on the left, and the same on the right for whatever sits there
-     (the first-person joystick). z-index alone (.bottom-bar is above this)
-     used to just make the corner controls paint ON TOP when the tile row
-     was wide enough to reach them — clickable, but visually overlapping the
-     tiles underneath on a narrow phone. Capping the width so the bar's own
+  /* Reserve an 80px gutter on each side for whatever might sit in either
+     bottom corner — today just the first-person joystick on the right (the
+     view-mode toggle that used to justify the LEFT gutter moved into
+     hud-left-col, but this stays centred either way so removing it isn't
+     load-bearing the way it was for the phone rule below, which anchored
+     asymmetrically instead of centring). z-index alone (.bottom-bar is
+     above this) used to just make a corner control paint ON TOP when the
+     tile row was wide enough to reach it — clickable, but visually
+     overlapping the tiles underneath. Capping the width so the bar's own
      edge stops short of the corner fixes the overlap at the source instead
      of only fixing which layer wins it. Bar stays scrollable (overflow-x)
      for whatever tiles don't fit in what's left. */
@@ -781,16 +783,17 @@ button {
 }
 
 @media (max-width: 720px) {
-  /* On a phone there's only ever real content in the bottom-LEFT corner
-     (the view-controls) — the desktop rule's symmetric 80px-each-side
-     centering wastes the whole right side as dead space while still
-     clipping tiles against the reserved-but-empty left gutter (the actual
-     bug reported: "DOOR LOCK" clipped to "OCK" with a big empty strip on
-     the right). Anchor to the left edge of the AVAILABLE space instead —
-     flush next to the view-controls — and let the bar grow rightward to
-     use the rest of the screen, capped only so it can't run under the
-     right edge. transform/50% centering no longer applies once left is a
-     fixed offset instead of 50%. */
+  /* This USED TO anchor flush against the view-controls corner button that
+     lived in the bottom-left back then — reserving 80px on the left and
+     letting the bar grow rightward from there, which read as "hugging/
+     shifted toward the right" once that button moved into the left column's
+     own dedicated section (see hud-left-col/ViewControls) and left this
+     corner empty. Nothing sits in either bottom corner on a phone now (the
+     joystick only appears in first-person mode, and even then wasn't given
+     its own dedicated gutter here) — span the full width with small
+     matching side margins instead, and centre the tiles within it so a
+     short list (e.g. just "Door Lock" + "Pool") doesn't look anchored to
+     one edge inside the now much wider bar. */
   .summary-bar {
     /* calc(...), not a flat 14px — the base rule's bottom already includes
        env(safe-area-inset-bottom) for the home-indicator gesture area; a
@@ -798,9 +801,12 @@ button {
        matches virtually all of them), same bug class as .hud-topbar's
        shorthand-padding one just above. */
     bottom: calc(14px + env(safe-area-inset-bottom, 0px)); gap: 8px; padding: 7px;
-    left: calc(80px + env(safe-area-inset-left, 0px));
+    left: calc(14px + env(safe-area-inset-left, 0px));
+    right: calc(14px + env(safe-area-inset-right, 0px));
     transform: none;
-    max-width: calc(100vw - 92px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+    width: auto;
+    max-width: none;
+    justify-content: center;
   }
   .summary-tile { min-width: 96px; padding: 9px 14px 9px 9px; gap: 10px; }
   .summary-tile-icon { width: 40px; height: 40px; }

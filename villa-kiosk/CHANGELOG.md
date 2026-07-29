@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.36.5
+
+### Changes
+- Fixed a regression from 2.36.3's HUD reorg: on a phone (≤720px), the bottom SummaryBar (the scene/device tile strip) was still anchored `left: 80px` to sit flush against the first-person/bird's-eye view toggle's old bottom-left corner spot — but that button moved into its own section in the left column in 2.36.3, leaving the corner empty and the tile row visually shifted toward the right with a large dead gap on the left (reported from a field screenshot: "Door Lock"/"Pool" tiles hugging the right side instead of spanning the screen). Now spans the full width with small, equal side margins (safe-area aware) and centres its tiles within that width, so a short tile list no longer reads as anchored to one edge. Typecheck and production build clean.
+
+---
+
+
 ## 2.36.4
 
 ### Changes
