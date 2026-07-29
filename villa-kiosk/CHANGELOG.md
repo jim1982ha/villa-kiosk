@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.88
+
+### Changes
+- Camera beam: bigger, per follow-up field report with screenshots confirming last release's heading fix worked (the beam now visibly points where the camera is aimed) but reading as too small to feel like a coverage area. Doubled BEAM_MAX_LENGTH (3m to 6m) and BEAM_END_DIAMETER (3m to 6m) together, which is deliberate: keeping their RATIO fixed preserves the exact same spread angle a prior round of feedback (2026-07-03) had already tuned to fix a DIFFERENT complaint, that the original 6m/1.6m beam read as a long thin streak reaching across multiple rooms. Verified precisely rather than assumed: old half-angle atan(1.5/3) and new half-angle atan(3/6) both compute to 26.565 degrees exactly, so this cannot regress toward that laser-streak shape. Frontal coverage area scales with the square of the radius, so doubling both dimensions quadruples how much of a room the cone visibly covers, matching the requested 'glow of light that gracefully covers the area in front of the camera' rather than a thin spotlight. Applies to every camera at once (single shared constant, same as the direction fix) and stays auto-clipped to nearby walls in a small room exactly as before (clippedLength's own raycast logic is untouched), so a small room does not get a beam poking through its far wall just because the reach ceiling went up. Verified: typecheck and build clean, existing 49-assertion engine/cache/diff/yield suite untouched and still green
+
+---
+
+
 ## 2.35.87
 
 ### Changes

@@ -14,18 +14,26 @@ import {
 } from "@babylonjs/core";
 
 const BEAM_COLOR = new Color3(0.95, 0.15, 0.12);
-// A short, wide "spotlight" cone — user feedback (2026-07-03) was that the
-// original 6m/1.6m combo read as a long thin streak reaching across multiple
-// rooms, not a beam coming OUT of the camera. Roughly halving the length and
-// nearly doubling the end diameter makes the cone's spread angle much wider
-// for a given reach (before: (1.6/2)/6 ≈ 7.6° half-angle; now: (3.0/2)/3 = 30°
-// half-angle) — reads as a stubby wide-angle spotlight instead of a laser.
-// These two constants define the beam's fixed SPREAD ANGLE (see BEAM_HALF_ANGLE
-// below); actual on-screen length/width both scale down together in a small
-// room so the cone always looks proportional, never a fixed-size wedge jammed
-// into whatever space is available.
-const BEAM_END_DIAMETER = 3.0;
-const BEAM_MAX_LENGTH = 3;
+// A wide "spotlight" cone at ROOM scale. Two rounds of feedback shaped this:
+// the original 6m/1.6m combo (2026-07-03, before) read as a long thin streak
+// reaching across multiple rooms, not a beam coming out of the camera — fixed
+// by roughly halving the length and nearly doubling the diameter, which
+// widened the spread angle a lot (≈7.6° half-angle -> ≈26.6°) but also left
+// it too SMALL to read as "this camera watches this area" (2026-07-29 report:
+// "very small", wanting "a glow of light that gracefully covers the area in
+// front of the camera"). This round doubles both dimensions again, which —
+// critically — keeps that SAME ≈26.6° spread angle (the ratio is unchanged,
+// only the scale is), so it stays the wide stubby spotlight shape that fixed
+// the original complaint; it does not regress toward a laser. Frontal
+// coverage area scales with the SQUARE of this, so doubling both reach and
+// width quadruples how much of a room the cone visibly covers. These two
+// constants define the beam's fixed SPREAD ANGLE (see BEAM_HALF_ANGLE below);
+// actual on-screen length/width both scale down together in a small room (via
+// clippedLength's wall raycasts) so the cone always looks proportional, never
+// a fixed-size wedge jammed into whatever space is available or poking
+// through the far wall of a small room.
+const BEAM_END_DIAMETER = 6.0;
+const BEAM_MAX_LENGTH = 6;
 const BEAM_HALF_ANGLE = Math.atan((BEAM_END_DIAMETER / 2) / BEAM_MAX_LENGTH);
 const BEAM_BASE_ALPHA = 0.16;
 const BEAM_PULSE_ALPHA = 0.4;
