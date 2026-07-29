@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.99
+
+### Changes
+- Root-caused the iPhone "top bar still obstructed" report from a field screenshot: it's specifically an HA Ingress/Companion-App issue, not a direct-hostname PWA one (confirmed absent there). Under Ingress this page is ALWAYS embedded below HA's own chrome — the sidebar's bar on desktop, or the Companion App's own toolbar (quick actions, notification bell, overflow menu) on iOS — which is what actually touches the physical screen edge in that context, not us. Our own `env(safe-area-inset-top)` reservation on the topbar (and every other top-anchored element) was still being applied on top of that, reserving a SECOND, redundant Dynamic-Island-sized gap below an area HA's own wrapper had already cleared — pushing the villa-name chip, the floor stack, and the PIN/profile gate down further than the villa's own UI needs, and making the two stacked bars in the screenshot read as one big obstruction. Fixed with a single shared `--safe-top` custom property (replacing 12 separate `env(safe-area-inset-top, 0px)` call sites) that `main.tsx` zeroes out via a `.vk-ingress` class stamped on `<html>` before first paint, detected the same way `ingress.ts` already does (`location.pathname` containing `/api/hassio_ingress/`) — so every top-anchored element (topbar, floor stack, room-name banner, camera header, PIN gate, teleport grid, first-run tips) gets the redundant space removed at once, correctly, with no risk of missing one. Left/right/bottom insets are untouched — HA's wrapper is a horizontal bar at the very top only; it doesn't help with the home indicator or a landscape side notch, both still genuinely needed regardless of Ingress. The direct-hostname PWA is unaffected (`.vk-ingress` never applies there — that page IS the top-level document and genuinely owns the full inset). Typecheck and production build clean.
+
+---
+
+
 ## 2.35.98
 
 ### Changes

@@ -28,6 +28,23 @@ if ("serviceWorker" in navigator && !underIngress) {
   });
 }
 
+// Under Ingress, this page is ALWAYS embedded below HA's own chrome — the
+// sidebar's top bar on desktop, or the Companion App's own toolbar (quick
+// actions, notification bell, overflow menu) on iOS/Android — never touching
+// the physical screen edge itself. HA's wrapper is what actually needs to
+// clear the Dynamic Island / notch there, not us; our OWN safe-area-inset-top
+// reservation on top of that stacked BELOW an already-cleared area, forcing a
+// second, redundant gap and pushing every top-anchored element (the floor
+// stack, the villa-name chip) down further than the villa's own UI needs.
+// A user field report (iPhone, Ingress/Companion-App context specifically —
+// confirmed NOT reproducing on the direct-hostname PWA, where this page IS
+// the top-level document and genuinely owns that inset) is exactly this.
+// Set once, before React mounts, so CSS (--safe-top, see styles.css) can act
+// on it from first paint with no flash of the wrong layout. Left/right/bottom
+// insets are untouched — HA's wrapper is a horizontal bar at the very top
+// only, it doesn't help with the home indicator or a landscape side notch.
+if (underIngress) document.documentElement.classList.add("vk-ingress");
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {/* No router: the kiosk is a single screen. HashRouter existed so deep

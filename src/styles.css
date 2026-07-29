@@ -12,6 +12,19 @@
      control regardless of which one a given rule happens to style. */
   --radius-squircle: 14px;
 
+  /* Every top-anchored element's clearance from the Dynamic Island/notch
+     reads THIS, not env(safe-area-inset-top) directly. Under HA Ingress
+     (main.tsx stamps .vk-ingress on <html> before first paint) this page is
+     ALWAYS embedded below HA's own chrome — the sidebar's bar on desktop, or
+     the Companion App's toolbar on iOS — which is what actually touches the
+     physical screen edge there, not us. Reserving our own inset on top of
+     that stacked a second, redundant gap below an area HA had already
+     cleared, pushing the villa-name chip/floor-stack/PIN-gate down further
+     than the villa's own UI needs (a real field report — iPhone, Ingress
+     specifically, not the direct-hostname PWA where this page IS the
+     top-level document and genuinely owns the inset). */
+  --safe-top: env(safe-area-inset-top, 0px);
+
   /* ---- Light theme (default) ---- */
   /* Surfaces */
   --bg-base: #eef2f8;
@@ -60,6 +73,11 @@
   --panel-padding: 24px;
   --touch-min: 44px;
 }
+
+/* Under HA Ingress, HA's own chrome already clears the Dynamic Island/notch
+   — see --safe-top's own comment above. Not a light/dark concern, so this is
+   its own rule rather than folded into the dark-theme block below. */
+:root.vk-ingress { --safe-top: 0px; }
 
 /* ---- Dark theme (explicit) ---- */
 :root[data-theme="dark"] {
@@ -476,7 +494,7 @@ button {
    all aligned under the brand on the left edge. */
 .hud-left-col {
   position: absolute; z-index: 21;
-  top: calc(52px + env(safe-area-inset-top, 0px) + 8px);
+  top: calc(52px + var(--safe-top) + 8px);
   /* --hud-side-pad — the SAME value .hud-topbar pads its brand chip with
      (18px, 24px on desktop — see that variable's own comment) — so the floor
      stack's left edge always lines up exactly under the villa-name chip's
@@ -501,7 +519,7 @@ button {
      used to sit at a flat 64px regardless of device, which on an iPhone with
      a Dynamic Island (a taller inset than a plain notch) let it render
      partially under/behind the island cutout instead of clear of it. */
-  position: absolute; top: calc(64px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+  position: absolute; top: calc(64px + var(--safe-top)); left: 50%; transform: translateX(-50%);
   padding: 8px 22px; border-radius: 999px; z-index: 15;
   animation: fadeSlide 0.4s ease-out;
   text-align: center; max-width: 86vw;
@@ -511,7 +529,7 @@ button {
 /* Failed-service-call feedback: sits above panels/sheets so a tap that did
    nothing always explains itself, wherever it happened. */
 .service-toast {
-  position: absolute; top: calc(64px + env(safe-area-inset-top, 0px));
+  position: absolute; top: calc(64px + var(--safe-top));
   left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 8px;
   border: 1px solid var(--status-danger); color: var(--status-danger);
@@ -961,7 +979,7 @@ input[type="range"]::-moz-range-thumb {
    collide once they're not sharing a row at all). */
 .camera-header {
   position: absolute; top: 0; left: 0; right: 0;
-  padding: calc(20px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px)) 0 calc(24px + env(safe-area-inset-left, 0px));
+  padding: calc(20px + var(--safe-top)) calc(24px + env(safe-area-inset-right, 0px)) 0 calc(24px + env(safe-area-inset-left, 0px));
   pointer-events: none; /* the label itself re-enables it, nothing else lives here now */
 }
 .camera-header .label {
@@ -1062,7 +1080,7 @@ input[type="range"]::-moz-range-thumb {
   position: absolute; inset: 0; z-index: 50;
   background: var(--bg-overlay); backdrop-filter: blur(14px);
   padding:
-    calc(60px + env(safe-area-inset-top, 0px))
+    calc(60px + var(--safe-top))
     calc(32px + env(safe-area-inset-right, 0px))
     calc(32px + env(safe-area-inset-bottom, 0px))
     calc(32px + env(safe-area-inset-left, 0px));
@@ -1469,7 +1487,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   position: absolute; inset: 0; z-index: 30;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
   text-align: center;
-  padding: calc(52px + env(safe-area-inset-top, 0px) + 24px) 24px 24px;
+  padding: calc(52px + var(--safe-top) + 24px) 24px 24px;
   background: var(--bg-base);
 }
 .spinner { width: 44px; height: 44px; border: 4px solid var(--bg-input); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; }
@@ -1552,8 +1570,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
    edge instead of lined up under it. */
 :root { --hud-side-pad: 18px; }
 .hud-topbar {
-  height: calc(52px + env(safe-area-inset-top, 0px));
-  padding-top: env(safe-area-inset-top, 0px);
+  height: calc(52px + var(--safe-top));
+  padding-top: var(--safe-top);
   padding-left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
   padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px));
 }
@@ -1670,7 +1688,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
     border-radius: 0;
     border: none;
     /* Inset content from the notch / home indicator. */
-    padding-top: env(safe-area-inset-top, 0px);
+    padding-top: var(--safe-top);
   }
   /* left/right env() on every section (not just .modal's own padding-top)
      since this sheet is full-bleed (width:100%): in landscape on a
@@ -1693,7 +1711,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   /* Plain (non-settings) modals scroll their own content on tiny screens. */
   .modal:not(.settings-modal) {
     overflow-y: auto;
-    padding: calc(20px + env(safe-area-inset-top, 0px)) calc(18px + env(safe-area-inset-right, 0px))
+    padding: calc(20px + var(--safe-top)) calc(18px + env(safe-area-inset-right, 0px))
              calc(20px + env(safe-area-inset-bottom, 0px)) calc(18px + env(safe-area-inset-left, 0px));
   }
   /* The device panel is short (a few rows + a small graph) and reads far
@@ -1727,7 +1745,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   /* (Config table is card-styled at all widths now — see the base rules.) */
 
   /* Room badge: smaller display type so longer names stay on one centred line. */
-  .room-label { top: calc(58px + env(safe-area-inset-top, 0px)); padding: 7px 18px; }
+  .room-label { top: calc(58px + var(--safe-top)); padding: 7px 18px; }
   .room-title { font-size: 20px; }
 }
 
@@ -1747,7 +1765,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
      content is naturally less exposed than a top-pinned bar, but a tall
      profile-card list or a short viewport still pushes content right up
      against the edge. */
-  padding: calc(24px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px))
+  padding: calc(24px + var(--safe-top)) calc(24px + env(safe-area-inset-right, 0px))
            calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px));
   overflow-y: auto;
 }
