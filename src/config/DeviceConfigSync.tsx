@@ -86,7 +86,24 @@ export default function DeviceConfigSync() {
     // existed, must not blank that field). The baseline is that MERGED result,
     // which is what the local slice will equal once `update` commits — so the
     // push effect sees no change and the pull can't bounce straight back.
-    serverJsonRef.current = JSON.stringify({ ...localRef.current, ...server });
+    const merged = { ...localRef.current, ...server };
+    const mergedJson = JSON.stringify(merged);
+    serverJsonRef.current = mergedJson;
+    // Skip the update entirely when the server genuinely has nothing new for
+    // us. `pull()` runs on every mount AND every window focus/visibilitychange
+    // (below) — so on a kiosk that's just been minimised and restored, or a
+    // phone brought back from the background, this fires constantly with
+    // data that hasn't moved an inch. update() still hands React (and from
+    // there, SceneManager) a BRAND NEW object reference for every field in
+    // `server` on every call, even when its content is byte-identical to what
+    // config already holds — a fresh JSON parse can never be `===` the
+    // existing object. SceneManager's structural-change gate content-diffs
+    // entityMap (entityMapDelta) but compares meshBindings by REFERENCE, so
+    // an unconditional update() here forced a full mesh re-index — visible as
+    // covers/locks snapping back to their hardcoded default pose mid-rebuild,
+    // and the multi-second freeze the rebuild itself costs — on literally
+    // every focus regain, whether or not anything had actually changed.
+    if (mergedJson === JSON.stringify(localRef.current)) return;
     update(server);
   }, [update, role]);
 

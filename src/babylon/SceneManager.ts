@@ -1567,9 +1567,24 @@ export class SceneManager {
     const mapDelta = prev.entityMap === config.entityMap
       ? "identical"
       : entityMapDelta(prev.entityMap, config.entityMap);
+    // meshBindings needs the SAME same-content-different-reference guard as
+    // entityMap just above, for the identical reason: DeviceConfigSync's
+    // pull() hands both fields a freshly JSON-parsed (so never `===` the
+    // existing one) object on every call, including a no-op pull that ran
+    // purely because the tab regained focus/visibility. Missed when
+    // entityMapDelta was introduced — meshBindings sat right next to it,
+    // still comparing by bare reference, so a config that hadn't changed at
+    // all still tripped `structuralChanged` (a full indexMeshes/
+    // applyStructure pass) on every single focus regain. Unlike entityMap
+    // there's no cosmetic/structural split to make here — any REAL change to
+    // which mesh is which entity is inherently structural — so this only
+    // needs a same-content check, not a delta classifier.
+    const meshBindingsChanged =
+      prev.meshBindings !== config.meshBindings &&
+      JSON.stringify(prev.meshBindings) !== JSON.stringify(config.meshBindings);
     const cosmeticOnly =
       mapDelta === "cosmetic" &&
-      prev.meshBindings === config.meshBindings &&
+      !meshBindingsChanged &&
       !sh3dChanged;
 
     // indexMeshes()/applyStructure() only read entity↔mesh bindings; everything
@@ -1577,7 +1592,7 @@ export class SceneManager {
     // model load, not here.
     const structuralChanged =
       mapDelta === "structural" ||
-      prev.meshBindings !== config.meshBindings ||
+      meshBindingsChanged ||
       sh3dChanged;
 
     // renderFx first (sets base IBL + builds/clears the env texture), THEN the

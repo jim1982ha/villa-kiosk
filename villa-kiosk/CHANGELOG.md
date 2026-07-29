@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.95
+
+### Changes
+- Fixed the "app freezes and resets for a few seconds every time you come back to it" report — reproducible on every single minimise/restore or app-switch, desktop and mobile alike, not an occasional glitch. Root-caused, not guessed: `DeviceConfigSync.pull()` runs on mount AND on every `window focus`/`visibilitychange` event (by design, so an edit made on another kiosk shows up here without a reload) and, until now, called `update(server)` UNCONDITIONALLY every single time — even when the server's shared config (entity↔mesh bindings, device groups, room definitions) hadn't changed one bit since the last pull. `update()` always hands React a BRAND NEW object reference for each field (a fresh JSON parse from the HTTP response), and `SceneManager.updateConfig`'s structural-change gate compares `meshBindings` by bare REFERENCE (`prev.meshBindings !== config.meshBindings`) — a fresh-but-identical object always fails that check. Net effect: every single focus regain triggered a full `indexMeshes()` + `applyStructure()` pass — the same multi-second, main-thread-blocking rebuild a genuine structural edit is supposed to cost — for a config that hadn't actually changed. That's the "few seconds unresponsive," and it's also why covers/locks visibly snapped back to their hardcoded default pose (closed/locked/off) before the post-rebuild repaint restored their real state moments later: `EntityVisuals.indexMeshes()` deliberately forces every multi-pose entity to that default first (so an unbound or late-reporting entity doesn't render all its poses at once), normally invisible because it happens once at initial load. Fixed at both ends: `DeviceConfigSync.pull()` now compares the merged result against current local state and skips `update()` entirely when nothing actually changed (mirroring the SAME "push only real changes" discipline the outbound half of this file already had, now applied inbound too); and `SceneManager.updateConfig`'s `meshBindings` check now content-diffs (JSON compare) instead of reference-comparing — the exact same same-content-different-reference guard `entityMapDelta` already gave `entityMap`, now covering the sibling field that was missed when that fix originally shipped, so any OTHER future caller handing a fresh-but-identical `meshBindings` object can't retrigger this either. Typecheck and production build clean.
+
+---
+
+
 ## 2.35.94
 
 ### Changes
