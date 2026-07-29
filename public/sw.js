@@ -143,13 +143,44 @@ self.addEventListener("fetch", (event) => {
 // distinct URL, so a cache hit is always the right bytes; when the model is
 // replaced the stamp changes, we miss, fetch once, and prune the stale versions
 // of the same path to cap cache growth.
+//
+// The fetch() below is NOT wrapped in a way that silently swallows failure —
+// on a genuine miss it must either succeed or surface an error the page can
+// see — but it IS wrapped so that failure is a controlled fallback rather than
+// an UNCAUGHT REJECTION. Before this fix, event.respondWith() was handed a
+// bare `fetch(req)`: if that promise rejected — a dropped connection, or the
+// service worker itself being torn down and restarted mid-fetch, which
+// Chrome/Safari do freely under memory pressure and which the client's own
+// telemetry shows happening repeatedly on the SAME device this bug was
+// reported from (context-lost climbing past 30 in one session) — the
+// rejection propagated straight through respondWith() as the page's network
+// request failing, and the page saw exactly "TypeError: Failed to fetch".
+// That is indistinguishable from a real network outage to the app's own
+// retry logic (fetchModelWithRetry), so it retried correctly — but every
+// retry hit the SAME unguarded fetch() and could fail the SAME way, some of
+// them near-instantly (a synchronous throw, not a real timed-out request),
+// burning through the retry budget faster than an actual network blip would.
+// Falling back to ANY previously cached copy of this exact path (even a
+// stale version — the ?v= stamp means the NEXT successful load still gets
+// the true current one) turns a hard failure into a degraded-but-working
+// load whenever one is available, and only reaches the network-failure
+// fallback when there is truly nothing to fall back to.
 async function modelCacheFirst(req, url) {
   const cache = await caches.open(MODEL_CACHE);
   const hit = await cache.match(req);
   if (hit) return hit;
-  const res = await fetch(req);
+
+  const path = url.pathname;
+  let res;
+  try {
+    res = await fetch(req);
+  } catch (err) {
+    const stale = await findStaleModelCacheEntry(cache, path);
+    if (stale) return stale;
+    throw err; // nothing to fall back to — let the page's own retry logic handle it
+  }
+
   if (res && res.status === 200) {
-    const path = url.pathname;
     const keys = await cache.keys();
     await Promise.all(
       keys
@@ -159,4 +190,12 @@ async function modelCacheFirst(req, url) {
     await cache.put(req, res.clone());
   }
   return res;
+}
+
+/** Any cached response for this exact path, regardless of its ?v= stamp —
+ *  used only as a last-resort fallback when a fresh fetch fails outright. */
+async function findStaleModelCacheEntry(cache, path) {
+  const keys = await cache.keys();
+  const match = keys.find((k) => new URL(k.url).pathname === path);
+  return match ? cache.match(match) : undefined;
 }

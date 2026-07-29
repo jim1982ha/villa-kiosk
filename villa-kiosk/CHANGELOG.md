@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.86
+
+### Changes
+- Fix a service-worker bug that could turn a transient model-fetch failure into a load that never recovers, in the standalone/PWA build specifically. Reported after a fresh GLB upload, on the installed PWA: MODEL_LOAD_FAILED / 'Failed to fetch' at the fetch-model phase, with the 'Connection to the villa is unstable' retry screen not clearing. sw.js's modelCacheFirst had no error handling around its fetch(req) call — on a cache miss (guaranteed right after an upload, since the ?v=<etag> stamp changes) it awaited fetch() bare and handed the result straight to event.respondWith(). If that promise rejected, the rejection propagated through respondWith() as the PAGE's own network request failing, indistinguishable on the page side from a real outage, with the same generic TypeError: Failed to fetch already visible in the report. The app's own retry logic (fetchModelWithRetry) is sound — capped exponential backoff for a 2-minute budget before surfacing a real error — but every retry hit the SAME unguarded fetch(), so if the underlying cause recurred on each attempt, some retries could fail near-instantly (a synchronous SW-level throw, not a real timed-out request) rather than the graceful backoff the UI's 'reconnecting...' message implies. The client's own telemetry from the SAME device shows why this specific failure mode is plausible here beyond an ordinary network blip: context-lost climbing past 30 in one session, meaning the browser is aggressively tearing down and restarting the GPU context AND, by extension, is free to recycle the service worker itself mid-fetch under the same memory pressure — a documented browser behaviour, not a bug in this app, but one the old code had no defence against. Fix: modelCacheFirst now falls back to ANY previously cached copy of the same model path (even a stale ?v=) when the fresh fetch throws, turning a hard failure into a degraded-but-working load whenever one is available, and only reaches the network-failure path when there is genuinely nothing to fall back to — at which point it still rethrows, so the page's retry/error logic keeps seeing real failures rather than a silently swallowed one. Verified behaviourally against the actual sw.js source (not a re-typed mirror), mocking the Cache/fetch globals: cache hit skips the network entirely, a successful fetch still caches-and-prunes old versions exactly as before, a failed fetch with a stale entry available falls back to it instead of throwing, and a failed fetch with nothing cached still rethrows so the page is never left silently stuck. 8/8 assertions pass
+
+---
+
+
 ## 2.35.85
 
 ### Changes
