@@ -19,7 +19,6 @@
 import { useMemo, useState } from "react";
 import {
   X, ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog, TriangleAlert,
-  DoorClosed, Lightbulb,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -28,7 +27,8 @@ import { hasCapability } from "@/auth/permissions";
 import { useFmData } from "@/fm/FmDataContext";
 import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
 import { unavailableDeviceIds } from "@/config/deviceGroups";
-import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
+import { locksGroup, lightsGroup } from "@/config/summaryGroups";
+import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
 import TodayTab from "./TodayTab";
 import ReadinessTab from "./ReadinessTab";
 import FaultsTab from "./FaultsTab";
@@ -65,13 +65,19 @@ export default function FacilityModal({
   const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
   const [unavailableOpen, setUnavailableOpen] = useState(false);
-  // The Readiness tab's "View doors" / "View lights" shortcuts — same idea as
-  // unavailableOpen above, generalised to any readiness check that names its
-  // own entityIds (see ReadinessTab's SHORTCUT_LABEL), so a new check gets
-  // this shortcut for free by opting in there instead of a new state var and
-  // a new panel here each time.
-  const [checkPanel, setCheckPanel] = useState<ReadinessCheck | null>(null);
-  const CHECK_ICON: Partial<Record<string, typeof DoorClosed>> = { locks: DoorClosed, lights: Lightbulb };
+  // The Readiness tab's "View doors" / "View lights" shortcuts. Deliberately
+  // NOT the failing check's own (narrower) entityIds — the operator taps
+  // "View doors" expecting the SAME modal the bottom-bar "Locks" tile opens
+  // (every lock, not just the currently-unlocked ones), so this opens the
+  // identical group locksGroup/lightsGroup already build for that tile (see
+  // summaryGroups.ts) rather than a second, differently-scoped view.
+  const [checkPanelGroup, setCheckPanelGroup] = useState<SummaryGroup | null>(null);
+  const openCheckDevices = (check: ReadinessCheck) => {
+    const group = check.id === "locks" ? locksGroup(entities)
+      : check.id === "lights" ? lightsGroup(entities)
+      : null;
+    if (group) setCheckPanelGroup(group);
+  };
 
   // Shared by the Readiness tab and the Report tab, so the report can never
   // disagree with what the operator just looked at.
@@ -137,7 +143,7 @@ export default function FacilityModal({
                 report={readiness}
                 onOpenEntity={onOpenEntity}
                 onOpenUnavailableDevices={() => setUnavailableOpen(true)}
-                onOpenCheckDevices={(check) => setCheckPanel(check)}
+                onOpenCheckDevices={openCheckDevices}
               />
             )}
             {ready && tab === "faults" && <FaultsTab onOpenEntity={onOpenEntity} />}
@@ -172,17 +178,13 @@ export default function FacilityModal({
         />
       )}
 
-      {checkPanel && (
+      {checkPanelGroup && (
         <SummaryGroupPanel
-          group={{
-            title: checkPanel.label,
-            icon: CHECK_ICON[checkPanel.id] ?? TriangleAlert,
-            entityIds: checkPanel.entityIds ?? [],
-          }}
+          group={checkPanelGroup}
           canControl={canControl}
           mappedEntityIds={mappedEntityIds}
-          onClose={() => setCheckPanel(null)}
-          onOpenEntity={(id) => { setCheckPanel(null); onOpenEntity(id); }}
+          onClose={() => setCheckPanelGroup(null)}
+          onOpenEntity={(id) => { setCheckPanelGroup(null); onOpenEntity(id); }}
         />
       )}
     </>

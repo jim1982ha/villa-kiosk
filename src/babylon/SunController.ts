@@ -220,6 +220,19 @@ export class SunController {
       this.scene.imageProcessingConfiguration.exposure =
         r.exposure * (isDay ? 1 : nightExposure);
     }
+    // TEMP diagnostic for the "Invert day/night" report (2026-07): the button
+    // toggle works once but not consistently on a second press, and static
+    // review of this whole call chain (SettingsModal -> SceneManager.
+    // setRenderConfig -> here) found no path that should silently drop a
+    // later call. Plain console.log (NOT devLog — that's compiled out of
+    // production builds entirely) so this is visible in the field. Safe to
+    // remove once the root cause is confirmed from a real report.
+    // eslint-disable-next-line no-console
+    console.log("[SunController] applyDayNight", {
+      isDay, nightT, invert: !!this.config.render?.dayNightInvert,
+      baked: this.baked, hasNightBlend: !!this.nightBlend, hasGlassDim: !!this.glassDim,
+      exposure: this.scene.imageProcessingConfiguration.exposure,
+    });
     // Window panes dim on the same twilight ramp (see the field's comment) —
     // in every mode, since no bake, lightmap or scene light drives them.
     this.glassDim?.(nightT);

@@ -98,7 +98,13 @@ const ACCESS_BINARY_DC = new Set(["motion", "presence", "occupancy", "moving"]);
  */
 export const SWITCH_PURPOSE_HINTS: ReadonlyArray<readonly [RegExp, Category, string]> = [
   [/motion|presence|occupan|detect/i, "access_control", "activity"],
-  [/\block|unlock|door|gate/i,        "access_control", "lock"],
+  // Every alternative here needs its OWN boundary, not just "lock"'s \b —
+  // "door"/"gate" as bare substrings matched inside "outdoor" and
+  // "aggregate", miscategorising ordinary exterior light switches as
+  // access_control/lock (purple badge, lock glyph). \b alone can't fix this:
+  // "_" counts as a word character, so \bdoor\b still doesn't see a boundary
+  // in "outdoor_light" — anchor explicitly against start/end/"."/"_" instead.
+  [/(?:^|[._])(?:lock|unlock|door|gate)(?:[._]|$)/i, "access_control", "lock"],
   [/light|lamp|\bled\b|spot/i,        "light",          "lightbulb"],
   [/fan|vmc|extract|vent/i,           "comfort",        "fan"],
   [/pump|filtr|filter|jet|jacuzzi|spa|pool/i, "energy",  "droplets"],
@@ -154,32 +160,6 @@ export function categoryForEntity(entityId: string, type: EntityType, deviceClas
   }
 
   return DEFAULT_CATEGORY_BY_TYPE[type] ?? "others";
-}
-
-/** True when a `switch.*` (or `input_boolean.*`) entity is really a
- *  relay-controlled door lock modelled as a plain switch — e.g. a doorbell/
- *  intercom door-strike relay — rather than HA's native `lock` domain. Reuses
- *  SWITCH_PURPOSE_HINTS (the SAME table that already buckets such a switch
- *  into "access_control" with the "lock" badge glyph) so this stays a single
- *  source of truth instead of a second, possibly-drifting pattern — and,
- *  crucially, is villa-agnostic: any switch whose id/name reads as a door/
- *  gate relay is picked up automatically, with no per-entity config. */
-export function isLockLikeSwitch(entityId: string): boolean {
-  const id = entityId.toLowerCase();
-  for (const [re, , glyph] of SWITCH_PURPOSE_HINTS) {
-    if (re.test(id)) return glyph === "lock";
-  }
-  return false;
-}
-
-/** Best-effort "is this lock-like switch currently secured" from its raw on/
- *  off state. HA has no standard way to know a relay's polarity, so this
- *  assumes the overwhelmingly common convention for electric door strikes and
- *  maglocks: energised/ON = released (unlocked), de-energised/OFF = secured
- *  (locked) — "fail-secure" wiring. Treat anything but a live "on" as locked,
- *  same as an unavailable lock reads as its last-known-safe state elsewhere. */
-export function isLockSwitchSecured(state: string): boolean {
-  return state !== "on";
 }
 
 /** The category to actually USE for an entity: a stored value the user picked

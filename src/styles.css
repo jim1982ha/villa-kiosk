@@ -455,10 +455,12 @@ button {
 .hud-left-col {
   position: absolute; z-index: 21;
   top: calc(52px + env(safe-area-inset-top, 0px) + 8px);
-  /* Same 18px .hud-topbar itself pads its brand chip with, so the floor
-     stack's left edge lines up exactly under the villa-name chip's left
-     edge instead of sitting 4px off it. */
-  left: calc(18px + env(safe-area-inset-left, 0px));
+  /* --hud-side-pad — the SAME value .hud-topbar pads its brand chip with
+     (18px, 24px on desktop — see that variable's own comment) — so the floor
+     stack's left edge always lines up exactly under the villa-name chip's
+     left edge at every breakpoint, not just the one it happened to be
+     eyeballed against. */
+  left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
   display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
 .hud-left-col > * { pointer-events: auto; }
@@ -1507,12 +1509,19 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .center { text-align: center; }
 
 /* --- Mobile / notch safe areas --- */
-/* Keep the top bar clear of the phone status bar / notch. */
+/* Keep the top bar clear of the phone status bar / notch. --hud-side-pad is
+   the ONE value both .hud-topbar's left padding AND .hud-left-col's left
+   offset read (see .hud-left-col below) — they used to be two separately
+   hardcoded 18px's that agreed only by coincidence: the desktop media query
+   further down bumps .hud-topbar's to 24px but nothing told .hud-left-col,
+   so above 1024px the floor/rooms stack sat 6px left of the brand chip's own
+   edge instead of lined up under it. */
+:root { --hud-side-pad: 18px; }
 .hud-topbar {
   height: calc(52px + env(safe-area-inset-top, 0px));
   padding-top: env(safe-area-inset-top, 0px);
-  padding-left: calc(18px + env(safe-area-inset-left, 0px));
-  padding-right: calc(18px + env(safe-area-inset-right, 0px));
+  padding-left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px));
 }
 
 /* --- Tablet / desktop polish --- */
@@ -1526,7 +1535,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .settings-modal { max-width: 780px; }
   .config-editor-modal { max-width: 780px; }
   .teleport-grid .tp-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
-  .hud-topbar { padding-left: calc(24px + env(safe-area-inset-left, 0px)); padding-right: calc(24px + env(safe-area-inset-right, 0px)); }
+  :root { --hud-side-pad: 24px; }
+  .hud-topbar { padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px)); }
 }
 
 /* --- Narrow DESKTOP window: shed the top bar's optional parts in order of
@@ -1545,7 +1555,11 @@ label.toggle span { user-select: none; line-height: 1.4; }
   /* Then the profile's NAME (the logout icon beside it stays, so switching
      profiles is still one click) and some chrome padding. */
   .hud-profile .hud-profile-name { display: none; }
-  .hud-topbar { padding: 0 10px; gap: 8px; }
+  /* Sets --hud-side-pad too (not just padding) so .hud-left-col's left
+     offset — which reads that same variable — stays lined up with the
+     brand chip at this width tier as well. */
+  :root { --hud-side-pad: 10px; }
+  .hud-topbar { padding: 0 var(--hud-side-pad); gap: 8px; }
   .hud-center { gap: 8px; }
 }
 @media (max-width: 860px) {
@@ -1558,10 +1572,11 @@ label.toggle span { user-select: none; line-height: 1.4; }
 
 @media (max-width: 640px), (max-height: 560px) {
   /* --- Compact top bar so nothing wraps or gets cropped on a phone --- */
+  :root { --hud-side-pad: 10px; }
   .hud-topbar {
     gap: 6px;
-    padding-left: calc(10px + env(safe-area-inset-left, 0px));
-    padding-right: calc(10px + env(safe-area-inset-right, 0px));
+    padding-left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
+    padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px));
     /* .hud-brand (the left column) is hidden on a phone — drop it from the
        track list entirely instead of reserving an empty auto column for it.
        .hud-right is now empty on a phone too (its overflow button moved
@@ -1785,7 +1800,12 @@ label.toggle span { user-select: none; line-height: 1.4; }
    operator worklist is defined here. Colour is semantic throughout — an
    overdue task must read as overdue before anything is actually read. */
 .fm-tabs {
-  display: flex; gap: 4px; padding: 0 22px 10px; overflow-x: auto;
+  /* Symmetric top/bottom padding — this had ZERO top padding (only 10px at
+     the bottom, before the border), so the tab buttons sat flush against the
+     row's top edge with all the breathing room below them, reading as "not
+     vertically centred" within the header band even though each button's
+     OWN icon+label were centred fine internally. */
+  display: flex; align-items: center; gap: 4px; padding: 10px 22px; overflow-x: auto;
   scrollbar-width: none; border-bottom: 1px solid var(--hairline);
 }
 .fm-tabs::-webkit-scrollbar { display: none; }

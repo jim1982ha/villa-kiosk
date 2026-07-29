@@ -20,19 +20,15 @@
 
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
-import {
-  Lightbulb, Snowflake, Zap, Waves, Sparkles, DoorClosed, DoorOpen,
-} from "lucide-react";
+import { Snowflake, Zap, Waves, Sparkles } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
-import {
-  CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient, isLockLikeSwitch, isLockSwitchSecured,
-} from "@/config/EntityCategories";
+import { CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient } from "@/config/EntityCategories";
 import { applyScene, activeSceneName } from "@/config/scenes";
 import type { KioskScene } from "@/config/scenes";
-import { prettifyEntitySlug } from "@/config/EntityMap";
+import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
@@ -75,11 +71,6 @@ function onOffSummary(onCount: number, total: number): string {
   return `${onCount} On`;
 }
 
-// Same fallback prettifier every other display surface uses (dedupe a
-// repeated leading phrase, then Title Case) instead of a separate, simpler
-// re-implementation here that didn't dedupe — see EntityMap.prettifyEntitySlug.
-const friendly = (e: HassEntity) => e.attributes.friendly_name?.trim() || prettifyEntitySlug(e.entity_id);
-
 /** Build the ordered tile list from the live entity snapshot. Pure (no side
  *  effects) so it's cheap to recompute on every state push via useMemo. */
 function deriveTiles(
@@ -92,20 +83,21 @@ function deriveTiles(
   const tiles: SummaryTile[] = [];
 
   // ── Door locks ───────────────────────────────────────────────────────
-  // Native `lock.*` entities PLUS any `switch.*` that reads as a door/gate
-  // relay (a doorbell/intercom door strike, say) — see isLockLikeSwitch. One
-  // combined tile so a relay-modelled door isn't invisible next to real locks.
-  const nativeLocks = byDomain("lock");
-  const lockSwitches = byDomain("switch").filter((e) => isLockLikeSwitch(e.entity_id));
-  const locks = [...nativeLocks, ...lockSwitches];
-  const isSecured = (e: HassEntity) => (e.entity_id.startsWith("lock.") ? e.state === "locked" : isLockSwitchSecured(e.state));
-  if (locks.length) {
-    const lockedN = locks.filter(isSecured).length;
+  // `lock.*` entities only — see locksGroup's own docstring for why this
+  // isn't extended to switches that merely LOOK like a door/gate relay by
+  // name (tried once, matched every "outdoor" light switch in the villa via
+  // an unanchored "door" substring — reverted). Shared with the Facility
+  // Readiness tab's "View doors" shortcut (see summaryGroups.ts) so both
+  // open the identical group, not two independently-derived lists.
+  const locksG = locksGroup(entities);
+  if (locksG) {
+    const locks = locksG.entityIds.map((id) => entities[id]).filter((e): e is HassEntity => !!e);
+    const lockedN = locks.filter((l) => l.state === "locked").length;
     const allLocked = lockedN === locks.length;
     const single = locks.length === 1;
     tiles.push({
       id: "__locks",
-      icon: allLocked ? DoorClosed : DoorOpen,
+      icon: locksG.icon,
       // Short + generic on purpose, even for a single lock: the tile's real
       // constraint is horizontal space in the bar, and "Outdoor Entrance
       // Lock" (the lock's own HA friendly_name) was one of the widest tiles
@@ -115,12 +107,12 @@ function deriveTiles(
       // the real per-device name (title, further down) — it has the room.
       label: single ? "Door Lock" : "Locks",
       value: single
-        ? (isSecured(locks[0]) ? "Locked" : "Unlocked")
+        ? (locks[0].state === "locked" ? "Locked" : locks[0].state === "unlocked" ? "Unlocked" : locks[0].state)
         : `${lockedN}/${locks.length} locked`,
       tone: allLocked ? "neutral" : "warn",
       category: "access_control",
-      entityIds: locks.map((l) => l.entity_id),
-      title: single ? friendly(locks[0]) : "Locks",
+      entityIds: locksG.entityIds,
+      title: locksG.title,
       canControl: can("access_control"),
     });
   }
@@ -146,14 +138,18 @@ function deriveTiles(
   }
 
   // ── All lights ───────────────────────────────────────────────────────
-  const lights = byDomain("light");
-  if (lights.length) {
+  // Shared with the Facility Readiness tab's "View lights" shortcut (see
+  // summaryGroups.ts) so both open the identical full list of lights, not
+  // just the ones a readiness check happens to flag as still lit.
+  const lightsG = lightsGroup(entities);
+  if (lightsG) {
+    const lights = lightsG.entityIds.map((id) => entities[id]).filter((e): e is HassEntity => !!e);
     const n = lights.filter(isOn).length;
     tiles.push({
-      id: "__lights", icon: Lightbulb, label: "Lights",
+      id: "__lights", icon: lightsG.icon, label: "Lights",
       value: onOffSummary(n, lights.length),
       tone: n > 0 ? "on" : "off", category: "light",
-      entityIds: lights.map((e) => e.entity_id), title: "Lights", canControl: can("light"),
+      entityIds: lightsG.entityIds, title: lightsG.title, canControl: can("light"),
     });
   }
 
