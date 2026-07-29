@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.89
+
+### Changes
+- Camera beam: fix a real regression from the widening in the previous release. Field report with a screenshot: after doubling the cone's size, a beam near a doorway rendered as a short stub again instead of the expected reach across the room. Root cause: CameraBeams.clippedLength samples 8 rays around the cone's SURFACE and takes the MINIMUM reach across all of them (deliberately, to stop the beam's sides poking through a nearby wall its centreline ray missed — a real fix from 2026-07-03). Those rays were tested against the FULL shadowCasters set, which legitimately includes every static mesh for shadow-casting purposes (furniture blocks light too) — but for a beam, that means a single piece of furniture, a curtain, or a door frame grazed by just ONE of those 8 edge rays collapsed the WHOLE cone to a stub, even with a completely clear room ahead of the centreline. Doubling the cone's angular spread in the previous release made this dramatically more likely: a wider cone's edge rays sweep much more off-axis space at the same distance from the camera, so a nearby side object that the old narrow beam would have missed entirely is now squarely in its path. Fix: the beam's occluder set is now restricted to genuinely structural geometry — walls, partitions, railings, fences, glazing, and the baked pipeline's merged Structure_* meshes — via a new isStructuralMeshName, extracted to src/babylon/meshPatterns.ts and shared with SceneManager.applyStructure's existing wall/collision regex (same classification, one definition, not two that could drift apart) rather than the full shadowCasters superset. A door's glass panel still blocks (it is a real optical barrier); its frame/trim and any furniture no longer do, since neither should limit what a camera can conceptually see across a room. Verified two ways: 26 name-classification assertions covering the real pipeline's Structure_L1/_Exterior naming, standard walls/partitions/railings/fences/glass, and a broad set of furniture/door-trim/decor names that must NOT match; and the full existing suite (25 fm + 9 cache + 10 diff + 5 yield + 91 security) still green. Typecheck and build clean
+
+---
+
+
 ## 2.35.88
 
 ### Changes

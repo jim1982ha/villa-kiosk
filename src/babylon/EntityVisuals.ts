@@ -65,6 +65,7 @@ import { phantomEntity } from "@/utils/phantomEntity";
 import { tapDebug } from "@/utils/tapDebug";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
+import { isStructuralMeshName } from "./meshPatterns";
 import { axisWorldScale } from "./meshUnits";
 import { LightPool } from "./LightPools";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
@@ -1438,7 +1439,19 @@ export class EntityVisuals {
       tapDebug(`camera beams: ${sources.length} built [${sources.map((s) => s.entityId).join(", ")}]`
         + (skipped.length ? ` | skipped: ${skipped.join("; ")}` : ""));
     }
-    this.beams.rebuild(sources, new Set(this.shadowCasters));
+    // NOT the full shadowCasters set — that includes every static mesh
+    // (furniture blocks light too, legitimately, for shadows), but a beam's
+    // edge-ray sampling takes the MINIMUM reach across 8 rays around the
+    // cone's surface, so a single piece of furniture, curtain, or door frame
+    // grazed by just one of those rays collapsed the WHOLE cone to a stub —
+    // worse the wider the cone is (field report right after the beam was
+    // deliberately widened). Restrict to genuinely structural geometry (walls,
+    // partitions, railings, glazing, or the baked pipeline's merged
+    // Structure_* meshes) — see meshPatterns.isStructuralMeshName.
+    const beamOccluders = new Set(
+      this.shadowCasters.filter((m) => isStructuralMeshName(m.name)),
+    );
+    this.beams.rebuild(sources, beamOccluders);
     // Re-assert current motion state onto the freshly-built beams. Beams are
     // (re)built by setCameraDirections, which runs AFTER the first batch of HA
     // states has already been applied — so a camera whose motion sensor was

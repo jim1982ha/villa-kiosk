@@ -32,6 +32,7 @@ import { report as reportTelemetry } from "@/utils/telemetry";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
+import { STRUCTURAL_NAME_RE } from "./meshPatterns";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
@@ -1284,9 +1285,10 @@ export class SceneManager {
    * alone, and turn on collision for vertical barriers.
    */
   private applyStructure(meshes: AbstractMesh[]): void {
-    // Name patterns that are explicitly collidable (walls, railings, glass barriers).
-    const structuralByName =
-      /wall|partition|cloison|railing|balustrade|banister|newel|column|pillar|fence|window|glass|slid|baie|vitr/i;
+    // Name patterns that are explicitly collidable (walls, railings, glass
+    // barriers) — shared with the camera beam's occluder classification, see
+    // meshPatterns.ts.
+    const structuralByName = STRUCTURAL_NAME_RE;
     // Stairs/steps in several languages — these must NEVER collide (you walk up
     // them via floor-following) and are tagged so the camera can climb them.
     const stairPat = /stair|step|escalier|marche|scala|treppe|stufe|trap\b/i;
