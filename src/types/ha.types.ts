@@ -67,6 +67,16 @@ export interface HassServiceTarget {
   entity_id: string | string[];
 }
 
+/** Subset of `config/entity_registry/list`'s rows we use — just enough to
+ *  tell whether the USER hid an entity in HA (Settings > Entities >
+ *  "Visible" toggle). `hidden_by` is a string (e.g. "user") when hidden, null
+ *  otherwise; unrelated to `disabled_by` (a disabled entity has no state at
+ *  all, so it already can't appear via get_states). */
+export interface HassEntityRegistryEntry {
+  entity_id: string;
+  hidden_by: string | null;
+}
+
 export type EntityDomain =
   | "light"
   | "climate"

@@ -124,8 +124,13 @@ function deriveTiles(
   // pool room. The second rule is the more robust one: it catches a switch
   // named nothing like "pool" (a generic "Filter Pump 2") as long as it's
   // placed in the Swimming Pool room, without touching the first rule at all.
+  // Anchored against "."/"_"/" "/start/end (room names are human text with
+  // spaces, entity ids use "_") — a bare "spa" would otherwise match inside
+  // e.g. "spartan_gym_relay" (same substring-collision bug class as
+  // EntityCategories' SWITCH_PURPOSE_HINTS).
+  const POOL_WORD = /(?:^|[._ ])(?:pool|jacuzzi|jaccuzi|spa)(?:[._ ]|$)/i;
   const poolSwitches = byDomain("switch").filter(
-    (e) => /pool|jacuzzi|jaccuzi|spa/i.test(e.entity_id) || /pool|jacuzzi|spa/i.test(entityMap[e.entity_id]?.room ?? ""),
+    (e) => POOL_WORD.test(e.entity_id) || POOL_WORD.test(entityMap[e.entity_id]?.room ?? ""),
   );
   if (poolSwitches.length) {
     const on = poolSwitches.some(isOn);
@@ -327,15 +332,27 @@ function SceneMenu({ scenes, canRun, apply, activeName }: {
 }
 
 export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
-  const { entities, callService } = useHA();
+  const { entities, hiddenEntityIds, callService } = useHA();
   const { role } = useProfile();
   const { config } = useConfig();
 
   const [openGroup, setOpenGroup] = useState<SummaryTile | null>(null);
 
+  // Entities hidden in HA are excluded up front so a tile's "3 On" count
+  // never disagrees with the (also-filtered, see SummaryGroupPanel) list its
+  // tap opens.
+  const visibleEntities = useMemo(() => {
+    if (hiddenEntityIds.size === 0) return entities;
+    const out: Record<string, HassEntity> = {};
+    for (const [id, e] of Object.entries(entities)) {
+      if (!hiddenEntityIds.has(id)) out[id] = e;
+    }
+    return out;
+  }, [entities, hiddenEntityIds]);
+
   const deviceTiles = useMemo(
-    () => deriveTiles(entities, config.entityMap, (c) => (role ? isCategoryAllowed(role, c) : false)),
-    [entities, config.entityMap, role],
+    () => deriveTiles(visibleEntities, config.entityMap, (c) => (role ? isCategoryAllowed(role, c) : false)),
+    [visibleEntities, config.entityMap, role],
   );
 
   const scenes = config.kioskScenes ?? [];

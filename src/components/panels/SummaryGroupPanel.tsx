@@ -79,7 +79,7 @@ function groupByRoom(
 export default function SummaryGroupPanel({
   group, canControl, mappedEntityIds, onClose, onOpenEntity, hideBulkToggle,
 }: Props) {
-  const { entities, callService } = useHA();
+  const { entities, hiddenEntityIds, callService } = useHA();
   const { config } = useConfig();
   const { role } = useProfile();
   // Bulk-toggling an entire group (potentially dozens of devices) from one
@@ -96,7 +96,13 @@ export default function SummaryGroupPanel({
   // the count that opened it (badge said 30, list showed 3), since the caller
   // counts ids and this counted live entities. Same stand-in the 3D badge
   // layer uses, so a device faded on the map is now guaranteed to appear here.
-  const all = group.entityIds.map((id) => entities[id] ?? phantomEntity(id));
+  // Entities the user hid in HA (Settings > Entities > Visible) are excluded
+  // regardless of which caller built `group` — HA's own auto-populated
+  // dashboards honour this the same way, and this modal IS this app's
+  // auto-populated device list.
+  const all = group.entityIds
+    .filter((id) => !hiddenEntityIds.has(id))
+    .map((id) => entities[id] ?? phantomEntity(id));
   // Devices you can see in the villa first; HA-only ones (no geometry in this
   // model) grouped after them under their own heading — HIDDEN entirely for
   // Guest: a device with no map presence is exactly the kind of "behind the

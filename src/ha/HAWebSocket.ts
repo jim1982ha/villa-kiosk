@@ -2,7 +2,7 @@
 // Robust HA WebSocket client: auth, message-id tracking, event subscriptions,
 // exponential-backoff reconnect with re-subscription. (3Dash-informed patterns.)
 
-import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
+import type { HassEntity, HassEntityRegistryEntry, HassServiceTarget } from "@/types/ha.types";
 import { ingressWsUrl } from "./ingress";
 
 type Resolver = (result: unknown) => void;
@@ -305,6 +305,12 @@ export class HAWebSocket {
 
   async getStates(): Promise<HassEntity[]> {
     return this.sendMessage<HassEntity[]>("get_states");
+  }
+
+  /** Entity registry rows (hidden_by, etc.) — NOT included in get_states,
+   *  which only reports live state/attributes. */
+  async getEntityRegistry(): Promise<HassEntityRegistryEntry[]> {
+    return this.sendMessage<HassEntityRegistryEntry[]>("config/entity_registry/list");
   }
 
   async callService(

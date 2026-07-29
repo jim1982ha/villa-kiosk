@@ -22,6 +22,11 @@ export interface HAConfig {
 
 interface HAStateContextType {
   entities: Record<string, HassEntity>;
+  /** entity_ids the user marked "hidden" in HA (Settings > Entities >
+   *  Visible toggle) — kept out of every auto-populated list (SummaryBar
+   *  tiles, SummaryGroupPanel) the same way HA's own dashboards honour it.
+   *  Empty until the one-shot registry fetch on connect resolves. */
+  hiddenEntityIds: Set<string>;
   /**
    * Imperative, ALWAYS-current read of `entities` — for the rare caller that
    * needs the latest snapshot at some later moment rather than reacting to
@@ -70,6 +75,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const ws = wsRef.current;
 
   const [entities, setEntitiesState] = useState<Record<string, HassEntity>>({});
+  const [hiddenEntityIds, setHiddenEntityIds] = useState<Set<string>>(new Set());
   // Mirrors `entities` synchronously (no extra render/effect lag) so
   // getEntitiesSnapshot() below is never stale — see its docstring.
   const entitiesRef = useRef<Record<string, HassEntity>>({});
@@ -137,6 +143,14 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
         ws.sendMessage<HAConfig>("get_config")
           .then((cfg) => setHaConfig(cfg))
           .catch((err) => devLog("[HA] get_config failed (onboarding auto-fill skipped)", err));
+        // Registry-only data (get_states never reports hidden_by) — best
+        // effort: a profile without registry read access just sees nothing
+        // filtered, same as before this existed.
+        ws.getEntityRegistry()
+          .then((rows) => setHiddenEntityIds(new Set(
+            rows.filter((r) => r.hidden_by != null).map((r) => r.entity_id),
+          )))
+          .catch((err) => devLog("[HA] entity_registry/list failed (hidden filter skipped)", err));
       } catch (err) {
         const msg = (err as Error).message;
         setLastError(msg);
@@ -175,6 +189,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const value = useMemo<HAStateContextType>(
     () => ({
       entities,
+      hiddenEntityIds,
       getEntitiesSnapshot,
       connection,
       connected: connection === "connected",
@@ -187,7 +202,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       lastError,
       serviceError,
     }),
-    [entities, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
+    [entities, hiddenEntityIds, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
   );
 
   return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;

@@ -95,23 +95,30 @@ const ACCESS_BINARY_DC = new Set(["motion", "presence", "occupancy", "moving"]);
  * an "others"-grey badge). Ordered: first match wins, most specific first.
  * Only consulted when nothing more reliable (a user-set category, a
  * device_class) applies.
+ *
+ * Every alternative is anchored against start/end/"."/"_" (not bare `\b` —
+ * "_" is a word character, so `\bdoor\b` still matches inside "outdoor_
+ * light"). Unanchored substrings used to cross-match: "door"/"gate" matched
+ * inside "outdoor"/"aggregate" (reverted), and "light" matched inside
+ * `switch.outdoor_swimming_pool_light_patio_top` and won by table order even
+ * though the same id also reads as pool equipment — the switch is grouped
+ * under Pool everywhere else in the app, so its badge disagreed with itself.
+ * The SYSTEM a switch belongs to (pool, heating, camera, speaker, outlet) is
+ * checked before the generic FIXTURE-type hints (light, fan) that describe
+ * only what a system switch happens to control, so "pool_light" reads as
+ * pool/energy and a plain "outdoor_light" (no system keyword) still reads as
+ * light.
  */
 export const SWITCH_PURPOSE_HINTS: ReadonlyArray<readonly [RegExp, Category, string]> = [
-  [/motion|presence|occupan|detect/i, "access_control", "activity"],
-  // Every alternative here needs its OWN boundary, not just "lock"'s \b —
-  // "door"/"gate" as bare substrings matched inside "outdoor" and
-  // "aggregate", miscategorising ordinary exterior light switches as
-  // access_control/lock (purple badge, lock glyph). \b alone can't fix this:
-  // "_" counts as a word character, so \bdoor\b still doesn't see a boundary
-  // in "outdoor_light" — anchor explicitly against start/end/"."/"_" instead.
+  [/(?:^|[._])(?:motion|presence|occupan\w*|detect\w*)(?:[._]|$)/i, "access_control", "activity"],
   [/(?:^|[._])(?:lock|unlock|door|gate)(?:[._]|$)/i, "access_control", "lock"],
-  [/light|lamp|\bled\b|spot/i,        "light",          "lightbulb"],
-  [/fan|vmc|extract|vent/i,           "comfort",        "fan"],
-  [/pump|filtr|filter|jet|jacuzzi|spa|pool/i, "energy",  "droplets"],
-  [/heat|boiler|water_?heater|thermo/i, "comfort",      "thermometer"],
-  [/camera|cctv/i,                    "access_control", "cctv"],
-  [/speaker|music|audio|sonos/i,      "others",         "music"],
-  [/plug|socket|outlet/i,             "energy",         "plug"],
+  [/(?:^|[._])(?:pump|filtr\w*|filter|jet|jacuzzi|spa|pool)(?:[._]|$)/i, "energy", "droplets"],
+  [/(?:^|[._])(?:heat\w*|boiler\w*|water_?heater|thermo\w*)(?:[._]|$)/i, "comfort", "thermometer"],
+  [/(?:^|[._])(?:camera|cctv)(?:[._]|$)/i, "access_control", "cctv"],
+  [/(?:^|[._])(?:speaker|music|audio|sonos)(?:[._]|$)/i, "others", "music"],
+  [/(?:^|[._])(?:plug|socket|outlet)(?:[._]|$)/i, "energy", "plug"],
+  [/(?:^|[._])(?:light|lamp|led|spot)(?:[._]|$)/i, "light", "lightbulb"],
+  [/(?:^|[._])(?:fan|vmc|extract\w*|vent\w*)(?:[._]|$)/i, "comfort", "fan"],
 ];
 
 /** Resolve the DEFAULT category for an entity: exception > device_class rule >
@@ -154,6 +161,11 @@ export function categoryForEntity(entityId: string, type: EntityType, deviceClas
   // so a switch can never end up with a lightbulb icon on a grey "others"
   // badge: one table decides both.
   if (type === "switch" || type === "input_boolean") {
+    // Mirrors iconKeyFor's SWITCH_ICON_KEY check: an explicit device_class
+    // (from the entity itself or a "Show as" registry override) is a firmer
+    // signal than a name guess, so it's checked first here too — otherwise
+    // the badge colour and glyph could disagree again for the same entity.
+    if (dc === "outlet") return "energy";
     for (const [re, category] of SWITCH_PURPOSE_HINTS) {
       if (re.test(id)) return category;
     }

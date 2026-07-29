@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.36.2
+
+### Changes
+- Fixed two issues reported from the bottom-bar "Pool" group modal. (1) Entities the user hid in HA (Settings > Entities > "Visible" toggle) were still listed under "Not on the map" — the app never fetched HA's entity registry at all (`get_states` only reports live state/attributes, never `hidden_by`), so there was nothing to filter on. Added a one-shot `config/entity_registry/list` fetch (`HAWebSocket.getEntityRegistry`) alongside the existing `get_config` call on connect, stored as `hiddenEntityIds` in `HAStateStore`, and filtered out of `SummaryGroupPanel` (every caller of this shared modal — SummaryBar tiles, Facility Readiness shortcuts, HUD's unavailable-devices list) and out of `SummaryBar`'s own tile derivation so a tile's "N On" count can't disagree with the (also-filtered) list tapping it opens. (2) `switch.outdoor_swimming_pool_light_patio_top` (a pool-area light relay) drew a lightbulb icon instead of the expected pool/energy droplet — its id contains both "light" and "pool", and `EntityCategories.SWITCH_PURPOSE_HINTS` (the shared table that picks both the badge colour and the glyph for every generic `switch.*`/`input_boolean.*`) matched "light" first purely by table order, even though the same switch is grouped under Pool everywhere else in the app. Reordered the table so a switch's SYSTEM (pool/jacuzzi/spa, heating, camera, speaker, outlet) is checked before the generic FIXTURE-type hints (light, fan) that only describe what a system switch happens to control, and anchored every remaining alternative against start/end/"."/"_" (previously only the lock/door/gate entry had this — the rest were bare unanchored substrings, the same bug class as the earlier "outdoor" reverted regression). Also added the same anchoring to `SummaryBar`'s separate pool-tile-membership regex (`pool|jacuzzi|jaccuzi|spa`, previously unanchored — a bare "spa" could false-match e.g. "spartan_gym_relay"), and made `categoryForEntity`'s switch/input_boolean branch check `device_class === "outlet"` first, mirroring `iconKeyFor`'s existing `SWITCH_ICON_KEY` check, so the badge colour and glyph can't drift apart for an entity with an explicit device_class the way they used to for name-only ones. Typecheck and production build clean.
+
+---
+
+
 ## 2.36.1
 
 ### Changes
