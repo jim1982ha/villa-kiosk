@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.98
+
+### Changes
+- Camera panel fullscreen button: found and fixed a real, iPhone-specific gap while checking "does the camera fullscreen view work as well on iOS as Android." `toggleFullscreen` called `Element.requestFullscreen()` unconditionally — iPhone Safari (unlike iPadOS, desktop Safari, and every Android browser) does not support the Fullscreen API on an arbitrary element at all: `document.fullscreenEnabled` is `false` and the call always rejects. The button rendered anyway, so on iPhone specifically it looked pressable but silently did nothing, and its icon never flipped to "exit fullscreen" (`document.fullscreenElement` never becomes truthy there either). Fixed by feature-detecting `document.fullscreenEnabled` (not platform-sniffing — keeps working correctly if Apple ever adds support) and hiding the button entirely where it can't do anything, rather than offering a dead control; also added `.catch()` to both the enter/exit calls as defence in depth. The live feed itself is unaffected either way — `.camera-fullscreen` already covers the full viewport via CSS on every platform, independent of the native Fullscreen API succeeding. Everything else checked (native-HLS-vs-hls.js branching for iOS Safari's MSE support, `playsInline`/`muted`/`autoPlay` on the `<video>` element, the pinch-zoom/pan gesture's `touch-action: none` correctly pre-empting Safari's native page-zoom, safe-area coverage on the header/controls) was already implemented correctly cross-platform — no other iOS-specific gap found. Typecheck and production build clean.
+
+---
+
+
 ## 2.35.97
 
 ### Changes

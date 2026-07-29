@@ -257,15 +257,28 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
 
   // The feed is an <img> (MJPEG/snapshot), so there's no native video control
   // bar; a live camera has no timeline to scrub or pause. Fullscreen is the one
-  // meaningful control, so we expose it via the Fullscreen API (graceful no-op
-  // where unsupported — the panel already covers the screen via CSS).
+  // meaningful control, so we expose it via the Fullscreen API — but iPhone
+  // Safari (unlike iPadOS and every desktop/Android browser) does not
+  // support requestFullscreen() on an arbitrary element at all: the method
+  // exists on the prototype, but document.fullscreenEnabled is false and the
+  // call rejects every time. The button used to render unconditionally, so
+  // on iPhone specifically it looked pressable but silently did nothing —
+  // the icon never flipped to "exit fullscreen" because
+  // document.fullscreenElement never became truthy, either. Feature-detected
+  // below (not platform-sniffed, so this keeps working correctly if/when
+  // Apple ever adds support) and the button is hidden entirely where it
+  // can't do anything, rather than offer a control that doesn't work. The
+  // feed itself is unaffected either way — .camera-fullscreen already covers
+  // the whole viewport via CSS regardless of the native Fullscreen API.
+  const fullscreenSupported =
+    typeof document !== "undefined" && document.fullscreenEnabled;
   const toggleFullscreen = () => {
     const el = rootRef.current;
     if (!el) return;
     if (document.fullscreenElement) {
-      void document.exitFullscreen?.();
+      void document.exitFullscreen?.().catch(() => {});
     } else {
-      void el.requestFullscreen?.();
+      void el.requestFullscreen?.().catch(() => {});
     }
   };
 
@@ -611,14 +624,16 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
               </button>
             </>
           )}
-          <button
-            className="icon-btn fs-btn"
-            onClick={toggleFullscreen}
-            title={isFs ? "Exit fullscreen" : "Fullscreen"}
-            aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
-          >
-            {isFs ? <Minimize2 size={26} /> : <Maximize2 size={26} />}
-          </button>
+          {fullscreenSupported && (
+            <button
+              className="icon-btn fs-btn"
+              onClick={toggleFullscreen}
+              title={isFs ? "Exit fullscreen" : "Fullscreen"}
+              aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
+            >
+              {isFs ? <Minimize2 size={26} /> : <Maximize2 size={26} />}
+            </button>
+          )}
           <button className="icon-btn close" onClick={onClose}>
             <X size={28} />
           </button>
