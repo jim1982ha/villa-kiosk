@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.92
+
+### Changes
+- Room data now embeds directly in the GLB — no more separate `.rooms.json` upload for a pipeline built with this release. Follow-up to 2.35.91's "select both files together" workaround, which only halved the friction; a lone freshly-exported `.glb` still couldn't carry the villa's room names/positions on its own. Pipeline (blender_pipeline.py 2.14.0): `_compute_room_data` extracts the room/entity-parsing logic that used to live only inside `_write_room_sidecar` into a shared function; `_embed_room_data` (new, runs BEFORE the glTF export) stamps its result as a `vk_rooms_json` JSON-string glTF extra on a new bare "VillaKioskRoomData" Empty node — same `vk_` extras namespace as the structure-role metadata shipped last release. `export_extras=True` is now set EXPLICITLY on the glTF export call (previously relying on Blender's own default, which is also what silently made vk_role/vk_level/vk_exterior work at all — worth pinning down rather than leaving implicit). The legacy `.rooms.json` sidecar is still written every run, unchanged format, now sourced from the same computed data (can't drift from the embedded copy) and kept purely as a fallback for an older/hand-built GLB. App side: new `src/utils/glbRoomDataExtractor.ts` reads the JSON chunk of the raw GLB binary directly per the glTF-Binary spec — no Babylon/WebGL scene needed, so it can run immediately after picking a file in Settings, before any model is loaded. `ConfigEditorModal`'s combined GLB(+rooms) upload now tries this FIRST whenever only a `.glb` was selected: if embedded data is found and validates through the existing `parseRoomData` (same validator an uploaded sidecar goes through — malformed extras are never trusted/uploaded), it's synthesized into a `File` and pushed through the exact same central-rooms-upload path a manually-picked `.rooms.json` would take, reusing 100% of the already-working central-store write + every-load sync/diff/apply machinery. A GLB from an older pipeline (no carrier node) behaves exactly as before — falls back to needing a manual `.rooms.json`, no error surfaced for the missing embed itself. Verified with 11 assertions against the real extractor module (valid payload round-trips through the actual `parseRoomData`, bad magic/wrong chunk type/truncated buffer/non-string extras all resolve to `null` rather than throwing) plus a `python3 -m py_compile` pass on the pipeline script. MODEL_PIPELINE.md updated to describe the new one-file upload path. Typecheck and production build clean.
+
+---
+
+
 ## 2.35.91
 
 ### Changes

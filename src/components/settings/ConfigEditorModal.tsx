@@ -12,6 +12,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { buildConfigExport, parseConfigImport } from "@/config/AppConfig";
 import { parseRoomData } from "@/utils/sh3dParser";
+import { extractEmbeddedRoomDataJson } from "@/utils/glbRoomDataExtractor";
 import { fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type AddonConfig } from "@/utils/storage";
 import { getLoadedModelInfo } from "@/utils/modelInfo";
 import ConfigEditor from "./ConfigEditor";
@@ -239,9 +240,11 @@ function ModelActionsRow({
         <code>.rooms.json</code> the Blender pipeline emits next to the GLB —
         it carries the room names, shapes and device positions used to label rooms and place devices.
         {canUploadCentrally && (
-          <> Select both files together in "Upload GLB (+ room data)" (ctrl/cmd-click both in the file
-          picker) to send them in one go — or use the buttons separately, e.g. to update just the room
-          data without re-uploading the model.</>
+          <> A pipeline from 2026-07-29 or later embeds this directly in the GLB, so uploading just
+          the <code>.glb</code> alone is usually enough now — a separate <code>.rooms.json</code> is
+          only needed for an older export. Select both files together in "Upload GLB (+ room data)"
+          (ctrl/cmd-click both in the file picker) if you do have one, or use the buttons separately,
+          e.g. to update just the room data without re-uploading the model.</>
         )}{" "}
         Import/Export Configuration is a per-device backup of your device↔room bindings, room
         viewpoints, device icons and Settings preferences.
@@ -360,18 +363,42 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
     }
   };
 
-  /** The GLB picker now accepts BOTH the .glb and its .rooms.json selected
+  /** The GLB picker accepts BOTH the .glb and its .rooms.json selected
    *  together in one dialog (see ModelActionsRow's onGlbFiles) — uploads
    *  whichever of the two is present, GLB first, sequentially (uploadBusy/
    *  uploadPct are single-flight state, so these can't run concurrently),
-   *  and reloads only once at the end. A lone .glb (no rooms file selected)
-   *  behaves exactly as before. */
+   *  and reloads only once at the end.
+   *
+   *  A LONE .glb (no rooms file picked) is no longer necessarily missing its
+   *  room data at all: a pipeline ≥2.14.0 embeds it directly in the GLB
+   *  (glTF extras on a carrier node — see blender_pipeline.py's
+   *  _embed_room_data). Before deciding there's nothing to sync, read the
+   *  raw GLB bytes for that embedded copy (glbRoomDataExtractor — no
+   *  Babylon/WebGL needed, just the binary) and, if present and valid,
+   *  upload it through the EXACT SAME "rooms" path a manually-picked
+   *  .rooms.json would take — same validation (parseRoomData), same
+   *  central-store write, same central-sync-on-every-load the app already
+   *  does. A GLB from an older pipeline, or one with no/garbled embedded
+   *  data, behaves exactly as before: falls back to needing a manual
+   *  .rooms.json upload, no error shown for the missing embed itself. */
   const uploadGlbAndRooms = async (files: File[]) => {
     const glb = files.find((f) => f.name.toLowerCase().endsWith(".glb"));
-    const rooms = files.find((f) => f.name.toLowerCase().endsWith(".json"));
+    let rooms = files.find((f) => f.name.toLowerCase().endsWith(".json"));
     if (!glb && !rooms) {
       setUploadMsg({ text: "Please choose a .glb file (and optionally its .rooms.json).", ok: false });
       return;
+    }
+    if (glb && !rooms) {
+      try {
+        const embeddedJson = extractEmbeddedRoomDataJson(await glb.arrayBuffer());
+        if (embeddedJson) {
+          parseRoomData(embeddedJson); // throws if malformed — don't trust/upload garbage
+          rooms = new File([embeddedJson], `${glb.name.replace(/\.glb$/i, "")}.rooms.json`, { type: "application/json" });
+        }
+      } catch {
+        // No embedded data, or it didn't parse — fall through with rooms
+        // still undefined, same as a GLB that never had any.
+      }
     }
     if (glb) await uploadCentral(glb, "glb", { reload: !rooms });
     if (rooms) await uploadCentral(rooms, "rooms", { reload: true });

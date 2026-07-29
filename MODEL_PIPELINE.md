@@ -299,12 +299,18 @@ Done!  14 mesh(es) in the GLB:
 
 ### Step B-3 — Upload to the kiosk
 
-**Add-on**: Advanced Settings → *3D model source* → **Upload central GLB**
-(and **Upload room data** for the `.rooms.json` sidecar this script also
-emits) — every kiosk then loads that same central file automatically, no
-per-device upload. **Standalone**: if a central model isn't already
-detected automatically (see the add-on note above), Advanced Settings → *3D
-model source* has a per-browser uploader instead.
+**Add-on**: Advanced Settings → *3D model source* → **Upload GLB (+ room
+data)**. Since pipeline 2.14.0 the room/entity plan data (names, shapes,
+device positions) is embedded directly in the `.glb` itself — select just
+that one file and the kiosk reads it automatically, no second upload. The
+script still also writes a `.rooms.json` sidecar next to the GLB as a
+fallback (needed for an older/hand-built GLB, or if you ever want to update
+just the room data without re-uploading the model) — select both files
+together in the same picker (ctrl/cmd-click) to send them in one go. Every
+kiosk then loads that same central file automatically, no per-device upload.
+**Standalone**: if a central model isn't already detected automatically (see
+the add-on note above), Advanced Settings → *3D model source* has a
+per-browser uploader instead.
 
 That's it. The kiosk resolves entity IDs directly from mesh names:
 - Tapping the door lock panel → lock control panel (unlock/lock)
