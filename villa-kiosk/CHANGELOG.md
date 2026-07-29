@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.36.0
+
+### Changes
+- Found the REAL root cause of the iPhone "top bar obstructed" report, superseding the 2.35.99 diagnosis. Two clearly-labeled field screenshots (HA Addon vs. direct-hostname PWA) made it possible to isolate the bug for the first time: the PWA screenshot showed the topbar icon row sitting right against the status bar/Dynamic Island, while the Addon screenshot looked correct. That split ruled out the Ingress-vs-PWA theory from 2.35.99 as the actual cause — a genuine per-viewport-width CSS bug was hiding underneath it the whole time. `.hud-topbar`'s `@media (max-width: 1000px)` rule declared `padding: 0 var(--hud-side-pad);` — a 2-value shorthand that sets `padding-top`/`padding-bottom` to `0` as a side effect of only intending to change the left/right padding, silently overriding the base rule's `padding-top: var(--safe-top)`. Because this media query matches essentially every phone (portrait or landscape), the safe-area reservation was being wiped out on real phones across the board, not just under Ingress. It stayed invisible in the Addon/Ingress context specifically because 2.35.99's `.vk-ingress` override already forces `--safe-top` to `0px` there anyway — the shorthand bug and that override coincidentally produced the same result, masking the bug in the one context that got tested. In the direct-hostname PWA, `--safe-top` is meant to hold the real non-zero Dynamic Island inset, and the shorthand was zeroing it, reproducing exactly the reported symptom. Fixed by splitting the shorthand into individual `padding-left`/`padding-right` declarations so the inherited `padding-top` survives. Proactively audited every other safe-area-sensitive rule for the same shorthand-cascade pattern and found one more: `.summary-bar`'s `@media (max-width: 720px)` override set a flat `bottom: 14px;` with no `env()` term at all, silently dropping home-indicator clearance on every phone; changed to `bottom: calc(14px + env(safe-area-inset-bottom, 0px));`. No other selector in the audit had the same conflict — each either has a single rule occurrence or its override already re-declares the safe-area term explicitly. The `--safe-top`/`.vk-ingress` mechanism from 2.35.99 is unaffected and stays in place. Typecheck and production build clean.
+
+---
+
+
 ## 2.35.99
 
 ### Changes

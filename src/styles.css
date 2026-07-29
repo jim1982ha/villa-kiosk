@@ -791,7 +791,12 @@ button {
      right edge. transform/50% centering no longer applies once left is a
      fixed offset instead of 50%. */
   .summary-bar {
-    bottom: 14px; gap: 8px; padding: 7px;
+    /* calc(...), not a flat 14px — the base rule's bottom already includes
+       env(safe-area-inset-bottom) for the home-indicator gesture area; a
+       bare literal here silently dropped that on every phone (this query
+       matches virtually all of them), same bug class as .hud-topbar's
+       shorthand-padding one just above. */
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px)); gap: 8px; padding: 7px;
     left: calc(80px + env(safe-area-inset-left, 0px));
     transform: none;
     max-width: calc(100vw - 92px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
@@ -1611,7 +1616,19 @@ label.toggle span { user-select: none; line-height: 1.4; }
      offset — which reads that same variable — stays lined up with the
      brand chip at this width tier as well. */
   :root { --hud-side-pad: 10px; }
-  .hud-topbar { padding: 0 var(--hud-side-pad); gap: 8px; }
+  /* left/right ONLY — never the `padding` SHORTHAND here. This used to be
+     `padding: 0 var(--hud-side-pad)`, which sets padding-top AND
+     padding-bottom to 0 as a side effect of the shorthand, silently
+     overriding the base rule's `padding-top: var(--safe-top)` for EVERY
+     phone (this query matches virtually all of them) — real, confirmed field
+     bug: the topbar's icon row rendered too close to the status bar/Dynamic
+     Island specifically in the standalone PWA (where --safe-top is a real
+     non-zero value), while the HA-Ingress case happened to look fine only by
+     coincidence (--safe-top is ALREADY forced to 0 there — see .vk-ingress —
+     so the accidental override changed nothing visible). Nothing below this
+     breakpoint (the ≤640px query further down) ever redeclared padding-top
+     either, so the override stuck all the way down to the smallest phones. */
+  .hud-topbar { padding-left: var(--hud-side-pad); padding-right: var(--hud-side-pad); gap: 8px; }
   .hud-center { gap: 8px; }
 }
 @media (max-width: 860px) {
