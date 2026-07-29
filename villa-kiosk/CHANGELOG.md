@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.85
+
+### Changes
+- Remove the coloured left-accent stripe from every Facility card — .fm-row, .fm-headline, .fm-cap all carried a saturated 3px colour bar down the left edge regardless of state (grey/green/amber/red), which read as templated: the exact 'obviously generated' tell of colour-coding every row the same way whether or not anything is actually wrong. Replaced with a quieter, more deliberate pattern used consistently across all three: a plain 1px hairline border normally, and — only for a state that actually needs attention — a faint full-card background tint (color-mix, ~6-7% of the status colour into the card background) plus a slightly tinted border, rather than a stripe. Severity now reads primarily from the elements that already carried it honestly: the status pill (.fm-badge, same family as a GitHub/Linear chip), the coloured check icon (.fm-check-icon), and the cap meter's coloured fill (.fm-cap-bar) — none of those changed, since a coloured badge/icon/progress-bar is a normal, deliberate UI pattern and was never what read as generated. .fm-headline (the Readiness tab's 'Not ready' banner) previously had NO icon at all and relied solely on the border stripe to carry its own state — since the stripe is gone, it now gets a coloured icon of its own (reusing the exact same CheckCircle2/AlertTriangle/XCircle set the checks below it use, via the same ICON map), so the headline and its checks read as one consistent system instead of two different ways of saying the same thing. Confirmed no coloured left-border-as-status pattern remains anywhere in the app — grep shows only unrelated 1px hairline dividers left. Verified: typecheck and build clean
+
+---
+
+
 ## 2.35.84
 
 ### Changes

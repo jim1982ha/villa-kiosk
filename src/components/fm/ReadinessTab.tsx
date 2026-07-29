@@ -42,11 +42,16 @@ export default function ReadinessTab({
       ? "Ready, with things worth fixing"
       : "Not ready";
 
+  const HeadlineIcon = ICON[report.overall];
+
   return (
     <div className="fm-stack">
       <div className={`fm-headline ${report.overall}`}>
-        <strong>{headline}</strong>
-        <span className="muted">{report.passed} of {report.total} checks passing</span>
+        <span className="fm-headline-icon"><HeadlineIcon size={22} /></span>
+        <div className="fm-headline-text">
+          <strong>{headline}</strong>
+          <span className="muted">{report.passed} of {report.total} checks passing</span>
+        </div>
       </div>
 
       <div className="fm-list">

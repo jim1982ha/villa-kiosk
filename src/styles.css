@@ -1783,18 +1783,27 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-stat.warn .n { color: var(--status-warning); }
 .fm-stat.bad  .n { color: var(--status-danger); }
 
-/* Rows: a left severity stripe carries state without relying on the badge. */
+/* Rows: severity is carried by the badge pill (below) and, for a row that
+   actually needs attention right now, a faint full-card tint — not a
+   saturated 3px stoplight bar down the left edge of every card. A coloured
+   stripe on every row regardless of state is the exact "this was clearly
+   generated" tell; a wash this quiet is barely noticeable until something
+   is actually wrong, which is the point — criticality should read as a
+   deliberate, occasional signal, not decoration applied uniformly. */
 .fm-list { display: flex; flex-direction: column; gap: 8px; }
 .fm-row {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 12px 14px; border-radius: 12px;
   background: var(--bg-card); border: 1px solid var(--hairline);
-  border-left: 3px solid var(--hairline-strong);
 }
-.fm-row.state-overdue  { border-left-color: var(--status-danger); }
-.fm-row.state-never    { border-left-color: var(--status-danger); }
-.fm-row.state-due-soon { border-left-color: var(--status-warning); }
-.fm-row.state-ok       { border-left-color: var(--status-on); }
+.fm-row.state-overdue, .fm-row.state-never {
+  background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
+}
+.fm-row.state-due-soon {
+  background: color-mix(in srgb, var(--status-warning) 6%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-warning) 25%, var(--hairline));
+}
 .fm-row-main { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .fm-row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .fm-row-sub { font-size: 12.5px; }
@@ -1804,6 +1813,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
   font-size: 11px; padding: 1px 7px; border-radius: 999px;
   background: var(--bg-input); color: var(--text-dim); white-space: nowrap;
 }
+/* The actual status carrier: a filled pill, same family as a GitHub/Linear
+   status chip — reads as a deliberate label, not a colour-coded rule. */
 .fm-badge {
   font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
   white-space: nowrap; background: var(--bg-input); color: var(--text-secondary);
@@ -1817,14 +1828,27 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-check-icon.warn { color: var(--status-warning); }
 .fm-check-icon.fail { color: var(--status-danger); }
 
+/* Same treatment as .fm-row above: a coloured icon (matching .fm-check-icon
+   so the headline and the checks below it read as one system) plus a quiet
+   tint, no accent bar. */
 .fm-headline {
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; align-items: center; gap: 12px;
   padding: 14px 16px; border-radius: 12px; border: 1px solid var(--hairline);
-  border-left: 3px solid var(--status-on); background: var(--bg-card);
+  background: var(--bg-card);
 }
+.fm-headline-icon { flex: 0 0 auto; display: flex; color: var(--status-on); }
+.fm-headline-text { display: flex; flex-direction: column; gap: 2px; }
 .fm-headline strong { font-size: 17px; }
-.fm-headline.warn { border-left-color: var(--status-warning); }
-.fm-headline.fail { border-left-color: var(--status-danger); }
+.fm-headline.warn {
+  background: color-mix(in srgb, var(--status-warning) 6%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-warning) 25%, var(--hairline));
+}
+.fm-headline.warn .fm-headline-icon { color: var(--status-warning); }
+.fm-headline.fail {
+  background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
+}
+.fm-headline.fail .fm-headline-icon { color: var(--status-danger); }
 
 /* Chips that jump to a device — interactive, so they look interactive. */
 .fm-chiprow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
@@ -1861,16 +1885,23 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 .fm-inline-error { font-size: 12.5px; color: var(--status-danger); }
 
-/* Spend-vs-cap meter. The bar is the point: a number alone doesn't convey
-   "how close am I" at a glance, and that proximity is the whole decision. */
+/* Spend-vs-cap meter. The bar fill IS the state indicator — a number alone
+   doesn't convey "how close am I" at a glance, and that proximity is the
+   whole decision — so the card itself only needs a quiet tint once the cap
+   is actually a concern, not a permanent coloured accent bar. */
 .fm-cap {
   display: flex; flex-direction: column; gap: 8px;
   padding: 14px 16px; border-radius: 12px;
   background: var(--bg-card); border: 1px solid var(--hairline);
-  border-left: 3px solid var(--status-on);
 }
-.fm-cap.approaching { border-left-color: var(--status-warning); }
-.fm-cap.exceeded { border-left-color: var(--status-danger); }
+.fm-cap.approaching {
+  background: color-mix(in srgb, var(--status-warning) 6%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-warning) 25%, var(--hairline));
+}
+.fm-cap.exceeded {
+  background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
+}
 .fm-cap-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .fm-cap-head strong { font-size: 20px; font-variant-numeric: tabular-nums; }
 .fm-cap-bar { height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
