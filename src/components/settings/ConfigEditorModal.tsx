@@ -170,8 +170,8 @@ function CentralModelInfo({
  */
 function ModelActionsRow({
   canUploadCentrally, uploadBusy, uploadPct, uploadMsg, backupMsg,
-  glbUploadRef, roomsUploadRef, configFileRef,
-  onGlbFiles, onRoomsFile, onConfigFile, onExport,
+  glbUploadRef, configFileRef,
+  onGlbFiles, onConfigFile, onExport,
 }: {
   canUploadCentrally: boolean;
   uploadBusy: "glb" | "rooms" | null;
@@ -179,52 +179,40 @@ function ModelActionsRow({
   uploadMsg: { text: string; ok: boolean } | null;
   backupMsg: { text: string; ok: boolean } | null;
   glbUploadRef: RefObject<HTMLInputElement>;
-  roomsUploadRef: RefObject<HTMLInputElement>;
   configFileRef: RefObject<HTMLInputElement>;
-  /** One or two files: just the .glb, or the .glb AND its .rooms.json
-   *  selected TOGETHER (multi-select in the OS file picker — ctrl/cmd+click
-   *  both, since they live in the same pipeline-output folder). A browser
-   *  can't reach out to disk and discover the sidecar file on its own (no
-   *  filesystem access from a plain <input type=file>), so this is as
-   *  "automatic" as the platform allows: one dialog, one action, instead of
-   *  two separate uploads through two separate buttons. */
+  /** ONE upload entry point for the model, handling every combination: a
+   *  lone .glb (room data auto-extracted from its embedded glTF extras when
+   *  present — see uploadGlbAndRooms), a .glb + its .rooms.json picked
+   *  together (multi-select — ctrl/cmd-click both, since a browser can't
+   *  reach out to disk and discover a sibling file on its own), or a lone
+   *  .rooms.json on its own (to update just the room data, or supply a
+   *  fallback for a GLB that has none embedded, without re-uploading the
+   *  model). Two separate buttons for this used to exist; merged into one
+   *  once a lone .glb selection became the common case. */
   onGlbFiles: (files: File[]) => void;
-  onRoomsFile: (file: File) => void;
   onConfigFile: (file: File) => void;
   onExport: () => void;
 }) {
   return (
     <>
       {/* GLB/room-data upload only exists where there's a backend to accept
-          it (Ingress) — a standalone page has none, so these two buttons are
-          left out entirely there rather than shown disabled: a permanently
+          it (Ingress) — a standalone page has none, so this button is left
+          out entirely there rather than shown disabled: a permanently
           non-functional button reads as broken, not as an explained state. */}
       {canUploadCentrally && (
-        <>
-          <input ref={glbUploadRef} type="file" multiple accept=".glb,.json,application/json,model/gltf-binary" style={{ display: "none" }}
-            onChange={(e) => { const files = Array.from(e.target.files ?? []); e.target.value = ""; if (files.length) onGlbFiles(files); }} />
-          <input ref={roomsUploadRef} type="file" accept=".json,application/json" style={{ display: "none" }}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) onRoomsFile(f); e.target.value = ""; }} />
-        </>
+        <input ref={glbUploadRef} type="file" multiple accept=".glb,.json,application/json,model/gltf-binary" style={{ display: "none" }}
+          onChange={(e) => { const files = Array.from(e.target.files ?? []); e.target.value = ""; if (files.length) onGlbFiles(files); }} />
       )}
       <input ref={configFileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onConfigFile(f); e.target.value = ""; }} />
       <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
         {canUploadCentrally && (
-          <>
-            <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
-              onClick={() => glbUploadRef.current?.click()}>
-              <Upload size={15} /> {uploadBusy === "glb"
-                ? (uploadPct === null ? "Uploading…" : `Uploading ${uploadPct}%`)
-                : "Upload GLB (+ room data)"}
-            </button>
-            <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
-              onClick={() => roomsUploadRef.current?.click()}>
-              <Upload size={15} /> {uploadBusy === "rooms"
-                ? (uploadPct === null ? "Uploading…" : `Uploading ${uploadPct}%`)
-                : "Upload room data"}
-            </button>
-          </>
+          <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} disabled={uploadBusy !== null}
+            onClick={() => glbUploadRef.current?.click()}>
+            <Upload size={15} /> {uploadBusy
+              ? (uploadPct === null ? "Uploading…" : `Uploading ${uploadPct}%`)
+              : "Upload GLB / room data"}
+          </button>
         )}
         <button className="btn ghost" style={{ flex: 1, minWidth: 160 }} onClick={() => configFileRef.current?.click()}>
           <Upload size={15} /> Import Configuration
@@ -235,16 +223,16 @@ function ModelActionsRow({
       </div>
       <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
         {canUploadCentrally
-          ? "Each upload overwrites the current central file and reloads every kiosk on next open. Room data is the small "
+          ? "Each upload overwrites the current central file(s) and reloads every kiosk on next open. Room data is the small "
           : "Upload a central GLB/room data from the Villa Kiosk add-on's Advanced Settings instead — a standalone page has no backend to write them. Room data is the small "}
-        <code>.rooms.json</code> the Blender pipeline emits next to the GLB —
-        it carries the room names, shapes and device positions used to label rooms and place devices.
+        <code>.rooms.json</code> shape (room names, shapes, device positions) used to label rooms and place devices —
+        a pipeline from 2026-07-29 or later embeds it directly in the <code>.glb</code>, so picking just
+        that one file is enough.
         {canUploadCentrally && (
-          <> A pipeline from 2026-07-29 or later embeds this directly in the GLB, so uploading just
-          the <code>.glb</code> alone is usually enough now — a separate <code>.rooms.json</code> is
-          only needed for an older export. Select both files together in "Upload GLB (+ room data)"
-          (ctrl/cmd-click both in the file picker) if you do have one, or use the buttons separately,
-          e.g. to update just the room data without re-uploading the model.</>
+          <> A GLB with nothing embedded (an older export, or hand-built) clears any room data left over
+          from a previous upload rather than keep showing it against a model it may no longer match —
+          pick the matching <code>.rooms.json</code> alongside it (ctrl/cmd-click both) if you have one, or
+          on its own afterwards to add it back.</>
         )}{" "}
         Import/Export Configuration is a per-device backup of your device↔room bindings, room
         viewpoints, device icons and Settings preferences.
@@ -306,7 +294,20 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
   // Adopt a room-data sidecar (<model>.rooms.json emitted by the Blender
   // pipeline) into this running client immediately after a central upload.
   const applyRoomData = (text: string) => {
-    const { rooms, entities } = parseRoomData(text);
+    // parseRoomData deliberately REJECTS a document with zero rooms (throws
+    // "No named rooms found…") — the right call for the manual upload
+    // button, where an empty result usually means the wrong file got picked.
+    // But uploadGlbAndRooms ALSO uploads a genuinely, deliberately empty
+    // {rooms:[]} document on purpose (a GLB with no room data of its own,
+    // see its docstring) — that's not a mistake to reject, it's the reset
+    // itself, so recognise that specific shape before handing off to the
+    // stricter validator.
+    let raw: unknown;
+    try { raw = JSON.parse(text); } catch { raw = null; }
+    const isDeliberateEmpty = !!raw && typeof raw === "object"
+      && Array.isArray((raw as { rooms?: unknown }).rooms)
+      && (raw as { rooms: unknown[] }).rooms.length === 0;
+    const { rooms, entities } = isDeliberateEmpty ? { rooms: [], entities: [] } : parseRoomData(text);
     update({
       sh3dRooms: rooms,
       sh3dEntities: entities,
@@ -323,7 +324,6 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
   // Central upload: push a GLB or the room-data sidecar straight into the
   // add-on's /data store via the supervisor-proxy, no SSH/Samba needed.
   const glbUploadRef = useRef<HTMLInputElement>(null);
-  const roomsUploadRef = useRef<HTMLInputElement>(null);
   const [uploadBusy, setUploadBusy] = useState<null | "glb" | "rooms">(null);
   const [uploadMsg, setUploadMsg] = useState<{ text: string; ok: boolean } | null>(null);
   /** 0-100 while a chunked upload is in flight, null otherwise. */
@@ -363,29 +363,42 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
     }
   };
 
-  /** The GLB picker accepts BOTH the .glb and its .rooms.json selected
-   *  together in one dialog (see ModelActionsRow's onGlbFiles) — uploads
-   *  whichever of the two is present, GLB first, sequentially (uploadBusy/
-   *  uploadPct are single-flight state, so these can't run concurrently),
-   *  and reloads only once at the end.
+  /** The ONE upload entry point (see ModelActionsRow's onGlbFiles): a lone
+   *  .glb, a .glb + its .rooms.json picked together, or a lone .rooms.json
+   *  on its own. GLB uploads first when both are present, sequentially
+   *  (uploadBusy/uploadPct are single-flight state), reloading only once at
+   *  the end.
    *
-   *  A LONE .glb (no rooms file picked) is no longer necessarily missing its
-   *  room data at all: a pipeline ≥2.14.0 embeds it directly in the GLB
-   *  (glTF extras on a carrier node — see blender_pipeline.py's
-   *  _embed_room_data). Before deciding there's nothing to sync, read the
-   *  raw GLB bytes for that embedded copy (glbRoomDataExtractor — no
-   *  Babylon/WebGL needed, just the binary) and, if present and valid,
-   *  upload it through the EXACT SAME "rooms" path a manually-picked
-   *  .rooms.json would take — same validation (parseRoomData), same
-   *  central-store write, same central-sync-on-every-load the app already
-   *  does. A GLB from an older pipeline, or one with no/garbled embedded
-   *  data, behaves exactly as before: falls back to needing a manual
-   *  .rooms.json upload, no error shown for the missing embed itself. */
+   *  A .glb with no rooms file picked alongside it is no longer necessarily
+   *  missing its room data at all: a pipeline ≥2.14.0 embeds it directly in
+   *  the GLB (glTF extras on a carrier node — see blender_pipeline.py's
+   *  _embed_room_data). Read the raw GLB bytes for that embedded copy
+   *  (glbRoomDataExtractor — no Babylon/WebGL needed, just the binary) and,
+   *  if present and valid, upload it through the EXACT SAME "rooms" path a
+   *  manually-picked .rooms.json would take.
+   *
+   *  If NEITHER an embedded copy nor a picked file is available, upload an
+   *  EMPTY room-data document instead of just leaving whatever was there
+   *  from a PREVIOUS GLB untouched — otherwise a genuinely new floor plan
+   *  (an older pipeline export, or one where the embed failed) would keep
+   *  silently "matching" against stale room polygons/positions from a model
+   *  this one may no longer resemble at all, with nothing to say so. Routed
+   *  through the SAME uploadCentral("rooms") -> applyRoomData path a real
+   *  file takes (applyRoomData recognises the deliberately-empty shape and
+   *  applies it directly rather than rejecting it as "no rooms found"), so
+   *  it gets the exact same wholesale-replace treatment as any other rooms
+   *  upload: sh3dRooms/sh3dEntities clear AND teleportPoints reset (a new,
+   *  now-empty plan is still a plan change) — the central store, and every
+   *  kiosk's next load, ends up on a clean slate instead of accumulating
+   *  redundant/mismatched room definitions across repeated GLB imports. An
+   *  unchanged floor plan re-exported without the room data attached now
+   *  needs that .rooms.json re-picked alongside it too — a deliberate
+   *  trade favouring a consistent room definition over that convenience. */
   const uploadGlbAndRooms = async (files: File[]) => {
     const glb = files.find((f) => f.name.toLowerCase().endsWith(".glb"));
     let rooms = files.find((f) => f.name.toLowerCase().endsWith(".json"));
     if (!glb && !rooms) {
-      setUploadMsg({ text: "Please choose a .glb file (and optionally its .rooms.json).", ok: false });
+      setUploadMsg({ text: "Please choose a .glb and/or a .rooms.json file.", ok: false });
       return;
     }
     if (glb && !rooms) {
@@ -396,8 +409,15 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
           rooms = new File([embeddedJson], `${glb.name.replace(/\.glb$/i, "")}.rooms.json`, { type: "application/json" });
         }
       } catch {
-        // No embedded data, or it didn't parse — fall through with rooms
-        // still undefined, same as a GLB that never had any.
+        // No embedded data, or it didn't parse — fall through to the empty
+        // reset below, same as a GLB that never had any.
+      }
+      if (!rooms) {
+        rooms = new File(
+          [JSON.stringify({ schema: 1, rooms: [], entities: [] })],
+          `${glb.name.replace(/\.glb$/i, "")}.rooms.json`,
+          { type: "application/json" },
+        );
       }
     }
     if (glb) await uploadCentral(glb, "glb", { reload: !rooms });
@@ -436,8 +456,8 @@ function ModelSource({ onModelChanged }: { onModelChanged: () => void }) {
           )}
           <ModelActionsRow
             canUploadCentrally uploadBusy={uploadBusy} uploadPct={uploadPct} uploadMsg={uploadMsg} backupMsg={backupMsg}
-            glbUploadRef={glbUploadRef} roomsUploadRef={roomsUploadRef} configFileRef={configFileRef}
-            onGlbFiles={(files) => void uploadGlbAndRooms(files)} onRoomsFile={(f) => uploadCentral(f, "rooms")}
+            glbUploadRef={glbUploadRef} configFileRef={configFileRef}
+            onGlbFiles={(files) => void uploadGlbAndRooms(files)}
             onConfigFile={importConfig} onExport={exportConfig}
           />
         </>

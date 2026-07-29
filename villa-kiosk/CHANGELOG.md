@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.93
+
+### Changes
+- Follow-up to 2.35.92's embedded room data: cleaned up the Advanced Settings upload UI now that a lone `.glb` usually carries its own room data, and closed a real staleness gap. UI: the separate "Upload GLB (+ room data)" and "Upload room data" buttons are now ONE "Upload GLB / room data" button/input (multi-select, `.glb`/`.json` in any combination) — a rooms-only pick still works exactly like the old dedicated button did (update room data without re-uploading the model), it just doesn't need its own button anymore. Correctness fix: previously, uploading a lone `.glb` with no embedded room data (an older pipeline export, or one where the embed failed) left whatever `sh3dRooms`/`sh3dEntities` were already stored completely untouched — meaning a genuinely new floor plan could silently keep "matching" against a PREVIOUS model's room polygons/device positions forever, with no warning. `uploadGlbAndRooms` now uploads a deliberately empty `{rooms:[],entities:[]}` document through the exact same rooms-upload path in that case, so the central store — and every kiosk's next load — resets to a clean slate instead of accumulating redundant/mismatched room definitions across repeated GLB imports (an unchanged floor plan re-exported without its room data attached now needs that `.rooms.json` re-picked alongside it too — a deliberate trade favouring consistency). `applyRoomData` had to learn to tell "deliberately empty" apart from "wrong/garbage file" (`sh3dParser.parseRoomData` rejects zero rooms on purpose, to protect the manual-upload path from a mis-click) before this could apply cleanly instead of surfacing as a confusing upload failure. Typecheck and production build clean.
+
+---
+
+
 ## 2.35.92
 
 ### Changes

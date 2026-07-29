@@ -299,15 +299,18 @@ Done!  14 mesh(es) in the GLB:
 
 ### Step B-3 — Upload to the kiosk
 
-**Add-on**: Advanced Settings → *3D model source* → **Upload GLB (+ room
-data)**. Since pipeline 2.14.0 the room/entity plan data (names, shapes,
-device positions) is embedded directly in the `.glb` itself — select just
-that one file and the kiosk reads it automatically, no second upload. The
-script still also writes a `.rooms.json` sidecar next to the GLB as a
-fallback (needed for an older/hand-built GLB, or if you ever want to update
-just the room data without re-uploading the model) — select both files
-together in the same picker (ctrl/cmd-click) to send them in one go. Every
-kiosk then loads that same central file automatically, no per-device upload.
+**Add-on**: Advanced Settings → *3D model source* → **Upload GLB / room
+data** (one button now handles both). Since pipeline 2.14.0 the room/entity
+plan data (names, shapes, device positions) is embedded directly in the
+`.glb` itself — select just that one file and the kiosk reads it
+automatically, no second upload. If it isn't found (an older or hand-built
+GLB), the kiosk clears out any room data left over from a *previous* upload
+rather than keep showing it against a model it may no longer match — pick the
+matching `.rooms.json` the script also writes next to the GLB alongside it
+(ctrl/cmd-click both in the same picker) to send them in one go, or upload
+that file on its own afterwards to update just the room data without
+re-uploading the model. Every kiosk then loads that same central file
+automatically, no per-device upload.
 **Standalone**: if a central model isn't already detected automatically (see
 the add-on note above), Advanced Settings → *3D model source* has a
 per-browser uploader instead.
