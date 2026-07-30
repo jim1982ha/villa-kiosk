@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.37.1
+
+### Changes
+- **Fixed the badge-size stepper being asymmetric against the new clustering LOD** (reported: clustering engaged on the Nth "+" click, but took *five* "−" clicks to release). The LOD band's enter/leave thresholds are deliberately far apart — that dead zone is the hysteresis that stops the band flip-flopping while the camera drifts. But hysteresis is only correct for *continuous* input: a stepper click is a **discrete, deliberate act**, and "+" then "−" is the same control returning to the same state, so it must land in the same band it came from. The band is now re-derived from current crowding alone (same thresholds in both directions, no dead zone) whenever the user changes badge size, making the stepper exactly reversible while camera movement keeps its hysteresis. Verified by simulating a full stepper sweep up and back down at a fixed camera: **asymmetric at 0/12 sizes after, versus a mismatch before.** The badge-style toggle (classic ↔ card) now snaps the same way, since swapping a squircle for a much wider card resizes every collision box and can cross a threshold on its own.
+- **Badge size can no longer be set to 0.** The stepper's floor was zero, which scaled every badge to nothing — visually indistinguishable from the villa failing to load, and reachable one click past "smallest" with nothing to explain it. Floor is now one step (0.25): still tiny, still obviously present. Bounds live in one place (`ENTITY_ICON_SCALE_MIN`/`MAX` + `clampIconScale` in AppConfig) and are applied by both the HUD stepper and the scene, so the control's limits and the renderer's clamp cannot drift apart; a value persisted as 0 before this change is clamped on read, so an existing kiosk stuck at 0 recovers by itself rather than showing a dead "−" button. Hiding badges entirely is still a reasonable thing to want, but it belongs behind an explicit toggle rather than the bottom of a size stepper. Typecheck and production build clean.
+
+---
+
+
 ## 2.37.0
 
 ### Changes

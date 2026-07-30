@@ -54,6 +54,7 @@ import {
   AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel, Image,
 } from "@babylonjs/gui";
 import type { AppConfig } from "@/config/AppConfig";
+import { clampIconScale } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
@@ -608,6 +609,20 @@ export class EntityVisuals {
   /** Which badges won their spot last frame — the stickiness input that keeps
    *  a borderline collision from flickering (see greedyPlace). */
   private placedLast = new Set<string>();
+  /**
+   * Re-derive the LOD band from current crowding alone on the next pass,
+   * ignoring the hysteresis dead zone.
+   *
+   * The dead zone exists to absorb CONTINUOUS input (a drifting camera), for
+   * which "don't switch back until things have clearly changed" is right. A
+   * DISCRETE user action is the opposite case: stepping badge size + then −
+   * is the same control returning to the same state, so it must land in the
+   * same band it came from. Without this the two thresholds made the stepper
+   * badly asymmetric — clusters engaged on the Nth "+" click but survived
+   * five "−" clicks before letting go, which reads as the control being
+   * broken (reported from the field, exactly that ratio).
+   */
+  private bandSnapPending = false;
   /** Active storey from FloorManager (1-based). Floors below it stay rendered
    *  (cumulative visibility), so enabled-state alone can't cull their badges —
    *  cullLabels compares each label's stamped floorIndex against this. */
@@ -714,14 +729,25 @@ export class EntityVisuals {
     // Entity-light wall occlusion is always-on: walls block lamp light out of
     // the box, so there is nothing to tear down here when config changes.
     // Apply the user's size multiplier.
-    if (typeof config.entityIconScale === "number" && config.entityIconScale !== this.iconUserScale) {
-      this.iconUserScale = config.entityIconScale;
+    const wantScale = clampIconScale(config.entityIconScale);
+    if (wantScale !== this.iconUserScale) {
+      this.iconUserScale = wantScale;
+      // Changing the size stepper is a DELIBERATE, discrete act — not the
+      // continuous drift the LOD hysteresis exists to absorb — so the band
+      // must be re-derived from scratch rather than kept sticky. See
+      // bandSnapPending.
+      this.bandSnapPending = true;
       this.applyIconScale();
     }
     // Labels are always shown; rebuild when a device group is created/edited
     // (a member's badge must appear/disappear without needing a full
     // re-index — see rebuildLabels' hiddenMembers).
     if (config.deviceGroups !== prevGroups || config.badgeStyle !== prevBadgeStyle) {
+      // A style switch resizes every collision box (a card is far wider than a
+      // squircle), so it can cross a band threshold on its own. Discrete user
+      // action ⇒ re-derive the band cleanly rather than inheriting a sticky
+      // one — same reasoning as the size stepper above.
+      if (config.badgeStyle !== prevBadgeStyle) this.bandSnapPending = true;
       this.rebuildLabels();
     }
     if (typeof config.render?.lightPoolIntensity === "number") {
@@ -2318,6 +2344,16 @@ export class EntityVisuals {
    *  while the camera drifts around a boundary. */
   private updateDetailBand(crowd: number): void {
     const prev = this.detail;
+    if (this.bandSnapPending) {
+      // Pure function of crowding — the SAME thresholds in both directions,
+      // so a discrete change and its inverse are exact opposites.
+      this.bandSnapPending = false;
+      this.detail = crowd > CROWD_CLUSTERS_ON ? "clusters"
+        : crowd > CROWD_PRIORITY_ON ? "priority"
+        : "all";
+      if (prev !== this.detail) this.requestRender();
+      return;
+    }
     if (this.detail === "clusters") {
       if (crowd < CROWD_CLUSTERS_OFF) {
         this.detail = crowd < CROWD_PRIORITY_OFF ? "all" : "priority";

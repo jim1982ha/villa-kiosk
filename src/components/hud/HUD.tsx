@@ -30,6 +30,7 @@ import { isCategoryAllowed, hasCapability } from "@/auth/permissions";
 import { ROLE_LABELS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
+import { ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX, clampIconScale } from "@/config/AppConfig";
 import { unavailableDeviceIds } from "@/config/deviceGroups";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
@@ -43,10 +44,11 @@ import { scheduleBoard } from "@/fm/fmEngine";
 type IconType = ComponentType<{ size?: number | string }>;
 
 // Label-size stepper (next to the category filter): each click moves
-// entityIconScale by this much, clamped to [0, LABEL_SCALE_MAX]. 0 = badges
-// hidden entirely (scale-to-zero, see EntityVisuals.applyIconScale).
+// entityIconScale by this much, clamped to the shared
+// [ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX] bounds. The floor is NOT
+// zero any more — see ENTITY_ICON_SCALE_MIN for why scale-to-zero was
+// removed.
 const LABEL_SCALE_STEP = 0.25;
-const LABEL_SCALE_MAX = 3;
 
 // Icons for the category-filter column — each toggles that category's state
 // tags on/off on the map. Chosen to read distinctly at a glance since there
@@ -330,9 +332,11 @@ export default function HUD({
         : [...config.hiddenCategories, cat],
     });
 
-  const labelScale = config.entityIconScale ?? 1;
+  // Clamped on READ too, so a value persisted before the floor existed (a
+  // stored 0) shows the stepper in a valid state instead of a stuck "-".
+  const labelScale = clampIconScale(config.entityIconScale);
   const stepLabelScale = (delta: number) => {
-    const next = Math.min(LABEL_SCALE_MAX, Math.max(0, Math.round((labelScale + delta) * 4) / 4));
+    const next = clampIconScale(Math.round((labelScale + delta) * 4) / 4);
     update({ entityIconScale: next });
   };
 
@@ -426,7 +430,7 @@ export default function HUD({
             <button
               className="icon-btn hud-labelsize-btn"
               onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
-              disabled={labelScale <= 0}
+              disabled={labelScale <= ENTITY_ICON_SCALE_MIN}
               title="Decrease label size"
               aria-label="Decrease label size"
             >
@@ -435,7 +439,7 @@ export default function HUD({
             <button
               className="icon-btn hud-labelsize-btn"
               onClick={() => stepLabelScale(LABEL_SCALE_STEP)}
-              disabled={labelScale >= LABEL_SCALE_MAX}
+              disabled={labelScale >= ENTITY_ICON_SCALE_MAX}
               title="Increase label size"
               aria-label="Increase label size"
             >
@@ -515,7 +519,7 @@ export default function HUD({
                       <button
                         className="icon-btn"
                         onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
-                        disabled={labelScale <= 0}
+                        disabled={labelScale <= ENTITY_ICON_SCALE_MIN}
                         title="Decrease label size"
                         aria-label="Decrease label size"
                       >
@@ -524,7 +528,7 @@ export default function HUD({
                       <button
                         className="icon-btn"
                         onClick={() => stepLabelScale(LABEL_SCALE_STEP)}
-                        disabled={labelScale >= LABEL_SCALE_MAX}
+                        disabled={labelScale >= ENTITY_ICON_SCALE_MAX}
                         title="Increase label size"
                         aria-label="Increase label size"
                       >

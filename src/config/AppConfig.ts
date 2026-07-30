@@ -9,6 +9,25 @@ import type { KioskScene } from "./scenes";
 
 const CONFIG_KEY = "villa-kiosk:config:v2";
 
+/**
+ * Bounds for entityIconScale, shared by the HUD stepper and the scene so the
+ * control's limits and the renderer's clamp can never disagree.
+ *
+ * The minimum is deliberately NOT zero. It used to be, and a scale of 0 made
+ * every badge vanish — indistinguishable from the villa failing to load, and
+ * reachable in one click too many from the "smallest" setting with no label
+ * explaining what had happened. Hiding badges is a legitimate thing to want,
+ * but it belongs behind an explicit toggle, not the bottom of a size stepper.
+ * One step (0.25) is the floor: still tiny, still obviously present.
+ */
+export const ENTITY_ICON_SCALE_MIN = 0.25;
+export const ENTITY_ICON_SCALE_MAX = 3;
+/** Clamp a possibly-legacy/persisted value (a stored 0 predates the floor). */
+export function clampIconScale(v: number | undefined): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) return 1;
+  return Math.min(ENTITY_ICON_SCALE_MAX, Math.max(ENTITY_ICON_SCALE_MIN, v));
+}
+
 /** Model transform matching the coordinates baked into TeleportPoints.ts. */
 export const DEFAULT_MODEL_TRANSFORM: ModelTransform = {
   scale: 0.01,
@@ -214,7 +233,9 @@ export interface AppConfig {
    */
   cameraBeamPitchDeg?: number;
   /** Global size multiplier for the in-scene state-icon badges (1 = default).
-   *  In the bird's-eye view this is further scaled by the zoom level. */
+   *  In the bird's-eye view this is further scaled by the zoom level.
+   *  Clamped to [ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX] by every
+   *  consumer — see those constants. */
   entityIconScale: number;
   /** Floating-badge visual style:
    *  - "classic" (default): a category-coloured icon squircle with a small
