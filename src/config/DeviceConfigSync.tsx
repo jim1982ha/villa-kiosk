@@ -9,7 +9,7 @@
 // there is no new state to expose — this only reconciles it. (Contrast
 // ScenesProvider, which is a real provider because it exposes scenes/setScenes.)
 //
-// The server is authoritative, with two ordering rules that make it safe:
+// The server is authoritative, with three ordering rules that make it safe:
 //
 //   1. PULL BEFORE PUSH. A push is only ever emitted after the first pull has
 //      completed (`hydrated`). This is what stops the dangerous race: the app
@@ -23,6 +23,11 @@
 //      pushing — an endless round-trip. Every push and every pull records what
 //      the server is known to hold; we only send when the local slice actually
 //      differs from that.
+//
+//   3. A PULL NEVER CLOBBERS AN UNPUSHED LOCAL EDIT. Pushes are debounced but
+//      pulls fire on every focus/visibilitychange, so a pull could land in the
+//      middle of the debounce window and write the server's older copy back
+//      over what the user just changed. See the check in pull().
 //
 // Writes are owner-only (the server 403s anything else, and we skip the
 // request entirely for other roles) — shared state is exactly what a guest
@@ -86,6 +91,34 @@ export default function DeviceConfigSync() {
     // existed, must not blank that field). The baseline is that MERGED result,
     // which is what the local slice will equal once `update` commits — so the
     // push effect sees no change and the pull can't bounce straight back.
+    // RULE 3: A PULL MUST NEVER CLOBBER AN UNPUSHED LOCAL EDIT.
+    //
+    // Checked FIRST, and against the baseline as it stood BEFORE this pull —
+    // if the local slice has drifted from what the server was last known to
+    // hold, this client is mid-edit and its own push is still in the debounce
+    // window. Pushes wait PUSH_DEBOUNCE_MS but pull() runs on every focus and
+    // visibilitychange, and on several platforms interacting with a native
+    // <select> blurs then refocuses the window — so picking a room in
+    // Advanced Settings fired a pull while that very edit was still pending,
+    // fetched the server's older copy, and wrote it back over the change.
+    // Reported from the field as "I set the room, and seconds later it
+    // reverts". The merge below can't save us either: it is per-KEY over the
+    // shared slice and entityMap is ONE key, so the server's whole entityMap
+    // replaces the local one wholesale, pending edit and all.
+    //
+    // Compared after the await, since the edit may have landed while the
+    // request was in flight — precisely the window at risk. serverJsonRef is
+    // deliberately left alone so the push gate still sees a difference and
+    // sends this client's edit; the next pull then reconciles normally.
+    // Losing a beat of remote changes is fine, losing the user's edit is not.
+    const priorBaseline = serverJsonRef.current;
+    if (priorBaseline !== null && JSON.stringify(localRef.current) !== priorBaseline) return;
+
+    // Server wins for every field it actually carries; fields it omits keep
+    // their current local value (an older store, or one written before a field
+    // existed, must not blank that field). The baseline is that MERGED result,
+    // which is what the local slice will equal once `update` commits — so the
+    // push effect sees no change and the pull can't bounce straight back.
     const merged = { ...localRef.current, ...server };
     const mergedJson = JSON.stringify(merged);
     serverJsonRef.current = mergedJson;
@@ -104,6 +137,7 @@ export default function DeviceConfigSync() {
     // and the multi-second freeze the rebuild itself costs — on literally
     // every focus regain, whether or not anything had actually changed.
     if (mergedJson === JSON.stringify(localRef.current)) return;
+
     update(server);
   }, [update, role]);
 

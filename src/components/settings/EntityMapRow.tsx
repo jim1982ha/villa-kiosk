@@ -40,6 +40,11 @@ interface Props {
    *  passed down already-extracted so this row's props only actually change
    *  when ITS entity changes, not the whole house's. */
   entity: HassEntity | undefined;
+  /** Home Assistant has no such entity (renamed/removed there) — the row is
+   *  dead config. Flagged rather than auto-deleted: the entry may still carry
+   *  a label/room the user wants to re-point at the renamed entity via
+   *  "Change entity ID". See ConfigEditor's stale-cleanup banner. */
+  stale?: boolean;
   expanded: boolean;
   editing: boolean;
   /** Only meaningful when `editing` — the parent always passes undefined for
@@ -61,7 +66,7 @@ interface Props {
 }
 
 function EntityMapRow({
-  entryKey, mapping, entity, expanded, editing, remapNewId, roomNames, matchedRowRef,
+  entryKey, mapping, entity, stale, expanded, editing, remapNewId, roomNames, matchedRowRef,
   onToggleExpanded, onStartRemap, onRemapChange, onRemapApply, onRemapCancel, onRemove, onPatch,
 }: Props) {
   // Draft state is now scoped to THIS ROW's own component instance (one hook
@@ -79,7 +84,12 @@ function EntityMapRow({
   const m = field.drafts.v ? { ...mapping, ...field.drafts.v } : mapping;
 
   return (
-    <tr ref={matchedRowRef} style={m.disabled ? { opacity: 0.5 } : undefined}>
+    <tr
+      ref={matchedRowRef}
+      className={stale ? "config-row-stale" : undefined}
+      style={m.disabled ? { opacity: 0.5 } : undefined}
+      title={stale ? `${m.entityId} no longer exists in Home Assistant` : undefined}
+    >
       <td data-label="" className="device-card-header">
         <input
           type="checkbox"

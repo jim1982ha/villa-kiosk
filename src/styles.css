@@ -2135,3 +2135,16 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 .fm-report-table th { color: var(--text-secondary); font-weight: 600; }
 .fm-report-table td:first-child, .fm-report-table th:first-child { padding-left: 0; }
+
+/* Config Editor: a row whose entity Home Assistant no longer knows about, and
+   the banner offering to clear them out in one go. Flagged rather than
+   auto-removed — the row may still hold a label/room worth re-pointing at the
+   renamed entity via "Change entity ID". */
+.config-row-stale > td { background: color-mix(in srgb, var(--status-danger) 8%, transparent); }
+.config-stale-notice {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  margin-bottom: 12px; padding: 12px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--status-danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-danger) 35%, transparent);
+}
+.config-stale-notice .btn { flex: 0 0 auto; }

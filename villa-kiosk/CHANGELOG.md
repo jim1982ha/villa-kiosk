@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.38.1
+
+### Changes
+- **Fixed room (and other Advanced Settings) edits silently reverting a few seconds after being made.** A genuine data-loss race in `DeviceConfigSync`: pushes to the add-on's shared store are debounced 900ms, but `pull()` runs on *every* window focus and visibilitychange — and on several platforms interacting with a native `<select>` blurs then refocuses the window. So choosing a room fired a pull while that very edit was still sitting in the debounce window; the pull fetched the server's older copy and wrote it straight back over the change. The existing merge couldn't help, because it is per-KEY over the shared slice and `entityMap` is a single key, so the server's whole entityMap replaced the local one wholesale, pending edit and all. A third ordering rule now applies: **a pull never clobbers an unpushed local edit** — if the local slice has drifted from what the server was last known to hold, this client is mid-edit and the pull is skipped, leaving its own push to carry the change up. Verified by simulating the exact scenario: the old ordering reverts "Kitchen" back to "Unmapped", the new one keeps it, and a genuine remote change still applies once the two are back in sync.
+- **Advanced Settings now flags entities Home Assistant no longer has**, with a one-click "Remove N" cleanup. This answers a report of rows for entities that had been renamed in HA and weren't in the GLB either: `entityMap` only ever *grew* — auto-detection adds a row for any mesh named like an entity ID, and nothing ever removed one — so a renamed or deleted entity left its row behind permanently, stored centrally by the add-on. Stale rows are tinted and flagged rather than auto-deleted, since the entry may still hold a label/room worth re-pointing at the renamed entity via "Change entity ID". The check is guarded on a live, populated HA snapshot, so a reconnecting client can never be told its entire configuration is stale.
+- The camera feed's **Previous** arrow no longer opens the camera picker on hold — having the same picker on both arrows was redundant. It stays on **Next**. Previous now steps directly, so it also can't be swallowed by the shared long-press flag that exists only to suppress the click at the end of a hold. Typecheck and production build clean.
+
+---
+
+
 ## 2.38.0
 
 ### Changes

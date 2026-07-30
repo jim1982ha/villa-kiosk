@@ -27,7 +27,7 @@ import type { EntityMapping } from "@/types/scene.types";
 
 export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
   const { config, update } = useConfig();
-  const { entities } = useHA();
+  const { entities, connected } = useHA();
   const [newId, setNewId] = useState<string | undefined>(undefined);
   // Seed the filter when opened from a device panel's edit shortcut, so that
   // entity's row is shown immediately.
@@ -71,6 +71,29 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     () => Object.entries(config.entityMap).filter(([key]) => !boundEntityIds.has(key)),
     [config.entityMap, boundEntityIds],
   );
+  // Entries Home Assistant has never heard of. This map only ever GREW —
+  // auto-detection adds a row for any mesh named like an entity ID and nothing
+  // has ever removed one — so renaming or deleting an entity in HA leaves its
+  // old row here for good, long after both the entity and its mesh are gone.
+  // Reported from the field as rows for entities that "don't exist anymore in
+  // HA and aren't in the GLB either".
+  //
+  // Guarded on a live, populated snapshot: while HA is reconnecting `entities`
+  // is empty, and offering to delete the ENTIRE map at that moment would be a
+  // catastrophic false positive.
+  const haReady = connected && Object.keys(entities).length > 0;
+  const staleIds = useMemo(() => {
+    if (!haReady) return [] as string[];
+    return allEntries.map(([id]) => id).filter((id) => !entities[id]);
+  }, [haReady, allEntries, entities]);
+  const staleSet = useMemo(() => new Set(staleIds), [staleIds]);
+
+  const removeStale = useCallback(() => {
+    const next = { ...configRef.current.entityMap };
+    for (const id of staleIds) delete next[id];
+    update({ entityMap: next });
+  }, [staleIds, update]);
+
   // Live filter by entity id, label or room — the auto-detected list is long.
   const entries = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -166,6 +189,22 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
         3D model itself, not per browser.
       </p>
 
+      {staleIds.length > 0 && (
+        <div className="config-stale-notice">
+          <div>
+            <strong>{staleIds.length} entit{staleIds.length === 1 ? "y" : "ies"} no longer in Home Assistant.</strong>
+            <div className="muted body-text" style={{ marginTop: 2 }}>
+              These rows were auto-detected from an earlier model or before the
+              entity was renamed/removed in HA. They do nothing except clutter
+              this list — the devices are gone.
+            </div>
+          </div>
+          <button className="btn ghost" onClick={removeStale}>
+            Remove {staleIds.length}
+          </button>
+        </div>
+      )}
+
       {allEntries.length > 0 && (
         <div className="config-search">
           <Search size={16} />
@@ -211,6 +250,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                 entryKey={key}
                 mapping={m0}
                 entity={entities[key]}
+                stale={staleSet.has(key)}
                 expanded={expandedKeys.has(key)}
                 editing={remapKey === key}
                 remapNewId={remapKey === key ? remapNewId : undefined}

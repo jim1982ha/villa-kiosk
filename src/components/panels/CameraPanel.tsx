@@ -596,16 +596,17 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           )}
           {canCycle && (
             <>
+              {/* Plain step-back button: no hold-to-pick. Offering the same
+                  camera picker on BOTH arrows was redundant — one entry point
+                  is enough, and it stays on Next (below). Calls stepCamera
+                  directly rather than onCycleBtnClick, so it can't be
+                  swallowed by the shared long-press flag that exists only to
+                  suppress the click at the end of a hold. */}
               <button
-                className="icon-btn cam-prev has-hold-action"
-                onPointerDown={onCycleBtnDown}
-                onPointerUp={onCycleBtnUp}
-                onPointerLeave={onCycleBtnUp}
-                onPointerCancel={onCycleBtnUp}
-                onContextMenu={(e) => e.preventDefault()}
-                onClick={() => onCycleBtnClick(-1)}
-                title="Previous camera — hold to pick a camera"
-                aria-label="Previous camera — hold to pick a camera"
+                className="icon-btn cam-prev"
+                onClick={() => stepCamera(-1)}
+                title="Previous camera"
+                aria-label="Previous camera"
               >
                 <ChevronLeft size={28} />
               </button>
@@ -640,7 +641,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
         </div>
       </div>
 
-      {/* Camera picker — opened by holding either prev/next arrow. A plain
+      {/* Camera picker — opened by holding the NEXT arrow. A plain
           list rather than a radial dial (the Rooms menu's style): this is a
           flat list of names, nothing spatial about it. */}
       {pickerOpen && (
