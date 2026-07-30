@@ -56,6 +56,9 @@ export interface SceneManagerOptions {
   onEntityPicked: (entityId: string, clientX: number, clientY: number) => void;
   /** Called when a mesh mapped to an entity is long-pressed (open full panel). */
   onEntityLongPressed: (entityId: string, clientX: number, clientY: number) => void;
+  /** A zoomed-out room-cluster chip was tapped — hand its members to the
+   *  existing SummaryGroupPanel rather than opening any single device. */
+  onClusterPicked?: (room: string, entityIds: string[]) => void;
   /** Called when the active floor changes (staircase or button). */
   onFloorChange: (floor: number) => void;
   /** Called when the camera enters a new named room. */
@@ -172,6 +175,14 @@ export class SceneManager {
     // see EntityVisuals.pickBadgeAt()'s docstring for why that was dropped.
     const handleTap = (x: number, y: number) => {
       tapDebug(`TAP client(${x.toFixed(0)},${y.toFixed(0)})`);
+      // Room-cluster chips first: they only exist in the zoomed-out clusters
+      // band, where every individual badge is hidden, so this can never take
+      // a tap away from a badge the user can actually see.
+      const cluster = this.visuals.pickClusterAt(x, y);
+      if (cluster && opts.onClusterPicked) {
+        opts.onClusterPicked(cluster.room, cluster.entityIds);
+        return;
+      }
       const badgeEntity = this.visuals.pickBadgeAt(x, y);
       if (badgeEntity) { opts.onEntityPicked(badgeEntity, x, y); return; }
       this.pick.pickAtScreen(x, y);

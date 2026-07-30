@@ -377,6 +377,75 @@ const CARD_TEXT = "#f8fafc";
 // "currently has one" for collision-box sizing).
 const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climate", "sensor"]);
 
+/**
+ * Badge level-of-detail bands, and the crowding thresholds that switch
+ * between them. See cullLabels/greedyPlace for the mechanism; the short
+ * version of WHY this exists:
+ *
+ * declutterLabels' force-relaxation is only stable while a non-overlapping
+ * layout actually EXISTS. Zoomed out far enough, the badges' combined area
+ * exceeds the villa's screen footprint, so the constraint system is
+ * unsatisfiable: the solver never converges, exits mid-relaxation after its
+ * iteration cap, and — because "which axis has least penetration" and "which
+ * way do I push" are knife-edge branches whose flips cascade through the
+ * whole cluster — lands in a completely different equilibrium on every
+ * frame. On a moving camera that reads as ~100 badges "dancing" (reported
+ * from the field with a screen recording). No amount of extra iterations,
+ * damping or easing can fix an unsolvable system; the only real cure is to
+ * put FEWER badges on screen, which is exactly what map engines do.
+ *
+ * Bands, in order of increasing crowding:
+ *   all       — every badge, nudged apart by the existing relaxation. Safe
+ *               here precisely because the system IS satisfiable.
+ *   priority  — badges stay pinned at their true anchors (never nudged, so
+ *               they cannot jitter); where two collide, the more important
+ *               one keeps the spot and the other is dropped. Mapbox's
+ *               default symbol behaviour.
+ *   clusters  — individual badges give way to one chip per room, anchored at
+ *               its members' world-space centroid. A fixed world point
+ *               cannot dance, so this band is stable by construction.
+ *
+ * Thresholds are on MEASURED crowding (the fraction of badges whose box is
+ * blocked by a higher-priority one), not a magic camera radius, so the bands
+ * adapt themselves to villa size, entity count, viewport and icon scale. The
+ * ON/OFF pairs are deliberately far apart: that gap IS the hysteresis that
+ * stops the band flip-flopping while the camera hovers near a boundary.
+ * Crucially the metric is computed identically in EVERY band (it reads the
+ * projected anchors, never the current band's output), so there is no
+ * feedback loop between a band and the measurement that selects it.
+ */
+type LabelDetail = "all" | "priority" | "clusters";
+const CROWD_CLUSTERS_ON = 0.55;
+const CROWD_CLUSTERS_OFF = 0.38;
+const CROWD_PRIORITY_ON = 0.18;
+const CROWD_PRIORITY_OFF = 0.09;
+/** A badge that survived last frame is tested with a slightly smaller box, so
+ *  a borderline pair can't oscillate between placed and dropped. */
+const STICKY_SHRINK = 0.85;
+/** Room-cluster chip geometry. */
+const CLUSTER_HEIGHT_PX = 30;
+const CLUSTER_FONT_PX = 15;
+/** Clusters must stay legible at the far zoom where badges shrink hardest, so
+ *  their scale is floored well above the badge floor (getIconZoomCap: 0.22). */
+const CLUSTER_MIN_SCALE = 0.8;
+const NO_ROOM_LABEL = "Other";
+/** Slack around the viewport within which a badge still counts as on-screen,
+ *  so one hovering exactly at the edge doesn't toggle the crowding metric. */
+const OFFSCREEN_MARGIN_PX = 64;
+
+/** A badge that survived the per-entity culls, with its projected anchor. */
+interface ShownLabel {
+  id: string;
+  lbl: LabelControls;
+  x: number;
+  y: number;
+  /** Inside the viewport (+margin). Off-screen badges are excluded from
+   *  collision resolution and from the crowding metric — they can't overlap
+   *  anything the user can see, and counting them would peg the LOD band. */
+  onScreen: boolean;
+  off: { x: number; y: number };
+}
+
 // Status/enum SENSOR states (a text sensor like an AP's connectivity state).
 // NOMINAL = "all good, nothing to report" — its value is hidden (the badge is
 // already category-coloured, so "Connected" is just clutter). ALERT = a known
@@ -422,6 +491,17 @@ interface LabelControls {
   anchor: TransformNode;
   type: EntityType;
   category: Category;
+}
+
+/** One room's collapsed stand-in, shown only in the "clusters" band. Its
+ *  node sits at the world-space centroid of the room's badge anchors — a
+ *  fixed point, which is what makes the chip immune to the jitter that
+ *  motivated all of this. */
+interface ClusterControls {
+  container: Rectangle;
+  text: TextBlock;
+  node: TransformNode;
+  entityIds: string[];
 }
 
 /** A live state distilled to one of the visual kinds the badge outline colour-codes. */
@@ -520,6 +600,14 @@ export class EntityVisuals {
    *  the badge container is scaled by their product. */
   private iconUserScale = 1;
   private iconZoomScale = 1;
+  /** Current badge level-of-detail band (see LabelDetail). */
+  private detail: LabelDetail = "all";
+  /** Room-cluster chips, keyed by room name. Built lazily the first time the
+   *  clusters band engages; disposed with everything else in rebuildLabels. */
+  private clusters = new Map<string, ClusterControls>();
+  /** Which badges won their spot last frame — the stickiness input that keeps
+   *  a borderline collision from flickering (see greedyPlace). */
+  private placedLast = new Set<string>();
   /** Active storey from FloorManager (1-based). Floors below it stay rendered
    *  (cumulative visibility), so enabled-state alone can't cull their badges —
    *  cullLabels compares each label's stamped floorIndex against this. */
@@ -1787,6 +1875,13 @@ export class EntityVisuals {
       }
       this.labelLayer.rootContainer.clearControls();
     }
+    // The dispose loop above already freed the cluster chips (they're children
+    // of the same root) — drop the map's now-dangling references and the
+    // TransformNodes they anchored to, or ensureCluster would hand back a
+    // disposed control and the chips would silently stop rendering.
+    for (const c of this.clusters.values()) c.node.dispose();
+    this.clusters.clear();
+    this.placedLast.clear();
     this.labels.clear();
     this.labelLayer.rootContainer.isVisible = true;
 
@@ -2047,8 +2142,11 @@ export class EntityVisuals {
     const tm = this.scene.getTransformMatrix();
     const hidden = this.config.hiddenCategories;
 
+    const vpW = eng.getRenderWidth();
+    const vpH = eng.getRenderHeight();
+
     // Visible badges + their projected anchor position, for the declutter pass.
-    const shown: { id: string; lbl: LabelControls; x: number; y: number; off: { x: number; y: number } }[] = [];
+    const shown: ShownLabel[] = [];
 
     for (const [id, lbl] of this.labels) {
       if (hidden.includes(lbl.category)) {
@@ -2090,10 +2188,149 @@ export class EntityVisuals {
       const p = Vector3.Project(lbl.anchor.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
       const visible = p.z >= 0 && p.z <= 1;
       lbl.container.isVisible = visible;
-      if (visible) shown.push({ id, lbl, x: p.x, y: p.y, off: { x: 0, y: 0 } });
+      if (visible) {
+        // Whether it lands inside the actual viewport (plus a margin) — NOT
+        // the same question as `visible`, which only rejects anchors behind
+        // the camera. Zooming in pushes most of the villa off-screen; if
+        // those off-screen badges still counted, measured crowding would
+        // never fall and the LOD band could never relax back to "all".
+        const onScreen =
+          p.x >= -OFFSCREEN_MARGIN_PX && p.x <= vpW + OFFSCREEN_MARGIN_PX &&
+          p.y >= -OFFSCREEN_MARGIN_PX && p.y <= vpH + OFFSCREEN_MARGIN_PX;
+        shown.push({ id, lbl, x: p.x, y: p.y, onScreen, off: { x: 0, y: 0 } });
+      }
     }
 
-    this.declutterLabels(shown);
+    // ── Level of detail ──────────────────────────────────────────────────
+    // Rank + greedy-place ONCE. This both selects which badges survive a
+    // collision (used by the priority band) and yields the crowding metric
+    // that chooses the band — measured the same way in every band, from the
+    // projected anchors only, so selecting a band can never feed back into
+    // the measurement that selected it. See the LabelDetail block up top.
+    const boxes = this.labelBoxes(shown);
+    const { placed, crowding } = this.greedyPlace(shown, boxes);
+    this.placedLast = placed;
+    this.updateDetailBand(crowding);
+
+    if (this.detail === "clusters") {
+      for (const s of shown) s.lbl.container.isVisible = false;
+      this.updateClusters(shown);
+      return;
+    }
+    this.hideClusters();
+
+    if (this.detail === "priority") {
+      // Survivors sit at their EXACT anchor — no relaxation, no offsets, so
+      // there is nothing that can jitter. Dropped badges simply aren't drawn;
+      // they come back as the user zooms in and the crowding falls.
+      const baseY = this.labelBaseOffsetY();
+      for (const s of shown) {
+        const keep = placed.has(s.id);
+        s.lbl.container.isVisible = keep;
+        if (keep) {
+          s.lbl.container.linkOffsetXInPixels = 0;
+          s.lbl.container.linkOffsetYInPixels = baseY;
+        }
+      }
+      return;
+    }
+
+    this.declutterLabels(shown, boxes);
+  }
+
+  /** Pixel lift that centres a badge container above its anchor point. */
+  private labelBaseOffsetY(): number {
+    const card = this.config.badgeStyle === "card";
+    return -(card ? CARD_LABEL_HEIGHT_PX : LABEL_HEIGHT_PX) / 2;
+  }
+
+  /**
+   * Importance order for who keeps a contested spot: alerting/unavailable
+   * first, then anything ON, then the rest — the same "what needs me"
+   * ranking the HUD uses, and the direct equivalent of Mapbox's
+   * symbol-sort-key. Ties break on a hash of the entity_id rather than map
+   * insertion order: it must be a STABLE total order, because two badges
+   * swapping rank between frames would reintroduce exactly the flicker this
+   * whole mechanism exists to remove.
+   */
+  private labelRank(id: string, lbl: LabelControls): number {
+    const st = this.lastState.get(id);
+    const kind: BadgeKind = st ? this.badgeKind(lbl.type, st) : "info";
+    const base = kind === "alert" || kind === "unavailable" ? 0 : kind === "on" ? 1 : 2;
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+    return base * 65536 + ((h >>> 16) & 0xffff);
+  }
+
+  /**
+   * Greedy, collision-free placement in importance order: walk the badges
+   * best-first, keep each one at its true anchor if its box is still clear,
+   * otherwise drop it. Returns the survivors plus the crowding fraction
+   * (dropped / shown) that drives the LOD band.
+   *
+   * Deterministic and CONTINUOUS in a way the relaxation solver is not: a
+   * badge only changes state when it genuinely crosses a collision boundary,
+   * and nothing is ever pushed, so one badge's fate can't cascade into a
+   * neighbour's position. Cheaper too — one pass with an early break, versus
+   * the relaxation's 12 sweeps over every pair.
+   */
+  private greedyPlace(
+    shown: ShownLabel[],
+    boxes: { halfW: number; halfH: number; cy: number }[],
+  ): { placed: Set<string>; crowding: number } {
+    const placed = new Set<string>();
+    if (shown.length === 0) return { placed, crowding: 0 };
+
+    const order = shown.map((_, i) => i);
+    const rank = shown.map((s) => this.labelRank(s.id, s.lbl));
+    order.sort((a, b) => rank[a] - rank[b]);
+
+    const taken: { x: number; y: number; halfW: number; halfH: number }[] = [];
+    let blocked = 0;
+    let onScreenCount = 0;
+    for (const i of order) {
+      const s = shown[i], b = boxes[i];
+      // Off-screen badges take part in nothing: they can't visually collide,
+      // and letting them occupy slots or inflate the denominator would make
+      // the LOD band a function of the villa's total size rather than of what
+      // is actually crowding the user's view.
+      if (!s.onScreen) { placed.add(s.id); continue; }
+      onScreenCount++;
+      const cx = s.x, cy = s.y + b.cy;
+      // Stickiness: last frame's survivors are tested with a slightly smaller
+      // box, so a pair sitting exactly on the contact boundary settles instead
+      // of alternating each frame.
+      const k = this.placedLast.has(s.id) ? STICKY_SHRINK : 1;
+      const hw = b.halfW * k, hh = b.halfH * k;
+      let hit = false;
+      for (const t of taken) {
+        if (Math.abs(cx - t.x) < hw + t.halfW && Math.abs(cy - t.y) < hh + t.halfH) { hit = true; break; }
+      }
+      if (hit) { blocked++; continue; }
+      taken.push({ x: cx, y: cy, halfW: b.halfW, halfH: b.halfH });
+      placed.add(s.id);
+    }
+    return { placed, crowding: onScreenCount ? blocked / onScreenCount : 0 };
+  }
+
+  /** Move between LOD bands on measured crowding, with a wide dead zone
+   *  between each pair's enter/leave thresholds so the band cannot oscillate
+   *  while the camera drifts around a boundary. */
+  private updateDetailBand(crowd: number): void {
+    const prev = this.detail;
+    if (this.detail === "clusters") {
+      if (crowd < CROWD_CLUSTERS_OFF) {
+        this.detail = crowd < CROWD_PRIORITY_OFF ? "all" : "priority";
+      }
+    } else if (this.detail === "priority") {
+      if (crowd > CROWD_CLUSTERS_ON) this.detail = "clusters";
+      else if (crowd < CROWD_PRIORITY_OFF) this.detail = "all";
+    } else if (crowd > CROWD_CLUSTERS_ON) {
+      this.detail = "clusters";
+    } else if (crowd > CROWD_PRIORITY_ON) {
+      this.detail = "priority";
+    }
+    if (prev !== this.detail) this.requestRender();
   }
 
   /**
@@ -2114,14 +2351,56 @@ export class EntityVisuals {
    */
   private declutterLabels(
     shown: { id: string; lbl: LabelControls; x: number; y: number; off: { x: number; y: number } }[],
+    boxes: { halfW: number; halfH: number; cy: number }[],
   ): void {
     const scale = this.iconUserScale * this.iconZoomScale;
     const maxOff = 150 * scale; // never fling a label miles from its device
-    const card = this.config.badgeStyle === "card";
-    const baseY = -(card ? CARD_LABEL_HEIGHT_PX : LABEL_HEIGHT_PX) / 2;
+    const baseY = this.labelBaseOffsetY();
     const GAP = 5 * scale; // breathing room between two labels' boxes
 
-    // Each label's collision box, in screen px, relative to its anchor point.
+    for (const s of shown) { s.off.x = 0; s.off.y = 0; }
+    for (let iter = 0; iter < 12; iter++) {
+      let moved = false;
+      for (let i = 0; i < shown.length; i++) {
+        for (let j = i + 1; j < shown.length; j++) {
+          const a = shown[i], b = shown[j], ba = boxes[i], bb = boxes[j];
+          const dx = (b.x + b.off.x) - (a.x + a.off.x);
+          const dy = (b.y + b.off.y + bb.cy) - (a.y + a.off.y + ba.cy);
+          const ox = ba.halfW + bb.halfW + GAP - Math.abs(dx); // x-overlap (>0 = overlapping)
+          const oy = ba.halfH + bb.halfH + GAP - Math.abs(dy); // y-overlap
+          if (ox <= 0 || oy <= 0) continue; // boxes clear on at least one axis
+          // Resolve along the axis of LEAST penetration (minimum translation).
+          if (ox < oy) {
+            const s2 = dx === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dx);
+            a.off.x -= (ox / 2) * s2; b.off.x += (ox / 2) * s2;
+          } else {
+            const s2 = dy === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dy);
+            a.off.y -= (oy / 2) * s2; b.off.y += (oy / 2) * s2;
+          }
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+
+    for (const s of shown) {
+      const len = Math.hypot(s.off.x, s.off.y);
+      if (len > maxOff) { s.off.x *= maxOff / len; s.off.y *= maxOff / len; }
+      s.lbl.container.linkOffsetXInPixels = s.off.x;
+      s.lbl.container.linkOffsetYInPixels = baseY + s.off.y;
+    }
+  }
+
+  /** Each label's collision box in screen px, relative to its anchor point —
+   *  ONE definition, shared by the relaxation (declutterLabels) and the
+   *  greedy placement/crowding metric (greedyPlace), so the two can never
+   *  disagree about how much room a badge actually needs. */
+  private labelBoxes(
+    shown: { lbl: LabelControls }[],
+  ): { halfW: number; halfH: number; cy: number }[] {
+    const scale = this.iconUserScale * this.iconZoomScale;
+    const card = this.config.badgeStyle === "card";
+
     // Classic layout (unscaled, anchor at 0, y grows downward, hangs ABOVE):
     //   badge  → centre −56, half 20         (BADGE_DIAMETER 40, container 76 tall)
     //   pill   → centre −24, half 9          (VALUE_CHIP_HEIGHT 18, under the badge)
@@ -2161,38 +2440,125 @@ export class EntityVisuals {
       const cy = (pillCapable ? -45.5 : -56) * scale; // box centre Y relative to anchor
       return { halfW, halfH, cy };
     });
+    return boxes;
+  }
 
-    for (const s of shown) { s.off.x = 0; s.off.y = 0; }
-    for (let iter = 0; iter < 12; iter++) {
-      let moved = false;
-      for (let i = 0; i < shown.length; i++) {
-        for (let j = i + 1; j < shown.length; j++) {
-          const a = shown[i], b = shown[j], ba = boxes[i], bb = boxes[j];
-          const dx = (b.x + b.off.x) - (a.x + a.off.x);
-          const dy = (b.y + b.off.y + bb.cy) - (a.y + a.off.y + ba.cy);
-          const ox = ba.halfW + bb.halfW + GAP - Math.abs(dx); // x-overlap (>0 = overlapping)
-          const oy = ba.halfH + bb.halfH + GAP - Math.abs(dy); // y-overlap
-          if (ox <= 0 || oy <= 0) continue; // boxes clear on at least one axis
-          // Resolve along the axis of LEAST penetration (minimum translation).
-          if (ox < oy) {
-            const s2 = dx === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dx);
-            a.off.x -= (ox / 2) * s2; b.off.x += (ox / 2) * s2;
-          } else {
-            const s2 = dy === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dy);
-            a.off.y -= (oy / 2) * s2; b.off.y += (oy / 2) * s2;
-          }
-          moved = true;
-        }
-      }
-      if (!moved) break;
-    }
+  // ── Room clusters (the "clusters" LOD band) ───────────────────────────────
 
+  /**
+   * Collapse the visible badges into one chip per room, anchored at the
+   * world-space centroid of that room's badge anchors. Because the anchor is
+   * a fixed point in the SCENE rather than a solved screen position, the chip
+   * projects to a continuous screen path as the camera moves — it physically
+   * cannot exhibit the jitter this whole mechanism exists to remove.
+   *
+   * Membership comes from EntityMapping.room, the same field SummaryGroupPanel
+   * groups by, so tapping a chip can hand its entity list straight to that
+   * existing modal instead of inventing a second grouping concept.
+   */
+  private updateClusters(shown: ShownLabel[]): void {
+    const layer = this.labelLayer;
+    if (!layer) return; // no GUI layer yet — nothing to attach chips to
+
+    // Bucket by room, accumulating the centroid and worst state as we go.
+    // Off-screen members are included deliberately: a room's chip should
+    // report the whole room's device count, not just the part currently
+    // framed, and its centroid should stay put rather than sliding around as
+    // members cross the viewport edge.
+    const groups = new Map<string, { ids: string[]; sum: Vector3; alert: boolean }>();
     for (const s of shown) {
-      const len = Math.hypot(s.off.x, s.off.y);
-      if (len > maxOff) { s.off.x *= maxOff / len; s.off.y *= maxOff / len; }
-      s.lbl.container.linkOffsetXInPixels = s.off.x;
-      s.lbl.container.linkOffsetYInPixels = baseY + s.off.y;
+      const room = this.config.entityMap[s.id]?.room?.trim() || NO_ROOM_LABEL;
+      let g = groups.get(room);
+      if (!g) { g = { ids: [], sum: Vector3.Zero(), alert: false }; groups.set(room, g); }
+      g.ids.push(s.id);
+      g.sum.addInPlace(s.lbl.anchor.getAbsolutePosition());
+      const st = this.lastState.get(s.id);
+      if (st) {
+        const kind = this.badgeKind(s.lbl.type, st);
+        if (kind === "alert" || kind === "unavailable") g.alert = true;
+      }
     }
+
+    const scale = Math.max(CLUSTER_MIN_SCALE, this.iconUserScale * this.iconZoomScale);
+    for (const [room, g] of groups) {
+      const c = this.ensureCluster(room, layer);
+      c.entityIds = g.ids;
+      c.node.position.copyFrom(g.sum.scaleInPlace(1 / g.ids.length));
+      c.text.text = `${room}  ${g.ids.length}`;
+      // The chip's own colour carries the room's worst state — the only
+      // attention signal available once the individual badges are gone.
+      c.container.thickness = g.alert ? 2 : 0;
+      c.container.color = g.alert ? ALERT_RED_HEX : "transparent";
+      c.container.scaleX = scale;
+      c.container.scaleY = scale;
+      c.container.isVisible = true;
+    }
+    // Rooms that no longer have any visible member (floor switch, category
+    // filter) must not leave a stale chip floating over the villa.
+    for (const [room, c] of this.clusters) {
+      if (!groups.has(room)) c.container.isVisible = false;
+    }
+  }
+
+  private ensureCluster(room: string, layer: AdvancedDynamicTexture): ClusterControls {
+    const existing = this.clusters.get(room);
+    if (existing) return existing;
+
+    const node = new TransformNode(`cluster_${room}`, this.scene);
+    const container = new Rectangle(`clusterChip_${room}`);
+    container.height = `${CLUSTER_HEIGHT_PX}px`;
+    container.adaptWidthToChildren = true;
+    container.cornerRadius = CLUSTER_HEIGHT_PX / 2;
+    container.thickness = 0;
+    container.background = "rgba(17,20,26,0.86)";
+    container.shadowColor = "rgba(0,0,0,0.55)";
+    container.shadowBlur = 6;
+    container.shadowOffsetY = 2;
+    container.isPointerBlocker = false; // taps resolve via pickClusterAt, like badges
+
+    const text = new TextBlock(`clusterText_${room}`);
+    text.text = room;
+    text.color = "#ffffff";
+    text.fontSize = CLUSTER_FONT_PX;
+    text.fontWeight = "600";
+    text.resizeToFit = true;
+    text.paddingLeft = "12px";
+    text.paddingRight = "12px";
+    container.addControl(text);
+
+    layer.addControl(container);
+    container.linkWithMesh(node);
+    container.linkOffsetYInPixels = -CLUSTER_HEIGHT_PX / 2;
+
+    const c: ClusterControls = { container, text, node, entityIds: [] };
+    this.clusters.set(room, c);
+    return c;
+  }
+
+  private hideClusters(): void {
+    for (const c of this.clusters.values()) c.container.isVisible = false;
+  }
+
+  /** Entity ids behind the cluster chip at these CSS-pixel client coords, or
+   *  null. Mirrors pickBadgeAt's hit-test approach (Control.contains on the
+   *  real drawn box) — see its docstring for why that's the only reliable
+   *  way. Checked BEFORE badges by SceneManager: in the clusters band the
+   *  individual badges are hidden anyway, so a chip can never steal a tap
+   *  from a badge the user can actually see. */
+  pickClusterAt(clientX: number, clientY: number): { room: string; entityIds: string[] } | null {
+    if (this.detail !== "clusters" || this.clusters.size === 0) return null;
+    const eng = this.scene.getEngine();
+    const canvas = eng.getRenderingCanvas();
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const px = (clientX - rect.left) * (eng.getRenderWidth() / rect.width);
+    const py = (clientY - rect.top) * (eng.getRenderHeight() / rect.height);
+    for (const [room, c] of this.clusters) {
+      if (!c.container.isVisible) continue;
+      if (c.container.contains(px, py)) return { room, entityIds: [...c.entityIds] };
+    }
+    return null;
   }
 
   /**

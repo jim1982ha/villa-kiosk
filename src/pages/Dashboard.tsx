@@ -3,6 +3,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BabylonCanvas from "@/components/canvas/BabylonCanvas";
+import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
+import { Layers } from "lucide-react";
 import HUD from "@/components/hud/HUD";
 import RoomLabel from "@/components/hud/RoomLabel";
 import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
@@ -71,6 +73,10 @@ export default function Dashboard() {
   // Settings, so "Back" returns to Settings rather than just closing).
   const [configEditorFocus, setConfigEditorFocus] = useState<string | null>(null);
   const [room, setRoom] = useState<string | null>(null);
+  // A tapped zoomed-out room-cluster chip (see EntityVisuals' LOD bands) — its
+  // members open in the SAME group modal a bottom-bar tile uses, so a cluster
+  // needs no UI concept of its own.
+  const [clusterGroup, setClusterGroup] = useState<{ room: string; entityIds: string[] } | null>(null);
   const [currentFloor, setCurrentFloor] = useState(1);
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
   /** Entities with real geometry in the loaded model (see manager.mappedEntityIds). */
@@ -462,6 +468,7 @@ export default function Dashboard() {
         onManager={setManager}
         onEntityPicked={onEntityPicked}
         onEntityLongPressed={onEntityLongPressed}
+        onClusterPicked={(r, ids) => setClusterGroup({ room: r, entityIds: ids })}
         onFloorChange={(f) => setCurrentFloor(f)}
         onRoomChange={setRoom}
         onNeedModel={() => { if (canOpenSettings) setSettingsOpen(true); }}
@@ -605,6 +612,16 @@ export default function Dashboard() {
             onOpenEntity={openEntityPanel}
           />
         </PanelActionsProvider>
+      )}
+
+      {clusterGroup && (
+        <SummaryGroupPanel
+          group={{ title: clusterGroup.room, icon: Layers, entityIds: clusterGroup.entityIds }}
+          canControl={canControl}
+          mappedEntityIds={effectiveMappedEntityIds}
+          onClose={() => setClusterGroup(null)}
+          onOpenEntity={(id) => { setClusterGroup(null); openEntityPanel(id); }}
+        />
       )}
 
       {facilityOpen && canManageFacility && (

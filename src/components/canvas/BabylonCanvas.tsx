@@ -27,6 +27,8 @@ interface Props {
   onManager: (m: SceneManager | null) => void;
   onEntityPicked: (entityId: string, clientX: number, clientY: number) => void;
   onEntityLongPressed: (entityId: string, clientX: number, clientY: number) => void;
+  /** A zoomed-out room-cluster chip was tapped (see EntityVisuals' LOD bands). */
+  onClusterPicked: (room: string, entityIds: string[]) => void;
   onFloorChange: (floor: number) => void;
   onRoomChange: (room: string | null) => void;
   onNeedModel: () => void;
@@ -34,7 +36,7 @@ interface Props {
 }
 
 export default function BabylonCanvas({
-  onManager, onEntityPicked, onEntityLongPressed, onFloorChange, onRoomChange, onNeedModel, onModelUploaded,
+  onManager, onEntityPicked, onEntityLongPressed, onClusterPicked, onFloorChange, onRoomChange, onNeedModel, onModelUploaded,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const managerRef = useRef<SceneManager | null>(null);
@@ -61,8 +63,10 @@ export default function BabylonCanvas({
   // toggles would no-op. Route through refs so the scene always calls the latest.
   const onPickedRef = useRef(onEntityPicked);
   const onLongPressedRef = useRef(onEntityLongPressed);
+  const onClusterRef = useRef(onClusterPicked);
   useEffect(() => { onPickedRef.current = onEntityPicked; }, [onEntityPicked]);
   useEffect(() => { onLongPressedRef.current = onEntityLongPressed; }, [onEntityLongPressed]);
+  useEffect(() => { onClusterRef.current = onClusterPicked; }, [onClusterPicked]);
   const [status, setStatus] = useState<"loading" | "ready" | "no-model" | "error" | "crash-loop">("loading");
   const [progress, setProgress] = useState(0); // 0..1 GLB download progress
   // True while fetchModelWithRetry is riding through a transient network
@@ -119,6 +123,7 @@ export default function BabylonCanvas({
         config: sceneConfig,
         onEntityPicked: (id, x, y) => onPickedRef.current(id, x, y),
         onEntityLongPressed: (id, x, y) => onLongPressedRef.current(id, x, y),
+        onClusterPicked: (room, ids) => onClusterRef.current(room, ids),
         onFloorChange,
         onRoomChange,
       });
