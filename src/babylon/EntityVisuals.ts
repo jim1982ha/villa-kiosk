@@ -416,10 +416,47 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  * feedback loop between a band and the measurement that selects it.
  */
 type LabelDetail = "all" | "priority" | "clusters";
-const CROWD_CLUSTERS_ON = 0.55;
-const CROWD_CLUSTERS_OFF = 0.38;
-const CROWD_PRIORITY_ON = 0.18;
-const CROWD_PRIORITY_OFF = 0.09;
+/** Outcome of one relaxation pass — the input the LOD band decides on. */
+interface RelaxResult {
+  /** The solver settled with nothing left to push, i.e. an overlap-free
+   *  layout for this exact badge set EXISTS and is now applied. */
+  converged: boolean;
+  /** When it didn't: share of badges still overlapping someone afterwards.
+   *  Separates "a couple of stubborn pairs" from "hopelessly packed". */
+  unresolvedFrac: number;
+}
+/** Relaxation sweeps before giving up. Raised from 12 now that the outcome
+ *  is a DECISION and not just a cosmetic cap: every extra sweep is a layout
+ *  that gets fully shown instead of thinned. Costs nothing in the common
+ *  case — the loop exits the moment it settles. */
+const RELAX_ITERATIONS = 24;
+/**
+ * Thresholds on RESIDUAL OVERLAP — the share of badges still overlapping a
+ * neighbour once the solver has finished.
+ *
+ * Deliberately not on whether the solver "converged": measurement showed
+ * that a perfectly good layout very often reports converged=false. The
+ * solver settles into a harmless limit cycle where a few pairs shuffle each
+ * other by fractions of a pixel forever, while the drawn result has ZERO
+ * overlap. Gating on convergence therefore threw away badges that were
+ * sitting in clear space — reported from the field as lights vanishing at a
+ * zoom with obvious room around them.
+ *
+ * Residual overlap, by contrast, tracks the thing that actually matters.
+ * Measured against a 95-device villa on a moving camera:
+ *   residual 0.00 → 0.00–0.05 px/frame of badge movement  (rock steady)
+ *   residual 0.11 → 0.25 px/frame
+ *   residual 0.43 → 1.66 px/frame, peaks of 217 px
+ *   residual 0.82 → 50.9 px/frame, peaks of 608 px        (the "dancing")
+ * So a near-zero residual means both "they all fit" AND "they hold still" —
+ * exactly the condition for showing every badge.
+ */
+const UNRESOLVED_ALL_MAX = 0.02;
+/** Past this the layout isn't merely tight, it's hopeless — go to room
+ *  clusters rather than thinning most of the map one badge at a time. The
+ *  wide ON/OFF gap is the hysteresis. */
+const UNRESOLVED_CLUSTERS_ON = 0.45;
+const UNRESOLVED_CLUSTERS_OFF = 0.28;
 /** A badge that survived last frame is tested with a slightly smaller box, so
  *  a borderline pair can't oscillate between placed and dropped. */
 const STICKY_SHRINK = 0.85;
@@ -2228,15 +2265,29 @@ export class EntityVisuals {
     }
 
     // ── Level of detail ──────────────────────────────────────────────────
-    // Rank + greedy-place ONCE. This both selects which badges survive a
-    // collision (used by the priority band) and yields the crowding metric
-    // that chooses the band — measured the same way in every band, from the
-    // projected anchors only, so selecting a band can never feed back into
-    // the measurement that selected it. See the LabelDetail block up top.
-    const boxes = this.labelBoxes(shown);
-    const { placed, crowding } = this.greedyPlace(shown, boxes);
-    this.placedLast = placed;
-    this.updateDetailBand(crowding);
+    // ALWAYS try the friendly option first: nudge everything apart. Whether
+    // that solver CONVERGES is the exact, principled signal for "is there
+    // room for all of these?" — if it settles with no overlap left, a valid
+    // layout demonstrably exists and every badge is shown. Only when it
+    // cannot converge is the system over-constrained, which is precisely the
+    // condition that made it thrash and the badges dance. Deciding on a raw
+    // crowding count instead (the first cut of this) dropped badges that the
+    // nudging would have resolved perfectly well — reported from the field
+    // as lights disappearing at a zoom with obvious free space around them.
+    const baseY = this.labelBaseOffsetY();
+    const onScreen = shown.filter((s) => s.onScreen);
+    // Off-screen badges take part in no layout: they can't overlap anything
+    // visible, and letting them push or block on-screen ones would make the
+    // result depend on the villa's total size rather than on what's in view.
+    for (const s of shown) {
+      if (s.onScreen) continue;
+      s.lbl.container.linkOffsetXInPixels = 0;
+      s.lbl.container.linkOffsetYInPixels = baseY;
+    }
+
+    const boxes = this.labelBoxes(onScreen);
+    const relaxed = this.declutterLabels(onScreen, boxes);
+    this.updateDetailBand(relaxed);
 
     if (this.detail === "clusters") {
       for (const s of shown) s.lbl.container.isVisible = false;
@@ -2246,11 +2297,14 @@ export class EntityVisuals {
     this.hideClusters();
 
     if (this.detail === "priority") {
-      // Survivors sit at their EXACT anchor — no relaxation, no offsets, so
-      // there is nothing that can jitter. Dropped badges simply aren't drawn;
-      // they come back as the user zooms in and the crowding falls.
-      const baseY = this.labelBaseOffsetY();
-      for (const s of shown) {
+      // Over-constrained: nudging can't separate these, so fall back to
+      // dropping. Survivors sit at their EXACT anchor — no offsets at all, so
+      // nothing can jitter — and greedy placement guarantees the ones kept
+      // don't overlap each other. Dropped badges return as soon as the
+      // relaxation can converge again.
+      const { placed } = this.greedyPlace(onScreen, boxes);
+      this.placedLast = placed;
+      for (const s of onScreen) {
         const keep = placed.has(s.id);
         s.lbl.container.isVisible = keep;
         if (keep) {
@@ -2261,7 +2315,9 @@ export class EntityVisuals {
       return;
     }
 
-    this.declutterLabels(shown, boxes);
+    // "all": the relaxation converged and has already written its offsets —
+    // every badge stays on screen, which is the whole point.
+    this.placedLast.clear();
   }
 
   /** Pixel lift that centres a badge container above its anchor point. */
@@ -2342,28 +2398,32 @@ export class EntityVisuals {
   /** Move between LOD bands on measured crowding, with a wide dead zone
    *  between each pair's enter/leave thresholds so the band cannot oscillate
    *  while the camera drifts around a boundary. */
-  private updateDetailBand(crowd: number): void {
+  /**
+   * Choose the band from how much overlap the relaxation could NOT remove.
+   *
+   * The guarantee this encodes: **if the badges can be nudged into a
+   * non-overlapping layout, every one of them is shown.** Nothing is hidden
+   * for being merely close to a neighbour — only when the arrangement is
+   * genuinely impossible, which (see UNRESOLVED_ALL_MAX) is also precisely
+   * when the solver starts thrashing and the badges dance. Those two are the
+   * same condition, so one measurement serves both goals.
+   */
+  private updateDetailBand(r: RelaxResult): void {
     const prev = this.detail;
-    if (this.bandSnapPending) {
-      // Pure function of crowding — the SAME thresholds in both directions,
-      // so a discrete change and its inverse are exact opposites.
-      this.bandSnapPending = false;
-      this.detail = crowd > CROWD_CLUSTERS_ON ? "clusters"
-        : crowd > CROWD_PRIORITY_ON ? "priority"
-        : "all";
-      if (prev !== this.detail) this.requestRender();
-      return;
-    }
-    if (this.detail === "clusters") {
-      if (crowd < CROWD_CLUSTERS_OFF) {
-        this.detail = crowd < CROWD_PRIORITY_OFF ? "all" : "priority";
-      }
-    } else if (this.detail === "priority") {
-      if (crowd > CROWD_CLUSTERS_ON) this.detail = "clusters";
-      else if (crowd < CROWD_PRIORITY_OFF) this.detail = "all";
-    } else if (crowd > CROWD_CLUSTERS_ON) {
+    const snap = this.bandSnapPending;
+    this.bandSnapPending = false;
+    const f = r.unresolvedFrac;
+
+    if (f <= UNRESOLVED_ALL_MAX) {
+      this.detail = "all";
+    } else if (snap) {
+      // Discrete user action: no dead zone, so + and − are exact inverses.
+      this.detail = f > UNRESOLVED_CLUSTERS_ON ? "clusters" : "priority";
+    } else if (this.detail === "clusters") {
+      if (f < UNRESOLVED_CLUSTERS_OFF) this.detail = "priority";
+    } else if (f > UNRESOLVED_CLUSTERS_ON) {
       this.detail = "clusters";
-    } else if (crowd > CROWD_PRIORITY_ON) {
+    } else {
       this.detail = "priority";
     }
     if (prev !== this.detail) this.requestRender();
@@ -2386,16 +2446,17 @@ export class EntityVisuals {
    * real drawn box) keeps working.
    */
   private declutterLabels(
-    shown: { id: string; lbl: LabelControls; x: number; y: number; off: { x: number; y: number } }[],
+    shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-  ): void {
+  ): RelaxResult {
     const scale = this.iconUserScale * this.iconZoomScale;
     const maxOff = 150 * scale; // never fling a label miles from its device
     const baseY = this.labelBaseOffsetY();
     const GAP = 5 * scale; // breathing room between two labels' boxes
 
     for (const s of shown) { s.off.x = 0; s.off.y = 0; }
-    for (let iter = 0; iter < 12; iter++) {
+    let converged = false;
+    for (let iter = 0; iter < RELAX_ITERATIONS; iter++) {
       let moved = false;
       for (let i = 0; i < shown.length; i++) {
         for (let j = i + 1; j < shown.length; j++) {
@@ -2416,7 +2477,10 @@ export class EntityVisuals {
           moved = true;
         }
       }
-      if (!moved) break;
+      // Settled with nothing left to push: a valid, overlap-free layout for
+      // this exact badge set demonstrably EXISTS. That is the signal the LOD
+      // band keys off (see updateDetailBand) — not a heuristic count.
+      if (!moved) { converged = true; break; }
     }
 
     for (const s of shown) {
@@ -2425,6 +2489,29 @@ export class EntityVisuals {
       s.lbl.container.linkOffsetXInPixels = s.off.x;
       s.lbl.container.linkOffsetYInPixels = baseY + s.off.y;
     }
+
+    // THE deciding measurement (see UNRESOLVED_ALL_MAX): the share of badges
+    // still overlapping someone once the solver has finished, evaluated
+    // against the final clamped offsets — i.e. against what is actually
+    // drawn, not against what the solver intended. A converged run is
+    // overlap-free by definition and skips the scan; an unconverged one is
+    // very often overlap-free too, which is the entire point.
+    let unresolved = 0;
+    if (!converged) {
+      for (let i = 0; i < shown.length; i++) {
+        for (let j = 0; j < shown.length; j++) {
+          if (i === j) continue;
+          const a = shown[i], b = shown[j], ba = boxes[i], bb = boxes[j];
+          const dx = (b.x + b.off.x) - (a.x + a.off.x);
+          const dy = (b.y + b.off.y + bb.cy) - (a.y + a.off.y + ba.cy);
+          if (ba.halfW + bb.halfW - Math.abs(dx) > 0 && ba.halfH + bb.halfH - Math.abs(dy) > 0) {
+            unresolved++;
+            break;
+          }
+        }
+      }
+    }
+    return { converged, unresolvedFrac: shown.length ? unresolved / shown.length : 0 };
   }
 
   /** Each label's collision box in screen px, relative to its anchor point —

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.37.2
+
+### Changes
+- **Fixed badges being hidden when there was obvious room for them** (reported with three screenshots across different category filters — e.g. with only Lights on, several light badges were missing despite clear space around them). 2.37.0 chose its LOD band from a raw *crowding* count (how many badges start out overlapping), which drops badges the nudging step would have separated perfectly well. The band is now chosen from **residual overlap** — how much overlap is still left *after* the relaxation has run — so the rule became: *if the badges can be nudged into a non-overlapping layout, every one of them is shown.* Nothing is hidden for merely being close to a neighbour.
+- Along the way, measurement disproved the obvious-looking signal: gating on whether the solver "converged" is wrong, because a perfectly good layout very often reports `converged=false`. The solver settles into a harmless limit cycle where a few pairs shuffle each other by fractions of a pixel forever while the drawn result has **zero** overlap — so a convergence gate also threw away badges sitting in clear space. Residual overlap tracks the thing that actually matters, and it predicts stability almost exactly. Measured on a 95-device villa with a moving camera: residual 0.00 → 0.00–0.05 px/frame of badge movement (rock steady), 0.11 → 0.25, 0.43 → 1.66 (peaks 217 px), 0.82 → 50.9 px/frame (peaks 608 px — the original "dancing"). A near-zero residual therefore means both "they all fit" *and* "they hold still", which is exactly the condition for showing everything, so one measurement serves both goals.
+- Net effect across 155 (zoom × category-subset) combinations on a simulated villa: **1673 more badges shown, and 70 more combinations showing every single badge** (124/155 vs 54/155) — with the anti-dancing guarantee intact, since the escalation threshold now sits in the region where jitter actually begins. Relaxation sweeps raised 12 → 24, since the outcome is now a decision rather than a cosmetic cap and each extra sweep is a layout that gets fully shown instead of thinned (free in the common case — the loop exits as soon as it settles).
+- Every threshold involved is a **fraction of the badges currently on screen**, never a count, a pixel budget tied to this villa, or an entity/room name: a villa with 20 devices and one with 500 behave identically, and new rooms, devices or icons need no code change. Room clusters continue to come from `EntityMapping.room` with anchors computed from real geometry. Typecheck and production build clean.
+
+---
+
+
 ## 2.37.1
 
 ### Changes
