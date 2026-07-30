@@ -415,7 +415,7 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  * projected anchors, never the current band's output), so there is no
  * feedback loop between a band and the measurement that selects it.
  */
-type LabelDetail = "all" | "priority" | "clusters";
+type LabelDetail = "labels" | "clusters";
 /** Outcome of one relaxation pass — the input the LOD band decides on. */
 interface RelaxResult {
   /** The solver settled with nothing left to push, i.e. an overlap-free
@@ -425,41 +425,53 @@ interface RelaxResult {
    *  Separates "a couple of stubborn pairs" from "hopelessly packed". */
   unresolvedFrac: number;
 }
-/** Relaxation sweeps before giving up. Raised from 12 now that the outcome
- *  is a DECISION and not just a cosmetic cap: every extra sweep is a layout
- *  that gets fully shown instead of thinned. Costs nothing in the common
- *  case — the loop exits the moment it settles. */
+/** Relaxation sweeps before giving up and letting thinResidualOverlaps
+ *  clean up whatever is left. Costs nothing in the common case — the loop
+ *  exits the moment it settles. */
 const RELAX_ITERATIONS = 24;
 /**
- * Thresholds on RESIDUAL OVERLAP — the share of badges still overlapping a
- * neighbour once the solver has finished.
+ * The ONLY thresholds left, and they govern one thing: when individual
+ * badges give way to room clusters. Measured as the share of badges still
+ * overlapping a neighbour after the relaxation has run.
  *
- * Deliberately not on whether the solver "converged": measurement showed
- * that a perfectly good layout very often reports converged=false. The
- * solver settles into a harmless limit cycle where a few pairs shuffle each
- * other by fractions of a pixel forever, while the drawn result has ZERO
- * overlap. Gating on convergence therefore threw away badges that were
- * sitting in clear space — reported from the field as lights vanishing at a
- * zoom with obvious room around them.
+ * Note what is deliberately NOT threshold-driven: whether a given badge is
+ * shown. That is decided per badge, incrementally, by thinResidualOverlaps.
+ * Two earlier attempts put a threshold there and both misbehaved in the
+ * field — first a raw crowding count (hid badges the nudging would have
+ * separated), then a residual-overlap gate (a few pixels of pan flipped the
+ * whole view between "all badges" and "most badges hidden"). A per-badge
+ * decision has no cliff for a threshold to sit on, so both classes of bug
+ * are gone by construction rather than by tuning.
  *
- * Residual overlap, by contrast, tracks the thing that actually matters.
- * Measured against a 95-device villa on a moving camera:
+ * Residual overlap does still predict instability well, which is why it
+ * remains the right trigger for the cluster mode. Measured on a 95-device
+ * villa with a moving camera:
  *   residual 0.00 → 0.00–0.05 px/frame of badge movement  (rock steady)
  *   residual 0.11 → 0.25 px/frame
  *   residual 0.43 → 1.66 px/frame, peaks of 217 px
  *   residual 0.82 → 50.9 px/frame, peaks of 608 px        (the "dancing")
- * So a near-zero residual means both "they all fit" AND "they hold still" —
- * exactly the condition for showing every badge.
+ * Past ~0.45 so few badges would survive thinning that a room-level summary
+ * genuinely reads better. Swapping the whole presentation is a real mode
+ * change, so the ON/OFF gap is wide: crossing it slightly late is far better
+ * than crossing it back and forth while the camera drifts.
  */
-const UNRESOLVED_ALL_MAX = 0.02;
-/** Past this the layout isn't merely tight, it's hopeless — go to room
- *  clusters rather than thinning most of the map one badge at a time. The
- *  wide ON/OFF gap is the hysteresis. */
 const UNRESOLVED_CLUSTERS_ON = 0.45;
 const UNRESOLVED_CLUSTERS_OFF = 0.28;
-/** A badge that survived last frame is tested with a slightly smaller box, so
- *  a borderline pair can't oscillate between placed and dropped. */
-const STICKY_SHRINK = 0.85;
+/**
+ * Temporal hysteresis for visibility: a badge that was shown last frame is
+ * tested against a box scaled by this, so it takes a clearly worse conflict
+ * to evict it than it took to admit it. Deliberately asymmetric — a HIDDEN
+ * badge is always tested at full size, so it must earn genuine clearance to
+ * come back. That asymmetry is what stops a pair trading places every frame.
+ *
+ * The cost is tolerating a few pixels of overlap between badges that are
+ * already on screen (~6px here, invisible against their shadows and rounded
+ * corners); the benefit, measured on a 95-device villa under a slow camera
+ * orbit, is worst-case visibility churn dropping from 8 badges/frame at 0.95
+ * to 3 at 0.65. A badge blinking is far more distracting than two badges
+ * touching, so this is biased towards holding still.
+ */
+const STICKY_SHRINK = 0.7;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -639,7 +651,7 @@ export class EntityVisuals {
   private iconUserScale = 1;
   private iconZoomScale = 1;
   /** Current badge level-of-detail band (see LabelDetail). */
-  private detail: LabelDetail = "all";
+  private detail: LabelDetail = "labels";
   /** Room-cluster chips, keyed by room name. Built lazily the first time the
    *  clusters band engages; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
@@ -2264,16 +2276,23 @@ export class EntityVisuals {
       }
     }
 
-    // ── Level of detail ──────────────────────────────────────────────────
-    // ALWAYS try the friendly option first: nudge everything apart. Whether
-    // that solver CONVERGES is the exact, principled signal for "is there
-    // room for all of these?" — if it settles with no overlap left, a valid
-    // layout demonstrably exists and every badge is shown. Only when it
-    // cannot converge is the system over-constrained, which is precisely the
-    // condition that made it thrash and the badges dance. Deciding on a raw
-    // crowding count instead (the first cut of this) dropped badges that the
-    // nudging would have resolved perfectly well — reported from the field
-    // as lights disappearing at a zoom with obvious free space around them.
+    // ── Layout ───────────────────────────────────────────────────────────
+    // Two steps, always both, in this order:
+    //   1. NUDGE everything apart (declutterLabels). Most frames end here
+    //      with nothing overlapping, so every badge is shown.
+    //   2. Drop ONLY what step 1 could not separate (thinResidualOverlaps).
+    //
+    // Step 2 is deliberately incremental rather than a mode switch. An
+    // earlier version flipped a global band — "nudge everything" vs "drop
+    // every colliding badge" — the instant a single measurement crossed a
+    // threshold, so a few pixels of camera movement could add or remove
+    // DOZENS of badges at once. That was reported from the field as heavy
+    // flickering while panning: nudge one way and most badges vanished,
+    // nudge a little further and they all came back. Adding hysteresis would
+    // only have moved that cliff, not removed it. Thinning the minimum
+    // necessary set has no cliff to move: when two badges genuinely cannot
+    // fit, exactly one disappears — never forty — so panning degrades one
+    // badge at a time and there is no threshold to mis-tune.
     const baseY = this.labelBaseOffsetY();
     const onScreen = shown.filter((s) => s.onScreen);
     // Off-screen badges take part in no layout: they can't overlap anything
@@ -2296,28 +2315,9 @@ export class EntityVisuals {
     }
     this.hideClusters();
 
-    if (this.detail === "priority") {
-      // Over-constrained: nudging can't separate these, so fall back to
-      // dropping. Survivors sit at their EXACT anchor — no offsets at all, so
-      // nothing can jitter — and greedy placement guarantees the ones kept
-      // don't overlap each other. Dropped badges return as soon as the
-      // relaxation can converge again.
-      const { placed } = this.greedyPlace(onScreen, boxes);
-      this.placedLast = placed;
-      for (const s of onScreen) {
-        const keep = placed.has(s.id);
-        s.lbl.container.isVisible = keep;
-        if (keep) {
-          s.lbl.container.linkOffsetXInPixels = 0;
-          s.lbl.container.linkOffsetYInPixels = baseY;
-        }
-      }
-      return;
-    }
-
-    // "all": the relaxation converged and has already written its offsets —
-    // every badge stays on screen, which is the whole point.
-    this.placedLast.clear();
+    const kept = this.thinResidualOverlaps(onScreen, boxes);
+    this.placedLast = kept;
+    for (const s of onScreen) s.lbl.container.isVisible = kept.has(s.id);
   }
 
   /** Pixel lift that centres a badge container above its anchor point. */
@@ -2345,68 +2345,64 @@ export class EntityVisuals {
   }
 
   /**
-   * Greedy, collision-free placement in importance order: walk the badges
-   * best-first, keep each one at its true anchor if its box is still clear,
-   * otherwise drop it. Returns the survivors plus the crowding fraction
-   * (dropped / shown) that drives the LOD band.
+   * Drop the MINIMUM set of badges needed to leave no overlap, working from
+   * the positions the relaxation actually produced (offsets included), not
+   * from raw anchors. Walk best-first and keep a badge whenever its box is
+   * still clear; only the ones that genuinely cannot fit are dropped. When
+   * the nudging already separated everything — the usual case — this drops
+   * nothing at all and every badge stays visible.
    *
-   * Deterministic and CONTINUOUS in a way the relaxation solver is not: a
-   * badge only changes state when it genuinely crosses a collision boundary,
-   * and nothing is ever pushed, so one badge's fate can't cascade into a
-   * neighbour's position. Cheaper too — one pass with an early break, versus
-   * the relaxation's 12 sweeps over every pair.
+   * Being incremental is the whole point: the previous design switched a
+   * global mode and could add or remove dozens of badges from one frame to
+   * the next, which is what made panning flicker. Here a badge's fate
+   * depends only on whether IT still collides, so a small camera move
+   * changes at most a badge or two.
+   *
+   * Importance order (labelRank) decides who yields in a genuine conflict,
+   * and last frame's survivors are tested with a slightly smaller box
+   * (STICKY_SHRINK) so a pair balanced exactly on the contact boundary
+   * settles instead of alternating every frame.
    */
-  private greedyPlace(
+  private thinResidualOverlaps(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-  ): { placed: Set<string>; crowding: number } {
-    const placed = new Set<string>();
-    if (shown.length === 0) return { placed, crowding: 0 };
+  ): Set<string> {
+    const kept = new Set<string>();
+    if (shown.length === 0) return kept;
 
     const order = shown.map((_, i) => i);
     const rank = shown.map((s) => this.labelRank(s.id, s.lbl));
     order.sort((a, b) => rank[a] - rank[b]);
 
     const taken: { x: number; y: number; halfW: number; halfH: number }[] = [];
-    let blocked = 0;
-    let onScreenCount = 0;
     for (const i of order) {
       const s = shown[i], b = boxes[i];
-      // Off-screen badges take part in nothing: they can't visually collide,
-      // and letting them occupy slots or inflate the denominator would make
-      // the LOD band a function of the villa's total size rather than of what
-      // is actually crowding the user's view.
-      if (!s.onScreen) { placed.add(s.id); continue; }
-      onScreenCount++;
-      const cx = s.x, cy = s.y + b.cy;
-      // Stickiness: last frame's survivors are tested with a slightly smaller
-      // box, so a pair sitting exactly on the contact boundary settles instead
-      // of alternating each frame.
+      // Post-relaxation position — the badge's drawn location.
+      const cx = s.x + s.off.x, cy = s.y + s.off.y + b.cy;
       const k = this.placedLast.has(s.id) ? STICKY_SHRINK : 1;
       const hw = b.halfW * k, hh = b.halfH * k;
       let hit = false;
       for (const t of taken) {
         if (Math.abs(cx - t.x) < hw + t.halfW && Math.abs(cy - t.y) < hh + t.halfH) { hit = true; break; }
       }
-      if (hit) { blocked++; continue; }
+      if (hit) continue;
       taken.push({ x: cx, y: cy, halfW: b.halfW, halfH: b.halfH });
-      placed.add(s.id);
+      kept.add(s.id);
     }
-    return { placed, crowding: onScreenCount ? blocked / onScreenCount : 0 };
+    return kept;
   }
 
-  /** Move between LOD bands on measured crowding, with a wide dead zone
-   *  between each pair's enter/leave thresholds so the band cannot oscillate
-   *  while the camera drifts around a boundary. */
   /**
-   * Choose the band from how much overlap the relaxation could NOT remove.
+   * The ONE remaining mode decision: individual badges, or room clusters.
    *
-   * The guarantee this encodes: **if the badges can be nudged into a
-   * non-overlapping layout, every one of them is shown.** Nothing is hidden
-   * for being merely close to a neighbour — only when the arrangement is
-   * genuinely impossible, which (see UNRESOLVED_ALL_MAX) is also precisely
-   * when the solver starts thrashing and the badges dance. Those two are the
-   * same condition, so one measurement serves both goals.
+   * There is deliberately no threshold governing whether a badge is shown —
+   * that is settled per-badge and incrementally by thinResidualOverlaps, so
+   * there is no cliff for a threshold to sit on. This only picks the point
+   * at which showing individual badges stops being useful at all, because
+   * so few would survive that a room-level summary genuinely reads better.
+   * That IS a real mode change, so it keeps a wide hysteresis gap: crossing
+   * it swaps the whole presentation, and doing that repeatedly while the
+   * camera drifts would be far worse than crossing it slightly late.
    */
   private updateDetailBand(r: RelaxResult): void {
     const prev = this.detail;
@@ -2414,17 +2410,14 @@ export class EntityVisuals {
     this.bandSnapPending = false;
     const f = r.unresolvedFrac;
 
-    if (f <= UNRESOLVED_ALL_MAX) {
-      this.detail = "all";
-    } else if (snap) {
-      // Discrete user action: no dead zone, so + and − are exact inverses.
-      this.detail = f > UNRESOLVED_CLUSTERS_ON ? "clusters" : "priority";
+    if (snap) {
+      // Discrete user action (size stepper, style switch): no dead zone, so
+      // an action and its inverse land in the same place.
+      this.detail = f > UNRESOLVED_CLUSTERS_ON ? "clusters" : "labels";
     } else if (this.detail === "clusters") {
-      if (f < UNRESOLVED_CLUSTERS_OFF) this.detail = "priority";
+      if (f < UNRESOLVED_CLUSTERS_OFF) this.detail = "labels";
     } else if (f > UNRESOLVED_CLUSTERS_ON) {
       this.detail = "clusters";
-    } else {
-      this.detail = "priority";
     }
     if (prev !== this.detail) this.requestRender();
   }

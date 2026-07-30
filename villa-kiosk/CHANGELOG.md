@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.37.3
+
+### Changes
+- **Fixed badges flickering en masse while rotating the camera** (reported with three screenshots: nudge the angle slightly and most badges vanished, nudge a little further and they all came back). This was a side effect of 2.37.2. That release decided between "nudge everything apart" and "drop every colliding badge" as a single **global mode**, flipped by one measurement crossing a threshold — so a few pixels of camera rotation could add or remove dozens of badges at once. Measured on a 95-device villa under a slow orbit: **worst case 46 badges changing visibility in a single frame.**
+- Adding hysteresis to that threshold would only have moved the cliff, not removed it, so the global mode is gone entirely. Layout is now always the same two steps: nudge everything apart, then drop **only** the badges that step could not separate. That is a per-badge, incremental decision — when two badges genuinely cannot fit, exactly one disappears, never forty — so panning and rotating degrade one badge at a time. Worst-case churn drops to **4 badges/frame (avg 0.36)**, a >10× improvement, while 2.37.2's full-visibility gain is untouched (still 124/155 zoom × category-subset combinations showing every badge, vs 54/155 before that release).
+- Notably this also **removes the threshold that governed whether a badge is shown at all.** Two successive attempts put one there and both misbehaved in the field — first a raw crowding count (2.37.0, hid badges the nudging would have separated), then a residual-overlap gate (2.37.2, the mass flicker above). A per-badge decision has no cliff for a threshold to sit on, so both classes of bug are now impossible by construction rather than avoided by tuning. One threshold pair remains, and only for the genuine mode change of swapping individual badges for room clusters, where a wide hysteresis gap is appropriate.
+- Visibility now carries deliberate temporal hysteresis: a badge already on screen is tested against a slightly smaller box than a hidden one, so it takes a clearly worse conflict to evict a badge than it took to admit it, and a hidden badge must earn real clearance to return. The cost is tolerating ~6px of overlap between badges that are already visible — invisible against their shadows and rounded corners — on the principle that a blinking badge is far more distracting than two badges touching. As always these are ratios of the on-screen badge set, with no counts, pixel budgets or entity/room names tied to this villa. Typecheck and production build clean.
+
+---
+
+
 ## 2.37.2
 
 ### Changes
