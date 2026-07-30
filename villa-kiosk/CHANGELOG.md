@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.37.5
+
+### Changes
+- **Found the actual root cause of "never groups, and dances at far zoom"** (2.37.4's shrink-floor change was treating a symptom and did not fix it). Studying the screen recording frame by frame showed the badges fanned out in a wide arc **well beyond the villa's own footprint** — the nudging step had pushed them off their devices into empty space. `declutterLabels` allowed each badge to travel `150px` from its anchor: roughly **four badge widths**.
+- That budget was an escape hatch, and it invalidated everything downstream. Faced with a crowded villa the solver never had to fail — it just fanned badges outwards over empty space until they no longer overlapped. So a view that is visibly far too dense still measured as "no overlap left, all fine", which is precisely why clustering could never trigger no matter how far out you zoomed; and the large offsets needed to achieve that swung around chaotically frame to frame, which is the dancing. It also made the badges *wrong*: a badge exists to point at a device, and one sitting four widths away points at nothing.
+- The nudge budget is now **1.1 badge widths**, so nudging can only resolve genuinely local crowding and anything worse registers as unresolved — which is what lets clustering take over. Measured on a 95-device villa: maximum badge displacement drops from **106–152px to 31–44px**, and residual overlap now rises with zoom-out instead of being suppressed. On a realistic 60-device plan the handoff is clean and monotonic: **all 60 badges shown with zero residual while the villa spans 750–2400px on screen, room chips below ~550px** — so nothing is grouped while there is room, and grouping reliably engages once there isn't. Expressed in badge widths, so it scales with the user's size setting and assumes nothing about the villa. Typecheck and production build clean.
+
+---
+
+
 ## 2.37.4
 
 ### Changes

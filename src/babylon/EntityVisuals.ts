@@ -430,6 +430,28 @@ interface RelaxResult {
  *  exits the moment it settles. */
 const RELAX_ITERATIONS = 24;
 /**
+ * How far the nudging may move a badge from its device, in multiples of the
+ * badge's own width. THE most consequential number here, and it was 150px
+ * flat (~4 badge widths) — which quietly broke everything downstream.
+ *
+ * A badge exists to point at a device. Once it has wandered several widths
+ * away it is pointing at nothing, so a generous budget doesn't just look
+ * untidy, it makes the badge WRONG. Worse, it gave the solver an escape
+ * hatch: faced with a crowded villa it would fan the badges outwards over
+ * empty space until they no longer overlapped, instead of failing. That
+ * fanning-out was the "never groups, and dances" report — a scene that is
+ * visibly far too dense would still measure as "no overlap left, all fine",
+ * so clustering could never trigger, while the large offsets needed to
+ * achieve it swung around chaotically from frame to frame.
+ *
+ * Held to about one badge width, the nudging can only resolve genuinely
+ * local crowding. Anything worse now REGISTERS as unresolved, which is what
+ * lets clustering take over, and the offsets stay small enough that even an
+ * unstable layout can only jitter by a little. Expressed in badge widths, so
+ * it scales with the user's size setting and assumes nothing about the villa.
+ */
+const MAX_NUDGE_BADGE_WIDTHS = 1.1;
+/**
  * The ONLY thresholds left, and they govern one thing: when individual
  * badges give way to room clusters. Measured as the share of badges still
  * overlapping a neighbour after the relaxation has run.
@@ -2443,7 +2465,7 @@ export class EntityVisuals {
     boxes: { halfW: number; halfH: number; cy: number }[],
   ): RelaxResult {
     const scale = this.iconUserScale * this.iconZoomScale;
-    const maxOff = 150 * scale; // never fling a label miles from its device
+    const maxOff = MAX_NUDGE_BADGE_WIDTHS * BADGE_DIAMETER_PX * scale;
     const baseY = this.labelBaseOffsetY();
     const GAP = 5 * scale; // breathing room between two labels' boxes
 
