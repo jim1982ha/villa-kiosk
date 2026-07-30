@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.38.0
+
+### Changes
+- **Room-cluster chips no longer overlap each other.** They were anchored to their room's centroid with no collision handling of their own, so two rooms whose centroids project close together stacked into an unreadable pile (reported: "Master Bathroom 3" sitting across "Outdoor 11" across "Bedroom 1 4"). Chips are far wider than badges because they carry text, which makes them much more prone to it. They now go through the same declutter solver the badges use, with a deliberately generous travel budget: a chip labels a whole *room* rather than pointing at one object, so moving it costs nothing in meaning — unlike a badge, where travel is exactly what made it misleading (see 2.37.5's `MAX_NUDGE_BADGE_WIDTHS`).
+- Refactored that solver into one shared `relaxBoxes` used by both badges and chips, rather than duplicating it. Its subtleties — resolve along the axis of least penetration; relax from zero each frame instead of easing toward a target (which fed the render loop and made labels shake); clamp travel *after* solving and measure the residual against the clamped result, i.e. against what is actually drawn — were each bought with a field bug and are not worth reimplementing twice.
+- **Grouping now engages earlier**, and on a more meaningful signal. The trigger is no longer an abstract residual-overlap score but **the share of on-screen badges that had to be hidden** because they wouldn't fit. That is what a viewer actually perceives, and it makes the rule directly explainable: *once a view can't honestly show about one badge in twelve, a room summary beats a partial map.* On a realistic 60-device plan the crossover moves from a villa spanning ~600px to ~650px on screen — grouping while the map is still mostly intact, rather than waiting until a quarter of the badges are already missing. Everything above that is unchanged: all 60 badges still shown, with zero hidden, right down to 750px.
+- Both thresholds remain fractions of whatever is on screen, and the chip metrics are expressed in multiples of the chip's own height, so nothing here assumes a villa size, device count, room set or screen. Typecheck and production build clean.
+
+---
+
+
 ## 2.37.5
 
 ### Changes

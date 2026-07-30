@@ -451,34 +451,104 @@ const RELAX_ITERATIONS = 24;
  * it scales with the user's size setting and assumes nothing about the villa.
  */
 const MAX_NUDGE_BADGE_WIDTHS = 1.1;
+
+/** A point that can be nudged: screen anchor plus the offset applied to it. */
+interface Nudgeable { x: number; y: number; off: { x: number; y: number } }
+
+/**
+ * Push overlapping screen boxes apart, minimum-translation, and report what
+ * couldn't be resolved. Shared by the device badges and the room-cluster
+ * chips so the two can never drift apart in behaviour — the subtleties here
+ * (resolve along the axis of LEAST penetration; relax from zero every frame
+ * rather than easing toward a target, which fed the render loop and made
+ * labels shake; clamp travel AFTER solving and measure the residual against
+ * the clamped result, i.e. against what is actually drawn) were all bought
+ * with field bugs and are not worth reimplementing twice.
+ *
+ * `gap` is the breathing room added between boxes; `maxOff` is how far a box
+ * may travel from its anchor before it stops meaning anything — see
+ * MAX_NUDGE_BADGE_WIDTHS for why a generous budget is actively harmful.
+ */
+function relaxBoxes(
+  pts: Nudgeable[],
+  boxes: { halfW: number; halfH: number; cy: number }[],
+  gap: number,
+  maxOff: number,
+): RelaxResult {
+  for (const p of pts) { p.off.x = 0; p.off.y = 0; }
+  let converged = false;
+  for (let iter = 0; iter < RELAX_ITERATIONS; iter++) {
+    let moved = false;
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const a = pts[i], b = pts[j], ba = boxes[i], bb = boxes[j];
+        const dx = (b.x + b.off.x) - (a.x + a.off.x);
+        const dy = (b.y + b.off.y + bb.cy) - (a.y + a.off.y + ba.cy);
+        const ox = ba.halfW + bb.halfW + gap - Math.abs(dx); // >0 = overlapping
+        const oy = ba.halfH + bb.halfH + gap - Math.abs(dy);
+        if (ox <= 0 || oy <= 0) continue; // clear on at least one axis
+        if (ox < oy) {
+          const s = dx === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dx);
+          a.off.x -= (ox / 2) * s; b.off.x += (ox / 2) * s;
+        } else {
+          const s = dy === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dy);
+          a.off.y -= (oy / 2) * s; b.off.y += (oy / 2) * s;
+        }
+        moved = true;
+      }
+    }
+    if (!moved) { converged = true; break; }
+  }
+
+  for (const p of pts) {
+    const len = Math.hypot(p.off.x, p.off.y);
+    if (len > maxOff) { p.off.x *= maxOff / len; p.off.y *= maxOff / len; }
+  }
+
+  let unresolved = 0;
+  if (!converged) {
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = 0; j < pts.length; j++) {
+        if (i === j) continue;
+        const a = pts[i], b = pts[j], ba = boxes[i], bb = boxes[j];
+        const dx = (b.x + b.off.x) - (a.x + a.off.x);
+        const dy = (b.y + b.off.y + bb.cy) - (a.y + a.off.y + ba.cy);
+        if (ba.halfW + bb.halfW - Math.abs(dx) > 0 && ba.halfH + bb.halfH - Math.abs(dy) > 0) {
+          unresolved++;
+          break;
+        }
+      }
+    }
+  }
+  return { converged, unresolvedFrac: pts.length ? unresolved / pts.length : 0 };
+}
 /**
  * The ONLY thresholds left, and they govern one thing: when individual
- * badges give way to room clusters. Measured as the share of badges still
- * overlapping a neighbour after the relaxation has run.
+ * badges give way to room clusters. Measured as the share of on-screen
+ * badges that had to be HIDDEN because the nudging couldn't fit them.
  *
- * Note what is deliberately NOT threshold-driven: whether a given badge is
- * shown. That is decided per badge, incrementally, by thinResidualOverlaps.
- * Two earlier attempts put a threshold there and both misbehaved in the
- * field — first a raw crowding count (hid badges the nudging would have
- * separated), then a residual-overlap gate (a few pixels of pan flipped the
- * whole view between "all badges" and "most badges hidden"). A per-badge
- * decision has no cliff for a threshold to sit on, so both classes of bug
- * are gone by construction rather than by tuning.
+ * Expressing it as "how many did we have to hide" rather than an abstract
+ * overlap score makes the rule directly explainable — *once a view can't
+ * honestly show about one badge in eight, a room summary beats a partial
+ * map* — and it is what a viewer actually perceives. It also groups earlier
+ * than the previous residual-overlap measure, which only tripped once the
+ * view was already badly overcrowded.
  *
- * Residual overlap does still predict instability well, which is why it
- * remains the right trigger for the cluster mode. Measured on a 95-device
- * villa with a moving camera:
- *   residual 0.00 → 0.00–0.05 px/frame of badge movement  (rock steady)
- *   residual 0.11 → 0.25 px/frame
- *   residual 0.43 → 1.66 px/frame, peaks of 217 px
- *   residual 0.82 → 50.9 px/frame, peaks of 608 px        (the "dancing")
- * Past ~0.45 so few badges would survive thinning that a room-level summary
- * genuinely reads better. Swapping the whole presentation is a real mode
- * change, so the ON/OFF gap is wide: crossing it slightly late is far better
- * than crossing it back and forth while the camera drifts.
+ * Note what is deliberately NOT threshold-driven: whether an individual
+ * badge is shown. That is decided per badge, incrementally, by
+ * thinResidualOverlaps. Two earlier attempts put a threshold there and both
+ * misbehaved in the field — first a raw crowding count (hid badges the
+ * nudging would have separated), then a residual-overlap gate (a few pixels
+ * of pan flipped the whole view between "all badges" and "most hidden"). A
+ * per-badge decision has no cliff for a threshold to sit on, so both classes
+ * of bug are gone by construction rather than by tuning.
+ *
+ * Swapping the whole presentation IS a real mode change, so the ON/OFF gap
+ * stays wide: crossing it slightly late is far better than crossing back and
+ * forth while the camera drifts. Fractions, so any villa behaves the same.
  */
-const UNRESOLVED_CLUSTERS_ON = 0.45;
-const UNRESOLVED_CLUSTERS_OFF = 0.28;
+const UNRESOLVED_CLUSTERS_ON = 0.08;
+const UNRESOLVED_CLUSTERS_OFF = 0.03;
 /**
  * Temporal hysteresis for visibility: a badge that was shown last frame is
  * tested against a box scaled by this, so it takes a clearly worse conflict
@@ -500,6 +570,22 @@ const CLUSTER_FONT_PX = 15;
 /** Clusters must stay legible at the far zoom where badges shrink hardest, so
  *  their scale is floored well above the badge floor (getIconZoomCap: 0.22). */
 const CLUSTER_MIN_SCALE = 0.8;
+/** Breathing room between two chips, and how far one may be nudged from its
+ *  room's centroid — in multiples of its own height, so both track the chip
+ *  design rather than a fixed pixel guess. A chip labels a whole ROOM rather
+ *  than pointing at one object, so it can travel much further than a badge
+ *  (MAX_NUDGE_BADGE_WIDTHS) without becoming misleading. */
+const CLUSTER_GAP_PX = 6;
+const CLUSTER_MAX_NUDGE_HEIGHTS = 4;
+/** Estimated advance width per character at CLUSTER_FONT_PX/weight 600, plus
+ *  the TextBlock's own left+right padding. Babylon computes the real width
+ *  during layout (adaptWidthToChildren), which isn't readable before the
+ *  frame is drawn — this only has to be close enough to keep chips apart. */
+const CLUSTER_CHAR_PX = 8.2;
+const CLUSTER_TEXT_PAD_PX = 24;
+function chipWidthPx(text: string): number {
+  return text.length * CLUSTER_CHAR_PX + CLUSTER_TEXT_PAD_PX;
+}
 const NO_ROOM_LABEL = "Other";
 /** Slack around the viewport within which a badge still counts as on-screen,
  *  so one hovering exactly at the edge doesn't toggle the crowding metric. */
@@ -2327,8 +2413,15 @@ export class EntityVisuals {
     }
 
     const boxes = this.labelBoxes(onScreen);
-    const relaxed = this.declutterLabels(onScreen, boxes);
-    this.updateDetailBand(relaxed);
+    this.declutterLabels(onScreen, boxes);
+    // Thin FIRST, then decide the mode from the result: the share of badges
+    // this view can't fit is the most honest possible trigger for "stop
+    // pretending and summarise by room". Computed identically whichever mode
+    // is active (it reads only the relaxed positions), so the mode can never
+    // feed back into the measurement that selects it.
+    const kept = this.thinResidualOverlaps(onScreen, boxes);
+    const droppedFrac = onScreen.length ? 1 - kept.size / onScreen.length : 0;
+    this.updateDetailBand(droppedFrac);
 
     if (this.detail === "clusters") {
       for (const s of shown) s.lbl.container.isVisible = false;
@@ -2337,7 +2430,6 @@ export class EntityVisuals {
     }
     this.hideClusters();
 
-    const kept = this.thinResidualOverlaps(onScreen, boxes);
     this.placedLast = kept;
     for (const s of onScreen) s.lbl.container.isVisible = kept.has(s.id);
   }
@@ -2426,11 +2518,10 @@ export class EntityVisuals {
    * it swaps the whole presentation, and doing that repeatedly while the
    * camera drifts would be far worse than crossing it slightly late.
    */
-  private updateDetailBand(r: RelaxResult): void {
+  private updateDetailBand(f: number): void {
     const prev = this.detail;
     const snap = this.bandSnapPending;
     this.bandSnapPending = false;
-    const f = r.unresolvedFrac;
 
     if (snap) {
       // Discrete user action (size stepper, style switch): no dead zone, so
@@ -2465,68 +2556,17 @@ export class EntityVisuals {
     boxes: { halfW: number; halfH: number; cy: number }[],
   ): RelaxResult {
     const scale = this.iconUserScale * this.iconZoomScale;
-    const maxOff = MAX_NUDGE_BADGE_WIDTHS * BADGE_DIAMETER_PX * scale;
     const baseY = this.labelBaseOffsetY();
-    const GAP = 5 * scale; // breathing room between two labels' boxes
-
-    for (const s of shown) { s.off.x = 0; s.off.y = 0; }
-    let converged = false;
-    for (let iter = 0; iter < RELAX_ITERATIONS; iter++) {
-      let moved = false;
-      for (let i = 0; i < shown.length; i++) {
-        for (let j = i + 1; j < shown.length; j++) {
-          const a = shown[i], b = shown[j], ba = boxes[i], bb = boxes[j];
-          const dx = (b.x + b.off.x) - (a.x + a.off.x);
-          const dy = (b.y + b.off.y + bb.cy) - (a.y + a.off.y + ba.cy);
-          const ox = ba.halfW + bb.halfW + GAP - Math.abs(dx); // x-overlap (>0 = overlapping)
-          const oy = ba.halfH + bb.halfH + GAP - Math.abs(dy); // y-overlap
-          if (ox <= 0 || oy <= 0) continue; // boxes clear on at least one axis
-          // Resolve along the axis of LEAST penetration (minimum translation).
-          if (ox < oy) {
-            const s2 = dx === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dx);
-            a.off.x -= (ox / 2) * s2; b.off.x += (ox / 2) * s2;
-          } else {
-            const s2 = dy === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dy);
-            a.off.y -= (oy / 2) * s2; b.off.y += (oy / 2) * s2;
-          }
-          moved = true;
-        }
-      }
-      // Settled with nothing left to push: a valid, overlap-free layout for
-      // this exact badge set demonstrably EXISTS. That is the signal the LOD
-      // band keys off (see updateDetailBand) — not a heuristic count.
-      if (!moved) { converged = true; break; }
-    }
-
+    const result = relaxBoxes(
+      shown, boxes,
+      5 * scale,                                              // breathing room
+      MAX_NUDGE_BADGE_WIDTHS * BADGE_DIAMETER_PX * scale,      // nudge budget
+    );
     for (const s of shown) {
-      const len = Math.hypot(s.off.x, s.off.y);
-      if (len > maxOff) { s.off.x *= maxOff / len; s.off.y *= maxOff / len; }
       s.lbl.container.linkOffsetXInPixels = s.off.x;
       s.lbl.container.linkOffsetYInPixels = baseY + s.off.y;
     }
-
-    // THE deciding measurement (see UNRESOLVED_ALL_MAX): the share of badges
-    // still overlapping someone once the solver has finished, evaluated
-    // against the final clamped offsets — i.e. against what is actually
-    // drawn, not against what the solver intended. A converged run is
-    // overlap-free by definition and skips the scan; an unconverged one is
-    // very often overlap-free too, which is the entire point.
-    let unresolved = 0;
-    if (!converged) {
-      for (let i = 0; i < shown.length; i++) {
-        for (let j = 0; j < shown.length; j++) {
-          if (i === j) continue;
-          const a = shown[i], b = shown[j], ba = boxes[i], bb = boxes[j];
-          const dx = (b.x + b.off.x) - (a.x + a.off.x);
-          const dy = (b.y + b.off.y + bb.cy) - (a.y + a.off.y + ba.cy);
-          if (ba.halfW + bb.halfW - Math.abs(dx) > 0 && ba.halfH + bb.halfH - Math.abs(dy) > 0) {
-            unresolved++;
-            break;
-          }
-        }
-      }
-    }
-    return { converged, unresolvedFrac: shown.length ? unresolved / shown.length : 0 };
+    return result;
   }
 
   /** Each label's collision box in screen px, relative to its anchor point —
@@ -2618,11 +2658,13 @@ export class EntityVisuals {
     }
 
     const scale = Math.max(CLUSTER_MIN_SCALE, this.iconUserScale * this.iconZoomScale);
+    const live: { c: ClusterControls; text: string }[] = [];
     for (const [room, g] of groups) {
       const c = this.ensureCluster(room, layer);
       c.entityIds = g.ids;
       c.node.position.copyFrom(g.sum.scaleInPlace(1 / g.ids.length));
-      c.text.text = `${room}  ${g.ids.length}`;
+      const label = `${room}  ${g.ids.length}`;
+      c.text.text = label;
       // The chip's own colour carries the room's worst state — the only
       // attention signal available once the individual badges are gone.
       c.container.thickness = g.alert ? 2 : 0;
@@ -2630,11 +2672,44 @@ export class EntityVisuals {
       c.container.scaleX = scale;
       c.container.scaleY = scale;
       c.container.isVisible = true;
+      live.push({ c, text: label });
     }
     // Rooms that no longer have any visible member (floor switch, category
     // filter) must not leave a stale chip floating over the villa.
     for (const [room, c] of this.clusters) {
       if (!groups.has(room)) c.container.isVisible = false;
+    }
+
+    // Chips carry text, so they're far wider than a badge and two rooms whose
+    // centroids project close together overlapped into an unreadable stack
+    // (reported: "Master Bathroom 3" sitting across "Outdoor 11" across
+    // "Bedroom 1 4"). Push them apart with the SAME solver the badges use.
+    // Safe to nudge freely here: a chip labels a whole room rather than
+    // pointing at one object, so a little travel costs nothing in meaning —
+    // hence a much larger budget than MAX_NUDGE_BADGE_WIDTHS allows a badge.
+    if (live.length > 1) {
+      const cam = this.scene.activeCamera;
+      if (!cam) return;
+      const eng = this.scene.getEngine();
+      const vp = cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight());
+      const tm = this.scene.getTransformMatrix();
+      const pts: Nudgeable[] = [];
+      const boxes: { halfW: number; halfH: number; cy: number }[] = [];
+      for (const { c, text } of live) {
+        const p = Vector3.Project(c.node.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
+        pts.push({ x: p.x, y: p.y, off: { x: 0, y: 0 } });
+        boxes.push({
+          halfW: (chipWidthPx(text) / 2) * scale,
+          halfH: (CLUSTER_HEIGHT_PX / 2) * scale,
+          // The chip is centred on its anchor by linkOffsetY (see ensureCluster).
+          cy: 0,
+        });
+      }
+      relaxBoxes(pts, boxes, CLUSTER_GAP_PX * scale, CLUSTER_MAX_NUDGE_HEIGHTS * CLUSTER_HEIGHT_PX * scale);
+      for (let i = 0; i < live.length; i++) {
+        live[i].c.container.linkOffsetXInPixels = pts[i].off.x;
+        live[i].c.container.linkOffsetYInPixels = -(CLUSTER_HEIGHT_PX / 2) * scale + pts[i].off.y;
+      }
     }
   }
 
