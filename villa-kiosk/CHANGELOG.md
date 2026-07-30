@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.37.4
+
+### Changes
+- **Fixed badges never grouping at far zoom, and dancing again there** (reported with a screen recording: zooming right out produced an unreadable, jittering blob of tiny icons that never became room clusters). Root cause was two mechanisms fighting over the same job. `OverviewController.getIconZoomCap` shrinks badges as you zoom past the whole-villa fit, and its floor was `0.22` — so badges shrank about as fast as the villa did. Clustering engages when badges can no longer be laid out without overlapping, but badges that shrink in step with the scene **never start overlapping**, so the trigger could never fire.
+- The metric was in fact *inverted* in that region: measured on a 95-device villa, zooming out from 1.5× to 6× past the fit made residual overlap **fall** (0.17 → 0.00 → 0.08 → 0.38) instead of rise, because the shrink outpaced the crowding. Density decreasing as you zoom out is obviously wrong, and it is exactly why the view could sit in a dense blob indefinitely without ever grouping.
+- Fixed by flooring the shrink at a still-legible fraction of the user's chosen badge size (`ICON_ZOOM_MIN_SCALE`), so the two mechanisms hand off instead of competing: badges recede while that remains useful, then genuinely overlap, and clustering takes over and replaces them with room chips. Density now rises monotonically with zoom-out, as it must. Since clusters are anchored to a fixed world-space point, reaching them also ends the dancing at that zoom. The floor is a fraction of the user's own size setting, so it assumes nothing about villa size, device count or screen. Typecheck and production build clean.
+
+---
+
+
 ## 2.37.3
 
 ### Changes
