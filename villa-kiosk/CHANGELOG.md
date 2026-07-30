@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.36.7
+
+### Changes
+- **Root-caused and fixed the recurring PWA-only `MODEL_LOAD_FAILED` / "Failed to fetch" failure** (previous attempts had treated it as a network problem; it never was one). The service worker is registered ONLY on the direct/Cloudflare hostname and deliberately skipped under Ingress (`main.tsx`) — which is exactly why the add-on always worked while the installed PWA could not load at all. In `sw.js`'s `modelCacheFirst`, a cache MISS did `await cache.put(...)` (plus an awaited `keys()`/`delete()` prune) **inside the promise handed to `event.respondWith()`** — i.e. inside the page's own network request, *after* all 15 MB had already downloaded successfully. Any failure in that write — `QuotaExceededError` on a 15 MB entry, a header combination the Cache API refuses (`Vary: *`), or the worker being killed mid-write under memory pressure, which this device does constantly (its telemetry shows `context-lost` past 30 in a single session) — rejected the page's request, and a rejected `respondWith` promise surfaces as precisely `TypeError: Failed to fetch`, indistinguishable from a real outage. Because it was deterministic, every retry re-downloaded 15 MB and died identically until the whole budget was spent: the field report shows **124 s elapsed against the 120 s `MODEL_FETCH_RETRY_BUDGET_MS`**, confirming every attempt failed the same way. The earlier fix guarded only the `fetch()` call and left this entire write path unguarded, which is why it didn't hold.
+  - `modelCacheFirst` now returns the response to the page the moment it exists and performs the cache write in the **background**, fully isolated (`event.waitUntil`, itself guarded against `InvalidStateError` if the event already settled). `caches.open`/`cache.match` failures degrade to a plain network fetch instead of failing the request. Nothing about caching can fail a model load any more — worst case is an uncached model (slower next open), never a broken one. This also halves peak memory held in the response path and shrinks the window the worker must stay alive, both of which were feeding the very memory pressure that triggers the kill. A `QuotaExceededError` additionally drops the model cache so the next open has room (no re-`put` with the already-consumed body).
+  - Verified by running the real `sw.js` against a stubbed Cache API: the previous code turned all five caching failure modes into "Failed to fetch"; the new code passes the response through in all five, while a genuine network failure with nothing cached still correctly rejects so the client's retry logic keeps owning real outages.
+  - Defence in depth: added a `vk-sw-bypass` escape hatch, checked first in the SW's fetch handler (pure network, no interception, no caching). `fetchModelWithRetry` now escalates to it on every retry after a failure when a service worker controls the page — a SW-mediated failure repeats identically forever, so plain retrying cannot recover from one, whereas going around it can. A future SW bug can therefore no longer permanently brick the installed PWA.
+  - `MODEL_CACHE` bumped `v1`→`v2` so the `activate` handler reclaims the old cache on deploy: if the failure was quota-driven that frees the space immediately, and otherwise costs one clean re-download. Typecheck and production build clean.
+
+---
+
+
 ## 2.36.6
 
 ### Changes

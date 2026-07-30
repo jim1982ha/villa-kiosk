@@ -16,7 +16,21 @@ const CACHE = "villa-kiosk-v6";
 // The big central 3D model (GLB/SH3D, tens of MB) lives in its OWN cache that
 // survives app updates — it rarely changes and re-downloading it on every open
 // is the main load-time cost. Version-stamped URLs (?v=<etag>) invalidate it.
-const MODEL_CACHE = "villa-kiosk-model-v1";
+//
+// Bumped v1 -> v2 with the respondWith fix below: the `activate` handler
+// deletes any cache not in its keep-list, so this drops whatever the old
+// cache held. If the field failure WAS storage-quota-driven, that reclaims
+// the space in one shot; if it wasn't, the only cost is a single clean
+// re-download. Either way the deployed fix starts from a known-good state
+// rather than inheriting a possibly-wedged cache.
+const MODEL_CACHE = "villa-kiosk-model-v2";
+// Escape hatch (see fetchProgress.ts's SW_BYPASS_PARAM): a request carrying
+// this query param is passed straight to the network, no interception, no
+// caching. The client escalates to it after a model fetch fails, so a service
+// worker that is somehow still breaking the request — a bug here, a browser
+// quirk, a SW being repeatedly killed under memory pressure — can never
+// permanently brick the PWA the way it just did in the field.
+const SW_BYPASS_PARAM = "vk-sw-bypass";
 // Precache index.html by its explicit path, NOT the bare directory "./":
 // Home Assistant's static file server returns "403: Forbidden" for a directory
 // request (it won't auto-serve index.html), which would reject cache.addAll and
@@ -77,6 +91,10 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
 
+  // Client-requested bypass — pure network, before any other rule. Must stay
+  // the FIRST check so it also escapes any future branch added below.
+  if (url.searchParams.has(SW_BYPASS_PARAM)) return;
+
   // Central 3D model files (GLB/room-data sidecar): cache-first in the
   // persistent model cache. Checked BEFORE the /api/ exclusion below because,
   // behind Ingress, the model is served under
@@ -87,7 +105,7 @@ self.addEventListener("fetch", (event) => {
   // probeStandaloneCentralModel — gets the same treatment, not just Ingress's.
   const isModelFile = url.pathname.endsWith(".glb") || url.pathname.endsWith(".rooms.json");
   if (isModelFile && !url.pathname.includes("camera_proxy")) {
-    event.respondWith(modelCacheFirst(req, url));
+    event.respondWith(modelCacheFirst(event, req, url));
     return;
   }
 
@@ -144,52 +162,102 @@ self.addEventListener("fetch", (event) => {
 // replaced the stamp changes, we miss, fetch once, and prune the stale versions
 // of the same path to cap cache growth.
 //
-// The fetch() below is NOT wrapped in a way that silently swallows failure —
-// on a genuine miss it must either succeed or surface an error the page can
-// see — but it IS wrapped so that failure is a controlled fallback rather than
-// an UNCAUGHT REJECTION. Before this fix, event.respondWith() was handed a
-// bare `fetch(req)`: if that promise rejected — a dropped connection, or the
-// service worker itself being torn down and restarted mid-fetch, which
-// Chrome/Safari do freely under memory pressure and which the client's own
-// telemetry shows happening repeatedly on the SAME device this bug was
-// reported from (context-lost climbing past 30 in one session) — the
-// rejection propagated straight through respondWith() as the page's network
-// request failing, and the page saw exactly "TypeError: Failed to fetch".
-// That is indistinguishable from a real network outage to the app's own
-// retry logic (fetchModelWithRetry), so it retried correctly — but every
-// retry hit the SAME unguarded fetch() and could fail the SAME way, some of
-// them near-instantly (a synchronous throw, not a real timed-out request),
-// burning through the retry budget faster than an actual network blip would.
-// Falling back to ANY previously cached copy of this exact path (even a
-// stale version — the ?v= stamp means the NEXT successful load still gets
-// the true current one) turns a hard failure into a degraded-but-working
-// load whenever one is available, and only reaches the network-failure
-// fallback when there is truly nothing to fall back to.
-async function modelCacheFirst(req, url) {
-  const cache = await caches.open(MODEL_CACHE);
-  const hit = await cache.match(req);
-  if (hit) return hit;
-
+// THE GOVERNING RULE HERE, learned the hard way twice: the promise handed to
+// event.respondWith() IS the page's network request. Anything that can reject
+// inside it fails that request, and the page sees exactly
+// "TypeError: Failed to fetch" — with no way to tell it apart from a real
+// outage. So the ONLY thing allowed to reject out of this function is a
+// genuine network failure with nothing cached to fall back on.
+//
+// A previous fix guarded the fetch() alone and was reported as still broken.
+// It was: on a cache MISS this function used to `await cache.put(...)` (plus
+// an await'ed keys()/delete() prune) INSIDE the respondWith promise, after
+// the bytes had already arrived. Any failure in that write — a
+// QuotaExceededError on a 15 MB entry, a response header combination the
+// Cache API refuses (`Vary: *`), or the service worker being killed mid-write
+// under memory pressure, which this very device does constantly (its own
+// telemetry shows context-lost climbing past 30 in a session) — rejected the
+// page's request AFTER a fully successful 15 MB download. Deterministic, so
+// the client's retry loop re-downloaded and re-failed identically until its
+// whole budget was gone: the field report shows 124 s elapsed against a 120 s
+// budget, i.e. every single attempt died the same way. Under Ingress the
+// service worker isn't registered at all (see main.tsx), which is precisely
+// why the add-on kept working while the PWA could not load at all.
+//
+// So now: the response is returned to the page the moment it exists, and the
+// cache write happens in the BACKGROUND, fully isolated. Nothing about
+// caching can fail the request any more — the worst case is an uncached
+// model (slower next open), never a broken one. This also halves the peak
+// memory held in the response path and shrinks the window in which the SW
+// must stay alive, both of which were feeding the very memory pressure that
+// triggers the kill.
+async function modelCacheFirst(event, req, url) {
   const path = url.pathname;
+  let cache = null;
+  try {
+    cache = await caches.open(MODEL_CACHE);
+    const hit = await cache.match(req);
+    if (hit) return hit;
+  } catch {
+    // Storage unavailable/blocked/corrupted — caching is an optimisation, so
+    // fall through to a plain network fetch rather than failing the request.
+    cache = null;
+  }
+
   let res;
   try {
     res = await fetch(req);
   } catch (err) {
-    const stale = await findStaleModelCacheEntry(cache, path);
-    if (stale) return stale;
-    throw err; // nothing to fall back to — let the page's own retry logic handle it
+    // Network genuinely failed. ANY cached copy of this path (even a stale
+    // ?v=) beats a dead load — the next successful open still gets the
+    // current bytes, since the stamp only moves forward.
+    if (cache) {
+      try {
+        const stale = await findStaleModelCacheEntry(cache, path);
+        if (stale) return stale;
+      } catch { /* cache read failed too — fall through to the throw */ }
+    }
+    throw err; // nothing to fall back to — the page's retry logic owns it
   }
 
-  if (res && res.status === 200) {
+  // Background, best-effort cache write. Deliberately NOT awaited: see the
+  // rule above. waitUntil keeps the worker alive for the write when it's
+  // still accepted (the event may already have settled by now, which throws
+  // InvalidStateError — in that case just let it run unsupervised).
+  if (cache && res && res.status === 200) {
+    let copy;
+    try { copy = res.clone(); } catch { copy = null; }
+    if (copy) {
+      const write = storeModel(cache, req, path, copy).catch(() => {});
+      try { event.waitUntil(write); } catch { /* event no longer active */ }
+    }
+  }
+  return res;
+}
+
+/** Prune older ?v= entries for this path, then store the new one. Isolated so
+ *  every failure mode stays off the response path (see modelCacheFirst). */
+async function storeModel(cache, req, path, body) {
+  try {
     const keys = await cache.keys();
     await Promise.all(
       keys
         .filter((k) => new URL(k.url).pathname === path && k.url !== req.url)
         .map((k) => cache.delete(k)),
     );
-    await cache.put(req, res.clone());
+    await cache.put(req, body);
+  } catch (err) {
+    // Out of storage: reclaim the whole model cache so the NEXT open has room
+    // to cache cleanly. Deliberately no retry with `body` here — a failed
+    // cache.put has already consumed it, so re-putting would throw "body
+    // already used" and mask the real error. Freeing the space is the fix;
+    // this load already has its bytes and continues unaffected.
+    if (err && err.name === "QuotaExceededError") {
+      await caches.delete(MODEL_CACHE);
+      return;
+    }
+    throw err;
   }
-  return res;
 }
 
 /** Any cached response for this exact path, regardless of its ?v= stamp —

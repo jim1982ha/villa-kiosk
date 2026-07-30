@@ -41,6 +41,33 @@ const MODEL_FETCH_MAX_DELAY_MS = 8_000;
 // spinning forever with no explanation.
 const MODEL_FETCH_RETRY_BUDGET_MS = 120_000;
 
+/** Query param the service worker treats as "pure network, no interception,
+ *  no caching" (see public/sw.js, where it's the very first fetch-handler
+ *  check). Kept in sync by name only — the two files can't import from each
+ *  other, so if you rename it, rename it there too. */
+export const SW_BYPASS_PARAM = "vk-sw-bypass";
+
+/** Same URL, marked so the service worker steps out of the way entirely.
+ *  Query params don't affect nginx's /model/ routing (`try_files $uri`
+ *  ignores the query string) and the existing ?v= stamp is preserved, so the
+ *  immutable Cache-Control mapping still applies. */
+function withServiceWorkerBypass(url: string): string {
+  try {
+    const u = new URL(url, typeof location !== "undefined" ? location.href : "http://localhost");
+    u.searchParams.set(SW_BYPASS_PARAM, "1");
+    return u.toString();
+  } catch {
+    return url; // unparseable — better to retry the plain URL than to throw
+  }
+}
+
+/** Is a service worker actually mediating this page's requests? Only then is
+ *  bypassing it meaningful (under Ingress none is registered at all — see
+ *  main.tsx — which is exactly why the add-on path never hit this bug). */
+function serviceWorkerControlsPage(): boolean {
+  return typeof navigator !== "undefined" && !!navigator.serviceWorker?.controller;
+}
+
 /**
  * Fetch + read a model URL with progress, riding through a NETWORK-level
  * failure — fetch() throwing, or the stream dropping mid-read
@@ -55,6 +82,10 @@ const MODEL_FETCH_RETRY_BUDGET_MS = 120_000;
  * point being that the kiosk recovers on its own the moment the hop is back,
  * with no manual reload. `onRetrying` (optional) fires before each backoff so
  * the UI can show a "reconnecting…" state instead of a frozen spinner.
+ *
+ * Retries also ESCALATE past the service worker (see the loop body): a
+ * SW-mediated failure repeats identically forever, so plain retrying can't
+ * recover from one — going around it can.
  *
  * An HTTP error status (404, 500, …) is deliberately NOT retried — that
  * response DID arrive, and it's a real, informative failure (wrong path,
@@ -72,8 +103,19 @@ export async function fetchModelWithRetry(
   const started = Date.now();
   let attempt = 0;
   for (;;) {
+    // Escalation: the FIRST attempt goes through the service worker normally
+    // (so its model cache keeps doing its job on the happy path); every retry
+    // after a failure bypasses it. A SW-mediated failure is deterministic —
+    // the field bug that motivated this re-downloaded 15 MB and died the same
+    // way on every attempt until the 120 s budget ran out — so retrying the
+    // identical path is worthless, while going around it actually recovers.
+    // Costs nothing when the SW isn't the culprit: the bypassed request is a
+    // plain network fetch of the same URL.
+    const attemptUrl = attempt > 0 && serviceWorkerControlsPage()
+      ? withServiceWorkerBypass(url)
+      : url;
     try {
-      const resp = await fetch(url);
+      const resp = await fetch(attemptUrl);
       if (!resp.ok) return { resp, data: new ArrayBuffer(0) }; // caller classifies + reports the status; no retry
       const data = await readWithProgress(resp, onProgress);
       return { resp, data };
