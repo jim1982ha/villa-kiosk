@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.38.3
+
+### Changes
+- **Advanced Settings' "Linked entity" and "Motion sensor" pickers can now be cleared.** Reported: once either was set there was no way back to "unset" short of typing over it with a different entity. `EntityPicker` gained an optional `onClear` — a small "×" inside the search box once a value is set — wired up for exactly these two genuinely-optional link fields (in both the auto-detected entity list and the mesh-bindings table). Left off every other `EntityPicker` use (a mesh's own primary binding already has its own "Unbind" button; several others have nothing selected yet to clear), so nothing gained a clear button that didn't already need one. Clearing stores `undefined`, the same convention this field's own migration code already uses, rather than an empty string.
+- **Removed the redundant floor-picker ring inside the rooms dial.** Long-pressing a specific floor button already tells the dial which floor you want, so re-offering both floors as chips inside the dial (as `1F`/`2F`, one of them already lit) was an extra, pointless step. The dial now opens straight to that floor's rooms.
+- **Room chips in the dial are now alphabetically sorted**, rather than following whatever order they were added in the model.
+- **Fixed room chips overlapping when a floor has a lot of rooms.** The fan's angular spread was capped at ±86° regardless of room count, so past about 15 rooms each additional one shrank the angular gap between chips below what the fixed 228px radius could physically separate — exactly the stacked-label mess in the screenshot. The dial now grows its radius to restore the same safe per-room spacing once the angular spread saturates, capped by how much vertical room the current viewport actually has (so it can never run off-screen) — only past THAT cap do labels start to overlap, a deliberate, visible fallback for a genuinely long list rather than the previous silent stacking. Verified numerically: unchanged for the common case (≤15 rooms, still the original 228px/48px-per-room baseline exactly), grows cleanly through ~30 rooms, then degrades gracefully rather than clipping off-screen. Typecheck and production build clean.
+
+---
+
 ## 2.38.2
 
 ### Changes

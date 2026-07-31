@@ -19,8 +19,9 @@ export interface RadialItem {
   /** Viewport coordinates (position: fixed) of the chip centre. */
   x: number;
   y: number;
-  kind: "floor" | "room" | "manage";
-  /** Highlighted — e.g. the currently-active floor. */
+  kind: "room" | "manage";
+  /** Highlighted state, currently unused by either kind — kept so a future
+   *  "you're already here" indicator doesn't need a shape change. */
   active: boolean;
 }
 

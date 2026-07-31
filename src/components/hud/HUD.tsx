@@ -156,8 +156,11 @@ export default function HUD({
   // frame its whole bird's-eye view — onShowFloor), while a LONG-PRESS opens
   // the radial room-picker dial, pre-scoped to WHICHEVER floor button was
   // held — not necessarily the floor currently on screen, so long-pressing
-  // "2F" while standing on 1F goes straight to 2F's rooms. Tap a room in the
-  // dial to zoom there, tap outside to dismiss. See RadialRoomMenu.
+  // "2F" while standing on 1F goes straight to 2F's rooms. No intermediate
+  // floor-picker ring inside the dial any more either — holding a SPECIFIC
+  // floor button already told it which floor you want, so re-offering both
+  // floors as chips inside the dial was a redundant extra step. Tap a room
+  // to zoom there, tap outside to dismiss. See RadialRoomMenu.
   // ───────────────────────────────────────────────────────────────────────
   type RadialState = { cx: number; cy: number; activeFloor: number | null };
   // One ref per floor button — the dial anchors itself to whichever one was
@@ -168,38 +171,66 @@ export default function HUD({
   const floorLongFired = useRef(false);
 
   const availFloors = floors.filter((f) => floorsAvailable.includes(f));
-  const FLOOR_R = 78;    // inner arc radius (floors)
-  const ROOM_R = 228;    // outer arc radius (rooms) — roomy so labels don't stack
+  const ROOM_R = 228;         // baseline outer-arc radius — the original, always-fine "few rooms" size
+  const ROOM_MIN_ARC_PX = 48; // safe arc-length per room AT that baseline (228px radius, ~12° steps)
+  const ROOM_VIEWPORT_PAD = 40; // top/bottom breathing room — matches the cy-clamp margin below
+  const ROOM_R_FLOOR = 90;    // sanity floor so an extreme case never collapses the fan onto the button
+
+  /** Half-angle (deg) of the room fan for `n` rooms: unchanged from before —
+   *  a tight ~12° step per room until the spread saturates at ±86°. */
+  const roomFanHalfAngle = (n: number): number =>
+    n <= 1 ? 0 : Math.min(86, ((n - 1) * 12) / 2);
+
+  /**
+   * Outer arc radius for `n` rooms.
+   *
+   * The baseline (228px) reproduces the original "few rooms" look exactly,
+   * unchanged. Past ~15 rooms the fan's angular spread saturates at ±86°, so
+   * each ADDITIONAL room shrinks the angular slice between chips below the
+   * safe arc-length that kept them apart at the baseline — this is what let
+   * a long room list stack its labels on top of each other. Growing the
+   * radius instead restores that same safe per-room spacing by giving the
+   * (now-fixed) angular spread more physical arc to spend it on.
+   *
+   * That growth is capped by how much vertical room the CURRENT viewport
+   * actually has, so the dial can never be pushed off-screen. Only once even
+   * that cap can't fit the ideal spacing do labels start to overlap — a
+   * deliberate, visible fallback for an unusually long room list, not a bug.
+   */
+  const roomFanRadius = (n: number): number => {
+    const half = roomFanHalfAngle(n);
+    let needed = ROOM_R;
+    if (n > 1) {
+      const stepRad = ((2 * half) / (n - 1)) * (Math.PI / 180);
+      if (stepRad > 0) needed = Math.max(ROOM_R, ROOM_MIN_ARC_PX / stepRad);
+    }
+    const maxForViewport = window.innerHeight / 2 - ROOM_VIEWPORT_PAD;
+    return Math.max(ROOM_R_FLOOR, Math.min(needed, maxForViewport));
+  };
+
+  const roomsForFloor = (f: number) =>
+    config.teleportPoints
+      .filter((p) => (p.floor ?? 1) === f)
+      // Alphabetical, not model/creation order — reads as a deliberately
+      // organised list rather than whatever order rooms happened to be added.
+      .sort((a, b) => a.name.localeCompare(b.name));
 
   const buildRadialItems = (r: RadialState): RadialItem[] => {
-    const items: RadialItem[] = [];
+    if (r.activeFloor == null) return [];
     const cosd = (d: number) => Math.cos((d * Math.PI) / 180);
     const sind = (d: number) => Math.sin((d * Math.PI) / 180);
     const arc = (i: number, n: number, half: number) =>
       n <= 1 ? 0 : -half + (2 * half) * (i / (n - 1));
-    // Floors: a tight fan so 1F / 2F sit close together.
-    availFloors.forEach((f, i) => {
-      const a = arc(i, availFloors.length, 22);
-      items.push({
-        key: `f${f}`, label: `${f}F`, kind: "floor",
-        x: r.cx + FLOOR_R * cosd(a), y: r.cy + FLOOR_R * sind(a),
-        active: r.activeFloor === f,
-      });
+    const rooms = roomsForFloor(r.activeFloor);
+    const half = roomFanHalfAngle(rooms.length);
+    const radius = roomFanRadius(rooms.length);
+    return rooms.map((p, i) => {
+      const a = arc(i, rooms.length, half);
+      return {
+        key: `r${p.name}`, label: p.name, kind: "room",
+        x: r.cx + radius * cosd(a), y: r.cy + radius * sind(a), active: false,
+      };
     });
-    if (r.activeFloor != null) {
-      const rooms = config.teleportPoints.filter((p) => (p.floor ?? 1) === r.activeFloor);
-      // Spread rooms across a near-full right semicircle; a big radius keeps
-      // even a long room list from stacking on top of each other.
-      const half = rooms.length <= 1 ? 0 : Math.min(86, ((rooms.length - 1) * 12) / 2);
-      rooms.forEach((p, i) => {
-        const a = arc(i, rooms.length, half);
-        items.push({
-          key: `r${p.name}`, label: p.name, kind: "room",
-          x: r.cx + ROOM_R * cosd(a), y: r.cy + ROOM_R * sind(a), active: false,
-        });
-      });
-    }
-    return items;
   };
 
   const closeRadial = () => setRadial(null);
@@ -208,9 +239,10 @@ export default function HUD({
   const openRadialForFloor = (f: number) => {
     const b = floorBtnRefs.current.get(f)?.getBoundingClientRect();
     if (!b) return;
+    const radius = roomFanRadius(roomsForFloor(f).length);
     const cx = b.right + 16;
     // Clamp the centre so the tall outer arc always fits (never clipped top/bottom).
-    const margin = ROOM_R + 40;
+    const margin = radius + ROOM_VIEWPORT_PAD;
     const cy = Math.max(
       Math.min(margin, window.innerHeight / 2),
       Math.min(b.top + b.height / 2, window.innerHeight - margin),
@@ -260,11 +292,7 @@ export default function HUD({
   };
 
   const onRadialPick = (it: RadialItem) => {
-    if (it.kind === "floor") {
-      const f = Number(it.key.slice(1));
-      onShowFloor(f);                                     // tap a floor → switch to it + frame its whole view …
-      setRadial((r) => (r ? { ...r, activeFloor: f } : r)); // … and reveal its rooms
-    } else if (it.kind === "manage") {
+    if (it.kind === "manage") {
       closeRadial();
       onOpenTeleport();                                    // full Rooms list — create / edit / re-anchor
     } else {

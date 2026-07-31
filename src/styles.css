@@ -486,7 +486,6 @@ button {
    translucent wash — matches every other button's highlight. */
 .radial-item:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 .radial-item:active { transform: translate(-50%, -50%) scale(0.94); }
-.radial-item.radial-floor { min-width: 46px; height: 46px; padding: 0; font-size: 14px; font-weight: 700; border-radius: 50%; }
 .radial-item.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 @keyframes radial-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } }
 
@@ -1454,6 +1453,15 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .config-table .config-search input {
   background: transparent; padding: 10px 0; border-radius: 0;
 }
+/* EntityPicker's optional "clear this link" button — sits inside the same
+   pill as the search input/icon, not off as its own separate control, since
+   it only ever applies to the value that pill is already showing. */
+.entity-picker-clear {
+  width: 26px; height: 26px; flex: 0 0 auto;
+  border: none; background: transparent; border-radius: 8px;
+  color: var(--text-dim);
+}
+.entity-picker-clear:hover { background: var(--bg-panel); color: var(--text-primary); }
 
 /* Entity ID cell: id text on the left, action icons (edit + delete) pinned right
    so every card lines up identically. */

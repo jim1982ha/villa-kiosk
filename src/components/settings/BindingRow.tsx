@@ -127,6 +127,7 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
             <EntityPicker
               value={meta.linkedEntityId}
               onChange={(id) => draftField({ linkedEntityId: id })}
+              onClear={() => draftField({ linkedEntityId: undefined })}
               allowCustom
               hideCurrentLabel
               placeholder={
@@ -141,6 +142,7 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
               <EntityPicker
                 value={meta.motionEntityId}
                 onChange={(id) => draftField({ motionEntityId: id })}
+                onClear={() => draftField({ motionEntityId: undefined })}
                 domains={["binary_sensor"]}
                 allowCustom
                 hideCurrentLabel

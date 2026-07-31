@@ -3,7 +3,7 @@
 // makes binding turnkey — you pick from real entities, not typed IDs.
 
 import { useEffect, useRef, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 
 interface Props {
@@ -16,12 +16,20 @@ interface Props {
   allowCustom?: boolean;
   /** Hide the "Bound to X" label shown when a value is selected and closed. */
   hideCurrentLabel?: boolean;
+  /** Renders a small "×" in the search box once a value is set, calling this
+   *  to unset it. Omitted entirely for pickers where clearing wouldn't make
+   *  sense (a mesh's own primary binding already has its own "Unbind"
+   *  button; a picker with no `value` at all, e.g. "add another member", has
+   *  nothing to clear) — only pass this for genuinely OPTIONAL links
+   *  (linkedEntityId, motionEntityId), which previously had no way at all to
+   *  go back to "unset" once something had been picked. */
+  onClear?: () => void;
 }
 
 const ENTITY_ID_RE = /^[a-z_]+\.[a-z0-9_]+$/;
 
 export default function EntityPicker({
-  value, onChange, domains, placeholder, allowCustom, hideCurrentLabel,
+  value, onChange, domains, placeholder, allowCustom, hideCurrentLabel, onClear,
 }: Props) {
   const { entities } = useHA();
   const [query, setQuery] = useState("");
@@ -85,6 +93,20 @@ export default function EntityPicker({
           onFocus={() => setOpen(true)}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
         />
+        {/* Only when there's actually something TO clear, the caller wants
+            that offered, and the dropdown isn't open (where it would just
+            sit awkwardly next to an in-progress search). */}
+        {onClear && value && !open && (
+          <button
+            type="button"
+            className="icon-btn entity-picker-clear"
+            onClick={(e) => { e.stopPropagation(); onClear(); }}
+            title={`Clear (was ${value})`}
+            aria-label={`Clear selection (was ${value})`}
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {!hideCurrentLabel && value && !open && (

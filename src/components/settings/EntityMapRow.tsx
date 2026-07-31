@@ -246,6 +246,7 @@ function EntityMapRow({
             <EntityPicker
               value={m.linkedEntityId}
               onChange={(id) => draftField({ linkedEntityId: id })}
+              onClear={() => draftField({ linkedEntityId: undefined })}
               allowCustom
               hideCurrentLabel
               placeholder="Adds an on/off switch…"
@@ -256,6 +257,7 @@ function EntityMapRow({
               <EntityPicker
                 value={m.motionEntityId}
                 onChange={(id) => draftField({ motionEntityId: id })}
+                onClear={() => draftField({ motionEntityId: undefined })}
                 domains={["binary_sensor"]}
                 allowCustom
                 hideCurrentLabel
