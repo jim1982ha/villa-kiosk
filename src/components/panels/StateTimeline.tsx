@@ -36,6 +36,17 @@ interface Props {
    *  to render as the same empty state, so a slow network looked identical
    *  to a device that's never reported). */
   loading?: boolean;
+  /** Run top-to-bottom instead of left-to-right (the camera panel's side rail
+   *  on a phone in landscape). Segments are laid out on the other axis and the
+   *  pointer read switches axis with them, so this is a genuinely vertical
+   *  bar — NOT the horizontal one rotated with a CSS transform, which was the
+   *  first attempt: a rotated box has to be sized from its container's height
+   *  in a property that means width, which needs that height known up front,
+   *  and every way of supplying it (a viewport unit, then a measured one) was
+   *  an assumption that could disagree with the real box. Laying the segments
+   *  out on the correct axis in the first place has no such coupling — the bar
+   *  simply fills its container like any other block. */
+  vertical?: boolean;
 }
 
 /** Tidy a raw HA state for display: "not_home" → "Not home", "on" → "On". */
@@ -44,7 +55,7 @@ function prettyState(s: string): string {
   return t ? t[0].toUpperCase() + t.slice(1) : s;
 }
 
-export default function StateTimeline({ data, hours = 24, colorFor, height, legend, loading }: Props) {
+export default function StateTimeline({ data, hours = 24, colorFor, height, legend, loading, vertical }: Props) {
   const [hover, setHover] = useState<{ x: number; state: string; t: number } | null>(null);
 
   if (data.length === 0) {
@@ -80,18 +91,21 @@ export default function StateTimeline({ data, hours = 24, colorFor, height, lege
 
   const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    // Read whichever axis the bar actually runs along.
+    const frac = vertical
+      ? Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+      : Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
     const t = start + frac * span;
     const seg = segments.find((s) => t >= s.from && t <= s.to) ?? segments[segments.length - 1];
-    setHover({ x: (e.clientX - rect.left), state: seg.state, t });
+    setHover({ x: vertical ? e.clientY - rect.top : e.clientX - rect.left, state: seg.state, t });
   };
 
   return (
     <>
       <div className="spark-wrap">
         <div
-          className="state-timeline"
-          style={{ ...(height ? { height } : undefined), touchAction: "none" }}
+          className={`state-timeline${vertical ? " state-timeline-vertical" : ""}`}
+          style={{ ...(height && !vertical ? { height } : undefined), touchAction: "none" }}
           onPointerMove={onMove}
           onPointerDown={onMove}
           onPointerLeave={() => setHover(null)}
@@ -100,11 +114,18 @@ export default function StateTimeline({ data, hours = 24, colorFor, height, lege
             <div
               key={i}
               className="state-timeline-seg"
-              style={{ left: `${s.left}%`, width: `${Math.max(s.width, 0.3)}%`, background: colorFor(s.state) }}
+              style={
+                vertical
+                  ? { top: `${s.left}%`, height: `${Math.max(s.width, 0.3)}%`, background: colorFor(s.state) }
+                  : { left: `${s.left}%`, width: `${Math.max(s.width, 0.3)}%`, background: colorFor(s.state) }
+              }
             />
           ))}
           {hover && (
-            <div className="state-timeline-cursor" style={{ left: hover.x }} />
+            <div
+              className="state-timeline-cursor"
+              style={vertical ? { top: hover.x } : { left: hover.x }}
+            />
           )}
         </div>
         {hover && (

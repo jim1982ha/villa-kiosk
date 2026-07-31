@@ -123,26 +123,17 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  // Phone-landscape rail: the status timeline is rotated 90° to run down the
-  // left edge (see styles.css), and its PRE-rotation width becomes its
-  // on-screen length once rotated — i.e. it has to equal the rail's actual
-  // height. That used to be assumed as 100dvh, on the theory that the panel
-  // fills the dynamic viewport exactly — reported as visibly wrong on a real
-  // device (a black gap next to the rail): dvh is a viewport unit and can
-  // legitimately differ from this PANEL's own rendered box (embedding,
-  // browser chrome insets, rounding), which a fixed CSS assumption has no way
-  // to see. Measuring the real container instead removes the assumption
-  // entirely, the same fix already applied to the portrait centring bug.
-  const railRef = useRef<HTMLDivElement>(null);
-  const [railLen, setRailLen] = useState(0);
+  // Phone-landscape rail: the status bar runs vertically down the left edge.
+  // Detected here rather than in CSS alone because the timeline has to lay its
+  // segments out on the matching axis (StateTimeline's `vertical`) — a CSS
+  // rotation was tried first and abandoned; see that prop's docstring.
+  const [railVertical, setRailVertical] = useState(false);
   useEffect(() => {
-    const el = railRef.current;
-    if (!el) return;
-    const measure = () => setRailLen(el.offsetHeight);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
+    const mq = window.matchMedia("(orientation: landscape) and (max-height: 560px)");
+    const sync = () => setRailVertical(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
   }, []);
 
   // Every camera in the house, in a stable order, so prev/next can cycle
@@ -615,15 +606,12 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           stays aligned with prev/next/zoom/fullscreen/close regardless of
           how many of those are currently rendered. */}
       <div className="camera-bottom-row" ref={bottomRowRef}>
-        <div
-          className="camera-status-bar"
-          ref={railRef}
-          style={railLen ? ({ "--cam-rail-len": `${railLen}px` } as React.CSSProperties) : undefined}
-        >
+        <div className="camera-status-bar">
           <StateTimeline
             data={statusHistory}
             loading={statusLoading}
             height={56}
+            vertical={railVertical}
             colorFor={(s) => (s === "motion" ? "var(--status-danger)" : s === "offline" ? "#000" : "var(--status-on)")}
           />
         </div>

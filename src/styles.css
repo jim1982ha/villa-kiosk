@@ -1066,9 +1066,8 @@ input[type="range"]::-moz-range-thumb {
 
 /* --- Camera fullscreen --- */
 /* --cam-rail: thickness of the side status rail in the phone-landscape
-   layout below. Declared here (not in the media query) because the rotated
-   timeline offsets itself by exactly this value, so the two must be the same
-   number by construction rather than by two edits staying in sync. */
+   layout below. One declaration shared by the rail and the bar inside it, so
+   the two can't drift apart across separate edits. */
 .camera-fullscreen {
   --cam-rail: 22px;
   position: absolute; inset: 0; z-index: 60; background: #000;
@@ -1080,7 +1079,14 @@ input[type="range"]::-moz-range-thumb {
    + controls bar on every screen size/orientation (previously this was
    desktop-only, gated behind a min-width media query, which left the bottom
    row floating on top of the video in mobile portrait). */
-.camera-viewport { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
+/* overflow: hidden HERE, on the parent, is what keeps a pinch-zoomed feed
+   inside its own region. .camera-zoom (the element the zoom transform is
+   applied to) already sets overflow: hidden, but an element's own overflow
+   cannot clip its OWN transform — scaling it scales its clipping box along
+   with its content, so the enlarged feed spilled across the whole panel and
+   read as "the entire screen zooms" rather than just the video. Only an
+   ancestor that is NOT itself being transformed can clip it. */
+.camera-viewport { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; min-width: 0; width: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 /* Zoom/pan layer: fills its container, centres the feed, and is transformed
    by useMediaZoom. will-change keeps the transform on the compositor (cheap). */
 .camera-zoom { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; will-change: transform; }
@@ -1200,40 +1206,31 @@ input[type="range"]::-moz-range-thumb {
   }
   .camera-controls .icon-btn svg { width: 55%; height: 55%; }
 
-  /* Status rail down the left edge. The timeline itself is a horizontal bar
-     by construction (percentage-positioned segments), so it's ROTATED rather
-     than reimplemented: turned a quarter turn about its top-left corner, then
-     pushed back across by its own thickness. Its hover tooltip is suppressed
-     here — the pointer maths behind it assumes an unrotated box, so it would
-     report the wrong time.
+  /* Status rail down the left edge — a genuinely vertical bar (StateTimeline's
+     `vertical` lays its segments on the Y axis), NOT the horizontal one
+     rotated. The rotated version is gone: it had to be sized from its
+     container's height using a property that means width, so the height had
+     to be supplied up front, and every way of doing that (a viewport unit,
+     then a measured one) was an assumption that could disagree with the real
+     box — which is exactly how it kept ending up misaligned. Laid out on the
+     right axis it just fills its container like any other block, with nothing
+     left to disagree about.
 
-     --cam-rail-len (set inline from CameraPanel, measuring the rail's OWN
-     rendered height live) is what the bar's pre-rotation width — i.e. its
-     on-screen LENGTH once rotated — is sized from. It used to be assumed as
-     100dvh on the theory that this panel exactly fills the dynamic viewport;
-     reported as visibly wrong on a real device (a stray gap next to the
-     rail), because dvh is a viewport unit that can legitimately differ from
-     this PANEL's own box (embedding, browser-chrome insets, rounding) — a
-     mismatch a fixed CSS assumption has no way to see. 100dvh is kept ONLY
-     as the fallback for the handful of frames before JS's first measurement
-     lands. */
+     Padded to the same vertical bounds as the control column opposite it, so
+     the two rails read as a matched pair framing the feed. */
   .camera-status-bar {
     order: -1;
     flex: 0 0 auto;
-    width: calc(var(--cam-rail) + env(safe-area-inset-left, 0px));
-    padding-left: env(safe-area-inset-left, 0px);
-    position: relative;
-    overflow: hidden;
+    width: var(--cam-rail);
+    box-sizing: content-box;
+    padding: 8px 0 8px env(safe-area-inset-left, 0px);
+    display: flex;
     background: #000;
-    pointer-events: none;
   }
-  .camera-status-bar .spark-wrap { position: static; }
+  .camera-status-bar .spark-wrap { flex: 1 1 auto; display: flex; min-height: 0; }
   .camera-status-bar .state-timeline,
   .camera-status-bar .state-timeline-skeleton {
-    position: absolute; top: 0; left: env(safe-area-inset-left, 0px);
-    width: var(--cam-rail-len, 100dvh); height: var(--cam-rail);
-    transform-origin: 0 0;
-    transform: translateX(var(--cam-rail)) rotate(90deg);
+    width: var(--cam-rail); height: auto; flex: 1 1 auto; min-height: 0;
   }
 }
 /* Wraps the HLS <video> together with its instant snapshot preview so the two
@@ -1705,6 +1702,12 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .state-timeline { position: relative; width: 100%; height: 78px; border-radius: 8px; overflow: hidden; background: var(--bg-input); }
 .state-timeline-seg { position: absolute; top: 0; bottom: 0; }
 .state-timeline-cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.85); box-shadow: 0 0 3px rgba(0,0,0,0.5); pointer-events: none; }
+/* Vertical variant: segments span the full WIDTH and are positioned/sized on
+   the Y axis instead (the inline styles switch axis to match — see
+   StateTimeline's `vertical`), so the two orientations share one component
+   and one set of segment maths rather than being reimplemented. */
+.state-timeline-vertical .state-timeline-seg { top: auto; bottom: auto; left: 0; right: 0; }
+.state-timeline-vertical .state-timeline-cursor { top: auto; bottom: auto; left: 0; right: 0; width: auto; height: 2px; }
 /* Loading placeholder — same footprint as the real bar, so nothing jumps
    when history actually arrives. A soft sweep, not spinner/text, so it
    doesn't compete with the rest of the panel while it's still settling. */

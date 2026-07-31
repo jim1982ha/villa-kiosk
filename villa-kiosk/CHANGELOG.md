@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.43.0
+
+### Changes
+- **Reverted the rotated status rail and replaced it with a genuinely vertical one.** Both previous attempts (a `100dvh` length, then a JS-measured one) were patches on a fundamentally wrong approach: a rotated bar has to be sized from its container's HEIGHT via a property that means WIDTH, so that height must be supplied up front — and every way of supplying it is an assumption that can disagree with the real box, which is why it kept ending up misaligned. `StateTimeline` now takes a `vertical` mode that lays its segments (and its pointer read) on the Y axis, so the bar simply fills its container like any other block, with nothing left to disagree about. One component and one set of segment maths still serve both orientations. The rail is also padded to the same vertical bounds as the control column opposite it, so the two read as a matched pair framing the feed, and its hover tooltip works again (it had to be disabled while rotated, since the pointer maths assumed an unrotated box).
+- **Fixed pinch-zoom scaling the whole panel instead of just the video.** The zoom transform is applied to the media wrapper, which already sets `overflow: hidden` — but an element's own overflow cannot clip its OWN transform: scaling it scales its clipping box along with its content, so the enlarged feed spilled across the entire panel. Clipping now happens on the parent region, which isn't itself transformed and therefore can contain it. The controls and status rail stay put and fully visible while zooming, as expected. Typecheck and production build clean.
+
+---
+
 ## 2.42.1
 
 ### Changes
