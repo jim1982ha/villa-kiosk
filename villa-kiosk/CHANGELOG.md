@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.45.0
+
+### Changes
+- **Emptied the last hardcoded villa data: `Sh3dCalibration.ts`.** It held one specific villa's entity plan coordinates and room polygons as the fallback used whenever `config.sh3dEntities`/`sh3dRooms` are absent — meaning any *other* villa lacking plan data would be calibrated against a floor plan that isn't its own (wrong scale, origin and mirroring), which is a worse failure than having no calibration at all. Both tables are now empty; the types and the `polygonCentroid` helper stay. Real data comes from `config.sh3dEntities`/`sh3dRooms`, parsed from the uploaded `.sh3d` or read straight out of the GLB's embedded `vk_rooms_json` (pipeline ≥ 2.14.0).
+- Verified safe for existing installs before changing it, rather than assuming: the removed fallback described rooms (*Main Room*, *WIC / Dressing*, *Storage / Laundry*) that do not appear in the live app at all, while every room actually in use (*Kitchen*, *Onsen*, *Swimming Pool*, *Staircase 1F*, *Outdoor*, …) was absent from it — proving the running configuration reads real sh3d data and never touched this table.
+- **With this, the shipped code contains no device, room or coordinate belonging to any particular villa** — completing the cleanup begun in 2.44.0 (`EntityMap.ts`) and 2.44.1 (`TeleportPoints.ts`). Typecheck and production build clean.
+
+---
+
 ## 2.44.1
 
 ### Changes
