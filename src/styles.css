@@ -162,6 +162,23 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Form controls (button/input/select/textarea) do NOT inherit font-family
+   from the page by default — every browser's UA stylesheet gives them their
+   own native control font instead, regardless of what html/body sets. One
+   rule here, at the top, is the single place that's ever true: every such
+   element inherits whatever --font-ui resolves to (San Francisco on Apple
+   devices) from its ambient context, rather than each component/screen
+   needing its own explicit font-family (which is what silently left some
+   controls on the browser default before — a fix in one place, DRY, instead
+   of patched in per component as they were each individually noticed). */
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: inherit;
+}
+
 html,
 body,
 #root {
@@ -192,7 +209,6 @@ body,
 }
 
 button {
-  font-family: var(--font-ui);
   color: var(--text-primary);
   cursor: pointer;
   border: none;

@@ -588,6 +588,24 @@ export class CameraController {
     this.roomPolygons = polys;
   }
 
+  /** World-space XZ bounding box of a real drawn room polygon by name, or
+   *  null if this room has none (e.g. a point-only teleport spot like a
+   *  staircase landing — see RoomHighlight's two-source split). Used to
+   *  dynamically frame a room's own true dimensions rather than whatever
+   *  radius happened to be saved with its teleport point. */
+  getRoomBounds(name: string): { minX: number; maxX: number; minZ: number; maxZ: number } | null {
+    const poly = this.roomPolygons.find((r) => r.name === name);
+    if (!poly || poly.pts.length === 0) return null;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of poly.pts) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.z < minZ) minZ = p.z;
+      if (p.z > maxZ) maxZ = p.z;
+    }
+    return { minX, maxX, minZ, maxZ };
+  }
+
   private updateRoom(): void {
     let room: string | null = null;
 

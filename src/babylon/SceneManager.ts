@@ -669,16 +669,20 @@ export class SceneManager {
 
   /**
    * Navigate to a teleport point correctly for whichever mode is active:
-   * first-person → animated camera teleport; overview → restore that room's
-   * saved bird's-eye framing (angle/tilt/zoom) if one was set via long-press
-   * on its card, otherwise just pan the bird's-eye target to the room centre
-   * (stays in overview mode either way).
+   * first-person → animated camera teleport; overview → the room's ACTUAL
+   * dimensions (real polygon, or its entities' spread as a fallback) frame
+   * the shot dynamically, keeping the saved viewing angle when one exists;
+   * only when a room has neither a polygon nor any registered entity to
+   * measure does this fall back to whatever pose/position was last saved.
    */
   navigateTo(point: TeleportPoint): void {
     // Remember the target so a later overview → first-person switch lands here.
     this.lastNavigatedRoom = point;
     if (this.viewMode === "overview") {
-      if (point.overviewPose) {
+      const framed = this.computeRoomOverviewPose(point);
+      if (framed) {
+        this.overview.applyPose(framed);
+      } else if (point.overviewPose) {
         this.overview.applyPose(point.overviewPose);
       } else {
         this.overview.panTo(point.position.x, point.position.z);
@@ -686,6 +690,49 @@ export class SceneManager {
     } else {
       this.camera.teleport(point);
     }
+  }
+
+  /**
+   * Recompute a room's overview framing from its true size instead of
+   * trusting whatever radius happened to be saved with its teleport point —
+   * an installer's one-time eyeballed zoom doesn't reliably keep every
+   * device badge inside the frame (reported: a room's badges stayed
+   * clustered even after "zooming to" it, because the saved shot wasn't
+   * actually wide enough to clear them). The room's REAL wall polygon is
+   * preferred; a point-only teleport spot (staircase landing, etc. — no
+   * polygon) falls back to the bounding box of its own registered entities,
+   * with a wider margin since anchors sit at individual devices rather than
+   * at the room's actual edges. The saved alpha/beta (the installer's
+   * intended viewing angle) is kept when one exists — only the distance
+   * back is recalculated — with a sane top-down default otherwise. Returns
+   * null when the room has neither a polygon nor any entity to measure,
+   * i.e. genuinely nothing to derive a size from.
+   */
+  private computeRoomOverviewPose(
+    point: TeleportPoint,
+  ): { alpha: number; beta: number; radius: number; target: { x: number; y: number; z: number } } | null {
+    const realBounds = this.camera.getRoomBounds(point.name);
+    const bounds = realBounds ?? this.visuals.getRoomEntityBounds(point.name);
+    if (!bounds) return null;
+    const marginFrac = realBounds ? 0.35 : 0.6;
+
+    const cx = (bounds.minX + bounds.maxX) / 2;
+    const cz = (bounds.minZ + bounds.maxZ) / 2;
+    const span = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 2) * (1 + marginFrac);
+    // Same aspect-correction + radius/span relationship OverviewController's
+    // own whole-villa fitTo uses, just applied to a room-scale span instead
+    // of the villa's — see fitTo's comment for why the correction matters on
+    // a portrait phone specifically.
+    const aspect = this.engine.getAspectRatio(this.overview.camera);
+    const aspectCorrection = aspect < 1 ? 1 / aspect : 1;
+    const radius = span * aspectCorrection * 1.05;
+
+    return {
+      alpha: point.overviewPose?.alpha ?? -Math.PI / 2,
+      beta: point.overviewPose?.beta ?? 0.5,
+      radius,
+      target: { x: cx, y: point.overviewPose?.target.y ?? point.position.y, z: cz },
+    };
   }
 
   private worldExtends(meshes: AbstractMesh[]) {

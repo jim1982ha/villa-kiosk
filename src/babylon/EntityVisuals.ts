@@ -352,6 +352,12 @@ const VALUE_CHIP_HEIGHT_PX = 18;
 // basis for pickBadgeAt()'s nearest-centre hit-testing.
 const BADGE_DIAMETER_PX = 40;
 
+// Babylon GUI's canvas text defaults to Arial regardless of the app's own
+// --font-ui — every TextBlock in this file must set this explicitly, or its
+// text silently reverts to that default instead of matching the rest of the
+// Kiosk (San Francisco on Apple devices).
+const GUI_FONT_FAMILY = "-apple-system, BlinkMacSystemFont, system-ui, sans-serif";
+
 // ── "card" badge style (config.badgeStyle==="card") — a horizontal category-
 // coloured card with an icon chip + value, instead of the classic vertical
 // squircle+pill. Both are the SAME LabelControls (container/badge/glyph/
@@ -476,29 +482,49 @@ function relaxBoxes(
 }
 /**
  * The ONLY thresholds left, and they govern one thing: when a room's own
- * badges give way to that room's cluster chip. Both are gaps (in badge
- * widths) added to the plain box-overlap test at the badges' fixed, un-nudged
- * positions — so, unlike the old fraction-of-hidden metric, this reads
- * directly off geometry that never depends on any earlier layout decision.
+ * badges give way to that room's cluster chip.
  *
- * Deliberately asymmetric, the same hysteresis idea as any two-threshold
- * band: ENTER fires the moment two boxes actually touch (badges should group
- * "as soon as they start to collide", not only once solidly overlapping), but
- * a room that's already clustered only lets go once its members are
- * genuinely clear of each other by a much wider margin. Without that gap a
- * room sitting exactly on the boundary would flicker in and out of its chip
- * every time the camera moved a pixel; with it, the room settles into
- * whichever state it's in and only flips when the crowding has clearly
- * changed. A real mode change (whole-room badges ⇄ one chip) deserves this —
- * crossing it slightly late is far better than crossing back and forth.
+ * A first version grouped a room the instant ANY two of its badges merely
+ * touched — reasoning that grouping "as soon as they start to collide" beat
+ * an abrupt global switch. In the field that read as WAY too eager: two or
+ * three badges lightly overlapping is a completely normal, unremarkable
+ * sight in any map UI (Google/Apple Maps pins overlap constantly at city
+ * zoom and nobody nudges them apart for it), so summarising a whole room
+ * over that was throwing away information the view had plenty of room for.
+ * Real marker-clustering engines don't nudge markers into empty space to
+ * avoid this either — Mapbox/Google Maps show markers at their true
+ * position OR merge them into a cluster bubble, nothing in between, because
+ * a nudge whose distance depends on the current neighbour layout is exactly
+ * what made badges "dance" here across several earlier attempts (nudging
+ * removed for good — see the header comment above).
+ *
+ * So two changes: (1) CLUSTER_OVERLAP_ALLOW_WIDTHS means a pair only counts
+ * as "colliding" once they overlap by a meaningful amount — a graze at the
+ * edge doesn't count — and (2) a room only groups once a connected pile of
+ * MORE than CLUSTER_TRIGGER_COUNT badges are all mutually colliding this
+ * way (updateRoomClustering's union-find over exactly this test), not on a
+ * single touching pair. A small huddle stays individually visible; only a
+ * genuine crowd gets summarised.
+ *
+ * Exiting keeps the same asymmetric-hysteresis idea as before, just
+ * re-expressed with the pile-size test: a room that's already clustered
+ * only lets go once NONE of its members are still in an over-the-limit
+ * pile at a much wider clearance (CLUSTER_EXIT_GAP_WIDTHS) — without that
+ * gap a room sitting on the boundary would flicker every time the camera
+ * moved a pixel.
  */
-const CLUSTER_ENTER_GAP_WIDTHS = 0;
+const CLUSTER_OVERLAP_ALLOW_WIDTHS = 0.5;
 const CLUSTER_EXIT_GAP_WIDTHS = 1.4;
+/** A locally-overlapping pile needs MORE than this many badges before it
+ *  summarises into its room's chip — small huddles of 2-3 stay individual. */
+const CLUSTER_TRIGGER_COUNT = 3;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
-/** Default chip border — a faint slate-blue outline, not the alert ring. */
-const CLUSTER_BORDER_COLOR = "rgba(148,163,184,0.22)";
+/** Solid brand blue — the same colour var(--accent) resolves to for the
+ *  DOM's own primary buttons — rather than a translucent dark tone that
+ *  still reads as "a black pill" at a glance (field-reported). */
+const CLUSTER_BG_COLOR = "#0ea5e9";
 /** Clusters must stay legible at the far zoom where badges shrink hardest, so
  *  their scale is floored well above the badge floor (getIconZoomCap: 0.22). */
 const CLUSTER_MIN_SCALE = 0.8;
@@ -1583,6 +1609,26 @@ export class EntityVisuals {
     this.roomHighlight.setRooms(polys);
   }
 
+  /** World-space XZ bounding box of a room's registered entity ANCHORS — the
+   *  fallback used by SceneManager.navigateTo when this room has no real
+   *  drawn polygon (CameraController.getRoomBounds returns null), e.g. a
+   *  point-only teleport spot. Null if the room has no registered entities
+   *  either (nothing to frame). */
+  getRoomEntityBounds(room: string): { minX: number; maxX: number; minZ: number; maxZ: number } | null {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    let found = false;
+    for (const [id, lbl] of this.labels) {
+      if ((this.config.entityMap[id]?.room?.trim() || NO_ROOM_LABEL) !== room) continue;
+      const p = lbl.anchor.getAbsolutePosition();
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.z < minZ) minZ = p.z;
+      if (p.z > maxZ) maxZ = p.z;
+      found = true;
+    }
+    return found ? { minX, maxX, minZ, maxZ } : null;
+  }
+
   /** Replace the named-viewpoint "rooms" (config.teleportPoints) that don't
    *  have a real room polygon — forwarded to RoomHighlight for a synthetic
    *  patch. Called on every re-fit AND live whenever config.teleportPoints
@@ -2137,7 +2183,7 @@ export class EntityVisuals {
       // Match the app's own UI typeface (--font-ui) instead of the GUI layer's
       // Babylon default (Arial) — that mismatch was rendering the pill in a
       // font that visually clashed with every other label in the app.
-      valueText.fontFamily = "-apple-system, BlinkMacSystemFont, system-ui, sans-serif";
+      valueText.fontFamily = GUI_FONT_FAMILY;
       valueText.fontWeight = "600";
       valueText.fontSize = card ? 13 : 11;
       valueText.resizeToFit = true;
@@ -2349,54 +2395,80 @@ export class EntityVisuals {
    * individual badges — the ONE mode decision left, now made per room
    * instead of once globally.
    *
-   * Two on-screen badges "collide" if their fixed, un-nudged boxes touch —
-   * checked against every OTHER on-screen badge, not just same-room ones, so
-   * a badge from a crowded neighbouring room dragging a quiet room's badge
-   * into visual overlap still gets resolved (both rooms end up clustered).
-   * ENTER uses a near-zero gap (group "as soon as they start to collide", per
-   * the field request); a room that's already clustered only reverts once
-   * ALL its pairs clear a much wider EXIT gap — see the constants' own
-   * comment for why that asymmetry is what stops a room flickering in and
-   * out of its chip while the camera hovers near the boundary.
+   * A room groups only once a locally-overlapping PILE of more than
+   * CLUSTER_TRIGGER_COUNT badges forms — not on any single touching pair,
+   * see the constants' own comment for why. "Pile" means a connected
+   * component of the "meaningfully overlapping" relation (union-find over
+   * every on-screen badge, not just same-room ones, so a crowded
+   * neighbouring room's badge dragging a quiet room's badge into the same
+   * pile still resolves both rooms). ENTER uses a generous overlap
+   * allowance; a room that's already clustered only reverts once none of
+   * its members are still in an over-the-limit pile at the much wider EXIT
+   * clearance — the same asymmetric-hysteresis idea as before, just
+   * re-expressed as pile size instead of "any touch at all".
    */
   private updateRoomClustering(
     onScreen: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
   ): void {
     const scale = this.iconUserScale * this.iconZoomScale;
-    const enterGap = CLUSTER_ENTER_GAP_WIDTHS * BADGE_DIAMETER_PX * scale;
+    // Negative: two boxes must overlap by MORE than a plain graze at the
+    // edge before they count as part of the same pile at all.
+    const enterGap = -CLUSTER_OVERLAP_ALLOW_WIDTHS * BADGE_DIAMETER_PX * scale;
     const exitGap = CLUSTER_EXIT_GAP_WIDTHS * BADGE_DIAMETER_PX * scale;
     const roomOf = (id: string) => this.config.entityMap[id]?.room?.trim() || NO_ROOM_LABEL;
 
     const snap = this.bandSnapPending;
     this.bandSnapPending = false;
 
-    // Rooms with at least one ENTER-level pair this frame, and rooms all of
-    // whose pairs are STILL within the (wider) EXIT gap — i.e. not yet
-    // clearly separated.
-    const enterHit = new Set<string>();
-    const stillTouching = new Set<string>();
-    for (let i = 0; i < onScreen.length; i++) {
-      for (let j = i + 1; j < onScreen.length; j++) {
+    const n = onScreen.length;
+    const enterParent = Array.from({ length: n }, (_, i) => i);
+    const exitParent = Array.from({ length: n }, (_, i) => i);
+    const find = (parent: number[], x: number): number => {
+      while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+      return x;
+    };
+    const union = (parent: number[], a: number, b: number): void => {
+      const ra = find(parent, a), rb = find(parent, b);
+      if (ra !== rb) parent[ra] = rb;
+    };
+
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
         const a = onScreen[i], b = onScreen[j], ba = boxes[i], bb = boxes[j];
         const dx = Math.abs(b.x - a.x);
         const dy = Math.abs((b.y + bb.cy) - (a.y + ba.cy));
-        if (dx < ba.halfW + bb.halfW + enterGap && dy < ba.halfH + bb.halfH + enterGap) {
-          enterHit.add(roomOf(a.id));
-          enterHit.add(roomOf(b.id));
-        }
-        if (dx < ba.halfW + bb.halfW + exitGap && dy < ba.halfH + bb.halfH + exitGap) {
-          stillTouching.add(roomOf(a.id));
-          stillTouching.add(roomOf(b.id));
-        }
+        if (dx < ba.halfW + bb.halfW + enterGap && dy < ba.halfH + bb.halfH + enterGap) union(enterParent, i, j);
+        if (dx < ba.halfW + bb.halfW + exitGap && dy < ba.halfH + bb.halfH + exitGap) union(exitParent, i, j);
       }
+    }
+    const componentSizes = (parent: number[]): Map<number, number> => {
+      const sizes = new Map<number, number>();
+      for (let i = 0; i < n; i++) {
+        const r = find(parent, i);
+        sizes.set(r, (sizes.get(r) ?? 0) + 1);
+      }
+      return sizes;
+    };
+    const enterSizes = componentSizes(enterParent);
+    const exitSizes = componentSizes(exitParent);
+
+    // Rooms with a member in an over-the-limit ENTER pile this frame, and
+    // rooms with a member STILL in an over-the-limit EXIT pile — i.e. not
+    // yet clearly thinned out.
+    const enterHit = new Set<string>();
+    const stillPacked = new Set<string>();
+    for (let i = 0; i < n; i++) {
+      const room = roomOf(onScreen[i].id);
+      if ((enterSizes.get(find(enterParent, i)) ?? 1) > CLUSTER_TRIGGER_COUNT) enterHit.add(room);
+      if ((exitSizes.get(find(exitParent, i)) ?? 1) > CLUSTER_TRIGGER_COUNT) stillPacked.add(room);
     }
 
     let changed = false;
     const rooms = new Set(onScreen.map((s) => roomOf(s.id)));
     for (const room of rooms) {
       const was = this.roomClustered.get(room) ?? false;
-      const now = snap ? enterHit.has(room) : was ? stillTouching.has(room) : enterHit.has(room);
+      const now = snap ? enterHit.has(room) : was ? stillPacked.has(room) : enterHit.has(room);
       if (now !== was) changed = true;
       this.roomClustered.set(room, now);
     }
@@ -2504,10 +2576,9 @@ export class EntityVisuals {
       const label = `${room}  ${g.ids.length}`;
       c.text.text = label;
       // The chip's own ring carries the room's worst state — the only
-      // attention signal available once the individual badges are gone —
-      // over its default subtle border otherwise (see ensureCluster).
-      c.container.thickness = g.alert ? 2 : 1;
-      c.container.color = g.alert ? ALERT_RED_HEX : CLUSTER_BORDER_COLOR;
+      // attention signal available once the individual badges are gone.
+      c.container.thickness = g.alert ? 2 : 0;
+      c.container.color = g.alert ? ALERT_RED_HEX : "transparent";
       c.container.scaleX = scale;
       c.container.scaleY = scale;
       c.container.isVisible = true;
@@ -2561,14 +2632,16 @@ export class EntityVisuals {
     container.height = `${CLUSTER_HEIGHT_PX}px`;
     container.adaptWidthToChildren = true;
     container.cornerRadius = CLUSTER_HEIGHT_PX / 2;
-    // Slate-blue, not flat black — the same overlay tone the rest of the
-    // Kiosk's dark surfaces (panels, the value pill above) use, so a room
-    // chip reads as part of this UI rather than a generic dark pill dropped
-    // on top of it.
-    container.thickness = 1;
-    container.color = CLUSTER_BORDER_COLOR;
-    container.background = "rgba(15,23,42,0.88)";
-    container.shadowColor = "rgba(0,0,0,0.55)";
+    // Solid accent blue — the exact colour var(--accent) resolves to on the
+    // DOM side (.btn.primary etc.), an already-trusted white-on-accent
+    // pairing in this app. A translucent near-black tone was tried first and
+    // still read as "just a dark/black pill" at a glance; a saturated brand
+    // colour reads unambiguously as a Kiosk element instead, the same way a
+    // map's cluster marker is usually a solid, recognisable colour rather
+    // than a neutral dark chip.
+    container.thickness = 0;
+    container.background = CLUSTER_BG_COLOR;
+    container.shadowColor = "rgba(0,0,0,0.4)";
     container.shadowBlur = 6;
     container.shadowOffsetY = 2;
     container.isPointerBlocker = false; // taps resolve via pickClusterAt, like badges
@@ -2576,6 +2649,7 @@ export class EntityVisuals {
     const text = new TextBlock(`clusterText_${room}`);
     text.text = room;
     text.color = "#ffffff";
+    text.fontFamily = GUI_FONT_FAMILY;
     text.fontSize = CLUSTER_FONT_PX;
     text.fontWeight = "600";
     text.resizeToFit = true;

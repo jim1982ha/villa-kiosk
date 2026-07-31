@@ -91,6 +91,30 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
   const rootRef = useRef<HTMLDivElement>(null);
   const zoom = useMediaZoom<HTMLDivElement>();
   const [isFs, setIsFs] = useState(false);
+  // The status/controls row sits in normal flow BELOW the video (never over
+  // it — see .camera-bottom-row), which reserves real screen height for it
+  // and would otherwise leave the video's own visual centre sitting ABOVE
+  // true screen-centre (only the space above the row is available to centre
+  // it in). Mirroring that same amount of space back in as margin-TOP on the
+  // video region (NOT padding — .camera-zoom fills it via inset:0, and an
+  // absolutely-positioned child's offsets resolve against the padding edge
+  // regardless of the parent's own padding, so padding here would be a
+  // no-op; margin instead shrinks/shifts the flex item's own box) makes its
+  // centre line up with the row's, and a bar that reserves height on both
+  // sides in EQUAL amounts is centred on the whole screen — restoring "the
+  // video looks centred on the phone", the one thing the non-overlapping
+  // layout gave up. Measured live (rather than assumed) since the row's
+  // real height varies by screen width (it stacks onto two lines on a
+  // narrow phone — see the max-width:720px rule) and safe-area inset.
+  const bottomRowRef = useRef<HTMLDivElement>(null);
+  const [bottomRowH, setBottomRowH] = useState(0);
+  useEffect(() => {
+    const el = bottomRowRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setBottomRowH(entry.contentRect.height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Every camera in the house, in a stable order, so prev/next can cycle
   // through them without leaving the viewer. Wraps around at both ends.
@@ -516,7 +540,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           overlaps. Used to be desktop-only (gated behind a min-width media
           query); a phone in portrait needs this exactly as much as a laptop
           does, so it's now the only layout. */}
-      <div className="camera-viewport">
+      <div className="camera-viewport" style={{ marginTop: bottomRowH }}>
         {/* Zoom/pan layer — FIRST child so the controls below paint on top of
             it and stay clickable while it captures pinch/wheel/drag gestures. */}
         <div className="camera-zoom" ref={zoom.ref} style={zoom.style}>
@@ -558,7 +582,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           fill the space left of it (see .camera-bottom-row flex rule) so it
           stays aligned with prev/next/zoom/fullscreen/close regardless of
           how many of those are currently rendered. */}
-      <div className="camera-bottom-row">
+      <div className="camera-bottom-row" ref={bottomRowRef}>
         <div className="camera-status-bar">
           <StateTimeline
             data={statusHistory}
