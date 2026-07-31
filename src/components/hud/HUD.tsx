@@ -21,7 +21,9 @@
 
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
-  Home, Settings, LogOut,
+  // MapIcon, not Map: the bare name shadows the global Map constructor,
+  // which this file also uses.
+  Home, Settings, LogOut, Map as MapIcon, PersonStanding,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
   EllipsisVertical, Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
 } from "lucide-react";
@@ -577,6 +579,16 @@ export default function HUD({
                       </button>
                     </div>
                   </div>
+                  {/* Same view switch as the inline row's, immediately before
+                      Settings so the pairing matches the desktop layout. */}
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    onClick={() => { setMenuOpen(false); onToggleViewMode(); }}
+                  >
+                    {viewMode === "overview" ? <PersonStanding size={18} /> : <MapIcon size={18} />}
+                    <span>{viewMode === "overview" ? "First-person view" : "Bird's-eye view"}</span>
+                  </button>
                   {canOpenSettings && (
                     <button
                       role="menuitem"
@@ -675,6 +687,13 @@ export default function HUD({
             )}
             {/* (The colour-legend button moved into the category row — it
                 explains those very colours. See .hud-cat-help.) */}
+            {/* First-person / bird's-eye switch, immediately LEFT of Settings.
+                It used to sit at the bottom of the left column; both are
+                app-level "how am I looking at this villa" controls rather
+                than map content, so they belong in the same top-right
+                cluster. On a phone this whole row collapses into the
+                overflow menu, which carries its own copy (see .hud-menu). */}
+            <ViewControls viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
             {canOpenSettings && (
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
                 <Settings size={20} />
@@ -752,7 +771,6 @@ export default function HUD({
             />
           )}
         </div>
-        <ViewControls stacked viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
       </div>
 
       <div className="bottom-bar">

@@ -401,8 +401,9 @@ export function resetConfig(): void {
  * / Import configuration). Deliberately narrower than the full AppConfig:
  *  - covers exactly what the product spec calls "your configuration" — device
  *    ↔ room bindings (entityMap + meshBindings, auto-detected AND manually
- *    bound), room definitions (teleportPoints, incl. each room's saved
- *    overviewPose), device icons (incl. each device's per-badge colour override,
+ *    bound), room definitions (teleportPoints — a room's bird's-eye framing is
+ *    derived from the floor plan, not stored), device icons (incl. each
+ *    device's per-badge colour override,
  *    entityMap `badgeColor`), enabled/disabled devices (the entityMap
  *    `disabled` flag) and every option in the First-person/Overview, Render
  *    quality and Device-icon Settings sections. entityMap is exported/imported

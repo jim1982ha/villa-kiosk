@@ -530,10 +530,27 @@ const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
  *  throws away detail the view had room for — the "grouping is far too
  *  eager" report. */
 const GROUP_OVERLAP_ALLOW_WIDTHS = 0.5;
-/** A pile needs MORE than this many badges before it summarises into its
- *  room's chip; smaller huddles are fanned apart instead (see FAN_GAP_PX)
- *  and stay individually readable. */
-const CLUSTER_TRIGGER_COUNT = 3;
+/**
+ * How much of the ROOM's own width a fanned-out pile may occupy before the
+ * room summarises into its chip instead.
+ *
+ * This replaced a fixed "more than N badges ⇒ cluster" count, which was the
+ * wrong question to ask: it grouped a room of 5 ceiling devices even when
+ * zoomed right into that room with obvious empty space around them (reported
+ * with screenshots — dropping the badge SIZE made all 5 appear, proving the
+ * space was there all along). Whether badges fit is a matter of how much
+ * room there is versus how much they need, and a raw count knows neither.
+ *
+ * So the test is now literally "does the laid-out row fit in this room?":
+ * the fanned width is converted to world units at the current zoom and
+ * compared against the room's own real width. Zoomed out over the whole
+ * villa a dense room's row is many times wider than the room, so it
+ * summarises; zoomed into that same room the row easily fits, so every badge
+ * is shown — which is exactly the behaviour asked for, and it falls out of
+ * the geometry instead of needing a tuned count. Still a pure function of
+ * world positions and zoom, so all the invariance above is preserved.
+ */
+const FAN_MAX_ROOM_SPAN_FRACTION = 0.9;
 /**
  * Breathing room between two badges laid out side by side within a small
  * huddle (fanBadges) — explicitly requested ("it's ok to artificially move
@@ -769,6 +786,10 @@ export class EntityVisuals {
   /** Room-cluster chips, keyed by room name. Built lazily the first time a
    *  room clusters; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
+  /** Each room's real ground width from the drawn floor plan, keyed by
+   *  normalised room name — the space budget grouping lays badges out
+   *  against (see setRoomPolygons / FAN_MAX_ROOM_SPAN_FRACTION). */
+  private roomSpans = new Map<string, number>();
   /** Active storey from FloorManager (1-based). Floors below it stay rendered
    *  (cumulative visibility), so enabled-state alone can't cull their badges —
    *  cullLabels compares each label's stamped floorIndex against this. */
@@ -1634,6 +1655,24 @@ export class EntityVisuals {
    *  (load + mirror-flip toggles), same trigger as the teleport grid. */
   setRoomPolygons(polys: { name: string; pts: { x: number; z: number }[]; floorY?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
     this.roomHighlight.setRooms(polys);
+    // Cache each room's real WIDTH (its larger ground dimension) — the
+    // "is there space here?" denominator for grouping, see
+    // FAN_MAX_ROOM_SPAN_FRACTION. Taken from the drawn floor plan rather than
+    // from where the devices happen to sit, because a room whose devices are
+    // all clustered at the ceiling centre still has its whole floor area
+    // available to lay badges out across.
+    this.roomSpans.clear();
+    for (const p of polys) {
+      if (p.pts.length === 0) continue;
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (const q of p.pts) {
+        if (q.x < minX) minX = q.x;
+        if (q.x > maxX) maxX = q.x;
+        if (q.z < minZ) minZ = q.z;
+        if (q.z > maxZ) maxZ = q.z;
+      }
+      this.roomSpans.set(p.name.trim().toLowerCase(), Math.max(maxX - minX, maxZ - minZ));
+    }
   }
 
   /** World-space XZ bounding box (plus a floor height) of a room's registered
@@ -2396,16 +2435,19 @@ export class EntityVisuals {
     const boxes = this.labelBoxes(shown);
     const piles = this.groupBadges(shown, boxes);
 
+    // A pile is laid out side by side if the resulting row actually FITS in
+    // the room it belongs to, and only summarises into the room's chip when
+    // it genuinely doesn't — see FAN_MAX_ROOM_SPAN_FRACTION.
     this.roomClustered.clear();
+    const fannable: number[][] = [];
     for (const members of piles) {
-      if (members.length <= CLUSTER_TRIGGER_COUNT) continue;
-      for (const i of members) {
-        this.roomClustered.set(this.roomOf(shown[i].id), true);
-      }
+      if (members.length < 2) continue;
+      if (this.pileFitsItsRoom(shown, boxes, members)) fannable.push(members);
+      else for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
     }
     // Fan only what stays individually visible — a badge about to hide behind
     // its room's chip must not be nudged for nothing.
-    this.fanBadges(shown, boxes, piles);
+    this.fanBadges(shown, boxes, fannable);
 
     for (const s of shown) {
       s.lbl.container.linkOffsetXInPixels = s.off.x;
@@ -2535,6 +2577,56 @@ export class EntityVisuals {
    * every other object anchored in the scene. See FAN_GAP_PX for why this is
    * not a return of the relaxation solver that once made badges dance.
    */
+  /**
+   * Would this pile, laid out side by side, fit across the room it sits in?
+   *
+   * The row's width is measured in pixels (that's what a badge's size is
+   * defined in), then converted to world units at the current zoom so it can
+   * be compared against the room's own real width from the floor plan. A
+   * pile spanning several rooms is judged against the widest of them, since
+   * that is the space actually available to it. Rooms with no drawn polygon
+   * (a point-only teleport spot) fall back to the spread of their own
+   * devices, which is the only measure available there.
+   */
+  private pileFitsItsRoom(
+    shown: ShownLabel[],
+    boxes: { halfW: number; halfH: number; cy: number }[],
+    members: number[],
+  ): boolean {
+    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
+    if (pxPerWorld <= 0) return false;
+    const fanGap = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
+    let rowPx = fanGap * (members.length - 1);
+    for (const i of members) rowPx += boxes[i].halfW * 2;
+    const rowWorld = rowPx / pxPerWorld;
+
+    let available = 0;
+    for (const i of members) {
+      const key = this.roomOf(shown[i].id).trim().toLowerCase();
+      const span = this.roomSpans.get(key) ?? this.entitySpreadFor(key);
+      if (span > available) available = span;
+    }
+    if (!(available > 0)) return false;
+    return rowWorld <= available * FAN_MAX_ROOM_SPAN_FRACTION;
+  }
+
+  /** Ground width spanned by a room's own devices — the stand-in for a room
+   *  width when the floor plan has no polygon for it. */
+  private entitySpreadFor(roomKey: string): number {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    let found = false;
+    for (const [id, lbl] of this.labels) {
+      if (this.roomOf(id).trim().toLowerCase() !== roomKey) continue;
+      const p = lbl.anchor.getAbsolutePosition();
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.z < minZ) minZ = p.z;
+      if (p.z > maxZ) maxZ = p.z;
+      found = true;
+    }
+    return found ? Math.max(maxX - minX, maxZ - minZ) : 0;
+  }
+
   private fanBadges(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
@@ -2542,7 +2634,7 @@ export class EntityVisuals {
   ): void {
     const fanGap = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
     for (const pile of piles) {
-      if (pile.length < 2 || pile.length > CLUSTER_TRIGGER_COUNT) continue;
+      if (pile.length < 2) continue;
       const members = [...pile].sort((a, b) => shown[a].id.localeCompare(shown[b].id));
       const widths = members.map((i) => boxes[i].halfW * 2);
       const total = widths.reduce((s, w) => s + w, 0) + fanGap * (members.length - 1);

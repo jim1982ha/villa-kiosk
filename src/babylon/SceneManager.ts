@@ -684,22 +684,16 @@ export class SceneManager {
    * Navigate to a teleport point correctly for whichever mode is active:
    * first-person → animated camera teleport; overview → the room's ACTUAL
    * dimensions (real polygon, or its entities' spread as a fallback) frame
-   * the shot dynamically, keeping the saved viewing angle when one exists;
-   * only when a room has neither a polygon nor any registered entity to
-   * measure does this fall back to whatever pose/position was last saved.
+   * the shot dynamically. Only a room that has neither a polygon nor any
+   * registered entity to measure falls back to simply panning to it.
    */
   navigateTo(point: TeleportPoint): void {
     // Remember the target so a later overview → first-person switch lands here.
     this.lastNavigatedRoom = point;
     if (this.viewMode === "overview") {
       const framed = this.computeRoomOverviewPose(point);
-      if (framed) {
-        this.overview.applyPose(framed);
-      } else if (point.overviewPose) {
-        this.overview.applyPose(point.overviewPose);
-      } else {
-        this.overview.panTo(point.position.x, point.position.z);
-      }
+      if (framed) this.overview.applyPose(framed);
+      else this.overview.panTo(point.position.x, point.position.z);
     } else {
       this.camera.teleport(point);
     }
@@ -726,9 +720,12 @@ export class SceneManager {
    * The room's REAL wall polygon is preferred; a point-only teleport spot
    * (staircase landing, etc. — no polygon) falls back to the bounding box of
    * its own registered entities, with a wider margin since anchors sit at
-   * individual devices rather than at the room's actual edges. The saved
-   * alpha/beta (the installer's intended viewing angle) is kept when one
-   * exists — only the distance back is recalculated. Returns null when the
+   * individual devices rather than at the room's actual edges.
+   *
+   * The CURRENT heading/tilt is preserved — only the target and distance
+   * change — so flying to a room reads as the camera moving over to it
+   * rather than the view snapping to some stored orientation, the same way a
+   * map's "zoom to this feature" keeps your bearing. Returns null when the
    * room has neither a polygon nor any entity to measure.
    */
   private computeRoomOverviewPose(
@@ -760,8 +757,8 @@ export class SceneManager {
     const radius = (sphere / Math.sin(halfAngle)) * (1 + marginFrac);
 
     return {
-      alpha: point.overviewPose?.alpha ?? -Math.PI / 2,
-      beta: point.overviewPose?.beta ?? 0.5,
+      alpha: cam.alpha,
+      beta: cam.beta,
       radius,
       // Orbit about the room's own CENTRE, at the height the room's floor
       // actually sits at — a teleport point stores the first-person EYE
@@ -1320,7 +1317,7 @@ export class SceneManager {
    *  changes on its own (e.g. the user just added "Staircase") — adding a
    *  named room shouldn't need a full model reload to start glowing. */
   private syncRoomPoints(): void {
-    // teleportPoints store the CAMERA's eye position (see setAnchorHere/
+    // teleportPoints store the CAMERA's eye position (see TeleportMenu's
     // addRoomHere), not the floor — same relation CameraController.groundCamera
     // uses in reverse (floorY = eyeY - eyeHeight). A room like "Staircase" is
     // anchored well above the recentred floor's y≈0, so the glow patch must

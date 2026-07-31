@@ -540,27 +540,30 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           overlaps. Used to be desktop-only (gated behind a min-width media
           query); a phone in portrait needs this exactly as much as a laptop
           does, so it's now the only layout. */}
+      {/* Title — anchored to the TOP OF THE PANEL, i.e. the top of the screen,
+          NOT to the video region. It used to live inside .camera-viewport, so
+          it followed that region's own top edge: on a phone in portrait that
+          left it stranded in the middle of the black bar above the feed, and
+          on a wide screen (where the feed is letterboxed the other way) it
+          landed ON the video's top-left corner. Pinning it here puts it above
+          the feed in every aspect/orientation, which is the one placement
+          that reads the same everywhere. */}
+      <div className="camera-header">
+        <div className="label">
+          {mapping.label}
+          {lastMotion && (
+            <span className="muted" style={{ marginLeft: 10, fontSize: 13 }}>
+              updated {new Date(lastMotion as string).toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+      </div>
+
       <div className="camera-viewport" style={{ marginTop: bottomRowH }}>
         {/* Zoom/pan layer — FIRST child so the controls below paint on top of
             it and stay clickable while it captures pinch/wheel/drag gestures. */}
         <div className="camera-zoom" ref={zoom.ref} style={zoom.style}>
           {renderView()}
-        </div>
-
-        {/* Title only now — the controls used to share this header (stacking
-            into a second row on mobile), but now live in their OWN cluster at
-            the bottom-right instead (see .camera-controls below): easier
-            one-handed thumb reach, and it fully sidesteps the title ever
-            overlapping a button regardless of screen size. */}
-        <div className="camera-header">
-          <div className="label">
-            {mapping.label}
-            {lastMotion && (
-              <span className="muted" style={{ marginLeft: 10, fontSize: 13 }}>
-                updated {new Date(lastMotion as string).toLocaleTimeString()}
-              </span>
-            )}
-          </div>
         </div>
 
         {/* An empty <video>/<img> mid-setup reads as "broken" rather than

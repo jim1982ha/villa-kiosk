@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.41.0
+
+### Changes
+- **Badges now group on whether they actually FIT, not on a device count — fixes a room staying summarised with obvious empty space around it.** The previous rule clustered any pile of more than 3 badges, which is the wrong question: it grouped a bedroom's 5 ceiling devices even zoomed right into that room, and dropping the badge *size* made all 5 appear, proving the space had been there all along. The test is now literally *"does the laid-out row fit across this room?"* — the fanned width is converted to world units at the current zoom and compared against the room's real width from the floor plan. Zoomed out over the villa a dense room's row is many times wider than the room, so it summarises; zoomed into that room the row fits easily and every badge shows. Falls out of the geometry rather than needing a tuned number, and stays a pure function of world positions + zoom, so all the pan/rotate invariance from 2.40.0 is preserved. Verified by simulation on the exact reported case.
+- **Removed the "save this room's view" long-press entirely.** Now that a room's framing is derived from its floor-plan footprint on arrival, a hand-saved viewpoint was not just redundant but actively worse — it froze one person's one-time eyeballed zoom into config, and being usually too wide it *also* left that room's badges grouped when you arrived. Gone with it: the stored `overviewPose` (and its type), the re-anchor gesture, its confirmation flash and CSS, the hold-vs-scroll touch arbitration the Rooms grid needed only to host the gesture, and the config-merge step that carried the saved pose across recalibrations. Flying to a room now keeps your **current** heading/tilt and only changes what it's looking at and from how far — the way a map's "zoom to this feature" keeps your bearing.
+- **Moved the first-person / bird's-eye switch beside Settings** (top-right), out of the left column — both are "how am I looking at this villa" controls rather than map content. Mirrored into the phone overflow menu in the same position relative to Settings.
+- **Fixed the camera feed's title placement.** It was anchored to the video region, so it followed that region's top edge: on a phone in portrait it was stranded mid-way up the black bar above the feed, and on a wide screen it landed on the video's own top-left corner. It's now pinned to the top of the screen, above the feed, in every aspect and orientation.
+- **Restyled every dialog as frosted glass** rather than a flat opaque sheet, matching the material the HUD sections and bottom bar already use, so the villa stays faintly visible behind a panel and dialogs read as part of the app. Softer, deeper shadow with an inset top highlight; larger corner radius; footer actions (Edit…) are now soft ghost pills instead of boxy outlined buttons; section captions ("LAST 24 HOURS") are smaller and lighter so they label the content instead of competing with it. Applied via two shared theme tokens, so every current and future modal inherits it from one place. Typecheck and production build clean.
+
+---
+
 ## 2.40.0
 
 ### Changes

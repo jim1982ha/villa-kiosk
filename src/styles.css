@@ -30,6 +30,14 @@
   --bg-base: #eef2f8;
   --bg-panel: rgba(255, 255, 255, 0.82);
   --bg-overlay: rgba(255, 255, 255, 0.94);
+  /* Frosted-glass surface shared by every floating dialog (device panels,
+     Settings, Rooms, the badge legend…) — deliberately far more transparent
+     than --bg-overlay so the villa stays faintly visible behind it, which is
+     what makes a dialog read as part of this app rather than a flat sheet
+     dropped on top of it. Pair ALWAYS with --glass-blur: without the blur the
+     transparency alone just looks like a rendering fault. */
+  --bg-glass: rgba(255, 255, 255, 0.7);
+  --glass-blur: blur(28px) saturate(180%);
   --bg-card: rgba(255, 255, 255, 0.9);
   --bg-input: rgba(15, 23, 42, 0.06);
 
@@ -95,6 +103,8 @@
   --bg-base: #0b1220;
   --bg-panel: rgba(15, 23, 42, 0.82);
   --bg-overlay: rgba(15, 23, 42, 0.94);
+  --bg-glass: rgba(17, 24, 39, 0.68);
+  --glass-blur: blur(28px) saturate(180%);
   --bg-card: rgba(30, 41, 59, 0.85);
   --bg-input: rgba(148, 163, 184, 0.14);
 
@@ -131,6 +141,8 @@
     --bg-base: #0b1220;
     --bg-panel: rgba(15, 23, 42, 0.82);
     --bg-overlay: rgba(15, 23, 42, 0.94);
+    --bg-glass: rgba(17, 24, 39, 0.68);
+    --glass-blur: blur(28px) saturate(180%);
     --bg-card: rgba(30, 41, 59, 0.85);
     --bg-input: rgba(148, 163, 184, 0.14);
 
@@ -222,7 +234,10 @@ button {
 
 /* --- Typography scale --- */
 .room-title { font-family: var(--font-display); font-size: 28px; font-weight: 300; letter-spacing: 0.05em; }
-.entity-label { font-family: var(--font-ui); font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); }
+/* Small section caption ("LAST 24 HOURS", …). Slightly smaller and lighter
+   than it was: at 13px/500 it competed with the actual content underneath it
+   instead of quietly labelling it. */
+.entity-label { font-family: var(--font-ui); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-dim); }
 .value-large { font-family: var(--font-ui); font-size: 48px; font-weight: 200; line-height: 1; }
 .value-unit { font-family: var(--font-ui); font-size: 18px; font-weight: 400; color: var(--text-secondary); }
 .body-text { font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
@@ -914,7 +929,8 @@ button {
 /* Single line, truncated with an ellipsis — same treatment as .panel-entity-id
    below it — instead of wrapping a long device name onto a second line. */
 .panel-header .title h2 {
-  margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px;
+  margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 22px;
+  letter-spacing: -0.015em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
 .panel-header .room { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
@@ -976,6 +992,23 @@ button {
   margin-top: 20px; padding-top: 16px;
   border-top: 1px solid var(--hairline);
 }
+/* Secondary actions in a panel footer (Edit…) read as a soft "ghost" pill
+   rather than a default-looking bordered box — the boxy outline was the
+   single most old-fashioned thing left in these dialogs. */
+.panel-footer .btn {
+  border: none;
+  background: var(--bg-input);
+  border-radius: 999px;
+  padding: 10px 20px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.panel-footer .btn:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.panel-footer .btn.primary { background: var(--accent); color: var(--text-on-accent); }
 
 .row-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 .row-buttons.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
@@ -1043,11 +1076,12 @@ input[type="range"]::-moz-range-thumb {
 /* Zoom/pan layer: fills its container, centres the feed, and is transformed
    by useMediaZoom. will-change keeps the transform on the compositor (cheap). */
 .camera-zoom { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; will-change: transform; }
-/* Header now holds ONLY the title — top-left, out of the controls' way on
-   every screen size (no more stacking rule needed: the two can never
-   collide once they're not sharing a row at all). */
+/* Header holds ONLY the title, pinned to the top of the PANEL (= the screen),
+   above the feed in every aspect/orientation — see the JSX comment for why it
+   can't live inside .camera-viewport. z-index keeps it over the letterboxed
+   feed on a screen where the video does reach the top edge. */
 .camera-header {
-  position: absolute; top: 0; left: 0; right: 0;
+  position: absolute; top: 0; left: 0; right: 0; z-index: 1;
   padding: calc(20px + var(--safe-top)) calc(24px + env(safe-area-inset-right, 0px)) 0 calc(24px + env(safe-area-inset-left, 0px));
   pointer-events: none; /* the label itself re-enables it, nothing else lives here now */
 }
@@ -1152,20 +1186,27 @@ input[type="range"]::-moz-range-thumb {
 .tp-card .tp-delete:hover { color: var(--status-danger); }
 .tp-card.tp-add { align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--accent); border-style: dashed; background: transparent; }
 .tp-card.tp-add span { font-family: var(--font-ui); font-size: 14px; color: var(--accent); }
-/* Brief confirmation shown over a card right after long-press/right-click
-   sets its anchor — setAnchorHere used to be completely silent. */
-.tp-card .tp-anchored {
-  position: absolute; inset: 0; z-index: 1;
-  display: flex; align-items: center; justify-content: center;
-  background: color-mix(in srgb, var(--status-on) 55%, rgba(0,0,0,0.55));
-  color: #fff;
-  animation: fadeIn 0.15s ease;
-}
-
 /* --- Modals / wizard --- */
 .modal-backdrop { position: absolute; inset: 0; z-index: 70; background: var(--scrim-strong); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; }
-.modal { width: 100%; max-width: 520px; max-height: 90vh; background: var(--bg-overlay); border-radius: 20px; border: 1px solid var(--hairline-strong); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 64px var(--shadow); }
-.modal h2 { font-family: var(--font-display); font-weight: 400; margin: 0; }
+/* Frosted glass, not a flat opaque sheet — the villa stays faintly visible
+   behind every dialog, which is what ties them to the rest of the Kiosk's
+   surfaces (the HUD sections and bottom bar are the same material). The
+   1px inset highlight along the top edge is the standard glass trick: it
+   catches the "light" and keeps the panel from reading as a flat rectangle
+   once its fill is translucent. */
+.modal {
+  width: 100%; max-width: 520px; max-height: 90vh;
+  background: var(--bg-glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-radius: 24px;
+  border: 1px solid var(--hairline);
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow:
+    0 32px 80px -12px var(--shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.modal h2 { font-family: var(--font-display); font-weight: 600; margin: 0; letter-spacing: -0.01em; }
 .modal .sub { color: var(--text-secondary); margin: 0 0 22px; }
 .modal label { display: block; font-size: 13px; color: var(--text-secondary); margin: 14px 0 6px; }
 .modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: 15px; }
