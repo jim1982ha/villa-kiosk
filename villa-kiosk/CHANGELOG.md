@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.44.1
+
+### Changes
+- **Emptied the hardcoded seed room list in `TeleportPoints.ts`** — the companion to 2.44.0's entity-map cleanup. It held the twelve rooms of the one villa this app was first built against: their names ("Master Bedroom", "Pool / Garden"…), hand-derived world coordinates and thumbnail paths, all shipped as the default for `config.teleportPoints`. A fresh install on any other villa therefore opened offering navigation to a dozen rooms that don't exist, at coordinates meaningless in its model. Rooms are produced at runtime instead — `SceneManager` fits the SweetHome plan→world transform and derives a teleport point per room polygon, which Dashboard adopts into the stored config — plus anything the user adds by hand via the Rooms menu. Verified every consumer is safe on an empty list (all `map`/`filter`/`find`; first-person spawn already falls back to a literal start pose; `BabylonCanvas` already resets this array to `[]` on model replacement, so empty was an expected state). The thumbnail paths it referenced pointed at a `public/thumbs/` directory that has never existed, so they were dead already. Typecheck and production build clean.
+
+---
+
 ## 2.44.0
 
 ### Changes
