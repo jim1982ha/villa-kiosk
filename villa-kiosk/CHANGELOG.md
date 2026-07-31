@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.44.0
+
+### Changes
+- **Removed the hardcoded device tables from `EntityMap.ts` — the shipped code no longer contains anyone's devices.** It carried ~22 literal entries (real entity_ids, labels and room names) for the one villa the app was first built against, plus a matching `MESH_ALIASES` table. Both predated auto-detection and the Config Editor, and were simply never removed once those existed. Two consequences, now fixed: (1) a fresh install on **any other villa** started with two dozen devices belonging to somebody else's house; (2) because `DEFAULT_CONFIG` is spread *underneath* stored config on load, deleting one of those seeded entries in Advanced Settings came straight back on the next reload — the "stale entities I can't get rid of" behaviour, whose root cause this was. Both tables are now empty; the map is built entirely at runtime by auto-detection and manual binding, writing to the stored config as the single source of truth. The alias *lookup* is kept so a future villa can supply aliases as data if its model uses the `[type]_[room]` naming convention — meshes named with a real entity_id (what the Blender pipeline emits) are matched without it. No behaviour change for an existing install, whose real configuration already lives in the add-on's stored config. Typecheck and production build clean.
+
+---
+
 ## 2.43.0
 
 ### Changes

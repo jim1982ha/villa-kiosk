@@ -2,157 +2,53 @@
 //
 // Maps GLB mesh names -> HA entity metadata.
 //
-// IMPORTANT: In the reference model the interactive objects were named in
-// SweetHome 3D *with their full HA entity_id* (e.g. "camera.livingroom_cam",
-// "climate.living_room_air_conditioner"). So the primary key here is the
-// entity_id itself, and `resolveMeshToMapping()` (see below) matches a tapped
-// mesh by entity_id, by the spec's "[type]_[room]" alias, or by a sanitised
-// form (dots -> underscores, which is what some glTF exporters emit).
+// The convention: interactive objects are named in SweetHome 3D *with their
+// full HA entity_id* (e.g. "camera.hallway_cam"), which is what the Blender
+// pipeline emits. So the primary key is the entity_id itself, and
+// `resolveMeshToMapping()` (below) matches a tapped mesh by entity_id, by a
+// "[type]_[room]" alias, or by a sanitised form (dots -> underscores, which
+// some glTF exporters emit).
 //
-// Entity IDs may change as devices are added — the in-app Config Editor edits a
-// copy of this map stored in localStorage, so no code change is required.
+// This file ships NO device data. Both tables below are deliberately empty —
+// the map is built at runtime by auto-detection + Advanced Settings and lives
+// in the stored config, which is the single source of truth. Nothing specific
+// to one villa belongs in shipped code; see the tables' own comments.
 
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 
 export type { EntityMapping, EntityType };
 
-/** Default mapping keyed by HA entity_id. */
-export const ENTITY_MAP: Record<string, EntityMapping> = {
-  // === CAMERAS ===
-  "camera.garden_public_wall_cam": {
-    entityId: "camera.garden_public_wall_cam",
-    type: "camera", label: "Garden Wall Camera", room: "Garden",
-  },
-  "camera.patio_1f_cam": {
-    entityId: "camera.patio_1f_cam",
-    type: "camera", label: "Patio Camera", room: "Patio",
-  },
-  "camera.garden_and_terrace_cam": {
-    entityId: "camera.garden_and_terrace_cam",
-    type: "camera", label: "Garden & Terrace Camera", room: "Garden",
-  },
-  "camera.main_house_door_cam": {
-    entityId: "camera.main_house_door_cam",
-    type: "camera", label: "Main Door Camera", room: "Entrance",
-  },
-  "camera.swimming_pool_cam": {
-    entityId: "camera.swimming_pool_cam",
-    type: "camera", label: "Pool Camera", room: "Pool",
-  },
-  "camera.livingroom_cam": {
-    entityId: "camera.livingroom_cam",
-    type: "camera", label: "Living Room Camera", room: "Living Room",
-  },
-  "camera.parking_gate_cam": {
-    entityId: "camera.parking_gate_cam",
-    type: "camera", label: "Parking Gate Camera", room: "Parking",
-  },
-  "camera.kitchen_cam": {
-    entityId: "camera.kitchen_cam",
-    type: "camera", label: "Kitchen Camera", room: "Kitchen",
-  },
-  "camera.patio_terrace_cam": {
-    entityId: "camera.patio_terrace_cam",
-    type: "camera", label: "Patio Terrace Camera", room: "Terrace",
-  },
-
-  // === CLIMATE / AC ===
-  "climate.living_room_air_conditioner": {
-    entityId: "climate.living_room_air_conditioner",
-    type: "climate", label: "Living Room AC", room: "Living Room",
-  },
-
-  // === COVERS (CURTAINS) ===
-  "cover.curtain_living_room_big": {
-    entityId: "cover.curtain_living_room_big",
-    type: "cover", label: "Living Room Curtain (Big)", room: "Living Room",
-  },
-  "cover.curtain_living_room_small": {
-    entityId: "cover.curtain_living_room_small",
-    type: "cover", label: "Living Room Curtain (Small)", room: "Living Room",
-  },
-  "cover.curtain_living_room_medium": {
-    entityId: "cover.curtain_living_room_medium",
-    type: "cover", label: "Living Room Curtain (Medium)", room: "Living Room",
-  },
-  "cover.curtain_bedroom_1": {
-    entityId: "cover.curtain_bedroom_1",
-    type: "cover", label: "Bedroom 1 Curtain", room: "Bedroom 1",
-  },
-  "cover.curtain_master_bedroom": {
-    entityId: "cover.curtain_master_bedroom",
-    type: "cover", label: "Master Bedroom Curtain", room: "Master Bedroom",
-  },
-
-  // === FANS ===
-  "fan.guest_bathroom_guest_bathroom_fan": {
-    entityId: "fan.guest_bathroom_guest_bathroom_fan",
-    type: "fan", label: "Guest Bathroom Fan", room: "Guest Bathroom",
-  },
-  "fan.master_bedroom_master_bathroom_wallswitch_center": {
-    entityId: "fan.master_bedroom_master_bathroom_wallswitch_center",
-    type: "fan", label: "Master Bathroom Fan", room: "Master Bathroom",
-  },
-
-  // === LOCKS ===
-  "lock.living_room_aqara_smart_door_lock_0aa9_lock_mechanism": {
-    entityId: "lock.living_room_aqara_smart_door_lock_0aa9_lock_mechanism",
-    type: "lock", label: "Front Door Lock", room: "Entrance",
-  },
-
-  // === BINARY SENSORS ===
-  "binary_sensor.water_leak_water_heater_1f_water_leak": {
-    entityId: "binary_sensor.water_leak_water_heater_1f_water_leak",
-    type: "binary_sensor", label: "Water Heater Leak Sensor", room: "Utility",
-  },
-
-  // === SENSORS ===
-  "sensor.sensor_t1_temperature": {
-    entityId: "sensor.sensor_t1_temperature",
-    type: "sensor", label: "Temperature Sensor T1", room: "Guest Bathroom",
-  },
-
-  // === MEDIA ===
-  "media_player.tv": {
-    entityId: "media_player.tv",
-    type: "media_player", label: "TV", room: "Living Room",
-  },
-
-  // === ASSIST SATELLITE ===
-  "assist_satellite.macbook_satellite": {
-    entityId: "assist_satellite.macbook_satellite",
-    type: "assist_satellite", label: "MacBook Satellite", room: "Living Room",
-  },
-};
+/**
+ * Seed entity map — intentionally EMPTY.
+ *
+ * This used to ship ~22 literal entries for the ONE villa this app was first
+ * built against (real entity_ids, labels and room names). That predated the
+ * Config Editor and auto-detection, and once those existed nobody removed the
+ * seed — so every install, on any villa, started with two dozen devices that
+ * belong to somebody else's house. Worse, DEFAULT_CONFIG is spread UNDER
+ * stored config on load (see AppConfig's mergeStored), so deleting one of
+ * those entries in the UI silently came back on the next reload — a real bug
+ * users hit as "stale entities I can't get rid of".
+ *
+ * The map is populated at runtime instead: auto-detection binds meshes named
+ * with their entity_id, and anything else is bound by hand in Advanced
+ * Settings. Both write to the stored config, which is the single source of
+ * truth. Keep this empty — nothing specific to any one villa belongs in the
+ * shipped code.
+ */
+export const ENTITY_MAP: Record<string, EntityMapping> = {};
 
 /**
- * Alias table for the spec's "[type]_[room]" Blender naming convention, in case
- * a future model uses those names instead of raw entity_ids.
+ * Alias table for the "[type]_[room]" Blender naming convention — also
+ * intentionally EMPTY, and for the same reason: the entries it used to hold
+ * were hand-written for one specific villa's devices.
+ *
+ * The lookup that consumes it (resolveMeshUnchecked strategy 2) is kept, so a
+ * future villa can reintroduce aliases as DATA if its model ever uses that
+ * convention. Meshes named with a real entity_id — what the pipeline actually
+ * emits — are matched by strategies 1 and 3 and never needed this.
  */
-export const MESH_ALIASES: Record<string, string> = {
-  camera_garden_wall: "camera.garden_public_wall_cam",
-  camera_patio_1f: "camera.patio_1f_cam",
-  camera_garden_terrace: "camera.garden_and_terrace_cam",
-  camera_main_door: "camera.main_house_door_cam",
-  camera_pool: "camera.swimming_pool_cam",
-  camera_living_room: "camera.livingroom_cam",
-  camera_parking: "camera.parking_gate_cam",
-  camera_kitchen: "camera.kitchen_cam",
-  camera_patio_terrace: "camera.patio_terrace_cam",
-  ac_living_room: "climate.living_room_air_conditioner",
-  cover_living_room_big: "cover.curtain_living_room_big",
-  cover_living_room_small: "cover.curtain_living_room_small",
-  cover_living_room_medium: "cover.curtain_living_room_medium",
-  cover_bedroom_1: "cover.curtain_bedroom_1",
-  cover_master_bedroom: "cover.curtain_master_bedroom",
-  fan_guest_bathroom: "fan.guest_bathroom_guest_bathroom_fan",
-  fan_master_bathroom: "fan.master_bedroom_master_bathroom_wallswitch_center",
-  lock_front_door: "lock.living_room_aqara_smart_door_lock_0aa9_lock_mechanism",
-  sensor_water_heater_1f: "binary_sensor.water_leak_water_heater_1f_water_leak",
-  sensor_t1_temperature: "sensor.sensor_t1_temperature",
-  media_tv: "media_player.tv",
-  assist_macbook: "assist_satellite.macbook_satellite",
-};
+export const MESH_ALIASES: Record<string, string> = {};
 
 /** Infer a panel/entity type from an entity_id domain prefix. */
 export function inferTypeFromEntityId(entityId: string): EntityType | null {
