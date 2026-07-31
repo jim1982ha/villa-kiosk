@@ -123,6 +123,27 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  // Phone-landscape rail: the status timeline is rotated 90° to run down the
+  // left edge (see styles.css), and its PRE-rotation width becomes its
+  // on-screen length once rotated — i.e. it has to equal the rail's actual
+  // height. That used to be assumed as 100dvh, on the theory that the panel
+  // fills the dynamic viewport exactly — reported as visibly wrong on a real
+  // device (a black gap next to the rail): dvh is a viewport unit and can
+  // legitimately differ from this PANEL's own rendered box (embedding,
+  // browser chrome insets, rounding), which a fixed CSS assumption has no way
+  // to see. Measuring the real container instead removes the assumption
+  // entirely, the same fix already applied to the portrait centring bug.
+  const railRef = useRef<HTMLDivElement>(null);
+  const [railLen, setRailLen] = useState(0);
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el) return;
+    const measure = () => setRailLen(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Every camera in the house, in a stable order, so prev/next can cycle
   // through them without leaving the viewer. Wraps around at both ends.
@@ -594,7 +615,11 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           stays aligned with prev/next/zoom/fullscreen/close regardless of
           how many of those are currently rendered. */}
       <div className="camera-bottom-row" ref={bottomRowRef}>
-        <div className="camera-status-bar">
+        <div
+          className="camera-status-bar"
+          ref={railRef}
+          style={railLen ? ({ "--cam-rail-len": `${railLen}px` } as React.CSSProperties) : undefined}
+        >
           <StateTimeline
             data={statusHistory}
             loading={statusLoading}

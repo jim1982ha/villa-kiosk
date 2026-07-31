@@ -1202,11 +1202,21 @@ input[type="range"]::-moz-range-thumb {
 
   /* Status rail down the left edge. The timeline itself is a horizontal bar
      by construction (percentage-positioned segments), so it's ROTATED rather
-     than reimplemented: sized to the rail's height (the panel fills the
-     viewport, so 100dvh is exactly that) and turned a quarter turn about its
-     top-left corner, then pushed back across by its own thickness. Its hover
-     tooltip is suppressed here — the pointer maths behind it assumes an
-     unrotated box, so it would report the wrong time. */
+     than reimplemented: turned a quarter turn about its top-left corner, then
+     pushed back across by its own thickness. Its hover tooltip is suppressed
+     here — the pointer maths behind it assumes an unrotated box, so it would
+     report the wrong time.
+
+     --cam-rail-len (set inline from CameraPanel, measuring the rail's OWN
+     rendered height live) is what the bar's pre-rotation width — i.e. its
+     on-screen LENGTH once rotated — is sized from. It used to be assumed as
+     100dvh on the theory that this panel exactly fills the dynamic viewport;
+     reported as visibly wrong on a real device (a stray gap next to the
+     rail), because dvh is a viewport unit that can legitimately differ from
+     this PANEL's own box (embedding, browser-chrome insets, rounding) — a
+     mismatch a fixed CSS assumption has no way to see. 100dvh is kept ONLY
+     as the fallback for the handful of frames before JS's first measurement
+     lands. */
   .camera-status-bar {
     order: -1;
     flex: 0 0 auto;
@@ -1221,7 +1231,7 @@ input[type="range"]::-moz-range-thumb {
   .camera-status-bar .state-timeline,
   .camera-status-bar .state-timeline-skeleton {
     position: absolute; top: 0; left: env(safe-area-inset-left, 0px);
-    width: 100dvh; height: var(--cam-rail);
+    width: var(--cam-rail-len, 100dvh); height: var(--cam-rail);
     transform-origin: 0 0;
     transform: translateX(var(--cam-rail)) rotate(90deg);
   }

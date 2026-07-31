@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.42.1
+
+### Changes
+- **The phone-landscape status rail's length no longer assumes it equals `100dvh`.** That assumed the camera panel exactly fills the dynamic viewport, which doesn't always hold on a real device (embedding, browser-chrome insets, rounding) — reported as the rail looking misaligned. The rotated bar's length is now taken from a live measurement of its own rendered box (the same fix already applied to the portrait centring bug), with `100dvh` kept only as the fallback for the handful of frames before that first measurement lands. Typecheck and production build clean.
+
+---
+
 ## 2.42.0
 
 ### Changes
