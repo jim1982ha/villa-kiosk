@@ -481,56 +481,75 @@ function relaxBoxes(
   }
 }
 /**
- * The ONLY thresholds left, and they govern one thing: when a room's own
- * badges give way to that room's cluster chip.
+ * Grouping thresholds. The ONE decision they govern: when a room's own badges
+ * give way to that room's cluster chip.
  *
- * A first version grouped a room the instant ANY two of its badges merely
- * touched — reasoning that grouping "as soon as they start to collide" beat
- * an abrupt global switch. In the field that read as WAY too eager: two or
- * three badges lightly overlapping is a completely normal, unremarkable
- * sight in any map UI (Google/Apple Maps pins overlap constantly at city
- * zoom and nobody nudges them apart for it), so summarising a whole room
- * over that was throwing away information the view had plenty of room for.
- * Real marker-clustering engines don't nudge markers into empty space to
- * avoid this either — Mapbox/Google Maps show markers at their true
- * position OR merge them into a cluster bubble, nothing in between, because
- * a nudge whose distance depends on the current neighbour layout is exactly
- * what made badges "dance" here across several earlier attempts (nudging
- * removed for good — see the header comment above).
+ * ── Why this is measured in WORLD space, not screen space ──────────────────
  *
- * So two changes: (1) CLUSTER_OVERLAP_ALLOW_WIDTHS means a pair only counts
- * as "colliding" once they overlap by a meaningful amount — a graze at the
- * edge doesn't count — and (2) a room only groups once a connected pile of
- * MORE than CLUSTER_TRIGGER_COUNT badges are all mutually colliding this
- * way (updateRoomClustering's union-find over exactly this test), not on a
- * single touching pair. A small huddle stays individually visible; only a
- * genuine crowd gets summarised.
+ * Every previous version tested whether badges overlapped ON SCREEN. That is
+ * the intuitive test, and it is the reason two separate field bugs kept
+ * coming back, because a screen-space test is a function of the whole camera
+ * pose (position, rotation, tilt, zoom):
  *
- * Exiting keeps the same asymmetric-hysteresis idea as before, just
- * re-expressed with the pile-size test: a room that's already clustered
- * only lets go once NONE of its members are still in an over-the-limit
- * pile at a much wider clearance (CLUSTER_EXIT_GAP_WIDTHS) — without that
- * gap a room sitting on the boundary would flicker every time the camera
- * moved a pixel.
+ *   - Panning/orbiting silently re-grouped rooms, since the projected gap
+ *     between two fixed 3D points changes with viewing angle.
+ *   - Worse, returning to the EXACT view you started from did not restore
+ *     the state you started with, because the enter/exit hysteresis that
+ *     stopped the resulting flicker made grouping depend on the PATH taken,
+ *     not just the destination. Reported verbatim: badges group while
+ *     sliding the camera, then stay grouped once you slide back.
+ *
+ * Hysteresis cannot fix that — it IS that. Path-dependence is what
+ * hysteresis means. So the fix is to remove the need for it: make grouping
+ * a pure function of inputs that DON'T change when the camera merely moves.
+ *
+ * This is exactly what every serious map engine does (Google/Apple Maps,
+ * Mapbox's Supercluster, Google Earth): markers are clustered in geographic
+ * space against a radius derived from the ZOOM LEVEL alone. Panning and
+ * rotating a map never re-cluster it; only zooming does, and zooming back
+ * out reproduces precisely the clusters you had before. That is the
+ * behaviour being asked for here, arrived at for the same reason.
+ *
+ * So: badges are grouped by their distance on the GROUND PLANE (world X/Z —
+ * the villa is a floor plan, so ground distance is the honest proxy for
+ * on-screen separation), against a radius that converts the badge's on-screen
+ * size into world units using the current zoom. Camera rotation, tilt and
+ * pan cannot influence it at all; only zoom can, and it does so reversibly.
+ * No hysteresis anywhere, so the same view always renders the same way.
  */
-const CLUSTER_OVERLAP_ALLOW_WIDTHS = 0.5;
-const CLUSTER_EXIT_GAP_WIDTHS = 1.4;
-/** A locally-overlapping pile needs MORE than this many badges before it
- *  summarises into its room's chip — small huddles of 2-3 stay individual. */
+/** Zoom is quantised to steps of 1/N of a doubling before it feeds the
+ *  grouping radius — the direct equivalent of a map engine clustering per
+ *  discrete zoom level. Inside a step nothing re-groups at all, so a slow
+ *  pinch can't sit exactly on a threshold and chatter; crossing one is a
+ *  single clean change, and crossing back undoes it exactly. */
+const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
+/** How much of its own width a badge may overlap a neighbour before the two
+ *  count as piled together. Generous on purpose: a light overlap between two
+ *  or three markers is normal, unremarkable map UI (Google/Apple Maps pins
+ *  overlap constantly at city zoom) and summarising a whole room over it
+ *  throws away detail the view had room for — the "grouping is far too
+ *  eager" report. */
+const GROUP_OVERLAP_ALLOW_WIDTHS = 0.5;
+/** A pile needs MORE than this many badges before it summarises into its
+ *  room's chip; smaller huddles are fanned apart instead (see FAN_GAP_PX)
+ *  and stay individually readable. */
 const CLUSTER_TRIGGER_COUNT = 3;
 /**
  * Breathing room between two badges laid out side by side within a small
- * huddle (updateRoomClustering's fan step) — explicitly requested ("it's ok
- * to artificially move the icon a bit to make them not overlap"). This is
- * NOT the force-relaxation that caused the earlier "dancing" reports: there
- * is no iteration and no branch whose direction depends on the current
- * relative screen position of two anchors (the actual source of that bug —
- * see the header comment above). A huddle is sorted by entity id — a fixed,
- * camera-independent order — and laid out left-to-right around its own
- * centre, so a given badge keeps the exact same slot for as long as the
- * huddle exists; only the shared centre drifts with the camera, same as any
- * other object glued to the scene, which is not "dancing", it's everything
- * else on screen doing the same thing.
+ * huddle (fanBadges) — explicitly requested ("it's ok to artificially move
+ * the icon a bit to make them not overlap"), and the piece a pure
+ * cluster-or-nothing map engine lacks. It exists because two devices can
+ * share ONE fixture (a ceiling fan and its own light, a socket and its power
+ * meter) and therefore sit at the same 3D point: no zoom level whatsoever
+ * separates those, so without a fan they would either overlap forever or
+ * force their whole room to stay grouped forever.
+ *
+ * This is NOT the force-relaxation that caused the earlier "dancing"
+ * reports. There is no iteration, and no branch whose direction depends on
+ * the current relative screen positions of two anchors — that dependency was
+ * the actual defect, not nudging as such. A huddle is ordered by entity id
+ * (fixed, camera-independent) and laid out around its own centre, so a badge
+ * holds the same slot for as long as the huddle exists.
  */
 const FAN_GAP_PX = 6;
 /** Room-cluster chip geometry. */
@@ -565,20 +584,23 @@ function chipWidthPx(text: string): number {
   return text.length * CLUSTER_CHAR_PX + CLUSTER_TEXT_PAD_PX;
 }
 const NO_ROOM_LABEL = "Other";
-/** Slack around the viewport within which a badge still counts as on-screen,
- *  so one hovering exactly at the edge doesn't toggle the crowding metric. */
-const OFFSCREEN_MARGIN_PX = 64;
 
-/** A badge that survived the per-entity culls, with its projected anchor. */
+/** A badge that survived the per-entity culls (category / floor / enabled),
+ *  with BOTH its world-space anchor and its projected screen position. */
 interface ShownLabel {
   id: string;
   lbl: LabelControls;
+  /** Projected screen position of the anchor, in render pixels. */
   x: number;
   y: number;
-  /** Inside the viewport (+margin). Off-screen badges are excluded from
-   *  collision resolution and from the crowding metric — they can't overlap
-   *  anything the user can see, and counting them would peg the LOD band. */
-  onScreen: boolean;
+  /** World-space anchor, projected onto the ground plane. THE input to
+   *  grouping — see groupBadges for why the decision is made here and not
+   *  in screen space. */
+  wx: number;
+  wz: number;
+  /** Anchor is in front of the camera, i.e. has a valid screen position at
+   *  all. Purely a RENDER gate — deliberately not an input to grouping. */
+  inFront: boolean;
   off: { x: number; y: number };
 }
 
@@ -736,27 +758,17 @@ export class EntityVisuals {
    *  the badge container is scaled by their product. */
   private iconUserScale = 1;
   private iconZoomScale = 1;
-  /** Per-room clustering state (true = that room's badges are currently
-   *  hidden behind its cluster chip) — the hysteresis input for
-   *  updateRoomClustering, keyed by the same room name as `clusters`. */
+  /** Which rooms are showing their cluster chip instead of individual badges.
+   *  Recomputed from scratch every frame by cullLabels — deliberately NOT
+   *  carried over as state: grouping is a pure function of world positions
+   *  and zoom now, and the previous frame's answer must never influence this
+   *  one (that path-dependence was the "stays grouped when I slide back"
+   *  bug — see the grouping thresholds' comment). Kept as a field only so
+   *  updateClusters and pickClusterAt can read the current frame's result. */
   private roomClustered = new Map<string, boolean>();
   /** Room-cluster chips, keyed by room name. Built lazily the first time a
    *  room clusters; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
-  /**
-   * Re-derive every room's clustered/individual state from current crowding
-   * alone on the next pass, ignoring the exit hysteresis gap.
-   *
-   * The gap exists to absorb CONTINUOUS input (a drifting camera), for which
-   * "don't switch back until things have clearly changed" is right. A
-   * DISCRETE user action is the opposite case: stepping badge size + then −
-   * is the same control returning to the same state, so it must land in the
-   * same state it came from. Without this the two thresholds made the
-   * stepper badly asymmetric — a room clustered on the Nth "+" click but
-   * survived five "−" clicks before letting go, which reads as the control
-   * being broken (reported from the field, exactly that ratio).
-   */
-  private bandSnapPending = false;
   /** Active storey from FloorManager (1-based). Floors below it stay rendered
    *  (cumulative visibility), so enabled-state alone can't cull their badges —
    *  cullLabels compares each label's stamped floorIndex against this. */
@@ -866,22 +878,18 @@ export class EntityVisuals {
     const wantScale = clampIconScale(config.entityIconScale);
     if (wantScale !== this.iconUserScale) {
       this.iconUserScale = wantScale;
-      // Changing the size stepper is a DELIBERATE, discrete act — not the
-      // continuous drift the LOD hysteresis exists to absorb — so the band
-      // must be re-derived from scratch rather than kept sticky. See
-      // bandSnapPending.
-      this.bandSnapPending = true;
+      // The size stepper feeds the grouping radius directly (a badge's own
+      // width is what that radius is built from), and grouping carries no
+      // state between frames, so stepping + then − lands back exactly where
+      // it started with nothing to reset here. That symmetry used to need an
+      // explicit "ignore the hysteresis once" flag; removing hysteresis
+      // removed the need for it.
       this.applyIconScale();
     }
     // Labels are always shown; rebuild when a device group is created/edited
     // (a member's badge must appear/disappear without needing a full
     // re-index — see rebuildLabels' hiddenMembers).
     if (config.deviceGroups !== prevGroups || config.badgeStyle !== prevBadgeStyle) {
-      // A style switch resizes every collision box (a card is far wider than a
-      // squircle), so it can cross a band threshold on its own. Discrete user
-      // action ⇒ re-derive the band cleanly rather than inheriting a sticky
-      // one — same reasoning as the size stepper above.
-      if (config.badgeStyle !== prevBadgeStyle) this.bandSnapPending = true;
       this.rebuildLabels();
     }
     if (typeof config.render?.lightPoolIntensity === "number") {
@@ -1628,24 +1636,33 @@ export class EntityVisuals {
     this.roomHighlight.setRooms(polys);
   }
 
-  /** World-space XZ bounding box of a room's registered entity ANCHORS — the
-   *  fallback used by SceneManager.navigateTo when this room has no real
-   *  drawn polygon (CameraController.getRoomBounds returns null), e.g. a
-   *  point-only teleport spot. Null if the room has no registered entities
-   *  either (nothing to frame). */
-  getRoomEntityBounds(room: string): { minX: number; maxX: number; minZ: number; maxZ: number } | null {
+  /** World-space XZ bounding box (plus a floor height) of a room's registered
+   *  entity ANCHORS — the fallback used by SceneManager.navigateTo when this
+   *  room has no real drawn polygon (CameraController.getRoomBounds returns
+   *  null), e.g. a point-only teleport spot. Null if the room has no
+   *  registered entities either (nothing to frame). Matched the same
+   *  case/whitespace-insensitive way as the polygon lookup, so a room whose
+   *  config spelling differs only in case still frames correctly. */
+  getRoomEntityBounds(
+    room: string,
+  ): { minX: number; maxX: number; minZ: number; maxZ: number; floorY: number } | null {
+    const key = room.trim().toLowerCase();
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    // Anchors hang above their device, so the LOWEST one is the closest
+    // available stand-in for the room's floor.
+    let minY = Infinity;
     let found = false;
     for (const [id, lbl] of this.labels) {
-      if ((this.config.entityMap[id]?.room?.trim() || NO_ROOM_LABEL) !== room) continue;
+      if (this.roomOf(id).trim().toLowerCase() !== key) continue;
       const p = lbl.anchor.getAbsolutePosition();
       if (p.x < minX) minX = p.x;
       if (p.x > maxX) maxX = p.x;
       if (p.z < minZ) minZ = p.z;
       if (p.z > maxZ) maxZ = p.z;
+      if (p.y < minY) minY = p.y;
       found = true;
     }
-    return found ? { minX, maxX, minZ, maxZ } : null;
+    return found ? { minX, maxX, minZ, maxZ, floorY: minY } : null;
   }
 
   /** Replace the named-viewpoint "rooms" (config.teleportPoints) that don't
@@ -2318,10 +2335,8 @@ export class EntityVisuals {
     const tm = this.scene.getTransformMatrix();
     const hidden = this.config.hiddenCategories;
 
-    const vpW = eng.getRenderWidth();
-    const vpH = eng.getRenderHeight();
-
-    // Visible badges + their projected anchor position, for the declutter pass.
+    // Every badge that passes the non-view culls (category / floor / enabled).
+    // Deliberately NOT filtered by what is currently framed — see groupBadges.
     const shown: ShownLabel[] = [];
 
     for (const [id, lbl] of this.labels) {
@@ -2356,56 +2371,54 @@ export class EntityVisuals {
         lbl.container.isVisible = false;
         continue;
       }
-      // Only cull anchors projecting BEHIND the camera (z outside [0,1] — a
-      // genuinely invalid screen position). Tap hit-testing does NOT read
-      // this projection: it asks each badge control directly via the GUI's
-      // own contains() (see pickBadgeAt), so there is no stored screen
-      // position to drift out of sync with what's actually drawn.
-      const p = Vector3.Project(lbl.anchor.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
-      const visible = p.z >= 0 && p.z <= 1;
-      lbl.container.isVisible = visible;
-      if (visible) {
-        // Whether it lands inside the actual viewport (plus a margin) — NOT
-        // the same question as `visible`, which only rejects anchors behind
-        // the camera. Zooming in pushes most of the villa off-screen; if
-        // those off-screen badges still counted, measured crowding would
-        // never fall and the LOD band could never relax back to "all".
-        const onScreen =
-          p.x >= -OFFSCREEN_MARGIN_PX && p.x <= vpW + OFFSCREEN_MARGIN_PX &&
-          p.y >= -OFFSCREEN_MARGIN_PX && p.y <= vpH + OFFSCREEN_MARGIN_PX;
-        shown.push({ id, lbl, x: p.x, y: p.y, onScreen, off: { x: 0, y: 0 } });
-      }
+      // The anchor's WORLD position is what grouping runs on (see groupBadges);
+      // its projection is only needed to draw it. Anchors projecting behind
+      // the camera (z outside [0,1]) have no valid screen position, so they
+      // can't be drawn — but they still take part in grouping, exactly so
+      // that turning the camera can't change how a room is presented.
+      const wp = lbl.anchor.getAbsolutePosition();
+      const p = Vector3.Project(wp, Matrix.IdentityReadOnly, tm, vp);
+      shown.push({
+        id, lbl,
+        x: p.x, y: p.y,
+        wx: wp.x, wz: wp.z,
+        inFront: p.z >= 0 && p.z <= 1,
+        off: { x: 0, y: 0 },
+      });
     }
 
     // ── Layout ───────────────────────────────────────────────────────────
-    // Every badge is pinned at a fixed offset directly above its own anchor —
-    // no nudging, ever (see the header comment above for why). The only
-    // decision left is which ROOMS are too crowded to show their badges
-    // individually right now (updateRoomClustering); a crowded room's
-    // members hide together in favour of that room's cluster chip.
+    // Grouping is decided in world space against the current zoom alone, so
+    // panning/orbiting cannot change it and the same view always renders the
+    // same way (see the thresholds' comment). Piles too big to read are
+    // summarised into their room's chip; smaller huddles are fanned apart.
     const baseY = this.labelBaseOffsetY();
-    const onScreen = shown.filter((s) => s.onScreen);
-    for (const s of shown) {
-      s.lbl.container.linkOffsetXInPixels = 0;
-      s.lbl.container.linkOffsetYInPixels = baseY;
-    }
+    const boxes = this.labelBoxes(shown);
+    const piles = this.groupBadges(shown, boxes);
 
-    // Off-screen badges take part in no collision test: they can't overlap
-    // anything visible, and letting them count would make the result depend
-    // on the villa's total size rather than on what's in view.
-    const boxes = this.labelBoxes(onScreen);
-    this.updateRoomClustering(onScreen, boxes);
-    // updateRoomClustering also fills in a small deterministic horizontal
-    // nudge (onScreen[i].off.x) for any badge still shown individually but
-    // huddled with a neighbour — apply it now, after the room decision, so
-    // a badge about to be hidden behind its room's chip is never nudged for
-    // nothing.
-    for (const s of onScreen) {
+    this.roomClustered.clear();
+    for (const members of piles) {
+      if (members.length <= CLUSTER_TRIGGER_COUNT) continue;
+      for (const i of members) {
+        this.roomClustered.set(this.roomOf(shown[i].id), true);
+      }
+    }
+    // Fan only what stays individually visible — a badge about to hide behind
+    // its room's chip must not be nudged for nothing.
+    this.fanBadges(shown, boxes, piles);
+
+    for (const s of shown) {
       s.lbl.container.linkOffsetXInPixels = s.off.x;
-      const room = this.config.entityMap[s.id]?.room?.trim() || NO_ROOM_LABEL;
-      s.lbl.container.isVisible = !this.roomClustered.get(room);
+      s.lbl.container.linkOffsetYInPixels = baseY;
+      s.lbl.container.isVisible = s.inFront && !this.roomClustered.get(this.roomOf(s.id));
     }
     this.updateClusters(shown);
+  }
+
+  /** A badge's room, normalised — the single definition every grouping,
+   *  chip and hit-test path reads, so none of them can disagree. */
+  private roomOf(entityId: string): string {
+    return this.config.entityMap[entityId]?.room?.trim() || NO_ROOM_LABEL;
   }
 
   /** Pixel lift that centres a badge container above its anchor point. */
@@ -2415,121 +2428,133 @@ export class EntityVisuals {
   }
 
   /**
-   * Decide which rooms currently need their cluster chip instead of
-   * individual badges — the ONE mode decision left, now made per room
-   * instead of once globally — and, for badges that stay individual, fan
-   * apart any small huddle among them so they don't actually overlap (see
-   * the trailing pile/fan pass below).
+   * Group badges into spatial piles — THE grouping decision, and the reason
+   * this app finally behaves consistently under camera movement.
    *
-   * A room groups only once a locally-overlapping PILE of more than
-   * CLUSTER_TRIGGER_COUNT badges forms — not on any single touching pair,
-   * see the constants' own comment for why. "Pile" means a connected
-   * component of the "meaningfully overlapping" relation (union-find over
-   * every on-screen badge, not just same-room ones, so a crowded
-   * neighbouring room's badge dragging a quiet room's badge into the same
-   * pile still resolves both rooms). ENTER uses a generous overlap
-   * allowance; a room that's already clustered only reverts once none of
-   * its members are still in an over-the-limit pile at the much wider EXIT
-   * clearance — the same asymmetric-hysteresis idea as before, just
-   * re-expressed as pile size instead of "any touch at all".
+   * Runs on world-space GROUND distance (X/Z) against a radius derived from
+   * the current zoom alone, so camera rotation, tilt and panning cannot
+   * influence the outcome at all, and returning to a view always reproduces
+   * exactly what that view showed before. See the thresholds' comment above
+   * for the full reasoning and the map-engine precedent.
+   *
+   * Every eligible badge takes part, including ones currently off-screen or
+   * behind the camera: a room's presentation must not depend on how much of
+   * it happens to be framed right now. Piles cross room boundaries on
+   * purpose — a crowded room's badges genuinely do sit on top of a quiet
+   * neighbour's, and the caller resolves every room represented in an
+   * over-sized pile.
+   *
+   * Returns each pile as a list of indices into `shown`.
    */
-  private updateRoomClustering(
-    onScreen: ShownLabel[],
+  private groupBadges(
+    shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-  ): void {
-    const scale = this.iconUserScale * this.iconZoomScale;
-    // Negative: two boxes must overlap by MORE than a plain graze at the
-    // edge before they count as part of the same pile at all.
-    const enterGap = -CLUSTER_OVERLAP_ALLOW_WIDTHS * BADGE_DIAMETER_PX * scale;
-    const exitGap = CLUSTER_EXIT_GAP_WIDTHS * BADGE_DIAMETER_PX * scale;
-    const roomOf = (id: string) => this.config.entityMap[id]?.room?.trim() || NO_ROOM_LABEL;
-
-    const snap = this.bandSnapPending;
-    this.bandSnapPending = false;
-
-    const n = onScreen.length;
-    const enterParent = Array.from({ length: n }, (_, i) => i);
-    const exitParent = Array.from({ length: n }, (_, i) => i);
-    const find = (parent: number[], x: number): number => {
+  ): number[][] {
+    const n = shown.length;
+    const parent = Array.from({ length: n }, (_, i) => i);
+    const find = (x: number): number => {
       while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
       return x;
     };
-    const union = (parent: number[], a: number, b: number): void => {
-      const ra = find(parent, a), rb = find(parent, b);
-      if (ra !== rb) parent[ra] = rb;
-    };
 
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const a = onScreen[i], b = onScreen[j], ba = boxes[i], bb = boxes[j];
-        const dx = Math.abs(b.x - a.x);
-        const dy = Math.abs((b.y + bb.cy) - (a.y + ba.cy));
-        if (dx < ba.halfW + bb.halfW + enterGap && dy < ba.halfH + bb.halfH + enterGap) union(enterParent, i, j);
-        if (dx < ba.halfW + bb.halfW + exitGap && dy < ba.halfH + bb.halfH + exitGap) union(exitParent, i, j);
-      }
-    }
-    const componentSizes = (parent: number[]): Map<number, number> => {
-      const sizes = new Map<number, number>();
+    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
+    if (pxPerWorld > 0) {
+      // Each badge's on-screen half-width expressed in world units, so the
+      // whole test lives on the ground plane. The allowance is subtracted
+      // here rather than in screen space so it scales identically.
+      const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
+      const reach = boxes.map((b) => (b.halfW * allow) / pxPerWorld);
+      const gapW = (FAN_GAP_PX * this.iconUserScale * this.iconZoomScale) / pxPerWorld;
       for (let i = 0; i < n; i++) {
-        const r = find(parent, i);
-        sizes.set(r, (sizes.get(r) ?? 0) + 1);
+        for (let j = i + 1; j < n; j++) {
+          const dx = shown[j].wx - shown[i].wx;
+          const dz = shown[j].wz - shown[i].wz;
+          const need = reach[i] + reach[j] + gapW;
+          if (dx * dx + dz * dz < need * need) {
+            const ra = find(i), rb = find(j);
+            if (ra !== rb) parent[ra] = rb;
+          }
+        }
       }
-      return sizes;
-    };
-    const enterSizes = componentSizes(enterParent);
-    const exitSizes = componentSizes(exitParent);
-
-    // Rooms with a member in an over-the-limit ENTER pile this frame, and
-    // rooms with a member STILL in an over-the-limit EXIT pile — i.e. not
-    // yet clearly thinned out.
-    const enterHit = new Set<string>();
-    const stillPacked = new Set<string>();
-    for (let i = 0; i < n; i++) {
-      const room = roomOf(onScreen[i].id);
-      if ((enterSizes.get(find(enterParent, i)) ?? 1) > CLUSTER_TRIGGER_COUNT) enterHit.add(room);
-      if ((exitSizes.get(find(exitParent, i)) ?? 1) > CLUSTER_TRIGGER_COUNT) stillPacked.add(room);
     }
 
-    let changed = false;
-    const rooms = new Set(onScreen.map((s) => roomOf(s.id)));
-    for (const room of rooms) {
-      const was = this.roomClustered.get(room) ?? false;
-      const now = snap ? enterHit.has(room) : was ? stillPacked.has(room) : enterHit.has(room);
-      if (now !== was) changed = true;
-      this.roomClustered.set(room, now);
-    }
-    if (changed) this.requestRender();
-
-    // Small huddles (below the trigger, so still shown individually) get a
-    // small deterministic horizontal fan instead of being left to actually
-    // overlap — see FAN_GAP_PX for why this is safe against the "dancing"
-    // failure a full relaxation solver caused. Reuses the SAME enter-level
-    // piles already computed above (a huddle worth fanning is by definition
-    // one that isn't big enough to have triggered clustering).
-    const piles = new Map<number, number[]>();
+    const byRoot = new Map<number, number[]>();
     for (let i = 0; i < n; i++) {
-      if (this.roomClustered.get(roomOf(onScreen[i].id))) continue; // hidden behind its chip anyway
-      const root = find(enterParent, i);
-      let members = piles.get(root);
-      if (!members) { members = []; piles.set(root, members); }
+      const r = find(i);
+      let members = byRoot.get(r);
+      if (!members) { members = []; byRoot.set(r, members); }
       members.push(i);
     }
-    const fanGap = FAN_GAP_PX * scale;
-    for (const members of piles.values()) {
-      if (members.length < 2) continue;
-      members.sort((a, b) => onScreen[a].id.localeCompare(onScreen[b].id));
+    return [...byRoot.values()];
+  }
+
+  /**
+   * Screen pixels per world unit at the camera's working distance, snapped to
+   * discrete zoom steps (GROUP_ZOOM_STEPS_PER_DOUBLING).
+   *
+   * Deliberately reads the ORBIT RADIUS on the bird's-eye camera rather than
+   * any per-badge distance: orbiting and panning both leave the radius
+   * untouched, which is precisely the invariance grouping needs.
+   *
+   * The first-person camera has no orbit radius, so it uses the MEDIAN
+   * distance to the badges themselves. That is measured from real scene data
+   * rather than assumed, is likewise unchanged by looking around on the spot
+   * (turning doesn't move you, so no distance changes), and shifts smoothly
+   * as you actually walk — which is the correct behaviour there: walking up
+   * to a group of devices SHOULD separate them, the same way zooming does.
+   * Median rather than mean so one far-off badge can't skew the whole scale.
+   */
+  private quantisedPixelsPerWorldUnit(shown: ShownLabel[]): number {
+    const cam = this.scene.activeCamera;
+    if (!cam) return 0;
+    const vpH = this.scene.getEngine().getRenderHeight();
+    const fov = cam.fov || 0.8;
+    // Duck-typed rather than instanceof-checked so this file needs no import
+    // of the concrete camera classes: only ArcRotateCamera exposes `radius`.
+    const orbitRadius = (cam as unknown as { radius?: number }).radius;
+    let dist = typeof orbitRadius === "number" ? orbitRadius : 0;
+    if (!(dist > 0)) {
+      if (shown.length === 0) return 0;
+      const ds = shown
+        .map((s) => Math.hypot(s.wx - cam.position.x, s.wz - cam.position.z))
+        .sort((a, b) => a - b);
+      dist = ds[ds.length >> 1];
+    }
+    if (!(dist > 0) || vpH <= 0) return 0;
+    const raw = vpH / (2 * dist * Math.tan(fov / 2));
+    if (!(raw > 0)) return 0;
+    const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
+    return Math.pow(2, Math.round(Math.log2(raw) * q) / q);
+  }
+
+  /**
+   * Lay the members of each still-individual huddle side by side so they
+   * don't actually overlap. Order is by entity id — fixed and
+   * camera-independent — so a badge holds the same slot for as long as its
+   * huddle exists; only the huddle's shared centre tracks the camera, like
+   * every other object anchored in the scene. See FAN_GAP_PX for why this is
+   * not a return of the relaxation solver that once made badges dance.
+   */
+  private fanBadges(
+    shown: ShownLabel[],
+    boxes: { halfW: number; halfH: number; cy: number }[],
+    piles: number[][],
+  ): void {
+    const fanGap = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
+    for (const pile of piles) {
+      if (pile.length < 2 || pile.length > CLUSTER_TRIGGER_COUNT) continue;
+      const members = [...pile].sort((a, b) => shown[a].id.localeCompare(shown[b].id));
       const widths = members.map((i) => boxes[i].halfW * 2);
       const total = widths.reduce((s, w) => s + w, 0) + fanGap * (members.length - 1);
-      // Laid out around the PILE's own average raw position, not an assumed
-      // shared anchor — members of a real pile rarely project to the exact
-      // same point, so the offset for each has to account for its OWN raw x
-      // (the gap between two members' final screen positions is what must
-      // be fanGap, not the gap between their offsets alone).
-      const cx = members.reduce((s, i) => s + onScreen[i].x, 0) / members.length;
+      // Centred on the huddle's own average projected position: members of a
+      // real huddle rarely project to the same point, so each offset has to
+      // subtract that member's OWN x — the gap that must equal fanGap is the
+      // one between final screen positions, not between offsets.
+      const cx = members.reduce((s, i) => s + shown[i].x, 0) / members.length;
       let cursor = cx - total / 2;
       for (let k = 0; k < members.length; k++) {
         const i = members[k];
-        onScreen[i].off.x = cursor + boxes[i].halfW - onScreen[i].x;
+        shown[i].off.x = cursor + boxes[i].halfW - shown[i].x;
         cursor += widths[k] + fanGap;
       }
     }
@@ -2605,16 +2630,15 @@ export class EntityVisuals {
     if (!layer) return; // no GUI layer yet — nothing to attach chips to
 
     // Bucket by room, accumulating the centroid and worst state as we go —
-    // but only for rooms updateRoomClustering flagged as crowded THIS frame;
-    // everyone else keeps their individual badges (cullLabels already made
-    // them visible) and gets no chip at all. Off-screen members of a
-    // clustered room are included deliberately: a room's chip should report
-    // the whole room's device count, not just the part currently framed, and
-    // its centroid should stay put rather than sliding around as members
-    // cross the viewport edge.
+    // but only for rooms flagged as grouped THIS frame (cullLabels); everyone
+    // else keeps their individual badges and gets no chip at all. Off-screen
+    // members of a grouped room are included deliberately: a room's chip
+    // should report the whole room's device count, not just the part
+    // currently framed, and its centroid should stay put rather than sliding
+    // around as members cross the viewport edge.
     const groups = new Map<string, { ids: string[]; sum: Vector3; alert: boolean }>();
     for (const s of shown) {
-      const room = this.config.entityMap[s.id]?.room?.trim() || NO_ROOM_LABEL;
+      const room = this.roomOf(s.id);
       if (!this.roomClustered.get(room)) continue;
       let g = groups.get(room);
       if (!g) { g = { ids: [], sum: Vector3.Zero(), alert: false }; groups.set(room, g); }

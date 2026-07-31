@@ -47,6 +47,19 @@ import { entityMapDelta } from "./entityMapDiff";
 // Babylon, no scene state) — see entityMapDiff.ts for the full reasoning about
 // which fields qualify and why.
 
+// ── Zoom-to-room framing (see computeRoomOverviewPose) ──────────────────────
+// Breathing room left around a room once it fills the frame, as a FRACTION of
+// the distance needed to fit it exactly — so it scales with the room rather
+// than being a fixed world distance that would swamp a small room and vanish
+// on a large one. The entity-bounds fallback gets more, because device anchors
+// sit inside the room rather than at its walls, so their box under-states it.
+const ROOM_FIT_MARGIN = 0.18;
+const ROOM_FIT_MARGIN_ENTITIES = 0.45;
+// Floor under the fitted radius, for a "room" that measures as a point (a
+// single device, or a one-entity teleport spot) and would otherwise ask the
+// camera to fly arbitrarily close. Expressed in world units = metres.
+const MIN_ROOM_FIT_RADIUS = 1.5;
+
 export interface SceneManagerOptions {
   config: AppConfig;
   /** Called when a mesh mapped to an entity is tapped (fast on/off action).
@@ -695,18 +708,28 @@ export class SceneManager {
   /**
    * Recompute a room's overview framing from its true size instead of
    * trusting whatever radius happened to be saved with its teleport point —
-   * an installer's one-time eyeballed zoom doesn't reliably keep every
-   * device badge inside the frame (reported: a room's badges stayed
-   * clustered even after "zooming to" it, because the saved shot wasn't
-   * actually wide enough to clear them). The room's REAL wall polygon is
-   * preferred; a point-only teleport spot (staircase landing, etc. — no
-   * polygon) falls back to the bounding box of its own registered entities,
-   * with a wider margin since anchors sit at individual devices rather than
-   * at the room's actual edges. The saved alpha/beta (the installer's
-   * intended viewing angle) is kept when one exists — only the distance
-   * back is recalculated — with a sane top-down default otherwise. Returns
-   * null when the room has neither a polygon nor any entity to measure,
-   * i.e. genuinely nothing to derive a size from.
+   * an installer's one-time eyeballed zoom doesn't reliably frame the room,
+   * and a shot that isn't tight enough also leaves the room's badges grouped
+   * after "zooming to" it, since grouping is a function of zoom (see
+   * EntityVisuals.groupBadges). Both halves of that report come from the
+   * same cause and are fixed here.
+   *
+   * Framing uses the standard "fit the bounding SPHERE" construction every
+   * CAD/3D viewer's zoom-to-fit uses, rather than comparing a raw span to a
+   * radius. A sphere subtends the same angle from every direction, so the
+   * result is correct for ANY tilt/heading (the previous span-based formula
+   * silently under-framed at anything other than straight down, because a
+   * tilted view has to cover more ground depth than the room's own width),
+   * and it accounts for BOTH field-of-view axes so a portrait phone gets the
+   * same coverage as a landscape desktop.
+   *
+   * The room's REAL wall polygon is preferred; a point-only teleport spot
+   * (staircase landing, etc. — no polygon) falls back to the bounding box of
+   * its own registered entities, with a wider margin since anchors sit at
+   * individual devices rather than at the room's actual edges. The saved
+   * alpha/beta (the installer's intended viewing angle) is kept when one
+   * exists — only the distance back is recalculated. Returns null when the
+   * room has neither a polygon nor any entity to measure.
    */
   private computeRoomOverviewPose(
     point: TeleportPoint,
@@ -714,24 +737,36 @@ export class SceneManager {
     const realBounds = this.camera.getRoomBounds(point.name);
     const bounds = realBounds ?? this.visuals.getRoomEntityBounds(point.name);
     if (!bounds) return null;
-    const marginFrac = realBounds ? 0.35 : 0.6;
+    // Entity anchors mark devices, not walls, so their box under-states the
+    // room — give that fallback more headroom than a true polygon needs.
+    const marginFrac = realBounds ? ROOM_FIT_MARGIN : ROOM_FIT_MARGIN_ENTITIES;
 
     const cx = (bounds.minX + bounds.maxX) / 2;
     const cz = (bounds.minZ + bounds.maxZ) / 2;
-    const span = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 2) * (1 + marginFrac);
-    // Same aspect-correction + radius/span relationship OverviewController's
-    // own whole-villa fitTo uses, just applied to a room-scale span instead
-    // of the villa's — see fitTo's comment for why the correction matters on
-    // a portrait phone specifically.
-    const aspect = this.engine.getAspectRatio(this.overview.camera);
-    const aspectCorrection = aspect < 1 ? 1 / aspect : 1;
-    const radius = span * aspectCorrection * 1.05;
+    const width = Math.max(bounds.maxX - bounds.minX, 0);
+    const depth = Math.max(bounds.maxZ - bounds.minZ, 0);
+    // Bounding-sphere radius of the room's footprint (half its diagonal), so
+    // no corner can fall outside the frame whichever way the camera faces.
+    const sphere = Math.max(Math.hypot(width, depth) / 2, MIN_ROOM_FIT_RADIUS);
+
+    const cam = this.overview.camera;
+    const vFov = cam.fov;
+    const aspect = this.engine.getAspectRatio(cam);
+    // Babylon's default FOVMODE_VERTICAL_FIXED keeps `fov` as the VERTICAL
+    // angle and derives the horizontal one from the aspect ratio; the TIGHTER
+    // of the two is what actually limits how much fits on screen.
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+    const halfAngle = Math.min(vFov, hFov) / 2;
+    const radius = (sphere / Math.sin(halfAngle)) * (1 + marginFrac);
 
     return {
       alpha: point.overviewPose?.alpha ?? -Math.PI / 2,
       beta: point.overviewPose?.beta ?? 0.5,
       radius,
-      target: { x: cx, y: point.overviewPose?.target.y ?? point.position.y, z: cz },
+      // Orbit about the room's own CENTRE, at the height the room's floor
+      // actually sits at — a teleport point stores the first-person EYE
+      // position, so reusing its y tilted the framing up by eye height.
+      target: { x: cx, y: bounds.floorY, z: cz },
     };
   }
 

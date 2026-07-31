@@ -212,8 +212,19 @@ export function labelFromEntityId(entityId: string, friendlyName?: string): stri
  *  permanently in config, indistinguishable from a deliberate customisation,
  *  even though a proper name was available moments later. */
 export function looksLikeRawFallbackLabel(entityId: string, label: string): boolean {
-  const raw = entityId.split(".")[1]?.replace(/_/g, " ") ?? "";
-  return label.trim().toLowerCase() === raw.trim().toLowerCase();
+  // Compare NORMALISED forms (underscores → spaces, whitespace collapsed,
+  // lower-cased) on BOTH sides. Normalising only the entity_id — as this did
+  // originally — missed the very common case of a label that is the raw slug
+  // still carrying its UNDERSCORES ("ceiling_fan_master_bedroom"): it differs
+  // from the space-separated id form by punctuation alone, so it was read as
+  // a deliberate user customisation and shown verbatim as a panel title,
+  // while the visually identical space-separated variant was correctly
+  // upgraded to the friendly name. Same string, two different outcomes,
+  // depending only on whether an underscore survived — which is exactly the
+  // inconsistency reported ("the name is wrong now… sometimes it works").
+  const norm = (s: string) => s.replace(/_/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  const raw = entityId.split(".")[1] ?? "";
+  return norm(label) === norm(raw);
 }
 
 /**

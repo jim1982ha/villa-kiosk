@@ -41,7 +41,7 @@ export class CameraController {
   private moveX = 0; // strafe, -1..1
   private moveY = 0; // forward, -1..1
   private roomAnchors: RoomAnchor[] = [];
-  private roomPolygons: Array<{ name: string; pts: Pt2[] }> = [];
+  private roomPolygons: Array<{ name: string; pts: Pt2[]; floorY?: number }> = [];
   private currentRoom: string | null = null;
   private animating = false;
   private eyeHeight: number;
@@ -584,17 +584,23 @@ export class CameraController {
   }
 
   /** Set the (model-space) room polygons used for point-in-polygon labelling. */
-  setRoomPolygons(polys: Array<{ name: string; pts: Pt2[] }>): void {
+  setRoomPolygons(polys: Array<{ name: string; pts: Pt2[]; floorY?: number }>): void {
     this.roomPolygons = polys;
   }
 
-  /** World-space XZ bounding box of a real drawn room polygon by name, or
-   *  null if this room has none (e.g. a point-only teleport spot like a
-   *  staircase landing — see RoomHighlight's two-source split). Used to
-   *  dynamically frame a room's own true dimensions rather than whatever
-   *  radius happened to be saved with its teleport point. */
-  getRoomBounds(name: string): { minX: number; maxX: number; minZ: number; maxZ: number } | null {
-    const poly = this.roomPolygons.find((r) => r.name === name);
+  /** World-space XZ bounding box (plus the room's floor height) of a real
+   *  drawn room polygon by name, or null if this room has none (e.g. a
+   *  point-only teleport spot like a staircase landing — see RoomHighlight's
+   *  two-source split). Used to dynamically frame a room's own true
+   *  dimensions rather than whatever radius happened to be saved with its
+   *  teleport point. Matched case/whitespace-insensitively: polygon names
+   *  come from the floor plan and teleport-point names from config, and a
+   *  silent mismatch here would look exactly like "zoom-to-room is broken". */
+  getRoomBounds(
+    name: string,
+  ): { minX: number; maxX: number; minZ: number; maxZ: number; floorY: number } | null {
+    const key = name.trim().toLowerCase();
+    const poly = this.roomPolygons.find((r) => r.name.trim().toLowerCase() === key);
     if (!poly || poly.pts.length === 0) return null;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const p of poly.pts) {
@@ -603,7 +609,7 @@ export class CameraController {
       if (p.z < minZ) minZ = p.z;
       if (p.z > maxZ) maxZ = p.z;
     }
-    return { minX, maxX, minZ, maxZ };
+    return { minX, maxX, minZ, maxZ, floorY: poly.floorY ?? 0 };
   }
 
   private updateRoom(): void {
