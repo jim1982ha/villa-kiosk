@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.39.2
+
+### Changes
+- **Room-cluster chip colour changed again — the brand blue read as an Energy-category badge.** `CATEGORY_COLORS.energy` is that same sky-to-electric blue, so a chip in it looked like it belonged to a device category rather than being a room summary. Switched to a neutral slate, deliberately outside every category's hue (comfort orange, access-control purple, light gold, network green, energy blue) so a chip reads as UI chrome/navigation, not a device.
+- **The Apple system font is now applied everywhere, including the serif "display" font.** The previous pass only fixed `--font-ui` (body text/controls); room titles, modal headings and the villa name in the top bar all still used a separate decorative serif (Cormorant Garamond) by original design, which is exactly what was still showing in the reported screenshots. `--font-display` now aliases `--font-ui` from the ONE place both are defined, so every remaining reference updates automatically — no per-component patching — and the now-fully-unused Google Fonts fetch was removed from `index.html`.
+- **Badges that are close together but not in a genuine crowd are now nudged apart a small, fixed amount instead of being left to actually overlap** — explicitly requested ("it's ok to artificially move the icon a bit"). This is NOT a return to the force-relaxation solver that caused the earlier "dancing" reports: there's no iteration and no direction choice that depends on the current relative screen position of two badges (that dependency was the actual bug). A huddle of 2-3 is sorted by entity id — a fixed, camera-independent order — and laid out left-to-right around its own centre; a badge keeps the same slot in its huddle for as long as the huddle exists, so nothing about it can flip or drift as the camera orbits. Caught and fixed a real bug in the first version of this fan step during verification: it assumed every badge in a huddle shared the same raw anchor position, which isn't true in general (two devices near but not AT the same spot) and produced negative (overlapping) gaps for exactly that case — fixed by centring the layout on the huddle's own average position instead. This should also resolve badges staying clustered post-zoom-to-room: many of those were two devices sharing one fixture (e.g. a ceiling fan + its own light), which no amount of zooming ever separates since they sit at the same 3D point — now fanned apart directly regardless of zoom level.
+- Every constant introduced across this and the previous release remains a ratio (badge-widths, viewport fractions) or a live-measured value, never a fixed pixel count or anything tied to this specific villa's rooms/entities — reconfirmed while fixing the fan-math bug above. Typecheck and production build clean.
+
+---
+
 ## 2.39.1
 
 ### Changes

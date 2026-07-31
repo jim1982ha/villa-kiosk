@@ -17,14 +17,9 @@
          use-credentials sends the session cookie/credentials so it loads. -->
     <link rel="manifest" href="./manifest.json" crossorigin="use-credentials" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon-180.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Display serif only — the UI typeface is the native system font stack
-         (San Francisco on Apple devices), so it needs no webfont fetch. -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&display=swap"
-      rel="stylesheet"
-    />
+    <!-- No webfont fetch at all: --font-display was its own serif (Cormorant
+         Garamond) but now just aliases --font-ui (see styles.css), so every
+         typeface in the app is the native system font stack. -->
     <title>Villa Kiosk</title>
   </head>
   <body>

@@ -518,13 +518,32 @@ const CLUSTER_EXIT_GAP_WIDTHS = 1.4;
 /** A locally-overlapping pile needs MORE than this many badges before it
  *  summarises into its room's chip — small huddles of 2-3 stay individual. */
 const CLUSTER_TRIGGER_COUNT = 3;
+/**
+ * Breathing room between two badges laid out side by side within a small
+ * huddle (updateRoomClustering's fan step) — explicitly requested ("it's ok
+ * to artificially move the icon a bit to make them not overlap"). This is
+ * NOT the force-relaxation that caused the earlier "dancing" reports: there
+ * is no iteration and no branch whose direction depends on the current
+ * relative screen position of two anchors (the actual source of that bug —
+ * see the header comment above). A huddle is sorted by entity id — a fixed,
+ * camera-independent order — and laid out left-to-right around its own
+ * centre, so a given badge keeps the exact same slot for as long as the
+ * huddle exists; only the shared centre drifts with the camera, same as any
+ * other object glued to the scene, which is not "dancing", it's everything
+ * else on screen doing the same thing.
+ */
+const FAN_GAP_PX = 6;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
-/** Solid brand blue — the same colour var(--accent) resolves to for the
- *  DOM's own primary buttons — rather than a translucent dark tone that
- *  still reads as "a black pill" at a glance (field-reported). */
-const CLUSTER_BG_COLOR = "#0ea5e9";
+/** Neutral slate — NOT the app's own sky-blue accent (tried first: read as
+ *  belonging to the Energy category, whose badge colour is that same blue —
+ *  see CATEGORY_COLORS.energy — a room summary shouldn't look like a device
+ *  category), and lighter than the translucent near-black tried before that
+ *  (read as "just black" at a glance). Deliberately outside every category
+ *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
+ *  navigation affordance, not a device — rather than any category's badge. */
+const CLUSTER_BG_COLOR = "#475569";
 /** Clusters must stay legible at the far zoom where badges shrink hardest, so
  *  their scale is floored well above the badge floor (getIconZoomCap: 0.22). */
 const CLUSTER_MIN_SCALE = 0.8;
@@ -2376,8 +2395,13 @@ export class EntityVisuals {
     // on the villa's total size rather than on what's in view.
     const boxes = this.labelBoxes(onScreen);
     this.updateRoomClustering(onScreen, boxes);
-
+    // updateRoomClustering also fills in a small deterministic horizontal
+    // nudge (onScreen[i].off.x) for any badge still shown individually but
+    // huddled with a neighbour — apply it now, after the room decision, so
+    // a badge about to be hidden behind its room's chip is never nudged for
+    // nothing.
     for (const s of onScreen) {
+      s.lbl.container.linkOffsetXInPixels = s.off.x;
       const room = this.config.entityMap[s.id]?.room?.trim() || NO_ROOM_LABEL;
       s.lbl.container.isVisible = !this.roomClustered.get(room);
     }
@@ -2393,7 +2417,9 @@ export class EntityVisuals {
   /**
    * Decide which rooms currently need their cluster chip instead of
    * individual badges — the ONE mode decision left, now made per room
-   * instead of once globally.
+   * instead of once globally — and, for badges that stay individual, fan
+   * apart any small huddle among them so they don't actually overlap (see
+   * the trailing pile/fan pass below).
    *
    * A room groups only once a locally-overlapping PILE of more than
    * CLUSTER_TRIGGER_COUNT badges forms — not on any single touching pair,
@@ -2473,6 +2499,40 @@ export class EntityVisuals {
       this.roomClustered.set(room, now);
     }
     if (changed) this.requestRender();
+
+    // Small huddles (below the trigger, so still shown individually) get a
+    // small deterministic horizontal fan instead of being left to actually
+    // overlap — see FAN_GAP_PX for why this is safe against the "dancing"
+    // failure a full relaxation solver caused. Reuses the SAME enter-level
+    // piles already computed above (a huddle worth fanning is by definition
+    // one that isn't big enough to have triggered clustering).
+    const piles = new Map<number, number[]>();
+    for (let i = 0; i < n; i++) {
+      if (this.roomClustered.get(roomOf(onScreen[i].id))) continue; // hidden behind its chip anyway
+      const root = find(enterParent, i);
+      let members = piles.get(root);
+      if (!members) { members = []; piles.set(root, members); }
+      members.push(i);
+    }
+    const fanGap = FAN_GAP_PX * scale;
+    for (const members of piles.values()) {
+      if (members.length < 2) continue;
+      members.sort((a, b) => onScreen[a].id.localeCompare(onScreen[b].id));
+      const widths = members.map((i) => boxes[i].halfW * 2);
+      const total = widths.reduce((s, w) => s + w, 0) + fanGap * (members.length - 1);
+      // Laid out around the PILE's own average raw position, not an assumed
+      // shared anchor — members of a real pile rarely project to the exact
+      // same point, so the offset for each has to account for its OWN raw x
+      // (the gap between two members' final screen positions is what must
+      // be fanGap, not the gap between their offsets alone).
+      const cx = members.reduce((s, i) => s + onScreen[i].x, 0) / members.length;
+      let cursor = cx - total / 2;
+      for (let k = 0; k < members.length; k++) {
+        const i = members[k];
+        onScreen[i].off.x = cursor + boxes[i].halfW - onScreen[i].x;
+        cursor += widths[k] + fanGap;
+      }
+    }
   }
 
   /** Each label's collision box in screen px, relative to its anchor point —

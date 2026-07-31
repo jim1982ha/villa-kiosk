@@ -66,7 +66,12 @@
   --ring: var(--bg-base);
 
   /* Typography */
-  --font-display: "Cormorant Garamond", Georgia, serif;
+  /* Was its own decorative serif (Cormorant Garamond) for room titles/modal
+     headings/the villa name — explicitly asked to be the SAME system font
+     as everything else, everywhere, no exceptions. Aliased rather than
+     deleted so every existing var(--font-display) reference (headings,
+     modal titles, the brand name) still works, updated from ONE place. */
+  --font-display: var(--font-ui);
   /* Native system font — San Francisco on every Apple device (iOS/iPadOS/
      macOS), Roboto on Android, Segoe UI on Windows — rather than a shipped
      webfont. Matches the platform's own UI type instead of reading as a
