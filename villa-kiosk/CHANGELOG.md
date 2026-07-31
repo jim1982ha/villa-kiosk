@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.39.0
+
+### Changes
+- **Device badges are no longer nudged, ever — root-caused the recurring "dancing" reports for good.** Every earlier attempt (capping the nudge distance, incremental per-badge thinning, a global crowding threshold) still nudged SOME badge away from its true anchor to resolve a collision, and that nudge amount necessarily changes as the camera moves and neighbours' relative positions shift — which reads as the badge drifting, exactly what kept getting reported. Badges now sit at a fixed pixel offset directly above their own anchor, full stop: with the camera and icon size held still that offset is bit-for-bit identical every frame, and it only moves when the anchor's own screen projection moves — same as everything else glued to the 3D scene. A device's badge is therefore always in the same place relative to that device, so the user can build real finger memory for where a given badge lives.
+- **Crowding is now resolved by grouping, not by nudging-then-dropping.** When a room's own badges collide with anything on screen — each other, or a neighbouring room's — ALL of that room's currently-visible badges hide together behind one room-cluster chip (unchanged from before: long-press it for the entity list). A room with room to breathe keeps every one of its badges pinned individually; only a genuinely crowded room gives way to its chip, and it's evaluated per room now, not as one global "all fine" / "all clustered" switch. Grouping engages the moment two badges actually touch, and a clustered room only reverts once its members are clearly separated by a much wider margin — the same asymmetric-hysteresis idea as before, just per room, so a room sitting near the boundary settles into one state instead of flickering as the camera drifts.
+- **Tapping a room-cluster chip now zooms into that room** (using its saved, per-room camera framing — the same one the radial room dial already navigates to), rather than opening the entity list. Long-pressing it still opens the list, unchanged — the gesture that used to be a tap moved to long-press so the one gesture ("press and hold to see everything here") stays consistent everywhere it appears. A room with no saved viewpoint (the catch-all "Other" bucket) falls back to opening the list on a tap too, rather than doing nothing.
+- **Room-cluster chips restyled**: flat near-black background replaced with the same slate-blue overlay tone used everywhere else in the Kiosk's dark surfaces, plus a faint hairline border, so a chip reads as part of this UI instead of a generic dark pill dropped on top of it.
+- **Modernized the "on/active" green** (the camera feed's status strip, the linked-entity toggle, and every other use of the same accent) from a flat, slightly garish green to a muted emerald that still reads as unmistakably "on" without clashing with the sky-blue/teal accents used everywhere else.
+- **Fixed the camera feed's controls overlapping the video on a phone in portrait.** The non-overlapping layout (video in its own region, a solid-backed status/controls bar below it) was desktop-only, gated behind a min-width media query; a phone in portrait needs it exactly as much as a laptop does, so it's now the only layout, on every screen size and orientation.
+- **Switched the UI typeface to the native system font** (San Francisco on iOS/iPadOS/macOS, the platform default elsewhere) instead of a shipped webfont, for a more native, less "generic template" look — and one less network fetch blocking first paint.
+- Verified the new clustering logic by simulation (a slowly-drifting pair of badges never flickers between states, a genuine separation clears it, a discrete size-stepper change re-decides immediately, a cross-room collision clusters both rooms). Typecheck and production build clean.
+
+---
+
 ## 2.38.3
 
 ### Changes

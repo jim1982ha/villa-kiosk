@@ -509,13 +509,13 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
   return (
     <div className="camera-fullscreen" ref={rootRef}>
       {/* Everything that visually belongs to "the live feed" (video, title
-          watermark, loading spinner) is grouped under ONE wrapper so a
-          desktop layout can size it as a distinct region — flex:1 above the
-          status/controls row (see .camera-viewport's desktop media query) —
-          instead of every layer sharing the SAME full-bleed box the bottom
-          row also overlaps. On mobile .camera-viewport stays inset:0 (its
-          base rule), so this wrapper is a no-op there: identical DOM, only
-          the desktop CSS actually changes behaviour. */}
+          watermark, loading spinner) is grouped under ONE wrapper so it can be
+          sized as a distinct region — flex:1 above the status/controls row
+          (see .camera-viewport) — on every screen size/orientation, instead
+          of every layer sharing the same full-bleed box the bottom row also
+          overlaps. Used to be desktop-only (gated behind a min-width media
+          query); a phone in portrait needs this exactly as much as a laptop
+          does, so it's now the only layout. */}
       <div className="camera-viewport">
         {/* Zoom/pan layer — FIRST child so the controls below paint on top of
             it and stay clickable while it captures pinch/wheel/drag gestures. */}

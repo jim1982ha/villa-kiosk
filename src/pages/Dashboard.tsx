@@ -453,6 +453,24 @@ export default function Dashboard() {
     [manager, viewMode, currentFloor, onFloorChange],
   );
 
+  // Tapping a room-cluster chip on the map does the SAME thing tapping that
+  // room in the radial dial does (HUD's onRadialPick) — navigate to its
+  // saved viewpoint — so the one gesture always has the one effect,
+  // wherever "this room" is currently represented on screen. teleportPoints
+  // already carries a per-room camera pose calibrated to fully frame that
+  // specific room (see SceneManager.navigateTo/roomSpawn), so there's
+  // nothing villa-specific to compute here. A room with no saved point
+  // (e.g. the catch-all "Other" bucket) falls back to the long-press
+  // behaviour — the entity list — rather than silently doing nothing.
+  const handleClusterTapped = useCallback(
+    (room: string, entityIds: string[]) => {
+      const point = config.teleportPoints.find((p) => p.name === room);
+      if (point) handleTeleport(point);
+      else setClusterGroup({ room, entityIds });
+    },
+    [config.teleportPoints, handleTeleport],
+  );
+
   const pinContinuous = useCallback(() => manager?.pinContinuous() ?? (() => {}), [manager]);
 
   // Swap between first-person walking and the bird's-eye overview camera.
@@ -469,6 +487,7 @@ export default function Dashboard() {
         onEntityPicked={onEntityPicked}
         onEntityLongPressed={onEntityLongPressed}
         onClusterPicked={(r, ids) => setClusterGroup({ room: r, entityIds: ids })}
+        onClusterTapped={handleClusterTapped}
         onFloorChange={(f) => setCurrentFloor(f)}
         onRoomChange={setRoom}
         onNeedModel={() => { if (canOpenSettings) setSettingsOpen(true); }}

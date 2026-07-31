@@ -47,8 +47,9 @@
   --text-dim: #94a3b8;
   --text-on-accent: #ffffff;
 
-  /* Status */
-  --status-on: #16a34a;
+  /* Status — a muted emerald, not a flat/flashy green, so "on" still reads
+     as unmistakably active without clashing with the sky-blue/teal accents. */
+  --status-on: #10b981;
   --status-off: #cbd5e1;
   --status-warning: #d97706;
   --status-danger: #dc2626;
@@ -66,7 +67,12 @@
 
   /* Typography */
   --font-display: "Cormorant Garamond", Georgia, serif;
-  --font-ui: "Inter", system-ui, sans-serif;
+  /* Native system font — San Francisco on every Apple device (iOS/iPadOS/
+     macOS), Roboto on Android, Segoe UI on Windows — rather than a shipped
+     webfont. Matches the platform's own UI type instead of reading as a
+     generic, imported look, and renders with zero webfont-fetch delay. */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    system-ui, "Segoe UI", Roboto, sans-serif;
 
   /* Sizing */
   --panel-radius: 16px;
@@ -98,7 +104,7 @@
   --text-dim: #64748b;
   --text-on-accent: #08131f;
 
-  --status-on: #22c55e;
+  --status-on: #34d399;
   --status-off: #334155;
   --status-warning: #fbbf24;
   --status-danger: #f87171;
@@ -134,7 +140,7 @@
     --text-dim: #64748b;
     --text-on-accent: #08131f;
 
-    --status-on: #22c55e;
+    --status-on: #34d399;
     --status-off: #334155;
     --status-warning: #fbbf24;
     --status-danger: #f87171;
@@ -1008,11 +1014,11 @@ input[type="range"]::-moz-range-thumb {
 .camera-fullscreen { position: absolute; inset: 0; z-index: 60; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .camera-fullscreen img, .camera-fullscreen video { max-width: 100%; max-height: 100%; object-fit: contain; }
 /* Groups the video + title watermark + loading spinner as one region — see
-   the JSX comment. Base rule (mobile / narrow) fills the WHOLE panel exactly
-   like before this existed, so the bottom row still overlaps it there; the
-   desktop media query further down is what turns this into a distinct,
-   non-overlapping top section. */
-.camera-viewport { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+   the JSX comment. Gets its OWN region above a real (non-overlapping) status
+   + controls bar on every screen size/orientation (previously this was
+   desktop-only, gated behind a min-width media query, which left the bottom
+   row floating on top of the video in mobile portrait). */
+.camera-viewport { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
 /* Zoom/pan layer: fills its container, centres the feed, and is transformed
    by useMediaZoom. will-change keeps the transform on the compositor (cheap). */
 .camera-zoom { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; will-change: transform; }
@@ -1030,17 +1036,17 @@ input[type="range"]::-moz-range-thumb {
   padding: 8px 16px; border-radius: 10px; min-width: 0; display: inline-block;
 }
 /* Bottom row: status strip + control cluster (prev/next/zoom-reset/
-   fullscreen/close) share one flex row so they're always the same height
-   and bottom offset. The status bar sits in the flex:1 space to the left of
-   the controls, but only fills 75% of it (width below) — the user wants a
-   visible gap before the button cluster, not an edge-to-edge bar touching
-   it. Easier one-handed thumb reach on a phone than a top corner, and it
-   can never overlap the title since the two are at opposite screen edges. */
+   fullscreen/close) share one flex row so they're always the same height.
+   Sits in normal flow BELOW the video (not floated over it) on every screen
+   size/orientation, on its own solid backing so it never reads as "part of
+   the video" or covers the last row of the feed on a phone in portrait. */
 .camera-bottom-row {
-  position: absolute; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-  left: calc(20px + env(safe-area-inset-left, 0px));
-  right: calc(20px + env(safe-area-inset-right, 0px));
+  position: relative; inset: auto;
+  flex: 0 0 auto; width: 100%; box-sizing: border-box;
+  background: #000;
   display: flex; align-items: center; gap: 10px;
+  padding: 16px calc(20px + env(safe-area-inset-right, 0px))
+            calc(16px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
 }
 .camera-controls {
   display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;
@@ -1090,25 +1096,6 @@ input[type="range"]::-moz-range-thumb {
   .camera-status-bar { flex: 0 0 auto; }
   .camera-controls { margin-left: 0; }
 }
-/* Desktop: the feed gets its OWN region above a real (non-overlapping) status
-   + controls bar, instead of the mobile-style immersive overlay where the
-   bottom row floats on top of the video. .camera-viewport switches from
-   filling the whole panel to a flex:1 top section; .camera-bottom-row drops
-   out of absolute positioning entirely and becomes a normal flow row below
-   it, on its own solid backing so it doesn't read as "part of the video". */
-@media (min-width: 900px) {
-  .camera-viewport {
-    position: relative; inset: auto;
-    flex: 1 1 auto; min-height: 0; width: 100%;
-  }
-  .camera-bottom-row {
-    position: relative; inset: auto; bottom: auto; left: auto; right: auto;
-    flex: 0 0 auto; width: 100%; box-sizing: border-box;
-    background: #000;
-    padding: 16px calc(20px + env(safe-area-inset-right, 0px))
-              calc(16px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
-  }
-}
 /* Wraps the HLS <video> together with its instant snapshot preview so the two
    overlap regardless of the video's own (pre-metadata) intrinsic size. */
 /* pointer-events: none — this spans the WHOLE panel (inset: 0), including
@@ -1149,7 +1136,7 @@ input[type="range"]::-moz-range-thumb {
 .tp-card .tp-anchored {
   position: absolute; inset: 0; z-index: 1;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(16, 130, 70, 0.55);
+  background: color-mix(in srgb, var(--status-on) 55%, rgba(0,0,0,0.55));
   color: #fff;
   animation: fadeIn 0.15s ease;
 }
