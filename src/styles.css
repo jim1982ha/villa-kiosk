@@ -1065,7 +1065,15 @@ input[type="range"]::-moz-range-thumb {
 .temp-stepper .target { font-size: 36px; font-weight: 300; min-width: 110px; text-align: center; }
 
 /* --- Camera fullscreen --- */
-.camera-fullscreen { position: absolute; inset: 0; z-index: 60; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+/* --cam-rail: thickness of the side status rail in the phone-landscape
+   layout below. Declared here (not in the media query) because the rotated
+   timeline offsets itself by exactly this value, so the two must be the same
+   number by construction rather than by two edits staying in sync. */
+.camera-fullscreen {
+  --cam-rail: 22px;
+  position: absolute; inset: 0; z-index: 60; background: #000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
 .camera-fullscreen img, .camera-fullscreen video { max-width: 100%; max-height: 100%; object-fit: contain; }
 /* Groups the video + title watermark + loading spinner as one region — see
    the JSX comment. Gets its OWN region above a real (non-overlapping) status
@@ -1150,6 +1158,73 @@ input[type="range"]::-moz-range-thumb {
      controls instead of sharing a row with them. */
   .camera-status-bar { flex: 0 0 auto; }
   .camera-controls { margin-left: 0; }
+}
+/* ── Phone in LANDSCAPE ────────────────────────────────────────────────────
+   A short, wide screen is the one case where stacking anything above/below
+   the feed is wasteful: vertical pixels are the scarce resource and the feed
+   wants all of them. So the toolbar splits and rotates to the sides — status
+   rail down the LEFT edge, controls down the RIGHT — leaving the full height
+   for the video between them.
+
+   Keyed on max-height, not max-width: what makes this layout necessary is the
+   screen being SHORT, which is exactly the condition being solved for (a
+   short landscape window on a tablet/desktop benefits identically).
+
+   `display: contents` dissolves .camera-bottom-row's own box so its two
+   children become direct flex items of the panel row and can be ordered to
+   opposite edges — no DOM change, and no wrapper left in the middle of the
+   flex line. It also makes the row measure 0 height, which correctly zeroes
+   the portrait centring margin (see CameraPanel's bottomRowRef). */
+@media (orientation: landscape) and (max-height: 560px) {
+  .camera-fullscreen { flex-direction: row; align-items: stretch; }
+  .camera-bottom-row { display: contents; }
+
+  .camera-viewport { order: 0; flex: 1 1 auto; min-width: 0; margin-top: 0 !important; }
+
+  /* Buttons in a column down the right edge. Sized from the VIEWPORT HEIGHT
+     so the whole column always fits without scrolling however short the
+     screen is, and clamped so it never becomes untappable or absurd. */
+  .camera-controls {
+    order: 1;
+    flex: 0 0 auto;
+    flex-direction: column; flex-wrap: nowrap;
+    justify-content: center; align-items: center;
+    gap: clamp(6px, 1.6dvh, 12px);
+    margin-left: 0;
+    padding: 8px calc(10px + env(safe-area-inset-right, 0px)) 8px 10px;
+    background: #000;
+  }
+  .camera-controls .icon-btn {
+    width: clamp(34px, 12dvh, 56px);
+    height: clamp(34px, 12dvh, 56px);
+  }
+  .camera-controls .icon-btn svg { width: 55%; height: 55%; }
+
+  /* Status rail down the left edge. The timeline itself is a horizontal bar
+     by construction (percentage-positioned segments), so it's ROTATED rather
+     than reimplemented: sized to the rail's height (the panel fills the
+     viewport, so 100dvh is exactly that) and turned a quarter turn about its
+     top-left corner, then pushed back across by its own thickness. Its hover
+     tooltip is suppressed here — the pointer maths behind it assumes an
+     unrotated box, so it would report the wrong time. */
+  .camera-status-bar {
+    order: -1;
+    flex: 0 0 auto;
+    width: calc(var(--cam-rail) + env(safe-area-inset-left, 0px));
+    padding-left: env(safe-area-inset-left, 0px);
+    position: relative;
+    overflow: hidden;
+    background: #000;
+    pointer-events: none;
+  }
+  .camera-status-bar .spark-wrap { position: static; }
+  .camera-status-bar .state-timeline,
+  .camera-status-bar .state-timeline-skeleton {
+    position: absolute; top: 0; left: env(safe-area-inset-left, 0px);
+    width: 100dvh; height: var(--cam-rail);
+    transform-origin: 0 0;
+    transform: translateX(var(--cam-rail)) rotate(90deg);
+  }
 }
 /* Wraps the HLS <video> together with its instant snapshot preview so the two
    overlap regardless of the video's own (pre-metadata) intrinsic size. */

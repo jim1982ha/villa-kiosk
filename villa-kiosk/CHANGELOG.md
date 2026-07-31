@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.42.0
+
+### Changes
+- **Fixed the camera feed still sitting too high in portrait.** Real measurement bug, not a tuning one: the space mirrored above the video was read from the controls row's `contentRect`, which is the CONTENT box and so excludes its ~16px top padding, its bottom padding AND the bottom safe-area inset. The row therefore occupied noticeably more height below the feed than was ever reserved above it, and the feed sat high by exactly that difference (~33px on a typical phone) — which is precisely the "centred on the gap above the controls rather than on the screen" that was reported. Now measured as the BORDER box, so the reserved space above and the space occupied below are identical by construction and the feed is genuinely screen-centred at any row height.
+- **New side-rail layout for a phone in landscape.** On a short, wide screen vertical pixels are the scarce resource, so nothing stacks above or below the feed any more: the toolbar splits and rotates to the edges — the status history becomes a vertical rail down the LEFT, the controls a vertical column down the RIGHT — giving the video the full screen height between them. The control column is sized from the viewport height and clamped, so it always fits without scrolling however short the screen is, while staying comfortably tappable. Keyed on screen HEIGHT rather than width, since being short is the actual condition this solves (a short landscape window anywhere gets the same benefit). Implemented by dissolving the toolbar's own box with `display: contents` so its two halves become direct children of the panel and can be sent to opposite edges — no DOM change and no leftover wrapper in the middle of the layout. The status rail reuses the existing timeline rotated a quarter turn rather than a second, near-duplicate vertical implementation; its hover tooltip is suppressed there, since the pointer maths behind it assumes an unrotated box and would otherwise report the wrong time. Typecheck and production build clean.
+
+---
+
 ## 2.41.0
 
 ### Changes

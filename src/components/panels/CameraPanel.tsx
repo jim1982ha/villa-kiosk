@@ -111,7 +111,15 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
   useEffect(() => {
     const el = bottomRowRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setBottomRowH(entry.contentRect.height));
+    // offsetHeight (BORDER box), NOT contentRect (CONTENT box): the row has
+    // ~16px of padding top and bottom plus the bottom safe-area inset, none of
+    // which contentRect counts — so mirroring contentRect reserved visibly
+    // LESS space above the video than the row actually occupies below it, and
+    // the feed sat noticeably high rather than centred. That was the reported
+    // "it's centred on the gap above the controls, not on the screen".
+    const measure = () => setBottomRowH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
