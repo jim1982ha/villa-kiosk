@@ -490,6 +490,26 @@ button {
 .radial-item.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 @keyframes radial-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } }
 
+/* "Manage rooms" — the full Rooms list (create/edit/re-anchor), the one
+   thing the old Rooms button's long-press reached that this dial's floor/
+   room picking doesn't cover. Pinned at a FIXED screen position (bottom
+   centre), deliberately NOT part of the arc layout above: the arcs are
+   anchored to whichever floor button was held and their size varies with
+   the room count, so anything sharing that coordinate system could collide
+   with a long room list. A fixed, independent spot can't. */
+.radial-manage-btn {
+  position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border-radius: 999px; white-space: nowrap; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--text-primary);
+  background: var(--bg-overlay); border: 1px solid var(--hairline-strong);
+  box-shadow: 0 6px 20px var(--shadow); backdrop-filter: blur(8px);
+  animation: radial-pop 0.12s ease-out;
+}
+.radial-manage-btn:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+.radial-manage-btn:active { transform: translateX(-50%) scale(0.96); }
+
 /* Left-side control column: floor switch, then the Room + Switch View stack,
    all aligned under the brand on the left edge. */
 .hud-left-col {

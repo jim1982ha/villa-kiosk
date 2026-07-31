@@ -9,17 +9,19 @@
 //              and Settings — grouped together since they're all "who's
 //              signed in / what needs attention" info, not map controls
 // A left control column floats below the brand: the vertical floor toggle
-// (1F / 2F) + the Rooms dial button, then — as its OWN section right below,
-// not merged into that stack — the first-person/bird's-eye view toggle
-// (previously a lone bottom-left corner button; moved here so the bottom bar
-// stays free for the summary tiles/joystick and nothing floats unlabelled in
-// a corner). (Device state labels are always shown; "Highlight clickable
-// objects" moved to Settings.)
+// (1F / 2F) — a plain tap switches floor as before; a LONG-PRESS on either
+// button opens the radial rooms dial pre-scoped to that floor, replacing the
+// separate Rooms/Compass button this used to be a 3rd item in the stack —
+// then, as its OWN section right below, not merged into that stack, the
+// first-person/bird's-eye view toggle (previously a lone bottom-left corner
+// button; moved here so the bottom bar stays free for the summary
+// tiles/joystick and nothing floats unlabelled in a corner). (Device state
+// labels are always shown; "Highlight clickable objects" moved to Settings.)
 // Bottom bar: bottom-right shows the first-person movement joystick only.
 
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
-  Home, Compass, Settings, LogOut,
+  Home, Settings, LogOut,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
   EllipsisVertical, Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
 } from "lucide-react";
@@ -149,16 +151,21 @@ export default function HUD({
   }, [fmData]);
   const canControlAny = role != null && hasCapability(role, "controlEntities");
 
-  // ── Rooms dial: SINGLE TAP opens the radial floor/room quick-nav (a tapped
-  // popup, not a hold-and-slide); LONG-PRESS opens the full Rooms list for
-  // creating / editing rooms. Inside the radial: tap a floor to switch to it +
-  // reveal its rooms, tap a room to zoom there, tap outside to dismiss. See
-  // RadialRoomMenu. ───────────────────────────────────────────────────────────
+  // ── Floor buttons now do double duty, no separate Rooms button any more:
+  // a normal tap/click keeps the original behaviour (switch to that floor,
+  // frame its whole bird's-eye view — onShowFloor), while a LONG-PRESS opens
+  // the radial room-picker dial, pre-scoped to WHICHEVER floor button was
+  // held — not necessarily the floor currently on screen, so long-pressing
+  // "2F" while standing on 1F goes straight to 2F's rooms. Tap a room in the
+  // dial to zoom there, tap outside to dismiss. See RadialRoomMenu.
+  // ───────────────────────────────────────────────────────────────────────
   type RadialState = { cx: number; cy: number; activeFloor: number | null };
-  const roomsBtnRef = useRef<HTMLButtonElement>(null);
+  // One ref per floor button — the dial anchors itself to whichever one was
+  // actually held, so its screen position always matches the gesture.
+  const floorBtnRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [radial, setRadial] = useState<RadialState | null>(null);
-  const roomsLongTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const roomsLongFired = useRef(false);
+  const floorLongTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const floorLongFired = useRef(false);
 
   const availFloors = floors.filter((f) => floorsAvailable.includes(f));
   const FLOOR_R = 78;    // inner arc radius (floors)
@@ -196,8 +203,10 @@ export default function HUD({
   };
 
   const closeRadial = () => setRadial(null);
-  const openRadial = () => {
-    const b = roomsBtnRef.current?.getBoundingClientRect();
+  /** Open the dial anchored to floor `f`'s OWN button, pre-expanded to `f`'s
+   *  rooms regardless of which floor is actually showing right now. */
+  const openRadialForFloor = (f: number) => {
+    const b = floorBtnRefs.current.get(f)?.getBoundingClientRect();
     if (!b) return;
     const cx = b.right + 16;
     // Clamp the centre so the tall outer arc always fits (never clipped top/bottom).
@@ -206,47 +215,48 @@ export default function HUD({
       Math.min(margin, window.innerHeight / 2),
       Math.min(b.top + b.height / 2, window.innerHeight - margin),
     );
-    // Open pre-expanded on the floor you're currently on, so a room is one tap away.
-    setRadial({ cx, cy, activeFloor: currentFloor ?? availFloors[0] ?? null });
+    setRadial({ cx, cy, activeFloor: f });
   };
 
-  const onRoomsPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+  const onFloorPointerDown = (f: number) => (e: React.PointerEvent<HTMLButtonElement>) => {
     if (e.button !== undefined && e.button !== 0) return;
-    roomsLongFired.current = false;
-    if (roomsLongTimer.current) clearTimeout(roomsLongTimer.current);
-    roomsLongTimer.current = setTimeout(() => {
-      roomsLongFired.current = true;
-      closeRadial();          // if the dial was open, drop it
-      onOpenTeleport();       // long-press → full Rooms list (create / edit)
+    floorLongFired.current = false;
+    if (floorLongTimer.current) clearTimeout(floorLongTimer.current);
+    floorLongTimer.current = setTimeout(() => {
+      floorLongFired.current = true;
+      openRadialForFloor(f);
     }, 450);
   };
-  const onRoomsPointerUp = () => {
-    if (roomsLongTimer.current) { clearTimeout(roomsLongTimer.current); roomsLongTimer.current = null; }
-    if (roomsLongFired.current) return;   // the long-press already opened the full list
-    if (radial) closeRadial(); else openRadial(); // tap toggles the dial
+  const onFloorPointerUp = (f: number) => () => {
+    if (floorLongTimer.current) { clearTimeout(floorLongTimer.current); floorLongTimer.current = null; }
+    if (floorLongFired.current) return; // the long-press already opened the dial
+    // Plain tap/click: ALWAYS the original floor-switch behaviour, even if a
+    // dial happens to be open (e.g. left over from holding the other floor
+    // button) — a normal tap must never be reinterpreted as a dial dismiss.
+    closeRadial();
+    onShowFloor(f);
   };
 
-  // Keyboard equivalent of the two gestures above — this button previously had
-  // ONLY pointer handlers, so Tab+Enter/Space did nothing at all (native button
-  // keyboard activation dispatches a click, not pointer events, so onPointerDown/
-  // onPointerUp never fired). Holding Enter/Space now mirrors a touch hold;
-  // preventDefault on keydown suppresses the browser's own click-on-activation
-  // so it can't ALSO fire and double-toggle the dial.
-  const onRoomsKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+  // Keyboard equivalent of the two gestures above — a floor button previously
+  // had only pointer handlers, so Tab+Enter/Space did nothing at all (native
+  // button keyboard activation dispatches a click, not pointer events, so
+  // onPointerDown/onPointerUp never fired). Holding Enter/Space now mirrors a
+  // touch hold; preventDefault on keydown suppresses the browser's own
+  // click-on-activation so it can't ALSO fire and switch floors right after.
+  const onFloorKeyDown = (f: number) => (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
     if (e.repeat) return; // ignore OS key-repeat while held, same as a still finger
-    roomsLongFired.current = false;
-    if (roomsLongTimer.current) clearTimeout(roomsLongTimer.current);
-    roomsLongTimer.current = setTimeout(() => {
-      roomsLongFired.current = true;
-      closeRadial();
-      onOpenTeleport();
+    floorLongFired.current = false;
+    if (floorLongTimer.current) clearTimeout(floorLongTimer.current);
+    floorLongTimer.current = setTimeout(() => {
+      floorLongFired.current = true;
+      openRadialForFloor(f);
     }, 450);
   };
-  const onRoomsKeyUp = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+  const onFloorKeyUp = (f: number) => (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key !== "Enter" && e.key !== " ") return;
-    onRoomsPointerUp();
+    onFloorPointerUp(f)();
   };
 
   const onRadialPick = (it: RadialItem) => {
@@ -254,6 +264,9 @@ export default function HUD({
       const f = Number(it.key.slice(1));
       onShowFloor(f);                                     // tap a floor → switch to it + frame its whole view …
       setRadial((r) => (r ? { ...r, activeFloor: f } : r)); // … and reveal its rooms
+    } else if (it.kind === "manage") {
+      closeRadial();
+      onOpenTeleport();                                    // full Rooms list — create / edit / re-anchor
     } else {
       const point = config.teleportPoints.find((p) => p.name === it.label);
       if (point) onNavigateRoom(point);                   // tap a room → zoom there
@@ -661,54 +674,48 @@ export default function HUD({
         />
       )}
 
-      {/* Left column: the floor toggle (1F / 2F), the Rooms dial button, and
-          (overview only) the default-view anchor as a 4th button — same
-          section as the floor/rooms controls rather than off on its own in
-          the bottom-left corner, since it's the same kind of "where am I
-          looking" control. Tapping a floor switches to it (and frames it in
-          the bird's-eye); the Rooms button taps to a quick floor/room dial,
-          long-press for the full Rooms list to add/edit; the anchor button
-          taps to jump to this device's saved default view, long-press/
-          right-click to (re)define it. Right below, as its OWN dedicated
-          section (not merged into this stack — it's a different kind of
-          control, "how am I looking" rather than "where"), the first-person/
-          bird's-eye view TOGGLE: it used to be a lone standalone button in
-          the bottom-left corner, with nothing else there to explain it and
-          nothing to stop the (separately, absolutely positioned) SummaryBar's
-          tile row from visually extending over it on a narrow phone. Neither
-          the bottom bar (kept free for the tiles + joystick) nor the top bar
-          (already tight on a phone) had room for a clearly-labelled home. */}
+      {/* Left column: the floor toggle (1F / 2F — now the ONLY entry to the
+          rooms dial, no separate Rooms button any more) and, overview only,
+          the default-view anchor as a 4th button — same section as the floor
+          controls rather than off on its own in the bottom-left corner,
+          since it's the same kind of "where am I looking" control. A plain
+          tap/click on 1F/2F keeps the original behaviour (switch to that
+          floor, frame its whole bird's-eye view); a LONG-PRESS opens the
+          radial room-picker dial, pre-scoped to THAT floor's rooms — see
+          openRadialForFloor. The anchor button taps to jump to this device's
+          saved default view, long-press/right-click to (re)define it. Right
+          below, as its OWN dedicated section (not merged into this stack —
+          it's a different kind of control, "how am I looking" rather than
+          "where"), the first-person/bird's-eye view TOGGLE: it used to be a
+          lone standalone button in the bottom-left corner, with nothing else
+          there to explain it and nothing to stop the (separately, absolutely
+          positioned) SummaryBar's tile row from visually extending over it on
+          a narrow phone. Neither the bottom bar (kept free for the tiles +
+          joystick) nor the top bar (already tight on a phone) had room for a
+          clearly-labelled home. */}
       <div className="hud-left-col">
         <div className="hud-stack">
           {availFloors.map((f) => (
             <button
               key={f}
-              className={`icon-btn hud-floor-btn${currentFloor === f ? " active" : ""}`}
-              onClick={() => onShowFloor(f)}
-              title={`Show floor ${f}`}
-              aria-label={`Show floor ${f}`}
+              ref={(el) => { if (el) floorBtnRefs.current.set(f, el); else floorBtnRefs.current.delete(f); }}
+              className={`icon-btn hud-floor-btn has-hold-action${currentFloor === f || radial?.activeFloor === f ? " active" : ""}`}
+              title={`Show floor ${f} — hold for its rooms`}
+              aria-label={`Show floor ${f} — hold for its rooms`}
+              aria-describedby="floor-btn-hint"
               aria-pressed={currentFloor === f}
+              style={{ touchAction: "none" }}
+              onPointerDown={onFloorPointerDown(f)}
+              onPointerUp={onFloorPointerUp(f)}
+              onPointerCancel={() => { if (floorLongTimer.current) clearTimeout(floorLongTimer.current); }}
+              onContextMenu={(e) => e.preventDefault()}
+              onKeyDown={onFloorKeyDown(f)}
+              onKeyUp={onFloorKeyUp(f)}
             >
               {f}F
             </button>
           ))}
-          <button
-            ref={roomsBtnRef}
-            className={`icon-btn rooms-dial-btn has-hold-action${radial ? " active" : ""}`}
-            title="Rooms — tap for the quick floor/room dial, long-press to add/edit rooms"
-            aria-label="Rooms"
-            aria-describedby="rooms-btn-hint"
-            style={{ touchAction: "none" }}
-            onPointerDown={onRoomsPointerDown}
-            onPointerUp={onRoomsPointerUp}
-            onPointerCancel={() => { if (roomsLongTimer.current) clearTimeout(roomsLongTimer.current); }}
-            onContextMenu={(e) => e.preventDefault()}
-            onKeyDown={onRoomsKeyDown}
-            onKeyUp={onRoomsKeyUp}
-          >
-            <Compass size={20} />
-          </button>
-          <span id="rooms-btn-hint" className="sr-only">Hold (or hold Enter/Space) to add or edit rooms</span>
+          <span id="floor-btn-hint" className="sr-only">Hold (or hold Enter/Space) for this floor's rooms</span>
           {viewMode === "overview" && (
             <DefaultViewButton
               hasOverviewDefault={hasOverviewDefault}

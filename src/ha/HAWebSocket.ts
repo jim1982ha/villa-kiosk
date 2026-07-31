@@ -4,6 +4,7 @@
 
 import type { HassEntity, HassEntityRegistryEntry, HassServiceTarget } from "@/types/ha.types";
 import { ingressWsUrl } from "./ingress";
+import { captureError } from "@/utils/diagnostics";
 
 type Resolver = (result: unknown) => void;
 type Rejecter = (err: Error) => void;
@@ -28,6 +29,10 @@ export class HAWebSocket {
   private state: ConnectionState = "disconnected";
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Guards against reporting the same auth_invalid streak to telemetry on
+   *  every ~30s retry forever — see the auth_invalid handler. Reset on the
+   *  next successful auth so a LATER, separate occurrence still reports. */
+  private authInvalidReported = false;
 
   onStateChange: (state: ConnectionState) => void = () => {};
   /** Every failed service call is reported here (panels fire-and-forget). */
@@ -150,14 +155,44 @@ export class HAWebSocket {
           case "auth_ok":
             this.setState("connected");
             this.reconnectAttempts = 0;
+            this.authInvalidReported = false;
             this.resubscribeAll();
             this.startHeartbeat();
             finish(() => resolve());
             break;
           case "auth_invalid":
-            // Should not happen — the proxy injects a valid Supervisor token.
-            // If it does (e.g. proxy misconfigured), don't loop forever.
-            this.manuallyClosed = true;
+            // Should not happen on a healthy system — the proxy injects a
+            // valid Supervisor token server-side — but treating it as a
+            // PERMANENT failure (this used to set manuallyClosed = true) was
+            // itself the bug behind a real field report: a kiosk PWA left
+            // running for days eventually showed a stuck "Not connected to
+            // Home Assistant" that never recovered without someone manually
+            // reloading it — impossible for an unattended wall-mounted
+            // tablet. A Supervisor/HA-core restart (nightly backup, an
+            // add-on update, a network blip mid-restart) can plausibly cause
+            // exactly one transient auth hiccup, and the old code treated
+            // that indistinguishably from "this will never work", silently
+            // disabling every future reconnect attempt for the rest of the
+            // session.
+            //
+            // Falling through to the same closure handling as any other
+            // disconnect (below) means this now self-heals like every other
+            // transient failure already does in this client — the capped
+            // exponential backoff (scheduleReconnect) keeps retrying at a
+            // cheap, bounded cadence (never faster than 30s) instead of
+            // ever giving up, so it costs nothing extra in CPU or memory to
+            // leave running 24/7, and a genuinely misconfigured add-on just
+            // keeps failing visibly (the connection dot, and any attempted
+            // service call) rather than doing so silently forever.
+            //
+            // Still worth knowing about if it DOES happen, so report it once
+            // per streak (not on every ~30s retry — that would just spam the
+            // add-on's telemetry endpoint for no extra signal) via the same
+            // capture path field crashes already use.
+            if (!this.authInvalidReported) {
+              this.authInvalidReported = true;
+              captureError("HA_AUTH_INVALID", new Error(msg.message ?? "auth_invalid"), "HAWebSocket");
+            }
             finish(() => reject(new Error(msg.message ?? "Home Assistant rejected the add-on's authentication.")));
             this.ws?.close();
             break;
