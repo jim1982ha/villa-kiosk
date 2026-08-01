@@ -62,6 +62,7 @@ import { useConfig } from "./ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { pushWithRebase } from "@/utils/keyedSync";
+import { useStoreRefresh } from "@/hooks/useStoreRefresh";
 import {
   fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
   diffSharedConfig, applySharedConfigDiff, isSharedConfigDiffEmpty,
@@ -80,14 +81,6 @@ const PUSH_DEBOUNCE_MS = 900;
  *  try again). Only matters in the narrow window between this device's own
  *  pre-push fetch and its PUT landing — a genuine collision there is rare. */
 const MAX_PUSH_ATTEMPTS = 3;
-
-/** A device that stays foregrounded indefinitely (a wall-mounted kiosk tablet
- *  never loses focus or visibility) would otherwise only ever see another
- *  device's edits by luck of some unrelated re-render — focus/visibilitychange
- *  are the only other pull triggers. One small GET every few minutes closes
- *  that gap; it's negligible next to the HA WebSocket's own 25s heartbeat
- *  ping, so this isn't a meaningful battery/network cost. */
-const HEARTBEAT_PULL_MS = 3 * 60 * 1000;
 
 export default function DeviceConfigSync() {
   const { config, update } = useConfig();
@@ -312,23 +305,10 @@ export default function DeviceConfigSync() {
     update(server);
   }, [update, role, pushOwnDiff, reportSync]);
 
-  // Pull once on mount, then whenever the tab is refocused / becomes visible,
-  // plus a long visible-only heartbeat for a device that never does either —
-  // so a change made on another client lands here without a reload.
-  useEffect(() => {
-    void pull();
-    const onFocus = () => { void pull(); };
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
-    const heartbeat = setInterval(() => {
-      if (document.visibilityState === "visible") void pull();
-    }, HEARTBEAT_PULL_MS);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onFocus);
-      clearInterval(heartbeat);
-    };
-  }, [pull]);
+  // Mount + focus/visibility + a slow visible-only heartbeat, via the shared
+  // hook — the SAME triggers the Facility Manager store uses, so "how fresh is
+  // this screen" has one answer across the app rather than one per store.
+  useStoreRefresh(useCallback(() => { void pull(); }, [pull]));
 
   // Push local edits up, debounced. Gated on rules 1 and 2 above.
   useEffect(() => {

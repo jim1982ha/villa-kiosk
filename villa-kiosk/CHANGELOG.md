@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.64.0
+
+### Changes
+- **The Facility Manager screen now refreshes itself, so a fault or completion logged on one device stops being invisible on another until the app is restarted.** Found while field-verifying 2.63.0's concurrency fix: raising a fault on the phone and then one on the desktop correctly kept BOTH (the desktop even showed the phone's fault the instant it wrote, because a successful push returns the merged document) — but the phone only saw the desktop's fault after a restart. The records were right; the screen simply never asked again. `FmDataContext` re-read only on mount: no focus trigger, no visibility trigger, no heartbeat. In practice that means the facility manager logging work on site and the owner watching on another device cannot see each other, which is the normal working pattern rather than an edge case.
+- **The refresh triggers are now one shared hook (`useStoreRefresh`) used by BOTH server-backed stores**, rather than the device-config sync owning a private copy and the FM store having none. Mount, window focus, `visibilitychange`, and a slow heartbeat that only fires while the document is visible — so a wall-mounted tablet or a desktop window left open on the Facility tab, which fires none of the other triggers, still converges. "How fresh is this screen" now has one answer across the app instead of one per store, which is the same reason the diff/push protocol was unified in 2.63.0.
+- **The FM refresh will not clobber an unsent edit.** `mutate` applies locally first and pushes after, so between those two moments local legitimately differs from the server — a refresh landing exactly then would wipe a completion someone just walked across the villa to log. The refresh compares local against the last known server state and skips while a write is pending, the same rule the device-config sync already followed; the push is already in flight, so the next refresh reconciles. Losing a beat of remote changes is fine, losing the operator's entry is not.
+- **Audited every other server read for the same gap; the rest are deliberately not live.** `/device-config` already had these triggers. `/telemetry` is a diagnostic snapshot behind an explicit Refresh button — auto-refreshing a ring while someone reads it would make it jump under them. `/auth/roles` is read at the profile gate and only changes with add-on options (which restarts anyway). `/addon-config` reports the central 3D model: swapping the GLB live would tear down and rebuild the Babylon scene mid-navigation, which is worse than being stale, so a new upload is still picked up on next load by design. Only the FM store was actually missing refresh it should have had.
+
 ## 2.63.2
 
 ### Changes

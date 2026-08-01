@@ -10,13 +10,14 @@
 // and re-opening the panel re-reads the store.
 
 import {
-  createContext, useCallback, useContext, useEffect, useRef, useState,
+  createContext, useCallback, useContext, useRef, useState,
   type ReactNode,
 } from "react";
 import {
   fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff,
 } from "./fmApi";
 import { pushWithRebase } from "@/utils/keyedSync";
+import { useStoreRefresh } from "@/hooks/useStoreRefresh";
 import {
   EMPTY_FM_DATA,
   type FmCompletion, type FmCost, type FmData, type FmSavedDocument, type FmSchedule, type FmTicket,
@@ -73,13 +74,27 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const reload = useCallback(async () => {
     const fresh = await fetchFmData();
     if (fresh) {
-      setData(fresh.doc);
-      baseline.current = fresh.doc;
+      // NEVER clobber a change this device hasn't got onto the server yet.
+      // `mutate` applies locally first and pushes after, so between those two
+      // moments local legitimately differs from the server — and a refresh
+      // landing right then would wipe a completion somebody just walked
+      // across the villa to log. Same rule the device-config sync follows;
+      // losing a beat of remote changes is fine, losing the operator's entry
+      // is not. The push is already in flight, so the next refresh reconciles.
+      const pending = JSON.stringify(ref.current) !== JSON.stringify(baseline.current);
+      if (!pending) {
+        setData(fresh.doc);
+        baseline.current = fresh.doc;
+      }
     }
     setReady(true);
   }, []);
 
-  useEffect(() => { void reload(); }, [reload]);
+  // Re-read on mount, on focus/visibility, and on a slow visible-only
+  // heartbeat — the SAME triggers the device-config store uses. Previously
+  // mount-only, so a fault raised on one device stayed invisible on another
+  // until the app was restarted.
+  useStoreRefresh(useCallback(() => { void reload(); }, [reload]));
 
   /** Apply a change locally for immediate feedback, then persist. On failure
    *  the local state is KEPT (so the operator doesn't lose what they typed)
