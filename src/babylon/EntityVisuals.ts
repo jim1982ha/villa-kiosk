@@ -2147,8 +2147,13 @@ export class EntityVisuals {
   /** An entity's map-filter category: whatever the user set in the Config
    *  Editor (persisted on its EntityMapping), falling back to the type-based
    *  default (config/EntityCategories.ts) for entities that don't have one
-   *  yet (see bindingUtils). */
-  private categoryOf(entityId: string, type: EntityType): Category {
+   *  yet (see bindingUtils). Public: SceneManager's applyHighlight (the blue
+   *  "clickable" glow) reuses this exact resolution instead of its own
+   *  effectiveCategory() call, which used to omit device_class — the same
+   *  entity could disagree with itself (badge under Network, glow only
+   *  under Energy) since only THIS call site had the live device_class
+   *  needed to resolve an enum sensor like a UniFi AP's "State" correctly. */
+  categoryOf(entityId: string, type: EntityType): Category {
     const dc = this.lastState.get(entityId)?.attributes?.device_class as string | undefined;
     return effectiveCategory(entityId, type, this.config.entityMap[entityId]?.category, dc);
   }
@@ -2503,14 +2508,18 @@ export class EntityVisuals {
         lbl.container.isVisible = false;
         continue;
       }
-      // Hidden-in-HA / config-diagnostic entities get no badge at all — same
-      // exclusion SummaryGroupPanel already applies by default, so a room's
-      // cluster-chip count (built from `shown` below) can't disagree with
-      // what the modal that count opens actually lists.
-      if (this.suppressedEntityIds.has(id)) {
-        lbl.container.isVisible = false;
-        continue;
-      }
+      // NOTE: suppressedEntityIds (hidden-in-HA / config-diagnostic) is
+      // deliberately NOT filtered here. A previous version hid the badge
+      // entirely for any suppressed entity — which regressed every UniFi
+      // access-point "State" sensor (diagnostic-category by the integration's
+      // own convention) off the map, even though each was deliberately bound
+      // to real geometry. The map represents physical devices spatially; HA's
+      // "diagnostic" classification is about decluttering a flat SETTINGS
+      // list, a different concern entirely — a device someone bothered to
+      // bind to a mesh should stay tappable regardless of it. The room-
+      // cluster CHIP's count is filtered instead (see updateClusters), which
+      // is the only place a mismatch against SummaryGroupPanel's list
+      // actually mattered.
       // The badge must vanish with its device when FloorManager hides that
       // floor. Read enabled-state/floorIndex from the entity's actual bound
       // mesh (byEntity), not the anchor's OWN parent chain: most anchors are
@@ -2856,13 +2865,21 @@ export class EntityVisuals {
     // should report the whole room's device count, not just the part
     // currently framed, and its centroid should stay put rather than sliding
     // around as members cross the viewport edge.
-    const groups = new Map<string, { ids: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean }>();
+    const groups = new Map<string, { ids: string[]; countedIds: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean }>();
     for (const s of shown) {
       const room = this.roomOf(s.id);
       if (!this.roomClustered.get(room)) continue;
       let g = groups.get(room);
-      if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(room, g); }
+      if (!g) { g = { ids: [], countedIds: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(room, g); }
       g.ids.push(s.id);
+      // The chip's NUMBER and tap-target list must match what
+      // SummaryGroupPanel would actually show for this room (it excludes
+      // suppressed — hidden-in-HA/diagnostic — entities by default). A
+      // suppressed member still contributes its position/state below (its
+      // own badge stays real and visible — see cullLabels — it's just not
+      // one that modal's list would count), so it shouldn't inflate the
+      // number or appear in what tapping the chip opens either.
+      if (!this.suppressedEntityIds.has(s.id)) g.countedIds.push(s.id);
       g.sum.addInPlace(s.lbl.anchor.getAbsolutePosition());
       const st = this.lastState.get(s.id);
       if (st) {

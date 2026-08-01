@@ -19,12 +19,11 @@
 // labels are always shown; "Highlight clickable objects" moved to Settings.)
 // Bottom bar: bottom-right shows the first-person movement joystick only.
 
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Home, Settings, LogOut, Map as MapIcon, PersonStanding,
-  Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
   EllipsisVertical, Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
@@ -33,7 +32,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed, hasCapability } from "@/auth/permissions";
 import { ROLE_LABELS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
-import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_ICONS, categoryGradient } from "@/config/EntityCategories";
 import { ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX, clampIconScale } from "@/config/AppConfig";
 import { unavailableDeviceIds } from "@/config/deviceGroups";
 import type { Category, TeleportPoint } from "@/types/scene.types";
@@ -46,28 +45,12 @@ import { useFmData } from "@/fm/FmDataContext";
 import { scheduleBoard } from "@/fm/fmEngine";
 import { formatCountBadge } from "@/utils/countBadge";
 
-type IconType = ComponentType<{ size?: number | string }>;
-
 // Label-size stepper (next to the category filter): each click moves
 // entityIconScale by this much, clamped to the shared
 // [ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX] bounds. The floor is NOT
 // zero any more — see ENTITY_ICON_SCALE_MIN for why scale-to-zero was
 // removed.
 const LABEL_SCALE_STEP = 0.25;
-
-// Icons for the category-filter column — each toggles that category's state
-// tags on/off on the map. Chosen to read distinctly at a glance since there
-// are no text labels, only tooltips (see CATEGORY_LABELS).
-const CATEGORY_ICONS: Record<Category, IconType> = {
-  comfort: Armchair,
-  light: Lightbulb,
-  network: Wifi,
-  energy: Zap,
-  access_control: ShieldCheck,
-  // Puzzle (not a dots/lines glyph) — reads as its own distinct shape rather
-  // than being confused with the ⋮ overflow-menu button on small screens.
-  others: Puzzle,
-};
 
 interface Props {
   currentFloor: number;
@@ -106,6 +89,10 @@ interface Props {
   /** Open the Facility Manager workspace. Undefined when the profile lacks
    *  `manageFacility` — the button is then not rendered at all. */
   onOpenFacility?: () => void;
+  /** Long-press (or hold Enter/Space) a category filter icon — list every
+   *  device in that category, the same group-modal every SummaryBar tile
+   *  already opens. A plain tap keeps toggling that category's visibility. */
+  onOpenCategory: (category: Category) => void;
 }
 
 function useClock(): string {
@@ -122,7 +109,7 @@ export default function HUD({
   onOpenSettings, canOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  mappedEntityIds, onOpenEntity, onOpenFacility,
+  mappedEntityIds, onOpenEntity, onOpenFacility, onOpenCategory,
 }: Props) {
   const { connection, haConfig, entities } = useHA();
   const { config, update } = useConfig();
@@ -376,6 +363,29 @@ export default function HUD({
         : [...config.hiddenCategories, cat],
     });
 
+  // Tap a category icon = toggle its visibility (unchanged); HOLD it = list
+  // every device in that category. Same tap-vs-hold convention as the floor
+  // buttons' rooms dial and the camera panel's next-arrow picker — a single
+  // shared timer is enough since only one category can be held at a time.
+  const CATEGORY_HOLD_MS = 480;
+  const catPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const catLongFired = useRef(false);
+  const onCatPointerDown = (cat: Category) => () => {
+    catLongFired.current = false;
+    if (catPressTimer.current) clearTimeout(catPressTimer.current);
+    catPressTimer.current = setTimeout(() => {
+      catLongFired.current = true;
+      onOpenCategory(cat);
+    }, CATEGORY_HOLD_MS);
+  };
+  const onCatPointerUp = () => {
+    if (catPressTimer.current) { clearTimeout(catPressTimer.current); catPressTimer.current = null; }
+  };
+  const onCatClick = (cat: Category) => () => {
+    if (catLongFired.current) { catLongFired.current = false; return; }
+    toggleCategory(cat);
+  };
+
   // Clamped on READ too, so a value persisted before the floor existed (a
   // stored 0) shows the stepper in a valid state instead of a stuck "-".
   const labelScale = clampIconScale(config.entityIconScale);
@@ -432,7 +442,7 @@ export default function HUD({
               return (
                 <button
                   key={cat}
-                  className={`icon-btn${hidden ? "" : " active"}`}
+                  className={`icon-btn has-hold-action${hidden ? "" : " active"}`}
                   // Lit in the SAME gradient as this category's badges on the
                   // map (see config/EntityCategories.categoryGradient), so the
                   // filter row doubles as a colour legend.
@@ -440,8 +450,18 @@ export default function HUD({
                     background: categoryGradient(cat),
                     color: "#ffffff",
                   }}
-                  onClick={() => toggleCategory(cat)}
-                  title={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map`}
+                  onPointerDown={onCatPointerDown(cat)}
+                  onPointerUp={onCatPointerUp}
+                  onPointerLeave={onCatPointerUp}
+                  onPointerCancel={onCatPointerUp}
+                  onContextMenu={(e) => e.preventDefault()}
+                  onClick={onCatClick(cat)}
+                  // Space-only (not Enter) — same reasoning as DefaultViewButton's
+                  // own hold gesture: a <button> fires its click on Enter's
+                  // KEYDOWN but Space's KEYUP, so only Space can time a real hold.
+                  onKeyDown={(e) => { if (e.key === " " && !e.repeat) onCatPointerDown(cat)(); }}
+                  onKeyUp={(e) => { if (e.key === " ") onCatPointerUp(); }}
+                  title={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map — hold to list them`}
                   aria-label={`${CATEGORY_LABELS[cat]} devices on the map`}
                   aria-pressed={!hidden}
                 >

@@ -26,7 +26,6 @@ import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
 import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
-import { effectiveCategory } from "@/config/EntityCategories";
 import { isIOS as detectIOS } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { axisWorldScale } from "./meshUnits";
@@ -1598,7 +1597,12 @@ export class SceneManager {
       if (mapping.type === "climate") continue;
       // Glow only for categories currently shown (HUD chips): a hidden
       // category's objects shouldn't advertise themselves as clickable.
-      const category = effectiveCategory(mapping.entityId, mapping.type, mapping.category);
+      // Reuses EntityVisuals.categoryOf — the SAME resolution the badge
+      // itself uses (including live device_class) — rather than a second,
+      // independent effectiveCategory() call: that used to omit
+      // device_class, so an enum sensor (e.g. a UniFi AP's "State") could
+      // glow under a different category than its own badge showed.
+      const category = this.visuals.categoryOf(mapping.entityId, mapping.type);
       if (this.config.hiddenCategories.includes(category)) continue;
       if (!(m instanceof Mesh)) continue;
       const unit = axisWorldScale(m);

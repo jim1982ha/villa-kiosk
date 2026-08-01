@@ -121,33 +121,37 @@ export function isMappingAllowed(role: Role, entityId: string, mapping: EntityMa
 
 /**
  * The config the 3D scene should see for this role: denied categories merged
- * into the hidden set, denied entities stripped from the entity map (and their
- * mesh bindings with them). This is the single choke point that keeps the whole
- * Babylon layer RBAC-unaware — it just renders the config it's given.
+ * into the hidden set, denied types passed through as deniedTypes. This is
+ * the single choke point that keeps the whole Babylon layer RBAC-unaware —
+ * it just renders the config it's given.
  * Returns the input unchanged (same reference) for unrestricted roles, so the
  * scene's config-diffing sees no phantom updates.
+ *
+ * entityMap/meshBindings are passed through BY REFERENCE, not filtered — this
+ * used to rebuild both as new, denied-entries-stripped objects, which meant
+ * switching profile (Owner -> Guest, say) always looked STRUCTURALLY
+ * different to SceneManager.updateConfig's entityMapDelta/meshBindingsChanged
+ * checks, forcing a full multi-second structural re-index (material re-clone,
+ * per-light PointLight recreation — the "villa map is reloading" a profile
+ * switch visibly triggered) purely to hide a few badges. That rebuild bought
+ * nothing: every consumer that actually needs to hide a denied entity already
+ * independently re-checks hiddenCategories/deniedTypes on its own — cullLabels
+ * and applyHighlight both re-run on a bare hiddenCategories change with no
+ * structural flag needed, and resolveMeshToMapping (used by both indexMeshes
+ * and PickHandler) already nullifies any mapping whose type is in deniedTypes
+ * regardless of what's in entityMap. Leaving entityMap/meshBindings untouched
+ * keeps those references `===` stable across a role switch, so the structural
+ * checks correctly see "nothing changed" and skip the expensive rebuild, while
+ * hiding behaves identically either way.
  */
 export function filterConfigForRole(config: AppConfig, role: Role): AppConfig {
   const perms = PERMISSION_MATRIX[role];
   const denied = deniedCategories(role);
   if (denied.length === 0 && perms.deniedTypes.length === 0) return config;
 
-  const entityMap: Record<string, EntityMapping> = {};
-  for (const [id, mapping] of Object.entries(config.entityMap)) {
-    if (isMappingAllowed(role, id, mapping)) entityMap[id] = mapping;
-  }
-  const meshBindings: Record<string, string> = {};
-  for (const [mesh, id] of Object.entries(config.meshBindings)) {
-    if (!config.entityMap[id] || entityMap[id]) meshBindings[mesh] = id;
-  }
   return {
     ...config,
-    entityMap,
-    meshBindings,
     hiddenCategories: [...new Set([...config.hiddenCategories, ...denied])],
-    // Blocks the resolver's mesh-NAME inference fallback too (see the field's
-    // doc in AppConfig): stripping entityMap/meshBindings above doesn't stop a
-    // mesh literally named after an entity_id from self-binding.
     deniedTypes: perms.deniedTypes,
   };
 }

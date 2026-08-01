@@ -162,10 +162,9 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
             <ConfigEditor initialSearch={focusEntityId} />
           </CollapsibleSection>
 
-          <div className="settings-section-title" style={{ marginTop: 28 }}>
-            Grouped devices
-          </div>
-          <GroupedDevices />
+          <CollapsibleSection title="Grouped devices">
+            <GroupedDevices />
+          </CollapsibleSection>
 
           <CollapsibleSection title="Bound 3D objects">
             <BindingsTable />

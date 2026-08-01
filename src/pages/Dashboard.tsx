@@ -25,7 +25,7 @@ import FacilityModal from "@/components/fm/FacilityModal";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
-import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
+import { effectiveCategory, CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { isUnavailable } from "@/utils/stateColors";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
@@ -34,7 +34,7 @@ import { HAServices } from "@/ha/HAServiceCalls";
 import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
-import type { TeleportPoint } from "@/types/scene.types";
+import type { Category, TeleportPoint } from "@/types/scene.types";
 
 /** binary_sensor device_classes that mean "someone/something moved" — the
  *  motion toast below announces these. Mirrors the ACCESS_BINARY_DC set
@@ -78,6 +78,19 @@ export default function Dashboard() {
   // members open in the SAME group modal a bottom-bar tile uses, so a cluster
   // needs no UI concept of its own.
   const [clusterGroup, setClusterGroup] = useState<{ room: string; entityIds: string[] } | null>(null);
+  // Long-press a HUD category filter icon — every device in that category,
+  // the same group modal a SummaryBar tile or a room cluster opens. Only
+  // computed once a category is actually held (cheap null-skip otherwise).
+  const [categoryGroup, setCategoryGroup] = useState<Category | null>(null);
+  const categoryGroupEntityIds = useMemo(() => {
+    if (!categoryGroup) return [];
+    return Object.entries(config.entityMap)
+      .filter(([id, mapping]) => {
+        const dc = entities[id]?.attributes.device_class as string | undefined;
+        return effectiveCategory(id, mapping.type, mapping.category, dc) === categoryGroup;
+      })
+      .map(([id]) => id);
+  }, [categoryGroup, config.entityMap, entities]);
   // Live HA scenes (see config/haScenes.ts) — derived, not stored, so a scene
   // added/edited/removed in HA's own Scene Editor shows up here on the very
   // next entity update. Computed once here (not per-panel-open) since both
@@ -535,6 +548,7 @@ export default function Dashboard() {
         mappedEntityIds={effectiveMappedEntityIds}
         onOpenEntity={openEntityPanel}
         onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
+        onOpenCategory={setCategoryGroup}
       />
 
       {/* Bottom dashboard strip — scene / quick-action / summary tiles,
@@ -653,6 +667,16 @@ export default function Dashboard() {
           onClose={() => setClusterGroup(null)}
           onOpenEntity={(id) => { setClusterGroup(null); openEntityPanel(id); }}
           roomScenes={scenesForRoom(haScenes, clusterGroup.room)}
+        />
+      )}
+
+      {categoryGroup && (
+        <SummaryGroupPanel
+          group={{ title: CATEGORY_LABELS[categoryGroup], icon: CATEGORY_ICONS[categoryGroup], entityIds: categoryGroupEntityIds }}
+          canControl={canControl}
+          mappedEntityIds={effectiveMappedEntityIds}
+          onClose={() => setCategoryGroup(null)}
+          onOpenEntity={(id) => { setCategoryGroup(null); openEntityPanel(id); }}
         />
       )}
 

@@ -10,6 +10,8 @@
 // defaults here re-buckets already-detected devices too, while a genuine user
 // choice is preserved.
 
+import type { ComponentType } from "react";
+import { Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle } from "lucide-react";
 import type { Category, EntityType } from "@/types/scene.types";
 import { OPENING_DEVICE_CLASSES } from "./BinarySensorClasses";
 
@@ -25,6 +27,21 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   energy: "Energy",
   access_control: "Access Control",
   others: "Others",
+};
+
+/** Icon per category — the HUD's filter row (tooltip-only, no text labels)
+ *  and the category device-list modal (long-press a filter icon) both use
+ *  this one mapping, so a category can't read as one glyph in the top bar
+ *  and a different one in the modal it opens. */
+export const CATEGORY_ICONS: Record<Category, ComponentType<{ size?: number | string }>> = {
+  comfort: Armchair,
+  light: Lightbulb,
+  network: Wifi,
+  energy: Zap,
+  access_control: ShieldCheck,
+  // Puzzle (not a dots/lines glyph) — reads as its own distinct shape rather
+  // than being confused with the ⋮ overflow-menu button on small screens.
+  others: Puzzle,
 };
 
 /**

@@ -143,9 +143,19 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   const vOrder = (n: number): React.CSSProperties | undefined =>
     railVertical ? { order: n } : undefined;
 
-  // Every camera in the house, in a stable order, so prev/next can cycle
-  // through them without leaving the viewer. Wraps around at both ends.
-  const cameraIds = Object.keys(entities).filter((id) => id.startsWith("camera.")).sort();
+  // Every camera in the house, alphabetical by DISPLAY LABEL (not raw
+  // entity_id — the two can disagree, e.g. entity_id "camera.doorbell_main"
+  // showing as "Main Door Camera", which used to sort under "d" while
+  // reading as "M" in the picker/prev-next order) — so prev/next cycling and
+  // the picker list both match the order a user would actually expect from
+  // what's on screen. Wraps around at both ends.
+  const cameraIds = Object.keys(entities)
+    .filter((id) => id.startsWith("camera."))
+    .sort((a, b) => {
+      const labelA = displayLabelFor(a, config.entityMap[a]?.label, entities[a]?.attributes.friendly_name);
+      const labelB = displayLabelFor(b, config.entityMap[b]?.label, entities[b]?.attributes.friendly_name);
+      return labelA.localeCompare(labelB);
+    });
   const camIndex = cameraIds.indexOf(mapping.entityId);
   const canCycle = !!onOpenEntity && cameraIds.length > 1 && camIndex >= 0;
   const stepCamera = (delta: number) => {

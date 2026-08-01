@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.58.0
+
+### Changes
+- **Fixed a real regression: every UniFi access point (Network category) had disappeared from the villa map.** A recent fix meant to make a room-cluster chip's DEVICE COUNT match its modal's list had, as a side effect, hidden the individual 3D badge for any entity HA classifies as diagnostic — and an AP's "State" sensor is diagnostic-category by the UniFi integration's own convention. Reverted: a diagnostic-in-HA entity a user deliberately bound to real geometry stays visible and tappable on the map (that's a different concern from decluttering a flat settings LIST, which is what "diagnostic" is actually for) — the count-matching fix now scopes to the cluster chip's number only, not individual badge visibility.
+- **Fixed the blue "clickable" glow only appearing for these same AP sensors when the Energy filter was active, while their badge (and Advanced Settings) correctly showed Network.** The glow's own category resolver call was missing the entity's live `device_class` — the one signal needed to classify an enum sensor as Network — so it silently fell back to the generic "sensor" default (Energy) instead. Now reuses the exact same resolution the badge itself already uses, so a glow and its badge can't disagree again.
+- **Fixed switching profile (e.g. Owner → Guest) visibly "reloading" the villa map.** The role-filtered config handed to the 3D scene rebuilt `entityMap`/`meshBindings` as new objects on every switch, which the scene's own change-detection read as a structural edit and answered with a full multi-second re-index (material re-clone, per-light recreation) — just to hide a few badges. Traced every place that actually needs to hide a role-denied entity and confirmed each already re-checks the category/type denial lists on its own, cheaply, with no re-index required. `entityMap`/`meshBindings` now pass through unchanged by reference on a role switch, so the scene's diffing correctly sees "nothing structural changed" and skips the rebuild — hiding behaves identically, the map just doesn't visibly reload any more.
+- **Advanced Settings: "Grouped devices" now collapses by default**, matching every other section in that modal (its "Suggested group" button is inside the same collapsed component, not a separate always-visible row).
+- **Camera panel: the picker list and prev/next cycling are now alphabetical by DISPLAY LABEL, not raw entity_id** — the two can disagree (e.g. `camera.doorbell_main` showing as "Main Door Camera" used to sort under "d" while reading as "M").
+- **New: long-press (or hold Space) a category filter icon in the top bar to list every device in that category** — same group modal a SummaryBar tile or a room cluster already opens. A plain tap still just toggles that category's visibility on the map. The category→icon mapping moved into the shared config module so the top bar and this new modal can never show a different glyph for the same category.
+- Typecheck and production build clean throughout.
+
 ## 2.57.0
 
 ### Changes
