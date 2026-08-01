@@ -8,7 +8,10 @@
 // Renders nothing: the config itself already flows through ConfigContext, so
 // there is no new state to expose — this only reconciles it.
 //
-// The server is authoritative, with three ordering rules that make it safe:
+// villa-kiosk is routinely open on SEVERAL devices at once (a phone, a
+// MacBook, an iPad, a wall tablet) — this file has to make concurrent edits
+// from different devices commute, not just get one device's own read-then-
+// write loop right. Four rules make that safe:
 //
 //   1. PULL BEFORE PUSH. A push is only ever emitted after the first pull has
 //      completed (`hydrated`). This is what stops the dangerous race: the app
@@ -29,9 +32,26 @@
 //      server-side, and write the server's older copy back over it. Guarded
 //      by comparing local state against the last CONFIRMED server baseline
 //      (see the check in pull()) — the baseline only ever advances once a
-//      push actually SUCCEEDS (see the push effect below), never
-//      optimistically before it's sent, so this covers the whole at-risk
-//      window, not just the pre-send debounce.
+//      push actually SUCCEEDS (see pushOwnDiff below), never optimistically
+//      before it's sent, so this covers the whole at-risk window, not just
+//      the pre-send debounce.
+//
+//   4. A PUSH NEVER OVERWRITES ANOTHER DEVICE'S CONCURRENT EDIT. This is the
+//      one rule 1-3 don't cover: two devices editing DIFFERENT items (one
+//      relabels a light, the other links a sensor) around the same time.
+//      Sending "everything this device currently has" can't distinguish "I
+//      changed this" from "I'm just carrying this unchanged" — whichever
+//      push lands last would silently win for the WHOLE key (entityMap etc
+//      is one JSON blob), erasing the other device's item. Instead, a push
+//      diffs the local slice against the baseline THIS device last synced
+//      against (see deviceConfig.ts's diffSharedConfig — per-item, keyed by
+//      entity_id / mesh name / group id / room name), fetches the server's
+//      freshest copy, and replays only that per-item diff on top of it — so
+//      an unrelated item the other device wrote survives untouched. The
+//      write itself carries the revision it was computed against (an
+//      optimistic-concurrency token from the server, see supervisor-proxy.py)
+//      and is rejected with 409 + the fresher copy if another write landed
+//      in the gap; pushOwnDiff rebases and retries a bounded number of times.
 //
 // Writes are owner-only (the server 403s anything else, and we skip the
 // request entirely for other roles) — shared state is exactly what a guest
@@ -42,6 +62,8 @@ import { useConfig } from "./ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import {
   fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
+  diffSharedConfig, applySharedConfigDiff, isSharedConfigDiffEmpty,
+  type SharedDeviceConfig,
 } from "./deviceConfig";
 
 /** Debounce for outbound writes. Advanced Settings edits arrive in bursts (a
@@ -49,6 +71,20 @@ import {
  *  useDraftCommit, but a room/type change is immediate) — coalesce them into
  *  one PUT rather than one per keystroke. */
 const PUSH_DEBOUNCE_MS = 900;
+
+/** How many times pushOwnDiff will rebase-and-retry against a fresher server
+ *  copy before giving up for this debounce cycle (the next edit or pull will
+ *  try again). Only matters in the narrow window between this device's own
+ *  pre-push fetch and its PUT landing — a genuine collision there is rare. */
+const MAX_PUSH_ATTEMPTS = 3;
+
+/** A device that stays foregrounded indefinitely (a wall-mounted kiosk tablet
+ *  never loses focus or visibility) would otherwise only ever see another
+ *  device's edits by luck of some unrelated re-render — focus/visibilitychange
+ *  are the only other pull triggers. One small GET every few minutes closes
+ *  that gap; it's negligible next to the HA WebSocket's own 25s heartbeat
+ *  ping, so this isn't a meaningful battery/network cost. */
+const HEARTBEAT_PULL_MS = 3 * 60 * 1000;
 
 export default function DeviceConfigSync() {
   const { config, update } = useConfig();
@@ -72,28 +108,37 @@ export default function DeviceConfigSync() {
   const localRef = useRef(local);
   localRef.current = local;
 
-  /** Serialised slice the server is known to hold — the baseline both ordering
-   *  rules compare against. null until the first successful pull. */
+  /** The full shared-config object THIS device is known to be in sync with —
+   *  both the server's own last-seen state (pull) and, once a push succeeds,
+   *  what was just written. This is what a push diffs local against (rule 4)
+   *  and what a pull uses to detect a still-pending local edit (rule 3). null
+   *  until the first successful pull. */
+  const baselineRef = useRef<SharedDeviceConfig | null>(null);
+  /** Serialised form of baselineRef, kept in lockstep — cheap string-compare
+   *  gate for rules 2 and 3 without re-stringifying on every check. */
   const serverJsonRef = useRef<string | null>(null);
+  /** Optimistic-concurrency revision last confirmed from the server (see
+   *  supervisor-proxy.py's _store_revision) — sent with the next write so a
+   *  write that's gone stale gets rejected instead of silently overwriting a
+   *  different device's newer one. */
+  const revRef = useRef<number>(0);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pull = useCallback(async () => {
-    const server = await fetchSharedConfig();
-    if (server === null) return; // couldn't reach it — keep what we have
+    const result = await fetchSharedConfig();
+    if (result === null) return; // couldn't reach it — keep what we have
+    const { config: server, rev } = result;
     const keys = Object.keys(server);
     if (keys.length === 0) {
       // Nothing stored yet (fresh install, or first run after upgrading from
       // the localStorage-only versions). Seed the store from whatever THIS
       // device already has rather than letting an empty pull blank it.
+      baselineRef.current = localRef.current;
       serverJsonRef.current = JSON.stringify(localRef.current);
-      if (role === "owner") void saveSharedConfig(localRef.current);
+      revRef.current = rev;
+      if (role === "owner") void saveSharedConfig(localRef.current, rev);
       return;
     }
-    // Server wins for every field it actually carries; fields it omits keep
-    // their current local value (an older store, or one written before a field
-    // existed, must not blank that field). The baseline is that MERGED result,
-    // which is what the local slice will equal once `update` commits — so the
-    // push effect sees no change and the pull can't bounce straight back.
     // RULE 3: A PULL MUST NEVER CLOBBER AN UNPUSHED LOCAL EDIT.
     //
     // Checked FIRST, and against the baseline as it stood BEFORE this pull —
@@ -105,12 +150,10 @@ export default function DeviceConfigSync() {
     // Advanced Settings fired a pull while that very edit was still pending,
     // fetched the server's older copy, and wrote it back over the change.
     // Reported from the field as "I set the room, and seconds later it
-    // reverts". The merge below can't save us either: it is per-KEY over the
-    // shared slice and entityMap is ONE key, so the server's whole entityMap
-    // replaces the local one wholesale, pending edit and all.
+    // reverts".
     //
     // Compared after the await, since the edit may have landed while the
-    // request was in flight — precisely the window at risk. serverJsonRef is
+    // request was in flight — precisely the window at risk. baselineRef is
     // deliberately left alone so the push gate still sees a difference and
     // sends this client's edit; the next pull then reconciles normally.
     // Losing a beat of remote changes is fine, losing the user's edit is not.
@@ -122,9 +165,11 @@ export default function DeviceConfigSync() {
     // existed, must not blank that field). The baseline is that MERGED result,
     // which is what the local slice will equal once `update` commits — so the
     // push effect sees no change and the pull can't bounce straight back.
-    const merged = { ...localRef.current, ...server };
+    const merged = { ...localRef.current, ...server } as SharedDeviceConfig;
     const mergedJson = JSON.stringify(merged);
+    baselineRef.current = merged;
     serverJsonRef.current = mergedJson;
+    revRef.current = rev;
     // Skip the update entirely when the server genuinely has nothing new for
     // us. `pull()` runs on every mount AND every window focus/visibilitychange
     // (below) — so on a kiosk that's just been minimised and restored, or a
@@ -144,64 +189,73 @@ export default function DeviceConfigSync() {
     update(server);
   }, [update, role]);
 
-  // Pull once on mount, then whenever the tab is refocused / becomes visible —
+  // RULE 4: diff this device's local edits against the baseline it last
+  // synced against, replay ONLY that diff onto the server's freshest copy,
+  // and write it back under optimistic concurrency — retrying against a
+  // fresher copy if another device's write lands in the gap. See the file
+  // header for why a whole-object PUT of `local` can't be used here.
+  const pushOwnDiff = useCallback(async () => {
+    const baseline = baselineRef.current;
+    if (!baseline) return; // rule 1: no pull yet
+    const diff = diffSharedConfig(baseline, localRef.current);
+    if (isSharedConfigDiffEmpty(diff)) return; // nothing this device actually changed
+
+    for (let attempt = 0; attempt < MAX_PUSH_ATTEMPTS; attempt++) {
+      const fresh = await fetchSharedConfig();
+      const freshBase: SharedDeviceConfig = fresh && Object.keys(fresh.config).length > 0
+        ? ({ ...baseline, ...fresh.config } as SharedDeviceConfig)
+        : baseline;
+      const rev = fresh ? fresh.rev : revRef.current;
+      const next = applySharedConfigDiff(freshBase, diff);
+      const result = await saveSharedConfig(next, rev);
+      if (result.ok) {
+        baselineRef.current = next;
+        serverJsonRef.current = JSON.stringify(next);
+        revRef.current = result.rev;
+        // Fold in whatever the other device's items contributed, so this
+        // client's own view reflects them immediately rather than waiting
+        // for its next pull.
+        update(next);
+        return;
+      }
+      if (!result.conflict) return; // transport failure — next edit/pull retries later
+      // Another device's write landed between our fetch and our PUT — loop
+      // and rebase this device's diff against the copy the 409 handed back.
+    }
+  }, [update]);
+
+  // Pull once on mount, then whenever the tab is refocused / becomes visible,
+  // plus a long visible-only heartbeat for a device that never does either —
   // so a change made on another client lands here without a reload.
   useEffect(() => {
     void pull();
     const onFocus = () => { void pull(); };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
+    const heartbeat = setInterval(() => {
+      if (document.visibilityState === "visible") void pull();
+    }, HEARTBEAT_PULL_MS);
     return () => {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
+      clearInterval(heartbeat);
     };
   }, [pull]);
 
-  // Push local edits up, debounced. Gated on BOTH ordering rules above.
+  // Push local edits up, debounced. Gated on rules 1 and 2 above.
   useEffect(() => {
     if (role !== "owner") return;                 // non-owners never write
     const known = serverJsonRef.current;
     if (known === null) return;                   // rule 1: no pull yet
-    if (localJson === known) return;              // rule 2: nothing changed
+    if (localJson === known) return;               // rule 2: nothing changed
 
     if (pushTimer.current) clearTimeout(pushTimer.current);
-    pushTimer.current = setTimeout(() => {
-      const next = localRef.current;
-      const nextJson = JSON.stringify(next);
-      void saveSharedConfig(next).then((ok) => {
-        // Baseline advances ONLY on confirmed success — NOT before awaiting.
-        //
-        // This used to be set optimistically right here, before the PUT even
-        // went out, on the reasoning that a further edit landing mid-flight
-        // should compare against what's being sent rather than re-send an
-        // unchanged payload. But the push effect only re-fires when localJson
-        // itself changes (its dependency array), so that reasoning didn't
-        // actually depend on the baseline being pre-advanced — and setting it
-        // early opened a real race: the PUT is in flight but NOT YET
-        // committed server-side, and if a pull() fires in that window (this
-        // device regaining focus, a visibilitychange, another device's own
-        // mount-pull), rule 3's guard (localRef.current !== priorBaseline ⇒
-        // "mid-edit, abort") saw the OPTIMISTIC baseline already matching
-        // local and let the pull proceed — fetching the server's still-old
-        // copy and merging it straight over the edit that hadn't landed yet.
-        // Reported from the field as "I set a link/room/label, and a few
-        // seconds later it's gone" — reproducible on a SINGLE device with no
-        // second client involved, just an unlucky focus event in that window.
-        //
-        // Only advancing here means rule 3 now correctly treats the entire
-        // in-flight window (queued AND sent-but-unconfirmed) as "pending
-        // edit", so any pull that lands during it aborts and retries later
-        // instead of racing a write that hasn't landed. A failed write simply
-        // never advances the baseline, so the next edit or focus-pull retries
-        // against the old one — no separate rollback branch needed.
-        if (ok) serverJsonRef.current = nextJson;
-      });
-    }, PUSH_DEBOUNCE_MS);
+    pushTimer.current = setTimeout(() => { void pushOwnDiff(); }, PUSH_DEBOUNCE_MS);
 
     return () => {
       if (pushTimer.current) clearTimeout(pushTimer.current);
     };
-  }, [localJson, role]);
+  }, [localJson, role, pushOwnDiff]);
 
   return null;
 }

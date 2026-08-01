@@ -27,7 +27,8 @@
 // GLB's own payload through a second channel.
 
 import { ingressPath } from "@/ha/ingress";
-import type { AppConfig } from "./AppConfig";
+import type { AppConfig, DeviceGroup } from "./AppConfig";
+import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 
 /** The AppConfig fields stored centrally. Single source of truth — both the
  *  push (what we send) and the merge (what a pull is allowed to overwrite)
@@ -71,31 +72,150 @@ export function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
 // Key order is stable in both places because pickSharedConfig always builds
 // from SHARED_CONFIG_KEYS in order.
 
+// ── Per-item diff/merge ──────────────────────────────────────────────────
+// Two devices editing DIFFERENT items at nearly the same time (villa-kiosk
+// is routinely open on a phone, a MacBook, an iPad and a wall tablet at
+// once) must not be able to erase each other's work. A whole-object PUT of
+// "everything this device currently has" can't tell "I changed this" apart
+// from "I'm just carrying this unchanged" — so whichever device pushes last
+// silently wins for the WHOLE key, even for items the other device touched.
+// Diffing against the baseline each device last synced against, then
+// replaying only the genuinely-changed items onto the server's freshest
+// copy (see DeviceConfigSync's push flow), makes concurrent edits to
+// different items commute instead of racing.
+//
+// Each shared key is normalised to Record<id, item> for diffing — entityMap
+// and meshBindings already are; deviceGroups/teleportPoints (arrays) are
+// keyed by their own natural id (`id` / `name` respectively, both already
+// required to be unique elsewhere in the app).
+type Keyed<T> = Record<string, T>;
+
+function keyDeviceGroups(arr: DeviceGroup[]): Keyed<DeviceGroup> {
+  return Object.fromEntries(arr.map((g) => [g.id, g]));
+}
+function keyTeleportPoints(arr: TeleportPoint[]): Keyed<TeleportPoint> {
+  return Object.fromEntries(arr.map((p) => [p.name, p]));
+}
+
+interface KeyedDiff<T> {
+  set: Keyed<T>;
+  del: string[];
+}
+
+function diffKeyed<T>(base: Keyed<T>, next: Keyed<T>): KeyedDiff<T> {
+  const set: Keyed<T> = {};
+  for (const [id, item] of Object.entries(next)) {
+    if (JSON.stringify(base[id]) !== JSON.stringify(item)) set[id] = item;
+  }
+  const del: string[] = [];
+  for (const id of Object.keys(base)) if (!(id in next)) del.push(id);
+  return { set, del };
+}
+
+function applyKeyed<T>(server: Keyed<T>, diff: KeyedDiff<T>): Keyed<T> {
+  const out = { ...server, ...diff.set };
+  for (const id of diff.del) delete out[id];
+  return out;
+}
+
+function keyedDiffIsEmpty<T>(diff: KeyedDiff<T>): boolean {
+  return Object.keys(diff.set).length === 0 && diff.del.length === 0;
+}
+
+export interface SharedConfigDiff {
+  entityMap: KeyedDiff<EntityMapping>;
+  meshBindings: KeyedDiff<string>;
+  deviceGroups: KeyedDiff<DeviceGroup>;
+  teleportPoints: KeyedDiff<TeleportPoint>;
+}
+
+/** What did `next` actually change relative to `base`, per item? */
+export function diffSharedConfig(base: SharedDeviceConfig, next: SharedDeviceConfig): SharedConfigDiff {
+  return {
+    entityMap: diffKeyed(base.entityMap, next.entityMap),
+    meshBindings: diffKeyed(base.meshBindings, next.meshBindings),
+    deviceGroups: diffKeyed(keyDeviceGroups(base.deviceGroups), keyDeviceGroups(next.deviceGroups)),
+    teleportPoints: diffKeyed(keyTeleportPoints(base.teleportPoints), keyTeleportPoints(next.teleportPoints)),
+  };
+}
+
+export function isSharedConfigDiffEmpty(diff: SharedConfigDiff): boolean {
+  return keyedDiffIsEmpty(diff.entityMap) && keyedDiffIsEmpty(diff.meshBindings)
+    && keyedDiffIsEmpty(diff.deviceGroups) && keyedDiffIsEmpty(diff.teleportPoints);
+}
+
+/** Replay a diff onto some other config snapshot (normally the server's
+ *  freshest one) — additions/edits and deletions from the diff win,
+ *  everything else in `target` is left exactly as-is. */
+export function applySharedConfigDiff(target: SharedDeviceConfig, diff: SharedConfigDiff): SharedDeviceConfig {
+  return {
+    entityMap: applyKeyed(target.entityMap, diff.entityMap),
+    meshBindings: applyKeyed(target.meshBindings, diff.meshBindings),
+    deviceGroups: Object.values(applyKeyed(keyDeviceGroups(target.deviceGroups), diff.deviceGroups)),
+    teleportPoints: Object.values(applyKeyed(keyTeleportPoints(target.teleportPoints), diff.teleportPoints)),
+  };
+}
+
+/** One shared-config fetch: the parsed slice plus the revision it was read
+ *  at, so a subsequent write can detect whether someone else wrote in
+ *  between (see saveSharedConfig). */
+export interface SharedConfigFetch {
+  config: Partial<SharedDeviceConfig>;
+  rev: number;
+}
+
 /** Fetch the shared device config. Returns null on a transport/parse failure so
  *  the caller can distinguish "server has nothing yet" ({}) from "couldn't
  *  reach it" (null) — the latter must NOT overwrite what this device has. */
-export async function fetchSharedConfig(): Promise<Partial<SharedDeviceConfig> | null> {
+export async function fetchSharedConfig(): Promise<SharedConfigFetch | null> {
   try {
     const resp = await fetch(ingressPath("device-config"), { credentials: "same-origin" });
     if (!resp.ok) return null;
-    const data = (await resp.json()) as { config?: unknown };
-    return parseSharedConfig(data.config);
+    const data = (await resp.json()) as { config?: unknown; rev?: unknown };
+    return {
+      config: parseSharedConfig(data.config),
+      rev: typeof data.rev === "number" ? data.rev : 0,
+    };
   } catch {
     return null;
   }
 }
 
-/** Replace the shared device config (owner only — the server 403s other roles). */
-export async function saveSharedConfig(config: SharedDeviceConfig): Promise<boolean> {
+export type SaveSharedConfigResult =
+  | { ok: true; rev: number }
+  | { ok: false; conflict: false }
+  | { ok: false; conflict: true; server: Partial<SharedDeviceConfig>; rev: number };
+
+/** Write the shared device config (owner only — the server 403s other roles).
+ *  `expectedRev` is the revision this write was computed against; pass null
+ *  to skip the check (unconditional overwrite). If the server's stored
+ *  revision has since moved on, the write is rejected (409) rather than
+ *  silently clobbering whatever the other write put there — the caller gets
+ *  the fresher copy back so it can rebase its own diff and retry. */
+export async function saveSharedConfig(
+  config: SharedDeviceConfig,
+  expectedRev: number | null,
+): Promise<SaveSharedConfigResult> {
   try {
     const resp = await fetch(ingressPath("device-config"), {
       method: "PUT",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ config }),
+      body: JSON.stringify(expectedRev === null ? { config } : { config, rev: expectedRev }),
     });
-    return resp.ok;
+    if (resp.status === 409) {
+      const data = (await resp.json().catch(() => ({}))) as { config?: unknown; rev?: unknown };
+      return {
+        ok: false,
+        conflict: true,
+        server: parseSharedConfig(data.config),
+        rev: typeof data.rev === "number" ? data.rev : 0,
+      };
+    }
+    if (!resp.ok) return { ok: false, conflict: false };
+    const data = (await resp.json().catch(() => ({}))) as { rev?: unknown };
+    return { ok: true, rev: typeof data.rev === "number" ? data.rev : 0 };
   } catch {
-    return false;
+    return { ok: false, conflict: false };
   }
 }

@@ -1126,6 +1126,17 @@ def _write_json_store(path: str, payload: str) -> None:
         raise
 
 
+def _store_revision(path: str) -> int:
+    """A cheap, persistent (survives a proxy restart, unlike an in-memory
+    counter) revision marker for optimistic-concurrency writes — the file's
+    own mtime, which _write_json_store's atomic replace always advances.
+    Absent file (nothing stored yet) reads as revision 0."""
+    try:
+        return os.stat(path).st_mtime_ns
+    except OSError:
+        return 0
+
+
 def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str):
     """Build the (GET, PUT) handler pair for one shared store.
 
@@ -1133,11 +1144,25 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str):
     device config to see the right badges/rooms at all. PUT is owner-only,
     matching the Settings UI's own gating: shared state is exactly what a
     non-owner profile must not be able to rewrite for everyone else.
+
+    PUT optionally carries a `rev` (the revision the caller last read, from
+    GET's own response) for optimistic concurrency: villa-kiosk is routinely
+    open on several devices at once, and a blind overwrite here would let
+    the last PUT to arrive silently erase whatever a different device wrote
+    moments earlier. When `rev` is present and stale, the write is rejected
+    (409) with the current value + revision instead of applied — the caller
+    is expected to rebase its own change onto that fresher copy and retry
+    (see the frontend's DeviceConfigSync). Omitting `rev` keeps the old
+    unconditional-overwrite behaviour, which is what fm-data's single-writer
+    store still uses. The lock makes the read-check-write atomic against a
+    second PUT landing on this same store mid-request.
     """
+    lock = asyncio.Lock()
+
     async def get_handler(request: web.Request) -> web.Response:
         if not _authorized(request):
             return _unauthorized()
-        return web.json_response({key: _read_json_store(path, empty)})
+        return web.json_response({key: _read_json_store(path, empty), "rev": _store_revision(path)})
 
     async def put_handler(request: web.Request) -> web.Response:
         if not _authorized(request):
@@ -1152,11 +1177,20 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str):
         if not isinstance(value, type(empty)):
             return web.json_response(
                 {"error": f"{key} must be a {type(empty).__name__}"}, status=400)
+        expected_rev = body.get("rev") if isinstance(body, dict) else None
         payload = json.dumps(value)
         if len(payload.encode("utf-8")) > max_bytes:
             return web.json_response({"error": f"{key} payload too large"}, status=413)
-        _write_json_store(path, payload)
-        return web.json_response({"ok": True, "count": len(value)})
+        async with lock:
+            if isinstance(expected_rev, int):
+                current_rev = _store_revision(path)
+                if expected_rev != current_rev:
+                    return web.json_response(
+                        {"error": "conflict", key: _read_json_store(path, empty), "rev": current_rev},
+                        status=409)
+            _write_json_store(path, payload)
+            new_rev = _store_revision(path)
+        return web.json_response({"ok": True, "count": len(value), "rev": new_rev})
 
     return get_handler, put_handler
 

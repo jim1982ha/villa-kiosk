@@ -317,8 +317,26 @@ export default function BabylonCanvas({
           // casing, so an accepted HA area name still reads identically to
           // every other entity already carrying that room.
           const knownRooms = new Map(current.teleportPoints.map((p) => [p.name.trim().toLowerCase(), p.name]));
+          // Live HA state, read once for this whole pass — a mesh literally
+          // named after an entity_id (the pipeline's own naming convention)
+          // that HA no longer reports (renamed/removed) used to get
+          // auto-detected right back into entityMap on every single load,
+          // even the load immediately after a user explicitly removed it via
+          // Advanced Settings' "N entities no longer in Home Assistant ->
+          // Remove N" — the auto-detect pass never checked whether the
+          // entity was still real, only whether a mesh happened to carry its
+          // name. Reported: climate.gym_room kept "coming back" no matter
+          // how many times it was removed; confirmed via HA that the entity
+          // genuinely no longer exists. Auto-detect exists to save typing
+          // for a genuinely new, live entity — not to repopulate one that's
+          // gone. (Minor accepted trade-off: if this runs before HA's
+          // get_states has resolved, a real new entity could be skipped
+          // here and only get picked up on the NEXT load — self-healing,
+          // and far better than silently undoing an explicit removal.)
+          const liveEntities = getEntitiesSnapshot();
           for (const m of detected) {
             if (current.entityMap[m.entityId]) continue;
+            if (!liveEntities[m.entityId]) continue;
             // A fresh detection always starts "Unmapped" (resolveMeshUnchecked's
             // strategy 4) — try to resolve a real room before it's ever saved,
             // so Advanced Settings doesn't start every device with a blank
