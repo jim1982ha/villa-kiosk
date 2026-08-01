@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.52.0
+
+### Changes
+- **Fixed a misplacement from 2.51.0: the GLB/room-data upload button and its (i) model-info tooltip moved to the main app's top HUD bar, when the actual request was to put them in the Advanced Settings modal's OWN header** — the same treatment the day/night invert toggle gets in the Settings modal's header (icon-only, right-aligned, next to the title), not the global top bar. Moved both out of `HUD.tsx` (inline button, mobile overflow-menu duplicate, hidden file input, all reverted) and into `ConfigEditorModal.tsx`'s header row instead, gated the same Owner-only way. `CentralModelInfo.tsx` and `useGlbUpload.ts` relocated from `components/hud/` to `components/settings/` to match — that's their only consumer now. README's two references to "the upload icon in the top bar" corrected to point at the modal header.
+- Typecheck and production build clean.
+
 ## 2.51.0
 
 ### Changes

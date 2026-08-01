@@ -527,7 +527,6 @@ export default function Dashboard() {
         mappedEntityIds={effectiveMappedEntityIds}
         onOpenEntity={openEntityPanel}
         onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
-        onModelChanged={() => setModelKey((k) => k + 1)}
       />
 
       {/* Bottom dashboard strip — scene / quick-action / summary tiles,
@@ -677,6 +676,7 @@ export default function Dashboard() {
             if (configEditorFocus === null) setSettingsOpen(true);
             setConfigEditorFocus(null);
           }}
+          onModelChanged={() => setModelKey((k) => k + 1)}
         />
       )}
     </>

@@ -184,7 +184,7 @@ There's no connection onboarding: the kiosk always reaches Home Assistant token-
 
 The app is not tied to any specific villa. The only required input is a `.glb` model. To wire up a new villa:
 
-1. **Upload the GLB** (Owner profile → the upload icon in the top bar).
+1. **Upload the GLB** (Advanced Settings → the upload icon in the modal header, Owner profile).
 2. Wire it up — two ways, mix freely:
    - **Bind real objects** (Advanced Settings → *Bound 3D objects*): tap a lamp/curtain mesh, pick the live HA entity.
    - **Drop control markers**: for fused models or entities not yet in HA — tap any spot, a floating control is placed and linked to an entity_id (activates automatically when the entity appears).
@@ -456,7 +456,7 @@ The 3D scene never re-renders from React — HA state changes are pushed imperat
 ## Runtime configuration
 
 - **Settings** (gear icon): title, render quality, first-person/overview feel, device icon size, theme. No HA URL/token — the connection is automatic through the add-on proxy.
-- **Advanced Settings** (Settings' footer → *Advanced Settings*, a modal over the live dashboard, not a page reload): villa location, auto-detected entity settings (map any `entity_id` to a panel type + label + room, mark entities requiring confirmation), bound 3D objects, grouped devices, device telemetry. GLB/room-data upload lives in the top bar's upload icon (Owner profile), not in this modal — see [Works with any villa](#works-with-any-villa).
+- **Advanced Settings** (Settings' footer → *Advanced Settings*, a modal over the live dashboard, not a page reload): an icon-only GLB/room-data upload button in the modal's own header (Owner profile, next to a model-info (i) tooltip — same treatment as the day/night invert toggle in the Settings modal's header), plus villa location, auto-detected entity settings (map any `entity_id` to a panel type + label + room, mark entities requiring confirmation), bound 3D objects, grouped devices, device telemetry.
 - **Render quality** (Settings → *Render quality &amp; look*): independently toggle/tune tone mapping (Khronos Neutral / ACES / Standard), exposure, contrast, fill + key + ambient light balance, ambient occlusion (SSAO), sun shadows and environment lighting (IBL). All apply live and persist with your config; start with tone mapping + lower **Fill light** to cure a washed-out render. The same knobs can be baked into the GLB via the [Blender pipeline](MODEL_PIPELINE.md) flags.
 - **Teleport calibration**: open **Rooms**, then right-click / long-press any room card to save your current spot as that room's anchor.
 

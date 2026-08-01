@@ -7,9 +7,11 @@
 // nothing to reload on the way out.
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Upload } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
+import CentralModelInfo from "./CentralModelInfo";
+import { useGlbUpload } from "./useGlbUpload";
 import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
 import TelemetryPanel from "./TelemetryPanel";
@@ -21,6 +23,8 @@ interface Props {
   /** When opened from a device panel's edit shortcut, pre-filter the entity
    *  table to this entity_id so its row is right there. */
   focusEntityId?: string;
+  /** A GLB/room-data upload changed the model — remount the canvas to load it. */
+  onModelChanged: () => void;
 }
 
 /** A section title that doubles as a collapse toggle — for the two sections
@@ -92,8 +96,14 @@ function VillaCoordinates() {
   );
 }
 
-export default function ConfigEditorModal({ onBack, focusEntityId }: Props) {
+export default function ConfigEditorModal({ onBack, focusEntityId, onModelChanged }: Props) {
   const { role } = useProfile();
+  const canUploadModel = role === "owner";
+  // Central GLB/room-data upload — Owner only. Lives in this modal's OWN
+  // header (icon-only, same header-icon-btn treatment as the day/night
+  // invert toggle in the Settings modal's header), not the main app's top
+  // bar — it's an administration action scoped to Advanced Settings.
+  const glbUpload = useGlbUpload(canUploadModel, onModelChanged);
 
   return (
     <div className="modal-backdrop" onClick={onBack}>
@@ -103,9 +113,42 @@ export default function ConfigEditorModal({ onBack, focusEntityId }: Props) {
       >
         <div className="settings-header">
           <h2>Advanced Settings</h2>
+          {canUploadModel && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {glbUpload.addonCfg?.model_path && (
+                <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} editable />
+              )}
+              <input
+                ref={glbUpload.glbUploadRef} type="file" multiple hidden
+                accept=".glb,.json,application/json,model/gltf-binary"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  e.target.value = "";
+                  if (files.length) void glbUpload.uploadGlbAndRooms(files);
+                }}
+              />
+              <button
+                className="icon-btn header-icon-btn"
+                onClick={glbUpload.openPicker}
+                disabled={glbUpload.uploadBusy !== null}
+                title="Upload GLB Model"
+                aria-label="Upload GLB Model"
+              >
+                <Upload size={18} />
+                {glbUpload.uploadPct !== null && (
+                  <span className="icon-btn-count" aria-hidden="true">{glbUpload.uploadPct}%</span>
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="settings-body">
+          {glbUpload.uploadMsg && (
+            <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 0 }}>
+              {glbUpload.uploadMsg.text}
+            </div>
+          )}
           <div className="settings-section-title">Villa location</div>
           <VillaCoordinates />
           <p className="muted body-text" style={{ marginTop: 6, fontSize: 12 }}>

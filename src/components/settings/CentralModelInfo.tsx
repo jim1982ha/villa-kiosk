@@ -1,7 +1,8 @@
-// src/components/hud/CentralModelInfo.tsx
+// src/components/settings/CentralModelInfo.tsx
 // The (i) hover/focus tooltip carrying the full central-model details (path,
-// size, mesh count, SHA-256, source, latest plan) — lives in the HUD top bar
-// next to the GLB upload button (see GlbUploadControls), Owner profile only.
+// size, mesh count, SHA-256, source, latest plan) — lives in the Advanced
+// Settings modal's header, next to the GLB upload button (see
+// ConfigEditorModal), Owner profile only.
 
 import { Info } from "lucide-react";
 import type { getLoadedModelInfo } from "@/utils/modelInfo";
@@ -15,7 +16,7 @@ export default function CentralModelInfo({
   editable: boolean;
 }) {
   return (
-    <span className="info-tip hud-info-tip">
+    <span className="info-tip">
       <button type="button" className="info-btn" aria-label="Model details">
         <Info size={16} />
       </button>

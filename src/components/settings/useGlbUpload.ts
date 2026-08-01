@@ -1,9 +1,7 @@
-// src/components/hud/useGlbUpload.ts
+// src/components/settings/useGlbUpload.ts
 // Central GLB/room-data upload — pushes straight into the add-on's /data
 // store via the supervisor-proxy (no SSH/Samba, no path to configure).
-// Called once from HUD.tsx (Owner only) so the desktop button and the
-// mobile overflow-menu item share one file input and one upload state
-// instead of duplicating the async flow per render site.
+// Called from ConfigEditorModal's header (Owner only).
 
 import { useEffect, useRef, useState } from "react";
 import { useConfig } from "@/config/ConfigContext";
