@@ -442,7 +442,12 @@ export default function HUD({
               return (
                 <button
                   key={cat}
-                  className={`icon-btn has-hold-action${hidden ? "" : " active"}`}
+                  // No .has-hold-action here (unlike the floor buttons/camera
+                  // next-arrow, which keep their dot) — these already have a
+                  // full row of same-shaped neighbours, and the constant
+                  // "you can hold this" hint read as visual clutter rather
+                  // than a useful affordance, at the user's request.
+                  className={`icon-btn${hidden ? "" : " active"}`}
                   // Lit in the SAME gradient as this category's badges on the
                   // map (see config/EntityCategories.categoryGradient), so the
                   // filter row doubles as a colour legend.

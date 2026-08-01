@@ -1833,14 +1833,6 @@ export class SceneManager {
     return this.visuals.roomForEntity(entityId);
   }
 
-  /** HA's registry-derived suppressed set (hidden-in-HA / config-diagnostic
-   *  entities) — Dashboard calls this whenever useHA().suppressedEntityIds
-   *  changes, so those entities get no 3D badge and can't inflate a
-   *  room-cluster chip's count. See EntityVisuals.setSuppressedEntityIds. */
-  setSuppressedEntityIds(ids: Set<string>): void {
-    this.visuals.setSuppressedEntityIds(ids);
-  }
-
   private disposed = false;
   /** One-shot guard so handlePageShow's reload can never loop. */
   private reloadedAfterDispose = false;

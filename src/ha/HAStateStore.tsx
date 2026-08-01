@@ -30,6 +30,14 @@ interface HAStateContextType {
    *  this only affects the kiosk's own auto-built lists). Empty until the
    *  one-shot registry fetch on connect resolves. */
   suppressedEntityIds: Set<string>;
+  /** The subset of suppressedEntityIds suppressed SPECIFICALLY because a user
+   *  hid it in HA (registry hidden_by != null) — not merely because HA itself
+   *  filed it under entity_category config/diagnostic. Lets a UI surface that
+   *  chooses to still show a suppressed-but-mapped entity (see
+   *  Dashboard.tsx's category browse) mark THIS specific reason explicitly
+   *  ("Hidden in HA") rather than presenting it as an ordinary device with no
+   *  indication the user made a deliberate choice about it elsewhere. */
+  hiddenInHaEntityIds: Set<string>;
   /** entity_id -> HA's own Area name (this entity's registry row, falling
    *  back to its device's), resolved once from the registry fetch on
    *  connect. Empty until that resolves, and empty for any entity HA has no
@@ -94,6 +102,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
 
   const [entities, setEntitiesState] = useState<Record<string, HassEntity>>({});
   const [suppressedEntityIds, setSuppressedEntityIds] = useState<Set<string>>(new Set());
+  const [hiddenInHaEntityIds, setHiddenInHaEntityIds] = useState<Set<string>>(new Set());
   const [entityAreaNames, setEntityAreaNames] = useState<Record<string, string>>({});
   const [entityDeviceIds, setEntityDeviceIds] = useState<Record<string, string>>({});
   // Mirrors `entities` synchronously (no extra render/effect lag) so
@@ -173,6 +182,9 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
                 .filter((r) => r.hidden_by != null || r.entity_category === "config" || r.entity_category === "diagnostic")
                 .map((r) => r.entity_id),
             ));
+            setHiddenInHaEntityIds(new Set(
+              rows.filter((r) => r.hidden_by != null).map((r) => r.entity_id),
+            ));
             // device_id sits directly on the entity registry row — no extra
             // fetch needed, and it works even when the device/area registry
             // calls below fail (a profile that can read entities but not
@@ -242,6 +254,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     () => ({
       entities,
       suppressedEntityIds,
+      hiddenInHaEntityIds,
       entityAreaNames,
       entityDeviceIds,
       getEntitiesSnapshot,
@@ -256,7 +269,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       lastError,
       serviceError,
     }),
-    [entities, suppressedEntityIds, entityAreaNames, entityDeviceIds, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
+    [entities, suppressedEntityIds, hiddenInHaEntityIds, entityAreaNames, entityDeviceIds, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
   );
 
   return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;

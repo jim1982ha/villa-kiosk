@@ -9,7 +9,7 @@
 // panel) and the shared gradient badge (badgeImageDataUrl) so it feels native.
 
 import { useState, type ComponentType } from "react";
-import { ChevronRight, Sparkles, Power, PowerOff } from "lucide-react";
+import { ChevronRight, Sparkles, Power, PowerOff, EyeOff } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -97,7 +97,7 @@ export default function SummaryGroupPanel({
   group, canControl, mappedEntityIds, onClose, onOpenEntity, hideBulkToggle,
   filterSuppressed = true, roomScenes,
 }: Props) {
-  const { entities, suppressedEntityIds, callService } = useHA();
+  const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
   const { config } = useConfig();
   const { role } = useProfile();
   // Bulk-toggling an entire group (potentially dozens of devices) from one
@@ -248,6 +248,13 @@ export default function SummaryGroupPanel({
     const canToggle = canControl && (TOGGLEABLE.has(domain) || isLock);
     const toggleOn = isLock ? e.state !== "locked" : !OFF.has(e.state);
     const offMapRow = !mappedEntityIds.has(id);
+    // A user explicitly hid this in HA (registry hidden_by) — distinct from
+    // being merely diagnostic-category, and worth surfacing explicitly: a
+    // caller that opted out of filterSuppressed (the room/category browses)
+    // can now show this row at all, but the user should still be able to
+    // tell "HA itself says this is hidden" from an ordinary device at a
+    // glance, not just infer it silently.
+    const hiddenInHa = hiddenInHaEntityIds.has(id);
     const doToggle = () =>
       isLock
         ? callService("lock", e.state === "locked" ? "unlock" : "lock", {}, { entity_id: id })
@@ -267,7 +274,12 @@ export default function SummaryGroupPanel({
             draggable={false}
           />
           <span className="summary-entity-text">
-            <span className="summary-entity-name" title={label}>{label}</span>
+            <span className="summary-entity-name-row">
+              <span className="summary-entity-name" title={label}>{label}</span>
+              {hiddenInHa && (
+                <EyeOff size={13} className="summary-entity-hidden-icon" aria-label="Hidden in HA" />
+              )}
+            </span>
             <span className="summary-entity-state">{stateText}</span>
           </span>
           <ChevronRight size={18} className="summary-entity-chevron" />

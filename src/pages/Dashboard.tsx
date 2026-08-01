@@ -82,15 +82,6 @@ export default function Dashboard() {
   // the same group modal a SummaryBar tile or a room cluster opens. Only
   // computed once a category is actually held (cheap null-skip otherwise).
   const [categoryGroup, setCategoryGroup] = useState<Category | null>(null);
-  const categoryGroupEntityIds = useMemo(() => {
-    if (!categoryGroup) return [];
-    return Object.entries(config.entityMap)
-      .filter(([id, mapping]) => {
-        const dc = entities[id]?.attributes.device_class as string | undefined;
-        return effectiveCategory(id, mapping.type, mapping.category, dc) === categoryGroup;
-      })
-      .map(([id]) => id);
-  }, [categoryGroup, config.entityMap, entities]);
   // Live HA scenes (see config/haScenes.ts) — derived, not stored, so a scene
   // added/edited/removed in HA's own Scene Editor shows up here on the very
   // next entity update. Computed once here (not per-panel-open) since both
@@ -121,6 +112,38 @@ export default function Dashboard() {
     }
     return augmented;
   }, [mappedEntityIds, config.entityMap]);
+  // Diagnostic/hidden-in-HA entities are excluded UNLESS they're actually on
+  // the map (effectiveMappedEntityIds — real geometry, or linked/motion to
+  // something that has it): the same distinction the map badge itself uses
+  // (a UniFi AP's diagnostic "State" sensor someone deliberately bound to a
+  // mesh stays visible). This is NOT "show every diagnostic entity in this
+  // category" — an orphan RSSI/battery/uptime sensor that was never bound to
+  // anything visual stays filtered out exactly like before, category by
+  // category, entity by entity; only ones with real map presence get the
+  // exception.
+  //
+  // isMappingAllowed(role, ...) matters here specifically because this list
+  // is built directly from the RAW config.entityMap, bypassing the Babylon
+  // layer entirely — unlike a room-cluster's entityIds (sourced from
+  // EntityVisuals, which already never creates a badge for a denied-type
+  // entity — see indexMeshes/resolveMeshToMapping), nothing upstream of this
+  // computation has applied RBAC at all. Without this check, a category a
+  // role CAN see (e.g. "access_control") could still list an individually
+  // denied TYPE within it (a role that allows cameras but denies locks,
+  // say) — connected-profile-aware from the start, not left to the shared
+  // SummaryGroupPanel to somehow guess.
+  const categoryGroupEntityIds = useMemo(() => {
+    if (!categoryGroup || !role) return [];
+    return Object.entries(config.entityMap)
+      .filter(([id, mapping]) => {
+        if (!isMappingAllowed(role, id, mapping)) return false;
+        const dc = entities[id]?.attributes.device_class as string | undefined;
+        if (effectiveCategory(id, mapping.type, mapping.category, dc) !== categoryGroup) return false;
+        if (suppressedEntityIds.has(id) && !effectiveMappedEntityIds.has(id)) return false;
+        return true;
+      })
+      .map(([id]) => id);
+  }, [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, effectiveMappedEntityIds]);
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
   // Starts "overview" to match the actual landing view (see the one-shot
   // effect below): the HUD reads this to decide joystick vs. overview-help
@@ -199,14 +222,6 @@ export default function Dashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [haConfig]);
-
-  // Keep the 3D layer's suppressed-entity set current — a hidden-in-HA or
-  // config/diagnostic entity gets no 3D badge, and can't inflate a
-  // room-cluster chip's count past what SummaryGroupPanel's list (which
-  // already excludes the same set by default) actually shows.
-  useEffect(() => {
-    manager?.setSuppressedEntityIds(suppressedEntityIds);
-  }, [manager, suppressedEntityIds]);
 
   // Real-sun fallback: if HA has no sun.sun entity, refresh lighting hourly.
   // Depend on sun.sun SPECIFICALLY, not the whole `entities` map — `entities`
@@ -667,6 +682,15 @@ export default function Dashboard() {
           onClose={() => setClusterGroup(null)}
           onOpenEntity={(id) => { setClusterGroup(null); openEntityPanel(id); }}
           roomScenes={scenesForRoom(haScenes, clusterGroup.room)}
+          // Same rule as the category browse (Dashboard.tsx's categoryGroup,
+          // below) and for the same reason: every id in clusterGroup.entityIds
+          // came from EntityVisuals.updateClusters, which only ever includes
+          // entities that already have a real badge/mesh — so there is no
+          // "orphan diagnostic sensor" case here to filter, only "diagnostic
+          // entity someone deliberately bound to the villa", which this list
+          // should show like any other room member (matches this modal's own
+          // count, which stopped excluding them for the identical reason).
+          filterSuppressed={false}
         />
       )}
 
@@ -677,6 +701,22 @@ export default function Dashboard() {
           mappedEntityIds={effectiveMappedEntityIds}
           onClose={() => setCategoryGroup(null)}
           onOpenEntity={(id) => { setCategoryGroup(null); openEntityPanel(id); }}
+          // categoryGroupEntityIds has ALREADY applied the precise
+          // suppressed/diagnostic filtering (mapped-on-the-map entities kept,
+          // orphan diagnostic sensors dropped) — this modal's own blanket
+          // filterSuppressed=true default would otherwise strip the
+          // legitimately-kept ones straight back out again.
+          //
+          // Load-bearing invariant, not a coincidence: mappedEntityIds here
+          // is the SAME effectiveMappedEntityIds reference categoryGroupEntityIds
+          // filtered against above. Every suppressed entity that survived
+          // that filter is therefore, by construction, also in this set —
+          // so SummaryGroupPanel's own onMap/offMap split (which reads THIS
+          // prop) can never place a diagnostic entity under "Not on the
+          // map"; it always lands in the on-map, room-grouped list instead.
+          // If this prop is ever swapped for a differently-computed set,
+          // that guarantee breaks — keep the two in lockstep.
+          filterSuppressed={false}
         />
       )}
 

@@ -785,14 +785,6 @@ export class EntityVisuals {
   /** Last seen HA state per entity, so a label rebuild (toggle on / icon edit)
    *  can repaint badges immediately instead of waiting for the next push. */
   private lastState = new Map<string, HassEntity>();
-  /** Entities the user hid in HA, or that HA itself filed under
-   *  entity_category config/diagnostic (see HAStateStore's suppressedEntityIds) —
-   *  set from Dashboard via setSuppressedEntityIds. Excluded in cullLabels
-   *  exactly like hiddenCategories, so a suppressed entity gets no 3D badge
-   *  AND is never counted into a room-cluster chip's total; without this, the
-   *  chip's count and SummaryGroupPanel's list (which already filters these
-   *  out by default) could silently disagree. */
-  private suppressedEntityIds = new Set<string>();
   /** User size multiplier (Settings slider) and live bird's-eye zoom factor;
    *  the badge container is scaled by their product. */
   private iconUserScale = 1;
@@ -880,15 +872,6 @@ export class EntityVisuals {
   /** MUST be called before indexMeshes() — that's where lights are created. */
   setBakedMode(baked: boolean): void {
     this.bakedMode = baked;
-  }
-
-  /** Called whenever HA's registry-derived suppressed set changes (Dashboard's
-   *  useHA().suppressedEntityIds). No rebuild needed — cullLabels reads this
-   *  set every frame already, same as hiddenCategories; a render request is
-   *  enough to apply it under on-demand rendering. */
-  setSuppressedEntityIds(ids: Set<string>): void {
-    this.suppressedEntityIds = ids;
-    this.requestRender();
   }
 
   /** Repaint every badge from the current config (per-entity colour + glyph).
@@ -2865,21 +2848,24 @@ export class EntityVisuals {
     // should report the whole room's device count, not just the part
     // currently framed, and its centroid should stay put rather than sliding
     // around as members cross the viewport edge.
-    const groups = new Map<string, { ids: string[]; countedIds: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean }>();
+    // NOTE: no suppressedEntityIds filtering here, deliberately. Every `s` in
+    // `shown` already has a real badge, i.e. real mesh/geometry (cullLabels
+    // no longer excludes suppressed entities — see its own comment) — so
+    // every candidate reaching this loop is, by construction, "mapped".
+    // Dashboard.tsx's room-cluster modal call passes filterSuppressed={false}
+    // for the exact same reason the category browse does: a diagnostic-in-HA
+    // entity someone deliberately bound to a mesh (a UniFi AP's "State"
+    // sensor) should count and be listed like any other room member: HA's
+    // "diagnostic" classification declutters a flat settings LIST, it isn't
+    // a verdict on whether a physically-real, mapped device belongs in a
+    // room's device count.
+    const groups = new Map<string, { ids: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean }>();
     for (const s of shown) {
       const room = this.roomOf(s.id);
       if (!this.roomClustered.get(room)) continue;
       let g = groups.get(room);
-      if (!g) { g = { ids: [], countedIds: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(room, g); }
+      if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(room, g); }
       g.ids.push(s.id);
-      // The chip's NUMBER and tap-target list must match what
-      // SummaryGroupPanel would actually show for this room (it excludes
-      // suppressed — hidden-in-HA/diagnostic — entities by default). A
-      // suppressed member still contributes its position/state below (its
-      // own badge stays real and visible — see cullLabels — it's just not
-      // one that modal's list would count), so it shouldn't inflate the
-      // number or appear in what tapping the chip opens either.
-      if (!this.suppressedEntityIds.has(s.id)) g.countedIds.push(s.id);
       g.sum.addInPlace(s.lbl.anchor.getAbsolutePosition());
       const st = this.lastState.get(s.id);
       if (st) {

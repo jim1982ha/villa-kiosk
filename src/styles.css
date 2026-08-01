@@ -820,10 +820,20 @@ button {
 .summary-entity-main:hover { background: var(--bg-card); }
 .summary-entity-badge { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 11px; }
 .summary-entity-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+/* Row wrapper so the "hidden in HA" icon (if any) stays fixed-width and
+   visible rather than being clipped along with the name's own truncation —
+   the icon needs to sit OUTSIDE the ellipsis-truncating span, not inside it. */
+.summary-entity-name-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .summary-entity-name {
-  font-size: 15px; font-weight: 600;
+  font-size: 15px; font-weight: 600; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* A user explicitly hid this entity in HA (registry hidden_by) — shown only
+   where a caller has opted OUT of the default suppressed-entity filtering
+   (the room/category browse modals), so a device that's normally invisible
+   elsewhere doesn't just quietly appear with no indication anything's
+   different about it. */
+.summary-entity-hidden-icon { flex: 0 0 auto; color: var(--text-dim); }
 .summary-entity-state { font-size: 12.5px; color: var(--text-secondary); }
 .summary-entity-chevron { color: var(--text-dim); flex: 0 0 auto; }
 
