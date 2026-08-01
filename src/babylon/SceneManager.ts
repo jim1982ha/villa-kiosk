@@ -59,6 +59,13 @@ const ROOM_FIT_MARGIN_ENTITIES = 0.45;
 // single device, or a one-entity teleport spot) and would otherwise ask the
 // camera to fly arbitrarily close. Expressed in world units = metres.
 const MIN_ROOM_FIT_RADIUS = 1.5;
+// Extra tightening applied to the badge-declutter radius (see
+// computeRoomOverviewPose) so it still clears EntityVisuals.groupBadges'
+// QUANTISED zoom step, not just the raw unquantised threshold — the step
+// rounds to the nearest of GROUP_ZOOM_STEPS_PER_DOUBLING per octave, so an
+// unpadded target can land just the wrong side of its own step and still
+// group. 0.85 covers the worst case (half a step) with room to spare.
+const DECLUTTER_RADIUS_MARGIN = 0.85;
 
 export interface SceneManagerOptions {
   config: AppConfig;
@@ -754,7 +761,24 @@ export class SceneManager {
     // of the two is what actually limits how much fits on screen.
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
     const halfAngle = Math.min(vFov, hFov) / 2;
-    const radius = (sphere / Math.sin(halfAngle)) * (1 + marginFrac);
+    let radius = (sphere / Math.sin(halfAngle)) * (1 + marginFrac);
+
+    // Fitting the room's WALLS in frame is not the same distance as
+    // separating its own badges — an elongated or multi-device room can
+    // need to back off further for its footprint than its tightest badge
+    // pair needs for clarity, which is exactly "tapped the chip and it
+    // stayed a chip" even though the camera visibly moved. Tighten (never
+    // widen) toward whatever zoom this room's own badges actually require —
+    // see EntityVisuals.minPxPerWorldToDeclutterRoom.
+    const minPxPerWorld = this.visuals.minPxPerWorldToDeclutterRoom(point.name);
+    if (minPxPerWorld && minPxPerWorld > 0) {
+      const vpH = this.engine.getRenderHeight();
+      if (vpH > 0) {
+        const declutterRadius =
+          (vpH / (2 * minPxPerWorld * Math.tan(vFov / 2))) * DECLUTTER_RADIUS_MARGIN;
+        radius = Math.min(radius, Math.max(declutterRadius, MIN_ROOM_FIT_RADIUS));
+      }
+    }
 
     return {
       alpha: cam.alpha,

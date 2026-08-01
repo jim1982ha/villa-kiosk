@@ -30,14 +30,12 @@
   --bg-base: #eef2f8;
   --bg-panel: rgba(255, 255, 255, 0.82);
   --bg-overlay: rgba(255, 255, 255, 0.94);
-  /* Frosted-glass surface shared by every floating dialog (device panels,
-     Settings, Rooms, the badge legend…) — deliberately far more transparent
-     than --bg-overlay so the villa stays faintly visible behind it, which is
-     what makes a dialog read as part of this app rather than a flat sheet
-     dropped on top of it. Pair ALWAYS with --glass-blur: without the blur the
-     transparency alone just looks like a rendering fault. */
-  --bg-glass: rgba(255, 255, 255, 0.7);
-  --glass-blur: blur(28px) saturate(180%);
+  /* Solid surface for every floating DIALOG (device panels, Settings, Config
+     Editor, the badge legend…) — deliberately opaque, unlike the HUD's own
+     "glass" chrome (.icon-btn/.hud-group/.hud-stack/.hud-menu etc., see
+     --bg-panel above), which stays translucent. A dialog reads as content
+     you're meant to read/edit, not a floating overlay you glance past. */
+  --bg-modal: #ffffff;
   --bg-card: rgba(255, 255, 255, 0.9);
   --bg-input: rgba(15, 23, 42, 0.06);
 
@@ -103,8 +101,7 @@
   --bg-base: #0b1220;
   --bg-panel: rgba(15, 23, 42, 0.82);
   --bg-overlay: rgba(15, 23, 42, 0.94);
-  --bg-glass: rgba(17, 24, 39, 0.68);
-  --glass-blur: blur(28px) saturate(180%);
+  --bg-modal: #0f172a;
   --bg-card: rgba(30, 41, 59, 0.85);
   --bg-input: rgba(148, 163, 184, 0.14);
 
@@ -141,8 +138,7 @@
     --bg-base: #0b1220;
     --bg-panel: rgba(15, 23, 42, 0.82);
     --bg-overlay: rgba(15, 23, 42, 0.94);
-    --bg-glass: rgba(17, 24, 39, 0.68);
-    --glass-blur: blur(28px) saturate(180%);
+    --bg-modal: #0f172a;
     --bg-card: rgba(30, 41, 59, 0.85);
     --bg-input: rgba(148, 163, 184, 0.14);
 
@@ -929,7 +925,11 @@ button {
 /* Single line, truncated with an ellipsis — same treatment as .panel-entity-id
    below it — instead of wrapping a long device name onto a second line. */
 .panel-header .title h2 {
-  margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 22px;
+  /* Smaller than a typical modal heading on purpose — this is the ONE spot
+     that echoes an arbitrary, unbounded device name (every other modal's
+     title is a short fixed string), so it gets more of the row before
+     truncating instead of the same size as e.g. Settings' fixed heading. */
+  margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 18px;
   letter-spacing: -0.015em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
@@ -1270,17 +1270,15 @@ input[type="range"]::-moz-range-thumb {
 .tp-card.tp-add span { font-family: var(--font-ui); font-size: 14px; color: var(--accent); }
 /* --- Modals / wizard --- */
 .modal-backdrop { position: absolute; inset: 0; z-index: 70; background: var(--scrim-strong); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; }
-/* Frosted glass, not a flat opaque sheet — the villa stays faintly visible
-   behind every dialog, which is what ties them to the rest of the Kiosk's
-   surfaces (the HUD sections and bottom bar are the same material). The
-   1px inset highlight along the top edge is the standard glass trick: it
-   catches the "light" and keeps the panel from reading as a flat rectangle
-   once its fill is translucent. */
+/* Solid, not frosted glass — every dialog (Settings, a device panel, the
+   Config Editor…) reads as content to focus on, unlike the HUD's own glass
+   chrome over the 3D scene (.icon-btn/.hud-group/.hud-stack/.hud-menu etc.,
+   still translucent — see --bg-panel). The 1px inset highlight along the top
+   edge is a leftover glass-panel trick, kept since it still reads fine on an
+   opaque fill and nothing depends on removing it. */
 .modal {
   width: 100%; max-width: 520px; max-height: 90vh;
-  background: var(--bg-glass);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: var(--bg-modal);
   border-radius: 24px;
   border: 1px solid var(--hairline);
   display: flex; flex-direction: column; overflow: hidden;
@@ -1829,26 +1827,18 @@ label.toggle span { user-select: none; line-height: 1.4; }
     gap: 6px;
     padding-left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
     padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px));
-    /* .hud-brand (the left column) is hidden on a phone — drop it from the
-       track list entirely instead of reserving an empty auto column for it.
-       .hud-right is now empty on a phone too (its overflow button moved
-       into .hud-center's own Label-size group — see below), so this second
-       "auto" column collapses to ~0 and .hud-center effectively spans the
-       whole bar; kept as 2 columns anyway rather than special-cased to 1,
-       since an empty auto track costs nothing and this stays correct if
-       .hud-right ever gains mobile content again. */
-    grid-template-columns: minmax(0, 1fr) auto;
+    /* Keeps the base 3-column grid (brand | center | right) rather than
+       dropping to 2 columns — .hud-brand no longer force-hides below (it
+       already shrinks to icon+dot only via the ≤860px tier above), and the
+       two equal-weight side tracks are what CENTRES .hud-center in the
+       middle of the bar, same algebra as the desktop layout. */
   }
-  /* The whole brand chip (villa name, connection dot, clock) is hidden on a
-     phone — no standalone stand-in button either; connection status moves
-     into the overflow menu's dropdown instead (see hud-menu). */
-  .hud-brand { display: none; }
-  /* Tighter groups and smaller icon buttons. .hud-center now stretches the
-     full row (not just its own content width) and space-betweens its two
-     children — the category filter stays left, the Label-size group (which
-     the overflow/⋮ button now lives inside, see the JSX) sits flush at the
-     right edge of the screen, where a standalone .hud-right button used to. */
-  .hud-center { justify-self: stretch; gap: 4px; justify-content: space-between; }
+  /* Tighter gap; icon buttons shrink further below. .hud-brand is NOT hidden
+     here — it already dropped its title/clock in the wider tiers above, so
+     what's left is just the villa icon + connection dot, which comfortably
+     fits beside a category row that scrolls internally when space is
+     tight (.hud-group-scroll) rather than needing the whole chip gone. */
+  .hud-center { gap: 4px; }
   .hud-right { gap: 6px; }
   .hud-center .icon-btn { width: 32px; height: 32px; }
   /* Right side collapses entirely: Settings/profile move into the overflow
@@ -1867,8 +1857,11 @@ label.toggle span { user-select: none; line-height: 1.4; }
      another equal-weight rule later. */
   .hud-center .hud-cat-help, .hud-center .hud-labelsize-btn { display: none; }
   .hud-overflow { display: block; }
-  /* Left control stack: slightly narrower icon buttons to save width. */
-  .hud-stack .icon-btn { width: 36px; }
+  /* Left control stack (1F/2F/rooms): sized to match the bottom bar's own
+     icon chips (.summary-tile-icon's mobile size, see its media query) so
+     the two floating icon groups read as the same family of control instead
+     of the stack looking undersized next to the summary tiles below it. */
+  .hud-stack .icon-btn { width: 40px; height: 40px; }
 
   /* Dialogs fill the small screen and never crop their header/footer. The body
      scrolls between a pinned header and footer; dvh tracks the real visible

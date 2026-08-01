@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.45.1
+
+### Changes
+- **Mobile top bar: the category filter row was pinned to the left edge instead of centred.** The ≤640px tier stretched `.hud-center` full-width and space-betweened its two children (category row left, label-size/overflow group right) to make room after force-hiding the whole brand chip. Reverted to the same two-equal-flexible-side-columns grid the desktop layout already uses (`1fr minmax(0, auto) 1fr`) — that's what centres the middle track regardless of what the side tracks contain — and stopped fully hiding `.hud-brand` on phones: it already sheds its title/clock in the wider tiers above this one, so what's left (villa icon + connection dot) is compact enough to sit beside a category row that scrolls internally when tight, rather than needing the whole chip gone.
+- **Left floor/rooms stack (1F/2F) icons were noticeably smaller than the bottom summary bar's icon chips on a phone.** `.hud-stack .icon-btn` now matches `.summary-tile-icon`'s own mobile size (40×40, was 36×38) so the two floating icon groups read as the same family of control.
+- **Tapping a crowded room's cluster chip (e.g. "Swimming Pool 8") could zoom in without ever expanding to individual badges.** `computeRoomOverviewPose` only ever fit the room's WALLS in frame; for an elongated or multi-device room that distance can still leave the room's own tightest badge pair too close to separate, so the chip persisted even after the camera visibly moved. Added `EntityVisuals.minPxPerWorldToDeclutterRoom()` (reuses `groupBadges`' own reach/gap formula, solved for the zoom level instead of the grouping outcome) and the zoom-to-room radius now takes whichever is TIGHTER — the wall-fit distance or the badge-declutter distance — so a tap-to-zoom is guaranteed to resolve every one of that room's badges individually. Not yet field-verified against a live villa.
+- **Long-press entity panel title truncated too early.** `.panel-header .title h2` — the one modal heading that echoes an arbitrary, unbounded device name rather than a short fixed string — dropped from 22px to 18px so more of a long name shows before the ellipsis.
+- **Removed the translucent "glass" background from every dialog** (Settings, a device panel, Config Editor, the badge legend, etc.) — now a solid, opaque fill (`--bg-modal`) instead of the frosted `--bg-glass`/`blur(28px)` treatment. The HUD's own floating chrome over the 3D scene (icon buttons, the category row, the floor stack, dropdown menus) is untouched and stays translucent — a dialog is content to read/edit, the HUD chrome is an overlay on the live view underneath it.
+
+---
+
 ## 2.45.0
 
 ### Changes

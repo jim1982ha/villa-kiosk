@@ -396,9 +396,12 @@ export default function HUD({
       />
 
       <div className="hud-topbar">
-        {/* Hidden entirely on a phone (see .hud-brand mobile rule) — its
-            connection status moves into the right-side overflow menu below
-            instead of keeping any standalone button/space in the top bar. */}
+        {/* Shrinks progressively on a narrow screen (clock, then the villa
+            name, drop out — see .hud-brand's media queries) but is never
+            fully hidden: even on a phone the icon + connection dot stays put,
+            with a duplicate of the dot also in the overflow menu below for
+            reachability while the menu is the only place Settings/profile
+            live on that width. */}
         <div className="hud-brand">
           <Home size={22} />
           <span className="hud-title">{title}</span>
@@ -510,10 +513,12 @@ export default function HUD({
               </button>
               {menuOpen && (
                 <div className="hud-menu" role="menu" aria-label="Settings and profile">
-                  {/* Connection status — lives ONLY here on a phone (no standalone
-                      top-bar button/space; see .hud-brand's mobile rule) — as a
-                      bare icon (no "Connection: " text) sharing the profile
-                      line, not its own row. */}
+                  {/* Connection status, repeated here (the top-bar .hud-brand
+                      chip always shows its own dot too, phone included — see
+                      its media queries) since this dropdown is the one place
+                      Settings/profile live on a phone, and the profile line
+                      is a natural spot for it — as a bare icon (no
+                      "Connection: " text) sharing the line, not its own row. */}
                   <div className="hud-menu-header">
                     {role && <span>Signed in as {ROLE_LABELS[role]}</span>}
                     <span

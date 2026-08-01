@@ -1704,6 +1704,51 @@ export class EntityVisuals {
     return found ? { minX, maxX, minZ, maxZ, floorY: minY } : null;
   }
 
+  /**
+   * Minimum screen-pixels-per-world-unit needed for this room's OWN badges to
+   * never mutually group — the exact inverse of groupBadges' pairwise test,
+   * solved for the zoom level instead of the grouping outcome. Used by
+   * SceneManager.computeRoomOverviewPose so "zoom to this room" (tapping its
+   * cluster chip) is guaranteed to land close enough to show every one of its
+   * badges individually, not just close enough to fit the room's WALLS in
+   * frame. Those are different distances for an elongated or multi-device
+   * room: fitting a long room's full footprint can still leave a tight pair
+   * of badges within it grouped, which is exactly the "tapped the chip and it
+   * stayed a chip" report — see the session handoff for the room-fit half of
+   * this story.
+   *
+   * Reuses groupBadges' own reach/gap formula (same constants) so the two can
+   * never disagree about when a pair is "too close". Null when the room has
+   * fewer than 2 badges (nothing can ever group) or every pair is either
+   * already resolvable at any zoom or co-located (a shared fixture — no zoom
+   * level separates those; left for fanBadges' fixed-offset nudge, not this).
+   */
+  minPxPerWorldToDeclutterRoom(room: string): number | null {
+    const key = room.trim().toLowerCase();
+    const members: { lbl: LabelControls; wx: number; wz: number }[] = [];
+    for (const [id, lbl] of this.labels) {
+      if (this.roomOf(id).trim().toLowerCase() !== key) continue;
+      if (!lbl.anchor.isEnabled()) continue;
+      const p = lbl.anchor.getAbsolutePosition();
+      members.push({ lbl, wx: p.x, wz: p.z });
+    }
+    if (members.length < 2) return null;
+
+    const boxes = this.labelBoxes(members);
+    const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
+    const gapPx = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
+    let required = 0;
+    for (let i = 0; i < members.length; i++) {
+      for (let j = i + 1; j < members.length; j++) {
+        const dist = Math.hypot(members[j].wx - members[i].wx, members[j].wz - members[i].wz);
+        if (dist <= 0) continue; // co-located anchors: no zoom separates these
+        const need = (boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx) / dist;
+        if (need > required) required = need;
+      }
+    }
+    return required > 0 ? required : null;
+  }
+
   /** Replace the named-viewpoint "rooms" (config.teleportPoints) that don't
    *  have a real room polygon — forwarded to RoomHighlight for a synthetic
    *  patch. Called on every re-fit AND live whenever config.teleportPoints
