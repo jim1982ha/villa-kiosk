@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.63.2
+
+### Changes
+- **The service worker was serving the add-on's own mutable endpoints from cache on the standalone hostname, so clients were syncing against stale documents.** With 2.63.1's write path finally working, the telemetry showed the desktop's push succeed (`ok:true`, revision `…624218676838`) and then a pull four seconds later report revision `…961413682719` — a document **1.8 hours older than the write that had just been confirmed**. Other pulls returned `rev:"0"` with `entities:129` against a current 101: bodies so old they predate the revision field existing at all. The cause is in `sw.js`'s never-cache rule, which excluded `/api/`, `/auth/` and `camera_proxy`. The add-on's own endpoints only ever matched that by accident — behind Ingress they sit under `/api/hassio_ingress/<token>/…`. On the **standalone hostname, which is exactly what an installed PWA uses**, the same endpoints are bare paths like `/device-config`, matched nothing, and fell through to the cache-first branch. So every shared-store read on a home-screen install was served from cache, origin-dependently — which is why it hit the phone and iPhone hardest and left Ingress tabs looking fine.
+- **This was not a cosmetic staleness.** A client reading a pre-write copy of the shared config diffs against it and pushes conclusions drawn from data hours out of date, which is a correctness bug in the sync protocol rather than a rendering delay. It also cached the telemetry GET, so the diagnostics panel could serve a stale ring — meaning the tool used to investigate all of this was itself capable of showing an out-of-date picture. Earlier readings during this investigation that appeared to show a version not yet deployed cannot now be fully trusted for that reason.
+- `/device-config`, `/fm-data`, `/telemetry`, `/addon-config` and `/model-upload` are now explicitly never cached, by one list rather than an incidental pattern match. The central model (`/model/*.glb`, version-stamped) and evidence photos (`/fm-evidence/<id>`, content-addressed by a never-reused id) stay cache-first, which is correct and is the whole point of that cache. The cache name is bumped to `villa-kiosk-v7` so the `activate` handler evicts the wrongly-cached API responses already sitting on every installed device.
+
 ## 2.63.1
 
 ### Changes

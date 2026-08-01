@@ -12,7 +12,7 @@
  *  - Everything else (HA WebSocket is not HTTP; camera proxy, REST history):
  *    network-only — we never want to serve a stale camera frame or sensor value.
  */
-const CACHE = "villa-kiosk-v6";
+const CACHE = "villa-kiosk-v7";  // v7: evict wrongly-cached API responses
 // The big central 3D model (GLB/SH3D, tens of MB) lives in its OWN cache that
 // survives app updates — it rarely changes and re-downloading it on every open
 // is the main load-time cost. Version-stamped URLs (?v=<etag>) invalidate it.
@@ -109,11 +109,34 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Never cache live HA data.
+  // Never cache live data — HA's, and the add-on's OWN dynamic endpoints.
+  //
+  // The add-on's endpoints only carried the "/api/" exclusion by accident:
+  // behind Ingress they sit under /api/hassio_ingress/<token>/…, so they
+  // matched. On the STANDALONE hostname (which is what the installed PWA
+  // uses) the very same endpoints are bare paths like /device-config — same
+  // origin, matching nothing here — so they fell through to the cache-first
+  // branch below and were served from cache.
+  //
+  // That is not a stale-looking UI, it is a broken sync: a client would read
+  // a pre-write copy of the shared config, diff against it, and push
+  // conclusions drawn from data hours out of date. Seen in the field as a GET
+  // four seconds after a confirmed write returning a document 1.8 hours old,
+  // and as reads whose body predated the `rev` field entirely. It also made
+  // the telemetry panel itself serve a stale ring — i.e. it corrupted the
+  // very diagnostics used to investigate it.
+  //
+  // /model/*.glb is handled above (deliberately cache-first, version-stamped)
+  // and /fm-evidence/<id> is content-addressed by a never-reused id, so both
+  // stay cacheable. Everything listed here is mutable and must not be.
+  const NEVER_CACHE = [
+    "/device-config", "/fm-data", "/telemetry", "/addon-config", "/model-upload",
+  ];
   if (
     url.pathname.includes("/api/") ||
     url.pathname.includes("/auth/") ||
-    url.pathname.includes("camera_proxy")
+    url.pathname.includes("camera_proxy") ||
+    NEVER_CACHE.some((p) => url.pathname.endsWith(p))
   ) {
     return; // default network handling
   }
