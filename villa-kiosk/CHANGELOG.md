@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.48.0
+
+### Changes
+- **Fixed a real config-loss bug: an Advanced Settings edit (a room, a label, a linked device…) could silently revert a few seconds after being made — reproducible on a single device, no second client required.** `DeviceConfigSync`'s push effect marked its "server has this" baseline the instant a PUT was *sent*, not once it was *confirmed* — so if a pull fired in that in-flight window (this device regaining focus, a visibilitychange, another device opening the kiosk), it fetched the server's still-old copy and merged it straight over the edit that hadn't landed yet, tripping right past the existing "never clobber a pending edit" guard because that guard compared against the same too-early baseline. The baseline now only advances on confirmed success, so that guard covers the whole at-risk window instead of just the pre-send debounce.
+- **Fixed a linked-device badge ring not appearing until the next unrelated state change.** Linking a device to an already-`on` entity (Advanced Settings' "linked device" field) correctly seeded the internal ring-state set immediately, but never actually repainted the badge — so the ring only appeared once some other event happened to touch it, which might be never if the linked entity doesn't change state again. Now repaints right away.
+- **HUD topbar: removed the connection dot from the mobile brand chip** — already duplicated in the overflow menu's header, and dropping it is what actually frees enough width to stop the brand chip colliding with the centred category row on a phone (a real reported overflow, not just a tight fit). Re-verified all topbar icon buttons compile to the same 32×32 at this breakpoint.
+- **Room-cluster map chips: the device-count pill is now a genuine top-right corner overlay**, matching the HUD's unavailable-devices/facility icon convention exactly, instead of rendering inline next to the room name (which read as "a second word", not a badge, and wasn't circular since it was sharing the row's flow).
+- Advanced Settings: Grouped Devices' suggestions are now collapsed by default (only already-grouped devices show), "New group" moved above the existing-groups list with the redundant separator dropped, Bound 3D Objects is collapsed by default too, and the long description under the GLB/config import-export buttons is gone.
+- Settings: removed the Quality Preset picker entirely — the app now always renders at the fixed "High" look by design (no code path left to select a lower tier); Night Dimming shares a row with Brightness; Floating Badge Style is now a 2-button toggle sharing a responsive row with a single-button "Show the bottom summary bar" toggle (renamed, parenthetical dropped); the Scenes section (a pointer to HA's Scene Editor) is fully removed; Natural Scrolling now shares a row with the renamed "Blue glow for clickable devices" toggle.
+- SummaryBar's Scene tile now reads "N scenes" (singular-aware) instead of a bare count.
+- Typecheck and production build clean throughout.
+
 ## 2.47.0
 
 ### Changes

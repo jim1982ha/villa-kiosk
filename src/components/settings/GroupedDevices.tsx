@@ -5,7 +5,7 @@
 // and components/panels/DeviceGroupPanel for the combined detail view.
 
 import { useMemo, useState } from "react";
-import { Plus, Trash2, X, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2, X, Sparkles } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -29,6 +29,7 @@ export default function GroupedDevices() {
   const { config, update } = useConfig();
   const { entities, entityDeviceIds } = useHA();
   const [newPrimary, setNewPrimary] = useState<string | undefined>(undefined);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const suggestions = useMemo(
     () => suggestDeviceGroups(config.entityMap, config.deviceGroups, entityDeviceIds),
@@ -85,34 +86,36 @@ export default function GroupedDevices() {
         member's value and 24h history appear in that badge's detail view instead.
       </p>
 
-      {suggestions.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-            <Sparkles size={13} /> Suggested groups
-          </label>
-          {suggestions.map((s) => (
-            <div
-              key={`${s.primaryEntityId}|${s.memberEntityId}`}
-              className="row spread"
-              style={{ padding: "8px 0", borderTop: "1px solid var(--hairline)" }}
-            >
-              <span className="body-text" style={{ fontSize: 12, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
-                {entityLabel(config, entities, s.primaryEntityId)} <span className="muted">+</span>{" "}
-                {entityLabel(config, entities, s.memberEntityId)}
-              </span>
-              <button
-                className="btn ghost"
-                style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }}
-                onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}
-              >
-                Group these
-              </button>
-            </div>
-          ))}
+      {/* New group — first, since creating one is the primary action here;
+          the existing-groups list below is what you get once you've made
+          some. No border under this any more: it used to sit LAST, below
+          the groups list, separated from it by a rule that made sense in
+          that order but not in this one. */}
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
+          New group
+        </label>
+        <p className="muted body-text" style={{ fontSize: 11, marginBottom: 10 }}>
+          Pick the entity that should keep the map badge (e.g. temperature) — add
+          the rest as members once the group is created.
+        </p>
+        <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
+          <div style={{ flex: 1 }}>
+            <EntityPicker
+              value={newPrimary} onChange={setNewPrimary}
+              placeholder="Search or type entity_id…" hideCurrentLabel
+            />
+          </div>
+          <button
+            className="btn ghost" onClick={() => newPrimary && createGroup(newPrimary)}
+            disabled={!newPrimary} style={{ flexShrink: 0 }}
+          >
+            <Plus size={18} /> Create
+          </button>
         </div>
-      )}
+      </div>
 
-      {config.deviceGroups.length === 0 && suggestions.length === 0 && (
+      {config.deviceGroups.length === 0 && (
         <p className="muted body-text mt">No grouped devices yet.</p>
       )}
 
@@ -167,29 +170,37 @@ export default function GroupedDevices() {
         </div>
       ))}
 
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--hairline)" }}>
-        <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-          New group
-        </label>
-        <p className="muted body-text" style={{ fontSize: 11, marginBottom: 10 }}>
-          Pick the entity that should keep the map badge (e.g. temperature) — add
-          the rest as members once the group is created.
-        </p>
-        <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
-          <div style={{ flex: 1 }}>
-            <EntityPicker
-              value={newPrimary} onChange={setNewPrimary}
-              placeholder="Search or type entity_id…" hideCurrentLabel
-            />
-          </div>
+      {/* Suggestions — collapsed by default: this section only shows what's
+          already grouped unless you go looking for more. */}
+      {suggestions.length > 0 && (
+        <button
+          className="btn ghost mt"
+          onClick={() => setShowSuggestions((s) => !s)}
+        >
+          {showSuggestions ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <Sparkles size={13} /> {suggestions.length} suggested group{suggestions.length === 1 ? "" : "s"}
+        </button>
+      )}
+
+      {showSuggestions && suggestions.map((s) => (
+        <div
+          key={`${s.primaryEntityId}|${s.memberEntityId}`}
+          className="row spread"
+          style={{ padding: "8px 0", borderTop: "1px solid var(--hairline)" }}
+        >
+          <span className="body-text" style={{ fontSize: 12, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
+            {entityLabel(config, entities, s.primaryEntityId)} <span className="muted">+</span>{" "}
+            {entityLabel(config, entities, s.memberEntityId)}
+          </span>
           <button
-            className="btn ghost" onClick={() => newPrimary && createGroup(newPrimary)}
-            disabled={!newPrimary} style={{ flexShrink: 0 }}
+            className="btn ghost"
+            style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }}
+            onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}
           >
-            <Plus size={18} /> Create
+            Group these
           </button>
         </div>
-      </div>
+      ))}
     </div>
   );
 }

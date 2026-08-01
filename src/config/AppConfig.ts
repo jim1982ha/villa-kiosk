@@ -40,22 +40,19 @@ export const DEFAULT_MODEL_TRANSFORM: ModelTransform = {
 export type ToneMappingMode = "none" | "standard" | "aces" | "khr_neutral";
 
 /**
- * Render-quality preset. The Settings UI exposes just this (plus a couple of
- * heavy opt-in toggles) instead of ~15 individual dials — picking a preset
- * materialises a full RenderConfig (see RENDER_PRESETS). "high" is the default:
- * the app assumes the user wants the best look out of the box.
- */
-export type QualityPreset = "performance" | "balanced" | "high";
-
-/**
  * Render-quality / look knobs. Every effect is independently toggle-able and
  * tunable so the look can be iterated at runtime (Settings → Render quality)
  * without a rebuild. Mirrors the optional flags in the Blender GLB pipeline
  * (sources/blender_pipeline.py) so the same dials exist offline and online.
+ *
+ * Fixed at the "high" look by design (see DEFAULT_RENDER) — there used to be
+ * a Settings picker for three tiers (performance/balanced/high), removed as
+ * redundant: this app targets villa-owned tablets/displays, not a spread of
+ * unknown hardware a lighter tier would meaningfully help, and "best look
+ * out of the box" is what every install actually wants. exposure/nightDimming/
+ * lightPoolIntensity stay individually adjustable via their own sliders.
  */
 export interface RenderConfig {
-  /** Quality preset the config was materialised from (drives the Settings UI). */
-  quality: QualityPreset;
   /** Filmic tone-mapping operator. "khr_neutral" = Khronos PBR Neutral (best
    *  default: tames blown highlights without ACES's desaturation). */
   toneMapping: ToneMappingMode;
@@ -94,50 +91,23 @@ export interface RenderConfig {
    *  driven): real daytime renders the night look and vice versa. Surfaced
    *  in Settings only for BAKED villas (where day/night is a dramatic
    *  atlas crossfade worth previewing/overriding on demand), but honoured
-   *  everywhere. Optional + absent from the presets, so switching quality
-   *  never resets it. */
+   *  everywhere. Optional and untouched by "Reset look", so resetting the
+   *  rest of the look never resets it. */
   dayNightInvert?: boolean;
 }
 
-/**
- * Concrete RenderConfig for each preset. These are the ONLY render looks the UI
- * offers now (item: "simplify to a preset + a few toggles").
- *
- * Day/night warmth of the fill light + IBL is handled live in SunController, so
- * these values are the *base* look; the night pass dims/warms them automatically.
- */
-export const RENDER_PRESETS: Record<QualityPreset, RenderConfig> = {
-  // Fastest path for weak wall tablets: no AO, no IBL, gentle tone mapping.
-  performance: {
-    quality: "performance",
-    toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.08,
-    hemiIntensity: 0.55, sunIntensity: 1.0, ambientIntensity: 0.6,
-    ibl: false, environmentIntensity: 0.6,
-    ssao: false, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
-    nightDimming: 0.5, lightPoolIntensity: 1.0,
-  },
-  // The proven "safe win": subtle contact AO, no IBL.
-  balanced: {
-    quality: "balanced",
-    toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.1,
-    hemiIntensity: 0.5, sunIntensity: 1.0, ambientIntensity: 0.6,
-    ibl: false, environmentIntensity: 0.65,
-    ssao: true, ssaoRadius: 6, ssaoStrength: 0.2, ssaoSamples: 8,
-    nightDimming: 0.5, lightPoolIntensity: 1.0,
-  },
-  // Best look out of the box: AO + soft sky/ground IBL + higher-sample AO.
-  high: {
-    quality: "high",
-    toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.12,
-    hemiIntensity: 0.45, sunIntensity: 1.05, ambientIntensity: 0.6,
-    ibl: true, environmentIntensity: 0.6,
-    ssao: true, ssaoRadius: 6, ssaoStrength: 0.25, ssaoSamples: 16,
-    nightDimming: 0.5, lightPoolIntensity: 1.0,
-  },
+/** The fixed render look every install starts from — was the "high" tier of
+ *  a three-way preset picker (performance/balanced/high), removed as a
+ *  redundant Settings control; these are that tier's values. Day/night
+ *  warmth of the fill light + IBL is handled live in SunController, so this
+ *  is the *base* look — the night pass dims/warms it automatically. */
+export const DEFAULT_RENDER: RenderConfig = {
+  toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.12,
+  hemiIntensity: 0.45, sunIntensity: 1.05, ambientIntensity: 0.6,
+  ibl: true, environmentIntensity: 0.6,
+  ssao: true, ssaoRadius: 6, ssaoStrength: 0.25, ssaoSamples: 16,
+  nightDimming: 0.5, lightPoolIntensity: 1.0,
 };
-
-/** Default look: the best quality preset. */
-export const DEFAULT_RENDER: RenderConfig = RENDER_PRESETS.high;
 
 export interface AppConfig {
   /**

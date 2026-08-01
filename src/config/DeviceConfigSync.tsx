@@ -23,10 +23,15 @@
 //      the server is known to hold; we only send when the local slice actually
 //      differs from that.
 //
-//   3. A PULL NEVER CLOBBERS AN UNPUSHED LOCAL EDIT. Pushes are debounced but
-//      pulls fire on every focus/visibilitychange, so a pull could land in the
-//      middle of the debounce window and write the server's older copy back
-//      over what the user just changed. See the check in pull().
+//   3. A PULL NEVER CLOBBERS AN UNCONFIRMED LOCAL EDIT. Pushes are debounced
+//      but pulls fire on every focus/visibilitychange, so a pull could land
+//      while an edit is still queued OR already sent-but-not-yet-committed
+//      server-side, and write the server's older copy back over it. Guarded
+//      by comparing local state against the last CONFIRMED server baseline
+//      (see the check in pull()) — the baseline only ever advances once a
+//      push actually SUCCEEDS (see the push effect below), never
+//      optimistically before it's sent, so this covers the whole at-risk
+//      window, not just the pre-send debounce.
 //
 // Writes are owner-only (the server 403s anything else, and we skip the
 // request entirely for other roles) — shared state is exactly what a guest
@@ -163,16 +168,33 @@ export default function DeviceConfigSync() {
     pushTimer.current = setTimeout(() => {
       const next = localRef.current;
       const nextJson = JSON.stringify(next);
-      // Record the new baseline BEFORE awaiting: further edits made while the
-      // request is in flight must compare against what we're sending, not
-      // against the pre-edit state (which would re-send the same payload).
-      serverJsonRef.current = nextJson;
       void saveSharedConfig(next).then((ok) => {
-        // Failed write — drop the baseline back so the next edit (or the next
-        // focus-pull) retries instead of assuming the server has it. Guarded
-        // so a slow failed write can't clobber a newer baseline that landed
-        // while it was in flight.
-        if (!ok && serverJsonRef.current === nextJson) serverJsonRef.current = known;
+        // Baseline advances ONLY on confirmed success — NOT before awaiting.
+        //
+        // This used to be set optimistically right here, before the PUT even
+        // went out, on the reasoning that a further edit landing mid-flight
+        // should compare against what's being sent rather than re-send an
+        // unchanged payload. But the push effect only re-fires when localJson
+        // itself changes (its dependency array), so that reasoning didn't
+        // actually depend on the baseline being pre-advanced — and setting it
+        // early opened a real race: the PUT is in flight but NOT YET
+        // committed server-side, and if a pull() fires in that window (this
+        // device regaining focus, a visibilitychange, another device's own
+        // mount-pull), rule 3's guard (localRef.current !== priorBaseline ⇒
+        // "mid-edit, abort") saw the OPTIMISTIC baseline already matching
+        // local and let the pull proceed — fetching the server's still-old
+        // copy and merging it straight over the edit that hadn't landed yet.
+        // Reported from the field as "I set a link/room/label, and a few
+        // seconds later it's gone" — reproducible on a SINGLE device with no
+        // second client involved, just an unlucky focus event in that window.
+        //
+        // Only advancing here means rule 3 now correctly treats the entire
+        // in-flight window (queued AND sent-but-unconfirmed) as "pending
+        // edit", so any pull that lands during it aborts and retries later
+        // instead of racing a write that hasn't landed. A failed write simply
+        // never advances the baseline, so the next edit or focus-pull retries
+        // against the old one — no separate rollback branch needed.
+        if (ok) serverJsonRef.current = nextJson;
       });
     }, PUSH_DEBOUNCE_MS);
 

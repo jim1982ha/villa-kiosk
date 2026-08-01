@@ -51,7 +51,7 @@ import {
   type AbstractMesh, type Scene,
 } from "@babylonjs/core";
 import {
-  AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel, Image,
+  AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel, Image, Control,
 } from "@babylonjs/gui";
 import type { AppConfig } from "@/config/AppConfig";
 import { clampIconScale } from "@/config/AppConfig";
@@ -909,9 +909,17 @@ export class EntityVisuals {
     // Rebuilding here keeps the badge ring and camera beam correct after such
     // an edit; both are plain iterations over entityMap, orders of magnitude
     // cheaper than a re-index, so doing it on any entityMap change is fine.
+    let needsRepaint = false;
     if (config.entityMap !== prevEntityMap) {
       this.buildMotionToCameraIndex();
       this.buildLinkedEntityIndex();
+      // buildLinkedEntityIndex already SEEDS linkActiveIds from each linked
+      // entity's cached last-known state (so a link added while the linked
+      // entity is already "on" doesn't need to wait for a fresh state_changed
+      // event that may never come) — but seeding the Set alone doesn't redraw
+      // anything. Without this, "I just linked a device that's already on"
+      // showed no ring until something else happened to touch that badge.
+      needsRepaint = true;
     }
     // Entity-light wall occlusion is always-on: walls block lamp light out of
     // the box, so there is nothing to tear down here when config changes.
@@ -929,8 +937,10 @@ export class EntityVisuals {
     }
     // Labels are always shown; rebuild when a device group is created/edited
     // (a member's badge must appear/disappear without needing a full
-    // re-index — see rebuildLabels' hiddenMembers).
-    if (config.deviceGroups !== prevGroups || config.badgeStyle !== prevBadgeStyle) {
+    // re-index — see rebuildLabels' hiddenMembers), OR when entityMap itself
+    // changed (see needsRepaint above). One call covers both rather than two
+    // separate rebuildLabels() passes when both happen to change together.
+    if (needsRepaint || config.deviceGroups !== prevGroups || config.badgeStyle !== prevBadgeStyle) {
       this.rebuildLabels();
     }
     if (typeof config.render?.lightPoolIntensity === "number") {
@@ -2918,14 +2928,9 @@ export class EntityVisuals {
     container.shadowOffsetY = 2;
     container.isPointerBlocker = false; // taps resolve via pickClusterAt, like badges
 
-    // Room name + count pill side by side — same layout idiom the entity
-    // badge card already uses for icon+value (see rebuildLabels' `row`).
-    const row = new StackPanel(`clusterRow_${room}`);
-    row.isVertical = false;
-    row.height = `${CLUSTER_HEIGHT_PX}px`;
-    row.adaptWidthToChildren = true;
-    container.addControl(row);
-
+    // Room name — the chip's only FLOW content; the count renders as a
+    // corner overlay (below), not inline in this row, so it can't widen or
+    // otherwise perturb this text's own layout.
     const text = new TextBlock(`clusterText_${room}`);
     text.text = room;
     text.color = "#ffffff";
@@ -2934,24 +2939,35 @@ export class EntityVisuals {
     text.fontWeight = "600";
     text.resizeToFit = true;
     text.paddingLeft = "12px";
-    text.paddingRight = "6px";
-    row.addControl(text);
+    text.paddingRight = "12px";
+    container.addControl(text);
 
-    // The device count as its OWN small red pill, not folded into the name
-    // text — the same "small red circle, white bold number" convention the
-    // HUD's unavailable-devices/facility icons use via .icon-btn-count (see
-    // utils/countBadge.ts, the one piece of that actually shared: a Babylon
-    // GUI control can't consume CSS, so the colour/shape are re-expressed
-    // here rather than literally reused, but the CAP-AT-99+ formatting is
-    // the exact same imported function both sides call).
+    // The device count as a small red corner-overlay pill — matching the
+    // HUD's unavailable-devices/facility icons' .icon-btn-count CONVENTION
+    // (small red circle, white bold number, tucked into the top-right
+    // corner, INSIDE the parent's own bounds rather than hanging off it —
+    // see icon-btn-count's own comment for why: fully inside reads as the
+    // normal look for a count badge). A Babylon GUI control can't consume
+    // CSS, so the shape/position are re-expressed here rather than literally
+    // reused, but utils/countBadge.ts's cap-at-99+ formatting is the exact
+    // same function both sides call. Added to `container` (not the room-name
+    // row) and LAST, so it paints on top as a true overlay instead of
+    // sharing the row's flow — the earlier version put it inline in the row,
+    // which read as "a second word next to the room name", not a badge.
     const countBadge = new Rectangle(`clusterCount_${room}`);
     countBadge.width = `${CLUSTER_COUNT_DIAMETER_PX}px`;
     countBadge.height = `${CLUSTER_COUNT_DIAMETER_PX}px`;
     countBadge.cornerRadius = CLUSTER_COUNT_DIAMETER_PX / 2;
     countBadge.thickness = 0;
     countBadge.background = ALERT_RED_HEX; // matches var(--status-danger) — see colors.ts
-    countBadge.paddingRight = "8px";
-    row.addControl(countBadge);
+    countBadge.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+    countBadge.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    // Small INWARD inset (negative left pulls it left off the right edge,
+    // positive top pushes it down off the top edge) — tucked just inside
+    // the chip's own corner, not straddling/hanging off it.
+    countBadge.left = "-3px";
+    countBadge.top = "3px";
+    container.addControl(countBadge);
 
     const countText = new TextBlock(`clusterCountText_${room}`);
     countText.color = "#ffffff";

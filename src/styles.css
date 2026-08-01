@@ -1854,12 +1854,19 @@ label.toggle span { user-select: none; line-height: 1.4; }
   }
   /* Tighter gap; icon buttons shrink further below. .hud-brand is NOT hidden
      here — it already dropped its title/clock in the wider tiers above, so
-     what's left is just the villa icon + connection dot, which comfortably
-     fits beside a category row that scrolls internally when space is
-     tight (.hud-group-scroll) rather than needing the whole chip gone. */
+     what's left is just the villa icon (+ connection dot in wider tiers).
+     The dot itself drops at THIS tier — see .hud-brand .conn-dot below — a
+     real reported overflow, the brand chip's content colliding with the
+     category row, not just a tight-but-fitting layout. */
   .hud-center { gap: 4px; }
   .hud-right { gap: 6px; }
   .hud-center .icon-btn { width: 32px; height: 32px; }
+  /* Dropped, not just visually redundant: it's ALREADY duplicated in the
+     overflow menu's header (see HUD.tsx, the hud-menu-header conn-dot) so
+     reachability doesn't regress, and removing it is what actually frees
+     enough width for the brand chip to stop colliding with the centred
+     category row at this tier — the real fix, not a cosmetic one. */
+  .hud-brand .conn-dot { display: none; }
   /* Right side collapses to just the overflow button: Settings/profile/view
      toggle move into its dropdown (hud-menu) instead of showing inline. The
      overflow button lives in its OWN single-icon .hud-group pill inside

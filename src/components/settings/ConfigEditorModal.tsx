@@ -247,22 +247,6 @@ function ModelActionsRow({
           <Download size={15} /> Export Configuration
         </button>
       </div>
-      <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
-        {canUploadCentrally
-          ? "Each upload overwrites the current central file(s) and reloads every kiosk on next open. Room data is the small "
-          : "Upload a central GLB/room data from the Villa Kiosk add-on's Advanced Settings instead — a standalone page has no backend to write them. Room data is the small "}
-        <code>.rooms.json</code> shape (room names, shapes, device positions) used to label rooms and place devices —
-        a pipeline from 2026-07-29 or later embeds it directly in the <code>.glb</code>, so picking just
-        that one file is enough.
-        {canUploadCentrally && (
-          <> A GLB with nothing embedded (an older export, or hand-built) clears any room data left over
-          from a previous upload rather than keep showing it against a model it may no longer match —
-          pick the matching <code>.rooms.json</code> alongside it (ctrl/cmd-click both) if you have one, or
-          on its own afterwards to add it back.</>
-        )}{" "}
-        Import/Export Configuration is a per-device backup of your device↔room bindings, room
-        viewpoints, device icons and Settings preferences.
-      </p>
       {uploadMsg && (
         <div className={`test-result ${uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 8 }}>
           {uploadMsg.text}

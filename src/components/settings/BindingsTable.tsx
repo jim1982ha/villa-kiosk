@@ -27,6 +27,7 @@ import type { EntityMapping } from "@/types/scene.types";
 export default function BindingsTable() {
   const { config, update } = useConfig();
   const { entities, suppressedEntityIds, entityAreaNames } = useHA();
+  const [showBound, setShowBound] = useState(false);
   const [showUnbound, setShowUnbound] = useState(false);
   const [showUnmappedHa, setShowUnmappedHa] = useState(false);
 
@@ -103,7 +104,18 @@ export default function BindingsTable() {
         </p>
       )}
 
-      {bound.map((mesh) => (
+      {/* Bound objects — collapsed by default, same as unbound/unmapped below. */}
+      {bound.length > 0 && (
+        <button
+          className="btn ghost mt"
+          onClick={() => setShowBound((s) => !s)}
+        >
+          {showBound ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          {bound.length} bound object{bound.length === 1 ? "" : "s"}
+        </button>
+      )}
+
+      {showBound && bound.map((mesh) => (
         <BindingRow
           key={mesh}
           mesh={mesh}

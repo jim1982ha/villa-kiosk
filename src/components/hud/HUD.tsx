@@ -398,11 +398,10 @@ export default function HUD({
 
       <div className="hud-topbar">
         {/* Shrinks progressively on a narrow screen (clock, then the villa
-            name, drop out — see .hud-brand's media queries) but is never
-            fully hidden: even on a phone the icon + connection dot stays put,
-            with a duplicate of the dot also in the overflow menu below for
-            reachability while the menu is the only place Settings/profile
-            live on that width. */}
+            name, then the connection dot, drop out — see .hud-brand's media
+            queries) but is never fully hidden: even on a phone the home icon
+            stays put. The dot has a duplicate in the overflow menu below
+            (its header) for reachability once it drops here. */}
         <div className="hud-brand">
           <Home size={22} />
           <span className="hud-title">{title}</span>

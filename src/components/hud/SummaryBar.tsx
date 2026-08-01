@@ -299,7 +299,7 @@ function SceneMenu({ scenes, canRun, apply }: {
         <span className="summary-tile-icon"><Sparkles size={24} /></span>
         <span className="summary-tile-text">
           <span className="summary-tile-label">Scene</span>
-          <span className="summary-tile-value">{scenes.length}</span>
+          <span className="summary-tile-value">{scenes.length} scene{scenes.length === 1 ? "" : "s"}</span>
         </span>
       </button>
       {open && pos && createPortal(
