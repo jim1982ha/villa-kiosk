@@ -61,10 +61,11 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConfig } from "./ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { report as reportTelemetry } from "@/utils/telemetry";
+import { pushWithRebase } from "@/utils/keyedSync";
 import {
   fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
   diffSharedConfig, applySharedConfigDiff, isSharedConfigDiffEmpty,
-  loadSyncBaseline, saveSyncBaseline,
+  loadSyncBaseline, saveSyncBaseline, baselineFromServer,
   type SharedDeviceConfig,
 } from "./deviceConfig";
 
@@ -161,42 +162,45 @@ export default function DeviceConfigSync() {
   const pushOwnDiff = useCallback(async () => {
     const baseline = baselineRef.current;
     if (!baseline) return; // rule 1: no pull yet
-    const diff = diffSharedConfig(baseline, localRef.current);
-    if (isSharedConfigDiffEmpty(diff)) return; // nothing this device actually changed
 
-    for (let attempt = 0; attempt < MAX_PUSH_ATTEMPTS; attempt++) {
-      const fresh = await fetchSharedConfig();
-      const freshBase: SharedDeviceConfig = fresh && Object.keys(fresh.config).length > 0
-        ? ({ ...baseline, ...fresh.config } as SharedDeviceConfig)
-        : baseline;
-      const rev = fresh ? fresh.rev : revRef.current;
-      const next = applySharedConfigDiff(freshBase, diff);
-      const result = await saveSharedConfig(next, rev, fresh?.raw);
-      if (result.ok) {
-        commitBaseline(next);
-        revRef.current = result.rev;
-        reportSync({
-          op: "push", ok: true, attempt, rev: result.rev,
-          dismissed: next.dismissedEntityIds.length,
-          entities: Object.keys(next.entityMap).length,
-        });
-        // Fold in whatever the other device's items contributed, so this
-        // client's own view reflects them immediately rather than waiting
-        // for its next pull.
-        update(next);
-        return;
-      }
-      if (!result.conflict) {
-        reportSync({ op: "push", ok: false, reason: "transport", attempt });
-        return; // transport failure — next edit/pull retries later
-      }
-      // Another device's write landed between our fetch and our PUT — loop
-      // and rebase this device's diff against the copy the 409 handed back.
+    // The fetch-rebase-write-retry protocol itself lives in utils/keyedSync —
+    // the SAME loop the Facility Manager store uses. Only what a "diff" means
+    // for this document, and what to report, belong here.
+    const outcome = await pushWithRebase({
+      diff: diffSharedConfig(baseline, localRef.current),
+      isEmpty: isSharedConfigDiffEmpty,
+      baseline,
+      fetchFresh: async () => {
+        const fresh = await fetchSharedConfig();
+        return fresh === null
+          ? null
+          : { doc: baselineFromServer(fresh.config), rev: fresh.rev, raw: fresh.raw };
+      },
+      // Keys the server omits fall back to this device's baseline rather than
+      // to empty, so a push can never blank a field just because the server
+      // hasn't got it yet — the diff is what decides changes, not the base.
+      rebase: (base, fresh) => ({ ...base, ...fresh }),
+      apply: applySharedConfigDiff,
+      save: saveSharedConfig,
+      maxAttempts: MAX_PUSH_ATTEMPTS,
+    });
+
+    if (outcome.ok) {
+      commitBaseline(outcome.next);
+      revRef.current = outcome.rev;
+      reportSync({
+        op: "push", ok: true, attempts: outcome.attempts, rev: outcome.rev,
+        dismissed: outcome.next.dismissedEntityIds.length,
+        entities: Object.keys(outcome.next.entityMap).length,
+      });
+      // Fold in whatever another device contributed, so this client's view
+      // reflects it immediately rather than waiting for its next pull.
+      update(outcome.next);
+      return;
     }
-    // Fell out of the loop: every attempt hit a 409. Rare, but silent failure
-    // here would look identical to "never tried".
-    reportSync({ op: "push", ok: false, reason: "conflict-retries-exhausted" });
-  }, [update, reportSync]);
+    if (outcome.reason === "nothing-to-push") return;
+    reportSync({ op: "push", ok: false, reason: outcome.reason });
+  }, [update, reportSync, commitBaseline]);
 
   const pull = useCallback(async () => {
     const result = await fetchSharedConfig();
@@ -208,15 +212,20 @@ export default function DeviceConfigSync() {
     const keys = Object.keys(server);
     if (keys.length === 0) {
       // Nothing stored yet (fresh install, or first run after upgrading from
-      // the localStorage-only versions). Seed the store from whatever THIS
-      // device already has rather than letting an empty pull blank it.
-      commitBaseline(localRef.current);
+      // the localStorage-only versions). Record the baseline as EMPTY — which
+      // is the truth — rather than as this device's local slice. Recording
+      // local here would claim it was already synced, so the push gate would
+      // see no change and the seed would never actually be written; the old
+      // code papered over that with its own un-awaited save, whose failure
+      // nothing could detect or retry. With an honest empty baseline the
+      // normal debounced push does the seeding through the one write path
+      // that has CAS, retries and telemetry.
+      commitBaseline(baselineFromServer({}));
       revRef.current = rev;
       reportSync({
         op: "pull", seededEmptyStore: true, rev,
         dismissed: localRef.current.dismissedEntityIds.length,
       });
-      if (role === "owner") void saveSharedConfig(localRef.current, rev, result.raw);
       return;
     }
     // RULE 3: A PULL MUST NEVER CLOBBER AN UNPUSHED LOCAL EDIT.
@@ -267,7 +276,11 @@ export default function DeviceConfigSync() {
     // push effect sees no change and the pull can't bounce straight back.
     const merged = { ...localRef.current, ...server } as SharedDeviceConfig;
     const mergedJson = JSON.stringify(merged);
-    commitBaseline(merged, mergedJson);
+    // `merged` decides what local CONFIG becomes; the BASELINE is what the
+    // server actually holds. They are not the same object and conflating them
+    // is what stranded dismissedEntityIds on one device — see
+    // baselineFromServer's docstring.
+    commitBaseline(baselineFromServer(server));
     revRef.current = rev;
     // What the server actually handed this device. `dismissed` is the number
     // that matters when "Remove" works on one device and not another: if the

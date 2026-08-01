@@ -13,7 +13,10 @@ import {
   createContext, useCallback, useContext, useEffect, useRef, useState,
   type ReactNode,
 } from "react";
-import { fetchFmData, saveFmData, fmId } from "./fmApi";
+import {
+  fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff,
+} from "./fmApi";
+import { pushWithRebase } from "@/utils/keyedSync";
 import {
   EMPTY_FM_DATA,
   type FmCompletion, type FmCost, type FmData, type FmSavedDocument, type FmSchedule, type FmTicket,
@@ -62,9 +65,17 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const ref = useRef(data);
   ref.current = data;
 
+  /** What the server is known to hold, so a write can send only what THIS
+   *  device changed (see utils/keyedSync.ts). Empty until the first read —
+   *  which is the truth, and makes the first write push everything local. */
+  const baseline = useRef<FmData>(EMPTY_FM_DATA);
+
   const reload = useCallback(async () => {
-    const d = await fetchFmData();
-    if (d) setData(d);
+    const fresh = await fetchFmData();
+    if (fresh) {
+      setData(fresh.doc);
+      baseline.current = fresh.doc;
+    }
     setReady(true);
   }, []);
 
@@ -78,8 +89,29 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     const next = fn(ref.current);
     setData(next);
     setSaveError(null);
-    const ok = await saveFmData(next);
-    if (!ok) setSaveError("Couldn't save to the add-on — the change is only on this device.");
+    // Send ONLY what this action changed, replayed onto the server's freshest
+    // copy under the revision it came at. This used to PUT the whole document
+    // with no revision, so two people working the villa at once — which is the
+    // normal case, the owner and the facility manager both hold
+    // manageFacility — silently overwrote each other's records.
+    const outcome = await pushWithRebase({
+      diff: diffFmData(baseline.current, next),
+      isEmpty: fmDiffIsEmpty,
+      baseline: baseline.current,
+      fetchFresh: fetchFmData,
+      rebase: (_base, fresh) => fresh,
+      apply: applyFmDiff,
+      save: (doc, rev, carryOver) => saveFmData(doc, rev, carryOver),
+    });
+    if (outcome.ok) {
+      baseline.current = outcome.next;
+      // Fold in whatever another device contributed in the meantime, so this
+      // screen reflects the merged truth rather than only its own edit.
+      setData(outcome.next);
+      return;
+    }
+    if (outcome.reason === "nothing-to-push") return;
+    setSaveError("Couldn't save to the add-on — the change is only on this device.");
   }, []);
 
   const addSchedule = useCallback((s: Omit<FmSchedule, "id" | "createdAt">) =>

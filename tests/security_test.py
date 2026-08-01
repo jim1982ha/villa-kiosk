@@ -178,5 +178,31 @@ for frame in ("auth", "ping", "pong", "subscribe_events", "get_states",
               "call_service", "camera/stream"):
     t(f"{frame} permitted", frame in proxy.ALLOWED_WS_TYPES, True)
 
+# ------------------------------------------- shared store write boundary
+# The two mutable shared stores are built by ONE factory whose writer_roles
+# parameter is the whole access rule. The FM store previously had a
+# hand-written duplicate handler; folding it back onto the factory is what
+# gave it the revision check, so these assertions pin BOTH the roles and the
+# fact that the concurrency protection exists on both stores.
+section("shared JSON stores: who may write, and CAS is present")
+
+import inspect  # noqa: E402
+_factory_src = inspect.getsource(proxy._json_store_handlers)
+t("store PUT enforces writer_roles", "writer_roles" in _factory_src, True)
+t("store PUT checks the revision", "expected_rev" in _factory_src, True)
+t("store PUT serialises writes", "async with lock" in _factory_src, True)
+t("store GET returns a revision", '"rev": _store_revision(path)' in _factory_src, True)
+
+# Both stores must come from that factory — a bespoke handler is how the
+# protections got lost last time.
+_proxy_src = open(PROXY).read()
+t("device-config uses the factory",
+  "device_config_get_handler, device_config_put_handler = proxy._json_store_handlers".replace("proxy.", "")
+  in _proxy_src, True)
+t("fm-data uses the factory",
+  "fm_data_get_handler, fm_data_put_handler = _json_store_handlers" in _proxy_src, True)
+t("no bespoke fm-data PUT handler",
+  "async def fm_data_put_handler" in _proxy_src, False)
+
 print(f"\n{PASSED} passed, {FAILED} failed")
 sys.exit(1 if FAILED else 0)

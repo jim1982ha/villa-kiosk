@@ -6,6 +6,10 @@
 
 import { ingressPath } from "@/ha/ingress";
 import { EMPTY_FM_DATA, type FmData } from "./fmTypes";
+import {
+  keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty,
+  type KeyedDiff, type StoreFetch, type StoreSaveResult,
+} from "@/utils/keyedSync";
 
 /** Narrow an arbitrary parsed value to FmData, dropping anything unrecognised.
  *  A store written by a newer app version must not be able to inject unknown
@@ -27,33 +31,93 @@ export function parseFmData(raw: unknown): FmData {
 
 /** Returns null on a transport failure so the caller can tell "server has
  *  nothing" from "couldn't reach it" — the latter must never overwrite local
- *  state or be shown as an empty maintenance record. */
-export async function fetchFmData(): Promise<FmData | null> {
+ *  state or be shown as an empty maintenance record.
+ *
+ *  Also returns the revision and the RAW stored object: this store is edited
+ *  by the owner AND the facility manager, frequently from different devices
+ *  at the same time, so writes need optimistic concurrency and unknown-key
+ *  carry-over exactly like the device-config store. See utils/keyedSync.ts. */
+export async function fetchFmData(): Promise<StoreFetch<FmData> | null> {
   try {
     const r = await fetch(ingressPath("fm-data"), { credentials: "same-origin" });
     if (!r.ok) return null;
-    const d = (await r.json()) as { data?: unknown };
-    return parseFmData(d.data);
+    const d = (await r.json()) as { data?: unknown; rev?: unknown };
+    const raw = d.data && typeof d.data === "object"
+      ? (d.data as Record<string, unknown>) : {};
+    return {
+      doc: parseFmData(d.data),
+      rev: typeof d.rev === "number" ? d.rev : 0,
+      raw,
+    };
   } catch {
     return null;
   }
 }
 
-/** Replace the whole store. Owner and facility manager only (the server
- *  enforces it too). Resolves false so the UI can say the save failed rather
- *  than silently pretending it worked. */
-export async function saveFmData(data: FmData): Promise<boolean> {
+/** Write the store. Owner and facility manager only (the server enforces it
+ *  too).
+ *
+ *  `expectedRev` is the revision this write was computed against — the server
+ *  rejects it with 409 if another device wrote in the gap, so a concurrent
+ *  edit is rebased instead of silently overwritten. `carryOver` writes back
+ *  keys this app version doesn't recognise, so an older client can't delete a
+ *  newer one's field. This used to be a bare whole-document PUT with neither:
+ *  the owner resolving a ticket on one device and the facility manager logging
+ *  a completion on another would simply lose whichever landed first, with no
+ *  error shown — on the records that evidence the property's maintenance. */
+export async function saveFmData(
+  data: FmData,
+  expectedRev: number | null,
+  carryOver: Record<string, unknown> = {},
+): Promise<StoreSaveResult> {
   try {
+    const merged = { ...carryOver, ...data };
     const r = await fetch(ingressPath("fm-data"), {
       method: "PUT",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data }),
+      body: JSON.stringify(
+        expectedRev === null ? { data: merged } : { data: merged, rev: expectedRev }),
     });
-    return r.ok;
+    if (r.status === 409) return { ok: false, conflict: true };
+    if (!r.ok) return { ok: false, conflict: false };
+    const d = (await r.json().catch(() => ({}))) as { rev?: unknown };
+    return { ok: true, rev: typeof d.rev === "number" ? d.rev : 0 };
   } catch {
-    return false;
+    return { ok: false, conflict: false };
   }
+}
+
+// ── Per-item diff/merge for the FM document ──────────────────────────────
+// Every FM collection is a list of records with their own `id`, so the shared
+// keyed machinery applies directly — no bespoke merge logic here.
+const FM_COLLECTIONS = [
+  "schedules", "completions", "costs", "tickets", "savedDocuments",
+] as const;
+type FmCollection = (typeof FM_COLLECTIONS)[number];
+
+export type FmDataDiff = Record<FmCollection, KeyedDiff<{ id: string }>>;
+
+const keyFm = (d: FmData, k: FmCollection) =>
+  keyBy(d[k] as { id: string }[], (r) => r.id);
+
+export function diffFmData(base: FmData, next: FmData): FmDataDiff {
+  const out = {} as FmDataDiff;
+  for (const k of FM_COLLECTIONS) out[k] = diffKeyed(keyFm(base, k), keyFm(next, k));
+  return out;
+}
+
+export function fmDiffIsEmpty(diff: FmDataDiff): boolean {
+  return FM_COLLECTIONS.every((k) => keyedDiffIsEmpty(diff[k]));
+}
+
+/** Replay one device's changes onto the server's freshest copy. */
+export function applyFmDiff(target: FmData, diff: FmDataDiff): FmData {
+  const out = { ...target } as Record<string, unknown>;
+  for (const k of FM_COLLECTIONS) {
+    out[k] = Object.values(applyKeyed(keyFm(target, k), diff[k]));
+  }
+  return out as unknown as FmData;
 }
 
 /** Short, URL-safe, collision-resistant enough for one villa's records. */

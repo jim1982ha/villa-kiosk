@@ -32,6 +32,10 @@
 import { ingressPath } from "@/ha/ingress";
 import type { AppConfig, DeviceGroup } from "./AppConfig";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
+import {
+  keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty,
+  type Keyed, type KeyedDiff,
+} from "@/utils/keyedSync";
 
 /** The AppConfig fields stored centrally. Single source of truth — both the
  *  push (what we send) and the merge (what a pull is allowed to overwrite)
@@ -94,45 +98,16 @@ export function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
 // and meshBindings already are; deviceGroups/teleportPoints (arrays) are
 // keyed by their own natural id (`id` / `name` respectively, both already
 // required to be unique elsewhere in the app).
-type Keyed<T> = Record<string, T>;
-
-function keyDeviceGroups(arr: DeviceGroup[]): Keyed<DeviceGroup> {
-  return Object.fromEntries(arr.map((g) => [g.id, g]));
-}
-function keyTeleportPoints(arr: TeleportPoint[]): Keyed<TeleportPoint> {
-  return Object.fromEntries(arr.map((p) => [p.name, p]));
-}
+// The diff/apply primitives live in utils/keyedSync.ts — the SAME ones the
+// Facility Manager store uses. See that file for why these three rules are
+// shared code rather than a copy per store.
+const keyDeviceGroups = (arr: DeviceGroup[]) => keyBy(arr, (g) => g.id);
+const keyTeleportPoints = (arr: TeleportPoint[]) => keyBy(arr, (p) => p.name);
 /** A plain id list is its own key — dismissing an entity on one device and
  *  un-dismissing a DIFFERENT one on another must not cancel each other out,
  *  which is exactly what comparing the two lists wholesale would do. */
-function keyIdList(arr: string[]): Keyed<true> {
-  return Object.fromEntries(arr.map((id) => [id, true as const]));
-}
-
-interface KeyedDiff<T> {
-  set: Keyed<T>;
-  del: string[];
-}
-
-function diffKeyed<T>(base: Keyed<T>, next: Keyed<T>): KeyedDiff<T> {
-  const set: Keyed<T> = {};
-  for (const [id, item] of Object.entries(next)) {
-    if (JSON.stringify(base[id]) !== JSON.stringify(item)) set[id] = item;
-  }
-  const del: string[] = [];
-  for (const id of Object.keys(base)) if (!(id in next)) del.push(id);
-  return { set, del };
-}
-
-function applyKeyed<T>(server: Keyed<T>, diff: KeyedDiff<T>): Keyed<T> {
-  const out = { ...server, ...diff.set };
-  for (const id of diff.del) delete out[id];
-  return out;
-}
-
-function keyedDiffIsEmpty<T>(diff: KeyedDiff<T>): boolean {
-  return Object.keys(diff.set).length === 0 && diff.del.length === 0;
-}
+const keyIdList = (arr: string[]): Keyed<true> =>
+  Object.fromEntries(arr.map((id) => [id, true as const]));
 
 export interface SharedConfigDiff {
   entityMap: KeyedDiff<EntityMapping>;
@@ -213,6 +188,42 @@ export function saveSyncBaseline(config: SharedDeviceConfig): void {
   try {
     localStorage.setItem(BASELINE_KEY, JSON.stringify(config));
   } catch { /* storage full/disabled — degrades to the old in-memory behaviour */ }
+}
+
+/** What each shared key looks like when the server has never stored it.
+ *  Used to build a HONEST baseline (see baselineFromServer). */
+const EMPTY_SHARED_CONFIG: SharedDeviceConfig = {
+  entityMap: {}, meshBindings: {}, deviceGroups: [], teleportPoints: [],
+  dismissedEntityIds: [],
+};
+
+/**
+ * The baseline = what the server ACTUALLY holds, with an empty value for every
+ * key it doesn't carry.
+ *
+ * This must NOT be `{...local, ...server}`. That merge is right for deciding
+ * what local CONFIG becomes (a key the server omits must not blank the field
+ * locally), but using it as the baseline silently claims the server already
+ * has whatever local happens to hold. The push gate then compares local
+ * against that baseline, sees no difference, and never sends the field —
+ * so a key the server has never seen can never be pushed. It is stuck on
+ * whichever device created it, forever, looking perfectly applied there.
+ *
+ * Found in the field, not by inspection: `dismissedEntityIds` worked on the
+ * desktop and was invisible on the phone for days. The sync telemetry showed
+ * both devices pulling the same revision with `serverHadDismissed:false`,
+ * while the desktop reported `dismissed:6` — i.e. the desktop was reading its
+ * own localStorage and calling it synced. With an empty baseline the diff
+ * correctly reads as "local has 6 the server doesn't", and it pushes.
+ */
+export function baselineFromServer(server: Partial<SharedDeviceConfig>): SharedDeviceConfig {
+  const out = {} as Record<string, unknown>;
+  // Built in SHARED_CONFIG_KEYS order so its JSON compares byte-for-byte
+  // against pickSharedConfig's (the push gate is a string compare).
+  for (const key of SHARED_CONFIG_KEYS) {
+    out[key] = key in server ? server[key] : EMPTY_SHARED_CONFIG[key];
+  }
+  return out as SharedDeviceConfig;
 }
 
 /** One shared-config fetch: the parsed slice plus the revision it was read

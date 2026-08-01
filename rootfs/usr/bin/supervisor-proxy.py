@@ -1137,13 +1137,21 @@ def _store_revision(path: str) -> int:
         return 0
 
 
-def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str):
+def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
+                         writer_roles: tuple = ("owner",)):
     """Build the (GET, PUT) handler pair for one shared store.
 
     GET is open to any authorized session — a guest still has to read the
-    device config to see the right badges/rooms at all. PUT is owner-only,
-    matching the Settings UI's own gating: shared state is exactly what a
-    non-owner profile must not be able to rewrite for everyone else.
+    device config to see the right badges/rooms at all. PUT is restricted to
+    `writer_roles`, which defaults to owner-only (shared state is exactly what
+    a non-owner profile must not rewrite for everyone else); the FM store also
+    admits "ops", because maintaining it IS the facility manager's job.
+
+    That role difference used to be the excuse for a SECOND, hand-written PUT
+    handler for the FM store. Copying the handler copied its auth/validation
+    but silently NOT its revision check or its lock, so the FM store — the
+    maintenance and cost records — had no concurrency protection at all while
+    the device-config store did. One parameter is cheaper than one duplicate.
 
     PUT optionally carries a `rev` (the revision the caller last read, from
     GET's own response) for optimistic concurrency: villa-kiosk is routinely
@@ -1167,8 +1175,10 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str):
     async def put_handler(request: web.Request) -> web.Response:
         if not _authorized(request):
             return _unauthorized()
-        if _role_for(request) != "owner":
-            return _forbidden(f"Only the owner profile may edit {what}.")
+        if _role_for(request) not in writer_roles:
+            return _forbidden(f"Only the owner profile may edit {what}."
+                              if writer_roles == ("owner",)
+                              else f"You do not have permission to edit {what}.")
         try:
             body = await request.json()
         except (json.JSONDecodeError, ValueError):
@@ -1361,32 +1371,12 @@ async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
 
 device_config_get_handler, device_config_put_handler = _json_store_handlers(
     DEVICE_CONFIG_FILE, "config", {}, DEVICE_CONFIG_MAX_BYTES, "device configuration")
-# Facility Manager working set. PUT is owner-only by the shared factory's rule;
-# overridden below to also admit "ops", since the facility manager is precisely
-# who maintains this data.
-fm_data_get_handler, _fm_data_put_owner_only = _json_store_handlers(
-    FM_DATA_FILE, "data", {}, FM_DATA_MAX_BYTES, "facility manager data")
-
-
-async def fm_data_put_handler(request: web.Request) -> web.Response:
-    """Replace the FM working set. Unlike the other shared stores this admits
-    the facility manager as well as the owner — maintaining it IS their job."""
-    if not _authorized(request):
-        return _unauthorized()
-    if _role_for(request) not in ("owner", "ops"):
-        return _forbidden("Only the owner or facility manager may edit this.")
-    try:
-        body = await request.json()
-    except (json.JSONDecodeError, ValueError):
-        return web.json_response({"error": "invalid JSON"}, status=400)
-    value = body.get("data") if isinstance(body, dict) else body
-    if not isinstance(value, dict):
-        return web.json_response({"error": "data must be an object"}, status=400)
-    payload = json.dumps(value)
-    if len(payload.encode("utf-8")) > FM_DATA_MAX_BYTES:
-        return web.json_response({"error": "payload too large"}, status=413)
-    _write_json_store(FM_DATA_FILE, payload)
-    return web.json_response({"ok": True, "count": len(value)})
+# Facility Manager working set — same factory as the device config, so it gets
+# the same revision check, the same write lock and the same validation. The
+# only difference is who may write it.
+fm_data_get_handler, fm_data_put_handler = _json_store_handlers(
+    FM_DATA_FILE, "data", {}, FM_DATA_MAX_BYTES, "facility manager data",
+    writer_roles=("owner", "ops"))
 
 
 def main() -> None:
