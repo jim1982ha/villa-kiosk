@@ -1,14 +1,14 @@
 // src/fm/readiness.ts
-// "Is the villa ready for the next guest?" — Clause 1.1(iii)(a) (arrivals).
+// "Is the villa ready for the next guest?"
 //
 // Pure: takes the live entity snapshot plus the FM store and returns a list of
 // checks. No React, no network, so the rules can be tested and so the same
 // answer can be rendered in the operator panel, the report annex, or (later)
 // an owner-facing summary.
 //
-// Why this matters commercially: a failed check-in costs a review, reviews
-// drive occupancy, and Appendix C §1 lets the Owner terminate without penalty
-// if occupancy is under 50% in the first six months.
+// Why this matters commercially: a failed check-in costs a review, and
+// reviews drive occupancy — the kind of thing a management contract's own
+// performance clauses exist to protect, whatever they happen to say.
 
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
@@ -144,13 +144,13 @@ export function buildReadiness(
     });
   }
 
-  // ── Pool serviced within its Clause 3.7(iv) interval ─────────────────────
+  // ── Pool serviced within its configured schedule interval ────────────────
   const pool = fm.schedules.find((s) => s.builtinKey === "pool_landscaping" && s.enabled);
   if (pool) {
     const st = scheduleStatus(pool, fm.completions, now);
     checks.push({
       id: "pool",
-      label: "Pool serviced (Clause 3.7)",
+      label: "Pool serviced",
       state: st.state === "ok" ? "pass" : st.state === "due-soon" ? "warn" : "fail",
       detail: st.state === "never"
         ? "No pool service recorded yet."

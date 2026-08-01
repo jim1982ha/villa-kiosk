@@ -527,6 +527,7 @@ export default function Dashboard() {
         mappedEntityIds={effectiveMappedEntityIds}
         onOpenEntity={openEntityPanel}
         onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
+        onModelChanged={() => setModelKey((k) => k + 1)}
       />
 
       {/* Bottom dashboard strip — scene / quick-action / summary tiles,
@@ -675,13 +676,6 @@ export default function Dashboard() {
             // (focus set) → just close back to the villa.
             if (configEditorFocus === null) setSettingsOpen(true);
             setConfigEditorFocus(null);
-          }}
-          onModelChanged={() => {
-            // Refresh the scene in the BACKGROUND (remount the canvas) but keep
-            // this modal open — closing it on every upload felt abrupt. The
-            // modal's live controls use `manager?.…` so the brief remount
-            // window (old manager torn down, new one not yet ready) is a safe no-op.
-            setModelKey((k) => k + 1);
           }}
         />
       )}

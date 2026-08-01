@@ -63,9 +63,9 @@ export interface FmCompletion {
   costId?: string;
 }
 
-/** A maintenance expense. `category` follows Clause 3.3(i)/6.2(iii): "minor"
- *  counts against the monthly cap and is a shared Direct Expense; "major"
- *  is the Owner's and is excluded from the cap. */
+/** A maintenance expense. "minor" counts against the monthly cap and is a
+ *  shared direct expense; "major" is the Owner's and is excluded from the
+ *  cap — whatever the underlying contract calls that split. */
 export interface FmCost {
   id: string;
   at: string;

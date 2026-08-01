@@ -1,9 +1,10 @@
 // src/components/fm/TodayTab.tsx
-// The Clause 3.7 maintenance board, worst first, with the log-completion flow.
+// The maintenance board, worst first, with the log-completion flow.
 //
 // This is the screen the facility manager opens on: it answers "what do I have
 // to do" before it answers anything else, which is why it leads rather than the
-// 3D map. Overdue work is what Appendix C §7(b) turns into a termination risk.
+// 3D map. Overdue work is exactly the kind of gap a management contract's
+// maintenance-standard clause exists to prevent, whatever that clause is.
 
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";

@@ -23,7 +23,7 @@ Built with **React + TypeScript + Babylon.js**.
 | **On-demand rendering** | The GPU idles when nothing moves — essential for a 24/7 tablet. |
 | **Runtime config** | Map meshes → entities, calibrate teleport points, set thresholds — all in-app, no code edits. |
 | **Facility workspace** | Maintenance schedule with photo evidence, guest-readiness check, fault queue with resolution times, maintenance spend against a monthly cap, and a one-click monthly operations report — see [Facility Manager](#facility-manager) below. |
-| **PWA + backup** | Installable, works briefly offline, export/import a JSON config backup (device↔room bindings, room viewpoints, device icons, render/UI settings — deliberately not the model or HA credentials) from Advanced Settings. |
+| **PWA** | Installable, works briefly offline; shared config (device↔room bindings, room viewpoints, device groups) auto-syncs across every client through the add-on's own store, so there's nothing to manually back up or restore. |
 
 ---
 
@@ -184,7 +184,7 @@ There's no connection onboarding: the kiosk always reaches Home Assistant token-
 
 The app is not tied to any specific villa. The only required input is a `.glb` model. To wire up a new villa:
 
-1. **Import the GLB** (Advanced Settings → *3D model source*).
+1. **Upload the GLB** (Owner profile → the upload icon in the top bar).
 2. Wire it up — two ways, mix freely:
    - **Bind real objects** (Advanced Settings → *Bound 3D objects*): tap a lamp/curtain mesh, pick the live HA entity.
    - **Drop control markers**: for fused models or entities not yet in HA — tap any spot, a floating control is placed and linked to an entity_id (activates automatically when the entity appears).
@@ -402,13 +402,15 @@ have to be *evidenced*, not just performed. The tabs map to that:
 
 ### Where the defaults come from
 
-The built-in maintenance schedule is seeded from a typical Bali villa
-management agreement — air conditioning every 3 months, pest control twice a
-month, hydrowash every 3 months (soft furnishings) and 12 months (mattresses),
-pool and landscaping twice a week — and the spend cap from the same kind of
-"minor maintenance" threshold such agreements use. Every interval and the cap
-are editable, and tasks can be added or removed: nothing here is specific to
-one contract, it is just a sensible starting point rather than an empty screen.
+There are none. The maintenance schedule and the monthly spend cap both start
+empty — every task (title, interval, optional room/device/contract-clause
+reference) and the cap value are entered by the operator from the Schedule and
+Spend tabs. An earlier version shipped a schedule and cap modelled on one
+specific property-management agreement as a "starting point"; that meant a
+different villa, under a different contract, silently inherited maintenance
+intervals and a cap that were never theirs. Nothing Facility-Manager-related
+ships pre-filled any more, for the same reason nothing else in the kiosk does
+(see "Works with any villa" below).
 
 Intervals that aren't whole days round **down** (twice a week → every 3 days),
 so a genuinely late task can never read as compliant.
@@ -454,7 +456,7 @@ The 3D scene never re-renders from React — HA state changes are pushed imperat
 ## Runtime configuration
 
 - **Settings** (gear icon): title, render quality, first-person/overview feel, device icon size, theme. No HA URL/token — the connection is automatic through the add-on proxy.
-- **Advanced Settings** (Settings' footer → *Advanced Settings*, a modal over the live dashboard, not a page reload): 3D model source (upload the central GLB/room-data straight into the add-on's `/data` store), per-device configuration backup/restore, auto-detected entity settings (map any `entity_id` to a panel type + label + room, mark entities requiring confirmation), bound 3D objects, grouped devices.
+- **Advanced Settings** (Settings' footer → *Advanced Settings*, a modal over the live dashboard, not a page reload): villa location, auto-detected entity settings (map any `entity_id` to a panel type + label + room, mark entities requiring confirmation), bound 3D objects, grouped devices, device telemetry. GLB/room-data upload lives in the top bar's upload icon (Owner profile), not in this modal — see [Works with any villa](#works-with-any-villa).
 - **Render quality** (Settings → *Render quality &amp; look*): independently toggle/tune tone mapping (Khronos Neutral / ACES / Standard), exposure, contrast, fill + key + ambient light balance, ambient occlusion (SSAO), sun shadows and environment lighting (IBL). All apply live and persist with your config; start with tone mapping + lower **Fill light** to cure a washed-out render. The same knobs can be baked into the GLB via the [Blender pipeline](MODEL_PIPELINE.md) flags.
 - **Teleport calibration**: open **Rooms**, then right-click / long-press any room card to save your current spot as that room's anchor.
 

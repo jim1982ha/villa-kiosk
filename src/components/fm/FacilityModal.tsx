@@ -4,12 +4,12 @@
 // owner; see auth/permissions.ts for why both).
 //
 // Tab order is the operator's own order of business, not a feature list:
-//   Today      what needs doing right now (Clause 3.7 board + open faults)
-//   Readiness  is the villa fit for the next guest (Clause 1.1(iii)(a))
-//   Faults     the work queue (Clause 1.1(iv)(b))
-//   Spend      this month against the Minor Maintenance cap (Clause 3.3(i))
+//   Today      what needs doing right now (the maintenance board + open faults)
+//   Readiness  is the villa fit for the next guest
+//   Faults     the work queue
+//   Spend      this month against the configured Minor Maintenance cap
 //   Schedule   what the Today board measures against — configured, then acted on
-//   Report     the operational annex for the monthly owner report (Clause 3.11)
+//   Report     the operational annex for whatever monthly owner report already exists
 //
 // Fixed height (.modal-fixed-height) on desktop/tablet: this modal switches
 // between views with wildly different content — Spend can be two rows,
@@ -160,7 +160,7 @@ export default function FacilityModal({
 
           <div className="settings-footer" style={{ justifyContent: "space-between" }}>
             <span className="muted body-text" style={{ fontSize: 12 }}>
-              Maintenance intervals follow Clause 3.7 · cap follows Clause 3.3(i)
+              Maintenance intervals and the spend cap are set in the Schedule tab
             </span>
             <button className="btn primary" onClick={onClose}>Close</button>
           </div>

@@ -1,5 +1,5 @@
 // src/components/fm/ReadinessTab.tsx
-// "Is the villa fit for the next guest?" — Clause 1.1(iii)(a).
+// "Is the villa fit for the next guest?"
 //
 // Every check is derived, never hand-ticked: the point is that it reflects the
 // villa's ACTUAL live state, which is the one thing a paper checklist can't do.

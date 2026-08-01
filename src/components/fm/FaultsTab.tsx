@@ -1,7 +1,7 @@
 // src/components/fm/FaultsTab.tsx
-// The fault work queue — Clause 1.1(iv)(b) ("maintenance inspections and
-// supervision"). Time-to-resolution is what actually evidences supervision, so
-// the app stamps the resolution time itself rather than asking for it.
+// The fault work queue — evidence of maintenance inspection and supervision.
+// Time-to-resolution is what actually evidences supervision, so the app
+// stamps the resolution time itself rather than asking for it.
 //
 // New faults can be raised straight from a device that Home Assistant reports
 // as unavailable, which is the common case: the villa already knows what is

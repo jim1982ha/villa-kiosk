@@ -101,10 +101,10 @@ export function monthKey(at: string | number | Date): string {
 
 export interface BudgetStatus {
   month: string;
-  /** Minor-category spend this month — what Clause 3.3(i)'s cap applies to. */
+  /** Minor-category spend this month — what the configured cap applies to. */
   minorIdr: number;
-  /** Major spend, tracked separately: it is the Owner's under Clause 6.2(iii)
-   *  and explicitly NOT part of the cap. */
+  /** Major spend, tracked separately: it is the Owner's account and
+   *  explicitly NOT part of the cap. */
   majorIdr: number;
   capIdr: number;
   /** 0–1+ against the cap; can exceed 1. */
@@ -157,7 +157,8 @@ export interface TicketStats {
   resolved: number;
   /** Mean hours from opening to resolution across resolved tickets, or null
    *  when nothing has been resolved yet. This is the number that evidences
-   *  Clause 1.1(iv)(b)'s "inspections and supervision". */
+   *  the property's own "inspections and supervision" obligation, whatever
+   *  the source of that obligation is. */
   meanResolutionHours: number | null;
 }
 
@@ -180,8 +181,8 @@ export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
   };
 }
 
-/** Completions falling inside a calendar month — the maintenance section of the
- *  monthly report annex (Clause 3.11). */
+/** Completions falling inside a calendar month — the maintenance section of
+ *  the monthly report annex. */
 export function completionsInMonth(
   data: FmData, month: string,
 ): Array<{ completion: FmCompletion; schedule: FmSchedule | undefined }> {

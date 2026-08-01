@@ -141,7 +141,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         {/* RBAC: shared branding — administration, not personal taste. */}
         {can("editConfig") && (
           <>
-            <label>Dashboard title</label>
+            <div className="settings-section-title" style={{ margin: 0 }}>Dashboard title</div>
             <input
               value={siteTitle}
               onChange={(e) => applySiteTitle(e.target.value)}
@@ -165,7 +165,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             shows its own live value, so resetting a look that's no longer a
             multi-dial preset just means dragging them back — not worth a
             dedicated button. Day/night warmth is handled automatically. */}
-        <div className="settings-section-title" style={{ margin: 0 }}>Render quality &amp; look</div>
+        <div className="settings-section-title">Render quality &amp; look</div>
 
         {/* Blue-glow (a render/interaction toggle) and Natural scrolling (an
             Overview-camera toggle) don't share a topic — paired on one row,
@@ -295,8 +295,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             />
           </div>
         </div>
-
-        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         </>
         )}

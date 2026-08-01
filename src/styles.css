@@ -398,6 +398,24 @@ button {
 .hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
 .hud-right-inline { display: flex; align-items: center; gap: 12px; }
 
+/* GLB upload button + its (i) model-info tooltip, inline in the top bar
+   (Owner only — see HUD.tsx's useGlbUpload). position:relative anchors the
+   upload-result toast below the pair. */
+.hud-upload-wrap { position: relative; display: flex; align-items: center; gap: 6px; }
+/* The (i) popover's default anchor (.info-tip .info-pop) opens LEFT-anchored
+   (rightward) — fine deep in a modal, but this button sits near the RIGHT
+   edge of the screen, so opening rightward would push the popover off
+   viewport. Anchor from the right edge instead (opens leftward). */
+.hud-info-tip .info-pop { left: auto; right: 0; }
+/* Upload result/error — anchored below the button pair rather than inline
+   text, so it doesn't reflow the top bar. Stays until the next upload
+   attempt replaces or clears it (see useGlbUpload's uploadMsg). */
+.hud-upload-toast {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 90;
+  width: max-content; max-width: min(320px, 80vw);
+  margin-top: 0; box-shadow: 0 10px 32px var(--shadow);
+}
+
 /* Overflow menu: on phones the right-side controls (view mode, Settings,
    switch profile) collapse into this single button + dropdown. Hidden on
    roomy screens where the inline buttons fit; the compact-bar media query

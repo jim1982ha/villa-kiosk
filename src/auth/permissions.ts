@@ -83,7 +83,7 @@ export const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
     // tweaks), same as a guest — the admin-only sections (editConfig,
     // manageModel) stay gated to the owner. manageFacility is the one thing
     // they hold that the guest does not: the maintenance/fault workspace that
-    // evidences Kozystay's Clause 3.7 and 1.1(iv)(b) obligations.
+    // evidences the property's own maintenance/inspection obligations.
     capabilities: ["controlEntities", "openSettings", "customizeAppearance", "manageFacility"],
   },
 };

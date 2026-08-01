@@ -1,7 +1,6 @@
 // src/components/fm/ReportTab.tsx
-// Generates the operational annex to the monthly owner report (Clause 3.11,
-// due by the 10th of the following month — late reporting is a material breach
-// under Appendix C §7(a)).
+// Generates the operational annex for whatever monthly owner report cycle
+// the property already runs.
 //
 // Markdown, downloaded: it pastes into an email or WhatsApp unchanged, needs
 // no viewer, and stays readable years later if it is ever pulled up in a
@@ -9,8 +8,8 @@
 // ReportPreview) — a wall of "##"/"|" is not what an owner should have to
 // read to find out if the villa is ready for a guest — but the underlying
 // string, unchanged, is exactly what gets downloaded. The app deliberately
-// produces only the OPERATIONAL annex — Kozystay's financial report stays
-// theirs.
+// produces only the OPERATIONAL annex — financial reporting (revenue,
+// commissions, payout) is out of scope and stays with whoever runs it.
 //
 // Generation is an explicit action (the button), not a silent live re-render:
 // the report is a point-in-time record of the villa's Readiness/Faults/Spend/
@@ -97,10 +96,10 @@ export default function ReportTab({
   return (
     <div className="fm-stack">
       <p className="muted body-text">
-        The operational annex to the monthly owner report — maintenance performed
-        against Clause 3.7, spend against the Clause 3.3(i) cap, faults and response
-        times. Due by the 10th of the following month (Clause 3.11). Financial
-        reporting stays with Kozystay.
+        The operational annex for the monthly owner report — maintenance performed
+        against the configured schedule, spend against the Minor Maintenance cap,
+        faults and response times. Financial reporting is out of scope and stays
+        with whoever already handles it.
       </p>
 
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>

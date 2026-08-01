@@ -25,7 +25,7 @@ import {
   // which this file also uses.
   Home, Settings, LogOut, Map as MapIcon, PersonStanding,
   Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle,
-  EllipsisVertical, Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
+  EllipsisVertical, Minus, Plus, CircleHelp, TriangleAlert, ClipboardList, Upload,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -41,6 +41,8 @@ import VirtualJoystick from "./VirtualJoystick";
 import ViewControls, { DefaultViewButton } from "./ViewControls";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 import LegendModal from "./LegendModal";
+import CentralModelInfo from "./CentralModelInfo";
+import { useGlbUpload } from "./useGlbUpload";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { useFmData } from "@/fm/FmDataContext";
 import { scheduleBoard } from "@/fm/fmEngine";
@@ -106,6 +108,8 @@ interface Props {
   /** Open the Facility Manager workspace. Undefined when the profile lacks
    *  `manageFacility` — the button is then not rendered at all. */
   onOpenFacility?: () => void;
+  /** A GLB/room-data upload changed the model — remount the canvas to load it. */
+  onModelChanged: () => void;
 }
 
 function useClock(): string {
@@ -122,7 +126,7 @@ export default function HUD({
   onOpenSettings, canOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  mappedEntityIds, onOpenEntity, onOpenFacility,
+  mappedEntityIds, onOpenEntity, onOpenFacility, onModelChanged,
 }: Props) {
   const { connection, haConfig, entities } = useHA();
   const { config, update } = useConfig();
@@ -130,6 +134,13 @@ export default function HUD({
   const clock = useClock();
   const title = resolveSiteTitle(config, haConfig?.location_name);
   const floors = [1, 2];
+
+  // Central GLB/room-data upload — Owner only. One shared instance (not one
+  // per render site) so the desktop icon button and the mobile overflow-menu
+  // item drive the SAME file input/upload state instead of duplicating the
+  // async flow — see useGlbUpload's docstring.
+  const canUploadModel = role === "owner";
+  const glbUpload = useGlbUpload(canUploadModel, onModelChanged);
 
   // Every DEVICE HA currently reports as unavailable/unknown/never-reported.
   // Shared with fm/readiness.ts's "All devices reporting" check — see
@@ -564,6 +575,35 @@ export default function HUD({
             )}
             {/* (The colour-legend button moved into the category row — it
                 explains those very colours. See .hud-cat-help.) */}
+            {/* GLB/room-data upload — Owner only, icon-only (tooltip carries
+                the label), same header-icon-btn treatment as the day/night
+                invert toggle in Settings. The (i) model-info popover sits
+                immediately to its LEFT (only once a central model exists),
+                same reading order as the button it explains. */}
+            {canUploadModel && (
+              <span className="hud-upload-wrap">
+                {glbUpload.addonCfg?.model_path && (
+                  <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} editable />
+                )}
+                <button
+                  className="icon-btn"
+                  onClick={glbUpload.openPicker}
+                  disabled={glbUpload.uploadBusy !== null}
+                  title="Upload GLB Model"
+                  aria-label="Upload GLB Model"
+                >
+                  <Upload size={18} />
+                  {glbUpload.uploadPct !== null && (
+                    <span className="icon-btn-count" aria-hidden="true">{glbUpload.uploadPct}%</span>
+                  )}
+                </button>
+                {glbUpload.uploadMsg && (
+                  <div className={`hud-upload-toast test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`} role="status">
+                    {glbUpload.uploadMsg.text}
+                  </div>
+                )}
+              </span>
+            )}
             {/* First-person / bird's-eye switch, immediately LEFT of Settings.
                 It used to sit at the bottom of the left column; both are
                 app-level "how am I looking at this villa" controls rather
@@ -698,6 +738,20 @@ export default function HUD({
                   <CircleHelp size={18} />
                   <span>Map colours</span>
                 </button>
+                {/* Same upload as the inline row's icon button — shares its
+                    file input/state via useGlbUpload, just triggered from
+                    here on a phone. */}
+                {canUploadModel && (
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    disabled={glbUpload.uploadBusy !== null}
+                    onClick={() => { setMenuOpen(false); glbUpload.openPicker(); }}
+                  >
+                    <Upload size={18} />
+                    <span>Upload GLB Model</span>
+                  </button>
+                )}
                 {role && (
                   <button
                     role="menuitem"
@@ -713,6 +767,21 @@ export default function HUD({
           </div>
         </div>
       </div>
+
+      {/* Shared by both the inline icon button and the mobile menu item —
+          one input, one useGlbUpload instance, so the two triggers can never
+          disagree on upload state. */}
+      {canUploadModel && (
+        <input
+          ref={glbUpload.glbUploadRef} type="file" multiple hidden
+          accept=".glb,.json,application/json,model/gltf-binary"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            if (files.length) void glbUpload.uploadGlbAndRooms(files);
+          }}
+        />
+      )}
 
       {legendOpen && <LegendModal onClose={() => setLegendOpen(false)} />}
 

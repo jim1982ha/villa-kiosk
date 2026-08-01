@@ -1,16 +1,14 @@
 // src/fm/fmReport.ts
-// Builds the OPERATIONAL annex to Kozystay's monthly owner report.
-//
-// Clause 3.11 requires the owner report by the 10th of the following month;
-// Clause 3.12 gives the Owner 2 working days to query it before payout.
-// Appendix C §7(a) makes late or missing reporting a material breach that lets
-// the Owner terminate without penalty.
-//
-// This deliberately produces the OPERATIONAL annex only — device uptime,
-// maintenance performed against Clause 3.7, spend against the Clause 3.3(i)
-// cap, fault resolution. The financial report (revenue, OTA commissions,
-// payout) stays Kozystay's: duplicating their ledger badly would be worse than
-// not having it, and competing with their core product is not the goal.
+// Builds an OPERATIONAL annex, suitable for handing to whoever a villa's
+// owner report already goes to — device uptime, maintenance performed
+// against the configured schedule, spend against the configured Minor
+// Maintenance cap, fault resolution. Deliberately does NOT attempt a
+// financial report (revenue, OTA commissions, payout): that ledger belongs
+// to whatever booking/accounting system the property already uses, and
+// duplicating it badly here would be worse than leaving it out. Any
+// clause/contract reference shown per task is free-text the operator typed
+// in (see fmTypes.ts's Schedule.clause) — this file never asserts one of
+// its own.
 //
 // Output is Markdown: it pastes into an email, a WhatsApp message or a
 // document unchanged, needs no viewer, and stays readable if it is ever
@@ -47,12 +45,12 @@ export function buildMonthlyReport(input: ReportInput): string {
   L.push(`# ${villaName} — operational report`);
   L.push(`**Period:** ${monthLabel(month)}  `);
   L.push(`**Generated:** ${new Date().toLocaleString("en-GB")}  `);
-  L.push(`**Scope:** operational annex to the monthly owner report (Clause 3.11). `
-    + `Financial reporting — revenue, commissions and payout — is provided separately by Kozystay.`);
+  L.push(`**Scope:** operational status only — maintenance, spend, faults and device uptime. `
+    + `Financial reporting — revenue, commissions and payout — is out of scope and provided separately.`);
   L.push("");
 
-  // ── 1. Preventive maintenance (Clause 3.7) ───────────────────────────────
-  L.push(`## 1. Preventive maintenance — Clause 3.7`);
+  // ── 1. Preventive maintenance ─────────────────────────────────────────────
+  L.push(`## 1. Preventive maintenance`);
   const done = completionsInMonth(fm, month);
   if (done.length === 0) {
     L.push(`_No maintenance recorded in this period._`);
@@ -66,8 +64,8 @@ export function buildMonthlyReport(input: ReportInput): string {
   }
   L.push("");
 
-  // Current standing against the schedule — the part that evidences Appendix C
-  // §7(b) ("condition materially below the agreed standard") one way or another.
+  // Current standing against the schedule — the evidence trail for whether the
+  // villa is being kept to the agreed maintenance standard.
   L.push(`### Standing against schedule (as at report date)`);
   const active = fm.schedules.filter((s) => s.enabled);
   if (active.length === 0) {
@@ -91,17 +89,17 @@ export function buildMonthlyReport(input: ReportInput): string {
   }
   L.push("");
 
-  // ── 2. Maintenance spend (Clause 3.3(i) / 6.2) ───────────────────────────
+  // ── 2. Maintenance spend ──────────────────────────────────────────────────
   const b = budgetStatus(fm.costs, month);
-  L.push(`## 2. Maintenance spend — Clause 3.3(i)`);
+  L.push(`## 2. Maintenance spend`);
   L.push(`- **Minor Maintenance this month:** ${formatIdr(b.minorIdr)} of the `
     + `${formatIdr(b.capIdr)} monthly cap (${Math.round(b.fraction * 100)}%)`);
   if (b.majorIdr > 0) {
-    L.push(`- **Major maintenance (Owner's account, Clause 6.2(iii)):** ${formatIdr(b.majorIdr)}`);
+    L.push(`- **Major maintenance (Owner's account):** ${formatIdr(b.majorIdr)}`);
   }
   if (b.state === "exceeded") {
     L.push(`- ⚠️ The Minor Maintenance cap was reached. Spend beyond it is Major `
-      + `maintenance and falls to the Owner under Clause 6.2(iii).`);
+      + `maintenance and falls to the Owner.`);
   }
   L.push("");
   if (b.entries.length) {
@@ -114,12 +112,12 @@ export function buildMonthlyReport(input: ReportInput): string {
     L.push("");
   }
 
-  // ── 3. Faults (Clause 1.1(iv)(b)) ────────────────────────────────────────
+  // ── 3. Faults ──────────────────────────────────────────────────────────────
   const inMonth = fm.tickets.filter(
     (t) => monthKey(t.openedAt) === month
       || (t.resolvedAt && monthKey(t.resolvedAt) === month));
   const stats = ticketStats(fm.tickets);
-  L.push(`## 3. Faults and response — Clause 1.1(iv)(b)`);
+  L.push(`## 3. Faults and response`);
   L.push(`- Open: **${stats.open}** · In progress: **${stats.inProgress}** · Resolved (all time): **${stats.resolved}**`);
   if (stats.meanResolutionHours !== null) {
     L.push(`- Mean time to resolution: **${stats.meanResolutionHours.toFixed(1)} hours**`);
@@ -163,16 +161,15 @@ export function buildMonthlyReport(input: ReportInput): string {
   }
 
   L.push(`---`);
-  L.push(`_Generated by Villa Kiosk. Maintenance intervals follow Clause 3.7; the `
-    + `Minor Maintenance cap follows Clause 3.3(i). Photographic evidence for each entry `
+  L.push(`_Generated by Villa Kiosk. Photographic evidence for each entry `
     + `is retained in the kiosk and available on request._`);
   return L.join("\n");
 }
 
-/** A standalone spend statement for one month — the Clause 3.3(i) cap section
- *  of buildMonthlyReport, on its own, for whenever the operator wants that
- *  handed over without the rest of the operational annex. Same data, same
- *  section, deliberately not re-derived separately so the two can never
+/** A standalone spend statement for one month — the Minor Maintenance spend
+ *  section of buildMonthlyReport, on its own, for whenever the operator wants
+ *  that handed over without the rest of the operational annex. Same data,
+ *  same section, deliberately not re-derived separately so the two can never
  *  disagree about what a given month's Minor Maintenance total is. */
 export function buildSpendStatement(fm: FmData, month: string, villaName: string): string {
   const L: string[] = [];
@@ -181,18 +178,18 @@ export function buildSpendStatement(fm: FmData, month: string, villaName: string
   L.push(`# ${villaName} — maintenance spend statement`);
   L.push(`**Period:** ${monthLabel(month)}  `);
   L.push(`**Generated:** ${new Date().toLocaleString("en-GB")}  `);
-  L.push(`**Scope:** maintenance spend against the Clause 3.3(i) Minor Maintenance cap. `
-    + `Financial reporting — revenue, commissions and payout — is provided separately by Kozystay.`);
+  L.push(`**Scope:** maintenance spend against the configured Minor Maintenance cap. `
+    + `Financial reporting — revenue, commissions and payout — is out of scope and provided separately.`);
   L.push("");
 
   L.push(`- **Minor Maintenance this month:** ${formatIdr(b.minorIdr)} of the `
     + `${formatIdr(b.capIdr)} monthly cap (${Math.round(b.fraction * 100)}%)`);
   if (b.majorIdr > 0) {
-    L.push(`- **Major maintenance (Owner's account, Clause 6.2(iii)):** ${formatIdr(b.majorIdr)}`);
+    L.push(`- **Major maintenance (Owner's account):** ${formatIdr(b.majorIdr)}`);
   }
   if (b.state === "exceeded") {
     L.push(`- ⚠️ The Minor Maintenance cap was reached. Spend beyond it is Major `
-      + `maintenance and falls to the Owner under Clause 6.2(iii).`);
+      + `maintenance and falls to the Owner.`);
   }
   L.push("");
 
@@ -209,7 +206,7 @@ export function buildSpendStatement(fm: FmData, month: string, villaName: string
   L.push("");
 
   L.push(`---`);
-  L.push(`_Generated by Villa Kiosk. Cap follows Clause 3.3(i). `
-    + `Receipt evidence for each entry is retained in the kiosk and available on request._`);
+  L.push(`_Generated by Villa Kiosk. Receipt evidence for each entry is retained `
+    + `in the kiosk and available on request._`);
   return L.join("\n");
 }
