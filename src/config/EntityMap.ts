@@ -78,15 +78,33 @@ function dedupeRepeatedPrefix(words: string[]): string[] {
   return words;
 }
 
+/** Underscore→space, dedupe a repeated leading phrase (see
+ *  dedupeRepeatedPrefix), then Title Case each remaining word — the shared
+ *  core of prettifyEntitySlug (derives its raw string from an entity_id) and
+ *  displayLabelFor's own guard against a raw-slug HA friendly_name (some
+ *  integrations/YAML entities default friendly_name to the bare object_id
+ *  verbatim, which otherwise reached a panel title unprettified). Falls back
+ *  to the original string if it somehow dedupes/splits to nothing. */
+function prettifyRaw(raw: string): string {
+  const words = dedupeRepeatedPrefix(raw.replace(/_/g, " ").split(/\s+/).filter(Boolean));
+  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") || raw;
+}
+
+/** True when `s` reads as a raw machine slug (snake_case, no spaces, no
+ *  uppercase) rather than something a person wrote — the shape a bare
+ *  object_id has, and what an unnamed HA entity's friendly_name sometimes
+ *  defaults to verbatim. */
+function looksLikeRawSlug(s: string): boolean {
+  return /^[a-z0-9]+(_[a-z0-9]+)+$/.test(s);
+}
+
 /** Turn a raw entity_id local part into a readable label when no HA
- *  friendly_name is available: dedupe a repeated leading phrase (see
- *  dedupeRepeatedPrefix), then Title Case each remaining word — instead of
- *  the all-lowercase, doubled-up raw slug ("master bedroom master bedroom
- *  light ceiling center") that used to be the permanent fallback. */
+ *  friendly_name is available — instead of the all-lowercase, doubled-up
+ *  raw slug ("master bedroom master bedroom light ceiling center") that
+ *  used to be the permanent fallback. */
 export function prettifyEntitySlug(entityId: string): string {
-  const raw = entityId.split(".")[1]?.replace(/_/g, " ") ?? entityId;
-  const words = dedupeRepeatedPrefix(raw.split(/\s+/).filter(Boolean));
-  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") || entityId;
+  const raw = entityId.split(".")[1] ?? entityId;
+  return prettifyRaw(raw);
 }
 
 /**
@@ -134,12 +152,22 @@ export function looksLikeRawFallbackLabel(entityId: string, label: string): bool
  * good one is available. Advanced Settings' own Label EDIT FIELD deliberately
  * does NOT go through this — editing shows the exact raw stored value, not a
  * live-computed stand-in for it.
+ *
+ * A live HA friendly_name is normally trusted verbatim (assumed already
+ * human-written) — but some integrations, and any YAML/UI entity with no
+ * explicit name configured, leave friendly_name as the bare object_id
+ * itself, e.g. "ceiling_fan_gym_room". Reported as a panel title/badge that
+ * "still looks like a technical name" for exactly those entities. Caught the
+ * same way a raw stored label is (looksLikeRawSlug) and prettified rather
+ * than shown as-is, same as the no-friendly-name fallback below it always was.
  */
 export function displayLabelFor(
   entityId: string, storedLabel: string | undefined, friendlyName?: string,
 ): string {
   if (storedLabel && !looksLikeRawFallbackLabel(entityId, storedLabel)) return storedLabel;
-  return friendlyName?.trim() || prettifyEntitySlug(entityId);
+  const fn = friendlyName?.trim();
+  if (fn) return looksLikeRawSlug(fn) ? prettifyRaw(fn) : fn;
+  return prettifyEntitySlug(entityId);
 }
 
 /**

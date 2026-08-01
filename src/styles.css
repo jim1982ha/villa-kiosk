@@ -930,8 +930,8 @@ button {
    aligned with the close button, which .panel-header already is via
    align-items:flex-start above. */
 .panel-header-actions { flex: 0 0 auto; }
-/* Single line, truncated with an ellipsis — same treatment as .panel-entity-id
-   below it — instead of wrapping a long device name onto a second line. */
+/* Single line, truncated with an ellipsis, instead of wrapping a long device
+   name onto a second line. */
 .panel-header .title h2 {
   /* Smaller than a typical modal heading on purpose — this is the ONE spot
      that echoes an arbitrary, unbounded device name (every other modal's
@@ -942,11 +942,6 @@ button {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
 .panel-header .room { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
-.panel-header .panel-entity-id {
-  margin-top: 3px; font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px; color: var(--text-dim);
-  max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
 .panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
 /* Real map badge shown in the panel header. As a button it's a colour editor. */
 .panel-icon .panel-badge-img, .panel-badge-btn .panel-badge-img { width: 44px; height: 44px; display: block; border-radius: 12px; }
@@ -989,16 +984,16 @@ button {
 }
 .panel-close-btn:hover { background: var(--bg-input); color: var(--text-primary); }
 .panel-close-btn:active { transform: scale(0.92); }
-/* Same treatment as .settings-footer (Advanced Settings/Close) — text-labelled
-   buttons, right-aligned, separated by a hairline. Unlike .settings-footer this sits
-   INSIDE the modal's own padding (.panel-modal has no separate header/body/
-   footer padding of their own, see .modal:not(.settings-modal)), so it's
-   inset like the rest of the content rather than bleeding to the card edge. */
+/* Text-labelled button(s), right-aligned, no separator above (see
+   .settings-footer for the same rule applied to the other modal family).
+   Unlike .settings-footer this sits INSIDE the modal's own padding
+   (.panel-modal has no separate header/body/footer padding of their own,
+   see .modal:not(.settings-modal)), so it's inset like the rest of the
+   content rather than bleeding to the card edge. */
 .panel-footer {
   flex: 0 0 auto;
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-  margin-top: 20px; padding-top: 16px;
-  border-top: 1px solid var(--hairline);
+  margin-top: 20px;
 }
 /* Secondary actions in a panel footer (Edit…) read as a soft "ghost" pill
    rather than a default-looking bordered box — the boxy outline was the
@@ -1351,7 +1346,11 @@ input[type="range"]::-moz-range-thumb {
 .settings-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 8px 28px 12px; }
 .settings-body label { display: block; font-size: 13px; color: var(--text-secondary); margin: 14px 0 6px; }
 .settings-body label.toggle { display: flex; align-items: center; gap: 12px; margin-top: 12px; cursor: pointer; font-size: 15px; color: var(--text-primary); }
-.settings-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; border-top: 1px solid var(--hairline); background: var(--bg-overlay); }
+/* No separator above this footer, same reasoning as .panel-footer (device
+   panels) — the same visual rule applied once here since this ONE class
+   already backs every settings-style modal (Settings, Advanced Settings,
+   Facility, Legend, First-run tips), rather than a per-modal exception. */
+.settings-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; background: var(--bg-overlay); }
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
 .settings-section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin: 22px 0 8px; font-weight: 600; }

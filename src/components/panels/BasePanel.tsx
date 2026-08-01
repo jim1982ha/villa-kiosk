@@ -1,9 +1,12 @@
 // src/components/panels/BasePanel.tsx
 // Shared modal wrapper for device panels: centered dialog (not a bottom
-// sheet), backdrop-dismiss + Escape, header with icon/title/room/entity id
-// and a plain X dismiss button. Edit lives in the FOOTER, right-aligned —
-// title truncates with an ellipsis (see .panel-header .title h2 in
-// styles.css) instead of fighting a footer button for room.
+// sheet), backdrop-dismiss + Escape, header with icon/title/room and a plain
+// X dismiss button (the raw entity_id used to show as a third header line —
+// dropped for a slicker header; still available via Advanced Settings' Edit,
+// and every title is human-readable now — see displayLabelFor). Edit lives
+// in the FOOTER, right-aligned — title truncates with an ellipsis (see
+// .panel-header .title h2 in styles.css) instead of fighting a footer button
+// for room.
 
 import { useEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
@@ -29,7 +32,7 @@ interface Props {
 }
 
 export default function BasePanel({ title, room, icon, className, headerActions, onClose, children }: Props) {
-  const { entityId, onEdit, badge, onSetBadgeColor, linked } = usePanelActions();
+  const { onEdit, badge, onSetBadgeColor, linked } = usePanelActions();
   const [colorOpen, setColorOpen] = useState(false);
 
   useEffect(() => {
@@ -77,7 +80,6 @@ export default function BasePanel({ title, room, icon, className, headerActions,
             <div style={{ minWidth: 0 }}>
               <h2 title={title}>{title}</h2>
               {room && <div className="room">{room}</div>}
-              {entityId && <div className="panel-entity-id" title={entityId}>{entityId}</div>}
             </div>
           </div>
           {headerActions && <div className="panel-header-actions">{headerActions}</div>}

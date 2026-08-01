@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.50.0
+
+### Changes
+- **Device panels: removed the entity_id line from the header** (title/room only now, one less technical detail cluttering every panel) **and the separator above the footer's Edit button** — applied to the ONE shared class (`.settings-footer`) backing every settings-style modal (Settings, Advanced Settings, Facility, Legend, First-run Tips) rather than a one-off exception on device panels alone, so the same "no hard separator" look is consistent everywhere it applies.
+- **Fixed panel titles/badges still showing a raw technical name** (e.g. "ceiling_fan_gym_room" instead of "Ceiling Fan Gym Room") for entities whose HA `friendly_name` itself defaults to the bare object_id — some integrations and any YAML/UI entity with no explicit name configured do this. Fixed at the source (`displayLabelFor`, the one function every display surface already funnels through — panel titles, map badges, the group modal, device-group rows), so it's corrected everywhere at once, not just in one modal.
+- Typecheck and production build clean.
+
 ## 2.49.0
 
 ### Changes
