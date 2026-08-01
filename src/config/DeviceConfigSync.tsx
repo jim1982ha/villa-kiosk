@@ -124,71 +124,6 @@ export default function DeviceConfigSync() {
   const revRef = useRef<number>(0);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const pull = useCallback(async () => {
-    const result = await fetchSharedConfig();
-    if (result === null) return; // couldn't reach it — keep what we have
-    const { config: server, rev } = result;
-    const keys = Object.keys(server);
-    if (keys.length === 0) {
-      // Nothing stored yet (fresh install, or first run after upgrading from
-      // the localStorage-only versions). Seed the store from whatever THIS
-      // device already has rather than letting an empty pull blank it.
-      baselineRef.current = localRef.current;
-      serverJsonRef.current = JSON.stringify(localRef.current);
-      revRef.current = rev;
-      if (role === "owner") void saveSharedConfig(localRef.current, rev);
-      return;
-    }
-    // RULE 3: A PULL MUST NEVER CLOBBER AN UNPUSHED LOCAL EDIT.
-    //
-    // Checked FIRST, and against the baseline as it stood BEFORE this pull —
-    // if the local slice has drifted from what the server was last known to
-    // hold, this client is mid-edit and its own push is still in the debounce
-    // window. Pushes wait PUSH_DEBOUNCE_MS but pull() runs on every focus and
-    // visibilitychange, and on several platforms interacting with a native
-    // <select> blurs then refocuses the window — so picking a room in
-    // Advanced Settings fired a pull while that very edit was still pending,
-    // fetched the server's older copy, and wrote it back over the change.
-    // Reported from the field as "I set the room, and seconds later it
-    // reverts".
-    //
-    // Compared after the await, since the edit may have landed while the
-    // request was in flight — precisely the window at risk. baselineRef is
-    // deliberately left alone so the push gate still sees a difference and
-    // sends this client's edit; the next pull then reconciles normally.
-    // Losing a beat of remote changes is fine, losing the user's edit is not.
-    const priorBaseline = serverJsonRef.current;
-    if (priorBaseline !== null && JSON.stringify(localRef.current) !== priorBaseline) return;
-
-    // Server wins for every field it actually carries; fields it omits keep
-    // their current local value (an older store, or one written before a field
-    // existed, must not blank that field). The baseline is that MERGED result,
-    // which is what the local slice will equal once `update` commits — so the
-    // push effect sees no change and the pull can't bounce straight back.
-    const merged = { ...localRef.current, ...server } as SharedDeviceConfig;
-    const mergedJson = JSON.stringify(merged);
-    baselineRef.current = merged;
-    serverJsonRef.current = mergedJson;
-    revRef.current = rev;
-    // Skip the update entirely when the server genuinely has nothing new for
-    // us. `pull()` runs on every mount AND every window focus/visibilitychange
-    // (below) — so on a kiosk that's just been minimised and restored, or a
-    // phone brought back from the background, this fires constantly with
-    // data that hasn't moved an inch. update() still hands React (and from
-    // there, SceneManager) a BRAND NEW object reference for every field in
-    // `server` on every call, even when its content is byte-identical to what
-    // config already holds — a fresh JSON parse can never be `===` the
-    // existing object. SceneManager's structural-change gate content-diffs
-    // entityMap (entityMapDelta) but compares meshBindings by REFERENCE, so
-    // an unconditional update() here forced a full mesh re-index — visible as
-    // covers/locks snapping back to their hardcoded default pose mid-rebuild,
-    // and the multi-second freeze the rebuild itself costs — on literally
-    // every focus regain, whether or not anything had actually changed.
-    if (mergedJson === JSON.stringify(localRef.current)) return;
-
-    update(server);
-  }, [update, role]);
-
   // RULE 4: diff this device's local edits against the baseline it last
   // synced against, replay ONLY that diff onto the server's freshest copy,
   // and write it back under optimistic concurrency — retrying against a
@@ -223,6 +158,83 @@ export default function DeviceConfigSync() {
       // and rebase this device's diff against the copy the 409 handed back.
     }
   }, [update]);
+
+  const pull = useCallback(async () => {
+    const result = await fetchSharedConfig();
+    if (result === null) return; // couldn't reach it — keep what we have
+    const { config: server, rev } = result;
+    const keys = Object.keys(server);
+    if (keys.length === 0) {
+      // Nothing stored yet (fresh install, or first run after upgrading from
+      // the localStorage-only versions). Seed the store from whatever THIS
+      // device already has rather than letting an empty pull blank it.
+      baselineRef.current = localRef.current;
+      serverJsonRef.current = JSON.stringify(localRef.current);
+      revRef.current = rev;
+      if (role === "owner") void saveSharedConfig(localRef.current, rev);
+      return;
+    }
+    // RULE 3: A PULL MUST NEVER CLOBBER AN UNPUSHED LOCAL EDIT.
+    //
+    // Checked FIRST, and against the baseline as it stood BEFORE this pull —
+    // if the local slice has drifted from what the server was last known to
+    // hold, this client is mid-edit and its own push is still in the debounce
+    // window. Pushes wait PUSH_DEBOUNCE_MS but pull() runs on every focus and
+    // visibilitychange, and on several platforms interacting with a native
+    // <select> blurs then refocuses the window — so picking a room in
+    // Advanced Settings fired a pull while that very edit was still pending,
+    // fetched the server's older copy, and wrote it back over the change.
+    // Reported from the field as "I set the room, and seconds later it
+    // reverts".
+    //
+    // Compared after the await, since the edit may have landed while the
+    // request was in flight — precisely the window at risk. baselineRef is
+    // deliberately left alone so the push gate still sees a difference and
+    // sends this client's edit; the next pull then reconciles normally.
+    // Losing a beat of remote changes is fine, losing the user's edit is not.
+    const priorBaseline = serverJsonRef.current;
+    if (priorBaseline !== null && JSON.stringify(localRef.current) !== priorBaseline) {
+      // Aborting the pull is only half the answer: the reason we're aborting
+      // is that this device holds an edit the server hasn't got. If that
+      // edit's own push already failed (a flaky phone connection is the
+      // normal case), nothing would ever retry it — the push effect only
+      // re-fires when the local slice CHANGES — so the device would sit here
+      // refusing every pull for an edit it never sends, permanently out of
+      // sync in both directions until the user happened to edit something
+      // else. Retry the push instead, so a focus/heartbeat pull is what
+      // unwedges it.
+      void pushOwnDiff();
+      return;
+    }
+
+    // Server wins for every field it actually carries; fields it omits keep
+    // their current local value (an older store, or one written before a field
+    // existed, must not blank that field). The baseline is that MERGED result,
+    // which is what the local slice will equal once `update` commits — so the
+    // push effect sees no change and the pull can't bounce straight back.
+    const merged = { ...localRef.current, ...server } as SharedDeviceConfig;
+    const mergedJson = JSON.stringify(merged);
+    baselineRef.current = merged;
+    serverJsonRef.current = mergedJson;
+    revRef.current = rev;
+    // Skip the update entirely when the server genuinely has nothing new for
+    // us. `pull()` runs on every mount AND every window focus/visibilitychange
+    // (below) — so on a kiosk that's just been minimised and restored, or a
+    // phone brought back from the background, this fires constantly with
+    // data that hasn't moved an inch. update() still hands React (and from
+    // there, SceneManager) a BRAND NEW object reference for every field in
+    // `server` on every call, even when its content is byte-identical to what
+    // config already holds — a fresh JSON parse can never be `===` the
+    // existing object. SceneManager's structural-change gate content-diffs
+    // entityMap (entityMapDelta) but compares meshBindings by REFERENCE, so
+    // an unconditional update() here forced a full mesh re-index — visible as
+    // covers/locks snapping back to their hardcoded default pose mid-rebuild,
+    // and the multi-second freeze the rebuild itself costs — on literally
+    // every focus regain, whether or not anything had actually changed.
+    if (mergedJson === JSON.stringify(localRef.current)) return;
+
+    update(server);
+  }, [update, role, pushOwnDiff]);
 
   // Pull once on mount, then whenever the tab is refocused / becomes visible,
   // plus a long visible-only heartbeat for a device that never does either —

@@ -128,6 +128,25 @@ export interface AppConfig {
    * tapping objects in the scene. Takes priority over name-based matching.
    */
   meshBindings: Record<string, string>;
+  /**
+   * entity_ids the owner has explicitly dismissed via Advanced Settings'
+   * "N entities no longer in Home Assistant -> Remove N".
+   *
+   * Deleting the entityMap row alone was never enough to make one go away:
+   * the id is ALSO derived from the model itself (a mesh literally named
+   * after it, the pipeline's own naming convention), so every surface that
+   * reads mesh-derived ids — the unavailable-devices list, auto-detection on
+   * the next load — regenerated it seconds later, on that device and every
+   * other one. This records the DECISION rather than just its effect, so it
+   * survives a reload and syncs to every client.
+   *
+   * Self-healing by construction: a dismissal only applies while Home
+   * Assistant still doesn't know the entity. If it comes back (recreated,
+   * renamed back, an integration reloaded), it stops being dismissed and
+   * behaves like any other live entity — so this can never become a
+   * permanent invisible blocklist that hides a working device.
+   */
+  dismissedEntityIds: string[];
   teleportPoints: TeleportPoint[];
   alertThresholds: Record<string, Threshold>;
   modelTransform: ModelTransform;
@@ -251,6 +270,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   currentFloor: 1,
   entityMap: ENTITY_MAP,
   meshBindings: {},
+  dismissedEntityIds: [],
   teleportPoints: TELEPORT_POINTS,
   alertThresholds: DEFAULT_THRESHOLDS,
   modelTransform: DEFAULT_MODEL_TRANSFORM,

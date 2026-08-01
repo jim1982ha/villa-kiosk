@@ -10,11 +10,18 @@
 // now read from.
 
 import { DoorClosed, DoorOpen, Lightbulb } from "lucide-react";
-import { prettifyEntitySlug } from "@/config/EntityMap";
+import { displayLabelFor } from "@/config/EntityMap";
 import type { HassEntity } from "@/types/ha.types";
+import type { EntityMapping } from "@/types/scene.types";
 import type { SummaryGroup } from "@/components/panels/SummaryGroupPanel";
 
-const friendly = (e: HassEntity) => e.attributes.friendly_name?.trim() || prettifyEntitySlug(e.entity_id);
+// Same label the map badge, Advanced Settings and every device list show —
+// displayLabelFor is THE rule (a user's stored label wins over HA's
+// friendly_name, raw slugs get prettified). Deriving it here from
+// friendly_name alone meant a device the owner had renamed kept its old HA
+// name on this one tile while reading correctly everywhere else.
+const friendly = (e: HassEntity, entityMap: Record<string, EntityMapping>) =>
+  displayLabelFor(e.entity_id, entityMap[e.entity_id]?.label, e.attributes.friendly_name);
 
 /** Every `lock.*` entity — see SummaryBar's own docstring for why this is
  *  domain-only and NOT extended to switches that merely read as door/gate
@@ -24,12 +31,15 @@ const friendly = (e: HassEntity) => e.attributes.friendly_name?.trim() || pretti
  *  door lock" that doesn't risk exactly that kind of false positive — an
  *  explicit per-entity opt-in would be the honest way to add one, not a name
  *  match. Returns null (no group, no tile) when there are no locks at all. */
-export function locksGroup(entities: Record<string, HassEntity>): SummaryGroup | null {
+export function locksGroup(
+  entities: Record<string, HassEntity>,
+  entityMap: Record<string, EntityMapping> = {},
+): SummaryGroup | null {
   const locks = Object.values(entities).filter((e) => e.entity_id.startsWith("lock."));
   if (locks.length === 0) return null;
   const allLocked = locks.every((l) => l.state === "locked");
   return {
-    title: locks.length === 1 ? friendly(locks[0]) : "Locks",
+    title: locks.length === 1 ? friendly(locks[0], entityMap) : "Locks",
     icon: allLocked ? DoorClosed : DoorOpen,
     entityIds: locks.map((l) => l.entity_id),
   };

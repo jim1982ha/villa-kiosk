@@ -8,7 +8,7 @@
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { Unlink, Link2 } from "lucide-react";
 import EntityPicker from "./EntityPicker";
-import { CATEGORY_ORDER, CATEGORY_LABELS, categoryForEntity } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory } from "@/config/EntityCategories";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { memo } from "react";
 
@@ -77,7 +77,7 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
           </select>
           <select
             style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
-            value={meta.category ?? categoryForEntity(entityId, meta.type)}
+            value={effectiveCategory(entityId, meta.type, meta.category)}
             onChange={(e) => draftField({ category: e.target.value as Category })}
             title="Which map filter group this device belongs to"
           >

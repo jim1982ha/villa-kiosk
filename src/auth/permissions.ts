@@ -13,7 +13,7 @@
 
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import type { AppConfig } from "@/config/AppConfig";
-import { CATEGORY_ORDER, categoryForEntity } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, effectiveCategory } from "@/config/EntityCategories";
 import type { Role } from "./roles";
 
 /** Things a profile can DO (beyond seeing devices). */
@@ -115,7 +115,12 @@ export function climateLimits(role: Role): { climateMin: number; climateMax: num
 /** Per-entity check using its stored mapping (falls back to the category
  *  defaults exactly like the rest of the app does). */
 export function isMappingAllowed(role: Role, entityId: string, mapping: EntityMapping): boolean {
-  const category = mapping.category ?? categoryForEntity(entityId, mapping.type);
+  // effectiveCategory, NOT `mapping.category ?? categoryForEntity(...)`: the
+  // two disagree whenever a stored category merely equals the LEGACY auto
+  // default, which effectiveCategory deliberately ignores so current defaults
+  // apply. This decides what a role is allowed to see, so it disagreeing with
+  // the category the badge/filter actually uses is an RBAC hole, not cosmetic.
+  const category = effectiveCategory(entityId, mapping.type, mapping.category);
   return isEntityAllowed(role, mapping.type, category);
 }
 

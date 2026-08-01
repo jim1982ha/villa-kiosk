@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
+import { dismissedEntitySet } from "@/config/dismissedEntities";
 import { useHA } from "@/ha/HAStateStore";
 import EntityMapRow from "./EntityMapRow";
 import type { EntityMapping } from "@/types/scene.types";
@@ -64,9 +65,19 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     () => new Set(Object.values(config.meshBindings)),
     [config.meshBindings],
   );
+  // Dismissed-and-still-absent-from-HA entities are filtered out entirely (see
+  // AppConfig.dismissedEntityIds): auto-detection re-adds a row for any mesh
+  // named like an entity_id, so without this the rows the owner just removed
+  // reappeared here on the next model load. A dismissal that HA later
+  // contradicts (the entity is back) stops applying, and the row returns.
+  const dismissedSet = useMemo(
+    () => dismissedEntitySet(config.dismissedEntityIds, entities),
+    [config.dismissedEntityIds, entities],
+  );
   const allEntries = useMemo(
-    () => Object.entries(config.entityMap).filter(([key]) => !boundEntityIds.has(key)),
-    [config.entityMap, boundEntityIds],
+    () => Object.entries(config.entityMap)
+      .filter(([key]) => !boundEntityIds.has(key) && !dismissedSet.has(key)),
+    [config.entityMap, boundEntityIds, dismissedSet],
   );
   // Entries Home Assistant has never heard of. This map only ever GREW —
   // auto-detection adds a row for any mesh named like an entity ID and nothing
@@ -88,7 +99,14 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   const removeStale = useCallback(() => {
     const next = { ...configRef.current.entityMap };
     for (const id of staleIds) delete next[id];
-    update({ entityMap: next });
+    // Record the DECISION alongside deleting the rows. Deleting alone was
+    // never enough: these ids are also derived from the model (a mesh named
+    // after the entity), so auto-detection and the unavailable-devices list
+    // regenerated every one of them — the reported "I press Remove and they
+    // come straight back, on this device and the others".
+    const dismissed = new Set(configRef.current.dismissedEntityIds);
+    for (const id of staleIds) dismissed.add(id);
+    update({ entityMap: next, dismissedEntityIds: [...dismissed] });
   }, [staleIds, update]);
 
   // Live filter by entity id, label or room — the auto-detected list is long.

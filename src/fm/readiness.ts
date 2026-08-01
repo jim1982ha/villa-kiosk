@@ -56,6 +56,9 @@ export function buildReadiness(
    *  unavailableDeviceIds. Optional (defaults to none) only for a caller with
    *  no groups configured yet; every real caller has config.deviceGroups. */
   deviceGroups: readonly DeviceGroup[] = [],
+  /** See AppConfig.dismissedEntityIds — an entity the owner removed as gone
+   *  from HA must not keep the readiness check red forever either. */
+  dismissedEntityIds: readonly string[] = [],
   now = Date.now(),
 ): ReadinessReport {
   const checks: ReadinessCheck[] = [];
@@ -72,7 +75,8 @@ export function buildReadiness(
   // check counted raw candidates with no device-folding or debris filtering,
   // so a two-entity combo sensor could read as two broken devices here and
   // one on the HUD badge); see unavailableDeviceIds's docstring.
-  const offline = unavailableDeviceIds(entityMap, [...deviceGroups], mappedEntityIds, entities);
+  const offline = unavailableDeviceIds(
+    entityMap, [...deviceGroups], mappedEntityIds, entities, dismissedEntityIds);
   checks.push({
     id: "devices-online",
     label: "All devices reporting",

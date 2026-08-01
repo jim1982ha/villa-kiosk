@@ -82,8 +82,10 @@ export default function FacilityModal({
   // Shared by the Readiness tab and the Report tab, so the report can never
   // disagree with what the operator just looked at.
   const readiness = useMemo(
-    () => buildReadiness(entities, config.entityMap, mappedEntityIds, data, config.deviceGroups),
-    [entities, config.entityMap, mappedEntityIds, data, config.deviceGroups],
+    () => buildReadiness(
+      entities, config.entityMap, mappedEntityIds, data, config.deviceGroups,
+      config.dismissedEntityIds),
+    [entities, config.entityMap, mappedEntityIds, data, config.deviceGroups, config.dismissedEntityIds],
   );
 
   // Same list the HUD's own unavailable-devices badge shows (see
@@ -91,8 +93,9 @@ export default function FacilityModal({
   // panel rather than a Facility-local reimplementation, so there is only
   // ever one "unavailable devices" view in the app to keep in sync.
   const unavailableIds = useMemo(
-    () => unavailableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds, entities),
-    [config.entityMap, config.deviceGroups, mappedEntityIds, entities],
+    () => unavailableDeviceIds(
+      config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
+    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
   );
   const canControl = role != null && hasCapability(role, "controlEntities");
 
@@ -143,7 +146,9 @@ export default function FacilityModal({
                 onOpenCheckDevices={openCheckDevices}
               />
             )}
-            {ready && tab === "faults" && <FaultsTab onOpenEntity={onOpenEntity} />}
+            {ready && tab === "faults" && (
+              <FaultsTab onOpenEntity={onOpenEntity} unavailableIds={unavailableIds} />
+            )}
             {ready && tab === "spend" && <SpendTab onOpenEntity={onOpenEntity} />}
             {ready && tab === "schedule" && <ScheduleEditor />}
             {ready && tab === "report" && (

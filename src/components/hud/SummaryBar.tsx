@@ -88,7 +88,7 @@ function deriveTiles(
   // an unanchored "door" substring — reverted). Shared with the Facility
   // Readiness tab's "View doors" shortcut (see summaryGroups.ts) so both
   // open the identical group, not two independently-derived lists.
-  const locksG = locksGroup(entities);
+  const locksG = locksGroup(entities, entityMap);
   if (locksG) {
     const locks = locksG.entityIds.map((id) => entities[id]).filter((e): e is HassEntity => !!e);
     const lockedN = locks.filter((l) => l.state === "locked").length;

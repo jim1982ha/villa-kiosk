@@ -15,7 +15,6 @@ import { Plus, Wrench } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { displayLabelFor } from "@/config/EntityMap";
-import { isUnavailable } from "@/utils/stateColors";
 import { useFmData } from "@/fm/FmDataContext";
 import { localStamp, ticketStats } from "@/fm/fmEngine";
 import type { FmTicketStatus } from "@/fm/fmTypes";
@@ -29,7 +28,18 @@ const LABEL: Record<FmTicketStatus, string> = {
   open: "Open", in_progress: "In progress", resolved: "Resolved",
 };
 
-export default function FaultsTab({ onOpenEntity }: { onOpenEntity: (id: string) => void }) {
+export default function FaultsTab(
+  { onOpenEntity, unavailableIds }: {
+    onOpenEntity: (id: string) => void;
+    /** Computed once by FacilityModal via unavailableDeviceIds and passed in,
+     *  rather than recomputed here — this tab used to derive its own
+     *  "broken devices" shortlist straight off entityMap, which meant no
+     *  device folding, no config-debris filtering and no dismissals: the
+     *  same device could be one row on the HUD badge and two here, and an
+     *  entity the owner had explicitly removed still showed up. */
+    unavailableIds: string[];
+  },
+) {
   const { data, addTicket, updateTicket } = useFmData();
   const { entities } = useHA();
   const { config } = useConfig();
@@ -53,8 +63,7 @@ export default function FaultsTab({ onOpenEntity }: { onOpenEntity: (id: string)
   // ticket — the "raise this" shortlist.
   const ticketed = new Set(data.tickets.filter((t) => t.status !== "resolved")
     .map((t) => t.entityId).filter(Boolean));
-  const broken = Object.keys(config.entityMap)
-    .filter((id) => !config.entityMap[id]?.disabled && isUnavailable(entities[id]) && !ticketed.has(id));
+  const broken = unavailableIds.filter((id) => !ticketed.has(id));
 
   const label = (id: string) =>
     displayLabelFor(id, config.entityMap[id]?.label, entities[id]?.attributes.friendly_name);

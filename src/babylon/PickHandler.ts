@@ -11,7 +11,7 @@ import {
   PointerEventTypes, type PointerInfo, type AbstractMesh, type Scene, type Node,
 } from "@babylonjs/core";
 import { resolveMeshToMapping } from "@/config/EntityMap";
-import { categoryForEntity } from "@/config/EntityCategories";
+import { effectiveCategory } from "@/config/EntityCategories";
 import { tapDebug } from "@/utils/tapDebug";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 
@@ -87,7 +87,7 @@ export class PickHandler {
         // a category the HUD filter switched off is not interactive either,
         // matching SceneManager.applyHighlight's own gate (hidden categories
         // don't glow as clickable, so they shouldn't fire on tap either).
-        const category = mapping.category ?? categoryForEntity(mapping.entityId, mapping.type);
+        const category = effectiveCategory(mapping.entityId, mapping.type, mapping.category);
         if (!this.hiddenCategories.includes(category)) return mapping;
       }
       node = node.parent;

@@ -8,6 +8,7 @@ import type { AppConfig, DeviceGroup } from "./AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
+import { dismissedEntitySet } from "./dismissedEntities";
 
 /** Every entity_id folded into some group as a (non-primary) member — these
  *  never get their own badge; see EntityVisuals.rebuildLabels. */
@@ -160,8 +161,16 @@ export function unavailableDeviceIds(
   deviceGroups: DeviceGroup[],
   mappedEntityIds: ReadonlySet<string>,
   entities: Record<string, HassEntity>,
+  /** See AppConfig.dismissedEntityIds. Deleting the entityMap row was never
+   *  enough on its own: `candidates` below also draws from mappedEntityIds
+   *  (mesh-derived), so an entity whose MESH still carries its name came
+   *  straight back into this list the moment the owner removed it — on the
+   *  very device that removed it, and on every other one. Reported as
+   *  "I click Remove and they're still in Unavailable devices". */
+  dismissedEntityIds: readonly string[] = [],
 ): string[] {
   const candidates = new Set([...mappedEntityIds, ...Object.keys(entityMap)]);
+  const dismissed = dismissedEntitySet(dismissedEntityIds, entities);
 
   const repOf = new Map<string, string>();
   for (const g of deviceGroups) {
@@ -178,6 +187,7 @@ export function unavailableDeviceIds(
     // geometry on the map is not a device in error, it's a leftover key from
     // a renamed entity or an older model.
     if (!mappedEntityIds.has(id) && !entities[id]) continue;
+    if (dismissed.has(id)) continue;
     if (!isUnavailable(entities[id])) continue;
     reps.add(repOf.get(id) ?? id);
   }

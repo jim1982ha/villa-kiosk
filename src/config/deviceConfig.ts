@@ -14,6 +14,9 @@
 //     meshBindings   which 3D mesh is which entity
 //     deviceGroups   which entities are really one physical device
 //     teleportPoints room definitions (incl. each room's saved overview pose)
+//     dismissedEntityIds  entities the owner removed as "no longer in HA" —
+//                    a decision about the VILLA's model, so dismissing on a
+//                    phone must dismiss on the wall tablet too
 //
 //   PER-DEVICE — describes THIS CLIENT's look/feel, where different answers on
 //   different hardware are correct, not a drift to be reconciled: render
@@ -35,7 +38,7 @@ import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
  *  derive from this one list, so adding a field here is all it takes to make
  *  it site-wide. */
 export const SHARED_CONFIG_KEYS = [
-  "entityMap", "meshBindings", "deviceGroups", "teleportPoints",
+  "entityMap", "meshBindings", "deviceGroups", "teleportPoints", "dismissedEntityIds",
 ] as const;
 
 export type SharedConfigKey = (typeof SHARED_CONFIG_KEYS)[number];
@@ -62,6 +65,9 @@ export function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
   if (b.meshBindings && typeof b.meshBindings === "object") out.meshBindings = b.meshBindings;
   if (Array.isArray(b.deviceGroups)) out.deviceGroups = b.deviceGroups;
   if (Array.isArray(b.teleportPoints)) out.teleportPoints = b.teleportPoints;
+  if (Array.isArray(b.dismissedEntityIds)) {
+    out.dismissedEntityIds = b.dismissedEntityIds.filter((v) => typeof v === "string");
+  }
   return out as Partial<SharedDeviceConfig>;
 }
 
@@ -96,6 +102,12 @@ function keyDeviceGroups(arr: DeviceGroup[]): Keyed<DeviceGroup> {
 function keyTeleportPoints(arr: TeleportPoint[]): Keyed<TeleportPoint> {
   return Object.fromEntries(arr.map((p) => [p.name, p]));
 }
+/** A plain id list is its own key — dismissing an entity on one device and
+ *  un-dismissing a DIFFERENT one on another must not cancel each other out,
+ *  which is exactly what comparing the two lists wholesale would do. */
+function keyIdList(arr: string[]): Keyed<true> {
+  return Object.fromEntries(arr.map((id) => [id, true as const]));
+}
 
 interface KeyedDiff<T> {
   set: Keyed<T>;
@@ -127,6 +139,7 @@ export interface SharedConfigDiff {
   meshBindings: KeyedDiff<string>;
   deviceGroups: KeyedDiff<DeviceGroup>;
   teleportPoints: KeyedDiff<TeleportPoint>;
+  dismissedEntityIds: KeyedDiff<true>;
 }
 
 /** What did `next` actually change relative to `base`, per item? */
@@ -136,12 +149,14 @@ export function diffSharedConfig(base: SharedDeviceConfig, next: SharedDeviceCon
     meshBindings: diffKeyed(base.meshBindings, next.meshBindings),
     deviceGroups: diffKeyed(keyDeviceGroups(base.deviceGroups), keyDeviceGroups(next.deviceGroups)),
     teleportPoints: diffKeyed(keyTeleportPoints(base.teleportPoints), keyTeleportPoints(next.teleportPoints)),
+    dismissedEntityIds: diffKeyed(keyIdList(base.dismissedEntityIds), keyIdList(next.dismissedEntityIds)),
   };
 }
 
 export function isSharedConfigDiffEmpty(diff: SharedConfigDiff): boolean {
   return keyedDiffIsEmpty(diff.entityMap) && keyedDiffIsEmpty(diff.meshBindings)
-    && keyedDiffIsEmpty(diff.deviceGroups) && keyedDiffIsEmpty(diff.teleportPoints);
+    && keyedDiffIsEmpty(diff.deviceGroups) && keyedDiffIsEmpty(diff.teleportPoints)
+    && keyedDiffIsEmpty(diff.dismissedEntityIds);
 }
 
 /** Replay a diff onto some other config snapshot (normally the server's
@@ -153,6 +168,7 @@ export function applySharedConfigDiff(target: SharedDeviceConfig, diff: SharedCo
     meshBindings: applyKeyed(target.meshBindings, diff.meshBindings),
     deviceGroups: Object.values(applyKeyed(keyDeviceGroups(target.deviceGroups), diff.deviceGroups)),
     teleportPoints: Object.values(applyKeyed(keyTeleportPoints(target.teleportPoints), diff.teleportPoints)),
+    dismissedEntityIds: Object.keys(applyKeyed(keyIdList(target.dismissedEntityIds), diff.dismissedEntityIds)),
   };
 }
 

@@ -123,8 +123,9 @@ export default function HUD({
   // unavailableDeviceIds's docstring for why that sharing is load-bearing,
   // not just tidiness (the two used to disagree).
   const unavailableIds = useMemo(
-    () => unavailableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds, entities),
-    [config.entityMap, config.deviceGroups, mappedEntityIds, entities],
+    () => unavailableDeviceIds(
+      config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
+    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
   );
   const [unavailableOpen, setUnavailableOpen] = useState(false);
 
