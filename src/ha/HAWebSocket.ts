@@ -2,7 +2,9 @@
 // Robust HA WebSocket client: auth, message-id tracking, event subscriptions,
 // exponential-backoff reconnect with re-subscription. (3Dash-informed patterns.)
 
-import type { HassEntity, HassEntityRegistryEntry, HassServiceTarget } from "@/types/ha.types";
+import type {
+  HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntity, HassEntityRegistryEntry, HassServiceTarget,
+} from "@/types/ha.types";
 import { ingressWsUrl } from "./ingress";
 import { captureError } from "@/utils/diagnostics";
 
@@ -342,10 +344,23 @@ export class HAWebSocket {
     return this.sendMessage<HassEntity[]>("get_states");
   }
 
-  /** Entity registry rows (hidden_by, etc.) — NOT included in get_states,
-   *  which only reports live state/attributes. */
+  /** Entity registry rows (hidden_by, area_id, etc.) — NOT included in
+   *  get_states, which only reports live state/attributes. */
   async getEntityRegistry(): Promise<HassEntityRegistryEntry[]> {
     return this.sendMessage<HassEntityRegistryEntry[]>("config/entity_registry/list");
+  }
+
+  /** Device registry rows — only their id + area_id, to resolve the area an
+   *  entity INHERITS when its own registry row has no area_id of its own
+   *  (see HAStateStore's entityAreaNames). */
+  async getDeviceRegistry(): Promise<HassDeviceRegistryEntry[]> {
+    return this.sendMessage<HassDeviceRegistryEntry[]>("config/device_registry/list");
+  }
+
+  /** Area registry rows — id → human-readable name, this installation's own
+   *  live data (never shipped/assumed by this app). */
+  async getAreaRegistry(): Promise<HassAreaRegistryEntry[]> {
+    return this.sendMessage<HassAreaRegistryEntry[]>("config/area_registry/list");
   }
 
   async callService(

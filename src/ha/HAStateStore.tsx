@@ -30,6 +30,14 @@ interface HAStateContextType {
    *  this only affects the kiosk's own auto-built lists). Empty until the
    *  one-shot registry fetch on connect resolves. */
   suppressedEntityIds: Set<string>;
+  /** entity_id -> HA's own Area name (this entity's registry row, falling
+   *  back to its device's), resolved once from the registry fetch on
+   *  connect. Empty until that resolves, and empty for any entity HA has no
+   *  area assigned to — always this installation's live data, a room-name
+   *  SIGNAL to suggest/cross-check against, never authoritative on its own
+   *  (see roomForEntity's geometric room-polygon test, which wins when it
+   *  has an answer). */
+  entityAreaNames: Record<string, string>;
   /**
    * Imperative, ALWAYS-current read of `entities` — for the rare caller that
    * needs the latest snapshot at some later moment rather than reacting to
@@ -79,6 +87,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
 
   const [entities, setEntitiesState] = useState<Record<string, HassEntity>>({});
   const [suppressedEntityIds, setSuppressedEntityIds] = useState<Set<string>>(new Set());
+  const [entityAreaNames, setEntityAreaNames] = useState<Record<string, string>>({});
   // Mirrors `entities` synchronously (no extra render/effect lag) so
   // getEntitiesSnapshot() below is never stale — see its docstring.
   const entitiesRef = useRef<Record<string, HassEntity>>({});
@@ -146,16 +155,38 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
         ws.sendMessage<HAConfig>("get_config")
           .then((cfg) => setHaConfig(cfg))
           .catch((err) => devLog("[HA] get_config failed (onboarding auto-fill skipped)", err));
-        // Registry-only data (get_states never reports hidden_by/entity_category)
-        // — best effort: a profile without registry read access just sees
-        // nothing filtered, same as before this existed.
+        // Registry-only data (get_states never reports hidden_by/entity_category/
+        // area_id) — best effort: a profile without registry read access just
+        // sees nothing filtered/suggested, same as before this existed.
         ws.getEntityRegistry()
-          .then((rows) => setSuppressedEntityIds(new Set(
-            rows
-              .filter((r) => r.hidden_by != null || r.entity_category === "config" || r.entity_category === "diagnostic")
-              .map((r) => r.entity_id),
-          )))
-          .catch((err) => devLog("[HA] entity_registry/list failed (hidden filter skipped)", err));
+          .then(async (rows) => {
+            setSuppressedEntityIds(new Set(
+              rows
+                .filter((r) => r.hidden_by != null || r.entity_category === "config" || r.entity_category === "diagnostic")
+                .map((r) => r.entity_id),
+            ));
+            // Resolve each entity's Area NAME: its own area_id, falling back to
+            // its device's (HA's own inheritance rule — most entities carry no
+            // area_id of their own and get it from the device they belong to).
+            // Both registry fetches are separate best-effort steps so a profile
+            // that can read entities but not devices/areas still gets whatever
+            // resolves rather than losing the whole feature.
+            const [devices, areas] = await Promise.all([
+              ws.getDeviceRegistry().catch(() => []),
+              ws.getAreaRegistry().catch(() => []),
+            ]);
+            if (devices.length === 0 && areas.length === 0) return;
+            const areaNameById = new Map(areas.map((a) => [a.area_id, a.name]));
+            const deviceAreaById = new Map(devices.map((d) => [d.id, d.area_id]));
+            const resolved: Record<string, string> = {};
+            for (const r of rows) {
+              const areaId = r.area_id ?? (r.device_id ? deviceAreaById.get(r.device_id) : null);
+              const name = areaId ? areaNameById.get(areaId) : null;
+              if (name) resolved[r.entity_id] = name;
+            }
+            setEntityAreaNames(resolved);
+          })
+          .catch((err) => devLog("[HA] entity_registry/list failed (hidden filter + area names skipped)", err));
       } catch (err) {
         const msg = (err as Error).message;
         setLastError(msg);
@@ -195,6 +226,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     () => ({
       entities,
       suppressedEntityIds,
+      entityAreaNames,
       getEntitiesSnapshot,
       connection,
       connected: connection === "connected",
@@ -207,7 +239,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       lastError,
       serviceError,
     }),
-    [entities, suppressedEntityIds, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
+    [entities, suppressedEntityIds, entityAreaNames, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
   );
 
   return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;

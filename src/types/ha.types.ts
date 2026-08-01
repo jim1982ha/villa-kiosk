@@ -75,11 +75,34 @@ export interface HassServiceTarget {
  *  has no state at all, so it already can't appear via get_states).
  *  `entity_category` is "config" | "diagnostic" | null — the SAME field HA's
  *  own auto-generated dashboards read to keep those entities off area/device
- *  cards (they're still fully visible on the entity's own HA page). */
+ *  cards (they're still fully visible on the entity's own HA page).
+ *  `area_id`/`device_id` feed the room-suggestion signal in HAStateStore —
+ *  an entity's own `area_id` wins; when null, it inherits its device's (see
+ *  HassDeviceRegistryEntry). Both null for an entity with no area assigned
+ *  anywhere in HA — same as any other installation's real, per-site data,
+ *  never a value this app ships or assumes. */
 export interface HassEntityRegistryEntry {
   entity_id: string;
   hidden_by: string | null;
   entity_category: string | null;
+  area_id: string | null;
+  device_id: string | null;
+}
+
+/** Subset of `config/device_registry/list`'s rows — only needed to resolve
+ *  the AREA an entity inherits when its own registry row has no `area_id`
+ *  of its own (the common case: HA assigns area at the device level and
+ *  entities inherit it). */
+export interface HassDeviceRegistryEntry {
+  id: string;
+  area_id: string | null;
+}
+
+/** Subset of `config/area_registry/list`'s rows — id → human-readable name,
+ *  the only two fields the room-suggestion signal needs. */
+export interface HassAreaRegistryEntry {
+  area_id: string;
+  name: string;
 }
 
 export type EntityDomain =

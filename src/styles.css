@@ -1841,14 +1841,15 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .hud-center { gap: 4px; }
   .hud-right { gap: 6px; }
   .hud-center .icon-btn { width: 32px; height: 32px; }
-  /* Right side collapses entirely: Settings/profile move into the overflow
-     menu's dropdown (hud-menu) instead of showing inline, and that overflow
-     BUTTON itself now sits inside the Label-size .hud-group (see JSX) rather
-     than in its own .hud-right section, reading as one continuous group of
-     buttons instead of a visually separate, mismatched one. Its icon-btn
-     inherits sizing/shape from .hud-group .icon-btn + the .hud-center rule
-     above like its Minus/Plus neighbours — no separate override needed. */
+  /* Right side collapses to just the overflow button: Settings/profile/view
+     toggle move into its dropdown (hud-menu) instead of showing inline. The
+     overflow button lives in its OWN single-icon .hud-group pill inside
+     .hud-right (see JSX) — not inside the centered category group — so the
+     grid's third (justify-self: end) track pins it to the true right edge of
+     the bar while .hud-center's two equal side tracks keep the category row
+     centred, instead of both drifting toward the middle together. */
   .hud-right-inline { display: none; }
+  .hud-overflow { display: flex; }
   /* Inline colour-legend (?) and label-size +/- collapse into the overflow
      dropdown, which carries both. Declared HERE (not next to .hud-cat-sep,
      where it reads more naturally) because .icon-btn's `display: flex` sits
@@ -1856,7 +1857,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
      .hud-center prefix also raises specificity so this can't be re-broken by
      another equal-weight rule later. */
   .hud-center .hud-cat-help, .hud-center .hud-labelsize-btn { display: none; }
-  .hud-overflow { display: block; }
   /* Left control stack (1F/2F/rooms): sized to match the bottom bar's own
      icon chips (.summary-tile-icon's mobile size, see its media query) so
      the two floating icon groups read as the same family of control instead

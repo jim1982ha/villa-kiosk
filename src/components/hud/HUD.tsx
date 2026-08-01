@@ -470,8 +470,8 @@ export default function HUD({
               a phone (.hud-labelsize-btn, same breakpoint as .hud-cat-help) —
               a scrollable category row plus this pill was more than a narrow
               screen can show without scrolling to reach it; the SAME control
-              lives in the overflow dropdown below instead, always reachable
-              with no scroll. */}
+              lives in the overflow dropdown (.hud-right) instead, always
+              reachable with no scroll. */}
           <div className="hud-group" role="toolbar" aria-label="Label size">
             <button
               className="icon-btn hud-labelsize-btn"
@@ -491,147 +491,13 @@ export default function HUD({
             >
               <Plus size={18} />
             </button>
-
-            {/* Overflow menu (phones only — see .hud-overflow's default
-                display:none/mobile display:block): nested INSIDE this same
-                pill as Minus/Plus rather than off in its own .hud-right
-                section, so on a phone it reads as one continuous group of
-                buttons instead of a visually mismatched standalone button.
-                aria-haspopup/expanded + the outside-click ref stay on this
-                specific button/wrapper regardless of where it sits in the
-                layout. */}
-            <div className="hud-overflow" ref={menuRef}>
-              <button
-                className={`icon-btn${menuOpen ? " active" : ""}`}
-                onClick={() => setMenuOpen((o) => !o)}
-                title="Menu"
-                aria-label="Menu"
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-              >
-                <EllipsisVertical size={19} />
-              </button>
-              {menuOpen && (
-                <div className="hud-menu" role="menu" aria-label="Settings and profile">
-                  {/* Connection status, repeated here (the top-bar .hud-brand
-                      chip always shows its own dot too, phone included — see
-                      its media queries) since this dropdown is the one place
-                      Settings/profile live on a phone, and the profile line
-                      is a natural spot for it — as a bare icon (no
-                      "Connection: " text) sharing the line, not its own row. */}
-                  <div className="hud-menu-header">
-                    {role && <span>Signed in as {ROLE_LABELS[role]}</span>}
-                    <span
-                      className={`conn-dot ${connClass}`}
-                      title={`Connection: ${connection}`}
-                      role="img"
-                      aria-label={`Connection: ${connection}`}
-                    >
-                      <span className="dot" />
-                    </span>
-                  </div>
-                  {/* Unavailable/Facility alerts — the same two buttons that
-                      sit beside the profile chip on a roomy screen (see
-                      .hud-right-inline), collapsed into menu items here so a
-                      phone doesn't lose access to either, just an extra tap
-                      to reach them. Count shown inline rather than as a
-                      floating badge — this is a text row, not an icon. */}
-                  <button
-                    role="menuitem"
-                    className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); setUnavailableOpen(true); }}
-                  >
-                    <TriangleAlert size={18} />
-                    <span>Unavailable devices{unavailableIds.length > 0 ? ` (${unavailableIds.length > 99 ? "99+" : unavailableIds.length})` : ""}</span>
-                  </button>
-                  {onOpenFacility && (
-                    <button
-                      role="menuitem"
-                      className="hud-menu-item"
-                      onClick={() => { setMenuOpen(false); onOpenFacility(); }}
-                    >
-                      <ClipboardList size={18} />
-                      <span>Facility{facilityAttention > 0 ? ` (${facilityAttention > 99 ? "99+" : facilityAttention})` : ""}</span>
-                    </button>
-                  )}
-                  {/* Same control as the (hidden-on-mobile) inline Minus/Plus
-                      — one row, not two menu items, since it's a single
-                      stepper rather than two independent actions. Doesn't
-                      close the menu on click (unlike every other item here):
-                      stepping size is inherently a repeated action, and
-                      re-opening the dropdown after every click would be far
-                      more annoying than leaving it open. */}
-                  <div className="hud-menu-item hud-menu-stepper" role="none">
-                    <span>Label size</span>
-                    <div className="row" style={{ gap: 6 }}>
-                      <button
-                        className="icon-btn"
-                        onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
-                        disabled={labelScale <= ENTITY_ICON_SCALE_MIN}
-                        title="Decrease label size"
-                        aria-label="Decrease label size"
-                      >
-                        <Minus size={16} />
-                      </button>
-                      <button
-                        className="icon-btn"
-                        onClick={() => stepLabelScale(LABEL_SCALE_STEP)}
-                        disabled={labelScale >= ENTITY_ICON_SCALE_MAX}
-                        title="Increase label size"
-                        aria-label="Increase label size"
-                      >
-                        <Plus size={16} />
-                      </button>
-                    </div>
-                  </div>
-                  {/* Same view switch as the inline row's, immediately before
-                      Settings so the pairing matches the desktop layout. */}
-                  <button
-                    role="menuitem"
-                    className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); onToggleViewMode(); }}
-                  >
-                    {viewMode === "overview" ? <PersonStanding size={18} /> : <MapIcon size={18} />}
-                    <span>{viewMode === "overview" ? "First-person view" : "Bird's-eye view"}</span>
-                  </button>
-                  {canOpenSettings && (
-                    <button
-                      role="menuitem"
-                      className="hud-menu-item"
-                      onClick={() => { setMenuOpen(false); onOpenSettings(); }}
-                    >
-                      <Settings size={18} />
-                      <span>Settings</span>
-                    </button>
-                  )}
-                  <button
-                    role="menuitem"
-                    className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); setLegendOpen(true); }}
-                  >
-                    <CircleHelp size={18} />
-                    <span>Map colours</span>
-                  </button>
-                  {role && (
-                    <button
-                      role="menuitem"
-                      className="hud-menu-item"
-                      onClick={() => { setMenuOpen(false); beginSwitch(); }}
-                    >
-                      <LogOut size={18} />
-                      <span>Switch profile</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
         {/* Unavailable/Facility alerts, then the profile chip and Settings —
             roomy screens only; a phone collapses all of this into the
-            overflow menu above instead (see .hud-right-inline's mobile
-            display:none and the matching menu items further up). Alerts sit
+            overflow menu below instead (see .hud-right-inline's mobile
+            display:none and the matching menu items further down). Alerts sit
             right before the profile chip since both answer "what needs my
             attention right now", same reasoning that used to keep them beside
             the category filter — just relocated so that row stays purely
@@ -703,6 +569,140 @@ export default function HUD({
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
                 <Settings size={20} />
               </button>
+            )}
+          </div>
+
+          {/* Overflow menu (phones only — see .hud-overflow's default
+              display:none/mobile display:block): Settings/profile/view-toggle
+              collapse into this single button + dropdown, its own one-button
+              .hud-group pill (same chrome/sizing as every other HUD section)
+              sitting in the RIGHT grid track so it's pinned to the true edge
+              of the bar. Previously nested inside the centered category
+              group instead, which put "settings" wherever the category row's
+              content happened to end rather than at the edge. */}
+          <div className="hud-group hud-overflow" ref={menuRef}>
+            <button
+              className={`icon-btn${menuOpen ? " active" : ""}`}
+              onClick={() => setMenuOpen((o) => !o)}
+              title="Menu"
+              aria-label="Menu"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              <EllipsisVertical size={19} />
+            </button>
+            {menuOpen && (
+              <div className="hud-menu" role="menu" aria-label="Settings and profile">
+                {/* Connection status, repeated here (the top-bar .hud-brand
+                    chip always shows its own dot too, phone included — see
+                    its media queries) since this dropdown is the one place
+                    Settings/profile live on a phone, and the profile line
+                    is a natural spot for it — as a bare icon (no
+                    "Connection: " text) sharing the line, not its own row. */}
+                <div className="hud-menu-header">
+                  {role && <span>Signed in as {ROLE_LABELS[role]}</span>}
+                  <span
+                    className={`conn-dot ${connClass}`}
+                    title={`Connection: ${connection}`}
+                    role="img"
+                    aria-label={`Connection: ${connection}`}
+                  >
+                    <span className="dot" />
+                  </span>
+                </div>
+                {/* Unavailable/Facility alerts — the same two buttons that
+                    sit beside the profile chip on a roomy screen (see
+                    .hud-right-inline), collapsed into menu items here so a
+                    phone doesn't lose access to either, just an extra tap
+                    to reach them. Count shown inline rather than as a
+                    floating badge — this is a text row, not an icon. */}
+                <button
+                  role="menuitem"
+                  className="hud-menu-item"
+                  onClick={() => { setMenuOpen(false); setUnavailableOpen(true); }}
+                >
+                  <TriangleAlert size={18} />
+                  <span>Unavailable devices{unavailableIds.length > 0 ? ` (${unavailableIds.length > 99 ? "99+" : unavailableIds.length})` : ""}</span>
+                </button>
+                {onOpenFacility && (
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    onClick={() => { setMenuOpen(false); onOpenFacility(); }}
+                  >
+                    <ClipboardList size={18} />
+                    <span>Facility{facilityAttention > 0 ? ` (${facilityAttention > 99 ? "99+" : facilityAttention})` : ""}</span>
+                  </button>
+                )}
+                {/* Same control as the (hidden-on-mobile) inline Minus/Plus
+                    — one row, not two menu items, since it's a single
+                    stepper rather than two independent actions. Doesn't
+                    close the menu on click (unlike every other item here):
+                    stepping size is inherently a repeated action, and
+                    re-opening the dropdown after every click would be far
+                    more annoying than leaving it open. */}
+                <div className="hud-menu-item hud-menu-stepper" role="none">
+                  <span>Label size</span>
+                  <div className="row" style={{ gap: 6 }}>
+                    <button
+                      className="icon-btn"
+                      onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
+                      disabled={labelScale <= ENTITY_ICON_SCALE_MIN}
+                      title="Decrease label size"
+                      aria-label="Decrease label size"
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <button
+                      className="icon-btn"
+                      onClick={() => stepLabelScale(LABEL_SCALE_STEP)}
+                      disabled={labelScale >= ENTITY_ICON_SCALE_MAX}
+                      title="Increase label size"
+                      aria-label="Increase label size"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                </div>
+                {/* Same view switch as the inline row's, immediately before
+                    Settings so the pairing matches the desktop layout. */}
+                <button
+                  role="menuitem"
+                  className="hud-menu-item"
+                  onClick={() => { setMenuOpen(false); onToggleViewMode(); }}
+                >
+                  {viewMode === "overview" ? <PersonStanding size={18} /> : <MapIcon size={18} />}
+                  <span>{viewMode === "overview" ? "First-person view" : "Bird's-eye view"}</span>
+                </button>
+                {canOpenSettings && (
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    onClick={() => { setMenuOpen(false); onOpenSettings(); }}
+                  >
+                    <Settings size={18} />
+                    <span>Settings</span>
+                  </button>
+                )}
+                <button
+                  role="menuitem"
+                  className="hud-menu-item"
+                  onClick={() => { setMenuOpen(false); setLegendOpen(true); }}
+                >
+                  <CircleHelp size={18} />
+                  <span>Map colours</span>
+                </button>
+                {role && (
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    onClick={() => { setMenuOpen(false); beginSwitch(); }}
+                  >
+                    <LogOut size={18} />
+                    <span>Switch profile</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

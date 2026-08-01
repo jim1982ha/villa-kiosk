@@ -66,6 +66,18 @@ const MIN_ROOM_FIT_RADIUS = 1.5;
 // unpadded target can land just the wrong side of its own step and still
 // group. 0.85 covers the worst case (half a step) with room to spare.
 const DECLUTTER_RADIUS_MARGIN = 0.85;
+// How far the declutter step (above) may tighten the shot BELOW the room's
+// own wall/entity-fit radius, as a fraction of that radius rather than an
+// absolute distance — so a room with one pair of badges mounted close
+// together (a ceiling fan's light kit, stacked switches on one plate) can't
+// have its "zoom to this room" collapsed toward MIN_ROOM_FIT_RADIUS
+// regardless of how large the room actually is. Field-observed: a bedroom's
+// fan+light fixture alone drove the shot in to ~1.5m — point-blank on the
+// bed — instead of framing the room the way a spread-out cluster (the
+// motivating case for declutter-tightening, e.g. a pool ringed by 8 devices)
+// legitimately needs to. 0.5 still lets a genuinely spread-out room's own
+// badges pull the zoom in materially tighter than a plain wall-fit would.
+const DECLUTTER_RADIUS_MIN_FRACTION = 0.5;
 
 export interface SceneManagerOptions {
   config: AppConfig;
@@ -769,14 +781,18 @@ export class SceneManager {
     // pair needs for clarity, which is exactly "tapped the chip and it
     // stayed a chip" even though the camera visibly moved. Tighten (never
     // widen) toward whatever zoom this room's own badges actually require —
-    // see EntityVisuals.minPxPerWorldToDeclutterRoom.
+    // see EntityVisuals.minPxPerWorldToDeclutterRoom. Floored at a FRACTION
+    // of the room's own fit radius (see DECLUTTER_RADIUS_MIN_FRACTION), not
+    // an absolute constant, so one close-together badge pair can't drag a
+    // large room's shot in to a small room's distance.
     const minPxPerWorld = this.visuals.minPxPerWorldToDeclutterRoom(point.name);
     if (minPxPerWorld && minPxPerWorld > 0) {
       const vpH = this.engine.getRenderHeight();
       if (vpH > 0) {
         const declutterRadius =
           (vpH / (2 * minPxPerWorld * Math.tan(vFov / 2))) * DECLUTTER_RADIUS_MARGIN;
-        radius = Math.min(radius, Math.max(declutterRadius, MIN_ROOM_FIT_RADIUS));
+        const declutterFloor = Math.max(radius * DECLUTTER_RADIUS_MIN_FRACTION, MIN_ROOM_FIT_RADIUS);
+        radius = Math.min(radius, Math.max(declutterRadius, declutterFloor));
       }
     }
 
@@ -1803,6 +1819,14 @@ export class SceneManager {
   /** All entity mappings resolved from the last model load (for Config Editor auto-population). */
   getAutoDetectedMappings() {
     return this.visuals.getDetectedMappings();
+  }
+
+  /** Which real drawn room polygon this entity's own mesh anchor sits
+   *  inside, or null (no anchor yet, or it sits outside every polygon) —
+   *  the geometric room-auto-fill signal BabylonCanvas uses when merging a
+   *  freshly detected entity into config on first load. */
+  roomForEntity(entityId: string): string | null {
+    return this.visuals.roomForEntity(entityId);
   }
 
   private disposed = false;

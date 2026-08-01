@@ -64,6 +64,7 @@ import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable } from "@/utils/stateColors";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { tapDebug } from "@/utils/tapDebug";
+import { pointInPolygon } from "@/utils/geometry";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam } from "./meshRoles";
@@ -790,6 +791,12 @@ export class EntityVisuals {
    *  normalised room name — the space budget grouping lays badges out
    *  against (see setRoomPolygons / FAN_MAX_ROOM_SPAN_FRACTION). */
   private roomSpans = new Map<string, number>();
+  /** Each room's real drawn polygon (world-space X/Z, original casing) — the
+   *  geometric signal roomForEntity uses to auto-fill a freshly detected
+   *  entity's room on first sight (see getDetectedMappings). Separate from
+   *  roomSpans' normalised-key width cache since containment testing needs
+   *  the actual point list, not a derived number. */
+  private roomPolys: { name: string; pts: { x: number; z: number }[] }[] = [];
   /** Active storey from FloorManager (1-based). Floors below it stay rendered
    *  (cumulative visibility), so enabled-state alone can't cull their badges —
    *  cullLabels compares each label's stamped floorIndex against this. */
@@ -1662,6 +1669,7 @@ export class EntityVisuals {
     // all clustered at the ceiling centre still has its whole floor area
     // available to lay badges out across.
     this.roomSpans.clear();
+    this.roomPolys = polys.filter((p) => p.pts.length >= 3).map((p) => ({ name: p.name, pts: p.pts }));
     for (const p of polys) {
       if (p.pts.length === 0) continue;
       let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -1673,6 +1681,33 @@ export class EntityVisuals {
       }
       this.roomSpans.set(p.name.trim().toLowerCase(), Math.max(maxX - minX, maxZ - minZ));
     }
+  }
+
+  /** Which drawn room polygon (if any) contains this world-space ground
+   *  point — the geometric half of roomForEntity's room auto-fill. Straight
+   *  linear scan: called only once per freshly detected entity right after a
+   *  model load, never per-frame, so the room count (a couple dozen at most)
+   *  costs nothing worth caching further. */
+  private roomContaining(x: number, z: number): string | null {
+    for (const room of this.roomPolys) {
+      if (pointInPolygon(x, z, room.pts)) return room.name;
+    }
+    return null;
+  }
+
+  /** Auto-fill signal for a just-detected entity's room: which real drawn
+   *  room polygon its own mesh anchor sits inside, or null if it sits
+   *  outside every polygon (open ground between rooms, a fixture whose
+   *  anchor sits just past a wall) or the entity has no anchor yet. Purely
+   *  geometric — reads only this villa's own calibrated floor plan, so it
+   *  generalises to any install with zero per-site tuning. Called by
+   *  BabylonCanvas right after a model load, before a fresh mapping's
+   *  "Unmapped" placeholder room is ever saved to config. */
+  roomForEntity(entityId: string): string | null {
+    const anchor = this.labels.get(entityId)?.anchor;
+    if (!anchor) return null;
+    const p = anchor.getAbsolutePosition();
+    return this.roomContaining(p.x, p.z);
   }
 
   /** World-space XZ bounding box (plus a floor height) of a room's registered

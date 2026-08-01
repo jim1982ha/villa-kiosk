@@ -21,12 +21,14 @@ import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { upsertBinding, removeBinding } from "@/config/bindingUtils";
 import { loadMeshCatalog } from "@/utils/meshCatalog";
+import { inferTypeFromEntityId } from "@/config/EntityMap";
 import type { EntityMapping } from "@/types/scene.types";
 
 export default function BindingsTable() {
   const { config, update } = useConfig();
-  const { entities } = useHA();
+  const { entities, suppressedEntityIds, entityAreaNames } = useHA();
   const [showUnbound, setShowUnbound] = useState(false);
+  const [showUnmappedHa, setShowUnmappedHa] = useState(false);
 
   // The "Room" field below is free text matched EXACTLY (case/whitespace
   // aside) against a real room's name by RoomHighlight — a typo or a name
@@ -44,6 +46,22 @@ export default function BindingsTable() {
   const unbound = useMemo(
     () => catalog.filter((m) => !config.meshBindings[m]),
     [catalog, config.meshBindings],
+  );
+
+  // The INVERSE audit: real HA entities this kiosk has no way to show
+  // anywhere, because no 3D object in the model resolves to them (the
+  // "unbound objects" list above answers the opposite question — meshes
+  // with no entity). Scoped to domains this app actually knows how to
+  // render (inferTypeFromEntityId's known list — the same gate auto-detect
+  // itself uses) so this isn't every one of HA's hundreds of sensors, and
+  // excludes anything already hidden/diagnostic in HA (suppressedEntityIds
+  // — the same filter the summary tiles use), since those are entities the
+  // installer already told HA don't belong on a main dashboard.
+  const unmappedHaEntities = useMemo(
+    () => Object.keys(entities)
+      .filter((id) => inferTypeFromEntityId(id) && !config.entityMap[id] && !suppressedEntityIds.has(id))
+      .sort(),
+    [entities, config.entityMap, suppressedEntityIds],
   );
 
   // Latest config/entities via refs, read inside the stable callbacks below —
@@ -144,6 +162,49 @@ export default function BindingsTable() {
         <p className="muted body-text mt">
           Load a 3D model first — its object list will appear here for binding.
         </p>
+      )}
+
+      {/* The inverse audit — collapsed by default, informational only: there's
+          no mesh here to bind these TO, so unlike "unbound objects" above
+          there's no action to offer, just visibility into what's missing. */}
+      {unmappedHaEntities.length > 0 && (
+        <button
+          className="btn ghost mt"
+          onClick={() => setShowUnmappedHa((s) => !s)}
+        >
+          {showUnmappedHa ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          {unmappedHaEntities.length} HA entit{unmappedHaEntities.length === 1 ? "y" : "ies"} not shown anywhere in the model
+        </button>
+      )}
+
+      {showUnmappedHa && (
+        <>
+          <p className="muted body-text mt">
+            These exist in Home Assistant but no 3D object resolves to them, so
+            they have no badge, panel or place on the map — add an object for
+            one in the 3D model (or bind an existing unbound object above) to
+            make it controllable from the villa.
+          </p>
+          {unmappedHaEntities.map((id) => (
+            <div
+              key={id}
+              className="row spread"
+              style={{ gap: 12, padding: "8px 0", borderTop: "1px solid var(--hairline)" }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13 }}>{entities[id]?.attributes.friendly_name || id}</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", wordBreak: "break-all" }}>
+                  {id}
+                </div>
+              </div>
+              {entityAreaNames[id] && (
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", flex: "0 0 auto" }}>
+                  {entityAreaNames[id]}
+                </div>
+              )}
+            </div>
+          ))}
+        </>
       )}
     </div>
   );
