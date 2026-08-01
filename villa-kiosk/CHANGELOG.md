@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.49.0
+
+### Changes
+- **Advanced Settings: the whole "Bound 3D objects" section now collapses by default**, not just the bound-list inside it — the previous fix only hid the row list, leaving the "N unbound objects"/"N HA entities not shown" toggle buttons always visible. Wrapped in the same CollapsibleSection component Auto-detected entity settings and Device telemetry already use.
+- **Grouped Devices: the "Add another entity" picker now sits inline on the same row as its group's member pills**, in a new `compact` EntityPicker variant sized to match the pills' own height, instead of a full-size field on its own line below them.
+- **Room-cluster count pill: fixed it still overlapping the room name** (e.g. "Guest Bathroom" reading as "Guest Bathroo[4]"). The top-right corner overlay from the previous fix was correctly positioned but nothing stopped the text itself from rendering underneath it — the room name's own text box now reserves the badge's full footprint as space it never renders into, so the two can't collide regardless of room-name length.
+- **"Pre-configure a new entity" moved from Auto-detected Entity Settings into Bound 3D Objects** (now collapsed by default) — same "add something new to the entity↔object map" action this section is about.
+- Settings: Blue Glow and Natural Scrolling are now single-button segmented toggles (short label + icon) sharing one row, matching the Bottom Summary Bar control's style instead of checkboxes; Bottom Summary Bar renamed and given an icon; Classic/Card badge-style buttons got icons too; the now-redundant "Reset look" button is gone (only three simple sliders are left to reset); the separator between the Dashboard title field and Render Quality & Look is gone.
+- Typecheck and production build clean throughout.
+
 ## 2.48.0
 
 ### Changes

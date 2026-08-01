@@ -17,18 +17,15 @@
 // THEM changed.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { createDefaultMapping } from "@/config/EntityMap";
-import EntityPicker from "./EntityPicker";
 import EntityMapRow from "./EntityMapRow";
 import type { EntityMapping } from "@/types/scene.types";
 
 export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
   const { config, update } = useConfig();
   const { entities, connected } = useHA();
-  const [newId, setNewId] = useState<string | undefined>(undefined);
   // Seed the filter when opened from a device panel's edit shortcut, so that
   // entity's row is shown immediately.
   const [search, setSearch] = useState(initialSearch ?? "");
@@ -166,17 +163,6 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   const startRemap = useCallback((key: string) => { setRemapKey(key); setRemapNewId(undefined); }, []);
   const cancelRemap = useCallback(() => { setRemapKey(null); setRemapNewId(undefined); }, []);
 
-  const add = (id: string) => {
-    if (!id || config.entityMap[id]) return;
-    update({
-      entityMap: {
-        ...config.entityMap,
-        [id]: createDefaultMapping(id, { friendlyName: entities[id]?.attributes.friendly_name }),
-      },
-    });
-    setNewId(undefined);
-  };
-
   return (
     <div>
       <p className="muted body-text" style={{ marginBottom: 12 }}>
@@ -221,7 +207,8 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       {allEntries.length === 0 && (
         <p className="muted body-text mt">
           No auto-detected entities yet. Upload a GLB whose objects are named
-          after HA entity IDs, or pre-configure one below.
+          after HA entity IDs, or pre-configure one in the
+          <strong> Bound 3D objects</strong> section below.
         </p>
       )}
 
@@ -269,46 +256,6 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
         </table>
       )}
 
-      {/* Pre-configure a new entity */}
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--hairline)" }}>
-        <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-          Pre-configure a new entity
-        </label>
-        <p className="muted body-text" style={{ fontSize: 11, marginBottom: 10 }}>
-          Sets the label, room and panel type for an entity whose 3D object is
-          named after its entity ID. Useful to configure in advance — it
-          activates automatically when the matching model is uploaded.
-        </p>
-        <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
-          <div style={{ flex: 1 }}>
-            <EntityPicker
-              value={newId}
-              onChange={(id) => setNewId(id)}
-              allowCustom
-              hideCurrentLabel
-              placeholder="Search or type entity_id…"
-            />
-            {newId && (
-              <div className="muted body-text" style={{ marginTop: 6, fontSize: 12 }}>
-                Selected: <strong style={{ color: "var(--accent)" }}>{newId}</strong>
-                {config.entityMap[newId] && (
-                  <span style={{ marginLeft: 8, color: "var(--status-danger, #c0504d)" }}>
-                    already configured
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-          <button
-            className="btn primary"
-            onClick={() => newId && add(newId)}
-            disabled={!newId || !!config.entityMap[newId]}
-            style={{ flexShrink: 0 }}
-          >
-            <Plus size={18} /> Add
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

@@ -8,7 +8,9 @@
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
 import { useState } from "react";
-import { Sliders, Sun, Moon, Monitor, SunMoon } from "lucide-react";
+import {
+  Sliders, Sun, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
+} from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
@@ -155,41 +157,41 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             per-device comfort settings, not administration. */}
         {can("customizeAppearance") && (
         <>
-        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
 
         {/* ── Render quality & look ────────────────────────────────────────
             Fixed at the "high" look by design (AppConfig.DEFAULT_RENDER) —
-            no picker any more; day/night warmth is handled automatically in
-            the scene. "Reset look" restores exposure/night-dimming/light-pool
-            back to that default without touching dayNightInvert. */}
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-          <div className="settings-section-title" style={{ margin: 0 }}>Render quality &amp; look</div>
-          <button
-            className="btn ghost"
-            style={{ padding: "4px 10px", fontSize: 12 }}
-            onClick={() => applyRender({ ...DEFAULT_RENDER })}
-            title="Restore the recommended look"
-          >
-            Reset look
-          </button>
-        </div>
+            no picker, and no "reset" affordance either now: with only three
+            sliders left (Brightness/Night dimming/Light effect) each already
+            shows its own live value, so resetting a look that's no longer a
+            multi-dial preset just means dragging them back — not worth a
+            dedicated button. Day/night warmth is handled automatically. */}
+        <div className="settings-section-title" style={{ margin: 0 }}>Render quality &amp; look</div>
 
         {/* Blue-glow (a render/interaction toggle) and Natural scrolling (an
-            Overview-camera toggle) don't share a topic — paired on one row
-            purely for density, at the user's request. */}
-        <div className="row" style={{ gap: 20, marginTop: 12, flexWrap: "wrap" }}>
-          <label className="toggle" style={{ marginTop: 0 }}>
-            <input type="checkbox" checked={config.highlightInteractive}
-              onChange={(e) => update({ highlightInteractive: e.target.checked })} />
-            <span>Blue glow for clickable devices</span>
-          </label>
-          <label className="toggle" style={{ marginTop: 0 }}>
-            <input
-              type="checkbox" checked={config.naturalScrolling ?? true}
-              onChange={(e) => update({ naturalScrolling: e.target.checked })}
-            />
-            <span>Natural scrolling</span>
-          </label>
+            Overview-camera toggle) don't share a topic — paired on one row,
+            as single-button segmented toggles matching Bottom Summary bar's
+            style below, purely for density at the user's request. */}
+        <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+          <div className="segmented" role="group" aria-label="Blue glow for clickable devices" style={{ flex: "1 1 160px" }}>
+            <button
+              className={config.highlightInteractive ? "active" : ""}
+              onClick={() => update({ highlightInteractive: !config.highlightInteractive })}
+              aria-pressed={config.highlightInteractive}
+              title="Blue glow around clickable devices"
+            >
+              <MousePointerClick size={16} /> Clickable Glow
+            </button>
+          </div>
+          <div className="segmented" role="group" aria-label="Natural scrolling" style={{ flex: "1 1 160px" }}>
+            <button
+              className={(config.naturalScrolling ?? true) ? "active" : ""}
+              onClick={() => update({ naturalScrolling: !(config.naturalScrolling ?? true) })}
+              aria-pressed={config.naturalScrolling ?? true}
+              title="Natural scrolling in the bird's-eye view"
+            >
+              <Move size={16} /> Natural Scroll
+            </button>
+          </div>
         </div>
 
         {/* Invert day/night moved to the header, next to the theme selector
@@ -240,14 +242,14 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               onClick={() => update({ badgeStyle: "classic" })}
               aria-pressed={(config.badgeStyle ?? "classic") === "classic"}
             >
-              Classic
+              <Circle size={16} /> Classic
             </button>
             <button
               className={config.badgeStyle === "card" ? "active" : ""}
               onClick={() => update({ badgeStyle: "card" })}
               aria-pressed={config.badgeStyle === "card"}
             >
-              Card
+              <CreditCard size={16} /> Card
             </button>
           </div>
           {/* Single active/inactive button, its own one-item segmented group —
@@ -261,7 +263,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               onClick={() => update({ showSummaryBar: !(config.showSummaryBar ?? true) })}
               aria-pressed={config.showSummaryBar ?? true}
             >
-              Show the bottom summary bar
+              <PanelBottom size={16} /> Bottom Summary bar
             </button>
           </div>
         </div>

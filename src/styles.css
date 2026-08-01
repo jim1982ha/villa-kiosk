@@ -1589,6 +1589,11 @@ label.toggle span { user-select: none; line-height: 1.4; }
   padding: 10px 0; color: var(--text-primary); font-size: 14px;
 }
 .config-search input:focus { outline: none; }
+/* Compact variant — sized to sit inline at pill height (GroupedDevices'
+   "add another member" row, alongside its 4px/8px-padded member pills)
+   instead of the full standalone-field size above. */
+.config-search-compact { padding: 0 8px; border-radius: 999px; }
+.config-search-compact input { padding: 5px 0; font-size: 12px; }
 /* Inside the Config Editor's entity table/cards, the generic
    ".config-table input:not([type=checkbox])" rule (background: var(--bg-input))
    outranks ".config-search input"'s own transparent background — same class

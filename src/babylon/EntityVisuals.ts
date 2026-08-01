@@ -2930,7 +2930,13 @@ export class EntityVisuals {
 
     // Room name — the chip's only FLOW content; the count renders as a
     // corner overlay (below), not inline in this row, so it can't widen or
-    // otherwise perturb this text's own layout.
+    // otherwise perturb this text's own layout. Right padding is wide enough
+    // to reserve the corner badge's own full footprint (diameter + its inset
+    // + a small gap) as dead space the text never renders into — an overlay
+    // alone doesn't prevent overlap, since the text box itself still spans
+    // the container's full width by default; THIS is what stops a long room
+    // name's last letters from landing under the badge (reported: "Guest
+    // Bathroom" read as "Guest Bathroo[4]" with the badge over the "m").
     const text = new TextBlock(`clusterText_${room}`);
     text.text = room;
     text.color = "#ffffff";
@@ -2939,7 +2945,7 @@ export class EntityVisuals {
     text.fontWeight = "600";
     text.resizeToFit = true;
     text.paddingLeft = "12px";
-    text.paddingRight = "12px";
+    text.paddingRight = `${CLUSTER_COUNT_DIAMETER_PX + 12}px`;
     container.addControl(text);
 
     // The device count as a small red corner-overlay pill — matching the

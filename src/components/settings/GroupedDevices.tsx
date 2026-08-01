@@ -136,36 +136,38 @@ export default function GroupedDevices() {
             </button>
           </div>
 
-          {group.memberEntityIds.length > 0 && (
-            <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-              {group.memberEntityIds.map((id) => (
-                <span
-                  key={id}
-                  className="body-text"
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12,
-                    padding: "4px 8px", borderRadius: 999, background: "var(--bg-input)",
-                    maxWidth: "100%", overflowWrap: "anywhere",
-                  }}
+          {/* Member pills + the "add another" picker share one row — the
+              picker is a `compact` EntityPicker so its own height matches
+              the pills instead of towering over them as a full-size field
+              on its own line below. */}
+          <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 10, alignItems: "center" }}>
+            {group.memberEntityIds.map((id) => (
+              <span
+                key={id}
+                className="body-text"
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12,
+                  padding: "4px 8px", borderRadius: 999, background: "var(--bg-input)",
+                  maxWidth: "100%", overflowWrap: "anywhere",
+                }}
+              >
+                {entityLabel(config, entities, id)}
+                <button
+                  className="icon-btn" style={{ width: 20, height: 20, borderRadius: 999, flexShrink: 0 }}
+                  title="Remove from group" onClick={() => removeMember(group, id)}
                 >
-                  {entityLabel(config, entities, id)}
-                  <button
-                    className="icon-btn" style={{ width: 20, height: 20, borderRadius: 999, flexShrink: 0 }}
-                    title="Remove from group" onClick={() => removeMember(group, id)}
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+            <div style={{ flex: "1 1 180px", minWidth: 140 }}>
+              <EntityPicker
+                onChange={(id) => addMember(group, id)}
+                placeholder="Add another entity…"
+                hideCurrentLabel
+                compact
+              />
             </div>
-          )}
-
-          <div style={{ marginTop: 10, maxWidth: 320 }}>
-            <EntityPicker
-              onChange={(id) => addMember(group, id)}
-              placeholder="Add another entity to this device…"
-              hideCurrentLabel
-            />
           </div>
         </div>
       ))}

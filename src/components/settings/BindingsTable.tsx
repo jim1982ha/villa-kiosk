@@ -14,14 +14,14 @@
 // prop comparison actually has stable props to compare against.
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import BindingRow from "./BindingRow";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { upsertBinding, removeBinding } from "@/config/bindingUtils";
 import { loadMeshCatalog } from "@/utils/meshCatalog";
-import { inferTypeFromEntityId } from "@/config/EntityMap";
+import { inferTypeFromEntityId, createDefaultMapping } from "@/config/EntityMap";
 import type { EntityMapping } from "@/types/scene.types";
 
 export default function BindingsTable() {
@@ -30,6 +30,22 @@ export default function BindingsTable() {
   const [showBound, setShowBound] = useState(false);
   const [showUnbound, setShowUnbound] = useState(false);
   const [showUnmappedHa, setShowUnmappedHa] = useState(false);
+  // "Pre-configure a new entity" — moved here from ConfigEditor.tsx (Auto-
+  // detected entity settings): sets label/room/panel type for an entity_id
+  // whose 3D object doesn't exist YET, so it's ready the moment a matching
+  // model is uploaded. Lives here now since it's the same "add something new
+  // to the entity↔object map" action this whole section is about.
+  const [newId, setNewId] = useState<string | undefined>(undefined);
+  const addEntity = (id: string) => {
+    if (!id || config.entityMap[id]) return;
+    update({
+      entityMap: {
+        ...config.entityMap,
+        [id]: createDefaultMapping(id, { friendlyName: entities[id]?.attributes.friendly_name }),
+      },
+    });
+    setNewId(undefined);
+  };
 
   // The "Room" field below is free text matched EXACTLY (case/whitespace
   // aside) against a real room's name by RoomHighlight — a typo or a name
@@ -96,6 +112,46 @@ export default function BindingsTable() {
       <datalist id="bindings-room-names">
         {roomNames.map((n) => <option key={n} value={n} />)}
       </datalist>
+
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
+          Pre-configure a new entity
+        </label>
+        <p className="muted body-text" style={{ fontSize: 11, marginBottom: 10 }}>
+          Sets the label, room and panel type for an entity whose 3D object is
+          named after its entity ID. Useful to configure in advance — it
+          activates automatically when the matching model is uploaded.
+        </p>
+        <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
+          <div style={{ flex: 1 }}>
+            <EntityPicker
+              value={newId}
+              onChange={(id) => setNewId(id)}
+              allowCustom
+              hideCurrentLabel
+              placeholder="Search or type entity_id…"
+            />
+            {newId && (
+              <div className="muted body-text" style={{ marginTop: 6, fontSize: 12 }}>
+                Selected: <strong style={{ color: "var(--accent)" }}>{newId}</strong>
+                {config.entityMap[newId] && (
+                  <span style={{ marginLeft: 8, color: "var(--status-danger, #c0504d)" }}>
+                    already configured
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <button
+            className="btn primary"
+            onClick={() => newId && addEntity(newId)}
+            disabled={!newId || !!config.entityMap[newId]}
+            style={{ flexShrink: 0 }}
+          >
+            <Plus size={18} /> Add
+          </button>
+        </div>
+      </div>
 
       {bound.length === 0 && (
         <p className="muted body-text mt">

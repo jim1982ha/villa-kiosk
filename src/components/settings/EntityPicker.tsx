@@ -24,12 +24,16 @@ interface Props {
    *  (linkedEntityId, motionEntityId), which previously had no way at all to
    *  go back to "unset" once something had been picked. */
   onClear?: () => void;
+  /** Shrinks the search box to sit inline at the height of a small pill (e.g.
+   *  GroupedDevices' "add another member" row, alongside the member pills
+   *  themselves) instead of its normal standalone-field size. */
+  compact?: boolean;
 }
 
 const ENTITY_ID_RE = /^[a-z_]+\.[a-z0-9_]+$/;
 
 export default function EntityPicker({
-  value, onChange, domains, placeholder, allowCustom, hideCurrentLabel, onClear,
+  value, onChange, domains, placeholder, allowCustom, hideCurrentLabel, onClear, compact,
 }: Props) {
   const { entities } = useHA();
   const [query, setQuery] = useState("");
@@ -85,8 +89,8 @@ export default function EntityPicker({
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
-      <div className="config-search" style={{ marginBottom: 0 }}>
-        <Search size={16} />
+      <div className={`config-search${compact ? " config-search-compact" : ""}`} style={{ marginBottom: 0 }}>
+        <Search size={compact ? 13 : 16} />
         <input
           placeholder={selectedLabel ?? placeholder ?? "Search entities…"}
           value={query}

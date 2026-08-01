@@ -510,10 +510,9 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           </div>
           <GroupedDevices />
 
-          <div className="settings-section-title" style={{ marginTop: 28 }}>
-            Bound 3D objects
-          </div>
-          <BindingsTable />
+          <CollapsibleSection title="Bound 3D objects">
+            <BindingsTable />
+          </CollapsibleSection>
 
           {/* Owner only: the endpoint itself 403s other roles (it carries
               other people's user-agents and error text), so don't render a
