@@ -2248,6 +2248,45 @@ label.toggle span { user-select: none; line-height: 1.4; }
    action. */
 .fm-row-title-action { margin-left: auto; }
 .fm-row-sub { font-size: 12.5px; }
+
+/* Rows whose record can be erased by a superadmin (press and hold, then the
+   6-digit code — see auth/SuperadminGate.tsx). The hint is one small dot in
+   the corner: someone who knows what it means spots it immediately, someone
+   who doesn't reads it as decoration. A louder affordance would be worse in
+   both directions — it advertises a capability most profiles can't use, and
+   the previous experiment with hint dots on the HUD category icons was
+   removed as clutter in v2.59.0.
+   `position: relative` anchors the dot; `user-select` stops a hold from
+   selecting the row's text or raising iOS's callout menu mid-gesture. Scroll
+   is untouched (no touch-action override) — the hold itself cancels on drift
+   rather than the row swallowing the pan. */
+.fm-erasable { position: relative; -webkit-touch-callout: none; user-select: none; }
+.fm-erasable-dot {
+  position: absolute; top: 6px; right: 6px;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--text-dim); opacity: 0.45;
+  pointer-events: none;
+}
+.fm-erasable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fm-erasable:focus-visible .fm-erasable-dot { opacity: 0.9; }
+
+/* The elevation prompt: the keypad plus a line naming exactly what is about
+   to be destroyed, because the gesture that opens it is a hold on a row and a
+   mis-held finger must not be able to erase the neighbour. */
+.superadmin-prompt {
+  width: min(360px, 100%);
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.superadmin-prompt-head {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--status-danger); font-size: 13px; letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.superadmin-prompt-detail {
+  margin: 0; text-align: center; font-size: 13.5px; color: var(--text-secondary);
+  max-width: 320px;
+}
+.superadmin-prompt-note { margin: 0; text-align: center; font-size: 13.5px; max-width: 320px; }
 .fm-amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 
 .fm-clause {

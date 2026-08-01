@@ -116,7 +116,7 @@ AUTH = {"Authorization": f"Bearer {TOKEN}"}
 # _cleanup_stale_options below. (model_path was dropped when central models
 # moved into the add-on's own /data volume; leaving it here would make the
 # self-heal below wrongly preserve a now-unknown key.)
-KNOWN_OPTION_KEYS = {"guest_pin", "owner_pin", "ops_pin"}
+KNOWN_OPTION_KEYS = {"guest_pin", "owner_pin", "ops_pin", "superadmin_pin"}
 
 # The add-on's OWN persistent volume (Supervisor gives every add-on /data and
 # preserves it across restarts/updates). Central model files live here now —
@@ -687,6 +687,29 @@ async def auth_check_handler(request: web.Request) -> web.Response:
 AUTH_ROLES = ("guest", "owner", "ops")
 PIN_OPTION = {"guest": "guest_pin", "owner": "owner_pin", "ops": "ops_pin"}
 PIN_RE = re.compile(r"^[0-9]{4}$")
+
+# ── Superadmin elevation ─────────────────────────────────────────────────
+# NOT a fourth profile: it never appears in the profile picker, mints no
+# session, and cannot be "logged in as". It is a one-shot elevation used to
+# authorise a single DESTRUCTIVE write that the caller's normal role is not
+# allowed to make — today, permanently deleting a Facility Manager record.
+#
+# It is ADDITIVE, never a bypass: the store's own writer_roles check still
+# applies, so deleting FM records requires (owner or ops) AND a valid
+# elevation. Knowing the code does not turn a guest into an administrator.
+#
+# Six digits rather than four: this authorises irreversible destruction of the
+# maintenance record, so it should not share the guessing surface of the
+# everyday profile PINs (and the same two-tier rate limiter still applies).
+SUPERADMIN = "superadmin"
+SUPERADMIN_PIN_OPTION = "superadmin_pin"
+SUPERADMIN_PIN_RE = re.compile(r"^[0-9]{6}$")
+# Short window purely to cover the round-trip between "PIN accepted" and "the
+# write arrives". A token is consumed by the FIRST write that uses it, so this
+# is a ceiling on an unused one, not a period of standing privilege.
+ELEVATION_TTL_SECONDS = 120
+ELEVATION_MAX_OUTSTANDING = 32
+_elevation_tokens: dict = {}     # token -> expiry (time.monotonic)
 # Brute-force limiter. Two tiers, because one alone is wrong in a different way.
 #
 # PER-CLIENT (role + source IP) is the primary gate. The limiter used to be
@@ -709,7 +732,8 @@ AUTH_GLOBAL_MAX_FAILURES = 50    # per role, all clients combined
 AUTH_GLOBAL_LOCKOUT_SECONDS = 900
 AUTH_TRACK_MAX_CLIENTS = 2048    # hard cap on tracked (role, ip) pairs
 _auth_failures: dict = {}                                    # (role, ip) -> state
-_auth_failures_global: dict = {r: {"count": 0, "last": 0.0} for r in AUTH_ROLES}
+_auth_failures_global: dict = {r: {"count": 0, "last": 0.0}
+                              for r in (*AUTH_ROLES, SUPERADMIN)}
 
 
 def _client_ip(request: web.Request) -> str:
@@ -753,6 +777,39 @@ def _configured_pin(role: str) -> str:
     return raw if PIN_RE.fullmatch(raw) else ""
 
 
+def _configured_superadmin_pin() -> str:
+    """The configured 6-digit superadmin code, or "" when unset/malformed.
+
+    Empty means the whole capability is OFF: no elevation can be minted, so no
+    destructive delete can be authorised by anyone. That is the default."""
+    raw = str(_read_options().get(SUPERADMIN_PIN_OPTION, "") or "").strip()
+    return raw if SUPERADMIN_PIN_RE.fullmatch(raw) else ""
+
+
+def _mint_elevation() -> str:
+    """One single-use token authorising one destructive write."""
+    now = time.monotonic()
+    for tok in [t for t, exp in _elevation_tokens.items() if exp <= now]:
+        _elevation_tokens.pop(tok, None)
+    # Bound the dict: a caller who elevates repeatedly without spending the
+    # tokens must not be able to grow it without limit.
+    if len(_elevation_tokens) >= ELEVATION_MAX_OUTSTANDING:
+        for tok, _ in sorted(_elevation_tokens.items(), key=lambda kv: kv[1])[:8]:
+            _elevation_tokens.pop(tok, None)
+    token = secrets.token_urlsafe(24)
+    _elevation_tokens[token] = now + ELEVATION_TTL_SECONDS
+    return token
+
+
+def _consume_elevation(token) -> bool:
+    """Spend a token. Single use by construction — it is removed here, so a
+    replayed write is rejected exactly like one that never elevated."""
+    if not isinstance(token, str) or not token:
+        return False
+    exp = _elevation_tokens.pop(token, None)
+    return exp is not None and exp > time.monotonic()
+
+
 def _lockout_remaining(role: str, ip: str) -> int:
     """Seconds this caller must wait, from whichever tier is stricter."""
     now = time.monotonic()
@@ -777,6 +834,155 @@ async def auth_roles_handler(request: web.Request) -> web.Response:
     return web.json_response(
         {"roles": {r: {"pinRequired": bool(_configured_pin(r))} for r in AUTH_ROLES}},
     )
+
+
+async def auth_elevate_handler(request: web.Request) -> web.Response:
+    """Exchange the superadmin code for ONE single-use elevation token.
+
+    Deliberately not a login: no session is minted or changed, so there is no
+    such thing as "being" superadmin and nothing to forget to sign out of. The
+    token authorises exactly one destructive write and is consumed by it.
+
+    Rate-limited on the same two-tier limiter as the profile PINs (per client
+    IP and globally), and requires an already-authorized session — the code is
+    an extra factor on top of a normal profile, never a way in from nothing."""
+    if not _authorized(request):
+        return _unauthorized()
+    configured = _configured_superadmin_pin()
+    if not configured:
+        # Capability disabled (no code set). Say so plainly: this is an
+        # operator configuration state, not a wrong-code answer, and pretending
+        # otherwise sends someone hunting for a code that does not exist.
+        return web.json_response(
+            {"error": "Superadmin actions are not enabled on this installation."},
+            status=403)
+
+    ip = _client_ip(request)
+    wait = _lockout_remaining(SUPERADMIN, ip)
+    if wait > 0:
+        return web.json_response({"error": "too many attempts", "retryAfter": wait},
+                                 status=429)
+    try:
+        body = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return web.json_response({"error": "invalid JSON body"}, status=400)
+    submitted = str(body.get("pin", "") or "")
+    ok = hmac.compare_digest(submitted, configured)
+    # Same two-tier bookkeeping as auth_verify_handler: clear only THIS
+    # client's counter on success and let the global tier decay on its own, so
+    # one correct entry cannot reset a distributed guessing campaign.
+    now = time.monotonic()
+    st = _auth_failures.setdefault((SUPERADMIN, ip), {"count": 0, "last": 0.0})
+    gst = _auth_failures_global[SUPERADMIN]
+    if ok:
+        st["count"] = 0
+    else:
+        st["count"] += 1
+        st["last"] = now
+        gst["count"] += 1
+        gst["last"] = now
+        return web.json_response({"error": "incorrect code"}, status=401)
+    return web.json_response({"token": _mint_elevation(),
+                              "expiresIn": ELEVATION_TTL_SECONDS})
+
+
+# Collections in the FM document whose records are individually addressable by
+# `id`. Kept here (not imported from the frontend) because the server must be
+# able to tell "a record was removed" on its own — a rule that only the client
+# knows is not a rule.
+FM_RECORD_COLLECTIONS = ("schedules", "completions", "costs", "tickets", "savedDocuments")
+
+# The subset whose records are EVIDENCE of something that happened: a fault
+# that was raised, money that was spent, work that was signed off. Those are
+# what an audit rests on, so destroying one needs the superadmin code.
+#
+# The other two are deliberately NOT protected. A schedule is a plan, not a
+# record — deleting it changes what is due next week and destroys no history
+# (the completions it produced survive). A saved document is a snapshot that
+# can be regenerated from the records it was built from. Both already have
+# plain delete buttons that owner/ops use as routine housekeeping; putting a
+# code in front of those would be friction bought with nothing.
+FM_PROTECTED_COLLECTIONS = ("completions", "costs", "tickets")
+
+
+def _fm_ids(doc) -> dict:
+    """{collection: {id, ...}} for whatever this document actually contains."""
+    out = {}
+    for name in FM_RECORD_COLLECTIONS:
+        items = doc.get(name) if isinstance(doc, dict) else None
+        out[name] = {
+            str(it.get("id")) for it in items
+            if isinstance(it, dict) and it.get("id") is not None
+        } if isinstance(items, list) else set()
+    return out
+
+
+def _fm_photo_ids(doc, removed: dict) -> set:
+    """Evidence photo ids belonging ONLY to the records being removed."""
+    keep, drop = set(), set()
+    for name in FM_RECORD_COLLECTIONS:
+        items = doc.get(name) if isinstance(doc, dict) else None
+        if not isinstance(items, list):
+            continue
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            photos = it.get("photoIds")
+            ids = {str(p) for p in photos} if isinstance(photos, list) else set()
+            (drop if str(it.get("id")) in removed.get(name, set()) else keep).update(ids)
+    # A photo still referenced by a surviving record is never deleted.
+    return drop - keep
+
+
+def _fm_write_guard(request: web.Request, body, old, new):
+    """Erasing an evidence record needs a superadmin elevation.
+
+    Adding and amending stays open to owner/ops — that is their job. REMOVING
+    one of FM_PROTECTED_COLLECTIONS is different in kind: the record is the
+    evidence that a fault existed, money was spent or work was done, and losing
+    it cannot be undone from the app.
+
+    Enforced here rather than in the UI because the store takes whole
+    documents: a client that simply omits a record IS a delete, so gating only
+    the button would leave the capability wide open to anyone holding a normal
+    session and a JSON editor.
+    """
+    new_ids = _fm_ids(new)
+    removed = {
+        name: _fm_ids(old)[name] - new_ids[name]
+        for name in FM_PROTECTED_COLLECTIONS
+    }
+    if not any(removed.values()):
+        return None                      # nothing destroyed — ordinary write
+    if not _configured_superadmin_pin():
+        return _forbidden("Deleting records requires the superadmin code, "
+                          "which is not configured on this installation.")
+    token = body.get("elevation") if isinstance(body, dict) else None
+    if not _consume_elevation(token):
+        return _forbidden("Deleting a record requires a fresh superadmin "
+                          "authorisation for that specific action.")
+    return None
+
+
+def _fm_after_write(old, new) -> None:
+    """Purge evidence photos orphaned by an authorised delete, so "delete"
+    means the JPEG is gone from /data too, not just its reference."""
+    removed = {
+        name: old_ids - _fm_ids(new)[name]
+        for name, old_ids in _fm_ids(old).items()
+    }
+    if not any(removed.values()):
+        return
+    for photo_id in _fm_photo_ids(old, removed):
+        if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
+            continue
+        path = os.path.join(FM_EVIDENCE_DIR, f"{photo_id}.jpg")
+        if os.path.realpath(os.path.dirname(path)) != os.path.realpath(FM_EVIDENCE_DIR):
+            continue
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
 
 
 async def auth_verify_handler(request: web.Request) -> web.Response:
@@ -1149,7 +1355,8 @@ def _store_revision(path: str) -> str:
 
 
 def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
-                         writer_roles: tuple = ("owner",)):
+                         writer_roles: tuple = ("owner",),
+                         write_guard=None, after_write=None):
     """Build the (GET, PUT) handler pair for one shared store.
 
     GET is open to any authorized session — a guest still has to read the
@@ -1157,6 +1364,12 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
     `writer_roles`, which defaults to owner-only (shared state is exactly what
     a non-owner profile must not rewrite for everyone else); the FM store also
     admits "ops", because maintaining it IS the facility manager's job.
+
+    `write_guard(request, body, old, new)` may veto a write by returning a
+    response (used to require a superadmin elevation before any record is
+    DELETED); `after_write(old, new)` runs once the write has landed (used to
+    purge evidence photos an authorised delete orphaned). Both are optional
+    hooks on this one factory rather than a reason to fork it again.
 
     That role difference used to be the excuse for a SECOND, hand-written PUT
     handler for the FM store. Copying the handler copied its auth/validation
@@ -1209,14 +1422,21 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
         if len(payload.encode("utf-8")) > max_bytes:
             return web.json_response({"error": f"{key} payload too large"}, status=413)
         async with lock:
+            stored = _read_json_store(path, empty)
             if expected_rev is not None:
                 current_rev = _store_revision(path)
                 if expected_rev != current_rev:
                     return web.json_response(
-                        {"error": "conflict", key: _read_json_store(path, empty), "rev": current_rev},
+                        {"error": "conflict", key: stored, "rev": current_rev},
                         status=409)
+            if write_guard is not None:
+                veto = write_guard(request, body, stored, value)
+                if veto is not None:
+                    return veto
             _write_json_store(path, payload)
             new_rev = _store_revision(path)
+            if after_write is not None:
+                after_write(stored, value)
         return web.json_response({"ok": True, "count": len(value), "rev": new_rev})
 
     return get_handler, put_handler
@@ -1393,7 +1613,8 @@ device_config_get_handler, device_config_put_handler = _json_store_handlers(
 # only difference is who may write it.
 fm_data_get_handler, fm_data_put_handler = _json_store_handlers(
     FM_DATA_FILE, "data", {}, FM_DATA_MAX_BYTES, "facility manager data",
-    writer_roles=("owner", "ops"))
+    writer_roles=("owner", "ops"),
+    write_guard=_fm_write_guard, after_write=_fm_after_write)
 
 
 def main() -> None:
@@ -1422,6 +1643,7 @@ def main() -> None:
     app.router.add_put("/device-config", device_config_put_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
     app.router.add_post("/auth/verify", auth_verify_handler)
+    app.router.add_post("/auth/elevate", auth_elevate_handler)
     app.router.add_post("/auth/logout", auth_logout_handler)
     app.router.add_post("/auth/logout-all", auth_logout_all_handler)
     app.router.add_get("/auth/check", auth_check_handler)

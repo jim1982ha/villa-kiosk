@@ -8,7 +8,7 @@
 // which is why the entry form projects the new total as you type.
 
 import { useState } from "react";
-import { Plus, Trash2, Sparkles, Save, Download } from "lucide-react";
+import { Plus, Sparkles, Save, Download } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
@@ -19,6 +19,7 @@ import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
 import type { FmSavedDocument } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import DeviceSearchPicker, { buildDeviceOptions } from "./DeviceSearchPicker";
+import ErasableRow from "./ErasableRow";
 import ReportPreview from "./ReportPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 
@@ -201,7 +202,11 @@ export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string)
           <p className="muted body-text">No spend recorded for {month}.</p>
         )}
         {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => (
-          <div key={c.id} className="fm-row">
+          <ErasableRow
+            key={c.id}
+            intent={{ title: "Erase this spend entry", detail: `${c.label} — ${formatIdr(c.amountIdr)}` }}
+            erase={(token) => removeCost(c.id, token)}
+          >
             <div className="fm-row-main">
               <div className="fm-row-title">
                 <strong>{c.label}</strong>
@@ -225,10 +230,7 @@ export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string)
               )}
             </div>
             <span className="fm-amount">{formatIdr(c.amountIdr)}</span>
-            <button className="icon-btn" onClick={() => void removeCost(c.id)} aria-label="Delete entry">
-              <Trash2 size={15} />
-            </button>
-          </div>
+          </ErasableRow>
         ))}
       </div>
 

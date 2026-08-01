@@ -1,12 +1,19 @@
 // src/components/auth/PinPad.tsx
-// 4-digit passcode keypad for one profile. Pure input component: it collects
-// digits and reports the complete code upward — WHO verifies it (server or
-// env) is the caller's concern via the PinVerifier abstraction.
+// Numeric passcode keypad. Pure input component: it collects digits and reports
+// the complete code upward — WHO verifies it (server or env) is the caller's
+// concern via the PinVerifier abstraction.
+//
+// Two callers with different rules share it rather than forking: the profile
+// gate (4 digits, unlocks a session) and the superadmin elevation prompt (6
+// digits, authorises one destructive write). Everything that differs between
+// them — length, wording, the escape hatch offered after repeated failures —
+// is a prop, so the keypad behaviour, lockout countdown and keyboard handling
+// stay identical in both.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Delete } from "lucide-react";
 
-const PIN_LENGTH = 4;
+const DEFAULT_PIN_LENGTH = 4;
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 interface Props {
@@ -16,9 +23,21 @@ interface Props {
   onSubmit: (pin: string) => Promise<{ ok: boolean; retryAfter?: number }>;
   onAccepted: () => void;
   onBack: () => void;
+  /** Digits to collect before submitting. Default 4. */
+  length?: number;
+  /** Text of the back button. Default "Profiles". */
+  backLabel?: string;
+  /** Line under the title, replacing the default "Enter the N-digit passcode". */
+  subtitle?: string;
+  /** Shown after two wrong attempts, in place of the default guidance. */
+  helpText?: string;
 }
 
-export default function PinPad({ roleLabel, onSubmit, onAccepted, onBack }: Props) {
+export default function PinPad({
+  roleLabel, onSubmit, onAccepted, onBack,
+  length = DEFAULT_PIN_LENGTH, backLabel = "Profiles", subtitle, helpText,
+}: Props) {
+  const PIN_LENGTH = length;
   const [digits, setDigits] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +96,7 @@ export default function PinPad({ roleLabel, onSubmit, onAccepted, onBack }: Prop
       if (next.length === PIN_LENGTH) void submit(next);
       return next;
     });
-  }, [busy, lockedFor, submit]);
+  }, [busy, lockedFor, submit, PIN_LENGTH]);
 
   const erase = useCallback(() => {
     if (busy) return;
@@ -100,11 +119,11 @@ export default function PinPad({ roleLabel, onSubmit, onAccepted, onBack }: Prop
 
   return (
     <div className="pinpad" role="group" aria-label={`Passcode for ${roleLabel}`}>
-      <button className="pinpad-back" onClick={onBack} aria-label="Back to profile choice">
-        <ArrowLeft size={18} /> Profiles
+      <button className="pinpad-back" onClick={onBack} aria-label={`Back — ${backLabel}`}>
+        <ArrowLeft size={18} /> {backLabel}
       </button>
       <h2 className="pinpad-title">{roleLabel}</h2>
-      <p className="pinpad-sub">Enter the 4-digit passcode</p>
+      <p className="pinpad-sub">{subtitle ?? `Enter the ${PIN_LENGTH}-digit passcode`}</p>
 
       <div className="pinpad-dots" aria-label={`${digits.length} of ${PIN_LENGTH} digits entered`}>
         {Array.from({ length: PIN_LENGTH }, (_, i) => (
@@ -132,7 +151,7 @@ export default function PinPad({ roleLabel, onSubmit, onAccepted, onBack }: Prop
           else to go otherwise. */}
       {!locked && failCount >= 2 && (
         <p className="pinpad-help muted body-text">
-          Don&apos;t have the code? Ask whoever manages this villa&apos;s kiosk for it.
+          {helpText ?? "Don't have the code? Ask whoever manages this villa's kiosk for it."}
         </p>
       )}
 

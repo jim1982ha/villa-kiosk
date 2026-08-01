@@ -46,9 +46,13 @@ interface FmDataContextValue {
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
   ) => Promise<void>;
   addCost: (c: Omit<FmCost, "id">) => Promise<void>;
-  removeCost: (id: string) => Promise<void>;
   addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">) => Promise<void>;
   updateTicket: (id: string, patch: Partial<FmTicket>) => Promise<void>;
+  /** Erase a spend entry for good. Needs a single-use superadmin token — the
+   *  server rejects the write without one, so this is not a UI-level rule. */
+  removeCost: (id: string, elevation: string) => Promise<void>;
+  /** Erase a fault, its history and its evidence photos. Superadmin only. */
+  removeTicket: (id: string, elevation: string) => Promise<void>;
   /** Keep a generated report/spend statement (see FmSavedDocument) so it can
    *  be reopened or handed over later without regenerating it. */
   saveDocument: (doc: Omit<FmSavedDocument, "id" | "generatedAt">) => Promise<void>;
@@ -100,8 +104,9 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
    *  the local state is KEPT (so the operator doesn't lose what they typed)
    *  and the error surfaced — losing a completion someone just walked across
    *  the villa to log would be worse than showing it as unsaved. */
-  const mutate = useCallback(async (fn: (d: FmData) => FmData) => {
-    const next = fn(ref.current);
+  const mutate = useCallback(async (fn: (d: FmData) => FmData, elevation?: string) => {
+    const before = ref.current;
+    const next = fn(before);
     setData(next);
     setSaveError(null);
     // Send ONLY what this action changed, replayed onto the server's freshest
@@ -116,7 +121,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       fetchFresh: fetchFmData,
       rebase: (_base, fresh) => fresh,
       apply: applyFmDiff,
-      save: (doc, rev, carryOver) => saveFmData(doc, rev, carryOver),
+      save: (doc, rev, carryOver) => saveFmData(doc, rev, carryOver, elevation),
     });
     if (outcome.ok) {
       baseline.current = outcome.next;
@@ -126,6 +131,15 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (outcome.reason === "nothing-to-push") return;
+    // A rejected DELETE is the one failure that must not be left showing as
+    // applied: the record still exists on the server, and every other device
+    // still sees it. Put it back rather than leaving this screen quietly
+    // disagreeing with the store until the next refresh.
+    if (elevation) {
+      setData(before);
+      setSaveError("The delete was refused by the add-on — nothing was removed.");
+      return;
+    }
     setSaveError("Couldn't save to the add-on — the change is only on this device.");
   }, []);
 
@@ -163,8 +177,26 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const addCost = useCallback((c: Omit<FmCost, "id">) =>
     mutate((d) => ({ ...d, costs: [...d.costs, { ...c, id: fmId("co") }] })), [mutate]);
 
-  const removeCost = useCallback((id: string) =>
-    mutate((d) => ({ ...d, costs: d.costs.filter((c) => c.id !== id) })), [mutate]);
+  // ── Superadmin erasures ────────────────────────────────────────────────
+  // These take a single-use elevation token and destroy evidence permanently
+  // (the server also purges the entry's evidence photos from /data). They are
+  // separate from the ordinary mutators above precisely so that no ordinary
+  // code path can reach them by accident — you cannot erase a fault without
+  // holding a token, and a token exists only because someone entered the
+  // superadmin code seconds earlier for this specific action.
+
+  const removeCost = useCallback((id: string, elevation: string) =>
+    mutate((d) => ({
+      ...d,
+      costs: d.costs.filter((c) => c.id !== id),
+      // A completion pointing at a cost that no longer exists would render as
+      // a job with an unknown price. Drop the link, keep the completion —
+      // the work still happened.
+      completions: d.completions.map((c) => (c.costId === id ? { ...c, costId: undefined } : c)),
+    }), elevation), [mutate]);
+
+  const removeTicket = useCallback((id: string, elevation: string) =>
+    mutate((d) => ({ ...d, tickets: d.tickets.filter((t) => t.id !== id) }), elevation), [mutate]);
 
   const addTicket = useCallback((t: Omit<FmTicket, "id" | "openedAt" | "status">) =>
     mutate((d) => ({
@@ -205,7 +237,8 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     <FmDataContext.Provider value={{
       data, ready, saveError, reload,
       addSchedule, updateSchedule, removeSchedule, removeAllSchedules,
-      logCompletion, addCost, removeCost, addTicket, updateTicket,
+      logCompletion, addCost, addTicket, updateTicket,
+      removeCost, removeTicket,
       saveDocument, removeDocument,
     }}>
       {children}

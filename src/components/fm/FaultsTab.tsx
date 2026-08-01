@@ -19,6 +19,7 @@ import { useFmData } from "@/fm/FmDataContext";
 import { localStamp, ticketStats } from "@/fm/fmEngine";
 import type { FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
+import ErasableRow from "./ErasableRow";
 import DeviceSearchPicker, { buildDeviceOptions } from "./DeviceSearchPicker";
 
 const NEXT: Record<FmTicketStatus, FmTicketStatus | null> = {
@@ -40,7 +41,7 @@ export default function FaultsTab(
     unavailableIds: string[];
   },
 ) {
-  const { data, addTicket, updateTicket } = useFmData();
+  const { data, addTicket, updateTicket, removeTicket } = useFmData();
   const { entities } = useHA();
   const { config } = useConfig();
   const [adding, setAdding] = useState(false);
@@ -172,7 +173,12 @@ export default function FaultsTab(
 
       <div className="fm-list">
         {openFirst.map((t) => (
-          <div key={t.id} className={`fm-row state-${t.status === "resolved" ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
+          <ErasableRow
+            key={t.id}
+            className={`state-${t.status === "resolved" ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}
+            intent={{ title: "Erase this fault", detail: t.title }}
+            erase={(token) => removeTicket(t.id, token)}
+          >
             <div className="fm-row-main">
               <div className="fm-row-title">
                 <strong>{t.title}</strong>
@@ -207,7 +213,7 @@ export default function FaultsTab(
                 Mark {LABEL[NEXT[t.status]!].toLowerCase()}
               </button>
             )}
-          </div>
+          </ErasableRow>
         ))}
       </div>
     </div>

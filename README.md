@@ -151,6 +151,7 @@ matters is also enforced in `rootfs/usr/bin/supervisor-proxy.py`.
 | HA REST (`/core/api/*`) | Default **deny** for non-owners: ambiguous paths refused outright, then an allowlist of what the kiosk actually calls |
 | HA websocket | Default **deny** for non-owners: only the seven frame types the kiosk sends. Blocks `execute_script`, which otherwise wraps a forbidden service call and walks straight past the service allowlist |
 | Facility data + evidence photos | `owner`/`ops` only, on both read and write |
+| Erasing a facility record | A fault, a spend entry or a logged completion can be **destroyed** only with the 6-digit `superadmin_pin`, entered per deletion. The server refuses any write that removes one without a fresh single-use authorisation, so this is not a UI-level rule; leaving `superadmin_pin` empty makes the records permanently un-erasable from the app. Reached by pressing and holding the row — not a fourth profile, and additive: you still need `owner`/`ops` |
 | Uploads | Owner only, magic-byte checked, size-capped, destination path traversal-checked |
 
 Run the regression suite — every assertion is a hole that was once open:
@@ -399,6 +400,16 @@ have to be *evidenced*, not just performed. The tabs map to that:
 | **Spend** | Maintenance spend this month against a configurable monthly cap, optionally tied to a device the same way Faults is, with the projected total shown *before* an entry is saved — the point at which the decision is still open. |
 | **Schedule** | Add, edit, pause or remove maintenance tasks — interval (with presets like "twice a month"), optional room, optional contract reference. Every task shows the target date its interval implies, from its last completion or (if never done) from when it was created — the same date the Today board shows. Removing a task keeps the completions already logged against it; "Delete all" clears the schedule the same way. |
 | **Report** | Press **Generate report** to snapshot the villa's current Readiness/Faults/Spend/Schedule status into a formatted preview for any month. **Download .md** saves the underlying Markdown unchanged. |
+
+Faults and spend entries are *evidence*, so nothing in the normal interface
+deletes one — resolving a fault keeps it, and the record of what was spent is
+what an audit rests on. When an entry genuinely has to go (a duplicate, a test
+row, a figure entered against the wrong villa), press and hold it: a prompt
+asks for the 6-digit `superadmin_pin` from the add-on options, and only then is
+the record — with its evidence photos — destroyed. A faint dot in the corner of
+a row marks one that can be erased this way. Schedules and saved reports are
+not covered: a schedule is a plan and a report can be regenerated, so both keep
+their ordinary delete buttons.
 
 ### Where the defaults come from
 

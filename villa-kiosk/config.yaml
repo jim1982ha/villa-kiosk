@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: Villa Kiosk
-version: "2.64.0"
+version: "2.65.0"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -61,13 +61,38 @@ startup: application
 # turn this on if something else already gates the hostname itself (e.g.
 # Cloudflare Access) — it's meaningless for Ingress, which is already
 # auto-trusted, and unnecessary if you never expose port 8099 directly.
+#
+# superadmin_pin (empty by default = the capability is OFF): a SIX-digit code
+# that authorises permanently deleting a Facility Manager record — a fault, a
+# cost, a logged completion (and its evidence photos), a saved report or a
+# schedule. Normal profiles can add and amend those records; nothing can
+# delete one unless this code is set and entered.
+#
+# It is not a fourth profile: it never appears on the profile-select screen,
+# mints no session, and cannot be signed in as. Inside the app you reach it by
+# PRESSING AND HOLDING a deletable row, which opens a code prompt; a correct
+# code authorises that ONE deletion and then expires. Rows that can be deleted
+# this way carry a small dot in their corner — deliberately quiet, since it is
+# only meaningful to whoever holds the code.
+#
+# Enforcement is server-side: the add-on rejects any write that removes a
+# record without a fresh authorisation, so the restriction holds regardless of
+# what any client believes. It is additive, not a bypass — deleting still
+# requires an Owner or Facility manager session AS WELL AS the code.
+#
+# Six digits rather than four because it authorises irreversible destruction
+# of the maintenance record; the same brute-force lockout applies as for the
+# profile PINs. Leave it empty unless you actually need deletions, and treat
+# it as separate from the everyday passcodes.
 options:
   guest_pin: ""
   owner_pin: ""
   ops_pin: ""
+  superadmin_pin: ""
   public_model_access: false
 schema:
   guest_pin: match(^[0-9]{4}$|^$)?
   owner_pin: match(^[0-9]{4}$|^$)?
   ops_pin: match(^[0-9]{4}$|^$)?
+  superadmin_pin: match(^[0-9]{6}$|^$)?
   public_model_access: bool?

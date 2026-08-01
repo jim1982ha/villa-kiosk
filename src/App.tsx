@@ -4,6 +4,7 @@ import { FmDataProvider } from "@/fm/FmDataContext";
 import { HAStateProvider } from "@/ha/HAStateStore";
 import { ProfileProvider } from "@/auth/ProfileContext";
 import ProfileGate from "@/components/auth/ProfileGate";
+import { SuperadminGate } from "@/auth/SuperadminGate";
 import Dashboard from "@/pages/Dashboard";
 
 export default function App() {
@@ -34,7 +35,13 @@ export default function App() {
                     versions. Neither was exploitable here (no useNavigate, no
                     <Link>, no SSR), but an unused dependency is pure
                     supply-chain surface. */}
-                <Dashboard />
+                {/* Supplies the one-shot authorisation prompt that erasing a
+                    record requires. Wraps the app rather than the Facility
+                    panel so a second erasable surface elsewhere doesn't need
+                    its own copy of the prompt. */}
+                <SuperadminGate>
+                  <Dashboard />
+                </SuperadminGate>
               </FmDataProvider>
             </ProfileGate>
           </div>

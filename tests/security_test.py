@@ -225,5 +225,91 @@ t("revision changes when the store is written",
                    proxy._write_json_store(_tmp_rev, '{"a":2}'),
                    proxy._store_revision(_tmp_rev) != before)[-1])(_rev), True)
 
+# ------------------------------------------ superadmin erasure boundary
+# Deleting an evidence record (a fault, a spend, a logged completion) needs a
+# single-use elevation minted from the 6-digit superadmin code. The rule lives
+# HERE and not in the UI because the store takes whole documents: a client
+# that simply omits a record IS a delete, so a client-side check would be no
+# check at all.
+section("superadmin: erasing an evidence record needs an elevation")
+
+t("elevation route exists",
+  '"/auth/elevate"' in _proxy_src, True)
+t("superadmin code is 6 digits", bool(proxy.SUPERADMIN_PIN_RE.fullmatch("123456")), True)
+for bad in ("1234", "1234567", "12345a", "", "12 456"):
+    t(f"superadmin code rejects {bad!r}", bool(proxy.SUPERADMIN_PIN_RE.fullmatch(bad)), False)
+t("elevation code compared in constant time",
+  "hmac.compare_digest" in inspect.getsource(proxy.auth_elevate_handler), True)
+t("elevation attempts are rate limited",
+  "_auth_failures" in inspect.getsource(proxy.auth_elevate_handler), True)
+
+_doc = {
+    "tickets": [{"id": "tk1", "photoIds": ["p1"]}, {"id": "tk2", "photoIds": []}],
+    "costs": [{"id": "co1", "photoIds": ["p1", "p2"]}],
+    "completions": [{"id": "cp1", "photoIds": []}],
+    "schedules": [{"id": "sc1"}],
+    "savedDocuments": [{"id": "doc1"}],
+}
+
+
+def without(collection, ident):
+    d = {k: list(v) for k, v in _doc.items()}
+    d[collection] = [it for it in d[collection] if it["id"] != ident]
+    return d
+
+
+# With no code configured the capability is OFF — erasure is impossible for
+# everyone rather than open to anyone.
+proxy._read_options = lambda: {}
+t("no code configured → erasing a fault is refused",
+  proxy._fm_write_guard(None, {}, _doc, without("tickets", "tk1")) is not None, True)
+
+proxy._read_options = lambda: {proxy.SUPERADMIN_PIN_OPTION: "654321"}
+t("erasing a fault without an elevation is refused",
+  proxy._fm_write_guard(None, {}, _doc, without("tickets", "tk1")) is not None, True)
+t("erasing a spend without an elevation is refused",
+  proxy._fm_write_guard(None, {}, _doc, without("costs", "co1")) is not None, True)
+t("erasing a completion without an elevation is refused",
+  proxy._fm_write_guard(None, {}, _doc, without("completions", "cp1")) is not None, True)
+t("a bogus elevation token is refused",
+  proxy._fm_write_guard(None, {"elevation": "not-a-token"}, _doc,
+                        without("tickets", "tk1")) is not None, True)
+
+# Adding and amending stay open — this must not become a gate on ordinary work.
+_added = {k: list(v) for k, v in _doc.items()}
+_added["tickets"] = _added["tickets"] + [{"id": "tk3", "photoIds": []}]
+t("adding a fault needs no elevation", proxy._fm_write_guard(None, {}, _doc, _added), None)
+_amended = {k: list(v) for k, v in _doc.items()}
+_amended["tickets"] = [{"id": "tk1", "photoIds": ["p1"], "status": "resolved"},
+                       {"id": "tk2", "photoIds": []}]
+t("resolving a fault needs no elevation", proxy._fm_write_guard(None, {}, _doc, _amended), None)
+# Plans and regenerable snapshots are deliberately NOT protected: they are
+# routine housekeeping for owner/ops and destroy no history.
+t("deleting a schedule needs no elevation",
+  proxy._fm_write_guard(None, {}, _doc, without("schedules", "sc1")), None)
+t("deleting a saved document needs no elevation",
+  proxy._fm_write_guard(None, {}, _doc, without("savedDocuments", "doc1")), None)
+
+# A valid token authorises exactly ONE erasure and is then spent.
+_tok = proxy._mint_elevation()
+t("a valid elevation authorises the erasure",
+  proxy._fm_write_guard(None, {"elevation": _tok}, _doc, without("tickets", "tk1")), None)
+t("the same elevation cannot be replayed",
+  proxy._fm_write_guard(None, {"elevation": _tok}, _doc,
+                        without("tickets", "tk2")) is not None, True)
+# An expired token is worthless even if never used.
+_stale = proxy._mint_elevation()
+proxy._elevation_tokens[_stale] = time.monotonic() - 1
+t("an expired elevation is refused",
+  proxy._fm_write_guard(None, {"elevation": _stale}, _doc,
+                        without("tickets", "tk1")) is not None, True)
+
+# "Delete" must mean the JPEG leaves /data too — but only when nothing else
+# still points at it, or erasing one record would blank another's evidence.
+t("an erased record's own photo is orphaned",
+  proxy._fm_photo_ids(_doc, {"costs": {"co1"}}), {"p2"})
+t("a photo shared with a surviving record is kept",
+  "p1" in proxy._fm_photo_ids(_doc, {"costs": {"co1"}}), False)
+
 print(f"\n{PASSED} passed, {FAILED} failed")
 sys.exit(1 if FAILED else 0)

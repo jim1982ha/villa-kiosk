@@ -69,6 +69,11 @@ export async function saveFmData(
   data: FmData,
   expectedRev: string | null,
   carryOver: Record<string, unknown> = {},
+  /** Single-use superadmin token, required by the server for any write that
+   *  removes an evidence record (see auth/elevation.ts). Sent alongside the
+   *  document, never inside it — it authorises this one request and is
+   *  consumed by it, so it must not be stored. */
+  elevation?: string,
 ): Promise<StoreSaveResult> {
   try {
     const merged = { ...carryOver, ...data };
@@ -76,8 +81,11 @@ export async function saveFmData(
       method: "PUT",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        expectedRev === null ? { data: merged } : { data: merged, rev: expectedRev }),
+      body: JSON.stringify({
+        data: merged,
+        ...(expectedRev === null ? {} : { rev: expectedRev }),
+        ...(elevation ? { elevation } : {}),
+      }),
     });
     if (r.status === 409) return { ok: false, conflict: true };
     if (!r.ok) return { ok: false, conflict: false };
