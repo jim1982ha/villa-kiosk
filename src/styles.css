@@ -781,10 +781,12 @@ button {
 }
 .summary-room-heading:first-child { margin-top: 0; }
 /* "Scenes for this room" strip — SummaryGroupPanel's roomScenes, room-cluster
-   panel only. Sits above the device list, separated by a hairline so it
-   reads as a distinct action row rather than another device. */
+   panel only. Sits BELOW the device list (the room's own devices are why the
+   modal was opened; scenes are a secondary shortcut for the same room),
+   separated by a hairline above so it still reads as a distinct action row
+   rather than another device. */
 .summary-room-scenes {
-  border-bottom: 1px solid var(--hairline); padding-bottom: 14px; margin-bottom: 14px;
+  border-top: 1px solid var(--hairline); padding-top: 14px; margin-top: 14px;
 }
 .summary-room-scenes .summary-room-heading { margin-top: 0; }
 .summary-room-scenes-row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -973,17 +975,6 @@ button {
   font-size: 13px; box-shadow: none; border: 1px solid var(--hairline);
 }
 .badge-swatch.custom input[type="color"] { width: 26px; height: 26px; border: none; background: none; padding: 0; cursor: pointer; }
-/* Plain icon-only dismiss button, top-right of the header (replaces the old
-   footer "Close" button — see BasePanel). Sits as the header's last flex
-   child, pushed to the far right by .title's flex:1 1 auto. */
-.panel-close-btn {
-  flex-shrink: 0; width: var(--touch-min); height: var(--touch-min);
-  border-radius: 999px; background: transparent; color: var(--text-secondary);
-  display: flex; align-items: center; justify-content: center;
-  transition: background 0.15s, color 0.15s;
-}
-.panel-close-btn:hover { background: var(--bg-input); color: var(--text-primary); }
-.panel-close-btn:active { transform: scale(0.92); }
 /* Text-labelled button(s), right-aligned, no separator above (see
    .settings-footer for the same rule applied to the other modal family).
    Unlike .settings-footer this sits INSIDE the modal's own padding

@@ -187,6 +187,14 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [haConfig]);
 
+  // Keep the 3D layer's suppressed-entity set current — a hidden-in-HA or
+  // config/diagnostic entity gets no 3D badge, and can't inflate a
+  // room-cluster chip's count past what SummaryGroupPanel's list (which
+  // already excludes the same set by default) actually shows.
+  useEffect(() => {
+    manager?.setSuppressedEntityIds(suppressedEntityIds);
+  }, [manager, suppressedEntityIds]);
+
   // Real-sun fallback: if HA has no sun.sun entity, refresh lighting hourly.
   // Depend on sun.sun SPECIFICALLY, not the whole `entities` map — `entities`
   // gets a new reference on every single state_changed event for ANY entity

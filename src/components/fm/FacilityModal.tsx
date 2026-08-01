@@ -18,7 +18,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  X, ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog, TriangleAlert,
+  ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog, TriangleAlert,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -112,9 +112,6 @@ export default function FacilityModal({
         >
           <div className="settings-header">
             <h2>Facility</h2>
-            <button className="icon-btn" onClick={onClose} aria-label="Close">
-              <X size={18} />
-            </button>
           </div>
 
           <div className="fm-tabs" role="tablist" aria-label="Facility sections">

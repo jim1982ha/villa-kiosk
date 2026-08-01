@@ -9,7 +9,7 @@
 // panel) and the shared gradient badge (badgeImageDataUrl) so it feels native.
 
 import { useState, type ComponentType } from "react";
-import { ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight, Sparkles, Power, PowerOff } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -167,31 +167,21 @@ export default function SummaryGroupPanel({
             </button>
           </div>
         ) : (
-          <button className="btn ghost" onClick={() => setConfirming(true)}>
-            {anyOn ? "Turn all off" : "Turn all on"}
+          // Icon-only — the text label ("Turn all on/off") cost too much
+          // horizontal space in the header, especially on a phone. The icon
+          // itself carries the direction (Power = will turn on, PowerOff =
+          // will turn off); the tooltip/aria-label still spell it out.
+          <button
+            className="icon-btn"
+            onClick={() => setConfirming(true)}
+            title={anyOn ? "Turn all off" : "Turn all on"}
+            aria-label={anyOn ? "Turn all off" : "Turn all on"}
+          >
+            {anyOn ? <PowerOff size={18} /> : <Power size={18} />}
           </button>
         )
       )}
     >
-      {!!roomScenes?.length && (
-        <div className="summary-room-scenes">
-          <div className="summary-room-heading">Scenes for this room</div>
-          <div className="summary-room-scenes-row">
-            {roomScenes.map((s) => (
-              <button
-                key={s.entityId}
-                type="button"
-                className="btn ghost"
-                disabled={!canControl}
-                onClick={() => callService("scene", "turn_on", {}, { entity_id: s.entityId })}
-              >
-                <Sparkles size={15} /> {s.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {rows.length === 0 && <div className="muted body-text">No devices in this group.</div>}
 
       {/* On-map devices first, ROOM-grouped, then (if any, and not Guest) the
@@ -215,6 +205,27 @@ export default function SummaryGroupPanel({
             </div>
           ))}
         </>
+      )}
+
+      {/* Scenes last — the room's own devices are why this modal was opened,
+          scenes are a secondary shortcut for the same room. */}
+      {!!roomScenes?.length && (
+        <div className="summary-room-scenes">
+          <div className="summary-room-heading">Scenes for this room</div>
+          <div className="summary-room-scenes-row">
+            {roomScenes.map((s) => (
+              <button
+                key={s.entityId}
+                type="button"
+                className="btn ghost"
+                disabled={!canControl}
+                onClick={() => callService("scene", "turn_on", {}, { entity_id: s.entityId })}
+              >
+                <Sparkles size={15} /> {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </BasePanel>
   );

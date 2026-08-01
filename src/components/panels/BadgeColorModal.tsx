@@ -6,7 +6,7 @@
 // same cost as a label edit), so there's no live-drag re-index storm.
 
 import { useEffect } from "react";
-import { X, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 // A spread of distinct, pleasant badge colours. Identity swatches (not a data
 // scale), so no ramp/validator needed — just visibly different from each other.
@@ -49,9 +49,6 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
       <div className="modal panel-modal badge-color-modal" onClick={(e) => e.stopPropagation()}>
         <div className="panel-header">
           <div className="title"><h2>Icon colour</h2></div>
-          <button className="panel-close-btn" onClick={onClose} aria-label="Close">
-            <X size={20} />
-          </button>
         </div>
 
         <div className="panel-body">
@@ -82,6 +79,10 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
               <RotateCcw size={16} /> Category default
             </button>
           </div>
+        </div>
+
+        <div className="panel-footer">
+          <button className="btn primary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

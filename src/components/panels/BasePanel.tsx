@@ -1,15 +1,17 @@
 // src/components/panels/BasePanel.tsx
 // Shared modal wrapper for device panels: centered dialog (not a bottom
-// sheet), backdrop-dismiss + Escape, header with icon/title/room and a plain
-// X dismiss button (the raw entity_id used to show as a third header line —
-// dropped for a slicker header; still available via Advanced Settings' Edit,
-// and every title is human-readable now — see displayLabelFor). Edit lives
-// in the FOOTER, right-aligned — title truncates with an ellipsis (see
+// sheet), backdrop-dismiss + Escape, header with icon/title/room (the raw
+// entity_id used to show as a third header line — dropped for a slicker
+// header; still available via Advanced Settings' Edit, and every title is
+// human-readable now — see displayLabelFor). Edit and Close both live in the
+// FOOTER, right-aligned — same "no header close icon, footer Close button
+// instead" chrome every other modal in the app uses (Settings, Advanced
+// Settings, Facility, Legend…), so this is the ONE shared place that
+// convention comes from — title truncates with an ellipsis (see
 // .panel-header .title h2 in styles.css) instead of fighting a footer button
 // for room.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { X } from "lucide-react";
 import { usePanelActions } from "./PanelActionsContext";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import BadgeColorModal from "./BadgeColorModal";
@@ -22,10 +24,9 @@ interface Props {
    *  OTHER standard widths (e.g. the group panel uses the Settings width). */
   className?: string;
   /** Small header-row action(s) — e.g. SummaryGroupPanel's "Turn all on/off"
-   *  — right-aligned, LEFT of the close button. Same idea as Settings' theme
-   *  buttons sitting in ITS header instead of buried in the body: a panel's
-   *  one or two most-used actions belong where they're always visible, not
-   *  scrolled past. */
+   *  — right-aligned. Same idea as Settings' theme buttons sitting in ITS
+   *  header instead of buried in the body: a panel's one or two most-used
+   *  actions belong where they're always visible, not scrolled past. */
   headerActions?: ReactNode;
   onClose: () => void;
   children: ReactNode;
@@ -83,9 +84,6 @@ export default function BasePanel({ title, room, icon, className, headerActions,
             </div>
           </div>
           {headerActions && <div className="panel-header-actions">{headerActions}</div>}
-          <button className="panel-close-btn" onClick={onClose} aria-label="Close">
-            <X size={20} />
-          </button>
         </div>
         <div className="panel-body">
           {/* The device's linked entity, if one is configured (Advanced
@@ -116,11 +114,10 @@ export default function BasePanel({ title, room, icon, className, headerActions,
           )}
           {children}
         </div>
-        {onEdit && (
-          <div className="panel-footer">
-            <button className="btn ghost" onClick={onEdit}>Edit</button>
-          </div>
-        )}
+        <div className="panel-footer" style={{ justifyContent: onEdit ? "space-between" : "flex-end" }}>
+          {onEdit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
+          <button className="btn primary" onClick={onClose}>Close</button>
+        </div>
       </div>
 
       {colorOpen && badge && onSetBadgeColor && (

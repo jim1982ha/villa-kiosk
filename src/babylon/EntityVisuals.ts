@@ -785,6 +785,14 @@ export class EntityVisuals {
   /** Last seen HA state per entity, so a label rebuild (toggle on / icon edit)
    *  can repaint badges immediately instead of waiting for the next push. */
   private lastState = new Map<string, HassEntity>();
+  /** Entities the user hid in HA, or that HA itself filed under
+   *  entity_category config/diagnostic (see HAStateStore's suppressedEntityIds) —
+   *  set from Dashboard via setSuppressedEntityIds. Excluded in cullLabels
+   *  exactly like hiddenCategories, so a suppressed entity gets no 3D badge
+   *  AND is never counted into a room-cluster chip's total; without this, the
+   *  chip's count and SummaryGroupPanel's list (which already filters these
+   *  out by default) could silently disagree. */
+  private suppressedEntityIds = new Set<string>();
   /** User size multiplier (Settings slider) and live bird's-eye zoom factor;
    *  the badge container is scaled by their product. */
   private iconUserScale = 1;
@@ -872,6 +880,15 @@ export class EntityVisuals {
   /** MUST be called before indexMeshes() — that's where lights are created. */
   setBakedMode(baked: boolean): void {
     this.bakedMode = baked;
+  }
+
+  /** Called whenever HA's registry-derived suppressed set changes (Dashboard's
+   *  useHA().suppressedEntityIds). No rebuild needed — cullLabels reads this
+   *  set every frame already, same as hiddenCategories; a render request is
+   *  enough to apply it under on-demand rendering. */
+  setSuppressedEntityIds(ids: Set<string>): void {
+    this.suppressedEntityIds = ids;
+    this.requestRender();
   }
 
   /** Repaint every badge from the current config (per-entity colour + glyph).
@@ -2483,6 +2500,14 @@ export class EntityVisuals {
 
     for (const [id, lbl] of this.labels) {
       if (hidden.includes(lbl.category)) {
+        lbl.container.isVisible = false;
+        continue;
+      }
+      // Hidden-in-HA / config-diagnostic entities get no badge at all — same
+      // exclusion SummaryGroupPanel already applies by default, so a room's
+      // cluster-chip count (built from `shown` below) can't disagree with
+      // what the modal that count opens actually lists.
+      if (this.suppressedEntityIds.has(id)) {
         lbl.container.isVisible = false;
         continue;
       }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.54.0
+
+### Changes
+- **Fixed a real room-cluster count mismatch: the badge pill said 17 devices for a room, its own modal listed only 16.** Root cause: the 3D scene layer (`EntityVisuals`) had no concept of HA's registry-derived "hidden/config/diagnostic" entity set at all, so a room-cluster chip counted every mapped device regardless — while the modal it opens (`SummaryGroupPanel`) already excludes those by default, the same convention every other device list in the app follows. One of the room's devices was hidden in HA (or filed under a diagnostic entity_category), so the badge counted it and the modal correctly didn't show it. Fixed at the root rather than papering over the modal: `suppressedEntityIds` is now threaded from `HAStateStore` through `SceneManager` into `EntityVisuals`, which excludes those entities from getting a 3D badge at all (same insertion point as the existing hidden-category filter in `cullLabels`) — a suppressed entity can no longer inflate a cluster's count, and gets no floating badge on the map either, matching the "I hid this in HA" intent.
+- **Every modal's close button is now the same convention: a footer "Close" button, not a header X icon.** `BasePanel` (used by every device panel and the group/room-cluster modal), `FacilityModal` and `LegendModal` all carried a redundant top-right X on top of an already-present footer Close button (or, for `BasePanel`, the X used to be the ONLY way to close for panels with no Edit action); `BadgeColorModal` had the X with no footer at all. `BasePanel`'s footer now always renders — Close on the right always, Edit on the left when that profile can edit — and the header X is gone everywhere it appeared, one shared rule instead of two competing ones (documented as a stale "replaces the old footer Close button" comment that this change makes true again in reverse).
+- **The room/group modal's "Turn all on/off" button is icon-only now** (`Power`/`PowerOff`, contextual to current state) — the text label ate real width in the header, worst on a phone. Tooltip and `aria-label` still carry the full "Turn all on"/"Turn all off" text.
+- **"Scenes for this room" moved to the bottom of the room-cluster modal**, after the device list — the room's own devices are why that modal gets opened; scenes are a secondary shortcut for the same room, not the first thing to scroll past. The section's hairline separator flipped from below it to above it to match.
+- Typecheck and production build clean throughout.
+
 ## 2.53.0
 
 ### Changes

@@ -6,7 +6,6 @@
 // place. A first-time user has to tap around and learn it by trial. This is
 // that reference, one tap away, not shown by default.
 
-import { X } from "lucide-react";
 import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
 import { ALERT_RED_HEX } from "@/babylon/colors";
 
@@ -43,9 +42,6 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
       <div className="modal settings-modal legend-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <h2>Map colours</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
         </div>
         <div className="settings-body">
           <div className="settings-section-title">Device category (badge colour)</div>
