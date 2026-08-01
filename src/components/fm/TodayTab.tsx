@@ -6,7 +6,7 @@
 // 3D map. Overdue work is what Appendix C §7(b) turns into a termination risk.
 
 import { useState } from "react";
-import { Plus, Check, CalendarClock, Trash2 } from "lucide-react";
+import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
 import { scheduleBoard, formatIdr, localStamp, shortDate, type ScheduleStatus } from "@/fm/fmEngine";
 import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
@@ -34,7 +34,7 @@ function dueText(s: ScheduleStatus): string {
 }
 
 export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) => void }) {
-  const { data, logCompletion, seedDefaults, removeSchedule, removeAllSchedules } = useFmData();
+  const { data, logCompletion, removeSchedule, removeAllSchedules } = useFmData();
   const board = scheduleBoard(data);
   const [openId, setOpenId] = useState<string | null>(null);
   // Bulk delete is destructive across every task at once — require an
@@ -49,17 +49,11 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
         <CalendarClock size={28} />
         <h3>No maintenance schedule yet</h3>
         <p className="muted body-text">
-          Load the schedule from Clause 3.7 of the management agreement — air
-          conditioning every 3 months, pest control twice a month, hydrowash
-          every 3 and 12 months, pool and landscaping twice a week. You can edit
-          or add to it afterwards.
-        </p>
-        <button className="btn primary" onClick={() => void seedDefaults()}>
-          <Plus size={16} /> Load the standard schedule
-        </button>
-        <p className="muted body-text" style={{ fontSize: 13 }}>
-          You can change any interval, add your own tasks or remove these in the
-          <strong> Schedule</strong> tab afterwards.
+          Add your property's own recurring maintenance tasks — air
+          conditioning service, pest control, pool and landscaping, whatever
+          your own schedule or agreement calls for — in the
+          <strong> Schedule</strong> tab. Each task tracks its own interval,
+          due date and completion history from there.
         </p>
       </div>
     );
@@ -156,9 +150,10 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
 }
 
 /** The completion form. Cost is optional and defaults to Minor — but the moment
- *  it would take the month past the Clause 3.3(i) cap, the operator is told
- *  BEFORE saving, because that is when the minor-vs-major decision is still
- *  theirs to make. */
+ *  it would take the month past the configured Minor Maintenance cap (see
+ *  fmTypes.ts's MINOR_MAINTENANCE_CAP_IDR), the operator is told BEFORE
+ *  saving, because that is when the minor-vs-major decision is still theirs
+ *  to make. No-op with no cap configured — wouldExceedCap is never true then. */
 function LogCompletion({
   scheduleId, onCancel, onSave,
 }: {
@@ -206,9 +201,8 @@ function LogCompletion({
       {willExceed && (
         <div className="fm-banner warn">
           This takes the month past the {formatIdr(MINOR_MAINTENANCE_CAP_IDR)} Minor
-          Maintenance cap (Clause 3.3(i)). Spend beyond it is Major maintenance and
-          falls to the Owner under Clause 6.2(iii) — record it there instead if that
-          is what was agreed.
+          Maintenance cap. Spend beyond it is Major maintenance — record it as that
+          category instead if that's what your own agreement calls for.
         </div>
       )}
 

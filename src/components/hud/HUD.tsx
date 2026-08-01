@@ -44,6 +44,7 @@ import LegendModal from "./LegendModal";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { useFmData } from "@/fm/FmDataContext";
 import { scheduleBoard } from "@/fm/fmEngine";
+import { formatCountBadge } from "@/utils/countBadge";
 
 type IconType = ComponentType<{ size?: number | string }>;
 
@@ -471,8 +472,14 @@ export default function HUD({
               a scrollable category row plus this pill was more than a narrow
               screen can show without scrolling to reach it; the SAME control
               lives in the overflow dropdown (.hud-right) instead, always
-              reachable with no scroll. */}
-          <div className="hud-group" role="toolbar" aria-label="Label size">
+              reachable with no scroll. The WRAPPER itself (not just its two
+              buttons) is hidden at that breakpoint too — .hud-labelsize-group
+              exists so that rule has something to target, since a `display:
+              none`'d pair of children still leaves an empty pill rendering
+              its own chip chrome (padding/border/background), which read as
+              a stray blank rounded box sitting between the category row and
+              the overflow button. */}
+          <div className="hud-group hud-labelsize-group" role="toolbar" aria-label="Label size">
             <button
               className="icon-btn hud-labelsize-btn"
               onClick={() => stepLabelScale(-LABEL_SCALE_STEP)}
@@ -522,7 +529,7 @@ export default function HUD({
               <TriangleAlert size={18} />
               {unavailableIds.length > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
-                  {unavailableIds.length > 99 ? "99+" : unavailableIds.length}
+                  {formatCountBadge(unavailableIds.length)}
                 </span>
               )}
             </button>
@@ -538,7 +545,7 @@ export default function HUD({
                 <ClipboardList size={18} />
                 {facilityAttention > 0 && (
                   <span className="icon-btn-count" aria-hidden="true">
-                    {facilityAttention > 99 ? "99+" : facilityAttention}
+                    {formatCountBadge(facilityAttention)}
                   </span>
                 )}
               </button>
@@ -622,7 +629,7 @@ export default function HUD({
                   onClick={() => { setMenuOpen(false); setUnavailableOpen(true); }}
                 >
                   <TriangleAlert size={18} />
-                  <span>Unavailable devices{unavailableIds.length > 0 ? ` (${unavailableIds.length > 99 ? "99+" : unavailableIds.length})` : ""}</span>
+                  <span>Unavailable devices{unavailableIds.length > 0 ? ` (${formatCountBadge(unavailableIds.length)})` : ""}</span>
                 </button>
                 {onOpenFacility && (
                   <button
@@ -631,7 +638,7 @@ export default function HUD({
                     onClick={() => { setMenuOpen(false); onOpenFacility(); }}
                   >
                     <ClipboardList size={18} />
-                    <span>Facility{facilityAttention > 0 ? ` (${facilityAttention > 99 ? "99+" : facilityAttention})` : ""}</span>
+                    <span>Facility{facilityAttention > 0 ? ` (${formatCountBadge(facilityAttention)})` : ""}</span>
                   </button>
                 )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus

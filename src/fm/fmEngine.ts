@@ -114,12 +114,15 @@ export interface BudgetStatus {
 }
 
 /**
- * Where this month's maintenance spend sits against Clause 3.3(i).
+ * Where this month's maintenance spend sits against the configured Minor
+ * Maintenance cap (0 = not configured — see MINOR_MAINTENANCE_CAP_IDR).
  *
- * "approaching" at 80% exists because the decision the cap forces — do this as
- * shared Minor Maintenance, or raise it as Major for the Owner — has to be made
- * BEFORE the money is spent. A warning that only arrives at 100% arrives after
- * the choice is gone.
+ * "approaching" at 80% exists because the decision a cap forces — do this as
+ * shared Minor Maintenance, or raise it as Major — has to be made BEFORE the
+ * money is spent. A warning that only arrives at 100% arrives after the
+ * choice is gone. With no cap configured (capIdr <= 0) that decision doesn't
+ * apply yet, so spend is tracked as "ok" regardless of amount rather than
+ * reading as permanently "exceeded" against a zero cap.
  */
 export function budgetStatus(
   costs: readonly FmCost[], month = monthKey(Date.now()),
@@ -133,18 +136,19 @@ export function budgetStatus(
   const fraction = capIdr > 0 ? minorIdr / capIdr : 0;
   return {
     month, minorIdr, majorIdr, capIdr, fraction,
-    state: minorIdr >= capIdr ? "exceeded" : fraction >= 0.8 ? "approaching" : "ok",
+    state: capIdr <= 0 ? "ok" : minorIdr >= capIdr ? "exceeded" : fraction >= 0.8 ? "approaching" : "ok",
     entries,
   };
 }
 
 /** What a new minor expense of `amountIdr` would do to the cap — used to warn
- *  before it is committed rather than after. */
+ *  before it is committed rather than after. Never true with no cap
+ *  configured (capIdr <= 0). */
 export function wouldExceedCap(
   costs: readonly FmCost[], amountIdr: number,
   month = monthKey(Date.now()), capIdr = MINOR_MAINTENANCE_CAP_IDR,
 ): boolean {
-  return budgetStatus(costs, month, capIdr).minorIdr + amountIdr >= capIdr;
+  return capIdr > 0 && budgetStatus(costs, month, capIdr).minorIdr + amountIdr >= capIdr;
 }
 
 export interface TicketStats {

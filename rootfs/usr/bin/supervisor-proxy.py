@@ -1072,15 +1072,19 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     return web.json_response({"path": rel, "size": total})
 
 
-# ── Shared JSON stores (kiosk scenes, device configuration) ──────────────────
-# Both of these live HERE, in the add-on's own persistent /data volume, rather
-# than in each browser's localStorage — so what one device saves is immediately
+# ── Shared JSON stores (device configuration, facility manager data) ─────────
+# These live HERE, in the add-on's own persistent /data volume, rather than in
+# each browser's localStorage — so what one device saves is immediately
 # available on every other device that connects, exactly like the uploaded GLB
-# model above. They differ ONLY in filename, JSON key, empty shape and size
-# cap, so one read/write pair and one handler factory serves both instead of
-# two near-identical copies.
-SCENES_FILE = "/data/scenes.json"
-SCENES_MAX_BYTES = 1_000_000  # scenes are tiny; cap so a bad body can't fill /data
+# model above. One read/write pair and one handler factory serves all of them,
+# differing only in filename, JSON key, empty shape and size cap.
+#
+# Scenes used to be a third store here (kiosk-authored whole-villa state
+# snapshots, replayed via /scenes). Removed: it duplicated Home Assistant's
+# own Scene Editor / scene.* entities with a second, disconnected place to
+# author them. The kiosk now reads HA's own scenes live (their entity_id
+# attribute already lists every entity a scene touches) instead of storing
+# anything of its own — see src/config/haScenes.ts.
 # The villa's DEVICE configuration: entity<->mesh bindings, per-device metadata
 # (label, room, type, category, linked/motion entity, badge colour…), room
 # definitions and device groups. Bigger than scenes (one entry per entity, plus
@@ -1125,11 +1129,10 @@ def _write_json_store(path: str, payload: str) -> None:
 def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str):
     """Build the (GET, PUT) handler pair for one shared store.
 
-    GET is open to any authorized session — a guest still has to READ scenes to
-    activate them, and read the device config to see the right badges/rooms at
-    all. PUT is owner-only, matching the Settings UI's own gating: shared state
-    is exactly what a non-owner profile must not be able to rewrite for
-    everyone else.
+    GET is open to any authorized session — a guest still has to read the
+    device config to see the right badges/rooms at all. PUT is owner-only,
+    matching the Settings UI's own gating: shared state is exactly what a
+    non-owner profile must not be able to rewrite for everyone else.
     """
     async def get_handler(request: web.Request) -> web.Response:
         if not _authorized(request):
@@ -1322,8 +1325,6 @@ async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
     })
 
 
-scenes_get_handler, scenes_put_handler = _json_store_handlers(
-    SCENES_FILE, "scenes", [], SCENES_MAX_BYTES, "scenes")
 device_config_get_handler, device_config_put_handler = _json_store_handlers(
     DEVICE_CONFIG_FILE, "config", {}, DEVICE_CONFIG_MAX_BYTES, "device configuration")
 # Facility Manager working set. PUT is owner-only by the shared factory's rule;
@@ -1370,8 +1371,6 @@ def main() -> None:
     app.on_cleanup.append(on_cleanup)
     app.router.add_get("/addon-config", addon_config_handler)
     app.router.add_post("/model-upload", model_upload_handler)
-    app.router.add_get("/scenes", scenes_get_handler)
-    app.router.add_put("/scenes", scenes_put_handler)
     app.router.add_get("/device-config", device_config_get_handler)
     app.router.add_get("/fm-data", fm_data_get_handler)
     app.router.add_put("/fm-data", fm_data_put_handler)

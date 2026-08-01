@@ -74,6 +74,13 @@ const TONE: Record<string, string> = {
   recovered: "var(--status-warning)",
 };
 
+/** The table only ever RENDERS this many rows (newest first) — the add-on
+ *  already caps the underlying log at 500 events server-side (see
+ *  supervisor-proxy.py's TELEMETRY_MAX_EVENTS ring buffer), but 500 rows of
+ *  DOM in one long scroll is its own kind of unusable. Copy all/Download
+ *  still act on the FULL fetched set, not just what's visibly rendered. */
+const VISIBLE_ROWS = 10;
+
 export default function TelemetryPanel() {
   const [events, setEvents] = useState<TelemetryEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -172,7 +179,7 @@ export default function TelemetryPanel() {
 
       {!!events?.length && (
         <div className="config-table">
-          {events.map((e, i) => (
+          {events.slice(0, VISIBLE_ROWS).map((e, i) => (
             <div
               key={i}
               style={{
@@ -195,6 +202,12 @@ export default function TelemetryPanel() {
             </div>
           ))}
         </div>
+      )}
+      {!!events?.length && events.length > VISIBLE_ROWS && (
+        <p className="muted body-text" style={{ marginTop: 8, fontSize: 12 }}>
+          Showing the newest {VISIBLE_ROWS} of {events.length} — use <strong>Copy all</strong> or
+          <strong> Download .json</strong> above for the rest.
+        </p>
       )}
     </div>
   );

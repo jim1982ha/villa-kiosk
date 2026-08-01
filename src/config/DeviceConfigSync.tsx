@@ -6,8 +6,7 @@
 // the uploaded GLB is already shared.
 //
 // Renders nothing: the config itself already flows through ConfigContext, so
-// there is no new state to expose — this only reconciles it. (Contrast
-// ScenesProvider, which is a real provider because it exposes scenes/setScenes.)
+// there is no new state to expose — this only reconciles it.
 //
 // The server is authoritative, with three ordering rules that make it safe:
 //
@@ -80,8 +79,7 @@ export default function DeviceConfigSync() {
     if (keys.length === 0) {
       // Nothing stored yet (fresh install, or first run after upgrading from
       // the localStorage-only versions). Seed the store from whatever THIS
-      // device already has rather than letting an empty pull blank it — the
-      // same first-run migration ScenesProvider does.
+      // device already has rather than letting an empty pull blank it.
       serverJsonRef.current = JSON.stringify(localRef.current);
       if (role === "owner") void saveSharedConfig(localRef.current);
       return;

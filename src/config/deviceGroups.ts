@@ -55,9 +55,14 @@ export function removeGroup(config: AppConfig, groupId: string): Pick<AppConfig,
 /**
  * Suffix pairs that mark the same physical sensor exposed as two HA
  * entities, e.g. `sensor.living_room_foo_4217_temperature` +
- * `..._humidity`. The FIRST suffix in a pair becomes the suggested primary
- * (its badge is the one that stays on the map) — temperature reads as the
- * more map-relevant glance value of the two.
+ * `..._humidity`. FALLBACK only — see suggestDeviceGroups: HA's own device
+ * registry (entityDeviceIds) is the authoritative signal wherever it's
+ * available, since it needs no naming convention and isn't limited to one
+ * hardcoded pair of suffixes. This only still matters for an entity HA
+ * doesn't (or can't) link to a device — a virtual/template helper, say. The
+ * FIRST suffix in a pair becomes the suggested primary (its badge is the one
+ * that stays on the map) — temperature reads as the more map-relevant glance
+ * value of the two.
  */
 const PAIRABLE_SUFFIXES: readonly [string, string][] = [
   ["_temperature", "_humidity"],
@@ -69,27 +74,63 @@ export interface DeviceGroupSuggestion {
 }
 
 /**
- * Scan entityMap for same-device sensor pairs (identical entity_id apart
- * from a known suffix swap) that aren't grouped yet — surfaced in Advanced
- * Settings as one-click "Group these" suggestions rather than applied
- * automatically, so an unrelated pair (or a name that just happens to share
- * a prefix) never silently disappears from the map.
+ * Scan entityMap for same-device entities that aren't grouped yet —
+ * surfaced in Advanced Settings as one-click "Group these" suggestions
+ * rather than applied automatically, so an unrelated pair (or a name that
+ * just happens to share a prefix) never silently disappears from the map.
+ *
+ * Two signals, in priority order:
+ *   1. HA's own device registry (entityDeviceIds: entity_id -> device_id) —
+ *      authoritative, needs no name matching, and naturally covers however
+ *      many sibling entities one physical device exposes (a combo sensor's
+ *      temperature/humidity/battery/battery_voltage/…, not just a
+ *      hardcoded pair). A `_temperature` sibling is preferred as the
+ *      suggested primary when one exists (same reasoning as the suffix
+ *      fallback below); otherwise the alphabetically first, so the choice
+ *      is deterministic rather than registry-fetch-order noise.
+ *   2. The PAIRABLE_SUFFIXES name-matching fallback, for anything signal 1
+ *      didn't cover — no device_id available at all (a profile without
+ *      registry read access), or an entity HA itself doesn't attribute to
+ *      any device.
+ * Entities signal 1 already suggested a pairing for are skipped by signal 2,
+ * so a device_id-linked pair is never suggested twice.
  */
 export function suggestDeviceGroups(
   entityMap: Record<string, EntityMapping>,
   existingGroups: DeviceGroup[],
+  entityDeviceIds: Record<string, string> = {},
 ): DeviceGroupSuggestion[] {
   const already = groupedEntityIds(existingGroups);
   const ids = Object.keys(entityMap);
   const idSet = new Set(ids);
   const suggestions: DeviceGroupSuggestion[] = [];
+  const coveredByDeviceId = new Set<string>();
+
+  const byDevice = new Map<string, string[]>();
+  for (const id of ids) {
+    const deviceId = entityDeviceIds[id];
+    if (!deviceId || already.has(id)) continue;
+    const list = byDevice.get(deviceId) ?? [];
+    list.push(id);
+    byDevice.set(deviceId, list);
+  }
+  for (const members of byDevice.values()) {
+    if (members.length < 2) continue;
+    const sorted = [...members].sort();
+    const primary = sorted.find((id) => id.endsWith("_temperature")) ?? sorted[0];
+    for (const id of sorted) {
+      if (id === primary) continue;
+      suggestions.push({ primaryEntityId: primary, memberEntityId: id });
+      coveredByDeviceId.add(id);
+    }
+  }
 
   for (const [primarySuffix, memberSuffix] of PAIRABLE_SUFFIXES) {
     for (const id of ids) {
-      if (!id.endsWith(primarySuffix) || already.has(id)) continue;
+      if (!id.endsWith(primarySuffix) || already.has(id) || coveredByDeviceId.has(id)) continue;
       const base = id.slice(0, -primarySuffix.length);
       const memberId = `${base}${memberSuffix}`;
-      if (idSet.has(memberId) && !already.has(memberId)) {
+      if (idSet.has(memberId) && !already.has(memberId) && !coveredByDeviceId.has(memberId)) {
         suggestions.push({ primaryEntityId: id, memberEntityId: memberId });
       }
     }

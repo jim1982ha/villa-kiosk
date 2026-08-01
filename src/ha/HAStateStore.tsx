@@ -38,6 +38,13 @@ interface HAStateContextType {
    *  (see roomForEntity's geometric room-polygon test, which wins when it
    *  has an answer). */
   entityAreaNames: Record<string, string>;
+  /** entity_id -> HA's own device_id (from the entity registry) — the
+   *  authoritative "these entities belong to the same physical device"
+   *  signal, used to suggest device groups (see config/deviceGroups.ts)
+   *  without guessing from entity_id naming conventions. Empty until the
+   *  registry fetch resolves; entities with no device behind them (helpers,
+   *  templates) are simply absent as keys. */
+  entityDeviceIds: Record<string, string>;
   /**
    * Imperative, ALWAYS-current read of `entities` — for the rare caller that
    * needs the latest snapshot at some later moment rather than reacting to
@@ -88,6 +95,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const [entities, setEntitiesState] = useState<Record<string, HassEntity>>({});
   const [suppressedEntityIds, setSuppressedEntityIds] = useState<Set<string>>(new Set());
   const [entityAreaNames, setEntityAreaNames] = useState<Record<string, string>>({});
+  const [entityDeviceIds, setEntityDeviceIds] = useState<Record<string, string>>({});
   // Mirrors `entities` synchronously (no extra render/effect lag) so
   // getEntitiesSnapshot() below is never stale — see its docstring.
   const entitiesRef = useRef<Record<string, HassEntity>>({});
@@ -165,6 +173,14 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
                 .filter((r) => r.hidden_by != null || r.entity_category === "config" || r.entity_category === "diagnostic")
                 .map((r) => r.entity_id),
             ));
+            // device_id sits directly on the entity registry row — no extra
+            // fetch needed, and it works even when the device/area registry
+            // calls below fail (a profile that can read entities but not
+            // devices still gets this). The authoritative "these entities are
+            // really one physical device" signal — see suggestDeviceGroups.
+            const deviceIds: Record<string, string> = {};
+            for (const r of rows) if (r.device_id) deviceIds[r.entity_id] = r.device_id;
+            setEntityDeviceIds(deviceIds);
             // Resolve each entity's Area NAME: its own area_id, falling back to
             // its device's (HA's own inheritance rule — most entities carry no
             // area_id of their own and get it from the device they belong to).
@@ -227,6 +243,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       entities,
       suppressedEntityIds,
       entityAreaNames,
+      entityDeviceIds,
       getEntitiesSnapshot,
       connection,
       connected: connection === "connected",
@@ -239,7 +256,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       lastError,
       serviceError,
     }),
-    [entities, suppressedEntityIds, entityAreaNames, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
+    [entities, suppressedEntityIds, entityAreaNames, entityDeviceIds, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
   );
 
   return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;

@@ -780,6 +780,14 @@ button {
   text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim);
 }
 .summary-room-heading:first-child { margin-top: 0; }
+/* "Scenes for this room" strip — SummaryGroupPanel's roomScenes, room-cluster
+   panel only. Sits above the device list, separated by a hairline so it
+   reads as a distinct action row rather than another device. */
+.summary-room-scenes {
+  border-bottom: 1px solid var(--hairline); padding-bottom: 14px; margin-bottom: 14px;
+}
+.summary-room-scenes .summary-room-heading { margin-top: 0; }
+.summary-room-scenes-row { display: flex; flex-wrap: wrap; gap: 8px; }
 /* HA-only devices (no geometry in this villa model) — listed after the mapped
    ones under this heading and tinted, so it's clear they're not on the map. */
 .summary-offmap-heading {
@@ -1347,6 +1355,17 @@ input[type="range"]::-moz-range-thumb {
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
 .settings-section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin: 22px 0 8px; font-weight: 600; }
+/* The collapsible variant (ConfigEditorModal's auto-detected-entities /
+   device-telemetry sections) — same label typography, made clickable. Reset
+   to a plain full-width row (buttons carry their own background/border/
+   padding by default) rather than the app's usual .btn/.icon-btn chrome,
+   since this needs to keep reading as a section LABEL, not a button. */
+.settings-section-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  margin: 28px 0 8px; background: none; border: none; padding: 0;
+  cursor: pointer; text-align: left;
+}
+.settings-section-toggle svg { flex: 0 0 auto; }
 
 /* Screen-reader-only text — visually hidden, still announced. Used to
    describe a gesture-only secondary action (e.g. "hold to manage rooms")
@@ -1847,15 +1866,28 @@ label.toggle span { user-select: none; line-height: 1.4; }
      .hud-right (see JSX) — not inside the centered category group — so the
      grid's third (justify-self: end) track pins it to the true right edge of
      the bar while .hud-center's two equal side tracks keep the category row
-     centred, instead of both drifting toward the middle together. */
+     centred, instead of both drifting toward the middle together. Sized to
+     match .hud-center's own icons above rather than falling back to
+     .hud-group .icon-btn's wider 38px default — a real HUD read as visibly
+     lopsided (a noticeably bigger, rounder single button off to one side)
+     with every OTHER icon at 32px and only this one left at 38. */
   .hud-right-inline { display: none; }
   .hud-overflow { display: flex; }
-  /* Inline colour-legend (?) and label-size +/- collapse into the overflow
-     dropdown, which carries both. Declared HERE (not next to .hud-cat-sep,
-     where it reads more naturally) because .icon-btn's `display: flex` sits
-     below that spot at equal specificity and would win the cascade; the
-     .hud-center prefix also raises specificity so this can't be re-broken by
-     another equal-weight rule later. */
+  .hud-overflow .icon-btn { width: 32px; height: 32px; }
+  /* The label-size stepper's whole pill (not just its two now-hidden
+     buttons) — an empty .hud-group still renders its own padding/border/
+     background, which read as a stray blank rounded box sitting between the
+     category row and the overflow button once both its children were
+     display:none. Its controls live in the overflow dropdown instead. */
+  .hud-labelsize-group { display: none; }
+  /* Inline colour-legend (?) collapses into the overflow dropdown too (the
+     label-size buttons' own display:none is now redundant with the whole
+     group above, but harmless to keep — see .hud-labelsize-group). Declared
+     HERE (not next to .hud-cat-sep, where it reads more naturally) because
+     .icon-btn's `display: flex` sits below that spot at equal specificity
+     and would win the cascade; the .hud-center prefix also raises
+     specificity so this can't be re-broken by another equal-weight rule
+     later. */
   .hud-center .hud-cat-help, .hud-center .hud-labelsize-btn { display: none; }
   /* Left control stack (1F/2F/rooms): sized to match the bottom bar's own
      icon chips (.summary-tile-icon's mobile size, see its media query) so

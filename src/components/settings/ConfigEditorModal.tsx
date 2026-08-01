@@ -6,8 +6,8 @@
 // already applies to the live scene through ConfigContext.update(), so there is
 // nothing to reload on the way out.
 
-import { useEffect, useRef, useState, type RefObject } from "react";
-import { Download, Upload, Info } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { ChevronDown, ChevronRight, Download, Upload, Info } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { buildConfigExport, parseConfigImport } from "@/config/AppConfig";
@@ -28,6 +28,32 @@ interface Props {
   focusEntityId?: string;
   /** A GLB/room-data upload changed the model — remount the canvas to load it. */
   onModelChanged: () => void;
+}
+
+/** A section title that doubles as a collapse toggle — for the two sections
+ *  in this modal (auto-detected entities, device telemetry) whose lists can
+ *  run long enough to dominate the whole screen on open. Collapsed by
+ *  default so Advanced Settings opens on something scannable rather than a
+ *  wall of rows; `defaultOpen` lets a specific entry point (jumping here to
+ *  edit one entity) start expanded instead. */
+function CollapsibleSection({
+  title, defaultOpen = false, children,
+}: { title: string; defaultOpen?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <>
+      <button
+        type="button"
+        className="settings-section-title settings-section-toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {title}
+      </button>
+      {open && children}
+    </>
+  );
 }
 
 /** Villa coordinates (drive sun tracking). Applies live on blur rather than
@@ -488,10 +514,12 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
 
           {role === "owner" && <ModelSource onModelChanged={onModelChanged} />}
 
-          <div className="settings-section-title" style={{ marginTop: 28 }}>
-            Auto-detected entity settings
-          </div>
-          <ConfigEditor initialSearch={focusEntityId} />
+          {/* Defaults open when arriving via a device panel's "edit" shortcut
+              (focusEntityId set) — otherwise that jump would land on a
+              collapsed section with the target row hidden. */}
+          <CollapsibleSection title="Auto-detected entity settings" defaultOpen={!!focusEntityId}>
+            <ConfigEditor initialSearch={focusEntityId} />
+          </CollapsibleSection>
 
           <div className="settings-section-title" style={{ marginTop: 28 }}>
             Grouped devices
@@ -507,12 +535,9 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               other people's user-agents and error text), so don't render a
               panel that could only ever show an error for them. */}
           {role === "owner" && (
-            <>
-              <div className="settings-section-title" style={{ marginTop: 28 }}>
-                Device telemetry
-              </div>
+            <CollapsibleSection title="Device telemetry">
               <TelemetryPanel />
-            </>
+            </CollapsibleSection>
           )}
         </div>
 

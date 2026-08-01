@@ -27,21 +27,28 @@ function entityLabel(config: AppConfig, entities: Record<string, HassEntity>, id
 
 export default function GroupedDevices() {
   const { config, update } = useConfig();
-  const { entities } = useHA();
+  const { entities, entityDeviceIds } = useHA();
   const [newPrimary, setNewPrimary] = useState<string | undefined>(undefined);
 
   const suggestions = useMemo(
-    () => suggestDeviceGroups(config.entityMap, config.deviceGroups),
-    [config.entityMap, config.deviceGroups],
+    () => suggestDeviceGroups(config.entityMap, config.deviceGroups, entityDeviceIds),
+    [config.entityMap, config.deviceGroups, entityDeviceIds],
   );
   // Every entity already spoken for by some group (either role) — guards
   // against adding the same entity to two groups at once.
   const grouped = useMemo(() => groupedEntityIds(config.deviceGroups), [config.deviceGroups]);
 
+  // A device_id-linked device can have more than 2 sibling entities (e.g. a
+  // combo sensor's temperature/humidity/battery/…), which suggestDeviceGroups
+  // surfaces as one suggestion row PER sibling against the same primary —
+  // accepting a second row for a primary that already has a group must ADD
+  // to it, not silently create a second, orphaned group under the same
+  // primaryEntityId (only the first would ever be found by groupForPrimary).
   const acceptSuggestion = (primaryEntityId: string, memberEntityId: string) => {
-    update(upsertGroup(config, {
-      id: newGroupId(), primaryEntityId, memberEntityIds: [memberEntityId],
-    }));
+    const existing = config.deviceGroups.find((g) => g.primaryEntityId === primaryEntityId);
+    update(upsertGroup(config, existing
+      ? { ...existing, memberEntityIds: [...existing.memberEntityIds, memberEntityId] }
+      : { id: newGroupId(), primaryEntityId, memberEntityIds: [memberEntityId] }));
   };
 
   const createGroup = (primaryEntityId: string) => {

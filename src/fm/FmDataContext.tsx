@@ -15,7 +15,7 @@ import {
 } from "react";
 import { fetchFmData, saveFmData, fmId } from "./fmApi";
 import {
-  DEFAULT_SCHEDULES, EMPTY_FM_DATA,
+  EMPTY_FM_DATA,
   type FmCompletion, type FmCost, type FmData, type FmSavedDocument, type FmSchedule, type FmTicket,
 } from "./fmTypes";
 
@@ -45,9 +45,6 @@ interface FmDataContextValue {
   removeCost: (id: string) => Promise<void>;
   addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">) => Promise<void>;
   updateTicket: (id: string, patch: Partial<FmTicket>) => Promise<void>;
-  /** Seed Clause 3.7's schedule. Idempotent: only adds builtins not already
-   *  present, so it can't duplicate on a second press. */
-  seedDefaults: () => Promise<void>;
   /** Keep a generated report/spend statement (see FmSavedDocument) so it can
    *  be reopened or handed over later without regenerating it. */
   saveDocument: (doc: Omit<FmSavedDocument, "id" | "generatedAt">) => Promise<void>;
@@ -157,20 +154,11 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const removeDocument = useCallback((id: string) =>
     mutate((d) => ({ ...d, savedDocuments: d.savedDocuments.filter((r) => r.id !== id) })), [mutate]);
 
-  const seedDefaults = useCallback(() => mutate((d) => {
-    const have = new Set(d.schedules.map((s) => s.builtinKey).filter(Boolean));
-    const now = new Date().toISOString();
-    const additions = DEFAULT_SCHEDULES
-      .filter((s) => !have.has(s.builtinKey))
-      .map((s) => ({ ...s, id: fmId("sc"), createdAt: now }));
-    return additions.length ? { ...d, schedules: [...d.schedules, ...additions] } : d;
-  }), [mutate]);
-
   return (
     <FmDataContext.Provider value={{
       data, ready, saveError, reload,
       addSchedule, updateSchedule, removeSchedule, removeAllSchedules,
-      logCompletion, addCost, removeCost, addTicket, updateTicket, seedDefaults,
+      logCompletion, addCost, removeCost, addTicket, updateTicket,
       saveDocument, removeDocument,
     }}>
       {children}

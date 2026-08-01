@@ -24,6 +24,7 @@ import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import FacilityModal from "@/components/fm/FacilityModal";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor } from "@/config/EntityMap";
+import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
 import { isUnavailable } from "@/utils/stateColors";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
@@ -43,7 +44,7 @@ const MOTION_DEVICE_CLASSES = new Set(["motion", "presence", "occupancy", "movin
 export default function Dashboard() {
   const { config, update } = useConfig();
   const { role } = useProfile();
-  const { connect, entities, ws, haConfig, subscribeAll } = useHA();
+  const { connect, entities, suppressedEntityIds, ws, haConfig, subscribeAll } = useHA();
   // ProfileGate does NOT guarantee a signed-in role before this page mounts
   // (v2.30.2's early scene preload — an explicit, informed trade-off, see
   // ProfileGate's modelPreloadable — mounts it pre-login on non-iOS
@@ -77,6 +78,14 @@ export default function Dashboard() {
   // members open in the SAME group modal a bottom-bar tile uses, so a cluster
   // needs no UI concept of its own.
   const [clusterGroup, setClusterGroup] = useState<{ room: string; entityIds: string[] } | null>(null);
+  // Live HA scenes (see config/haScenes.ts) — derived, not stored, so a scene
+  // added/edited/removed in HA's own Scene Editor shows up here on the very
+  // next entity update. Computed once here (not per-panel-open) since both
+  // the cluster panel below AND SummaryBar's global tile need it.
+  const haScenes = useMemo(
+    () => deriveHaScenes(entities, suppressedEntityIds, config.entityMap),
+    [entities, suppressedEntityIds, config.entityMap],
+  );
   const [currentFloor, setCurrentFloor] = useState(1);
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
   /** Entities with real geometry in the loaded model (see manager.mappedEntityIds). */
@@ -526,6 +535,7 @@ export default function Dashboard() {
       <SummaryBar
         onOpenEntity={openEntityPanel}
         mappedEntityIds={effectiveMappedEntityIds}
+        scenes={haScenes}
       />
 
       {teleportOpen && (
@@ -634,6 +644,7 @@ export default function Dashboard() {
           mappedEntityIds={effectiveMappedEntityIds}
           onClose={() => setClusterGroup(null)}
           onOpenEntity={(id) => { setClusterGroup(null); openEntityPanel(id); }}
+          roomScenes={scenesForRoom(haScenes, clusterGroup.room)}
         />
       )}
 

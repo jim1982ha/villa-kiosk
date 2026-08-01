@@ -26,8 +26,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
 import { CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient } from "@/config/EntityCategories";
-import { applyScene, activeSceneName } from "@/config/scenes";
-import type { KioskScene } from "@/config/scenes";
+import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
@@ -205,6 +204,9 @@ interface Props {
   /** Entities with real geometry in the loaded model — everything else is
    *  flagged "not on the map" in the group modal. */
   mappedEntityIds: Set<string>;
+  /** Live HA scenes (config/haScenes.ts) — computed once in Dashboard since
+   *  the room-cluster panel needs the exact same derivation. */
+  scenes: HaSceneInfo[];
 }
 
 function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void }) {
@@ -232,14 +234,16 @@ function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void 
   );
 }
 
-/** ONE "Scene" tile for however many scenes exist. A single scene applies on
- *  tap; two or more open a pop-up picker above the tile. */
-function SceneMenu({ scenes, canRun, apply, activeName }: {
-  scenes: KioskScene[];
+/** ONE "Scene" tile for however many live HA scenes exist. A single scene
+ *  applies on tap; two or more open a pop-up picker above the tile. Reads
+ *  Home Assistant's own scene.* entities (see config/haScenes.ts) — there is
+ *  no "currently active scene" concept here the way the kiosk's own former
+ *  capture-and-compare scenes had (HA doesn't track "which scene is this
+ *  live state a match for"), so the tile's value is just the scene count. */
+function SceneMenu({ scenes, canRun, apply }: {
+  scenes: HaSceneInfo[];
   canRun: boolean;
-  apply: (s: KioskScene) => void;
-  /** Name of the scene the villa currently matches, or null for "Live". */
-  activeName: string | null;
+  apply: (s: HaSceneInfo) => void;
 }) {
   const [open, setOpen] = useState(false);
   // The pop-up is PORTALED to <body>: the summary-bar has a transform +
@@ -289,20 +293,13 @@ function SceneMenu({ scenes, canRun, apply, activeName }: {
         disabled={!canRun}
         aria-haspopup="menu"
         aria-expanded={open}
-        title={activeName
-          ? `Currently in "${activeName}" — tap to choose another scene`
-          : "Live — the villa doesn't match any saved scene. Tap to apply one."}
+        title={`${scenes.length} scene${scenes.length === 1 ? "" : "s"} from Home Assistant — tap to run one`}
         onClick={toggle}
       >
         <span className="summary-tile-icon"><Sparkles size={24} /></span>
         <span className="summary-tile-text">
           <span className="summary-tile-label">Scene</span>
-          {/* What the villa IS right now, not how many scenes happen to be
-              saved (a count told you nothing about the villa's state, which
-              is what every other tile in this bar reports). "Live" = the
-              current state matches no saved scene, i.e. something has been
-              changed by hand since one was applied. */}
-          <span className="summary-tile-value">{activeName ?? "Live"}</span>
+          <span className="summary-tile-value">{scenes.length}</span>
         </span>
       </button>
       {open && pos && createPortal(
@@ -315,7 +312,7 @@ function SceneMenu({ scenes, canRun, apply, activeName }: {
         >
           {scenes.map((s) => (
             <button
-              key={s.id}
+              key={s.entityId}
               type="button"
               role="menuitem"
               className="summary-scene-item"
@@ -331,7 +328,7 @@ function SceneMenu({ scenes, canRun, apply, activeName }: {
   );
 }
 
-export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
+export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Props) {
   const { entities, suppressedEntityIds, callService } = useHA();
   const { role } = useProfile();
   const { config } = useConfig();
@@ -355,13 +352,8 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
     [visibleEntities, config.entityMap, role],
   );
 
-  const scenes = config.kioskScenes ?? [];
   // A scene spans categories — allow running one if the profile may control ANY.
   const canRunScenes = !!role && CATEGORY_ORDER.some((c) => isCategoryAllowed(role, c));
-  // Which saved scene (if any) the villa currently matches. Memoised on the
-  // same inputs the tiles use: it walks every scene's captured calls against
-  // live state, so it must not re-run on unrelated renders.
-  const activeScene = useMemo(() => activeSceneName(scenes, entities), [scenes, entities]);
 
   // Hidden via Settings, or nothing to show. (The view-mode/default-view
   // buttons used to live in a left section here — they're back to always
@@ -377,8 +369,7 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds }: Props) {
           <SceneMenu
             scenes={scenes}
             canRun={canRunScenes}
-            activeName={activeScene}
-            apply={(s) => { void applyScene(s, callService); }}
+            apply={(s) => { void callService("scene", "turn_on", {}, { entity_id: s.entityId }); }}
           />
         )}
       </div>

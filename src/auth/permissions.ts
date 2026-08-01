@@ -29,8 +29,9 @@ export type Capability =
   /** Upload / replace / reset the central 3D model and SH3D plan. */
   | "manageModel"
   /** The Facility Manager workspace: maintenance schedule, completions with
-   *  photo evidence, maintenance spend against the Clause 3.3(i) cap, and
-   *  fault tickets. Held by BOTH the facility manager (whose job it is) and
+   *  photo evidence, maintenance spend against the configured Minor
+   *  Maintenance cap, and fault tickets. Held by BOTH the facility manager
+   *  (whose job it is) and
    *  the owner (who is accountable for the property and signs off the monthly
    *  report), so this is not simply "ops-only". */
   | "manageFacility";

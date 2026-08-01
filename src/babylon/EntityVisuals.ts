@@ -65,6 +65,7 @@ import { isUnavailable } from "@/utils/stateColors";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { tapDebug } from "@/utils/tapDebug";
 import { pointInPolygon } from "@/utils/geometry";
+import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam } from "./meshRoles";
@@ -592,6 +593,11 @@ const CLUSTER_MIN_SCALE = 0.8;
  *  comment above). */
 const CLUSTER_GAP_PX = 6;
 const CLUSTER_MAX_NUDGE_HEIGHTS = 4;
+/** The count pill's own diameter and font — sized down from the chip's own
+ *  height/font (a badge-within-a-badge reads wrong at the same scale), same
+ *  proportion .icon-btn-count keeps against its 48px parent button. */
+const CLUSTER_COUNT_DIAMETER_PX = 20;
+const CLUSTER_COUNT_FONT_PX = 11;
 /** Estimated advance width per character at CLUSTER_FONT_PX/weight 600, plus
  *  the TextBlock's own left+right padding. Babylon computes the real width
  *  during layout (adaptWidthToChildren), which isn't readable before the
@@ -672,10 +678,17 @@ interface LabelControls {
 /** One room's collapsed stand-in, shown only in the "clusters" band. Its
  *  node sits at the world-space centroid of the room's badge anchors — a
  *  fixed point, which is what makes the chip immune to the jitter that
- *  motivated all of this. */
+ *  motivated all of this. The device count renders as its own small red
+ *  pill (countBadge/countText) rather than being folded into the room-name
+ *  text — the same "small red pill for a count" convention the HUD's
+ *  unavailable-devices/facility icons use (DOM's .icon-btn-count); see
+ *  utils/countBadge.ts for the one piece of that actually shareable across
+ *  a DOM icon and a Babylon GUI chip (a canvas control can't consume CSS). */
 interface ClusterControls {
   container: Rectangle;
   text: TextBlock;
+  countBadge: Rectangle;
+  countText: TextBlock;
   node: TransformNode;
   entityIds: string[];
 }
@@ -2829,8 +2842,13 @@ export class EntityVisuals {
       const c = this.ensureCluster(room, layer);
       c.entityIds = g.ids;
       c.node.position.copyFrom(g.sum.scaleInPlace(1 / g.ids.length));
+      // Room name and count render as separate controls (see ensureCluster)
+      // but `label` still stands in for the whole chip's rendered text for
+      // the width ESTIMATE below (chipWidthPx) — close enough to keep chips
+      // apart, doesn't need to match what's drawn character-for-character.
       const label = `${room}  ${g.ids.length}`;
-      c.text.text = label;
+      c.text.text = room;
+      c.countText.text = formatCountBadge(g.ids.length);
       // The chip's own ring carries the room's worst state — the only
       // attention signal available once the individual badges are gone.
       c.container.thickness = g.alert ? 2 : 0;
@@ -2888,19 +2906,25 @@ export class EntityVisuals {
     container.height = `${CLUSTER_HEIGHT_PX}px`;
     container.adaptWidthToChildren = true;
     container.cornerRadius = CLUSTER_HEIGHT_PX / 2;
-    // Solid accent blue — the exact colour var(--accent) resolves to on the
-    // DOM side (.btn.primary etc.), an already-trusted white-on-accent
-    // pairing in this app. A translucent near-black tone was tried first and
-    // still read as "just a dark/black pill" at a glance; a saturated brand
-    // colour reads unambiguously as a Kiosk element instead, the same way a
-    // map's cluster marker is usually a solid, recognisable colour rather
-    // than a neutral dark chip.
+    // Neutral slate — NOT the app's accent blue (that's the Energy category's
+    // badge colour; a room summary shouldn't read as belonging to a device
+    // category) and lighter than a translucent near-black (read as "just
+    // black" at a glance). Outside every category hue on purpose, so the
+    // chip reads as UI chrome rather than any one category's badge.
     container.thickness = 0;
     container.background = CLUSTER_BG_COLOR;
     container.shadowColor = "rgba(0,0,0,0.4)";
     container.shadowBlur = 6;
     container.shadowOffsetY = 2;
     container.isPointerBlocker = false; // taps resolve via pickClusterAt, like badges
+
+    // Room name + count pill side by side — same layout idiom the entity
+    // badge card already uses for icon+value (see rebuildLabels' `row`).
+    const row = new StackPanel(`clusterRow_${room}`);
+    row.isVertical = false;
+    row.height = `${CLUSTER_HEIGHT_PX}px`;
+    row.adaptWidthToChildren = true;
+    container.addControl(row);
 
     const text = new TextBlock(`clusterText_${room}`);
     text.text = room;
@@ -2910,14 +2934,37 @@ export class EntityVisuals {
     text.fontWeight = "600";
     text.resizeToFit = true;
     text.paddingLeft = "12px";
-    text.paddingRight = "12px";
-    container.addControl(text);
+    text.paddingRight = "6px";
+    row.addControl(text);
+
+    // The device count as its OWN small red pill, not folded into the name
+    // text — the same "small red circle, white bold number" convention the
+    // HUD's unavailable-devices/facility icons use via .icon-btn-count (see
+    // utils/countBadge.ts, the one piece of that actually shared: a Babylon
+    // GUI control can't consume CSS, so the colour/shape are re-expressed
+    // here rather than literally reused, but the CAP-AT-99+ formatting is
+    // the exact same imported function both sides call).
+    const countBadge = new Rectangle(`clusterCount_${room}`);
+    countBadge.width = `${CLUSTER_COUNT_DIAMETER_PX}px`;
+    countBadge.height = `${CLUSTER_COUNT_DIAMETER_PX}px`;
+    countBadge.cornerRadius = CLUSTER_COUNT_DIAMETER_PX / 2;
+    countBadge.thickness = 0;
+    countBadge.background = ALERT_RED_HEX; // matches var(--status-danger) — see colors.ts
+    countBadge.paddingRight = "8px";
+    row.addControl(countBadge);
+
+    const countText = new TextBlock(`clusterCountText_${room}`);
+    countText.color = "#ffffff";
+    countText.fontFamily = GUI_FONT_FAMILY;
+    countText.fontSize = CLUSTER_COUNT_FONT_PX;
+    countText.fontWeight = "700";
+    countBadge.addControl(countText);
 
     layer.addControl(container);
     container.linkWithMesh(node);
     container.linkOffsetYInPixels = -CLUSTER_HEIGHT_PX / 2;
 
-    const c: ClusterControls = { container, text, node, entityIds: [] };
+    const c: ClusterControls = { container, text, countBadge, countText, node, entityIds: [] };
     this.clusters.set(room, c);
     return c;
   }

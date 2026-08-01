@@ -21,11 +21,7 @@
 //   eyeHeight/walkSpeed, badgeStyle, showSummaryBar, hiddenCategories,
 //   entityIconScale, currentFloor.
 //
-// kioskScenes is deliberately NOT here: it already has its own shared store
-// (/scenes, see scenesApi.ts + ScenesContext.tsx). Two writers for one field
-// would fight; leave that one owning itself.
-//
-// sh3dRooms/sh3dEntities are also excluded: they're DERIVED from the model's
+// sh3dRooms/sh3dEntities are excluded: they're DERIVED from the model's
 // .rooms.json sidecar, which is already served centrally, so every client
 // recomputes the same values on load. Syncing them would just duplicate the
 // GLB's own payload through a second channel.

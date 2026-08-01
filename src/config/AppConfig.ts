@@ -5,7 +5,6 @@ import type { Category, EntityMapping, EntityType, ModelTransform, TeleportPoint
 import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_THRESHOLDS, type Threshold } from "./ThresholdConfig";
-import type { KioskScene } from "./scenes";
 
 const CONFIG_KEY = "villa-kiosk:config:v2";
 
@@ -247,10 +246,6 @@ export interface AppConfig {
   badgeStyle?: "classic" | "card";
   /** Show the bottom summary/scene strip (SummaryBar). Default true. */
   showSummaryBar?: boolean;
-  /** User-defined kiosk scenes — one-tap snapshots of the villa's controllable
-   *  state, captured + applied from the SummaryBar (see config/scenes.ts).
-   *  Distinct from HA's own scene.* entities. */
-  kioskScenes?: KioskScene[];
   /** Manually-grouped entities that are really one physical device (e.g. a
    *  combo sensor exposing separate `_temperature`/`_humidity` entities).
    *  Only `primaryEntityId` gets a badge/mesh presence on the map; every
@@ -303,7 +298,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   entityIconScale: 1.0,
   badgeStyle: "classic",
   showSummaryBar: true,
-  kioskScenes: [],
   deviceGroups: [],
 };
 
@@ -429,7 +423,6 @@ export interface ConfigExportBundle {
   highlightInteractive: boolean;
   badgeStyle?: "classic" | "card";
   showSummaryBar?: boolean;
-  kioskScenes?: KioskScene[];
   render: RenderConfig;
 }
 
@@ -448,7 +441,6 @@ export function buildConfigExport(config: AppConfig): ConfigExportBundle {
     highlightInteractive: config.highlightInteractive,
     badgeStyle: config.badgeStyle,
     showSummaryBar: config.showSummaryBar,
-    kioskScenes: config.kioskScenes,
     render: config.render,
   };
 }
@@ -472,7 +464,6 @@ export function parseConfigImport(raw: unknown): Partial<ConfigExportBundle> {
   if (typeof b.highlightInteractive === "boolean") patch.highlightInteractive = b.highlightInteractive;
   if (b.badgeStyle === "classic" || b.badgeStyle === "card") patch.badgeStyle = b.badgeStyle;
   if (typeof b.showSummaryBar === "boolean") patch.showSummaryBar = b.showSummaryBar;
-  if (Array.isArray(b.kioskScenes)) patch.kioskScenes = b.kioskScenes as ConfigExportBundle["kioskScenes"];
   if (b.render && typeof b.render === "object") patch.render = b.render as RenderConfig;
   return patch;
 }

@@ -9,11 +9,12 @@
 // panel) and the shared gradient badge (badgeImageDataUrl) so it feels native.
 
 import { useState, type ComponentType } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Sparkles } from "lucide-react";
 import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
+import type { HaSceneInfo } from "@/config/haScenes";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory } from "@/config/EntityCategories";
@@ -57,6 +58,12 @@ interface Props {
    *  always equal to the badge's number, since nothing here would filter it
    *  down further. */
   filterSuppressed?: boolean;
+  /** HA scenes touching a device in this group's room — rendered as a "Scenes
+   *  for this room" strip above the device list. Only the ROOM-cluster caller
+   *  (Dashboard's clusterGroup) passes this; every other use of this panel
+   *  (Lights, AC, Unavailable devices, Facility…) isn't room-scoped, so it's
+   *  omitted there rather than guessed at. See config/haScenes.ts. */
+  roomScenes?: HaSceneInfo[];
 }
 
 const OFF = new Set(["off", "unavailable", "unknown", ""]);
@@ -88,7 +95,7 @@ function groupByRoom(
 
 export default function SummaryGroupPanel({
   group, canControl, mappedEntityIds, onClose, onOpenEntity, hideBulkToggle,
-  filterSuppressed = true,
+  filterSuppressed = true, roomScenes,
 }: Props) {
   const { entities, suppressedEntityIds, callService } = useHA();
   const { config } = useConfig();
@@ -166,6 +173,25 @@ export default function SummaryGroupPanel({
         )
       )}
     >
+      {!!roomScenes?.length && (
+        <div className="summary-room-scenes">
+          <div className="summary-room-heading">Scenes for this room</div>
+          <div className="summary-room-scenes-row">
+            {roomScenes.map((s) => (
+              <button
+                key={s.entityId}
+                type="button"
+                className="btn ghost"
+                disabled={!canControl}
+                onClick={() => callService("scene", "turn_on", {}, { entity_id: s.entityId })}
+              >
+                <Sparkles size={15} /> {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {rows.length === 0 && <div className="muted body-text">No devices in this group.</div>}
 
       {/* On-map devices first, ROOM-grouped, then (if any, and not Guest) the

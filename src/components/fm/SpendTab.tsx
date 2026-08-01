@@ -1,12 +1,11 @@
 // src/components/fm/SpendTab.tsx
-// Maintenance spend against Clause 3.3(i)'s IDR 3,000,000/month Minor
-// Maintenance cap.
-//
-// The cap matters because it decides WHO PAYS: under it, maintenance is a
-// shared Direct Expense Kozystay may action without prior consent (Cl. 6.2(ii));
-// over it, it is Major maintenance and the Owner bears it (Cl. 6.2(iii)).
-// The warning therefore has to arrive BEFORE the money is committed, which is
-// why the entry form projects the new total as you type.
+// Maintenance spend against a monthly Minor Maintenance cap — MINOR_MAINTENANCE_CAP_IDR
+// (see fmTypes.ts), 0 until an operator's own contract/agreement gives it a
+// real one. The cap matters because whatever agreement is in play, it's
+// typically the line that decides who pays for a repair: under it, ordinary
+// shared maintenance; over it, a bigger expense the owner is on the hook
+// for. The warning therefore has to arrive BEFORE the money is committed,
+// which is why the entry form projects the new total as you type.
 
 import { useState } from "react";
 import { Plus, Trash2, Sparkles, Save, Download } from "lucide-react";
@@ -79,7 +78,7 @@ export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string)
     setStatementSaved(true);
   };
   const projected = b.minorIdr + (category === "minor" ? amountIdr : 0);
-  const projectedOver = projected >= b.capIdr;
+  const projectedOver = b.capIdr > 0 && projected >= b.capIdr;
 
   // Months that actually have entries, newest first — plus the current month so
   // it's always selectable even before anything is recorded in it.
@@ -98,15 +97,19 @@ export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string)
       <div className={`fm-cap ${b.state}`}>
         <div className="fm-cap-head">
           <strong>{formatIdr(b.minorIdr)}</strong>
-          <span className="muted">of {formatIdr(b.capIdr)} Minor Maintenance cap</span>
+          <span className="muted">
+            {b.capIdr > 0 ? `of ${formatIdr(b.capIdr)} Minor Maintenance cap` : "Minor Maintenance spend (no cap configured)"}
+          </span>
         </div>
-        <div className="fm-cap-bar">
-          <span style={{ width: `${Math.min(100, b.fraction * 100)}%` }} />
-        </div>
+        {b.capIdr > 0 && (
+          <div className="fm-cap-bar">
+            <span style={{ width: `${Math.min(100, b.fraction * 100)}%` }} />
+          </div>
+        )}
         {b.state === "exceeded" && (
           <p className="fm-cap-note">
-            Cap reached. Further spend this month is Major maintenance and falls to
-            the Owner under Clause 6.2(iii).
+            Cap reached. Further spend this month is Major maintenance, on whatever
+            terms your own agreement sets for spend beyond it.
           </p>
         )}
         {b.state === "approaching" && (
