@@ -62,7 +62,7 @@ const STREAM_WATCHDOG_MS = 6000;
 // nothing breaks either way — it just takes longer to drop to MJPEG/snapshot.
 const HLS_WATCHDOG_MS = 15000;
 
-export default function CameraPanel({ entity, mapping, onClose, pinContinuous, onOpenEntity }: Props) {
+export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEntity }: Props) {
   const { connected, ws, entities } = useHA();
   const { config } = useConfig();
   // Same linked-entity switch every OTHER panel gets from the shared BasePanel
@@ -135,6 +135,13 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
+  // Reorders .camera-controls' vertical (phone-landscape) column ONLY — the
+  // portrait row keeps its natural DOM order untouched. Close-top/fullscreen-
+  // 2nd/next-above-previous reads more natural for a one-handed reach down a
+  // side rail than the portrait row's order does; flexbox `order` gets there
+  // without a second copy of the buttons.
+  const vOrder = (n: number): React.CSSProperties | undefined =>
+    railVertical ? { order: n } : undefined;
 
   // Every camera in the house, in a stable order, so prev/next can cycle
   // through them without leaving the viewer. Wraps around at both ends.
@@ -471,8 +478,6 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
     ? `${snapshotBase}${snapshotBase.includes("?") ? "&" : "?"}_=${tick}`
     : "";
 
-  const lastMotion = entity?.attributes.last_motion ?? entity?.last_changed;
-
   const onSnapshotError = () => {
     snapErrors.current += 1;
     if (snapErrors.current >= SNAPSHOT_MAX_ERRORS) setMode("failed");
@@ -569,14 +574,19 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           the feed in every aspect/orientation, which is the one placement
           that reads the same everywhere. */}
       <div className="camera-header">
-        <div className="label">
-          {mapping.label}
-          {lastMotion && (
-            <span className="muted" style={{ marginLeft: 10, fontSize: 13 }}>
-              updated {new Date(lastMotion as string).toLocaleTimeString()}
-            </span>
-          )}
-        </div>
+        <div className="label">{mapping.label}</div>
+        {/* Exiting zoom used to add a button to .camera-controls — every
+            existing icon there shifted position the instant you zoomed in,
+            which read as broken chrome rather than a new control appearing.
+            A pill under the title instead: same "Reset zoom" action, same
+            tap-to-clear affordance, but it doesn't perturb a cluster of
+            controls the user is about to reach for (prev/next/fullscreen/
+            close) while they're mid-gesture on the feed. */}
+        {zoom.zoomed && (
+          <button className="camera-zoom-pill" onClick={zoom.reset} title="Reset zoom" aria-label="Reset zoom">
+            <ZoomOut size={15} /> Zoomed in — tap to reset
+          </button>
+        )}
       </div>
 
       <div className="camera-viewport" style={{ marginTop: bottomRowH }}>
@@ -619,7 +629,11 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
           {/* Linked entity on/off — the camera's stand-in for the switch
               BasePanel shows at the top of every other panel. Styled as an
               icon-btn so it sits in this cluster naturally; .on marks the
-              live state, matching the badge's red ring. */}
+              live state, matching the badge's red ring.
+              Vertical (phone-landscape) rail order deliberately differs from
+              this DOM/portrait order — see vOrder: Close top, Fullscreen 2nd,
+              Next above Previous, this detection toggle last. Portrait order
+              (this DOM order) is untouched. */}
           {linked && (
             <button
               className={`icon-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
@@ -628,18 +642,9 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
               aria-checked={linked.isOn}
               aria-label={`${linked.label}: ${linked.isOn ? "on" : "off"}`}
               title={`${linked.label} — ${linked.isOn ? "turn off" : "turn on"}`}
+              style={vOrder(5)}
             >
               <Power size={26} />
-            </button>
-          )}
-          {zoom.zoomed && (
-            <button
-              className="icon-btn zoom-reset-btn"
-              onClick={zoom.reset}
-              title="Reset zoom"
-              aria-label="Reset zoom"
-            >
-              <ZoomOut size={26} />
             </button>
           )}
           {canCycle && (
@@ -655,6 +660,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
                 onClick={() => stepCamera(-1)}
                 title="Previous camera"
                 aria-label="Previous camera"
+                style={vOrder(4)}
               >
                 <ChevronLeft size={28} />
               </button>
@@ -668,6 +674,7 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
                 onClick={() => onCycleBtnClick(1)}
                 title="Next camera — hold to pick a camera"
                 aria-label="Next camera — hold to pick a camera"
+                style={vOrder(3)}
               >
                 <ChevronRight size={28} />
               </button>
@@ -679,11 +686,12 @@ export default function CameraPanel({ entity, mapping, onClose, pinContinuous, o
               onClick={toggleFullscreen}
               title={isFs ? "Exit fullscreen" : "Fullscreen"}
               aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
+              style={vOrder(2)}
             >
               {isFs ? <Minimize2 size={26} /> : <Maximize2 size={26} />}
             </button>
           )}
-          <button className="icon-btn close" onClick={onClose}>
+          <button className="icon-btn close" onClick={onClose} style={vOrder(1)}>
             <X size={28} />
           </button>
         </div>

@@ -84,12 +84,16 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
               <div className="value-large" style={{ fontSize: 26 }}>
                 {/* A SINGLE offline member inside an otherwise-live group can't
                     take over the whole panel, so it shows the shared pill
-                    inline — same wording/styling, just scoped to that reading. */}
+                    inline — same wording/styling, just scoped to that reading.
+                    Unit stays on the SAME line as the value (73%, not 73 over
+                    a second line with % on its own) — the value and its unit
+                    were previously two stacked block divs; now one line, unit
+                    a bit smaller, matching how SensorPanel already does it. */}
                 {r.unavailable
                   ? <span className="status-pill unavailable">UNAVAILABLE</span>
-                  : r.value}
+                  : <>{r.value}{r.unit && <span className="value-unit" style={{ fontSize: 15, marginLeft: 3 }}>{r.unit}</span>}</>}
               </div>
-              <div className="muted body-text">{r.unit || r.label}</div>
+              <div className="muted body-text">{r.label}</div>
             </div>
           ))}
         </div>

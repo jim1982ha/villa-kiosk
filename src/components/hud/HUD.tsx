@@ -549,6 +549,16 @@ export default function HUD({
                 )}
               </button>
             )}
+            {/* (The colour-legend button moved into the category row — it
+                explains those very colours. See .hud-cat-help.) */}
+            {/* First-person / bird's-eye switch, right after Facility — both
+                are app-level "how am I looking at/managing this villa"
+                controls rather than map content, so they sit together ahead
+                of the profile chip and Settings. It used to sit right before
+                Settings instead; moved at the user's request. On a phone
+                this whole row collapses into the overflow menu, which
+                carries its own copy (see .hud-menu). */}
+            <ViewControls viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
             {role && (
               <span className="hud-profile" title={`Signed in as ${ROLE_LABELS[role]}`}>
                 <span className="hud-profile-name">{ROLE_LABELS[role]}</span>
@@ -562,15 +572,6 @@ export default function HUD({
                 </button>
               </span>
             )}
-            {/* (The colour-legend button moved into the category row — it
-                explains those very colours. See .hud-cat-help.) */}
-            {/* First-person / bird's-eye switch, immediately LEFT of Settings.
-                It used to sit at the bottom of the left column; both are
-                app-level "how am I looking at this villa" controls rather
-                than map content, so they belong in the same top-right
-                cluster. On a phone this whole row collapses into the
-                overflow menu, which carries its own copy (see .hud-menu). */}
-            <ViewControls viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
             {canOpenSettings && (
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
                 <Settings size={20} />

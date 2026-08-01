@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.55.0
+
+### Changes
+- **Fixed the camera panel's phone-landscape status-rail tooltip appearing at the extreme top of the screen regardless of where you touched it.** `StateTimeline`'s tooltip positioning was written for the horizontal bar only — in vertical mode `hover.x` actually holds a Y-offset, but the same styling (`left: hover.x; bottom: 100%`) still applied, anchoring the tooltip's bottom edge to the (tall, narrow) rail's own top edge no matter where along it you touched. It now opens rightward off the rail, vertically centred on the real touch point. Also gave the rail a left inset matching the control column's own right padding, so it no longer sits flush against the true screen edge.
+- **Camera zoom: exiting no longer moves every other control button.** A "reset zoom" button used to appear IN the control cluster the instant you zoomed in, shifting prev/next/fullscreen/close over to make room — replaced with a pill under the camera name (same action, no reflow). Also dropped the "updated HH:MM:SS" text next to the name — redundant next to the status rail already showing the same thing graphically.
+- **Camera panel, phone-landscape only: reordered the side control column** — Close now sits at the top, Fullscreen second, Next above Previous, the detection-arm toggle last — a more natural one-handed reach down a side rail. Portrait's row order is untouched.
+- **Fixed a real value/unit rendering bug: a device-group panel's readings showed their unit on a separate line below the number** (73, then % underneath) instead of on the same line (73%) the way the single-sensor panel already does it correctly. Same fix applied consistently — the group panel's per-member breakdown now shows the label underneath instead of duplicating the unit there.
+- **Fixed the "default view saved" confirmation tooltip wrapping almost every word onto its own line.** It's an absolutely-positioned box anchored past its own narrow containing block's edge (`left: calc(100% + 10px)`) with no explicit width — some browsers compute its shrink-to-fit available width against that narrow container instead of the viewport, collapsing it to near-nothing. `width: max-content` fixes it regardless of that quirk.
+- **Settings modal: fixed two section titles ("Dashboard title", "First-person view") that had zero gap before their own content** — both used `style={{ margin: 0 }}`, meant to kill the double-gap at the top of a section, but that zeroed the BOTTOM margin too (the gap before the content that follows), not just the top. Changed to `marginTop: 0` in both places. Also removed the separator above "First-person view" and two matching ones in the Map Colours legend — same "the title's own top margin is enough, a separator on top of it is redundant" rule this modal already follows everywhere else, just missed in these three spots.
+- **Facility modal: its tab row was the one piece of that modal that didn't pick up the safe-area-aware padding** the header/body/footer already get on a phone — a flat 22px regardless of a notch/Dynamic-Island inset, unlike everything else in the same modal. Fixed to match. (The modal's overall full-bleed, no-rounded-corner mobile presentation itself is intentional and shared by every settings-style modal — Settings, Advanced Settings, Facility, Legend — not a Facility-specific inconsistency.)
+- HUD: the first-person/bird's-eye view toggle now sits immediately after the Facility button instead of immediately before Settings.
+- Typecheck and production build clean throughout.
+
 ## 2.54.0
 
 ### Changes

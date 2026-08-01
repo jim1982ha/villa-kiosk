@@ -60,8 +60,6 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
             ))}
           </div>
 
-          <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "20px 0" }} />
-
           <div className="settings-section-title">On the map (badge outline)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
             How a device's own badge shows its state in the 3D view — a
@@ -87,8 +85,6 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
               </div>
             ))}
           </div>
-
-          <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "20px 0" }} />
 
           <div className="settings-section-title">On a device panel (status pill)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>

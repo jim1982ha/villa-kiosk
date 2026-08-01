@@ -141,7 +141,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         {/* RBAC: shared branding — administration, not personal taste. */}
         {can("editConfig") && (
           <>
-            <div className="settings-section-title" style={{ margin: 0 }}>Dashboard title</div>
+            <div className="settings-section-title" style={{ marginTop: 0 }}>Dashboard title</div>
             <input
               value={siteTitle}
               onChange={(e) => applySiteTitle(e.target.value)}
@@ -272,13 +272,14 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           both show the same information, purely a look preference.
         </p>
 
-        <hr style={{ border: "none", borderTop: "1px solid var(--hairline)", margin: "22px 0" }} />
-
         {/* ── Camera & movement ─────────────────────────────────────────────
             First-person walk-through comfort. Bird's-eye's own "Natural
             scrolling" toggle moved up next to the blue-glow toggle above, so
-            this section is first-person only now. */}
-        <div className="settings-section-title" style={{ margin: 0 }}>First-person view</div>
+            this section is first-person only now. No separator above (same
+            "the title's own top margin is enough" rule every other section
+            transition in this modal follows) — a redundant hr-plus-margin
+            was the reported inconsistency. */}
+        <div className="settings-section-title">First-person view</div>
         <div className="slider-pair" style={{ marginTop: 10 }}>
           <div>
             <label>Eye height · {eyeHeight.toFixed(2)} m</label>

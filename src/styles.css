@@ -569,7 +569,14 @@ button {
    floated out to the right of the stack instead, same tooltip look
    (.overview-hint), just positioned rather than flowed. */
 .hud-left-col .hud-stack { position: relative; }
-.hud-anchor-hint { position: absolute; left: calc(100% + 10px); bottom: 0; z-index: 5; }
+/* width: max-content — without an explicit width, an absolutely-positioned
+   box anchored via `left: calc(100% + Xpx)` past its own (narrow, ~44px)
+   containing block's edge has its shrink-to-fit available width computed
+   against that narrow container instead of the viewport, which collapsed it
+   to near-nothing and wrapped almost every word onto its own line. Sizing to
+   content directly (still capped by .overview-hint's own max-width) fixes it
+   regardless of that coordinate-system quirk. */
+.hud-anchor-hint { position: absolute; left: calc(100% + 10px); bottom: 0; z-index: 5; width: max-content; }
 
 .room-label {
   /* Same safe-area treatment as .service-toast right below — this banner
@@ -1098,6 +1105,17 @@ input[type="range"]::-moz-range-thumb {
   font-size: 18px; background: rgba(0,0,0,0.5); color: #fff;
   padding: 8px 16px; border-radius: 10px; min-width: 0; display: inline-block;
 }
+/* "Reset zoom" pill, on its own line under the title — replaces a button that
+   used to appear in .camera-controls the instant you zoomed in, which shifted
+   every other icon in that cluster over. block+margin-top puts it on a new
+   line under the label without needing a wrapping container. */
+.camera-zoom-pill {
+  pointer-events: auto; display: flex; align-items: center; gap: 6px;
+  margin-top: 8px; font-size: 13px; font-weight: 500;
+  background: rgba(0,0,0,0.5); color: #fff;
+  padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.25);
+}
+.camera-zoom-pill:active { background: rgba(0,0,0,0.65); }
 /* Bottom row: status strip + control cluster (prev/next/zoom-reset/
    fullscreen/close) share one flex row so they're always the same height.
    Sits in normal flow BELOW the video (not floated over it) on every screen
@@ -1217,7 +1235,10 @@ input[type="range"]::-moz-range-thumb {
     flex: 0 0 auto;
     width: var(--cam-rail);
     box-sizing: content-box;
-    padding: 8px 0 8px env(safe-area-inset-left, 0px);
+    /* Same base inset as .camera-controls' right-side padding (10px + the
+       matching safe-area), so the rail doesn't sit flush against the true
+       screen edge the way the controls column never does on its side. */
+    padding: 8px 0 8px calc(10px + env(safe-area-inset-left, 0px));
     display: flex;
     background: #000;
   }
@@ -1942,6 +1963,14 @@ label.toggle span { user-select: none; line-height: 1.4; }
     flex-wrap: nowrap;
   }
   .settings-footer .btn { padding-left: 12px; padding-right: 12px; }
+  /* Facility's tab row sits between .settings-header and .settings-body but
+     used to keep its flat desktop 22px padding on mobile instead of picking
+     up the same safe-area-aware inset those two get here — the one thing on
+     this modal that didn't match the rest, most visible on a Dynamic-Island
+     phone rotated to landscape (left/right inset, not top). */
+  .fm-tabs {
+    padding: 10px calc(18px + env(safe-area-inset-right, 0px)) 10px calc(18px + env(safe-area-inset-left, 0px));
+  }
   /* Plain (non-settings) modals scroll their own content on tiny screens. */
   .modal:not(.settings-modal) {
     overflow-y: auto;

@@ -131,7 +131,19 @@ export default function StateTimeline({ data, hours = 24, colorFor, height, lege
         {hover && (
           <div
             className="spark-tip"
-            style={{ left: hover.x, bottom: "100%", marginBottom: 6, transform: `translateX(${hover.x > 160 ? "-100%" : "0"})` }}
+            // vertical: hover.x is a Y-offset (see onMove) — the horizontal
+            // styling below (left: hover.x, bottom: 100%) misused that as an
+            // X-offset AND anchored the tip's bottom edge to the wrap's own
+            // top edge, which for a tall, narrow rail (the camera panel's
+            // phone-landscape side bar) put the tooltip at the extreme top
+            // of the rail regardless of where the touch actually was.
+            // Opening rightward off the rail's edge with top pinned to the
+            // real touch offset (centred on it, so it never depends on a
+            // width/height guess the way the horizontal flip threshold does)
+            // fixes both at once.
+            style={vertical
+              ? { top: hover.x, left: "100%", marginLeft: 6, transform: "translateY(-50%)" }
+              : { left: hover.x, bottom: "100%", marginBottom: 6, transform: `translateX(${hover.x > 160 ? "-100%" : "0"})` }}
           >
             <strong><span style={{ color: colorFor(hover.state) }}>●</span> {prettyState(hover.state)}</strong>
             <span>{fmtChartTime(hover.t)}</span>
