@@ -1956,9 +1956,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
      height as the mobile URL bar shows/hides. */
   .modal-backdrop {
     padding: 0;
-    /* Top-anchor (not stretch): the modal is content-height up to the full
-       screen, so a short Settings view no longer leaves a big blank gap above
-       its footer. */
     align-items: flex-start;
     justify-content: stretch;
   }
@@ -1970,6 +1967,21 @@ label.toggle span { user-select: none; line-height: 1.4; }
     border: none;
     /* Inset content from the notch / home indicator. */
     padding-top: var(--safe-top);
+  }
+  /* Settings-family modals (Settings, Advanced Settings, Facility, Legend)
+     take the FULL screen height on mobile, not just up to it — a plain
+     max-height cap (the base .modal rule above) lets the dialog shrink to
+     fit short content instead, which for a tabbed workspace like Facility
+     meant the whole dialog's height (and the footer's position) visibly
+     jumped between tabs ("No faults recorded" vs. a long Faults list).
+     .settings-body's own flex:1 1 auto + overflow-y:auto already does the
+     rest — body scrolls/leaves blank space as needed, header and footer
+     stay pinned to a stable full-height sheet either way. Deliberately NOT
+     applied to .panel-modal (device panels, the group/room-cluster modal):
+     those are short by design and read better as a small centered card —
+     see that family's own mobile override below. */
+  .modal.settings-modal {
+    height: 100dvh;
   }
   /* left/right env() on every section (not just .modal's own padding-top)
      since this sheet is full-bleed (width:100%): in landscape on a

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.57.0
+
+### Changes
+- **Fixed settings-style modals (Settings, Advanced Settings, Facility, Legend) resizing to fit their current content on mobile instead of always filling the screen.** Each used `max-height: 100dvh` — a cap, not a fixed height — so the dialog shrank to whatever content happened to be showing. Invisible on Settings/Advanced Settings, which usually have enough content to nearly fill the screen anyway, but glaring on Facility: switching tabs ("No faults recorded" vs. a long list) visibly resized the whole dialog and moved the footer's position around underneath it, tab to tab. This was actually a deliberate prior choice (reasoning that a short view shouldn't leave blank space above its footer) — reversed at the user's explicit request: a stable full-height sheet with the footer always pinned to the true bottom matters more than avoiding blank space under short content. `height: 100dvh` now, not just a cap; `.settings-body`'s existing `flex:1 1 auto` + scroll does the rest. Device panels and the group/room-cluster modal are untouched — a different, deliberately small-card family.
+- Typecheck and production build clean.
+
 ## 2.56.0
 
 ### Changes
