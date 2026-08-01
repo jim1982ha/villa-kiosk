@@ -24,7 +24,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
-import { useFmData } from "@/fm/FmDataContext";
+import { useFmData, useFacilityLiveView } from "@/fm/FmDataContext";
 import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
 import { unavailableDeviceIds } from "@/config/deviceGroups";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
@@ -64,6 +64,12 @@ export default function FacilityModal({
   const { config } = useConfig();
   const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
+  // This panel is the one place facility records are actually read, so while
+  // it is open the store polls on the on-screen cadence instead of the
+  // background one. Without it the only way to see another device's change
+  // was to minimise and restore the window (a visibilitychange) or wait out
+  // the three-minute heartbeat.
+  useFacilityLiveView();
   const [unavailableOpen, setUnavailableOpen] = useState(false);
   // The Readiness tab's "View doors" / "View lights" shortcuts. Deliberately
   // NOT the failing check's own (narrower) entityIds — the operator taps

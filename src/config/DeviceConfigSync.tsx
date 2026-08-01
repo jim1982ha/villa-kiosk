@@ -60,7 +60,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConfig } from "./ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { report as reportTelemetry } from "@/utils/telemetry";
+import { useSyncReporter } from "@/utils/syncTelemetry";
 import { pushWithRebase } from "@/utils/keyedSync";
 import { useStoreRefresh } from "@/hooks/useStoreRefresh";
 import {
@@ -134,18 +134,9 @@ export default function DeviceConfigSync() {
   const revRef = useRef<string>("0");
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /** Last sync event reported, so an unchanged outcome isn't logged again.
-   *  The telemetry ring holds only the newest 500 events and a phone fires a
-   *  pull on every visibilitychange (this one does so every few seconds) —
-   *  without this, sync noise would evict the very history it's meant to
-   *  explain. A CHANGE is always reported; a steady state is reported once. */
-  const lastSyncSig = useRef<string>("");
-  const reportSync = useCallback((data: Record<string, unknown>) => {
-    const sig = JSON.stringify(data);
-    if (sig === lastSyncSig.current) return;
-    lastSyncSig.current = sig;
-    reportTelemetry("sync", data);
-  }, []);
+  // Reports this store's pulls/pushes, deduped, tagged `store:"config"` so a
+  // dump can never be mistaken for the Facility store's. See syncTelemetry.
+  const reportSync = useSyncReporter("config");
 
   // RULE 4: diff this device's local edits against the baseline it last
   // synced against, replay ONLY that diff onto the server's freshest copy,

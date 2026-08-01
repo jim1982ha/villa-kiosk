@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: Villa Kiosk
-version: "2.65.0"
+version: "2.66.0"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -63,10 +63,13 @@ startup: application
 # auto-trusted, and unnecessary if you never expose port 8099 directly.
 #
 # superadmin_pin (empty by default = the capability is OFF): a SIX-digit code
-# that authorises permanently deleting a Facility Manager record — a fault, a
-# cost, a logged completion (and its evidence photos), a saved report or a
-# schedule. Normal profiles can add and amend those records; nothing can
-# delete one unless this code is set and entered.
+# that authorises permanently deleting a Facility Manager EVIDENCE record — a
+# fault, a cost, or a logged completion, together with its evidence photos.
+# Normal profiles can add and amend those records; nothing can delete one
+# unless this code is set and entered. Schedules and saved reports are NOT
+# covered: a schedule is a plan rather than a record of something that
+# happened, and a saved report can be regenerated, so both keep their ordinary
+# delete buttons.
 #
 # It is not a fourth profile: it never appears on the profile-select screen,
 # mints no session, and cannot be signed in as. Inside the app you reach it by

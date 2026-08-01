@@ -24,18 +24,32 @@
 
 import { useEffect } from "react";
 
-/** Slow enough to be invisible in battery/network terms, quick enough that a
- *  second operator's change shows up on its own rather than "when you next
- *  reopen the app". */
+/** Background cadence: slow enough to be invisible in battery/network terms,
+ *  for a store nobody is currently looking at. */
 export const STORE_HEARTBEAT_MS = 3 * 60 * 1000;
+
+/** Cadence while the data is ACTUALLY ON SCREEN.
+ *
+ *  The background rate is wrong for a screen someone is watching: marking a
+ *  fault in progress on the desktop and then staring at the phone means up to
+ *  three minutes of the phone showing the old status with no indication that
+ *  anything is coming. That reads as "the sync is broken" even though it is
+ *  working exactly as designed — and the operator has no way to tell those two
+ *  apart. Faster only while a panel is open, so an unattended kiosk still
+ *  costs one small GET every three minutes. */
+export const STORE_ACTIVE_MS = 15 * 1000;
 
 /**
  * @param refresh  Re-read the store. MUST be safe to call at any moment: it is
  *                 the callee's job to refuse to clobber an edit this device
  *                 hasn't successfully pushed yet (see each store's guard).
  *                 Should be referentially stable — wrap it in useCallback.
+ * @param intervalMs  Heartbeat period; pass STORE_ACTIVE_MS while the data is
+ *                 on screen. Changing it restarts the timer, so a panel
+ *                 opening gets a prompt tick rather than inheriting the
+ *                 remainder of a slow one.
  */
-export function useStoreRefresh(refresh: () => void): void {
+export function useStoreRefresh(refresh: () => void, intervalMs: number = STORE_HEARTBEAT_MS): void {
   useEffect(() => {
     refresh();
     const onWake = () => { refresh(); };
@@ -43,11 +57,11 @@ export function useStoreRefresh(refresh: () => void): void {
     document.addEventListener("visibilitychange", onWake);
     const heartbeat = setInterval(() => {
       if (document.visibilityState === "visible") refresh();
-    }, STORE_HEARTBEAT_MS);
+    }, intervalMs);
     return () => {
       window.removeEventListener("focus", onWake);
       document.removeEventListener("visibilitychange", onWake);
       clearInterval(heartbeat);
     };
-  }, [refresh]);
+  }, [refresh, intervalMs]);
 }
