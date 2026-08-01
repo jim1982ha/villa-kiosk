@@ -19,3 +19,10 @@ export const ALERT_RED_HEX = "#E63333";
 // (a lock HA had lost contact with rendered as a confident red "unlocked").
 // Matches --status-warning's amber across the 2D panels for the same signal.
 export const UNAVAILABLE_AMBER = new Color3(0.85, 0.55, 0.05);
+
+// Same green as --status-on across the 2D panels ("this is reporting fine" /
+// "available") — for the one place on the Babylon GUI side that needs it
+// (the room-cluster chip's count pill, see EntityVisuals.updateClusters).
+// A Babylon GUI control can't consume a CSS custom property, so this is a
+// static match to the light-theme value rather than a live read.
+export const AVAILABLE_GREEN_HEX = "#10B981";

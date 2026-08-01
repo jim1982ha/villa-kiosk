@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.53.0
+
+### Changes
+- **Room-cluster chip: the outline ring and the count pill now carry two separate, correctly-scoped signals instead of one conflated red.** The ring used to fire on `alert || unavailable`, disagreeing with the rule individual device badges already use (`BADGE_RING`: red for `on` or `alert`, unavailable dims instead of ringing) — a room with only an unavailable device but nothing actually on/alerting rang red even though no single badge in that room would have. The ring now fires on the exact same `on || alert` condition individual badges use. The count pill's background was unconditionally red; it now reflects the room's REPORTING status specifically — red if at least one member is unavailable, otherwise the same green used for "available" elsewhere (`--status-on`, mirrored as a new static `AVAILABLE_GREEN_HEX` in `colors.ts` since a Babylon GUI control can't read a CSS custom property). The two signals are independent by design: a room can show a red ring (something's on) with a green pill (everything's still reporting) simultaneously.
+- Typecheck and production build clean.
+
 ## 2.52.0
 
 ### Changes

@@ -73,7 +73,7 @@ import { axisWorldScale } from "./meshUnits";
 import { LightPool } from "./LightPools";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { iconKeyFor } from "./badgeIconKeys";
-import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER } from "./colors";
+import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 1.3;
@@ -2831,18 +2831,22 @@ export class EntityVisuals {
     // should report the whole room's device count, not just the part
     // currently framed, and its centroid should stay put rather than sliding
     // around as members cross the viewport edge.
-    const groups = new Map<string, { ids: string[]; sum: Vector3; alert: boolean }>();
+    const groups = new Map<string, { ids: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean }>();
     for (const s of shown) {
       const room = this.roomOf(s.id);
       if (!this.roomClustered.get(room)) continue;
       let g = groups.get(room);
-      if (!g) { g = { ids: [], sum: Vector3.Zero(), alert: false }; groups.set(room, g); }
+      if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(room, g); }
       g.ids.push(s.id);
       g.sum.addInPlace(s.lbl.anchor.getAbsolutePosition());
       const st = this.lastState.get(s.id);
       if (st) {
         const kind = this.badgeKind(s.lbl.type, st);
-        if (kind === "alert" || kind === "unavailable") g.alert = true;
+        // Same rule as the individual badge ring (BADGE_RING): "on" and
+        // "alert" both ring red, "unavailable" does not — dimming is that
+        // kind's own signal, not a ring (see BADGE_RING's comment).
+        if (kind === "on" || kind === "alert") g.ringRed = true;
+        if (kind === "unavailable") g.unavailable = true;
       }
     }
 
@@ -2859,10 +2863,18 @@ export class EntityVisuals {
       const label = `${room}  ${g.ids.length}`;
       c.text.text = room;
       c.countText.text = formatCountBadge(g.ids.length);
-      // The chip's own ring carries the room's worst state — the only
-      // attention signal available once the individual badges are gone.
-      c.container.thickness = g.alert ? 2 : 0;
-      c.container.color = g.alert ? ALERT_RED_HEX : "transparent";
+      // The chip's own ring mirrors the individual badge ring rule exactly
+      // (BADGE_RING): red when at least one member is "on" or "alert",
+      // otherwise no ring — the only attention signal available once the
+      // individual badges are gone.
+      c.container.thickness = g.ringRed ? 2 : 0;
+      c.container.color = g.ringRed ? ALERT_RED_HEX : "transparent";
+      // The count pill itself carries the room's REPORTING status — red if
+      // at least one member is unavailable (HA has lost contact with it),
+      // the same "available" green everywhere else otherwise. Separate
+      // signal from the ring above: a room can be fully reporting AND have
+      // something on (red ring, green pill) at the same time.
+      c.countBadge.background = g.unavailable ? ALERT_RED_HEX : AVAILABLE_GREEN_HEX;
       c.container.scaleX = scale;
       c.container.scaleY = scale;
       c.container.isVisible = true;
@@ -2948,24 +2960,27 @@ export class EntityVisuals {
     text.paddingRight = `${CLUSTER_COUNT_DIAMETER_PX + 12}px`;
     container.addControl(text);
 
-    // The device count as a small red corner-overlay pill — matching the
-    // HUD's unavailable-devices/facility icons' .icon-btn-count CONVENTION
-    // (small red circle, white bold number, tucked into the top-right
-    // corner, INSIDE the parent's own bounds rather than hanging off it —
-    // see icon-btn-count's own comment for why: fully inside reads as the
-    // normal look for a count badge). A Babylon GUI control can't consume
-    // CSS, so the shape/position are re-expressed here rather than literally
-    // reused, but utils/countBadge.ts's cap-at-99+ formatting is the exact
-    // same function both sides call. Added to `container` (not the room-name
-    // row) and LAST, so it paints on top as a true overlay instead of
-    // sharing the row's flow — the earlier version put it inline in the row,
-    // which read as "a second word next to the room name", not a badge.
+    // The device count as a small corner-overlay pill — matching the HUD's
+    // unavailable-devices/facility icons' .icon-btn-count CONVENTION (small
+    // circle, white bold number, tucked into the top-right corner, INSIDE
+    // the parent's own bounds rather than hanging off it — see
+    // icon-btn-count's own comment for why: fully inside reads as the normal
+    // look for a count badge). A Babylon GUI control can't consume CSS, so
+    // the shape/position are re-expressed here rather than literally reused,
+    // but utils/countBadge.ts's cap-at-99+ formatting is the exact same
+    // function both sides call. Added to `container` (not the room-name row)
+    // and LAST, so it paints on top as a true overlay instead of sharing the
+    // row's flow — the earlier version put it inline in the row, which read
+    // as "a second word next to the room name", not a badge. Its background
+    // colour is REPORTING status (red = something unavailable, green =
+    // everything reporting), set every update in updateClusters — the value
+    // here is just the pre-first-update placeholder.
     const countBadge = new Rectangle(`clusterCount_${room}`);
     countBadge.width = `${CLUSTER_COUNT_DIAMETER_PX}px`;
     countBadge.height = `${CLUSTER_COUNT_DIAMETER_PX}px`;
     countBadge.cornerRadius = CLUSTER_COUNT_DIAMETER_PX / 2;
     countBadge.thickness = 0;
-    countBadge.background = ALERT_RED_HEX; // matches var(--status-danger) — see colors.ts
+    countBadge.background = AVAILABLE_GREEN_HEX;
     countBadge.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
     countBadge.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
     // Small INWARD inset (negative left pulls it left off the right edge,
