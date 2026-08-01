@@ -27,7 +27,8 @@ export type TelemetryKind =
   | "context-lost"    // WebGL context lost (the iOS memory-pressure signal)
   | "context-restored"
   | "lifecycle"       // pagehide / pageshow / visibility transitions
-  | "recovered";      // we auto-reloaded after a restore onto a dead scene
+  | "recovered"       // we auto-reloaded after a restore onto a dead scene
+  | "sync";           // shared-config pull/push outcome (see DeviceConfigSync)
 
 let disabled = false;
 

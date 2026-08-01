@@ -60,9 +60,11 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConfig } from "./ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
+import { report as reportTelemetry } from "@/utils/telemetry";
 import {
   fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
   diffSharedConfig, applySharedConfigDiff, isSharedConfigDiffEmpty,
+  loadSyncBaseline, saveSyncBaseline,
   type SharedDeviceConfig,
 } from "./deviceConfig";
 
@@ -113,16 +115,43 @@ export default function DeviceConfigSync() {
    *  what was just written. This is what a push diffs local against (rule 4)
    *  and what a pull uses to detect a still-pending local edit (rule 3). null
    *  until the first successful pull. */
-  const baselineRef = useRef<SharedDeviceConfig | null>(null);
+  // Seeded from the PERSISTED baseline (see deviceConfig's loadSyncBaseline)
+  // rather than starting null, so an edit whose push hadn't landed when the
+  // page reloaded is still recognised as pending and gets re-pushed instead
+  // of being silently overwritten by the next pull.
+  const baselineRef = useRef<SharedDeviceConfig | null>(loadSyncBaseline());
   /** Serialised form of baselineRef, kept in lockstep — cheap string-compare
    *  gate for rules 2 and 3 without re-stringifying on every check. */
-  const serverJsonRef = useRef<string | null>(null);
+  const serverJsonRef = useRef<string | null>(
+    baselineRef.current === null ? null : JSON.stringify(baselineRef.current),
+  );
+
+  /** Advance the baseline — the ONE place it moves, so the in-memory pair and
+   *  the persisted copy can never drift apart. */
+  const commitBaseline = useCallback((next: SharedDeviceConfig, json?: string) => {
+    baselineRef.current = next;
+    serverJsonRef.current = json ?? JSON.stringify(next);
+    saveSyncBaseline(next);
+  }, []);
   /** Optimistic-concurrency revision last confirmed from the server (see
    *  supervisor-proxy.py's _store_revision) — sent with the next write so a
    *  write that's gone stale gets rejected instead of silently overwriting a
    *  different device's newer one. */
   const revRef = useRef<number>(0);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Last sync event reported, so an unchanged outcome isn't logged again.
+   *  The telemetry ring holds only the newest 500 events and a phone fires a
+   *  pull on every visibilitychange (this one does so every few seconds) —
+   *  without this, sync noise would evict the very history it's meant to
+   *  explain. A CHANGE is always reported; a steady state is reported once. */
+  const lastSyncSig = useRef<string>("");
+  const reportSync = useCallback((data: Record<string, unknown>) => {
+    const sig = JSON.stringify(data);
+    if (sig === lastSyncSig.current) return;
+    lastSyncSig.current = sig;
+    reportTelemetry("sync", data);
+  }, []);
 
   // RULE 4: diff this device's local edits against the baseline it last
   // synced against, replay ONLY that diff onto the server's freshest copy,
@@ -142,36 +171,52 @@ export default function DeviceConfigSync() {
         : baseline;
       const rev = fresh ? fresh.rev : revRef.current;
       const next = applySharedConfigDiff(freshBase, diff);
-      const result = await saveSharedConfig(next, rev);
+      const result = await saveSharedConfig(next, rev, fresh?.raw);
       if (result.ok) {
-        baselineRef.current = next;
-        serverJsonRef.current = JSON.stringify(next);
+        commitBaseline(next);
         revRef.current = result.rev;
+        reportSync({
+          op: "push", ok: true, attempt, rev: result.rev,
+          dismissed: next.dismissedEntityIds.length,
+          entities: Object.keys(next.entityMap).length,
+        });
         // Fold in whatever the other device's items contributed, so this
         // client's own view reflects them immediately rather than waiting
         // for its next pull.
         update(next);
         return;
       }
-      if (!result.conflict) return; // transport failure — next edit/pull retries later
+      if (!result.conflict) {
+        reportSync({ op: "push", ok: false, reason: "transport", attempt });
+        return; // transport failure — next edit/pull retries later
+      }
       // Another device's write landed between our fetch and our PUT — loop
       // and rebase this device's diff against the copy the 409 handed back.
     }
-  }, [update]);
+    // Fell out of the loop: every attempt hit a 409. Rare, but silent failure
+    // here would look identical to "never tried".
+    reportSync({ op: "push", ok: false, reason: "conflict-retries-exhausted" });
+  }, [update, reportSync]);
 
   const pull = useCallback(async () => {
     const result = await fetchSharedConfig();
-    if (result === null) return; // couldn't reach it — keep what we have
+    if (result === null) {
+      reportSync({ op: "pull", aborted: "unreachable" });
+      return; // couldn't reach it — keep what we have
+    }
     const { config: server, rev } = result;
     const keys = Object.keys(server);
     if (keys.length === 0) {
       // Nothing stored yet (fresh install, or first run after upgrading from
       // the localStorage-only versions). Seed the store from whatever THIS
       // device already has rather than letting an empty pull blank it.
-      baselineRef.current = localRef.current;
-      serverJsonRef.current = JSON.stringify(localRef.current);
+      commitBaseline(localRef.current);
       revRef.current = rev;
-      if (role === "owner") void saveSharedConfig(localRef.current, rev);
+      reportSync({
+        op: "pull", seededEmptyStore: true, rev,
+        dismissed: localRef.current.dismissedEntityIds.length,
+      });
+      if (role === "owner") void saveSharedConfig(localRef.current, rev, result.raw);
       return;
     }
     // RULE 3: A PULL MUST NEVER CLOBBER AN UNPUSHED LOCAL EDIT.
@@ -203,6 +248,14 @@ export default function DeviceConfigSync() {
       // sync in both directions until the user happened to edit something
       // else. Retry the push instead, so a focus/heartbeat pull is what
       // unwedges it.
+      // The single most diagnostic line here: this device is holding an edit
+      // the server hasn't got. If a phone logs this repeatedly while a desktop
+      // logs clean pulls, the divergence is a stuck local edit, not a bad read.
+      reportSync({
+        op: "pull", aborted: "pending-local-edit",
+        dismissed: localRef.current.dismissedEntityIds.length,
+        entities: Object.keys(localRef.current.entityMap).length,
+      });
       void pushOwnDiff();
       return;
     }
@@ -214,9 +267,19 @@ export default function DeviceConfigSync() {
     // push effect sees no change and the pull can't bounce straight back.
     const merged = { ...localRef.current, ...server } as SharedDeviceConfig;
     const mergedJson = JSON.stringify(merged);
-    baselineRef.current = merged;
-    serverJsonRef.current = mergedJson;
+    commitBaseline(merged, mergedJson);
     revRef.current = rev;
+    // What the server actually handed this device. `dismissed` is the number
+    // that matters when "Remove" works on one device and not another: if the
+    // desktop shows a count here and the phone shows 0, the write never
+    // reached the store; if both show the same count, the divergence is on
+    // the rendering side, not the sync side.
+    reportSync({
+      op: "pull", rev,
+      dismissed: merged.dismissedEntityIds.length,
+      entities: Object.keys(merged.entityMap).length,
+      serverHadDismissed: Array.isArray(server.dismissedEntityIds),
+    });
     // Skip the update entirely when the server genuinely has nothing new for
     // us. `pull()` runs on every mount AND every window focus/visibilitychange
     // (below) — so on a kiosk that's just been minimised and restored, or a
@@ -234,7 +297,7 @@ export default function DeviceConfigSync() {
     if (mergedJson === JSON.stringify(localRef.current)) return;
 
     update(server);
-  }, [update, role, pushOwnDiff]);
+  }, [update, role, pushOwnDiff, reportSync]);
 
   // Pull once on mount, then whenever the tab is refocused / becomes visible,
   // plus a long visible-only heartbeat for a device that never does either —

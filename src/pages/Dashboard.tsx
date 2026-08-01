@@ -26,6 +26,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
+import { dismissedEntitySet } from "@/config/dismissedEntities";
 import { isUnavailable } from "@/utils/stateColors";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
@@ -104,14 +105,33 @@ export default function Dashboard() {
   // stops being reported as missing from the map it's actually reachable
   // from. Recomputed from config, not baked into the raw set at load time,
   // so re-linking a device in Settings takes effect without a model reload.
+  //
+  // Dismissed entities (see AppConfig.dismissedEntityIds) are removed HERE
+  // rather than at each list that renders them. This set is what every
+  // "is it on the map / does it exist" surface downstream reads — the
+  // unavailable-devices modal, the room-cluster list, Facility readiness —
+  // so filtering once is what makes "Remove" mean the same thing in all of
+  // them. It cannot be done by filtering config.entityMap instead: rebuilding
+  // that object per render is exactly what forced a full multi-second Babylon
+  // re-index in 2.58.0 (see filterConfigForRole's docstring), whereas this
+  // derived Set is already recomputed and costs nothing.
+  const dismissedIds = useMemo(
+    () => dismissedEntitySet(config.dismissedEntityIds, entities),
+    [config.dismissedEntityIds, entities],
+  );
   const effectiveMappedEntityIds = useMemo(() => {
-    const augmented = new Set(mappedEntityIds);
+    const augmented = new Set<string>();
+    for (const id of mappedEntityIds) if (!dismissedIds.has(id)) augmented.add(id);
     for (const mapping of Object.values(config.entityMap)) {
-      if (mapping.linkedEntityId) augmented.add(mapping.linkedEntityId);
-      if (mapping.motionEntityId) augmented.add(mapping.motionEntityId);
+      if (mapping.linkedEntityId && !dismissedIds.has(mapping.linkedEntityId)) {
+        augmented.add(mapping.linkedEntityId);
+      }
+      if (mapping.motionEntityId && !dismissedIds.has(mapping.motionEntityId)) {
+        augmented.add(mapping.motionEntityId);
+      }
     }
     return augmented;
-  }, [mappedEntityIds, config.entityMap]);
+  }, [mappedEntityIds, config.entityMap, dismissedIds]);
   // Diagnostic/hidden-in-HA entities are excluded UNLESS they're actually on
   // the map (effectiveMappedEntityIds — real geometry, or linked/motion to
   // something that has it): the same distinction the map badge itself uses
@@ -136,6 +156,11 @@ export default function Dashboard() {
     if (!categoryGroup || !role) return [];
     return Object.entries(config.entityMap)
       .filter(([id, mapping]) => {
+        // Same dismissal rule as every other surface — this list reads the raw
+        // entityMap, so a row the owner removed would otherwise still appear
+        // here (reported: gone from Advanced Settings, still in the category
+        // modal) whenever the entityMap delete itself hasn't propagated yet.
+        if (dismissedIds.has(id)) return false;
         if (!isMappingAllowed(role, id, mapping)) return false;
         const dc = entities[id]?.attributes.device_class as string | undefined;
         if (effectiveCategory(id, mapping.type, mapping.category, dc) !== categoryGroup) return false;
@@ -143,7 +168,7 @@ export default function Dashboard() {
         return true;
       })
       .map(([id]) => id);
-  }, [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, effectiveMappedEntityIds]);
+  }, [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, effectiveMappedEntityIds, dismissedIds]);
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
   // Starts "overview" to match the actual landing view (see the one-shot
   // effect below): the HUD reads this to decide joystick vs. overview-help

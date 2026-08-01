@@ -172,12 +172,69 @@ export function applySharedConfigDiff(target: SharedDeviceConfig, diff: SharedCo
   };
 }
 
+// The sync baseline (what the server was last known to hold) is PERSISTED,
+// not just held in memory for the lifetime of the page.
+//
+// Without this, a device that reloads before its push lands silently loses
+// the edit. The in-memory baseline starts as null on every fresh load, and a
+// null baseline means "nothing to protect" — so the very first pull lets the
+// server's copy win wholesale, overwriting the edit that localStorage had
+// faithfully kept. On a desktop that never happens: the push completes in a
+// second and the window closes. On the reported Android PWA it happens
+// constantly — its own telemetry shows pagehide->pageshow cycles two seconds
+// apart, i.e. it reloads faster than a debounced push (900 ms) plus its
+// fetch-then-PUT round trip can finish. Symptom: "the entities disappear
+// when I press Remove, then come back a few seconds later", on that device
+// only, forever.
+//
+// Persisting the baseline makes the pending-edit check (DeviceConfigSync's
+// rule 3) work ACROSS a reload: local still differs from the last CONFIRMED
+// baseline, so the next pull defers and re-pushes instead of clobbering.
+// A stale baseline is harmless — the diff still describes only this device's
+// own changes, and the push rebases them onto the server's freshest copy.
+const BASELINE_KEY = "villa-kiosk:shared-config-baseline";
+
+export function loadSyncBaseline(): SharedDeviceConfig | null {
+  try {
+    const raw = localStorage.getItem(BASELINE_KEY);
+    if (!raw) return null;
+    const parsed = parseSharedConfig(JSON.parse(raw));
+    // Only usable as a baseline if it carries every shared key — a partial
+    // one would read as "this device deleted the missing keys".
+    return SHARED_CONFIG_KEYS.every((k) => k in parsed)
+      ? (parsed as SharedDeviceConfig)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSyncBaseline(config: SharedDeviceConfig): void {
+  try {
+    localStorage.setItem(BASELINE_KEY, JSON.stringify(config));
+  } catch { /* storage full/disabled — degrades to the old in-memory behaviour */ }
+}
+
 /** One shared-config fetch: the parsed slice plus the revision it was read
  *  at, so a subsequent write can detect whether someone else wrote in
  *  between (see saveSharedConfig). */
 export interface SharedConfigFetch {
   config: Partial<SharedDeviceConfig>;
   rev: number;
+  /** The server document EXACTLY as stored, unparsed. Carried back into the
+   *  next write so keys this app version doesn't know about survive it.
+   *
+   *  parseSharedConfig deliberately drops unrecognised keys on read (a newer
+   *  version's field must not be injected into config), but a write rebuilds
+   *  the document from the parsed slice alone — so an OLDER client, which
+   *  parses a newer field to nothing, would silently DELETE it for everyone
+   *  the moment it pushed anything. That is not hypothetical: it is exactly
+   *  what a phone still running the previous build does to a `dismissedEntityIds`
+   *  the desktop just wrote, which reads as "the removal only works on one
+   *  device". Writing unknown keys back untouched makes a mixed-version fleet
+   *  (the normal state for a few minutes after every release, and longer for
+   *  an installed PWA serving a cached bundle) merely stale, never destructive. */
+  raw: Record<string, unknown>;
 }
 
 /** Fetch the shared device config. Returns null on a transport/parse failure so
@@ -188,9 +245,12 @@ export async function fetchSharedConfig(): Promise<SharedConfigFetch | null> {
     const resp = await fetch(ingressPath("device-config"), { credentials: "same-origin" });
     if (!resp.ok) return null;
     const data = (await resp.json()) as { config?: unknown; rev?: unknown };
+    const raw = data.config && typeof data.config === "object"
+      ? (data.config as Record<string, unknown>) : {};
     return {
       config: parseSharedConfig(data.config),
       rev: typeof data.rev === "number" ? data.rev : 0,
+      raw,
     };
   } catch {
     return null;
@@ -211,13 +271,19 @@ export type SaveSharedConfigResult =
 export async function saveSharedConfig(
   config: SharedDeviceConfig,
   expectedRev: number | null,
+  /** The raw server document this write was computed against (see
+   *  SharedConfigFetch.raw) — its unknown keys are written back untouched so
+   *  this client can't delete a field a newer version added. */
+  carryOver: Record<string, unknown> = {},
 ): Promise<SaveSharedConfigResult> {
   try {
+    const merged = { ...carryOver, ...config };
     const resp = await fetch(ingressPath("device-config"), {
       method: "PUT",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(expectedRev === null ? { config } : { config, rev: expectedRev }),
+      body: JSON.stringify(
+        expectedRev === null ? { config: merged } : { config: merged, rev: expectedRev }),
     });
     if (resp.status === 409) {
       const data = (await resp.json().catch(() => ({}))) as { config?: unknown; rev?: unknown };
