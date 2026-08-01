@@ -1126,15 +1126,26 @@ def _write_json_store(path: str, payload: str) -> None:
         raise
 
 
-def _store_revision(path: str) -> int:
+def _store_revision(path: str) -> str:
     """A cheap, persistent (survives a proxy restart, unlike an in-memory
     counter) revision marker for optimistic-concurrency writes — the file's
     own mtime, which _write_json_store's atomic replace always advances.
-    Absent file (nothing stored yet) reads as revision 0."""
+    Absent file (nothing stored yet) reads as "0".
+
+    Returned as a STRING, and that is not cosmetic. This was an int of
+    nanoseconds (~1.8e18), which is ~198x past JavaScript's MAX_SAFE_INTEGER:
+    at that magnitude doubles are 256 apart, so a browser client physically
+    cannot hold the value. It parsed a rounded number, sent that back, and the
+    comparison below never matched — so EVERY conditional write was rejected
+    with 409, on every retry, permanently. The symptom in the field was a
+    device that could read the shared config forever but never write to it,
+    reporting "conflict-retries-exhausted" with an unchanging revision.
+    An opaque string is immune to numeric precision by construction; nothing
+    outside this function needs to know it derives from a timestamp."""
     try:
-        return os.stat(path).st_mtime_ns
+        return str(os.stat(path).st_mtime_ns)
     except OSError:
-        return 0
+        return "0"
 
 
 def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
@@ -1187,12 +1198,18 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
         if not isinstance(value, type(empty)):
             return web.json_response(
                 {"error": f"{key} must be a {type(empty).__name__}"}, status=400)
-        expected_rev = body.get("rev") if isinstance(body, dict) else None
+        # Only a STRING rev participates in the concurrency check — see
+        # _store_revision. A client sending the old numeric form has already
+        # lost precision, so its value could never match; treating it as
+        # absent lets those (currently unable to write at all) through
+        # unconditionally rather than failing them forever.
+        raw_rev = body.get("rev") if isinstance(body, dict) else None
+        expected_rev = raw_rev if isinstance(raw_rev, str) else None
         payload = json.dumps(value)
         if len(payload.encode("utf-8")) > max_bytes:
             return web.json_response({"error": f"{key} payload too large"}, status=413)
         async with lock:
-            if isinstance(expected_rev, int):
+            if expected_rev is not None:
                 current_rev = _store_revision(path)
                 if expected_rev != current_rev:
                     return web.json_response(

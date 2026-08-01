@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.63.1
+
+### Changes
+- **The store revision is now an opaque string, which fixes shared config having been silently unwritable since 2.60.0.** With 2.63.0 finally pushing correctly, the sync telemetry showed the next failure immediately: the desktop logged `op:"pull" aborted:"pending-local-edit" dismissed:6` — correctly detecting it was holding an edit — followed by `op:"push" ok:false reason:"conflict-retries-exhausted"`, with an unchanging revision of `1785586961413682700` on every event from every device. That number is the store file's mtime in **nanoseconds**, roughly 1.8e18, which is about **198x past JavaScript's `MAX_SAFE_INTEGER`**. At that magnitude the representable doubles are 256 apart, so a browser cannot hold the value exactly: it parsed a rounded number, sent that back as the expected revision, and the server's comparison against the true integer could never match. Every conditional write was therefore rejected with 409, on every retry, permanently — the shared config had been readable but **unwritable from any browser** since optimistic concurrency was introduced in 2.60.0, which is why the entity dismissals could never reach the server no matter which device made them. The revision is now a string end to end (server, both store clients, and the shared push protocol); nothing parses it, it is only ever passed back. A non-string `rev` from an older client is treated as absent rather than mismatched, so 2.62.0/2.63.0 clients regain the ability to write at all (unconditionally, without the concurrency check) instead of being blocked forever.
+- **Four regression tests pin the hazard** (103 passing): the revision must be a string, including for a store that doesn't exist yet; it must change when the store is written; and — as positive proof of why it cannot be a number — the underlying value must exceed `MAX_SAFE_INTEGER` and must demonstrably corrupt if round-tripped through a double. Reverting it to an int now fails the suite instead of silently disabling every write.
+- Typecheck, production build, and the Python security suite (103/103) clean.
+
 ## 2.63.0
 
 ### Changes

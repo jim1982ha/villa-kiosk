@@ -46,7 +46,7 @@ export async function fetchFmData(): Promise<StoreFetch<FmData> | null> {
       ? (d.data as Record<string, unknown>) : {};
     return {
       doc: parseFmData(d.data),
-      rev: typeof d.rev === "number" ? d.rev : 0,
+      rev: typeof d.rev === "string" ? d.rev : "0",
       raw,
     };
   } catch {
@@ -67,7 +67,7 @@ export async function fetchFmData(): Promise<StoreFetch<FmData> | null> {
  *  error shown — on the records that evidence the property's maintenance. */
 export async function saveFmData(
   data: FmData,
-  expectedRev: number | null,
+  expectedRev: string | null,
   carryOver: Record<string, unknown> = {},
 ): Promise<StoreSaveResult> {
   try {
@@ -82,7 +82,7 @@ export async function saveFmData(
     if (r.status === 409) return { ok: false, conflict: true };
     if (!r.ok) return { ok: false, conflict: false };
     const d = (await r.json().catch(() => ({}))) as { rev?: unknown };
-    return { ok: true, rev: typeof d.rev === "number" ? d.rev : 0 };
+    return { ok: true, rev: typeof d.rev === "string" ? d.rev : "0" };
   } catch {
     return { ok: false, conflict: false };
   }

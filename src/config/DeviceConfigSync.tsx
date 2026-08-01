@@ -138,7 +138,7 @@ export default function DeviceConfigSync() {
    *  supervisor-proxy.py's _store_revision) — sent with the next write so a
    *  write that's gone stale gets rejected instead of silently overwriting a
    *  different device's newer one. */
-  const revRef = useRef<number>(0);
+  const revRef = useRef<string>("0");
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Last sync event reported, so an unchanged outcome isn't logged again.

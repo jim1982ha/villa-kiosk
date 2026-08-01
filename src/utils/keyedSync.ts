@@ -70,16 +70,20 @@ export function keyedDiffIsEmpty<T>(diff: KeyedDiff<T>): boolean {
  *  at, and the raw stored object (for rule 3's carry-over). */
 export interface StoreFetch<TDoc> {
   doc: TDoc;
-  rev: number;
+  /** Opaque revision token. A STRING deliberately: the server derives it from
+   *  a nanosecond timestamp, which is far past JavaScript's safe integer range
+   *  — as a number it silently rounded and every conditional write 409'd
+   *  forever. Never parse it, only pass it back. */
+  rev: string;
   raw: Record<string, unknown>;
 }
 
 export type StoreSaveResult =
-  | { ok: true; rev: number }
+  | { ok: true; rev: string }
   | { ok: false; conflict: boolean };
 
 export type PushOutcome<TDoc> =
-  | { ok: true; next: TDoc; rev: number; attempts: number }
+  | { ok: true; next: TDoc; rev: string; attempts: number }
   | { ok: false; reason: "nothing-to-push" | "transport" | "conflict-retries-exhausted" };
 
 /** Rules 1-3 as one loop: fetch the freshest copy, replay THIS device's diff
@@ -97,7 +101,7 @@ export async function pushWithRebase<TDoc, TDiff>(opts: {
    *  the server omits still resolve to something sane. */
   rebase: (baseline: TDoc, fresh: TDoc) => TDoc;
   apply: (target: TDoc, diff: TDiff) => TDoc;
-  save: (next: TDoc, rev: number, carryOver: Record<string, unknown>) => Promise<StoreSaveResult>;
+  save: (next: TDoc, rev: string, carryOver: Record<string, unknown>) => Promise<StoreSaveResult>;
   maxAttempts?: number;
 }): Promise<PushOutcome<TDoc>> {
   if (opts.isEmpty(opts.diff)) return { ok: false, reason: "nothing-to-push" };
@@ -107,7 +111,7 @@ export async function pushWithRebase<TDoc, TDiff>(opts: {
     const fresh = await opts.fetchFresh();
     const base = fresh ? opts.rebase(opts.baseline, fresh.doc) : opts.baseline;
     const next = opts.apply(base, opts.diff);
-    const result = await opts.save(next, fresh?.rev ?? 0, fresh?.raw ?? {});
+    const result = await opts.save(next, fresh?.rev ?? "0", fresh?.raw ?? {});
     if (result.ok) return { ok: true, next, rev: result.rev, attempts: attempt + 1 };
     if (!result.conflict) return { ok: false, reason: "transport" };
     // Someone else's write landed between our read and our write — loop and

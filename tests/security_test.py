@@ -204,5 +204,26 @@ t("fm-data uses the factory",
 t("no bespoke fm-data PUT handler",
   "async def fm_data_put_handler" in _proxy_src, False)
 
+# The revision must stay a STRING. As an int of nanoseconds (~1.8e18) it was
+# ~198x past JavaScript's MAX_SAFE_INTEGER, so every browser client rounded it
+# and every conditional write was rejected 409 forever — the store became
+# readable but permanently unwritable. Nothing here parses it as a number.
+_tmp_rev = os.path.join(tempfile.mkdtemp(), "rev-probe.json")
+proxy._write_json_store(_tmp_rev, '{"a":1}')
+_rev = proxy._store_revision(_tmp_rev)
+t("revision is a string", isinstance(_rev, str), True)
+t("revision of an absent store is a string", isinstance(proxy._store_revision("/nope/x"), str), True)
+# Positive proof of WHY it must stay a string: the underlying value is past
+# the range a JS number can hold exactly, so any numeric representation is
+# lossy. If someone "simplifies" this back to an int, this fails.
+t("revision is past JS MAX_SAFE_INTEGER (so a number would be lossy)",
+  int(_rev) > 2**53 - 1, True)
+t("revision would be corrupted if sent as a number",
+  str(int(float(_rev))) != _rev, True)
+t("revision changes when the store is written",
+  (lambda before: (time.sleep(0.01),
+                   proxy._write_json_store(_tmp_rev, '{"a":2}'),
+                   proxy._store_revision(_tmp_rev) != before)[-1])(_rev), True)
+
 print(f"\n{PASSED} passed, {FAILED} failed")
 sys.exit(1 if FAILED else 0)

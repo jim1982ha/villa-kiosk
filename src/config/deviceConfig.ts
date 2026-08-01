@@ -231,7 +231,7 @@ export function baselineFromServer(server: Partial<SharedDeviceConfig>): SharedD
  *  between (see saveSharedConfig). */
 export interface SharedConfigFetch {
   config: Partial<SharedDeviceConfig>;
-  rev: number;
+  rev: string;
   /** The server document EXACTLY as stored, unparsed. Carried back into the
    *  next write so keys this app version doesn't know about survive it.
    *
@@ -260,7 +260,7 @@ export async function fetchSharedConfig(): Promise<SharedConfigFetch | null> {
       ? (data.config as Record<string, unknown>) : {};
     return {
       config: parseSharedConfig(data.config),
-      rev: typeof data.rev === "number" ? data.rev : 0,
+      rev: typeof data.rev === "string" ? data.rev : "0",
       raw,
     };
   } catch {
@@ -269,9 +269,9 @@ export async function fetchSharedConfig(): Promise<SharedConfigFetch | null> {
 }
 
 export type SaveSharedConfigResult =
-  | { ok: true; rev: number }
+  | { ok: true; rev: string }
   | { ok: false; conflict: false }
-  | { ok: false; conflict: true; server: Partial<SharedDeviceConfig>; rev: number };
+  | { ok: false; conflict: true; server: Partial<SharedDeviceConfig>; rev: string };
 
 /** Write the shared device config (owner only — the server 403s other roles).
  *  `expectedRev` is the revision this write was computed against; pass null
@@ -281,7 +281,7 @@ export type SaveSharedConfigResult =
  *  the fresher copy back so it can rebase its own diff and retry. */
 export async function saveSharedConfig(
   config: SharedDeviceConfig,
-  expectedRev: number | null,
+  expectedRev: string | null,
   /** The raw server document this write was computed against (see
    *  SharedConfigFetch.raw) — its unknown keys are written back untouched so
    *  this client can't delete a field a newer version added. */
@@ -302,12 +302,12 @@ export async function saveSharedConfig(
         ok: false,
         conflict: true,
         server: parseSharedConfig(data.config),
-        rev: typeof data.rev === "number" ? data.rev : 0,
+        rev: typeof data.rev === "string" ? data.rev : "0",
       };
     }
     if (!resp.ok) return { ok: false, conflict: false };
     const data = (await resp.json().catch(() => ({}))) as { rev?: unknown };
-    return { ok: true, rev: typeof data.rev === "number" ? data.rev : 0 };
+    return { ok: true, rev: typeof data.rev === "string" ? data.rev : "0" };
   } catch {
     return { ok: false, conflict: false };
   }
