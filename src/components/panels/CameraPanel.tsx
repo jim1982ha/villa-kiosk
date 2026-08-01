@@ -633,7 +633,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               Vertical (phone-landscape) rail order deliberately differs from
               this DOM/portrait order — see vOrder: Close top, Fullscreen 2nd,
               Next above Previous, this detection toggle last. Portrait order
-              (this DOM order) is untouched. */}
+              (this DOM order) is untouched.
+              No explicit icon `size` on any button below — .camera-controls
+              .icon-btn svg (styles.css) sizes every icon in this cluster to
+              a consistent 55% of its button uniformly, at every breakpoint,
+              instead of a hand-picked pixel value per icon. */}
           {linked && (
             <button
               className={`icon-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
@@ -644,7 +648,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               title={`${linked.label} — ${linked.isOn ? "turn off" : "turn on"}`}
               style={vOrder(5)}
             >
-              <Power size={26} />
+              <Power />
             </button>
           )}
           {canCycle && (
@@ -662,7 +666,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                 aria-label="Previous camera"
                 style={vOrder(4)}
               >
-                <ChevronLeft size={28} />
+                <ChevronLeft />
               </button>
               <button
                 className="icon-btn cam-next has-hold-action"
@@ -676,7 +680,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                 aria-label="Next camera — hold to pick a camera"
                 style={vOrder(3)}
               >
-                <ChevronRight size={28} />
+                <ChevronRight />
               </button>
             </>
           )}
@@ -688,11 +692,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               aria-label={isFs ? "Exit fullscreen" : "Fullscreen"}
               style={vOrder(2)}
             >
-              {isFs ? <Minimize2 size={26} /> : <Maximize2 size={26} />}
+              {isFs ? <Minimize2 /> : <Maximize2 />}
             </button>
           )}
           <button className="icon-btn close" onClick={onClose} style={vOrder(1)}>
-            <X size={28} />
+            <X />
           </button>
         </div>
       </div>

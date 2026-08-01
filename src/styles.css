@@ -1133,7 +1133,31 @@ input[type="range"]::-moz-range-thumb {
   display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;
   margin-left: auto;
 }
-.camera-controls .icon-btn { width: 56px; height: 56px; }
+/* This bar is permanently solid black (.camera-bottom-row) — a fixed video-
+   viewer convention, not the app's own light/dark theme. The base .icon-btn's
+   THEME-driven glass (--bg-panel, near-opaque WHITE in light theme) read as a
+   pale, washed-out blob floating on black for a light-theme user while a
+   dark-theme user saw a normal-looking dark glass button — the identical
+   button looking different depending on the app theme, on a background that
+   never changes with it. Fixed, theme-independent white-on-dark glass here
+   instead — the standard frosted-circle-on-video look every native camera/
+   photo app uses, and now identical for every user regardless of theme.
+   One rule for the whole cluster (linked/prev/next/fullscreen/close) rather
+   than restyling each button separately. */
+.camera-controls .icon-btn {
+  width: 56px; height: 56px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+.camera-controls .icon-btn:hover { background: rgba(255, 255, 255, 0.24); }
+.camera-controls .icon-btn:active { transform: scale(0.94); }
+/* Icon fills a consistent share of the button at every size this cluster
+   ever renders at (56px desktop down to a 34px floor in the phone-landscape
+   rail — see that media query's own clamp()) — one rule instead of hardcoding
+   a pixel size per icon that only roughly matched the button box. */
+.camera-controls .icon-btn svg { width: 55%; height: 55%; }
 /* Linked-entity toggle in the camera's control cluster — green while on, so
    it reads as a live switch rather than another navigation button. */
 .camera-controls .camera-linked-btn.on {
@@ -1216,7 +1240,9 @@ input[type="range"]::-moz-range-thumb {
     width: clamp(34px, 12dvh, 56px);
     height: clamp(34px, 12dvh, 56px);
   }
-  .camera-controls .icon-btn svg { width: 55%; height: 55%; }
+  /* svg sizing is the base (non-landscape) rule now — same 55% at every
+     button size this cluster ever renders at, so it doesn't need repeating
+     here too. */
 
   /* Status rail down the left edge — a genuinely vertical bar (StateTimeline's
      `vertical` lays its segments on the Y axis), NOT the horizontal one

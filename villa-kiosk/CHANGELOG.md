@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.56.0
+
+### Changes
+- **Camera panel control buttons (linked-entity toggle, prev/next, fullscreen, close) now have a fixed, theme-independent dark-glass style instead of inheriting the app's THEME-driven `.icon-btn` chrome.** The camera bar is always solid black (`.camera-bottom-row`) — a fixed video-viewer convention, not the app's own light/dark theme — but the base `.icon-btn` glass (`--bg-panel`, a near-opaque WHITE in light theme) still applied there, so a light-theme user saw a pale, washed-out blob floating on black while a dark-theme user saw a normal-looking dark glass button: the identical control looked different depending on the app theme, on a background that never changes with it. Now a single fixed white-on-dark glass rule covers the whole cluster — the standard frosted-circle-on-video look native camera/photo apps use, and now identical for every user regardless of theme.
+- **Icon sizing in that same cluster is one CSS rule now** (55% of the button, at every size the cluster ever renders at — 56px desktop down to a 34px floor on the phone-landscape rail) **instead of a hand-picked pixel size hardcoded per icon** that only roughly matched. Removed the now-redundant landscape-only duplicate of the same rule.
+- Typecheck and production build clean.
+
 ## 2.55.0
 
 ### Changes
