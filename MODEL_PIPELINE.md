@@ -311,6 +311,15 @@ matching `.rooms.json` the script also writes next to the GLB alongside it
 that file on its own afterwards to update just the room data without
 re-uploading the model. Every kiosk then loads that same central file
 automatically, no per-device upload.
+
+That sidecar is named after the **`.sh3d`**, not the GLB (pipeline ≥2.15.0):
+its contents come from the floor plan and are identical whatever bake size
+produced the GLB, so a multi-size run writes one file instead of one per size.
+Pass `--no-room-sidecar` to skip it altogether (redundant for any current app,
+which reads the copy embedded in the GLB), and `--no-atlas-png` to keep the
+`villa_bake_atlas[_night].png` inspection copies out of the output folder.
+Both work with the sizes wrapper: `blender_pipeline.py 1024 2048 4096
+--no-atlas-png`.
 **Standalone**: if a central model isn't already detected automatically (see
 the add-on note above), Advanced Settings → *3D model source* has a
 per-browser uploader instead.
