@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.75.0
+
+### Changes
+- **The GLB download now starts before React mounts**, rather than only while the profile screen is showing. The common case is that the screen never shows: a returning device restores its profile and renders straight through to the villa, so every ordinary reload — which on Android happens whenever the app is backgrounded — paid the download again with nothing overlapping it. It is a plain fetch with no DOM, scene or decode work, so it cannot make anything on screen hesitate.
+- **Load telemetry now records whether the pre-download was actually used** (`prefetched: true/false`). Without it, "is the pre-load working?" was unanswerable from a device you don't hold: the phase timings alone can't tell a fast network from a prefetch that finished before login.
+
+### Measured, and worth stating plainly
+- **Downloading is 3% of the wait. Decoding is 97%.** Across 26 real loads from this installation: fetch median 119ms, parse median 3,738ms. `public_model_access` and every other download optimisation are therefore worth about a tenth of a second on this network — the setting works exactly as documented, it simply has almost nothing left to save here. The remaining time splits roughly evenly between Babylon's own glTF/Draco import (~1.6s) and this app's post-processing (~2.0s), both main-thread work that no amount of pre-downloading can overlap.
+
 ## 2.74.0
 
 ### Changes

@@ -174,6 +174,8 @@ export default function BabylonCanvas({
         noteLoadPhase("fetch-config");
         const addonCfg = await fetchAddonConfig();
         let data: ArrayBuffer | null = null;
+        /** Whether the profile screen's background download was reusable. */
+        let usedPrefetch = false;
         let fromAddon = false;
         let loadedSource = "(per-browser IndexedDB upload)";
         const tFetchStart = performance.now();
@@ -196,6 +198,7 @@ export default function BabylonCanvas({
           // (prefetch never started, targeted a different/stale URL, or
           // failed) so behaviour is identical to before whenever it can't help.
           const claimed = claimPrefetch(modelUrl);
+          usedPrefetch = claimed !== null;
           if (claimed) {
             const unsubscribe = claimed.onProgress((f) => { if (!cancelled) setProgress(f); });
             try {
@@ -288,6 +291,15 @@ export default function BabylonCanvas({
         // DEVICE, so a phone that parses 5x slower than the desktop shows up
         // as itself rather than as an anecdote.
         reportTelemetry("load", {
+          // Did the background download started on the profile screen actually
+          // get used? Without this, "is the pre-load working?" was a question
+          // nobody could answer from a device they don't hold — the phase
+          // timings alone can't distinguish a fast network from a prefetch
+          // that was already finished before login. `prefetched:false` with a
+          // large fetchMs means the head start was lost (no session yet AND
+          // public_model_access off, an unauthorised /model/, or a model
+          // replaced between the two).
+          prefetched: usedPrefetch,
           bytes: data.byteLength,
           meshes: meshNames.length,
           fetchMs: Math.round(tFetchDone - tFetchStart),

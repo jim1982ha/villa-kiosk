@@ -4,6 +4,7 @@ import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { installGlobalErrorCapture } from "./utils/diagnostics";
 import { installLifecycleTelemetry } from "./utils/telemetry";
+import { startModelPrefetch } from "./utils/modelPrefetch";
 import "./styles.css";
 
 // Record uncaught errors / rejections to localStorage so one that fires just
@@ -12,6 +13,24 @@ installGlobalErrorCapture();
 // Page-lifecycle + WebGL signals — the trail that explains an iOS white
 // screen after an app switch (see telemetry.ts / SceneManager.handlePageHide).
 installLifecycleTelemetry();
+
+// Start pulling the villa's GLB bytes NOW — before React mounts, before any
+// screen has decided whether a passcode is needed. It is a plain fetch(): no
+// DOM, no scene, no decode, so it cannot make anything on screen hesitate,
+// and the bytes are handed to the real loader when it gets there
+// (utils/modelPrefetch.claimPrefetch).
+//
+// ProfileGate already did this, but ONLY while its screen was showing — and
+// the common case is that it never shows. A returning device restores its
+// profile from sessionStorage and renders straight through to the villa, so
+// every ordinary reload paid the full download again with nothing overlapping
+// it. That is the reload path this app takes constantly: on Android the PWA
+// is evicted and reloaded whenever it goes to the background.
+//
+// If nothing is authorised yet the call fails harmlessly and resets itself;
+// ProfileGate's own retry (on the gate screen, and again the moment a profile
+// is authorised) still covers that case.
+startModelPrefetch();
 
 // Register the PWA service worker (best-effort). Skip it under HA Ingress: the
 // add-on is served from a per-session path (/api/hassio_ingress/<token>/), so a
