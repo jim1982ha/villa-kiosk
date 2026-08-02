@@ -10,8 +10,7 @@ import { resolveSiteTitle } from "@/config/AppConfig";
 import { useProfile } from "@/auth/ProfileContext";
 import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/roles";
 import { pinRequired as fetchPinRequired, verify, openSession } from "@/auth/PinVerifier";
-import { startModelPrefetch, onPrefetchAvailable } from "@/utils/modelPrefetch";
-import { isIOS } from "@/utils/diagnostics";
+import { startModelPrefetch } from "@/utils/modelPrefetch";
 import PinPad from "./PinPad";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
@@ -44,74 +43,6 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!role || switching) startModelPrefetch();
   }, [role, switching]);
-
-  // Flips true once startModelPrefetch above has CONFIRMED /model/ is
-  // reachable right now — at that point it's safe to mount `children` (the
-  // real Babylon scene) BEFORE login, so the multi-second Draco-decode +
-  // mesh-indexing pass also runs while the user is still on this screen.
-  //
-  // THIS IS AN INFORMED, EXPLICIT TRADE-OFF, not a "solved" problem: that
-  // decode is largely synchronous, main-thread-blocking work. v2.29.0 did
-  // this and froze clicks on this screen for the whole decode; v2.30.1
-  // reverted it for exactly that reason. v2.30.2 restores it at the user's
-  // explicit request after being told the only way to make pre-login decode
-  // GENUINELY non-blocking is moving the whole Babylon layer into a Web
-  // Worker via OffscreenCanvas — a large separate rewrite, not attempted
-  // 2.76.0 narrows the window rather than closing it: the preload no longer
-  // starts while a passcode pad is open, and waits for the browser to go idle
-  // first, so the screen paints and early taps land before anything heavy
-  // begins. The decode itself is unchanged and still runs on the main thread.
-  //
-  // What v2.30.2 shipped instead: SceneManager.loadModel now
-  // yields the main thread between its major top-level steps (see its own
-  // comments), which shrinks the longest uninterrupted freeze but does NOT
-  // eliminate it — expect this screen to still stutter/pause during a
-  // preload, just for less time and less continuously than before.
-  //
-  // EXCLUDES iOS entirely, for an unrelated reason: iOS Safari/WebView has a
-  // known, real per-tab memory ceiling that a heavy villa's Draco decode +
-  // GPU upload can exceed (see diagnostics.ts's crash-loop guard). Loading
-  // early there would retrigger that crash automatically on every reload,
-  // before the user even reaches the PIN screen. iOS always loads only
-  // after login, regardless of this trade-off.
-  const [modelPreloadable, setModelPreloadable] = useState(false);
-  useEffect(() => {
-    if (role && !switching) return; // already rendering children unconditionally below
-    if (isIOS()) return;
-    return onPrefetchAvailable(() => setModelPreloadable(true));
-  }, [role, switching]);
-
-  // WHEN that preload is allowed to begin. The decode is worth overlapping
-  // with this screen, but not at the cost of this screen — a passcode pad
-  // that drops digits is worse than a spinner, because the user cannot tell
-  // a stutter from a mis-tap and simply types it again.
-  //
-  // Two rules, both about protecting input rather than making the decode
-  // faster:
-  //   * never START while a passcode pad is open. Entering four digits is
-  //     the most timing-sensitive thing anyone does on this screen, and it
-  //     is over in a couple of seconds — the preload can wait for it.
-  //   * wait for the browser to be idle first, so the profile screen paints
-  //     and its first taps land before anything heavy begins. The timeout
-  //     keeps it bounded on a device that never reports idle.
-  // Latched: once the decode has started, unmounting it would throw away the
-  // work and dispose a half-built scene, which helps nobody.
-  const [preloadStarted, setPreloadStarted] = useState(false);
-  useEffect(() => {
-    if (preloadStarted || !modelPreloadable || pending) return;
-    // Schedule and cancel are paired here rather than each sniffing the
-    // window separately: requestIdleCallback is a recent arrival in Safari,
-    // so this app must assume it may be missing, and a cleanup that checks a
-    // DIFFERENT global than the one that scheduled could cancel with the
-    // wrong function. Whichever branch runs owns its own teardown.
-    const start = () => setPreloadStarted(true);
-    if (typeof window.requestIdleCallback === "function") {
-      const id = window.requestIdleCallback(start, { timeout: 1500 });
-      return () => window.cancelIdleCallback?.(id);
-    }
-    const id = window.setTimeout(start, 200);
-    return () => window.clearTimeout(id);
-  }, [preloadStarted, modelPreloadable, pending]);
 
   // Which profiles are gated — fetched once per visit to the select screen.
   // Until the answer arrives we assume every profile needs a PIN (fail closed).
@@ -147,7 +78,28 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   // Distinct from isSwitch: only isSwitch means there's a session to fall
   // back to (drives the Cancel button below) — modelPreloadable alone (a
   // first-ever, not-yet-logged-in visit) has nothing to cancel back to.
-  const showChildrenEarly = isSwitch || preloadStarted;
+  // Only when SWITCHING profile — never before a first sign-in.
+  //
+  // The villa's BYTES are still fetched as early as possible (main.tsx, and
+  // the effect above): that is a plain download and costs the screen nothing.
+  // What no longer happens before sign-in is the DECODE.
+  //
+  // 2.76.0 tried to keep the pre-login decode while protecting input, by not
+  // starting it during passcode entry and waiting for an idle moment. It
+  // isn't enough, and the reason is simple arithmetic: choosing a profile
+  // takes longer than the idle wait, so the decode has already started by the
+  // time the pad opens — and a decode that has started cannot be paused, it
+  // is synchronous main-thread work.
+  //
+  // So the trade is settled the other way, as the owner asked: a spinner
+  // AFTER sign-in beats a passcode pad that drops digits, because a stutter
+  // is indistinguishable from a mis-tap and the user just types it again.
+  // This also makes every platform behave alike — iOS has always loaded only
+  // after login (memory ceiling), and the target device is an iPad.
+  //
+  // `preloadStarted` is still computed above: it is what decides when the
+  // BYTES may be fetched, which is free. Only the DECODE waits.
+  const showChildrenEarly = isSwitch;
 
   const choose = (r: Role) => {
     setGateError(null);

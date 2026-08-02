@@ -266,7 +266,9 @@ export default function BabylonCanvas({
         // The heavy step and the usual iOS OOM point: Draco decode + texture
         // decode + GPU upload of the whole villa.
         noteLoadPhase("import-mesh");
-        const { importMs, postMs, phases } = await manager.loadModel(data);
+        // The versioned URL is the geometry's identity: it changes the instant a
+        // different GLB is uploaded, so cached probes cannot outlive their model.
+        const { importMs, postMs, phases } = await manager.loadModel(data, loadedSource);
         if (cancelled) return;
         noteLoadPhase("post-process");
         const tParseDone = performance.now();

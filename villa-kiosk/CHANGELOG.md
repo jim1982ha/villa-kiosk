@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.79.0
+
+### Performance — measured, then fixed
+- **The villa's floor probes are now reused across reloads, removing ~950ms from every load after the first.** 2.77.0's instrumentation named the culprit precisely: the downward raycasts that find the floor under each light fixture were **72% of `indexMeshes` and 27% of the entire visible load** — 42 rays at ~23ms each, because every one is a linear scan over a 1.4-million-triangle structure mesh with no octree. The in-memory bucket cache was already doing its job (180 requests collapsed to 42 rays); what it could not do is survive a reload — and reloads are the common case here, since Android evicts the PWA whenever it is backgrounded, so a phone paid this on every return to the app. The answers are a pure function of the geometry, so they are now kept and keyed by the **versioned model URL**: upload a different GLB and the key changes, so a stale answer cannot outlive the model it describes.
+
+### Fixed
+- **The profile and passcode screens no longer freeze — the villa is decoded only after sign-in.** 2.76.0 tried to keep the pre-login decode while protecting input, by not starting it during passcode entry and waiting for an idle moment. That wasn't enough, for a reason that is simple arithmetic: choosing a profile takes longer than the idle wait, so the decode had already started by the time the pad opened — and a decode in progress cannot be paused, it is synchronous main-thread work. The trade is now settled the other way: a spinner after sign-in beats a passcode pad that drops digits, because a stutter is indistinguishable from a mis-tap and the digit just gets typed again. Every platform now behaves alike, which matters because iOS has always loaded only after login (memory ceiling) and the target device is an iPad. The model's BYTES are still fetched as early as possible — that is a plain download and costs the screen nothing.
+
+### Diagnostics
+- **The add-on now logs the options it actually read at startup**, and whether `public_model_access` resolved ON or OFF. A toggle that reverts after a restart could not be settled by argument — every theory about it was either wrong or unfalsifiable from outside — so the server's own view of its configuration is now a fact in the add-on log. Passcodes are reported as set/unset and never echoed.
+
 ## 2.78.1
 
 ### Changes

@@ -1135,6 +1135,61 @@ export class EntityVisuals {
    * key, because within one bucket the excluded mesh is the fixture that is
    * doing the asking and is never the floor being sought.
    */
+  /** Identifies the geometry the probe answers belong to (the versioned model
+   *  URL). Null disables persistence — every load re-probes, as before. */
+  private probeCacheKey: string | null = null;
+
+  /**
+   * Reuse the previous load's floor probes when the geometry is byte-identical.
+   *
+   * Measured on this villa: the downward raycasts are ~950ms — 72% of
+   * indexMeshes and 27% of the whole visible load — because each one is a
+   * linear scan over a 1.4-million-triangle structure mesh with no octree.
+   * The in-memory bucket cache already collapses ~180 requests to 42 rays;
+   * what it cannot do is survive a reload, and reloads are the common case
+   * here (Android evicts the PWA whenever it is backgrounded, so a phone pays
+   * this on every return to the app).
+   *
+   * The answers are a pure function of the geometry, and the key is the
+   * VERSIONED model URL — it changes the moment a different GLB is uploaded,
+   * so a stale answer cannot outlive the model it describes. Recentring and
+   * scale normalisation run before this and are deterministic, so the same
+   * bytes really do produce the same world positions.
+   *
+   * Deliberately localStorage and not IndexedDB: 42 short strings, needed
+   * synchronously at the start of indexMeshes.
+   */
+  setProbeCacheKey(key: string | null): void {
+    this.probeCacheKey = key ? `vk.probe.${key}` : null;
+  }
+
+  private loadProbeCache(): void {
+    this.surfaceBelowCache.clear();
+    if (!this.probeCacheKey) return;
+    try {
+      const raw = localStorage.getItem(this.probeCacheKey);
+      if (!raw) return;
+      for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, number | null>)) {
+        this.surfaceBelowCache.set(k, v);
+      }
+    } catch { /* unreadable or quota-evicted — just re-probe */ }
+  }
+
+  private saveProbeCache(): void {
+    if (!this.probeCacheKey) return;
+    try {
+      // One model's probes at a time: an older GLB's entries are dead weight
+      // the moment a new one is uploaded, and this runs on devices where
+      // storage pressure is real.
+      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+        const k = localStorage.key(i);
+        if (k?.startsWith("vk.probe.") && k !== this.probeCacheKey) localStorage.removeItem(k);
+      }
+      localStorage.setItem(
+        this.probeCacheKey, JSON.stringify(Object.fromEntries(this.surfaceBelowCache)));
+    } catch { /* quota / private mode — the cache is an optimisation, not state */ }
+  }
+
   private surfaceBelow(x: number, y: number, z: number, exclude?: AbstractMesh): number | null {
     const key = `${Math.round(x / 4)}:${Math.round(y)}:${Math.round(z / 4)}`;
     const cached = this.surfaceBelowCache.get(key);
@@ -1158,9 +1213,9 @@ export class EntityVisuals {
 
   /** Build the reverse index entity_id -> meshes from the loaded GLB. */
   indexMeshes(meshes: AbstractMesh[]): void {
-    // Geometry may have changed since the last pass — start from a clean probe
-    // cache rather than reusing answers about a scene that no longer exists.
-    this.surfaceBelowCache.clear();
+    // Restore the previous load's probes when they describe THIS geometry
+    // (see setProbeCacheKey); otherwise this is a plain clear, as before.
+    this.loadProbeCache();
     this.stats = { probeMs: 0, probeRays: 0, probeHits: 0, labelsMs: 0 };
     // Dispose previously created light sources + shadow maps before re-indexing.
     this.disposeLights();
@@ -1472,6 +1527,7 @@ export class EntityVisuals {
     this.rebuildLabels(); // labels are always shown
     this.stats.labelsMs = Math.round(performance.now() - tLabels);
     this.stats.probeMs = Math.round(this.stats.probeMs);
+    this.saveProbeCache();
   }
 
   /** A rectangular LED cove (e.g. the dining-table or sofa-area perimeter) is

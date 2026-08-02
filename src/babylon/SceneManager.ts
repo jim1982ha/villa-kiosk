@@ -1073,9 +1073,12 @@ export class SceneManager {
    * Worker, a separate, much larger undertaking. This only shortens the
    * longest unbroken freeze and gives input a few more chances to land.
    */
-  async loadModel(data: ArrayBuffer): Promise<{
+  async loadModel(data: ArrayBuffer, modelKey?: string): Promise<{
     importMs: number; postMs: number; phases?: Record<string, number>;
   }> {
+    // Lets indexMeshes reuse the previous load's floor probes when the model
+    // is byte-identical — see EntityVisuals.setProbeCacheKey.
+    this.visuals.setProbeCacheKey(modelKey ?? null);
     const result = await loadModelInto(this.scene, data, this.config.extraGlassHints ?? []);
     if (this.disposed) return { importMs: result.importMs, postMs: 0 }; // unmounted mid-load
     const tPostStart = performance.now();
