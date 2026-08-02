@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.73.3
+
+### Changes
+- **Removed the stray "Choose files / No file chosen" control that appeared under the photo strip.** It was the hidden file input the camera button triggers, made visible by 2.73.1: that release styled form controls with `.fm-field input`, a DESCENDANT selector, and its `display: block` overrode the input's `hidden` attribute. Two separate mistakes, both now fixed properly rather than patched at the symptom.
+- **Form-control styling is scoped to direct children.** A field styles its own control, not whatever a nested component renders inside it. The descendant form also reached DeviceSearchPicker's search box — which has its own styling and doesn't want this one — so the device pickers in the fault and spend forms were being restyled too.
+- **`hidden` now means hidden, globally.** The attribute is a UA rule at the lowest possible precedence, so any author rule setting `display` silently defeats it, and the markup reads as correct the whole time. This is the second occurrence (the collapsed offline-devices list kept showing its chips in 2.70.0, for exactly the same reason), so it is now guarded once for the whole app instead of being fixed per site. Recorded in the project's gotchas so the next `display` rule doesn't reintroduce it.
+
 ## 2.73.2
 
 ### Changes
