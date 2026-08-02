@@ -70,6 +70,10 @@ export default function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [configEditorOpen, setConfigEditorOpen] = useState(false);
   const [facilityOpen, setFacilityOpen] = useState(false);
+  /** Device the Facility modal should open a blank fault for — set by a
+   *  panel's "report a fault" shortcut, cleared as soon as the modal has
+   *  consumed it so reopening Facility later doesn't resurrect the form. */
+  const [faultForEntity, setFaultForEntity] = useState<string | null>(null);
   // When Advanced Settings is opened from a device panel's edit shortcut, this
   // holds the entity_id to pre-filter the entity table on (null = opened from
   // Settings, so "Back" returns to Settings rather than just closing).
@@ -621,6 +625,16 @@ export default function Dashboard() {
                   setConfigEditorOpen(true);
                 }
               : undefined,
+            // Same capability that gates the Facility workspace itself —
+            // offering a shortcut into a screen the profile can't open would
+            // be a dead end.
+            onReportFault: canManageFacility
+              ? () => {
+                  setActivePanel(null);
+                  setFaultForEntity(activePanel.entityId);
+                  setFacilityOpen(true);
+                }
+              : undefined,
             // The device's exact map badge (same glyph/colour as the 3D view),
             // shown in the panel header and — for editors — clickable to recolour.
             badge: (() => {
@@ -747,9 +761,11 @@ export default function Dashboard() {
 
       {facilityOpen && canManageFacility && (
         <FacilityModal
-          onClose={() => setFacilityOpen(false)}
+          onClose={() => { setFacilityOpen(false); setFaultForEntity(null); }}
           mappedEntityIds={effectiveMappedEntityIds}
           onOpenEntity={(id) => { setFacilityOpen(false); openEntityPanel(id); }}
+          reportFaultFor={faultForEntity ?? undefined}
+          onFaultFormOpened={() => setFaultForEntity(null)}
         />
       )}
 

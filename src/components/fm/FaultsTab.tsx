@@ -10,14 +10,14 @@
 // shortlist), with free text for a device that isn't in the villa's list at
 // all — a spare part, or something not yet wired into Home Assistant.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Wrench } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { displayLabelFor } from "@/config/EntityMap";
 import { useFmData } from "@/fm/FmDataContext";
 import { localStamp, ticketStats } from "@/fm/fmEngine";
-import type { FmTicketStatus } from "@/fm/fmTypes";
+import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
@@ -25,12 +25,16 @@ import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 const NEXT: Record<FmTicketStatus, FmTicketStatus | null> = {
   open: "in_progress", in_progress: "resolved", resolved: null,
 };
+/** Read-only evidence strips never call back — a stable identity keeps the
+ *  memoised row from re-rendering on every parent update. */
+const NO_PHOTO_EDIT = () => {};
+
 const LABEL: Record<FmTicketStatus, string> = {
   open: "Open", in_progress: "In progress", resolved: "Resolved",
 };
 
 export default function FaultsTab(
-  { onOpenEntity, unavailableIds, deviceOptions }: {
+  { onOpenEntity, unavailableIds, deviceOptions, reportFaultFor, onFaultFormOpened }: {
     onOpenEntity: (id: string) => void;
     /** Computed once by FacilityModal via unavailableDeviceIds and passed in,
      *  rather than recomputed here — this tab used to derive its own
@@ -44,19 +48,38 @@ export default function FaultsTab(
      *  answer to "what is a device", which is how the picker came to list
      *  entries no other screen showed. */
     deviceOptions: DeviceOption[];
+    /** Open the form pre-pointed at this device (see FacilityModal). */
+    reportFaultFor?: string;
+    onFaultFormOpened?: () => void;
   },
 ) {
   const { data, addTicket, updateTicket, removeTicket } = useFmData();
   const { entities } = useHA();
   const { config } = useConfig();
   const [adding, setAdding] = useState(false);
+  /** Id of the fault being edited, or null when the form is raising a new one.
+   *  ONE form serves both: a fault raised in a hurry from a phone (often just
+   *  a device and four words) is exactly the record someone later needs to
+   *  correct or add photos to, and a second, subtly different edit form is how
+   *  the two drift apart. */
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [deviceText, setDeviceText] = useState("");
   const [entityId, setEntityId] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
 
   const resetForm = () => {
-    setAdding(false); setTitle(""); setDeviceText(""); setEntityId(""); setPhotoIds([]);
+    setAdding(false); setEditingId(null);
+    setTitle(""); setDeviceText(""); setEntityId(""); setPhotoIds([]);
+  };
+
+  const openEditor = (t: FmTicket) => {
+    setEditingId(t.id);
+    setAdding(true);
+    setTitle(t.title);
+    setEntityId(t.entityId ?? "");
+    setDeviceText(t.deviceLabel ?? (t.entityId ? label(t.entityId) : ""));
+    setPhotoIds(t.photoIds);
   };
 
   const stats = ticketStats(data.tickets);
@@ -84,6 +107,27 @@ export default function FaultsTab(
   };
   const clearDevice = () => { setEntityId(""); setDeviceText(""); };
 
+  // Arrived from a device panel's fault shortcut: open the form with that
+  // device already chosen. Runs once per request — the parent clears it — so
+  // it can never fight the operator's own edits afterwards. The title is left
+  // EMPTY on purpose: selectDevice's "<device> offline" guess is right for a
+  // device HA reports as down, but someone reporting a fault by hand is
+  // usually describing something HA cannot see at all (a dripping tap, a
+  // cracked panel), and a pre-written wrong title tends to get saved as-is.
+  useEffect(() => {
+    if (!reportFaultFor) return;
+    setAdding(true);
+    setEditingId(null);
+    setEntityId(reportFaultFor);
+    setDeviceText(label(reportFaultFor));
+    setTitle("");
+    setPhotoIds([]);
+    onFaultFormOpened?.();
+    // label() reads live config/entities; re-running on those would re-open
+    // the form mid-edit. The request id is the only trigger that matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportFaultFor]);
+
   return (
     <div className="fm-stack">
       <div className="fm-summary">
@@ -107,8 +151,8 @@ export default function FaultsTab(
 
       {adding && (
         <div className="fm-form">
-          <h3>Raise a fault</h3>
-          {broken.length > 0 && (
+          <h3>{editingId ? "Edit fault" : "Raise a fault"}</h3>
+          {broken.length > 0 && !editingId && (
             <div className="fm-field">
               <span>Devices Home Assistant reports as offline</span>
               <div className="fm-chiprow">
@@ -155,16 +199,21 @@ export default function FaultsTab(
               className="btn primary"
               disabled={!title.trim()}
               onClick={async () => {
-                await addTicket({
+                const fields = {
                   title: title.trim(),
                   entityId: entityId || undefined,
                   deviceLabel: deviceText.trim() || undefined,
                   room: entityId ? config.entityMap[entityId]?.room : undefined,
                   photoIds,
-                });
+                };
+                // Same fields either way — updateTicket leaves status,
+                // openedAt and resolvedAt alone, so correcting a description
+                // never rewrites the fault's history.
+                if (editingId) await updateTicket(editingId, fields);
+                else await addTicket(fields);
                 resetForm();
               }}
-            >Raise fault</button>
+            >{editingId ? "Save changes" : "Raise fault"}</button>
           </div>
         </div>
       )}
@@ -186,6 +235,7 @@ export default function FaultsTab(
             className={`state-${t.status === "resolved" ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}
             intent={{ title: "Erase this fault", detail: t.title }}
             erase={(token) => removeTicket(t.id, token)}
+            onOpen={() => openEditor(t)}
           >
             <div className="fm-row-main">
               <div className="fm-row-title">
@@ -195,13 +245,17 @@ export default function FaultsTab(
               <div className="fm-row-sub muted">
                 Opened {localStamp(t.openedAt)}
                 {t.resolvedAt && ` · resolved ${localStamp(t.resolvedAt)}`}
-                {t.photoIds.length > 0 && ` · ${t.photoIds.length} photo(s)`}
               </div>
+              {/* The photos themselves, not a count of them. "3 photo(s)"
+                  is a claim; a thumbnail you can open is the evidence. */}
+              {t.photoIds.length > 0 && (
+                <EvidenceRow photoIds={t.photoIds} onChange={NO_PHOTO_EDIT} disabled />
+              )}
               {(t.entityId || t.deviceLabel) && (
                 <div className="fm-chiprow">
                   {t.entityId ? (
                     <button className="fm-entity-chip" title={t.entityId}
-                      onClick={() => onOpenEntity(t.entityId!)}>
+                      onClick={(e) => { e.stopPropagation(); onOpenEntity(t.entityId!); }}>
                       {t.deviceLabel ?? label(t.entityId)}
                     </button>
                   ) : (
@@ -218,7 +272,8 @@ export default function FaultsTab(
               {LABEL[t.status]}
             </span>
             {NEXT[t.status] && (
-              <button className="btn ghost" onClick={() => void updateTicket(t.id, { status: NEXT[t.status]! })}>
+              <button className="btn ghost"
+                onClick={(e) => { e.stopPropagation(); void updateTicket(t.id, { status: NEXT[t.status]! }); }}>
                 Mark {LABEL[NEXT[t.status]!].toLowerCase()}
               </button>
             )}

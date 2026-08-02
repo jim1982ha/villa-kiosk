@@ -47,6 +47,10 @@ interface FmDataContextValue {
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
   ) => Promise<void>;
   addCost: (c: Omit<FmCost, "id">) => Promise<void>;
+  /** Correct a recorded spend entry. Amending is ordinary work (a mistyped
+   *  amount, a missing receipt photo) — only ERASING one needs the superadmin
+   *  code, because that destroys the record rather than fixing it. */
+  updateCost: (id: string, patch: Partial<FmCost>) => Promise<void>;
   addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">) => Promise<void>;
   updateTicket: (id: string, patch: Partial<FmTicket>) => Promise<void>;
   /** Erase a spend entry for good. Needs a single-use superadmin token — the
@@ -255,6 +259,11 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   // holding a token, and a token exists only because someone entered the
   // superadmin code seconds earlier for this specific action.
 
+  const updateCost = useCallback((id: string, patch: Partial<FmCost>) =>
+    mutate((d) => ({
+      ...d, costs: d.costs.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    })), [mutate]);
+
   const removeCost = useCallback((id: string, elevation: string) =>
     mutate((d) => ({
       ...d,
@@ -307,7 +316,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     <FmDataContext.Provider value={{
       data, ready, saveError, reload,
       addSchedule, updateSchedule, removeSchedule, removeAllSchedules,
-      logCompletion, addCost, addTicket, updateTicket,
+      logCompletion, addCost, updateCost, addTicket, updateTicket,
       removeCost, removeTicket,
       saveDocument, removeDocument, registerWatcher,
     }}>

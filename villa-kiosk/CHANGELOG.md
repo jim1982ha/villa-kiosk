@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.69.0
+
+### Changes
+- **A recorded fault or spend entry can now be corrected — tap the card to open it.** Both were write-once: a fault raised in thirty seconds from a phone (a device and four words, which is exactly the right way to raise one) could never be given a proper description, a photo, or a corrected device afterwards. The same form does both jobs rather than a second, subtly different editor, so the two cannot drift apart. Editing leaves the record's history alone: a fault keeps its status, opened and resolved timestamps, and a spend entry keeps the date it was recorded against — which is what the monthly total and the cap are computed from. Erasing one still needs the superadmin code; correcting one is ordinary work and does not.
+- **Evidence photos are visible where the record is, and open full size.** A saved fault said "3 photo(s)" and gave no way to see them, which makes a photo a claim rather than evidence. Faults and spend entries now show their thumbnails inline (smaller than in the capture form, so a three-photo fault isn't taller than the text describing it), and tapping one opens a full-size viewer with arrow-key and swipe-free chevron navigation, Escape or backdrop to close. The viewer lives in the component that already draws thumbnails, so every present and future surface that records evidence gets it without wiring.
+- **Tap-and-hold to erase no longer collides with tap-to-open.** A completed hold is followed by a click, which would have opened the editor underneath the authorisation prompt. The long-press hook now reports that it consumed the click, and controls inside a row (the status button, the device chip) keep acting as themselves rather than opening the card.
+- **A device panel can raise a fault about the device it is showing.** An icon button beside *Edit* opens the Facility workspace on the Faults tab with that device already filled in. The gap it closes is the moment of noticing: someone walking the villa taps the badge of a lamp that won't come on, and acting on it previously meant closing the panel, opening Facility, finding Faults and searching for the device they had just been looking at — four steps and a name they may not know. The description is deliberately left blank: the "<device> offline" guess is right when Home Assistant reports the device down, but a fault raised by hand is usually something HA cannot see at all (a dripping tap, a cracked panel), and a pre-written wrong title tends to get saved as written. Hidden for profiles without the Facility capability, so the shortcut can never lead to a screen the profile cannot open.
+
 ## 2.68.0
 
 ### Changes

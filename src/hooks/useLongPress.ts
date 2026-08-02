@@ -26,6 +26,11 @@ const LONG_PRESS_MS = 600;
 const MOVE_TOLERANCE_PX = 10;
 
 export interface LongPressHandlers {
+  /** Swallows the click the browser fires after a completed hold. Without it
+   *  a row that is BOTH tappable (open it) and holdable (erase it) would run
+   *  its tap action the moment the hold's own dialog appeared. Call this
+   *  first in your own onClick and bail if it returns true. */
+  consumeClick: () => boolean;
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerUp: () => void;
   onPointerLeave: () => void;
@@ -39,6 +44,8 @@ export interface LongPressHandlers {
 export function useLongPress(onLongPress: () => void): LongPressHandlers {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const origin = useRef<{ x: number; y: number } | null>(null);
+  /** Set when a hold completes, cleared by the click that follows it. */
+  const justFired = useRef(false);
 
   const cancel = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -52,11 +59,17 @@ export function useLongPress(onLongPress: () => void): LongPressHandlers {
     timer.current = setTimeout(() => {
       timer.current = null;
       origin.current = null;
+      justFired.current = true;
       onLongPress();
     }, LONG_PRESS_MS);
   }, [cancel, onLongPress]);
 
   return {
+    consumeClick: () => {
+      if (!justFired.current) return false;
+      justFired.current = false;
+      return true;
+    },
     onPointerDown: (e) => start(e.clientX, e.clientY),
     onPointerUp: cancel,
     onPointerLeave: cancel,

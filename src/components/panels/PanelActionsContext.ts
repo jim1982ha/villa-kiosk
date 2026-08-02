@@ -13,6 +13,16 @@ export interface PanelActions {
   /** Open Advanced Settings focused on this entity. Undefined when the current
    *  profile may not edit config — the edit button is then hidden. */
   onEdit?: () => void;
+  /** Raise a maintenance fault against the open device — opens the Facility
+   *  workspace on the Faults tab with this device already filled in.
+   *
+   *  The point is the moment of noticing. Someone walking the villa taps the
+   *  badge of a lamp that will not come on; before this, acting on that meant
+   *  closing the panel, opening Facility, finding Faults, and searching for
+   *  the device they had just been looking at — four steps and a name they
+   *  may not know. Undefined for profiles without manageFacility, which is
+   *  what hides the button. */
+  onReportFault?: () => void;
   /** Everything BasePanel needs to render THIS device's exact map badge in its
    *  header (same glyph + colour as the 3D view) and make it a colour editor.
    *  Provided by Dashboard, which knows the live entity + config. */

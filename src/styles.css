@@ -2249,6 +2249,64 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-row-title-action { margin-left: auto; }
 .fm-row-sub { font-size: 12.5px; }
 
+/* A record that opens for editing when tapped. The cursor and hover lift are
+   the whole affordance — a per-row "Edit" button would compete with the status
+   action already in these rows, and on a phone there is no width for both. */
+.fm-openable { cursor: pointer; }
+.fm-openable:hover { border-color: var(--hairline-strong); }
+.fm-openable:active { transform: translateY(1px); }
+
+/* Evidence thumbnails are buttons (they open the viewer), so they must not
+   inherit the default button chrome. */
+.fm-thumb-open {
+  display: block; width: 100%; height: 100%;
+  padding: 0; border: none; background: none; cursor: zoom-in;
+}
+
+/* Read-only strips sit INSIDE a list row, so they use smaller thumbs — a
+   68px square per photo would make a three-photo fault taller than the text
+   that describes it. */
+.fm-evidence.readonly .fm-thumb { width: 44px; height: 44px; border-radius: 8px; }
+.fm-evidence.readonly .fm-evidence-strip { gap: 6px; margin-top: 4px; }
+
+/* Full-size evidence viewer. Above every modal (the Facility workspace is
+   itself a modal, and this opens from inside it) and inset by the safe area so
+   the close button never lands under a notch. */
+.fm-lightbox {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.88);
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px
+           calc(env(safe-area-inset-bottom, 0px) + 16px);
+}
+.fm-lightbox img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; border-radius: 8px;
+}
+.fm-lightbox-close, .fm-lightbox-nav {
+  position: absolute; display: flex; align-items: center; justify-content: center;
+  width: var(--touch-min); height: var(--touch-min);
+  border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.45); color: #fff; cursor: pointer;
+}
+.fm-lightbox-close { top: calc(env(safe-area-inset-top, 0px) + 12px); right: 12px; }
+.fm-lightbox-nav.prev { left: 12px; }
+.fm-lightbox-nav.next { right: 12px; }
+.fm-lightbox-close:hover, .fm-lightbox-nav:hover { background: rgba(0, 0, 0, 0.7); }
+.fm-lightbox-count {
+  position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  left: 50%; transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.8); font-size: 12.5px;
+}
+
+/* Square icon-only variant of .btn, for a secondary action that sits beside a
+   worded one (the panel footer's "report a fault" next to "Edit"). */
+.btn.icon-only {
+  padding: 0; width: var(--touch-min); min-width: var(--touch-min);
+  justify-content: center;
+}
+.panel-footer-left { display: flex; align-items: center; gap: 8px; }
+
 /* Device-picker suggestion rows (Faults/Spend). Two lines: the friendly name,
    then the entity_id and room. The id is what actually identifies a device —
    a label like "Bedroom 1" names nothing an operator can act on — so it is

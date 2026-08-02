@@ -17,18 +17,32 @@ interface Props {
   intent: ElevationIntent;
   erase: (elevation: string) => Promise<void>;
   className?: string;
+  /** Tapping the row opens it for editing. Optional — a row with no editor
+   *  stays a plain, non-clickable record. */
+  onOpen?: () => void;
   children: ReactNode;
 }
 
-export default function ErasableRow({ intent, erase, className, children }: Props) {
+export default function ErasableRow({ intent, erase, className, onOpen, children }: Props) {
   const hold = useSuperadminDelete(intent, erase);
+  const { consumeClick, ...pointerHandlers } = hold;
   return (
     <div
-      className={`fm-row fm-erasable${className ? ` ${className}` : ""}`}
+      className={`fm-row fm-erasable${className ? ` ${className}` : ""}${onOpen ? " fm-openable" : ""}`}
       // Focusable so the hold gesture has a keyboard equivalent (hold
       // Enter/Space) rather than being touch-and-mouse only.
       tabIndex={0}
-      {...hold}
+      role={onOpen ? "button" : undefined}
+      onClick={(e) => {
+        // A completed hold is followed by a click. Opening the editor
+        // underneath the authorisation prompt would be exactly wrong.
+        if (consumeClick() || !onOpen) return;
+        // Controls inside the row (status buttons, the device chip) are their
+        // own actions; only a tap on the row's own surface opens it.
+        if ((e.target as HTMLElement).closest("button,a,input,select,textarea")) return;
+        onOpen();
+      }}
+      {...pointerHandlers}
     >
       {children}
       <span className="fm-erasable-dot" aria-hidden="true" />

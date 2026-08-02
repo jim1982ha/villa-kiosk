@@ -16,12 +16,15 @@ import { useFmData } from "@/fm/FmDataContext";
 import { budgetStatus, formatIdr, monthKey, localStamp } from "@/fm/fmEngine";
 import { buildSpendStatement } from "@/fm/fmReport";
 import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
-import type { FmSavedDocument } from "@/fm/fmTypes";
+import type { FmCost, FmSavedDocument } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import ErasableRow from "./ErasableRow";
 import ReportPreview from "./ReportPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
+
+/** Stable no-op for read-only evidence strips. */
+const NO_PHOTO_EDIT = () => {};
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions }: {
@@ -31,11 +34,14 @@ export default function SpendTab(
     deviceOptions: DeviceOption[];
   },
 ) {
-  const { data, addCost, removeCost, saveDocument } = useFmData();
+  const { data, addCost, updateCost, removeCost, saveDocument } = useFmData();
   const { config } = useConfig();
   const { haConfig } = useHA();
   const [month, setMonth] = useState(monthKey(Date.now()));
   const [adding, setAdding] = useState(false);
+  /** Id of the entry being corrected, or null when recording a new one — one
+   *  form for both, same reasoning as the Faults tab. */
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [deviceText, setDeviceText] = useState("");
   const [entityId, setEntityId] = useState("");
@@ -53,8 +59,20 @@ export default function SpendTab(
   const selectDevice = (id: string, name: string) => { setEntityId(id); setDeviceText(name); };
   const clearDevice = () => { setEntityId(""); setDeviceText(""); };
   const resetForm = () => {
-    setAdding(false); setLabel(""); setDeviceText(""); setEntityId("");
-    setAmount(""); setPhotoIds([]);
+    setAdding(false); setEditingId(null);
+    setLabel(""); setDeviceText(""); setEntityId("");
+    setAmount(""); setPhotoIds([]); setCategory("minor");
+  };
+
+  const openEditor = (c: FmCost) => {
+    setEditingId(c.id);
+    setAdding(true);
+    setLabel(c.label);
+    setAmount(String(c.amountIdr));
+    setCategory(c.category);
+    setPhotoIds(c.photoIds);
+    setEntityId(c.entityId ?? "");
+    setDeviceText(c.deviceLabel ?? "");
   };
 
   const b = budgetStatus(data.costs, month);
@@ -140,7 +158,7 @@ export default function SpendTab(
 
       {adding && (
         <div className="fm-form">
-          <h3>Record maintenance spend</h3>
+          <h3>{editingId ? "Edit spend entry" : "Record maintenance spend"}</h3>
           <div className="fm-field">
             <span>Device (search, or type one not listed — leave blank for a whole-villa expense)</span>
             <DeviceSearchPicker
@@ -188,16 +206,20 @@ export default function SpendTab(
               className="btn primary"
               disabled={!label.trim() || amountIdr <= 0}
               onClick={async () => {
-                await addCost({
-                  at: new Date().toISOString(), amountIdr,
-                  label: label.trim(), category, photoIds,
+                const fields = {
+                  amountIdr, label: label.trim(), category, photoIds,
                   entityId: entityId || undefined,
                   deviceLabel: deviceText.trim() || undefined,
                   room: entityId ? config.entityMap[entityId]?.room : undefined,
-                });
+                };
+                // `at` is set once, when the spend happened, and is never
+                // rewritten by a later correction — it is what the monthly
+                // total and the cap are computed from.
+                if (editingId) await updateCost(editingId, fields);
+                else await addCost({ ...fields, at: new Date().toISOString() });
                 resetForm();
               }}
-            >Save</button>
+            >{editingId ? "Save changes" : "Save"}</button>
           </div>
         </div>
       )}
@@ -211,20 +233,24 @@ export default function SpendTab(
             key={c.id}
             intent={{ title: "Erase this spend entry", detail: `${c.label} — ${formatIdr(c.amountIdr)}` }}
             erase={(token) => removeCost(c.id, token)}
+            onOpen={() => openEditor(c)}
           >
             <div className="fm-row-main">
               <div className="fm-row-title">
                 <strong>{c.label}</strong>
                 <span className="fm-clause">{c.category === "minor" ? "Minor" : "Major"}</span>
               </div>
-              <div className="fm-row-sub muted">
-                {localStamp(c.at)}{c.photoIds.length > 0 && ` · ${c.photoIds.length} photo(s)`}
-              </div>
+              <div className="fm-row-sub muted">{localStamp(c.at)}</div>
+              {/* The receipt itself, openable — the whole point of attaching
+                  one is that somebody can later check it. */}
+              {c.photoIds.length > 0 && (
+                <EvidenceRow photoIds={c.photoIds} onChange={NO_PHOTO_EDIT} disabled />
+              )}
               {(c.entityId || c.deviceLabel) && (
                 <div className="fm-chiprow">
                   {c.entityId ? (
                     <button className="fm-entity-chip" title={c.entityId}
-                      onClick={() => onOpenEntity?.(c.entityId!)}>
+                      onClick={(e) => { e.stopPropagation(); onOpenEntity?.(c.entityId!); }}>
                       {c.deviceLabel ?? c.entityId}
                     </button>
                   ) : (

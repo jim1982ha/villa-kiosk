@@ -13,6 +13,7 @@
 import { useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
 import { evidenceUrl, uploadEvidence } from "@/fm/fmApi";
+import PhotoLightbox from "./PhotoLightbox";
 
 export default function EvidenceRow({
   photoIds, onChange, disabled,
@@ -24,6 +25,11 @@ export default function EvidenceRow({
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Which photo the full-size viewer is showing, or null when closed. Lives
+  // here rather than in each caller so EVERY surface that shows evidence —
+  // the capture form, a saved fault, a spend entry — gets a working viewer
+  // from the one component that already draws the thumbnails.
+  const [viewing, setViewing] = useState<number | null>(null);
 
   const pick = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -43,11 +49,20 @@ export default function EvidenceRow({
   };
 
   return (
-    <div className="fm-evidence">
+    <div className={`fm-evidence${disabled ? " readonly" : ""}`}>
       <div className="fm-evidence-strip">
-        {photoIds.map((id) => (
+        {photoIds.map((id, i) => (
           <span key={id} className="fm-thumb">
-            <img src={evidenceUrl(id)} alt="" loading="lazy" />
+            {/* A button, not a bare <img>: opening evidence is a real action
+                and needs to be reachable by keyboard and announced as such. */}
+            <button
+              type="button"
+              className="fm-thumb-open"
+              onClick={() => setViewing(i)}
+              aria-label={`View photo ${i + 1} of ${photoIds.length}`}
+            >
+              <img src={evidenceUrl(id)} alt="" loading="lazy" />
+            </button>
             {!disabled && (
               <button
                 className="fm-thumb-x"
@@ -79,6 +94,14 @@ export default function EvidenceRow({
         onChange={(e) => void pick(e.target.files)}
       />
       {error && <div className="fm-inline-error">{error}</div>}
+      {viewing !== null && (
+        <PhotoLightbox
+          photoIds={photoIds}
+          index={viewing}
+          onIndexChange={setViewing}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   );
 }

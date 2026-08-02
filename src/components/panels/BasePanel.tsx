@@ -12,6 +12,7 @@
 // for room.
 
 import { useEffect, useState, type ReactNode } from "react";
+import { Wrench } from "lucide-react";
 import { usePanelActions } from "./PanelActionsContext";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import BadgeColorModal from "./BadgeColorModal";
@@ -33,7 +34,7 @@ interface Props {
 }
 
 export default function BasePanel({ title, room, icon, className, headerActions, onClose, children }: Props) {
-  const { onEdit, badge, onSetBadgeColor, linked } = usePanelActions();
+  const { onEdit, onReportFault, badge, onSetBadgeColor, linked } = usePanelActions();
   const [colorOpen, setColorOpen] = useState(false);
 
   useEffect(() => {
@@ -114,8 +115,23 @@ export default function BasePanel({ title, room, icon, className, headerActions,
           )}
           {children}
         </div>
-        <div className="panel-footer" style={{ justifyContent: onEdit ? "space-between" : "flex-end" }}>
-          {onEdit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
+        <div className="panel-footer"
+          style={{ justifyContent: onEdit || onReportFault ? "space-between" : "flex-end" }}>
+          <div className="panel-footer-left">
+            {onEdit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
+            {/* Icon-only, sitting beside Edit: this is a shortcut for a
+                device you are already looking at, not a primary action, and
+                a second worded button next to "Edit" would compete with it.
+                The title/aria-label carry the meaning. */}
+            {onReportFault && (
+              <button
+                className="btn ghost icon-only"
+                onClick={onReportFault}
+                title="Report a fault for this device"
+                aria-label="Report a fault for this device"
+              ><Wrench size={16} /></button>
+            )}
+          </div>
           <button className="btn primary" onClick={onClose}>Close</button>
         </div>
       </div>

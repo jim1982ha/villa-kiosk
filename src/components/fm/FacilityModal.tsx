@@ -52,15 +52,24 @@ const TABS: { id: Tab; label: string; icon: typeof ListChecks }[] = [
 ];
 
 export default function FacilityModal({
-  onClose, mappedEntityIds, onOpenEntity,
+  onClose, mappedEntityIds, onOpenEntity, reportFaultFor, onFaultFormOpened,
 }: {
   onClose: () => void;
   mappedEntityIds: Set<string>;
+  /** Open on Faults with a blank fault already pointed at this device — set
+   *  when the operator came here from a device panel's fault shortcut. */
+  reportFaultFor?: string;
+  /** Called once the form has been filled in, so the caller can drop the
+   *  request. Without it, closing and reopening Facility would spring the
+   *  same half-written fault form again. */
+  onFaultFormOpened?: () => void;
   /** Jump to a device's panel — lets a failing check or a fault open the
    *  actual device instead of leaving the operator to hunt for it. */
   onOpenEntity: (entityId: string) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("today");
+  // Landing on Faults rather than Today when the operator arrived by tapping
+  // "report a fault" on a device: they have already said what they want.
+  const [tab, setTab] = useState<Tab>(reportFaultFor ? "faults" : "today");
   const { entities } = useHA();
   const { config } = useConfig();
   const { role } = useProfile();
@@ -166,7 +175,8 @@ export default function FacilityModal({
             )}
             {ready && tab === "faults" && (
               <FaultsTab onOpenEntity={onOpenEntity} unavailableIds={unavailableIds}
-                deviceOptions={deviceOptions} />
+                deviceOptions={deviceOptions} reportFaultFor={reportFaultFor}
+                onFaultFormOpened={onFaultFormOpened} />
             )}
             {ready && tab === "spend" && (
               <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} />
