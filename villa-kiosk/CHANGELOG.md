@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.78.0
+
+### Fixed
+- **An option toggled on in the add-on's Configuration page could silently revert to off after a restart.** Reported against `public_model_access`, and the mechanism would have hit every future option too. The add-on self-heals its stored options by deleting keys the running code doesn't recognise — an ALLOWLIST, which is backwards for something shipped inside a Docker image. `config.yaml` and the field labels come from the *repository* and refresh as soon as the add-on repo does; the Python that reads them comes from the *image* and only changes when a new image is pulled. In the window between the two, the Configuration page offers an option the running code has never heard of, and the self-heal deletes it on every start. The operator toggles it, restarts, finds it off, and nothing logs a reason. `public_model_access` sat in `config.yaml` for many releases without ever being listed, so it was affected the whole time.
+- **The self-heal is now a denylist of options this add-on has actually retired** (`sh3d_path`, `model_path`). It cannot delete a setting that the current Configuration page offers, whatever version of the image is running. Worst case is now a stale key lingering until someone names it — a log warning — rather than a deliberate choice being discarded in silence. A test fails if any currently-offered option ever appears on that list.
+
+### Changes
+- **Rewrote the `public_model_access` help text, which oversold it.** It implied you had to switch it on to get a background pre-load. You don't: the villa starts loading as soon as the app opens, and a device that has signed in before already pre-loads without this. The option only affects devices that have never signed in (or whose sign-in expired) on the add-on's own hostname, and it has no effect at all in the Home Assistant sidebar. The text now leads with "leave this OFF unless you know you need it" and states the cost plainly — the floor plan becomes downloadable by anyone who can reach the add-on.
+
 ## 2.77.0
 
 ### Changes

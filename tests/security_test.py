@@ -421,8 +421,13 @@ t("lockout cannot be disabled",
 import yaml  # noqa: E402
 with open(os.path.join(HERE, "..", "villa-kiosk", "config.yaml"), encoding="utf-8") as _f:
     _cfg = yaml.safe_load(_f)
-t("every configured option is a known key",
-  set(_cfg["options"]) - proxy.KNOWN_OPTION_KEYS, set())
+# The self-heal must never delete an option the CURRENT config.yaml offers.
+# It used to work off an allowlist baked into this image, which silently
+# discarded any option added to config.yaml before a matching image shipped —
+# the operator toggles it, restarts, finds it off, and nothing logs why.
+t("the self-heal cannot strip a currently-offered option",
+  set(_cfg["options"]) & proxy.REMOVED_OPTION_KEYS, set())
+t("retired keys are still cleaned up", "model_path" in proxy.REMOVED_OPTION_KEYS, True)
 t("every option has a schema entry", set(_cfg["options"]) - set(_cfg["schema"]), set())
 
 # Help text is what the operator configuring this add-on actually reads. It

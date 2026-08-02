@@ -42,14 +42,17 @@ configuration:
       requires an Owner or Facility manager session AS WELL. Leave empty to
       switch deletion off entirely — records then cannot be erased by anyone.
   public_model_access:
-    name: Allow the 3D model to load before sign-in
+    name: Let the 3D model load without a passcode
     description: >-
-      Lets the villa floor plan start downloading and decoding while the
-      passcode screen is still showing, which shortens the first load. It
-      makes the model file (and only that) reachable with no passcode, so only
-      enable it if something else already protects the hostname, such as
-      Cloudflare Access. Pointless for the Home Assistant sidebar, which is
-      already trusted, and unnecessary if you never expose the port directly.
+      Leave this OFF unless you know you need it. The villa already starts
+      loading in the background as soon as the app opens — this option is only
+      about devices that have NEVER signed in, or whose sign-in has expired,
+      on the add-on's own hostname. A device that has signed in before already
+      pre-loads without it, so turning it on usually changes nothing you can
+      see. It has no effect at all in the Home Assistant sidebar. The cost is
+      real: the villa's 3D floor plan becomes downloadable by anyone who can
+      reach this add-on, with no passcode. Only enable it if something else
+      already protects the hostname, such as Cloudflare Access.
   evidence_retention_days:
     name: Keep evidence photos for (days)
     description: >-

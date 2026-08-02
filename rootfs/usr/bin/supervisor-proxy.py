@@ -116,12 +116,24 @@ AUTH = {"Authorization": f"Bearer {TOKEN}"}
 # _cleanup_stale_options below. (model_path was dropped when central models
 # moved into the add-on's own /data volume; leaving it here would make the
 # self-heal below wrongly preserve a now-unknown key.)
-KNOWN_OPTION_KEYS = {
-    "guest_pin", "owner_pin", "ops_pin", "superadmin_pin",
-    "public_model_access",
-    "evidence_retention_days", "session_days", "telemetry_max_events",
-    "pin_lockout_minutes",
-}
+# Options that USED to exist and no longer do. The self-heal strips exactly
+# these and nothing else.
+#
+# This was an ALLOWLIST — "keep the keys this build knows, drop the rest" — and
+# that is backwards for a component shipped inside a Docker image. config.yaml
+# and translations/ come from the REPOSITORY and update the moment the add-on
+# repo refreshes; this Python comes from the IMAGE and only updates when a new
+# image is pulled. So between those two moments the UI offers an option that
+# the running code has never heard of, and the self-heal helpfully deletes it
+# on every start — the operator toggles it, restarts, and finds it off again,
+# with no error anywhere. That is exactly what happened to
+# `public_model_access`, which lived in config.yaml for many releases without
+# ever being listed here.
+#
+# A denylist cannot do that. Its failure mode is a stale key lingering until
+# someone names it here, which is a log warning; the allowlist's failure mode
+# was silently discarding a setting the operator had deliberately chosen.
+REMOVED_OPTION_KEYS = {"sh3d_path", "model_path"}
 
 # The add-on's OWN persistent volume (Supervisor gives every add-on /data and
 # preserves it across restarts/updates). Central model files live here now —
@@ -564,8 +576,8 @@ async def _cleanup_stale_options(session: ClientSession) -> None:
     sync on the add-on's state (e.g. the Update button not registering as
     clickable until a full HA restart forces a clean reload).
 
-    Fetch our own stored options and, if any key isn't in the current
-    schema, write back only the known-good ones — using the exact same
+    Fetch our own stored options and, if any key is one this add-on has
+    actually retired, write back everything else — using the exact same
     Supervisor endpoint the Configuration tab's Save button uses. Runs once
     at every startup; a no-op once nothing stale remains. Best-effort: never
     let this block or fail startup — an API shape mismatch on some future
@@ -580,10 +592,10 @@ async def _cleanup_stale_options(session: ClientSession) -> None:
                 return
             body = await resp.json()
         options = (body.get("data") or {}).get("options") or {}
-        stale = sorted(set(options) - KNOWN_OPTION_KEYS)
+        stale = sorted(set(options) & REMOVED_OPTION_KEYS)
         if not stale:
             return
-        cleaned = {k: v for k, v in options.items() if k in KNOWN_OPTION_KEYS}
+        cleaned = {k: v for k, v in options.items() if k not in REMOVED_OPTION_KEYS}
         async with session.post(
             f"http://{SUPERVISOR}/addons/self/options", headers=AUTH,
             json={"options": cleaned},
