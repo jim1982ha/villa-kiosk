@@ -26,6 +26,19 @@ This is a redistributable Home Assistant add-on, not a bespoke dashboard for one
 
 In practice: derive from live HA/scene/floor-plan data rather than assuming; match rooms/entities through generic config lookups, case/whitespace-insensitively; prefer an **empty** default over a "helpful" seeded one for any user-editable config slice — a seed spread underneath stored config (see `AppConfig`'s merge-on-load) resurrects deleted entries on reload, which was the root cause of a real "stale entities I can't delete" bug. `EntityMap.ts`, `TeleportPoints.ts`, `Sh3dCalibration.ts`, `ThresholdConfig.ts`, and `fm/fmTypes.ts` all ship with deliberately empty seed tables/constants for exactly this reason — don't reintroduce literal data into them. MCP/HA access during development is a diagnostic instrument, not a data source: reading real entities to debug is fine, but that data must never become a literal in shipped code.
 
+## The second hard rule: no internet dependency, ever
+
+The kiosk's target is **an iPad mounted in a villa that may have no internet at all** — only a LAN path to Home Assistant. Anything the app fetches from a third-party host is a feature that works on the developer's desk and is simply missing on the wall.
+
+Audited and currently clean, which is a state to preserve rather than assume:
+- **Fonts** are the system stack (`-apple-system`/`BlinkMacSystemFont`), never a webfont.
+- **Draco** decoder WASM is bundled from `@babylonjs/core` and wired through `DracoCompression.Configuration` (`babylon/ModelLoader.ts`) precisely so a compressed GLB never touches Babylon's CDN.
+- **IBL** is a procedurally generated gradient cube (`RenderEnhancements.buildGradientEnv`), not a downloaded `.env`/`.dds`.
+- **The service worker precaches the shell + hashed assets**, so a cold start with no WAN still boots.
+- The `assets.babylonjs.com` / `cdn.babylonjs.com` strings visible in the built bundle are Babylon's defaults for APIs this app never calls (WebXR hand meshes, MRTK GUI, `CreateDefaultEnvironment`, `DefaultLoadingScreen`). They are inert string constants — do not make them live by calling those APIs.
+
+**Before adding any Babylon feature, check whether it lazily fetches an asset.** The known traps: `displayLoadingUI`/`DefaultLoadingScreen` (logo PNG), `CreateDefaultEnvironment`/`EnvironmentHelper` (skybox DDS), lens flares (`flare.png`), and **KTX2 textures — Babylon fetches that transcoder from its CDN by default and `@babylonjs/core` does not bundle it**, so KTX2 requires self-hosting the decoder before it can be used at all.
+
 ## Architecture
 
 **React never touches the 3D scene directly.** `src/babylon/` is plain TypeScript with zero React imports — `SceneManager` owns the Babylon `Engine`/`Scene` and every subsystem (camera, lighting, floors, picking, entity visuals). `src/ha/HAStateStore.tsx` pushes HA state changes **imperatively** into Babylon via `subscribeAll`/`subscribe` callbacks (registered once, called on every `state_changed` event) instead of re-rendering the canvas — this is why the 3D view never stutters on unrelated HA traffic. React only re-renders for the DOM-layer HUD/panels/modals.
