@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.80.0
+
+### Changes
+- **KTX2 (GPU-compressed) textures now work with no internet.** This is what unblocks the last big load item: with the floor-probe cache landed, Babylon's own glTF import is ~1.5s of a ~2.1s load, and most of that is texture decode. Ordinary PNG/JPEG textures are decoded by the CPU and uploaded as raw pixels; KTX2 transcodes straight into whatever compressed format the GPU speaks — ASTC on an iPad — and **stays compressed in GPU memory**, which matters twice over on the device that has a per-tab memory ceiling.
+- **The decoder is shipped, not fetched.** `@babylonjs/core` bundles Draco but not KTX2, so out of the box Babylon pulls the decoder from its CDN — on a villa iPad with no WAN that is not "slower", it is a villa with no textures. The decoder module now comes from npm and the MSC transcoder (which Babylon does not publish there) is vendored in `src/assets/ktx2/`, both imported so Vite hashes them and resolves the right base under Ingress. They are already in the service worker's precache manifest, so an offline install has them from the start. Adds ~520KB to the bundle, gzipped to ~290KB.
+- **Only the ETC1S path is wired; the UASTC entries are deliberately left null.** Pointing them at a CDN would reintroduce the exact dependency this exists to remove, and shipping four more WASM binaries for a format nothing here produces is dead weight. A UASTC GLB will fail to decode rather than silently phone home — the louder failure, and the right one.
+
+### Pipeline (blender_pipeline.py 2.16.0)
+- **`--ktx2` re-encodes the exported GLB's textures in place**, so the file uploaded to the kiosk is already the optimised one — a manual CLI pass is a step that gets skipped, and then the villa is slower for a month before anyone notices. Needs node/npx and internet **on the machine running the pipeline**, which is fine: that is a laptop, not the villa. Best-effort — a missing npx or a failed encode leaves the plain GLB untouched rather than producing no output at all.
+- **Check the result before shipping it.** ETC1S is aggressive and this villa's baked lighting atlases are gradient-heavy, so look for banding on large flat walls and floors. Re-running without `--ktx2` gives the plain GLB back, and the old file can simply be re-uploaded.
+
 ## 2.79.1
 
 ### Changes

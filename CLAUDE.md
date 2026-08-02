@@ -37,6 +37,8 @@ Audited and currently clean, which is a state to preserve rather than assume:
 - **The service worker precaches the shell + hashed assets**, so a cold start with no WAN still boots.
 - The `assets.babylonjs.com` / `cdn.babylonjs.com` strings visible in the built bundle are Babylon's defaults for APIs this app never calls (WebXR hand meshes, MRTK GUI, `CreateDefaultEnvironment`, `DefaultLoadingScreen`). They are inert string constants — do not make them live by calling those APIs.
 
+- **KTX2** textures are supported offline: `babylon/ModelLoader.ts` wires `KhronosTextureContainer2.URLConfig` to the npm decoder module plus an MSC transcoder vendored in `src/assets/ktx2/` (Babylon does not publish it, and `@babylonjs/core` does not bundle any of it). Only the ETC1S path is wired — the UASTC entries are deliberately `null`, because pointing them at a CDN would reintroduce exactly this dependency, and a UASTC GLB failing loudly beats one that silently phones home.
+
 **Before adding any Babylon feature, check whether it lazily fetches an asset.** The known traps: `displayLoadingUI`/`DefaultLoadingScreen` (logo PNG), `CreateDefaultEnvironment`/`EnvironmentHelper` (skybox DDS), lens flares (`flare.png`), and **KTX2 textures — Babylon fetches that transcoder from its CDN by default and `@babylonjs/core` does not bundle it**, so KTX2 requires self-hosting the decoder before it can be used at all.
 
 ## Architecture

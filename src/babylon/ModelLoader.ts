@@ -2,7 +2,7 @@
 // Load a GLB into the scene from an ArrayBuffer (IndexedDB) or an uploaded File,
 // and persist uploads to IndexedDB so a refresh doesn't re-upload.
 
-import { SceneLoader, Material, Color3, Vector3, HemisphericLight, DracoCompression, VertexBuffer, type AbstractMesh, type Scene } from "@babylonjs/core";
+import { SceneLoader, Material, Color3, Vector3, HemisphericLight, DracoCompression, KhronosTextureContainer2, VertexBuffer, type AbstractMesh, type Scene } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 // Bundle the Draco decoder from @babylonjs/core so a Draco-compressed GLB loads
 // WITHOUT hitting Babylon's default CDN — required for the offline HA-Ingress
@@ -10,6 +10,17 @@ import "@babylonjs/loaders/glTF";
 import dracoWrapperUrl from "@babylonjs/core/assets/Draco/draco_wasm_wrapper_gltf.js?url";
 import dracoWasmUrl from "@babylonjs/core/assets/Draco/draco_decoder_gltf.wasm?url";
 import dracoFallbackUrl from "@babylonjs/core/assets/Draco/draco_decoder_gltf.js?url";
+// KTX2 (GPU-compressed textures) needs the same treatment, and needs it MORE:
+// @babylonjs/core bundles Draco but NOT the KTX2 decoder, so out of the box
+// Babylon fetches it from cdn.babylonjs.com. On the villa iPad — which may
+// have no internet at all — that is not "slower", it is a model with no
+// textures. The decoder module comes from npm; the MSC transcoder (the one
+// ETC1S needs) is not published there, so it is vendored under src/assets/ktx2
+// and imported the same way, which lets Vite hash it and resolve the correct
+// base URL under HA Ingress.
+import ktx2DecoderUrl from "babylonjs-ktx2decoder/babylon.ktx2Decoder.js?url";
+import mscTranscoderJsUrl from "@/assets/ktx2/msc_basis_transcoder.js?url";
+import mscTranscoderWasmUrl from "@/assets/ktx2/msc_basis_transcoder.wasm?url";
 import { saveModelToIndexedDB } from "@/utils/storage";
 import { devLog } from "@/utils/devLog";
 import { isStructureMesh } from "./meshRoles";
@@ -23,6 +34,26 @@ DracoCompression.Configuration = {
     wasmBinaryUrl: dracoWasmUrl,
     fallbackUrl: dracoFallbackUrl,
   },
+};
+
+// Only the ETC1S path is wired up, because that is what the pipeline produces
+// (`blender_pipeline.py --ktx2` / `gltf-transform etc1s`). The UASTC entries
+// stay null on purpose: pointing them at a CDN would reintroduce exactly the
+// offline dependency this block exists to remove, and shipping four more WASM
+// binaries for a format nothing here emits is dead weight in the bundle. A GLB
+// using UASTC would fail to decode its textures rather than silently phone
+// home — the louder failure, and the right one.
+KhronosTextureContainer2.URLConfig = {
+  jsDecoderModule: ktx2DecoderUrl,
+  jsMSCTranscoder: mscTranscoderJsUrl,
+  wasmMSCTranscoder: mscTranscoderWasmUrl,
+  wasmUASTCToASTC: null,
+  wasmUASTCToBC7: null,
+  wasmUASTCToRGBA_UNORM: null,
+  wasmUASTCToRGBA_SRGB: null,
+  wasmUASTCToR8_UNORM: null,
+  wasmUASTCToRG8_UNORM: null,
+  wasmZSTDDecoder: null,
 };
 
 export interface LoadResult {
