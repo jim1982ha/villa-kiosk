@@ -22,6 +22,7 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { earClipTriangulate, type Pt2 } from "@/utils/geometry";
+import { roomKey } from "@/config/roomKey";
 import { ALERT_RED } from "./colors";
 
 // Same red as a running climate device's mesh outline / the badge alert ring
@@ -78,7 +79,7 @@ export class RoomHighlight {
   }
 
   private static normalise(name: string): string {
-    return name.trim().toLowerCase();
+    return roomKey(name);
   }
 
   /** Shared "glowing glass" material every glow mesh (flat polygon, flat

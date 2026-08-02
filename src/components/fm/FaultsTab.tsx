@@ -12,9 +12,8 @@
 
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Wrench } from "lucide-react";
-import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
-import { displayLabelFor } from "@/config/EntityMap";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
 import { localStamp, ticketStats } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
@@ -29,8 +28,6 @@ const NEXT: Record<FmTicketStatus, FmTicketStatus | null> = {
 };
 /** Read-only evidence strips never call back — a stable identity keeps the
  *  memoised row from re-rendering on every parent update. */
-const NO_PHOTO_EDIT = () => {};
-
 const LABEL: Record<FmTicketStatus, string> = {
   open: "Open", in_progress: "In progress", resolved: "Resolved",
 };
@@ -56,7 +53,6 @@ export default function FaultsTab(
   },
 ) {
   const { data, addTicket, updateTicket, removeTicket } = useFmData();
-  const { entities } = useHA();
   const { config } = useConfig();
   const [adding, setAdding] = useState(false);
   /** Id of the fault being edited, or null when the form is raising a new one.
@@ -101,8 +97,7 @@ export default function FaultsTab(
     .map((t) => t.entityId).filter(Boolean));
   const broken = unavailableIds.filter((id) => !ticketed.has(id));
 
-  const label = (id: string) =>
-    displayLabelFor(id, config.entityMap[id]?.label, entities[id]?.attributes.friendly_name);
+  const label = useEntityLabel();
 
 
   // One selection, two entry points (the offline shortlist and the search
@@ -288,7 +283,7 @@ export default function FaultsTab(
                   is a claim; a thumbnail you can open is the evidence. */}
               {t.note && <div className="fm-timeline-note">{t.note}</div>}
               {t.photoIds.length > 0 && (
-                <EvidenceRow photoIds={t.photoIds} onChange={NO_PHOTO_EDIT} disabled />
+                <EvidenceRow photoIds={t.photoIds} disabled />
               )}
               {/* The fault's own history. Rendered on the card rather than
                   behind another tap: "what has actually been done about this"

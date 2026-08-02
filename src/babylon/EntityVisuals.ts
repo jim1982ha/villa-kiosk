@@ -54,6 +54,7 @@ import {
   AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel, Image, Control,
 } from "@babylonjs/gui";
 import type { AppConfig } from "@/config/AppConfig";
+import { roomKey } from "@/config/roomKey";
 import { clampIconScale } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
@@ -1768,7 +1769,7 @@ export class EntityVisuals {
         if (q.z < minZ) minZ = q.z;
         if (q.z > maxZ) maxZ = q.z;
       }
-      this.roomSpans.set(p.name.trim().toLowerCase(), Math.max(maxX - minX, maxZ - minZ));
+      this.roomSpans.set(roomKey(p.name), Math.max(maxX - minX, maxZ - minZ));
     }
   }
 
@@ -1809,14 +1810,14 @@ export class EntityVisuals {
   getRoomEntityBounds(
     room: string,
   ): { minX: number; maxX: number; minZ: number; maxZ: number; floorY: number } | null {
-    const key = room.trim().toLowerCase();
+    const key = roomKey(room);
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     // Anchors hang above their device, so the LOWEST one is the closest
     // available stand-in for the room's floor.
     let minY = Infinity;
     let found = false;
     for (const [id, lbl] of this.labels) {
-      if (this.roomOf(id).trim().toLowerCase() !== key) continue;
+      if (roomKey(this.roomOf(id)) !== key) continue;
       const p = lbl.anchor.getAbsolutePosition();
       if (p.x < minX) minX = p.x;
       if (p.x > maxX) maxX = p.x;
@@ -1848,10 +1849,10 @@ export class EntityVisuals {
    * level separates those; left for fanBadges' fixed-offset nudge, not this).
    */
   minPxPerWorldToDeclutterRoom(room: string): number | null {
-    const key = room.trim().toLowerCase();
+    const key = roomKey(room);
     const members: { lbl: LabelControls; wx: number; wz: number }[] = [];
     for (const [id, lbl] of this.labels) {
-      if (this.roomOf(id).trim().toLowerCase() !== key) continue;
+      if (roomKey(this.roomOf(id)) !== key) continue;
       if (!lbl.anchor.isEnabled()) continue;
       const p = lbl.anchor.getAbsolutePosition();
       members.push({ lbl, wx: p.x, wz: p.z });
@@ -2788,7 +2789,7 @@ export class EntityVisuals {
 
     let available = 0;
     for (const i of members) {
-      const key = this.roomOf(shown[i].id).trim().toLowerCase();
+      const key = roomKey(this.roomOf(shown[i].id));
       const span = this.roomSpans.get(key) ?? this.entitySpreadFor(key);
       if (span > available) available = span;
     }
@@ -2798,11 +2799,11 @@ export class EntityVisuals {
 
   /** Ground width spanned by a room's own devices — the stand-in for a room
    *  width when the floor plan has no polygon for it. */
-  private entitySpreadFor(roomKey: string): number {
+  private entitySpreadFor(key: string): number {
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     let found = false;
     for (const [id, lbl] of this.labels) {
-      if (this.roomOf(id).trim().toLowerCase() !== roomKey) continue;
+      if (roomKey(this.roomOf(id)) !== key) continue;
       const p = lbl.anchor.getAbsolutePosition();
       if (p.x < minX) minX = p.x;
       if (p.x > maxX) maxX = p.x;

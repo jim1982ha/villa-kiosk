@@ -23,8 +23,7 @@
 import { useState } from "react";
 import { Camera, Check, Wrench, X } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { useHA } from "@/ha/HAStateStore";
-import { displayLabelFor } from "@/config/EntityMap";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
 import { uploadEvidence } from "@/fm/fmApi";
 import NotesField from "./NotesField";
@@ -38,7 +37,7 @@ export default function GuestReportModal({
 }) {
   const { addTicket } = useFmData();
   const { config } = useConfig();
-  const { entities } = useHA();
+  const label = useEntityLabel();
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
@@ -46,10 +45,7 @@ export default function GuestReportModal({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
-  const deviceLabel = entityId
-    ? displayLabelFor(entityId, config.entityMap[entityId]?.label,
-                      entities[entityId]?.attributes.friendly_name)
-    : undefined;
+  const deviceLabel = entityId ? label(entityId) : undefined;
 
   const attach = async (files: FileList | null) => {
     if (!files?.length) return;

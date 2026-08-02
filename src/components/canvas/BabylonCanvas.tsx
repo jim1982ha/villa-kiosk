@@ -2,6 +2,7 @@
 // Owns the <canvas> + SceneManager lifecycle and wires HA state -> 3D visuals.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { roomKey } from "@/config/roomKey";
 import { AlertTriangle, X } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { useConfig } from "@/config/ConfigContext";
@@ -316,7 +317,7 @@ export default function BabylonCanvas({
           // teleport point backs. Value is the room's CANONICAL (already-used)
           // casing, so an accepted HA area name still reads identically to
           // every other entity already carrying that room.
-          const knownRooms = new Map(current.teleportPoints.map((p) => [p.name.trim().toLowerCase(), p.name]));
+          const knownRooms = new Map(current.teleportPoints.map((p) => [roomKey(p.name), p.name]));
           // Live HA state, read once for this whole pass — a mesh literally
           // named after an entity_id (the pipeline's own naming convention)
           // that HA no longer reports (renamed/removed) used to get
@@ -348,7 +349,7 @@ export default function BabylonCanvas({
             // it names a room this villa's plan actually has, never blindly.
             const geoRoom = manager.roomForEntity(m.entityId);
             const areaName = entityAreaNamesRef.current[m.entityId];
-            const areaRoom = !geoRoom && areaName ? knownRooms.get(areaName.trim().toLowerCase()) : null;
+            const areaRoom = !geoRoom && areaName ? knownRooms.get(roomKey(areaName)) : null;
             const room = geoRoom ?? areaRoom;
             additions[m.entityId] = room ? { ...m, room } : m;
           }

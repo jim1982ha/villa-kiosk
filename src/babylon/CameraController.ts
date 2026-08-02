@@ -9,6 +9,7 @@ import {
   type Scene, type AbstractMesh,
 } from "@babylonjs/core";
 import type { AppConfig } from "@/config/AppConfig";
+import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint } from "@/types/scene.types";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { TapRecognizer } from "./TapRecognizer";
@@ -599,8 +600,8 @@ export class CameraController {
   getRoomBounds(
     name: string,
   ): { minX: number; maxX: number; minZ: number; maxZ: number; floorY: number } | null {
-    const key = name.trim().toLowerCase();
-    const poly = this.roomPolygons.find((r) => r.name.trim().toLowerCase() === key);
+    const key = roomKey(name);
+    const poly = this.roomPolygons.find((r) => roomKey(r.name) === key);
     if (!poly || poly.pts.length === 0) return null;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const p of poly.pts) {

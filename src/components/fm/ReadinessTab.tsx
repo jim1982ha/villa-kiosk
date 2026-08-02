@@ -9,7 +9,7 @@ import { useState } from "react";
 import { CheckCircle2, AlertTriangle, XCircle, ChevronRight, Camera } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { displayLabelFor } from "@/config/EntityMap";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData } from "@/fm/FmDataContext";
 import { monthKey } from "@/fm/fmEngine";
@@ -58,7 +58,8 @@ export default function ReadinessTab({
   onOpenCheckDevices: (check: ReadinessCheck) => void;
 }) {
   const { config } = useConfig();
-  const { entities, haConfig } = useHA();
+  const { haConfig } = useHA();
+  const label = useEntityLabel();
   const { saveDocument } = useFmData();
   const [saved, setSaved] = useState(false);
   const [viewing, setViewing] = useState<FmSavedDocument | null>(null);
@@ -131,8 +132,7 @@ export default function ReadinessTab({
                   <div className="fm-chiprow">
                     {c.entityIds.slice(0, 8).map((id) => (
                       <button key={id} className="fm-entity-chip" onClick={() => onOpenEntity(id)}>
-                        {displayLabelFor(id, config.entityMap[id]?.label,
-                          entities[id]?.attributes.friendly_name)}
+                        {label(id)}
                       </button>
                     ))}
                     {c.entityIds.length > 8 && (

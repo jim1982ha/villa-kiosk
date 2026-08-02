@@ -24,9 +24,6 @@ import NotesField from "./NotesField";
 import ReportPreview from "./ReportPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 
-/** Stable no-op for read-only evidence strips. */
-const NO_PHOTO_EDIT = () => {};
-
 export default function SpendTab(
   { onOpenEntity, deviceOptions }: {
     onOpenEntity?: (id: string) => void;
@@ -258,7 +255,7 @@ export default function SpendTab(
               {/* The receipt itself, openable — the whole point of attaching
                   one is that somebody can later check it. */}
               {c.photoIds.length > 0 && (
-                <EvidenceRow photoIds={c.photoIds} onChange={NO_PHOTO_EDIT} disabled />
+                <EvidenceRow photoIds={c.photoIds} disabled />
               )}
               {(c.entityId || c.deviceLabel) && (
                 <div className="fm-chiprow">

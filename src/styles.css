@@ -89,6 +89,15 @@
   --panel-radius: 16px;
   --panel-padding: 24px;
   --touch-min: 44px;
+  /* One labelled form field, one rhythm. Three surfaces had grown their own
+     numbers for the same idea — the Settings body (6px under a 13px label),
+     the slider fields (8px) and the Facility forms (5px under a 12px one) —
+     so a field looked slightly tighter or looser depending on which modal you
+     happened to be in, and the Facility forms read as cramped next to the
+     rest of the app. The value lives here now; the three rules below consume
+     it, and a fourth surface should too rather than picking a fourth number. */
+  --field-label-gap: 7px;
+  --field-label-size: 13px;
 }
 
 /* Under HA Ingress, HA's own chrome already clears the Dynamic Island/notch
@@ -1039,7 +1048,7 @@ button {
 .row-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 .row-buttons.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
 .field { margin: 18px 0; }
-.field > label { display: block; margin-bottom: 8px; }
+.field > label { display: block; margin-bottom: var(--field-label-gap); }
 
 /* --- Sliders --- */
 input[type="range"] {
@@ -1414,7 +1423,10 @@ input[type="range"]::-moz-range-thumb {
    whole Advanced Settings body. Nothing in the body legitimately needs
    horizontal scroll (wide tables card-stack on mobile already). */
 .settings-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 8px 28px 12px; }
-.settings-body label { display: block; font-size: 13px; color: var(--text-secondary); margin: 14px 0 6px; }
+.settings-body label {
+  display: block; color: var(--text-secondary);
+  font-size: var(--field-label-size); margin: 14px 0 var(--field-label-gap);
+}
 .settings-body label.toggle { display: flex; align-items: center; gap: 12px; margin-top: 12px; cursor: pointer; font-size: 15px; color: var(--text-primary); }
 /* No separator above this footer, same reasoning as .panel-footer (device
    panels) — the same visual rule applied once here since this ONE class
@@ -2498,8 +2510,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
   background: var(--bg-card); border: 1px solid var(--hairline-strong);
 }
 .fm-form h3 { margin: 0; font-size: 16px; }
-.fm-field { display: flex; flex-direction: column; gap: 5px; }
-.fm-field > span { font-size: 12px; color: var(--text-secondary); }
+.fm-field { display: flex; flex-direction: column; gap: var(--field-label-gap); }
+.fm-field > span { font-size: var(--field-label-size); color: var(--text-secondary); }
 /* DIRECT children only. A descendant selector here reached into every nested
    component that happens to sit in a field — EvidenceRow's hidden file input
    (which it un-hid, putting a stray "Choose files / No file chosen" control

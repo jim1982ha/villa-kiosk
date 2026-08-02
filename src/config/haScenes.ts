@@ -14,6 +14,7 @@
 // added, edited or deleted in HA's own editor a moment ago.
 
 import { prettifyEntitySlug } from "./EntityMap";
+import { roomKey } from "@/config/roomKey";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 
@@ -63,6 +64,6 @@ export function deriveHaScenes(
  *  mapped to it. Case/whitespace-insensitive, matching every other room-name
  *  comparison in this app. */
 export function scenesForRoom(scenes: HaSceneInfo[], room: string): HaSceneInfo[] {
-  const key = room.trim().toLowerCase();
-  return scenes.filter((s) => s.rooms.some((r) => r.trim().toLowerCase() === key));
+  const key = roomKey(room);
+  return scenes.filter((s) => s.rooms.some((r) => roomKey(r) === key));
 }

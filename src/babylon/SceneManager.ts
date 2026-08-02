@@ -13,6 +13,7 @@ import {
   type AbstractMesh,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
+import { roomKey } from "@/config/roomKey";
 
 import { CameraController } from "./CameraController";
 import { OverviewController } from "./OverviewController";
@@ -1276,7 +1277,7 @@ export class SceneManager {
     // config.teleportPoints currently holds; re-synced properly a moment
     // later once Dashboard's onCalibrated handler adopts the freshly-fitted
     // points (see updateConfig's teleportPoints diff below).
-    this.lastRoomPolyNames = new Set(worldPolys.map((r) => r.name.trim().toLowerCase()));
+    this.lastRoomPolyNames = new Set(worldPolys.map((r) => roomKey(r.name)));
     this.syncRoomPoints();
 
     // Camera motion-beam directions: each camera's sh3d plan `angle` (yaw)
@@ -1364,7 +1365,7 @@ export class SceneManager {
     // use, or it renders buried inside the stairs/slab below and never shows.
     const eyeHeight = this.config.eyeHeight ?? 1.7;
     const extras = this.config.teleportPoints
-      .filter((p) => !this.lastRoomPolyNames.has(p.name.trim().toLowerCase()))
+      .filter((p) => !this.lastRoomPolyNames.has(roomKey(p.name)))
       .map((p) => ({ name: p.name, x: p.position.x, z: p.position.z, floorY: p.position.y - eyeHeight }));
     this.visuals.setRoomPoints(extras);
   }

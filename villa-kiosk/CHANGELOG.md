@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.74.0
+
+### Changes
+- **A form field's label spacing is now defined once, not three times.** The Settings body, the slider fields and the Facility forms had each grown their own numbers for the same idea — 6px under a 13px label, 8px, and 5px under a 12px one — so a field looked slightly tighter or looser depending on which modal you were in, and the Facility forms read as cramped next to the rest of the app. One pair of tokens (`--field-label-gap`, `--field-label-size`) now feeds all three, set to a slightly roomier 7px.
+- **`roomKey()` replaces ~18 hand-written room-name normalisations.** Room names are typed in three unrelated places — Advanced Settings, the SweetHome3D plan, and Home Assistant's own Areas — and every comparison between them has to be case-insensitive and whitespace-tolerant. That rule was spelled out as `name.trim().toLowerCase()` at each site across the Babylon layer, the config layer and the components. All correct; the risk was never the code that existed but the next site that reasonably decides to also strip a hyphen and silently stops matching everything else. Two sites that looked identical but normalise sensor STATES, not rooms, were deliberately left alone.
+- **`useEntityLabel()` replaces the same two-table lookup written out at seven call sites.** Resolving a device's display name always meant reaching into both the entity map and the live entity table with exactly the right optional chaining; one site forgetting the config label would silently show Home Assistant's name instead, on one screen only, and read as a data bug.
+- **`EvidenceRow`'s `onChange` is optional**, so a read-only photo strip stops having to declare a do-nothing handler — three files each carried their own.
+
+### Deliberately not changed
+- **The HUD's two press-and-hold gestures stay as they are.** They look like duplicates of `useLongPress` and are not quite: each is a per-item handler factory built over a `.map()` (where a hook cannot be called), and their hold times differ on purpose — 450ms on a floor button, 480ms on a category icon, against the hook's 600ms, which is tuned for a list row you might be scrolling. Collapsing them would mean extracting two child components and re-timing two field-tested gestures, for no behaviour change. Recorded here rather than done quietly, so the next person doesn't rediscover it as an oversight.
+
 ## 2.73.3
 
 ### Changes

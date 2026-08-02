@@ -19,7 +19,10 @@ export default function EvidenceRow({
   photoIds, onChange, disabled,
 }: {
   photoIds: string[];
-  onChange: (next: string[]) => void;
+  /** Omit on a read-only strip. Three call sites each declared their own
+   *  do-nothing handler just to satisfy this prop, which is the component
+   *  making every caller carry a workaround for its own signature. */
+  onChange?: (next: string[]) => void;
   disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,7 +46,7 @@ export default function EvidenceRow({
         setError(e instanceof Error ? e.message : "Couldn't add that photo.");
       }
     }
-    if (added.length) onChange([...photoIds, ...added]);
+    if (added.length) onChange?.([...photoIds, ...added]);
     setBusy(false);
     if (inputRef.current) inputRef.current.value = "";
   };
@@ -66,7 +69,7 @@ export default function EvidenceRow({
             {!disabled && (
               <button
                 className="fm-thumb-x"
-                onClick={() => onChange(photoIds.filter((p) => p !== id))}
+                onClick={() => onChange?.(photoIds.filter((p) => p !== id))}
                 aria-label="Remove photo"
               ><X size={12} /></button>
             )}

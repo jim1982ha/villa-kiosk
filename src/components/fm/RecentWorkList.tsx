@@ -20,9 +20,6 @@ import { localStamp, formatIdr } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
 
-/** Stable no-op: these strips are read-only. */
-const NO_PHOTO_EDIT = () => {};
-
 export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
   const { data, removeCompletion } = useFmData();
 
@@ -75,7 +72,7 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
               </div>
               {c.note && <div className="fm-timeline-note">{c.note}</div>}
               {c.photoIds.length > 0 && (
-                <EvidenceRow photoIds={c.photoIds} onChange={NO_PHOTO_EDIT} disabled />
+                <EvidenceRow photoIds={c.photoIds} disabled />
               )}
             </div>
             {cost && <span className="fm-amount">{formatIdr(cost.amountIdr)}</span>}
