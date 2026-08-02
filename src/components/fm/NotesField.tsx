@@ -38,7 +38,11 @@ export default function NotesField({
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, MAX_PX)}px`;
+    // scrollHeight is 0 while the element is in a hidden subtree (a tab that
+    // isn't the open one). Writing 0px there would collapse the field, and it
+    // would stay collapsed until the next keystroke — leave the CSS height in
+    // place and let the next layout pass size it.
+    if (el.scrollHeight > 0) el.style.height = `${Math.min(el.scrollHeight, MAX_PX)}px`;
   }, [value]);
 
   return (

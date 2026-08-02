@@ -220,7 +220,7 @@ export default function FaultsTab(
             label="Details (optional)"
             value={note}
             onChange={setNote}
-            placeholder={"What exactly happens, when it started, anything already tried…\n\nAs much as you need — this field grows."}
+            placeholder="What exactly happens, when it started, anything already tried…"
             rows={3}
           />
           <div className="fm-field">

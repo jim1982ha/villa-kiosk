@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.73.1
+
+### Changes
+- **Multi-line fields in the Facility workspace were rendering unstyled** — a white box with black text, sized by the HTML `cols` attribute rather than the form column, sitting out of line with every field around it. The form-control rule read `.fm-field input, .fm-field select` and had simply never included `textarea`, so the browser's own defaults applied. Nothing had noticed because until recently the only textareas in these forms were in dialogs rarely opened; 2.72.0 put one on the fault and spend editors, where it was immediately obvious. All three control types are now styled together, so the next multi-line field added anywhere in the workspace inherits it instead of needing its own rule.
+- Also: dropped the second paragraph from the fault details placeholder (a blank line inside placeholder text renders literally, which read as a layout glitch), and the auto-grow now leaves the height alone when the field is measured inside a hidden tab, where the browser reports zero and the field would otherwise collapse until the next keystroke.
+
 ## 2.73.0
 
 ### Changes
