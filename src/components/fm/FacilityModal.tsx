@@ -29,6 +29,7 @@ import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
 import { unavailableDeviceIds } from "@/config/deviceGroups";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
+import { buildDeviceOptions } from "./DeviceSearchPicker";
 import TodayTab from "./TodayTab";
 import ReadinessTab from "./ReadinessTab";
 import FaultsTab from "./FaultsTab";
@@ -98,6 +99,17 @@ export default function FacilityModal({
   // unavailableDeviceIds) — the Readiness tab's quick-link opens this exact
   // panel rather than a Facility-local reimplementation, so there is only
   // ever one "unavailable devices" view in the app to keep in sync.
+  // Built ONCE here and handed to both tabs, the same way unavailableIds is
+  // (see FaultsTab's prop docstring): mappedEntityIds only exists at this
+  // level, and two tabs each deriving "the villa's devices" from a different
+  // starting point is precisely how the picker ended up offering rows no
+  // other screen would show.
+  const deviceOptions = useMemo(
+    () => buildDeviceOptions(config.entityMap, entities, config.deviceGroups,
+                             mappedEntityIds, config.dismissedEntityIds),
+    [config.entityMap, entities, config.deviceGroups, mappedEntityIds, config.dismissedEntityIds],
+  );
+
   const unavailableIds = useMemo(
     () => unavailableDeviceIds(
       config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
@@ -153,9 +165,12 @@ export default function FacilityModal({
               />
             )}
             {ready && tab === "faults" && (
-              <FaultsTab onOpenEntity={onOpenEntity} unavailableIds={unavailableIds} />
+              <FaultsTab onOpenEntity={onOpenEntity} unavailableIds={unavailableIds}
+                deviceOptions={deviceOptions} />
             )}
-            {ready && tab === "spend" && <SpendTab onOpenEntity={onOpenEntity} />}
+            {ready && tab === "spend" && (
+              <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} />
+            )}
             {ready && tab === "schedule" && <ScheduleEditor />}
             {ready && tab === "report" && (
               <ReportTab

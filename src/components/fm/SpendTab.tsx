@@ -18,14 +18,20 @@ import { buildSpendStatement } from "@/fm/fmReport";
 import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
 import type { FmSavedDocument } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
-import DeviceSearchPicker, { buildDeviceOptions } from "./DeviceSearchPicker";
+import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import ErasableRow from "./ErasableRow";
 import ReportPreview from "./ReportPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 
-export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string) => void }) {
+export default function SpendTab(
+  { onOpenEntity, deviceOptions }: {
+    onOpenEntity?: (id: string) => void;
+    /** Built once by FacilityModal and shared with the Faults tab, so both
+     *  offer exactly the same devices. */
+    deviceOptions: DeviceOption[];
+  },
+) {
   const { data, addCost, removeCost, saveDocument } = useFmData();
-  const { entities } = useHA();
   const { config } = useConfig();
   const { haConfig } = useHA();
   const [month, setMonth] = useState(monthKey(Date.now()));
@@ -44,7 +50,6 @@ export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string)
   const [statementSaved, setStatementSaved] = useState(false);
   const villaName = resolveSiteTitle(config, haConfig?.location_name);
 
-  const deviceOptions = buildDeviceOptions(config.entityMap, entities);
   const selectDevice = (id: string, name: string) => { setEntityId(id); setDeviceText(name); };
   const clearDevice = () => { setEntityId(""); setDeviceText(""); };
   const resetForm = () => {
@@ -218,7 +223,8 @@ export default function SpendTab({ onOpenEntity }: { onOpenEntity?: (id: string)
               {(c.entityId || c.deviceLabel) && (
                 <div className="fm-chiprow">
                   {c.entityId ? (
-                    <button className="fm-entity-chip" onClick={() => onOpenEntity?.(c.entityId!)}>
+                    <button className="fm-entity-chip" title={c.entityId}
+                      onClick={() => onOpenEntity?.(c.entityId!)}>
                       {c.deviceLabel ?? c.entityId}
                     </button>
                   ) : (

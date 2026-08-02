@@ -2249,6 +2249,34 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-row-title-action { margin-left: auto; }
 .fm-row-sub { font-size: 12.5px; }
 
+/* Device-picker suggestion rows (Faults/Spend). Two lines: the friendly name,
+   then the entity_id and room. The id is what actually identifies a device —
+   a label like "Bedroom 1" names nothing an operator can act on — so it is
+   always present rather than revealed on hover, which is unusable on a phone.
+   Both lines truncate instead of wrapping: a long entity_id must not push the
+   row's height around and make the list jump while typing. */
+.fm-picker-label {
+  display: flex; align-items: center; gap: 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fm-picker-meta {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 11px; min-width: 0;
+}
+.fm-picker-meta code {
+  font-size: 11px; opacity: 0.9;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fm-picker-meta > span { white-space: nowrap; flex: none; }
+.fm-picker-flag {
+  flex: none; font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 999px;
+}
+.fm-picker-flag.offline {
+  color: var(--status-danger);
+  background: color-mix(in srgb, var(--status-danger) 14%, transparent);
+}
+
 /* Rows whose record can be erased by a superadmin (press and hold, then the
    6-digit code — see auth/SuperadminGate.tsx). The hint is one small dot in
    the corner: someone who knows what it means spots it immediately, someone

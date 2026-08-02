@@ -26,32 +26,61 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import type { EntityMapping } from "@/types/scene.types";
 import { displayLabelFor } from "@/config/EntityMap";
+import { selectableDeviceIds } from "@/config/deviceGroups";
+import { isUnavailable } from "@/utils/stateColors";
+import type { DeviceGroup } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 
 export interface DeviceOption {
   entityId: string;
   label: string;
   room?: string;
+  /** True when Home Assistant currently reports this device as offline —
+   *  surfaced in the dropdown because that is very often WHY someone is
+   *  raising a fault against it. */
+  offline?: boolean;
 }
 
-/** Every candidate a fault/cost entry could point at — one per configured
+/** Every candidate a fault/cost entry could point at — one row per real
  *  device, sorted for a stable, scannable dropdown. Shared by both tabs so
- *  neither can build its candidate list a different way from the other. */
+ *  neither can build its candidate list a different way from the other.
+ *
+ *  WHICH devices those are is not decided here: selectableDeviceIds owns that
+ *  rule for the whole app. This used to enumerate `entityMap` directly with
+ *  only `disabled` filtered, which let three classes of non-device through —
+ *  entries Home Assistant has never heard of, entries the owner had removed,
+ *  and every member of a multi-entity device — none of which appear anywhere
+ *  else in the UI. The result was a picker offering rows like "Bedroom 1"
+ *  that named nothing anyone could find in the villa. */
 export function buildDeviceOptions(
   entityMap: Record<string, EntityMapping>,
   entities: Record<string, HassEntity>,
+  deviceGroups: DeviceGroup[] = [],
+  mappedEntityIds: ReadonlySet<string> = new Set(),
+  dismissedEntityIds: readonly string[] = [],
 ): DeviceOption[] {
-  return Object.keys(entityMap)
-    .filter((id) => !entityMap[id]?.disabled)
+  return selectableDeviceIds(entityMap, deviceGroups, mappedEntityIds, entities,
+                             dismissedEntityIds)
     .map((id) => ({
       entityId: id,
       label: displayLabelFor(id, entityMap[id]?.label, entities[id]?.attributes.friendly_name),
       room: entityMap[id]?.room,
+      offline: isUnavailable(entities[id]),
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 const MAX_RESULTS = 8;
+
+/** "Unmapped" is the placeholder EntityMap.resolveMeshToMapping writes for a
+ *  freshly auto-detected device before roomForEntity has worked out where it
+ *  actually sits — an internal marker, not a room in the villa. Rendering it
+ *  raw put a room-shaped word where a room name goes, which reads as a real
+ *  place called "Unmapped". Say what it means instead. */
+function roomHint(room: string | undefined): string {
+  if (!room || room.trim().toLowerCase() === "unmapped") return "no room set";
+  return room;
+}
 
 export default function DeviceSearchPicker({
   value, onChangeText, onSelect, onClear, options, placeholder, matchedEntityId,
@@ -155,9 +184,21 @@ export default function DeviceSearchPicker({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => { onSelect(o); setOpen(false); }}
             >
-              <span style={{ flex: 1, textAlign: "left" }}>
-                {o.label}
-                {o.room && <div className="muted" style={{ fontSize: 11 }}>{o.room}</div>}
+              {/* The entity_id is shown, not just the friendly label. A label
+                  alone is frequently not enough to know what you are picking —
+                  a row reading "Bedroom 1" tells an operator nothing they can
+                  act on, while "sensor.bedroom_1" names the thing exactly. The
+                  room comes second because it is the weaker hint of the two
+                  and is often not set at all. */}
+              <span style={{ flex: 1, textAlign: "left", minWidth: 0 }}>
+                <span className="fm-picker-label">
+                  {o.label}
+                  {o.offline && <span className="fm-picker-flag offline">offline</span>}
+                </span>
+                <span className="fm-picker-meta muted">
+                  <code>{o.entityId}</code>
+                  <span>{roomHint(o.room)}</span>
+                </span>
               </span>
             </button>
           ))}

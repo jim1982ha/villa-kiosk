@@ -20,7 +20,7 @@ import { localStamp, ticketStats } from "@/fm/fmEngine";
 import type { FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
-import DeviceSearchPicker, { buildDeviceOptions } from "./DeviceSearchPicker";
+import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 
 const NEXT: Record<FmTicketStatus, FmTicketStatus | null> = {
   open: "in_progress", in_progress: "resolved", resolved: null,
@@ -30,7 +30,7 @@ const LABEL: Record<FmTicketStatus, string> = {
 };
 
 export default function FaultsTab(
-  { onOpenEntity, unavailableIds }: {
+  { onOpenEntity, unavailableIds, deviceOptions }: {
     onOpenEntity: (id: string) => void;
     /** Computed once by FacilityModal via unavailableDeviceIds and passed in,
      *  rather than recomputed here — this tab used to derive its own
@@ -39,6 +39,11 @@ export default function FaultsTab(
      *  same device could be one row on the HUD badge and two here, and an
      *  entity the owner had explicitly removed still showed up. */
     unavailableIds: string[];
+    /** The villa's real devices, built once by FacilityModal — same reason as
+     *  unavailableIds above. Deriving it here would give this tab its own
+     *  answer to "what is a device", which is how the picker came to list
+     *  entries no other screen showed. */
+    deviceOptions: DeviceOption[];
   },
 ) {
   const { data, addTicket, updateTicket, removeTicket } = useFmData();
@@ -69,7 +74,6 @@ export default function FaultsTab(
   const label = (id: string) =>
     displayLabelFor(id, config.entityMap[id]?.label, entities[id]?.attributes.friendly_name);
 
-  const deviceOptions = buildDeviceOptions(config.entityMap, entities);
 
   // One selection, two entry points (the offline shortlist and the search
   // box) — both write here, so picking one never leaves the other showing a
@@ -112,6 +116,10 @@ export default function FaultsTab(
                   <button
                     key={id}
                     className={`fm-entity-chip${entityId === id ? " on" : ""}`}
+                    // The chip shows a friendly name; the entity_id is what
+                    // identifies the device. Same reason the search rows
+                    // carry it — a label alone can name nothing findable.
+                    title={id}
                     // Second click on the SAME chip un-selects it — the
                     // original bug was that this only ever selected, so once
                     // clicked a chip could never be released again.
@@ -192,7 +200,8 @@ export default function FaultsTab(
               {(t.entityId || t.deviceLabel) && (
                 <div className="fm-chiprow">
                   {t.entityId ? (
-                    <button className="fm-entity-chip" onClick={() => onOpenEntity(t.entityId!)}>
+                    <button className="fm-entity-chip" title={t.entityId}
+                      onClick={() => onOpenEntity(t.entityId!)}>
                       {t.deviceLabel ?? label(t.entityId)}
                     </button>
                   ) : (

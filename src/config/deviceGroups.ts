@@ -156,6 +156,67 @@ export function suggestDeviceGroups(
  * "1 offline" on the HUD badge has no way to know which number is real. Both
  * callers now go through this one function, so they cannot disagree again.
  */
+/**
+ * Every device the villa actually has, as ONE list: real, not hidden, not
+ * dismissed, and folded so a multi-entity device appears once.
+ *
+ * This is the answer to "what may a person be shown or asked to pick", and it
+ * exists because two surfaces disagreed about it in the field. The Facility
+ * fault picker listed raw `entityMap` keys with only `disabled` filtered, so
+ * it offered rows Home Assistant has never heard of — leftovers from a
+ * renamed entity or an older model — presented exactly like real devices.
+ * They were invisible everywhere else (Advanced Settings hides bound rows and
+ * flags stale ones; the category modal drops dismissed ones), so the owner had
+ * no way to reconcile "nothing unmapped in settings" with "unknown rooms in
+ * the picker", and no way to tell which entry meant a real thing.
+ *
+ * Candidates come from the entity map AND the model's own meshes, for the
+ * same reason unavailableDeviceIds does it: a device can legitimately be one
+ * without the other. The rules:
+ *   • `disabled` — the owner hid it;
+ *   • CONFIG DEBRIS — no HA entity AND no geometry on the map. Not a device
+ *     in error, just a key nothing has ever cleaned up;
+ *   • dismissed — the owner removed it and HA still doesn't know it
+ *     (see dismissedEntities for why that second half matters);
+ *   • group members fold into their primary, so one physical device with
+ *     three entities is one row.
+ */
+export function selectableDeviceIds(
+  entityMap: Record<string, EntityMapping>,
+  deviceGroups: DeviceGroup[],
+  mappedEntityIds: ReadonlySet<string>,
+  entities: Record<string, HassEntity>,
+  dismissedEntityIds: readonly string[] = [],
+): string[] {
+  const dismissed = dismissedEntitySet(dismissedEntityIds, entities);
+  const repOf = primaryByMember(entityMap, deviceGroups);
+  const reps = new Set<string>();
+  for (const id of new Set([...mappedEntityIds, ...Object.keys(entityMap)])) {
+    if (entityMap[id]?.disabled) continue;
+    if (!mappedEntityIds.has(id) && !entities[id]) continue;
+    if (dismissed.has(id)) continue;
+    reps.add(repOf.get(id) ?? id);
+  }
+  return [...reps];
+}
+
+/** member entity_id → the entity_id that REPRESENTS it on the map. Covers
+ *  both explicit groups and the ones only suggested so far, so a device folds
+ *  identically whether or not the owner has confirmed the grouping. */
+function primaryByMember(
+  entityMap: Record<string, EntityMapping>,
+  deviceGroups: DeviceGroup[],
+): Map<string, string> {
+  const repOf = new Map<string, string>();
+  for (const g of deviceGroups) {
+    for (const memberId of g.memberEntityIds) repOf.set(memberId, g.primaryEntityId);
+  }
+  for (const s of suggestDeviceGroups(entityMap, deviceGroups)) {
+    if (!repOf.has(s.memberEntityId)) repOf.set(s.memberEntityId, s.primaryEntityId);
+  }
+  return repOf;
+}
+
 export function unavailableDeviceIds(
   entityMap: Record<string, EntityMapping>,
   deviceGroups: DeviceGroup[],
@@ -169,27 +230,11 @@ export function unavailableDeviceIds(
    *  "I click Remove and they're still in Unavailable devices". */
   dismissedEntityIds: readonly string[] = [],
 ): string[] {
-  const candidates = new Set([...mappedEntityIds, ...Object.keys(entityMap)]);
-  const dismissed = dismissedEntitySet(dismissedEntityIds, entities);
-
-  const repOf = new Map<string, string>();
-  for (const g of deviceGroups) {
-    for (const memberId of g.memberEntityIds) repOf.set(memberId, g.primaryEntityId);
-  }
-  for (const s of suggestDeviceGroups(entityMap, deviceGroups)) {
-    if (!repOf.has(s.memberEntityId)) repOf.set(s.memberEntityId, s.primaryEntityId);
-  }
-
-  const reps = new Set<string>();
-  for (const id of candidates) {
-    if (entityMap[id]?.disabled) continue;
-    // Config debris: an entityMap entry HA has never heard of AND that has no
-    // geometry on the map is not a device in error, it's a leftover key from
-    // a renamed entity or an older model.
-    if (!mappedEntityIds.has(id) && !entities[id]) continue;
-    if (dismissed.has(id)) continue;
-    if (!isUnavailable(entities[id])) continue;
-    reps.add(repOf.get(id) ?? id);
-  }
-  return [...reps];
+  // "Which real devices are currently offline" — the reality filter (hidden,
+  // config debris, dismissed, group folding) is selectableDeviceIds' job, so
+  // the two lists cannot drift apart. They did once: the fault picker had its
+  // own, laxer idea of what counted as a device.
+  return selectableDeviceIds(entityMap, deviceGroups, mappedEntityIds, entities,
+                             dismissedEntityIds)
+    .filter((id) => isUnavailable(entities[id]));
 }

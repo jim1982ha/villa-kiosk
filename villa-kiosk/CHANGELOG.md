@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.68.0
+
+### Changes
+- **The Facility device picker offered rows that were not devices.** Raising a fault and searching "Bedroom" suggested "Bedroom 1", "Bedroom 2", "Bedroom 3" — entries Home Assistant has never heard of, each shown exactly like a real device and each impossible to identify or act on. They appeared nowhere else in the app, which is what made it so confusing: Advanced Settings showed nothing unmapped, because that screen hides bound rows, drops dismissed ones and puts stale ones behind an explicit "no longer in Home Assistant" banner. The picker applied none of those filters — it enumerated `entityMap` with only `disabled` checked.
+- **"What counts as a device" is now one function, `selectableDeviceIds`.** It applies the rules that were already spelled out for the unavailable-devices list and nowhere else: hidden entities are out; CONFIG DEBRIS (no HA entity *and* no geometry in the model — a leftover key from a renamed entity or an older GLB) is out; dismissed entities are out; and the members of a multi-entity device fold into their primary so one physical thing is one row. `unavailableDeviceIds` is now that same list filtered to the offline ones, rather than a second implementation of the same rules — the two can no longer disagree about the same device, which is exactly the class of bug this was.
+- **Both tabs are handed one prebuilt list.** Faults and Spend each built their own candidates; they now share the one FacilityModal computes, the same way the offline shortlist already worked. Two screens deriving "the villa's devices" from different starting points is how they came to disagree in the first place.
+- **Every suggestion now names its entity_id.** A friendly label alone frequently identifies nothing — "Bedroom 1" tells an operator nothing they can go and look at, while `sensor.bedroom_1` names it exactly. The id sits under the label alongside the room, always visible rather than on hover (unusable on a phone), and both lines truncate so a long id can't make the list jump while typing. Devices Home Assistant currently reports as offline are flagged in the row, since that is very often why someone is raising the fault. The offline quick-pick chips and the device chips on saved faults/spend entries carry the id as a tooltip for the same reason.
+- **"Unmapped" is no longer displayed as if it were a room.** It is the placeholder the model auto-detection writes before a device's real room is worked out — an internal marker that was being rendered in the slot where a room name goes, reading as a place in the villa called "Unmapped". Rows with no room now say "no room set".
+- **Audited every other list built from the entity map; the picker was the only one missing these rules.** The category modal already applied dismissals and RBAC, Advanced Settings its own filtering plus the stale banner, and the unavailable-devices modal the full rule set. The remaining enumerations are counts and one-off config migrations, not lists anyone is shown.
+
 ## 2.67.0
 
 ### Changes
