@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.73.0
+
+### Changes
+- **Every add-on option now explains itself on the Configuration page.** Until now that page showed the raw key — `evidence_retention_days`, `public_model_access` — and nothing else. All the explanation existed, but in comments inside `config.yaml`, which is a file the person configuring the add-on never opens. Home Assistant renders help text from `translations/en.yaml` and the add-on didn't ship one, so none of it reached the only screen where the decision is actually made. Each of the nine options now has a proper label and a short description written to answer "what do I put in this box", including what an EMPTY value means — which differs per field and is the easiest thing to get wrong: an empty guest passcode lets anyone in, an empty owner passcode removes the profile entirely, and an empty superadmin code switches record deletion off for everybody.
+- **The exposed port is explained too**, since mapping it is the single decision that changes this add-on's exposure most.
+- **A test fails if a future option ships without help text**, or if help text is left behind for an option that no longer exists. A setting nobody can interpret is how a villa ends up misconfigured, and passcodes and public model access are exactly the fields where that matters.
+
 ## 2.72.0
 
 ### Changes

@@ -425,6 +425,25 @@ t("every configured option is a known key",
   set(_cfg["options"]) - proxy.KNOWN_OPTION_KEYS, set())
 t("every option has a schema entry", set(_cfg["options"]) - set(_cfg["schema"]), set())
 
+# Help text is what the operator configuring this add-on actually reads. It
+# lives in translations/en.yaml because that is the only place Supervisor
+# renders — explanations in config.yaml comments are invisible in the UI. An
+# option shipped without one shows as a bare key with no clue what it does,
+# which for a security setting (passcodes, lockout, public model access) is
+# how a villa ends up misconfigured.
+with open(os.path.join(HERE, "..", "villa-kiosk", "translations", "en.yaml"),
+          encoding="utf-8") as _f:
+    _tr = yaml.safe_load(_f)
+t("every option has a label and help text in the UI",
+  set(_cfg["options"]) - set(_tr.get("configuration", {})), set())
+t("no help text for an option that no longer exists",
+  set(_tr.get("configuration", {})) - set(_cfg["options"]), set())
+t("every exposed port is explained",
+  set(_cfg.get("ports", {})) - set(_tr.get("network", {})), set())
+t("no field is left with an empty name or description",
+  [k for k, v in _tr["configuration"].items()
+   if not str(v.get("name", "")).strip() or not str(v.get("description", "")).strip()], [])
+
 proxy._read_options = _saved_read_options
 
 print(f"\n{PASSED} passed, {FAILED} failed")

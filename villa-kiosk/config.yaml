@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: Villa Kiosk
-version: "2.72.0"
+version: "2.73.0"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -87,6 +87,12 @@ startup: application
 # of the maintenance record; the same brute-force lockout applies as for the
 # profile PINs. Leave it empty unless you actually need deletions, and treat
 # it as separate from the everyday passcodes.
+# NOTE: the help text an operator actually SEES on the Configuration page lives
+# in translations/en.yaml — Supervisor renders that, never these comments. Add
+# a field there whenever you add one here (tests/security_test.py fails if you
+# forget). What stays here is the WHY behind each default, which belongs next
+# to the value it explains.
+#
 # ── Tunable policy ──────────────────────────────────────────────────────────
 # These four are POLICY, not preference: how long records are kept, how long a
 # session lasts, how hard a wrong passcode bites. No single number is right for

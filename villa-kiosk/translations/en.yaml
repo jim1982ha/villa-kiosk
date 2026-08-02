@@ -1,0 +1,87 @@
+# Field labels and help text for the add-on's Configuration page.
+#
+# Supervisor renders `name` as each field's label and `description` as the
+# help text underneath it. Without this file the UI shows the raw option key
+# ("evidence_retention_days") and nothing else — every explanation lived in
+# comments inside config.yaml, which is a file the operator configuring the
+# add-on never opens.
+#
+# Keep these short and decision-oriented: the question a reader has here is
+# "what do I put in this box", not "how is it implemented". The long-form
+# reasoning stays in config.yaml's comments and DOCS.md.
+configuration:
+  guest_pin:
+    name: Guest passcode (4 digits)
+    description: >-
+      Unlocks the Guest profile: comfort, lights, wifi and doors, with a
+      bounded A/C range. Leave EMPTY to let anyone in as a guest with no
+      prompt at all — since a guest can unlock doors, only do that on a villa
+      you are happy for any visitor to control.
+  owner_pin:
+    name: Owner passcode (4 digits)
+    description: >-
+      Unlocks the Owner profile: full control, plus configuration, the 3D
+      model and the Facility workspace. Leave empty to make the profile
+      unavailable — an empty owner passcode is not an open door, it removes
+      the profile from the picker.
+  ops_pin:
+    name: Facility manager passcode (4 digits)
+    description: >-
+      Unlocks the Facility manager profile: full device control and the
+      maintenance workspace (schedule, faults, spend, evidence), but not
+      configuration or the 3D model. Leave empty to make the profile
+      unavailable.
+  superadmin_pin:
+    name: Superadmin code (6 digits)
+    description: >-
+      Authorises permanently DELETING a maintenance record — a fault, a spend
+      entry or a logged completion, together with its photos. Not a fourth
+      profile: it never appears on the profile picker and grants nothing on
+      its own. Inside the app you press and hold a record to be asked for it,
+      and a correct code authorises that one deletion only. Deleting still
+      requires an Owner or Facility manager session AS WELL. Leave empty to
+      switch deletion off entirely — records then cannot be erased by anyone.
+  public_model_access:
+    name: Allow the 3D model to load before sign-in
+    description: >-
+      Lets the villa floor plan start downloading and decoding while the
+      passcode screen is still showing, which shortens the first load. It
+      makes the model file (and only that) reachable with no passcode, so only
+      enable it if something else already protects the hostname, such as
+      Cloudflare Access. Pointless for the Home Assistant sidebar, which is
+      already trusted, and unnecessary if you never expose the port directly.
+  evidence_retention_days:
+    name: Keep evidence photos for (days)
+    description: >-
+      How long maintenance photos are kept before being deleted. The default
+      550 is about 18 months — a 12-month agreement plus the dispute window
+      after it. Raise it if your own obligation runs longer, or set 0 to never
+      delete by age. Separate from the automatic clean-up of photos no record
+      points at any more, which always runs.
+  session_days:
+    name: Stay signed in for (days)
+    description: >-
+      How long a device stays signed in before the passcode is asked again. A
+      wall-mounted tablet wants a long window; a villa where guests use their
+      own phones wants a short one, so a departing guest's access lapses on
+      its own. Changing this affects new sign-ins only — use "Log out all
+      devices" in the app to apply it to existing ones immediately.
+  telemetry_max_events:
+    name: Diagnostic events to keep
+    description: >-
+      How much diagnostic history the add-on stores (load times, errors, sync
+      results), shown in the app under Advanced Settings. Raise it while
+      chasing an intermittent problem on someone else's device. The history is
+      a fixed-size ring, so the only cost is a slightly larger file.
+  pin_lockout_minutes:
+    name: Lockout after wrong passcodes (minutes)
+    description: >-
+      How long a device must wait after five wrong passcodes. The lockout
+      applies per device address, so raising it slows down someone guessing
+      without locking the household out of their own villa.
+network:
+  8099/tcp: >-
+    Reach the kiosk directly on this port, outside the Home Assistant
+    sidebar — for a full-screen app or a Cloudflare Tunnel. Leave it unset for
+    sidebar-only access. Every request on this port is authenticated by the
+    add-on itself; set at least one passcode before exposing it.
