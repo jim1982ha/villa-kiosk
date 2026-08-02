@@ -561,32 +561,6 @@ def _read_options() -> dict:
         return {}
 
 
-def _log_effective_options() -> None:
-    """Print what this process ACTUALLY read from /data/options.json at startup.
-
-    Added because a reverting toggle could not be settled by reasoning: the
-    operator sets an option, restarts, and sees it off again, while every
-    theory about why (a stale-key sweep, an image lagging the repository) was
-    either wrong or unfalsifiable from outside. This makes the server's own
-    view of its configuration a fact in the add-on log.
-
-    Passcodes are reported as set/unset, never echoed.
-    """
-    try:
-        opts = _read_options()
-    except Exception as err:  # noqa: BLE001 — diagnostics must never block startup
-        print(f"[supervisor-proxy] could not read options: {err}", flush=True)
-        return
-    secrets = {PIN_OPTION[r] for r in AUTH_ROLES} | {SUPERADMIN_PIN_OPTION}
-    shown = {
-        k: ("set" if str(v or "").strip() else "unset") if k in secrets else v
-        for k, v in sorted(opts.items())
-    }
-    print(f"[supervisor-proxy] effective options: {shown}", flush=True)
-    print(f"[supervisor-proxy] public_model_access is "
-          f"{'ON' if _public_model_access() else 'OFF'}", flush=True)
-
-
 async def _cleanup_stale_options(session: ClientSession) -> None:
     """Self-heal an add-on options key left over from a dropped schema field.
 
@@ -1856,7 +1830,6 @@ def main() -> None:
         os.makedirs(DATA_ROOT, exist_ok=True)
         _session_secret()  # create the signing key on first boot
         await _cleanup_stale_options(a["session"])
-        _log_effective_options()
 
     async def on_cleanup(a: web.Application) -> None:
         await a["session"].close()

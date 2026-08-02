@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.79.1
+
+### Changes
+- **Removed the startup options dump added in 2.79.0.** It existed to settle whether a reverting toggle was being lost before or after the server read it; the answer turned out to be neither — the add-on's Configuration page needs its **Save** button pressed, and a toggle flipped without saving is discarded by Home Assistant, not by this add-on. Diagnostics that have done their job are clutter, so it goes.
+- The self-heal change from 2.78.0 stays. It was not the cause of that report, but it fixed a real latent bug: the sweep worked from an allowlist compiled into the image, so any option added to `config.yaml` before a matching image shipped would have been deleted on every start. `public_model_access` was exposed to exactly that for many releases.
+
 ## 2.79.0
 
 ### Performance — measured, then fixed
