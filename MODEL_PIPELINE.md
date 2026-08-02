@@ -320,6 +320,34 @@ which reads the copy embedded in the GLB), and `--no-atlas-png` to keep the
 `villa_bake_atlas[_night].png` inspection copies out of the output folder.
 Both work with the sizes wrapper: `blender_pipeline.py 1024 2048 4096
 --no-atlas-png`.
+
+### Faster loads: `--ktx2` (pipeline ≥2.16.0, kiosk ≥2.80.0)
+
+`--ktx2` re-encodes the exported GLB's textures to KTX2/ETC1S in place, so the
+file you upload is already the optimised one. Ordinary PNG/JPEG textures are
+decoded by the CPU and uploaded as raw pixels; KTX2 transcodes straight into a
+GPU-native format (ASTC on an iPad) and stays compressed in GPU memory. With
+the kiosk's floor-probe cache in place, Babylon's glTF import is the largest
+remaining part of a load, and most of that is texture decode.
+
+    python3 blender_pipeline.py 2048 --ktx2
+
+**Requires Node.js on the machine running the pipeline** (`brew install node`,
+or the LTS installer from nodejs.org) — `npx` fetches `@gltf-transform/cli` the
+first time, so that machine needs internet. **The kiosk does not**: it ships
+its own KTX2 decoder and transcoder, so the villa display stays fully offline.
+If the script is running under a Blender launched from the macOS Finder its
+PATH may not include Homebrew even though your shell's does — set
+`VK_NPX=/opt/homebrew/bin/npx` to point at it.
+
+Upgrade the kiosk to **2.80.0 or later before uploading a KTX2 GLB**; an older
+build would try to fetch the decoder from Babylon's CDN and show an untextured
+villa on a display with no internet.
+
+**Check the result before shipping it.** ETC1S is aggressive and baked lighting
+atlases are gradient-heavy, so look for banding on large flat walls and floors.
+Re-running without `--ktx2` produces the plain GLB again, and the previous file
+can simply be re-uploaded.
 **Standalone**: if a central model isn't already detected automatically (see
 the add-on note above), Advanced Settings → *3D model source* has a
 per-browser uploader instead.
