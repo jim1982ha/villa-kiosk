@@ -26,6 +26,7 @@ import { useFmData } from "@/fm/FmDataContext";
 import { formatIdr } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
+import NotesField from "./NotesField";
 
 const STAGE_COPY: Record<FmTicketStatus, { title: string; cta: string; note: string }> = {
   open: { title: "Reopen fault", cta: "Reopen", note: "Why it's being reopened (optional)" },
@@ -94,13 +95,15 @@ export default function FaultStageModal({
             <input value={by} onChange={(e) => setBy(e.target.value)}
               placeholder="e.g. Wayan / AC contractor" />
           </label>
-          <label className="fm-field">
-            <span>{copy.note}</span>
-            <textarea value={note} rows={3} onChange={(e) => setNote(e.target.value)}
-              placeholder={asksCost
-                ? "e.g. Replaced the capacitor and cleaned the filters"
-                : "e.g. Contractor booked for Thursday morning"} />
-          </label>
+          <NotesField
+            label={copy.note}
+            value={note}
+            onChange={setNote}
+            rows={3}
+            placeholder={asksCost
+              ? "e.g. Replaced the capacitor and cleaned the filters"
+              : "e.g. Contractor booked for Thursday morning"}
+          />
           <div className="fm-field">
             <span>Photo (optional)</span>
             {/* Kept on the FAULT as well as this step, so the before/after

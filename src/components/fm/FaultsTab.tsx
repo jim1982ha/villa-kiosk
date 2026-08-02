@@ -21,6 +21,7 @@ import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
 import FaultStageModal from "./FaultStageModal";
+import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 
 const NEXT: Record<FmTicketStatus, FmTicketStatus | null> = {
@@ -67,6 +68,7 @@ export default function FaultsTab(
   const [title, setTitle] = useState("");
   const [deviceText, setDeviceText] = useState("");
   const [entityId, setEntityId] = useState("");
+  const [note, setNote] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   /** The fault whose stage change is being recorded, and where it's going. */
   const [staging, setStaging] = useState<{ ticket: FmTicket; to: FmTicketStatus } | null>(null);
@@ -74,7 +76,7 @@ export default function FaultsTab(
 
   const resetForm = () => {
     setAdding(false); setEditingId(null);
-    setTitle(""); setDeviceText(""); setEntityId(""); setPhotoIds([]);
+    setTitle(""); setDeviceText(""); setEntityId(""); setNote(""); setPhotoIds([]);
   };
 
   const openEditor = (t: FmTicket) => {
@@ -83,6 +85,7 @@ export default function FaultsTab(
     setTitle(t.title);
     setEntityId(t.entityId ?? "");
     setDeviceText(t.deviceLabel ?? (t.entityId ? label(t.entityId) : ""));
+    setNote(t.note ?? "");
     setPhotoIds(t.photoIds);
   };
 
@@ -125,6 +128,7 @@ export default function FaultsTab(
     setEntityId(reportFaultFor);
     setDeviceText(label(reportFaultFor));
     setTitle("");
+    setNote("");
     setPhotoIds([]);
     onFaultFormOpened?.();
     // label() reads live config/entities; re-running on those would re-open
@@ -205,10 +209,20 @@ export default function FaultsTab(
             />
           </div>
           <label className="fm-field">
-            <span>Describe the problem</span>
+            <span>Summary</span>
+            {/* Deliberately one line: this is the fault's headline — the card
+                title, the report row, the thing someone scans a list for. The
+                account of what is actually wrong belongs below. */}
             <input value={title} onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Pool pump not starting" />
           </label>
+          <NotesField
+            label="Details (optional)"
+            value={note}
+            onChange={setNote}
+            placeholder={"What exactly happens, when it started, anything already tried…\n\nAs much as you need — this field grows."}
+            rows={3}
+          />
           <div className="fm-field">
             <span>Photo evidence</span>
             <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
@@ -224,6 +238,7 @@ export default function FaultsTab(
                   entityId: entityId || undefined,
                   deviceLabel: deviceText.trim() || undefined,
                   room: entityId ? config.entityMap[entityId]?.room : undefined,
+                  note: note.trim() || undefined,
                   photoIds,
                 };
                 // Same fields either way — updateTicket leaves status,
@@ -271,6 +286,7 @@ export default function FaultsTab(
               </div>
               {/* The photos themselves, not a count of them. "3 photo(s)"
                   is a claim; a thumbnail you can open is the evidence. */}
+              {t.note && <div className="fm-timeline-note">{t.note}</div>}
               {t.photoIds.length > 0 && (
                 <EvidenceRow photoIds={t.photoIds} onChange={NO_PHOTO_EDIT} disabled />
               )}

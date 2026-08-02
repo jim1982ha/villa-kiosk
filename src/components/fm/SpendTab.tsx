@@ -20,6 +20,7 @@ import type { FmCost, FmSavedDocument } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import ErasableRow from "./ErasableRow";
+import NotesField from "./NotesField";
 import ReportPreview from "./ReportPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 
@@ -180,11 +181,12 @@ export default function SpendTab(
           {/* The same free note a fault carries, for the same reason: the
               person reading this in six months is not the person who typed
               the one-line label. */}
-          <label className="fm-field">
-            <span>Notes (optional)</span>
-            <textarea value={note} rows={2} onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. Second refill this quarter — check for a leak" />
-          </label>
+          <NotesField
+            label="Notes (optional)"
+            value={note}
+            onChange={setNote}
+            placeholder="e.g. Second refill this quarter — check for a leak"
+          />
           <label className="fm-field">
             <span>Amount (IDR)</span>
             <input value={amount} inputMode="numeric"

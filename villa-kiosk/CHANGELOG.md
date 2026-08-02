@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.72.0
+
+### Changes
+- **A fault can finally be explained, not just named.** "Describe the problem" was a single-line input and the only text field a fault had — so a fault could be given a headline and nothing more. It is now a one-line **Summary** (the card title, the report row, the thing people scan a list for) plus a **Details** field that takes as much as you need: what exactly happens, when it started, what has already been tried. Editing a fault opens both, and the details show on the card underneath the summary.
+- **Every free-text field in the Facility workspace is now the same field.** Each form had drifted to its own idea of "notes": the fault form had none at all, logging a completion used a single-line input that scrolled sideways past about eight words, and the two dialogs that did use a textarea disagreed on its height. How much you could say about a piece of work depended on which screen you happened to be on — which is not a decision those screens should be making. One `NotesField` now serves faults, spend, completions, every fault-stage update and the guest report form.
+- **It grows with what you type.** A fixed three rows is wrong in both directions — too tall for "replaced the filter", too short for a real account of what went wrong. The box expands as you write and shrinks again when text is deleted, capped so it can never push a form's buttons off the bottom of a phone screen, after which it scrolls.
+- **The guest report gained the same split**: a short "what's wrong" that becomes the fault's headline, and an optional details field for when it started, how often it happens and anything already tried. A guest typing three paragraphs into the summary would have produced a fault whose title was truncated in every list that shows it.
+
 ## 2.71.0
 
 ### Changes

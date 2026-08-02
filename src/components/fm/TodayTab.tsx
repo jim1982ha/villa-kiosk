@@ -14,6 +14,7 @@ import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
 import { budgetStatus, wouldExceedCap } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
+import NotesField from "./NotesField";
 
 const STATE_LABEL: Record<ScheduleStatus["state"], string> = {
   overdue: "Overdue",
@@ -196,11 +197,12 @@ function LogCompletion({
           placeholder="Name or company" />
       </label>
 
-      <label className="fm-field">
-        <span>Note (optional)</span>
-        <input value={note} onChange={(e) => setNote(e.target.value)}
-          placeholder="What was done, anything found" />
-      </label>
+      <NotesField
+        label="Note (optional)"
+        value={note}
+        onChange={setNote}
+        placeholder="What was done, anything found or worth flagging for next time"
+      />
 
       <label className="fm-field">
         <span>Cost (optional, IDR)</span>

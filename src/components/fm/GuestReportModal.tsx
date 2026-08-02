@@ -27,6 +27,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { displayLabelFor } from "@/config/EntityMap";
 import { useFmData } from "@/fm/FmDataContext";
 import { uploadEvidence } from "@/fm/fmApi";
+import NotesField from "./NotesField";
 
 export default function GuestReportModal({
   entityId, onClose,
@@ -39,6 +40,7 @@ export default function GuestReportModal({
   const { config } = useConfig();
   const { entities } = useHA();
   const [title, setTitle] = useState("");
+  const [note, setNote] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export default function GuestReportModal({
       entityId,
       deviceLabel,
       room: entityId ? config.entityMap[entityId]?.room : undefined,
+      note: note.trim() || undefined,
       photoIds,
       reportedBy: "guest",
     });
@@ -114,15 +117,24 @@ export default function GuestReportModal({
               )}
               <label className="fm-field">
                 <span>What&apos;s wrong?</span>
-                <textarea
+                {/* One line, same as the operator form's summary: this becomes
+                    the fault's headline in the work queue. Anything longer
+                    belongs in the details below, where it won't be truncated
+                    in a list. */}
+                <input
                   value={title}
-                  rows={3}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder={deviceLabel
-                    ? "e.g. It makes a loud rattling noise when it starts"
+                    ? "e.g. Makes a loud rattling noise"
                     : "e.g. The tap in the downstairs bathroom drips"}
                 />
               </label>
+              <NotesField
+                label="Anything else worth knowing? (optional)"
+                value={note}
+                onChange={setNote}
+                placeholder="When it started, how often it happens, anything you've already tried…"
+              />
               <div className="fm-field">
                 <span>Photo (optional)</span>
                 {/* No thumbnail: evidence photos are readable by the owner and
