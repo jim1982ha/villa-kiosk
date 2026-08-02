@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.78.1
+
+### Changes
+- **Rewrote the `public_model_access` help text as a plain ON-versus-OFF comparison.** The previous version explained the reasoning and buried the behaviour; this one states what each setting does in the first two sentences, keeps the warning, and says outright that devices which have signed in before are unaffected either way.
+
+### Note on the reverting toggle
+- The fix for that (2.78.0) lives in `supervisor-proxy.py`, which ships **inside the add-on image** — unlike `config.yaml` and these labels, which come from the repository and update as soon as it refreshes. So the option will keep resetting until the add-on is updated to an image built from 2.78.0 or later. The version shown in the app's Advanced Settings footer is the image's version (the Dockerfile bakes the built frontend and this Python into the same image), so it is the reliable way to tell which one is actually running.
+
 ## 2.78.0
 
 ### Fixed

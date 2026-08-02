@@ -44,15 +44,15 @@ configuration:
   public_model_access:
     name: Let the 3D model load without a passcode
     description: >-
-      Leave this OFF unless you know you need it. The villa already starts
-      loading in the background as soon as the app opens — this option is only
-      about devices that have NEVER signed in, or whose sign-in has expired,
-      on the add-on's own hostname. A device that has signed in before already
-      pre-loads without it, so turning it on usually changes nothing you can
-      see. It has no effect at all in the Home Assistant sidebar. The cost is
-      real: the villa's 3D floor plan becomes downloadable by anyone who can
-      reach this add-on, with no passcode. Only enable it if something else
-      already protects the hostname, such as Cloudflare Access.
+      OFF (default): the 3D model is sent only to a device that has signed in.
+      A device signing in for the FIRST time therefore waits for the model
+      after entering its passcode. ON: the model is sent to anyone who asks,
+      so a first-time device can start loading it while the passcode screen is
+      still up. Devices that have signed in before are unaffected either way —
+      they already pre-load. No effect in the Home Assistant sidebar. WARNING:
+      ON means the villa's floor plan can be downloaded by anyone who can
+      reach this add-on, with no passcode — only use it behind something like
+      Cloudflare Access.
   evidence_retention_days:
     name: Keep evidence photos for (days)
     description: >-
