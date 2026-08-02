@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.76.0
+
+### Changes
+- **The profile and passcode screens no longer freeze while the villa loads behind them.** Mounting the 3D scene before login (2.30.2) buys a head start, but the decode is main-thread work — the release note for it said in as many words to "expect this screen to still stutter/pause during a preload". Two rules now protect the input instead of the decode:
+  - **It never starts while a passcode pad is open.** Entering four digits is the most timing-sensitive thing anyone does here, and a pad that drops a digit is worse than a spinner: the user can't tell a stutter from a mis-tap and simply types it again. Entry takes a couple of seconds; the preload can wait for it.
+  - **It waits for the browser to go idle first**, so the screen paints and its first taps land before anything heavy begins — with a bounded timeout, for devices that never report idle.
+- Once started it is latched, since unmounting a half-built scene throws the work away and helps nobody.
+
+### What this does and doesn't fix
+- This narrows the window; it does not close it. The decode still runs on the main thread, so a preload that has begun can still cause a pause. Closing it completely means moving the Babylon layer into a Web Worker via OffscreenCanvas — a large, separate rewrite, still not attempted.
+- The most effective change available without that rewrite is not in this app at all: the villa's own GLB. Decoding is 97% of the load (measured, see 2.75.0), and re-encoding textures as KTX2 (`npx @gltf-transform/cli etc1s villa.glb out.glb`) moves a large part of that work from the CPU to the GPU. No code change, no rebuild.
+
 ## 2.75.0
 
 ### Changes

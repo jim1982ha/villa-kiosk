@@ -57,7 +57,12 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   // explicit request after being told the only way to make pre-login decode
   // GENUINELY non-blocking is moving the whole Babylon layer into a Web
   // Worker via OffscreenCanvas — a large separate rewrite, not attempted
-  // here. What v2.30.2 actually ships instead: SceneManager.loadModel now
+  // 2.76.0 narrows the window rather than closing it: the preload no longer
+  // starts while a passcode pad is open, and waits for the browser to go idle
+  // first, so the screen paints and early taps land before anything heavy
+  // begins. The decode itself is unchanged and still runs on the main thread.
+  //
+  // What v2.30.2 shipped instead: SceneManager.loadModel now
   // yields the main thread between its major top-level steps (see its own
   // comments), which shrinks the longest uninterrupted freeze but does NOT
   // eliminate it — expect this screen to still stutter/pause during a
@@ -75,6 +80,33 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
     if (isIOS()) return;
     return onPrefetchAvailable(() => setModelPreloadable(true));
   }, [role, switching]);
+
+  // WHEN that preload is allowed to begin. The decode is worth overlapping
+  // with this screen, but not at the cost of this screen — a passcode pad
+  // that drops digits is worse than a spinner, because the user cannot tell
+  // a stutter from a mis-tap and simply types it again.
+  //
+  // Two rules, both about protecting input rather than making the decode
+  // faster:
+  //   * never START while a passcode pad is open. Entering four digits is
+  //     the most timing-sensitive thing anyone does on this screen, and it
+  //     is over in a couple of seconds — the preload can wait for it.
+  //   * wait for the browser to be idle first, so the profile screen paints
+  //     and its first taps land before anything heavy begins. The timeout
+  //     keeps it bounded on a device that never reports idle.
+  // Latched: once the decode has started, unmounting it would throw away the
+  // work and dispose a half-built scene, which helps nobody.
+  const [preloadStarted, setPreloadStarted] = useState(false);
+  useEffect(() => {
+    if (preloadStarted || !modelPreloadable || pending) return;
+    const idle = window.requestIdleCallback?.bind(window)
+      ?? ((fn: () => void) => window.setTimeout(fn, 200));
+    const handle = idle(() => setPreloadStarted(true), { timeout: 1500 });
+    return () => {
+      if (window.cancelIdleCallback) window.cancelIdleCallback(handle as number);
+      else window.clearTimeout(handle as number);
+    };
+  }, [preloadStarted, modelPreloadable, pending]);
 
   // Which profiles are gated — fetched once per visit to the select screen.
   // Until the answer arrives we assume every profile needs a PIN (fail closed).
@@ -110,7 +142,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   // Distinct from isSwitch: only isSwitch means there's a session to fall
   // back to (drives the Cancel button below) — modelPreloadable alone (a
   // first-ever, not-yet-logged-in visit) has nothing to cancel back to.
-  const showChildrenEarly = isSwitch || modelPreloadable;
+  const showChildrenEarly = isSwitch || preloadStarted;
 
   const choose = (r: Role) => {
     setGateError(null);
