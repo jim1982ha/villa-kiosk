@@ -74,6 +74,7 @@ import { LightPool } from "./LightPools";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
+import { COSMETIC_MAPPING_FIELDS } from "./entityMapDiff";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 1.3;
@@ -897,6 +898,37 @@ export class EntityVisuals {
     return [...this.byEntity.keys()];
   }
 
+  /** Copy the cosmetic (non-structural) fields of every cached mapping across
+   *  from the freshly-applied config. Returns the entity ids whose per-light
+   *  intensity override changed, so the caller can re-derive just those
+   *  lights instead of every light in the villa.
+   *
+   *  Driven off COSMETIC_MAPPING_FIELDS rather than naming fields here: that
+   *  list is the definition of "safe to skip re-indexing for", and this is
+   *  what makes the claim true for a field whose consumer reads the cached
+   *  mapping. Entries are REPLACED, not mutated — resolveMeshToMapping can
+   *  hand back the config's own object, and writing through it would edit the
+   *  previous config in place. */
+  private refreshCosmeticMappings(): string[] {
+    const relight: string[] = [];
+    for (const [entityId, map] of this.mapping) {
+      const next = this.config.entityMap[entityId];
+      if (!next) continue;
+      const current = map as unknown as Record<string, unknown>;
+      const source = next as unknown as Record<string, unknown>;
+      const patch: Record<string, unknown> = {};
+      let changed = false;
+      for (const field of COSMETIC_MAPPING_FIELDS) {
+        if (source[field] === current[field]) continue;
+        patch[field] = source[field];
+        changed = true;
+        if (field === "lightIntensityRatio") relight.push(entityId);
+      }
+      if (changed) this.mapping.set(entityId, { ...map, ...patch } as EntityMapping);
+    }
+    return relight;
+  }
+
   updateConfig(config: AppConfig): void {
     const prevGroups = this.config.deviceGroups;
     const prevBadgeStyle = this.config.badgeStyle;
@@ -910,7 +942,18 @@ export class EntityVisuals {
     // an edit; both are plain iterations over entityMap, orders of magnitude
     // cheaper than a re-index, so doing it on any entityMap change is fine.
     let needsRepaint = false;
+    let relight: string[] = [];
     if (config.entityMap !== prevEntityMap) {
+      // The per-entity mappings cached here are built ONLY by indexMeshes()
+      // — the structural pass a cosmetic edit deliberately skips — so every
+      // consumer of this.mapping kept reading the values from the last
+      // re-index. The per-light intensity override was the visible casualty:
+      // moving that slider changed nothing at all, and could not, until a
+      // model reload or an unrelated structural edit happened to rebuild the
+      // map. Refreshing the cosmetic fields in place is the missing half of
+      // the promise COSMETIC_MAPPING_FIELDS makes; driving it off that same
+      // list means a future cosmetic field is covered automatically.
+      relight = this.refreshCosmeticMappings();
       this.buildMotionToCameraIndex();
       this.buildLinkedEntityIndex();
       // buildLinkedEntityIndex already SEEDS linkActiveIds from each linked
@@ -943,6 +986,19 @@ export class EntityVisuals {
     if (needsRepaint || config.deviceGroups !== prevGroups || config.badgeStyle !== prevBadgeStyle) {
       this.rebuildLabels();
     }
+    // A per-light override changed. Nothing will emit a state_changed for
+    // that entity, so without this the edit is simply invisible. Re-apply
+    // through the NORMAL path rather than recomputing the formula here: the
+    // override feeds the fixture's own emissive glow as well as the light it
+    // casts, and a resync that moved only one of the two would leave a bulb
+    // looking unchanged in a room that got darker. Usually one entity, and
+    // the edit is debounced, so the full path is affordable here — unlike the
+    // global strength slider, which drags across every light at once and
+    // keeps its lighter resync.
+    for (const entityId of relight) {
+      const state = this.lastState.get(entityId);
+      if (state) this.apply(state);
+    }
     if (typeof config.render?.lightPoolIntensity === "number") {
       this.setLightPoolIntensity(config.render.lightPoolIntensity);
     }
@@ -961,6 +1017,16 @@ export class EntityVisuals {
   setLightPoolIntensity(value: number): void {
     if (value === this.lightPoolStrength) return;
     this.lightPoolStrength = value;
+    this.resyncLightIntensities();
+  }
+
+  /** Re-derive EVERY light's brightness from its entity's last known state and
+   *  the current config — pools and dynamic PointLights together, since a
+   *  fixture may drive either. Call after anything that changes an input to
+   *  the brightness formula without an accompanying state_changed event: the
+   *  global "Light effect strength" slider, or a per-light intensity override
+   *  edited in Advanced Settings. */
+  private resyncLightIntensities(): void {
     this.forEachLightPoolState((pool, on, colour, brightnessFrac) =>
       pool.setState(on, colour, brightnessFrac * this.lightPoolStrength));
     this.resyncDynamicLightIntensities();

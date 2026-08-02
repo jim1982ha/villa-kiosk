@@ -158,7 +158,7 @@ export class HAWebSocket {
             this.setState("connected");
             this.reconnectAttempts = 0;
             this.authInvalidReported = false;
-            this.resubscribeAll();
+            this.resubscribeAll(socket);
             this.startHeartbeat();
             finish(() => resolve());
             break;
@@ -333,10 +333,32 @@ export class HAWebSocket {
     });
   }
 
-  private resubscribeAll() {
-    // Re-issue every active subscription after a reconnect (ids preserved).
+  /** Re-issue every active subscription after a reconnect (ids preserved).
+   *
+   *  Takes the socket that authenticated rather than reading `this.ws`, for
+   *  the same reason every other reply in onmessage does: a concurrent
+   *  reconnect may already have replaced `this.ws` with a NEWER socket that is
+   *  still CONNECTING, and `send()` on that throws. This one call site was
+   *  missed when that rule was introduced, and the consequences were larger
+   *  than a failed subscribe: the throw escaped mid-`forEach`, so the
+   *  remaining subscriptions were never re-registered AND the rest of the
+   *  auth_ok branch — startHeartbeat() and the connect promise's resolve() —
+   *  never ran either. A phone reported it in the field as
+   *  "Failed to execute 'send' on 'WebSocket': Still in CONNECTING state";
+   *  the visible symptom is entities that stop updating after a reconnect
+   *  until the app is reloaded.
+   *
+   *  Each send is also isolated, so one failure can't cost the others their
+   *  subscription. Anything not sent here is not lost: it stays in
+   *  `subscriptions` and is re-issued on the next auth_ok. */
+  private resubscribeAll(socket: WebSocket) {
+    if (socket.readyState !== WebSocket.OPEN) return;
     this.subscriptions.forEach((sub) => {
-      this.ws?.send(JSON.stringify({ id: sub.id, type: "subscribe_events", event_type: sub.eventType }));
+      try {
+        socket.send(JSON.stringify({
+          id: sub.id, type: "subscribe_events", event_type: sub.eventType,
+        }));
+      } catch { /* next auth_ok re-issues it */ }
     });
   }
 
