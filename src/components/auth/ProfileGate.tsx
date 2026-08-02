@@ -99,13 +99,18 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   const [preloadStarted, setPreloadStarted] = useState(false);
   useEffect(() => {
     if (preloadStarted || !modelPreloadable || pending) return;
-    const idle = window.requestIdleCallback?.bind(window)
-      ?? ((fn: () => void) => window.setTimeout(fn, 200));
-    const handle = idle(() => setPreloadStarted(true), { timeout: 1500 });
-    return () => {
-      if (window.cancelIdleCallback) window.cancelIdleCallback(handle as number);
-      else window.clearTimeout(handle as number);
-    };
+    // Schedule and cancel are paired here rather than each sniffing the
+    // window separately: requestIdleCallback is a recent arrival in Safari,
+    // so this app must assume it may be missing, and a cleanup that checks a
+    // DIFFERENT global than the one that scheduled could cancel with the
+    // wrong function. Whichever branch runs owns its own teardown.
+    const start = () => setPreloadStarted(true);
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(start, { timeout: 1500 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(start, 200);
+    return () => window.clearTimeout(id);
   }, [preloadStarted, modelPreloadable, pending]);
 
   // Which profiles are gated — fetched once per visit to the select screen.

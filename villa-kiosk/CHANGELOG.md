@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.76.1
+
+### Changes
+- **Hardened 2.76.0's idle scheduling for Safari.** `requestIdleCallback` is a recent arrival there, so the code already had a `setTimeout` fallback — but the cleanup decided how to cancel by checking a DIFFERENT global than the one that scheduled, which is exactly the shape that misfires on the browser the fallback exists for. Each branch now owns its own teardown.
+- No behaviour change on iPhone either way: the pre-login scene mount is disabled on iOS entirely (it can exceed the per-tab memory ceiling and retrigger a crash loop), so this scheduling never runs there.
+
 ## 2.76.0
 
 ### Changes
