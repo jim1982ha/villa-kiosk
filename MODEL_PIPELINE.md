@@ -321,6 +321,32 @@ which reads the copy embedded in the GLB), and `--no-atlas-png` to keep the
 Both work with the sizes wrapper: `blender_pipeline.py 1024 2048 4096
 --no-atlas-png`.
 
+### Your job list lives outside the script (pipeline ≥2.17.0)
+
+The sh3d/obj/glb paths and the bake flags tuned for a given property are
+*configuration*, not code — but they used to live inside `blender_pipeline.py`,
+so every script update overwrote them and they had to be re-entered by hand.
+
+They now come from **`blender_pipeline.jobs.json`**, sitting next to the script:
+
+```json
+[
+  {
+    "label": "TheLysHouse",
+    "sh3d": "TheLysHouse.sh3d",
+    "obj": "OBJ/TheLysHouse.obj",
+    "glb": "GLB/TheLysHouse_{size}.glb",
+    "flags": ["--bake", "--bake-lightmap", "--bake-size", "{size}", "--ktx2"]
+  }
+]
+```
+
+`{size}` is substituted with each requested bake size. With that file present,
+**updating the pipeline is just copying the `.py`** — your configuration is
+untouched. Without it, the built-in list in the script is used, so a fresh
+checkout still works. A malformed sidecar warns and falls back rather than
+aborting a bake.
+
 ### Faster loads: `--ktx2` (pipeline ≥2.16.0, kiosk ≥2.80.0)
 
 `--ktx2` re-encodes the exported GLB's textures to KTX2/ETC1S in place, so the
