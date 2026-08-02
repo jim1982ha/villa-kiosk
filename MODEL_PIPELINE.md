@@ -364,11 +364,20 @@ it ships its own KTX2 decoder, so the villa display stays fully offline):
 1. **Node.js** — `brew install node`, or the LTS installer from nodejs.org.
    `npx` fetches `@gltf-transform/cli` the first time, so that machine needs
    internet once.
-2. **KTX-Software** — install the `.pkg` from
+2. **KTX-Software 4.4.x** — install the `.pkg` from
    [KTX-Software releases](https://github.com/KhronosGroup/KTX-Software/releases).
-   There is no Homebrew formula. `gltf-transform etc1s` only *wraps* the
-   encoder; the actual work is done by `toktx` from this package, and without
-   it the command fails with a bare non-zero exit.
+   There is no Homebrew formula. Pick the build matching your Mac — run
+   `uname -m`: `arm64` → `…-Darwin-arm64.pkg`, `x86_64` → `…-Darwin-x86_64.pkg`.
+   Verify with `toktx --version` afterwards.
+
+   `gltf-transform etc1s` only *wraps* the encoder; the actual work is done by
+   `toktx` from this package, and without it the command fails with a bare
+   non-zero exit.
+
+   **Do not jump to 4.5 when it lands.** Khronos have deprecated the legacy
+   tools and state that "the legacy tools will be removed in Release 4.5" —
+   `toktx` is one of them. Until `@gltf-transform/cli` moves to the newer
+   `ktx create`, 4.4.x is the version that works.
 
 If the script runs under a Blender launched from the macOS Finder, its PATH may
 omit Homebrew and `/usr/local` even though your shell's does not. The script
