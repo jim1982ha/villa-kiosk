@@ -171,7 +171,11 @@ export default function FaultsTab(
                 {showBroken ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                 Devices Home Assistant reports as offline ({broken.length})
               </button>
-              <div className="fm-chiprow" hidden={!showBroken}>
+              {/* Rendered conditionally rather than hidden: `.fm-chiprow`
+                  sets `display: flex`, and an explicit display beats the
+                  browser's own `[hidden] { display: none }` — so the chips
+                  stayed visible with only the chevron changing. */}
+              {showBroken && <div className="fm-chiprow">
                 {broken.slice(0, 10).map((id) => (
                   <button
                     key={id}
@@ -186,7 +190,7 @@ export default function FaultsTab(
                     onClick={() => (entityId === id ? clearDevice() : selectDevice(id, label(id)))}
                   >{label(id)}</button>
                 ))}
-              </div>
+              </div>}
             </div>
           )}
           <div className="fm-field">

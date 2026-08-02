@@ -116,7 +116,12 @@ AUTH = {"Authorization": f"Bearer {TOKEN}"}
 # _cleanup_stale_options below. (model_path was dropped when central models
 # moved into the add-on's own /data volume; leaving it here would make the
 # self-heal below wrongly preserve a now-unknown key.)
-KNOWN_OPTION_KEYS = {"guest_pin", "owner_pin", "ops_pin", "superadmin_pin"}
+KNOWN_OPTION_KEYS = {
+    "guest_pin", "owner_pin", "ops_pin", "superadmin_pin",
+    "public_model_access",
+    "evidence_retention_days", "session_days", "telemetry_max_events",
+    "pin_lockout_minutes",
+}
 
 # The add-on's OWN persistent volume (Supervisor gives every add-on /data and
 # preserves it across restarts/updates). Central model files live here now —
@@ -134,7 +139,8 @@ MANAGED_PATH = {"glb": "villa.glb"}
 SESSION_COOKIE = "vk_session"
 SESSION_EPOCH_FILE = "/data/session-epoch"
 SESSION_SECRET_FILE = "/data/.session_secret"
-SESSION_TTL = 30 * 24 * 3600  # 30 days — a kiosk stays "logged in" a long time.
+# How long a kiosk stays "logged in" — the DEFAULT; see _session_ttl(), which
+# an operator can override through the add-on's session_days option.
 _session_secret_cache: bytes | None = None
 
 
@@ -203,7 +209,7 @@ def _sign_session(role: str, exp: int) -> str:
 
 
 def _make_session_token(role: str) -> str:
-    exp = int(time.time()) + SESSION_TTL
+    exp = int(time.time()) + _session_ttl()
     return f"{role}.{exp}.{_sign_session(role, exp)}"
 
 
@@ -298,7 +304,7 @@ def _model_authorized(request: web.Request) -> bool:
 def _set_session_cookie(resp: web.Response, role: str) -> None:
     resp.set_cookie(
         SESSION_COOKIE, _make_session_token(role),
-        max_age=SESSION_TTL, httponly=True, samesite="Lax", secure=True, path="/",
+        max_age=_session_ttl(), httponly=True, samesite="Lax", secure=True, path="/",
     )
 
 
@@ -727,13 +733,58 @@ _elevation_tokens: dict = {}     # token -> expiry (time.monotonic)
 # construction property of the old role-keyed dict had to be replaced with an
 # explicit bound, not dropped.
 AUTH_MAX_FAILURES = 5            # per client IP, per role
-AUTH_LOCKOUT_SECONDS = 300
 AUTH_GLOBAL_MAX_FAILURES = 50    # per role, all clients combined
 AUTH_GLOBAL_LOCKOUT_SECONDS = 900
 AUTH_TRACK_MAX_CLIENTS = 2048    # hard cap on tracked (role, ip) pairs
 _auth_failures: dict = {}                                    # (role, ip) -> state
 _auth_failures_global: dict = {r: {"count": 0, "last": 0.0}
                               for r in (*AUTH_ROLES, SUPERADMIN)}
+
+
+def _option_int(key: str, default: int, lo: int, hi: int) -> int:
+    """A numeric add-on option, read fresh and clamped.
+
+    These exist so an operator can tune the add-on from the Supervisor UI
+    instead of editing constants in a Python file they would lose on the next
+    update. Every one of them is a POLICY choice — how long evidence is kept,
+    how long a session lasts — where no single number is right for every
+    property, which is the test for whether something belongs here at all.
+
+    Read on every call rather than cached, so a change takes effect without
+    restarting this process (same as _public_model_access). Clamped rather
+    than trusted: the schema validates what the UI writes, but /data/options.
+    json can be hand-edited, and a retention of -1 or 10**9 must not turn into
+    "delete everything" or "never delete".
+    """
+    raw = _read_options().get(key, default)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, value))
+
+
+def _session_ttl() -> int:
+    """How long a signed-in profile stays signed in, in seconds."""
+    return _option_int("session_days", 30, 1, 365) * 86400
+
+
+def _evidence_retention_days() -> int:
+    """Age at which an evidence photo is deleted. 0 disables the sweep — for
+    an operator whose own retention obligation outlives any default we could
+    pick. Referenced-photo garbage collection is unaffected either way: this
+    is about age, not about whether anything still points at the file."""
+    return _option_int("evidence_retention_days", 550, 0, 3650)
+
+
+def _telemetry_max_events() -> int:
+    """How many diagnostic events the ring keeps."""
+    return _option_int("telemetry_max_events", 500, 50, 5000)
+
+
+def _auth_lockout_seconds() -> int:
+    """How long a client is locked out after too many wrong passcodes."""
+    return _option_int("pin_lockout_minutes", 5, 1, 1440) * 60
 
 
 def _client_ip(request: web.Request) -> str:
@@ -755,7 +806,7 @@ def _client_ip(request: web.Request) -> str:
 def _prune_auth_failures(now: float) -> None:
     """Drop expired per-client entries, and hard-trim if still oversized."""
     for key in [k for k, st in _auth_failures.items()
-                if now - st["last"] > AUTH_LOCKOUT_SECONDS]:
+                if now - st["last"] > _auth_lockout_seconds()]:
         _auth_failures.pop(key, None)
     if len(_auth_failures) > AUTH_TRACK_MAX_CLIENTS:
         # Oldest-first eviction. Evicting a still-locked attacker is acceptable:
@@ -816,7 +867,7 @@ def _lockout_remaining(role: str, ip: str) -> int:
     _prune_auth_failures(now)
     worst = 0
     for st, limit, window in (
-        (_auth_failures.get((role, ip)), AUTH_MAX_FAILURES, AUTH_LOCKOUT_SECONDS),
+        (_auth_failures.get((role, ip)), AUTH_MAX_FAILURES, _auth_lockout_seconds()),
         (_auth_failures_global[role], AUTH_GLOBAL_MAX_FAILURES, AUTH_GLOBAL_LOCKOUT_SECONDS),
     ):
         if not st or st["count"] < limit:
@@ -1578,7 +1629,6 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
 # N events in one JSON file, no rotation logic, no index, no PII beyond the
 # user-agent the browser already sends on every request.
 TELEMETRY_FILE = "/data/telemetry.json"
-TELEMETRY_MAX_EVENTS = 500
 TELEMETRY_MAX_BODY = 64_000
 
 
@@ -1605,7 +1655,7 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
 
     events = _read_json_store(TELEMETRY_FILE, [])
     events.append(body)
-    del events[:-TELEMETRY_MAX_EVENTS]          # keep only the newest N
+    del events[:-_telemetry_max_events()]       # keep only the newest N
     _write_json_store(TELEMETRY_FILE, json.dumps(events))
     return web.json_response({"ok": True, "stored": len(events)})
 
@@ -1643,8 +1693,8 @@ FM_DATA_MAX_BYTES = 4_000_000
 # complexity for no benefit.
 FM_EVIDENCE_DIR = "/data/fm-evidence"
 FM_EVIDENCE_MAX_BYTES = 3_000_000     # generous headroom over a downscaled JPEG
-FM_EVIDENCE_RETENTION_DAYS = 550      # ~18 months: covers a 12-month agreement
-                                      # plus the yield-up/dispute window after it
+# Evidence age limit — the DEFAULT is ~18 months (a 12-month agreement plus the
+# yield-up/dispute window after it). See _evidence_retention_days().
 FM_EVIDENCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 # How long an unreferenced photo is kept before it is treated as garbage. It
 # exists solely to cover the gap between "uploaded" and "saved": the client
@@ -1659,7 +1709,10 @@ def _prune_fm_evidence() -> int:
     """Delete evidence older than the retention window. Called opportunistically
     on upload — there is no scheduler in this process, and piggybacking on the
     write path means storage can only grow while it is actively being used."""
-    cutoff = time.time() - FM_EVIDENCE_RETENTION_DAYS * 86400
+    days = _evidence_retention_days()
+    if days <= 0:
+        return 0                      # retention sweep switched off
+    cutoff = time.time() - days * 86400
     removed = 0
     try:
         for name in os.listdir(FM_EVIDENCE_DIR):

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.71.0
+
+### Changes
+- **Four hardcoded policy values are now add-on options.** How long evidence is kept, how long a session lasts, how much diagnostic history to hold and how hard a wrong passcode bites are all POLICY — no single number is right for every property — so they belong in the Supervisor UI rather than in a Python file an operator would have to patch and then lose on the next update. All are read live (a change applies without restarting the add-on) and clamped server-side, because the schema only guards what the UI writes: `/data/options.json` can be hand-edited, and a retention of `-1` or `10^9` must not become "delete everything" or "never delete".
+  - `evidence_retention_days` (550, ~18 months) — `0` switches age-based deletion off entirely, for an operator whose own obligation outlives any default we could pick. Independent of the clean-up of photos nothing references any more, which always runs: those files are pure waste at any age.
+  - `session_days` (30) — a wall-mounted kiosk wants a long one; a villa where guests come and go with their own phones wants a short one, so a departing guest's session lapses on its own.
+  - `telemetry_max_events` (500) — raise it while chasing an intermittent fault on someone else's device; the ring is fixed-size, so the only cost is a slightly larger file.
+  - `pin_lockout_minutes` (5) — the lockout is per source address, so raising it punishes a guesser rather than locking the household out.
+- **Fixed the offline-devices section not actually collapsing.** The chevron flipped and the chips stayed. `.fm-chiprow` sets `display: flex`, and an explicit `display` beats the browser's own `[hidden] { display: none }` rule — so the `hidden` attribute did nothing. Rendered conditionally instead, which removes the trap rather than fighting it with more CSS.
+
 ## 2.70.0
 
 ### Changes

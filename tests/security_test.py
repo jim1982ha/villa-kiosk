@@ -378,5 +378,54 @@ t("an owner is not held to the guest shape",
   proxy._fm_write_guard(None, {}, _g_old,
                         with_tickets([_g_old["tickets"][0]], schedules=[{"id": "s"}])), None)
 
+# ------------------------------------------------- tunable policy options
+# These are operator-facing knobs, so the schema is not the only guard: a
+# hand-edited /data/options.json bypasses it entirely, and a retention of -1
+# or 10**9 must not become "delete everything" or "never delete".
+section("policy options: clamped, and malformed values fall back")
+
+_saved_read_options = proxy._read_options
+
+
+def with_options(**opts):
+    proxy._read_options = lambda: opts
+
+
+t("retention default with no option set",
+  (with_options(), proxy._evidence_retention_days())[1], 550)
+t("retention honours a real value",
+  (with_options(evidence_retention_days=30), proxy._evidence_retention_days())[1], 30)
+t("retention 0 means the sweep is off",
+  (with_options(evidence_retention_days=0), proxy._evidence_retention_days())[1], 0)
+t("negative retention clamps to off, never to 'delete everything'",
+  (with_options(evidence_retention_days=-5), proxy._evidence_retention_days())[1], 0)
+t("absurd retention clamps to the ceiling",
+  (with_options(evidence_retention_days=10**9), proxy._evidence_retention_days())[1], 3650)
+for junk in ("", "abc", None, [], {}):
+    t(f"malformed retention {junk!r} falls back to the default",
+      (with_options(evidence_retention_days=junk), proxy._evidence_retention_days())[1], 550)
+
+t("session default", (with_options(), proxy._session_ttl())[1], 30 * 86400)
+t("session honours a real value",
+  (with_options(session_days=1), proxy._session_ttl())[1], 86400)
+t("session can never be zero-length",
+  (with_options(session_days=0), proxy._session_ttl())[1], 86400)
+t("telemetry ring cannot be shrunk to nothing",
+  (with_options(telemetry_max_events=0), proxy._telemetry_max_events())[1], 50)
+t("lockout cannot be disabled",
+  (with_options(pin_lockout_minutes=0), proxy._auth_lockout_seconds())[1], 60)
+
+# Every option the schema offers must be recognised by the self-heal that
+# strips unknown keys, or the Supervisor UI would write a value this process
+# then deletes on the next start.
+import yaml  # noqa: E402
+with open(os.path.join(HERE, "..", "villa-kiosk", "config.yaml"), encoding="utf-8") as _f:
+    _cfg = yaml.safe_load(_f)
+t("every configured option is a known key",
+  set(_cfg["options"]) - proxy.KNOWN_OPTION_KEYS, set())
+t("every option has a schema entry", set(_cfg["options"]) - set(_cfg["schema"]), set())
+
+proxy._read_options = _saved_read_options
+
 print(f"\n{PASSED} passed, {FAILED} failed")
 sys.exit(1 if FAILED else 0)

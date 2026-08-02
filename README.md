@@ -152,6 +152,20 @@ matters is also enforced in `rootfs/usr/bin/supervisor-proxy.py`.
 | HA websocket | Default **deny** for non-owners: only the seven frame types the kiosk sends. Blocks `execute_script`, which otherwise wraps a forbidden service call and walks straight past the service allowlist |
 | Facility data + evidence photos | `owner`/`ops` only, on both read and write |
 | Erasing a facility record | A fault, a spend entry or a logged completion can be **destroyed** only with the 6-digit `superadmin_pin`, entered per deletion. The server refuses any write that removes one without a fresh single-use authorisation, so this is not a UI-level rule; leaving `superadmin_pin` empty makes the records permanently un-erasable from the app. Reached by pressing and holding the row — not a fourth profile, and additive: you still need `owner`/`ops` |
+
+### Tunable policy (add-on options)
+
+Four values that are policy rather than preference — no single number is right
+for every property — are add-on options instead of constants in the code. All
+are read live (no restart needed) and clamped server-side, so a hand-edited
+`options.json` can't turn one into "keep nothing" or "never expire".
+
+| Option | Default | What it decides |
+|---|---|---|
+| `evidence_retention_days` | 550 | Age at which a photo is deleted (~18 months = a 12-month agreement plus the dispute window). `0` switches age-based deletion off entirely. Independent of the automatic clean-up of photos nothing references, which always runs |
+| `session_days` | 30 | How long a profile stays signed in before the passcode is asked again. Long for a wall tablet; short where guests use their own phones, so a departing guest's session lapses on its own |
+| `telemetry_max_events` | 500 | How much diagnostic history is kept. Raise it while chasing an intermittent fault on someone else's device |
+| `pin_lockout_minutes` | 5 | How long a device that entered five wrong passcodes must wait. Per source address, so raising it punishes a guesser rather than the household |
 | Uploads | Owner only, magic-byte checked, size-capped, destination path traversal-checked |
 
 Run the regression suite — every assertion is a hole that was once open:
