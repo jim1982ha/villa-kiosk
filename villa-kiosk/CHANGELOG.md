@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.73.2
+
+### Changes
+- **Placeholder text now matches across a form's controls.** 2.73.1 styled the textarea's placeholder but left the single-line inputs on the browser default, so the fault editor showed two different placeholder greys in adjacent fields. Applied to both, from one rule.
+
 ## 2.73.1
 
 ### Changes

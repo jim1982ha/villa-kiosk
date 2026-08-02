@@ -2500,7 +2500,10 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-field input:focus, .fm-field select:focus, .fm-field textarea:focus {
   border-color: var(--accent); outline: none;
 }
-.fm-field textarea::placeholder { color: var(--text-dim); }
+/* All three, not just the textarea: a placeholder styled on one control and
+   left to the browser on the one directly above it is a visible mismatch in
+   the same form. */
+.fm-field input::placeholder, .fm-field textarea::placeholder { color: var(--text-dim); }
 
 .fm-banner {
   padding: 10px 12px; border-radius: 10px; font-size: 13.5px;
