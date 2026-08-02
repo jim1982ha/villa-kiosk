@@ -332,13 +332,22 @@ remaining part of a load, and most of that is texture decode.
 
     python3 blender_pipeline.py 2048 --ktx2
 
-**Requires Node.js on the machine running the pipeline** (`brew install node`,
-or the LTS installer from nodejs.org) — `npx` fetches `@gltf-transform/cli` the
-first time, so that machine needs internet. **The kiosk does not**: it ships
-its own KTX2 decoder and transcoder, so the villa display stays fully offline.
-If the script is running under a Blender launched from the macOS Finder its
-PATH may not include Homebrew even though your shell's does — set
-`VK_NPX=/opt/homebrew/bin/npx` to point at it.
+**Two prerequisites on the machine running the pipeline** (not on the kiosk —
+it ships its own KTX2 decoder, so the villa display stays fully offline):
+
+1. **Node.js** — `brew install node`, or the LTS installer from nodejs.org.
+   `npx` fetches `@gltf-transform/cli` the first time, so that machine needs
+   internet once.
+2. **KTX-Software** — install the `.pkg` from
+   [KTX-Software releases](https://github.com/KhronosGroup/KTX-Software/releases).
+   There is no Homebrew formula. `gltf-transform etc1s` only *wraps* the
+   encoder; the actual work is done by `toktx` from this package, and without
+   it the command fails with a bare non-zero exit.
+
+If the script runs under a Blender launched from the macOS Finder, its PATH may
+omit Homebrew and `/usr/local` even though your shell's does not. The script
+checks those locations directly; for anything unusual (nvm, asdf, a custom
+prefix) set `VK_NPX` and/or `VK_TOKTX` to the full binary paths.
 
 Upgrade the kiosk to **2.80.0 or later before uploading a KTX2 GLB**; an older
 build would try to fetch the decoder from Babylon's CDN and show an untextured
