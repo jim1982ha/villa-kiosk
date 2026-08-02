@@ -34,7 +34,14 @@ export type Capability =
    *  (whose job it is) and
    *  the owner (who is accountable for the property and signs off the monthly
    *  report), so this is not simply "ops-only". */
-  | "manageFacility";
+  | "manageFacility"
+  /** May file a fault report. Held by EVERY profile, guests included: the
+   *  person living in the villa is the one most likely to notice something
+   *  broken, and a report they cannot file is a fault nobody records. It is
+   *  NOT manageFacility — a guest files a report and can do nothing else with
+   *  it; triage, status, cost and resolution stay with owner/ops, and the
+   *  add-on enforces that shape server-side (_fm_guest_write_ok). */
+  | "reportFault";
 
 export interface RolePermissions {
   /** Device categories this profile sees on the map. "all" = every category. */
@@ -65,7 +72,7 @@ export const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
   guest: {
     allowedCategories: ["comfort", "light", "network", "access_control"],
     deniedTypes: ["camera", "binary_sensor"],
-    capabilities: ["controlEntities", "openSettings", "customizeAppearance"],
+    capabilities: ["controlEntities", "openSettings", "customizeAppearance", "reportFault"],
     controlLimits: { climateMin: 22, climateMax: 28 },
   },
   owner: {
@@ -73,7 +80,7 @@ export const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
     deniedTypes: [],
     capabilities: [
       "controlEntities", "openSettings", "customizeAppearance", "editConfig", "manageModel",
-      "manageFacility",
+      "manageFacility", "reportFault",
     ],
   },
   ops: {
@@ -84,7 +91,9 @@ export const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
     // manageModel) stay gated to the owner. manageFacility is the one thing
     // they hold that the guest does not: the maintenance/fault workspace that
     // evidences the property's own maintenance/inspection obligations.
-    capabilities: ["controlEntities", "openSettings", "customizeAppearance", "manageFacility"],
+    capabilities: [
+      "controlEntities", "openSettings", "customizeAppearance", "manageFacility", "reportFault",
+    ],
   },
 };
 

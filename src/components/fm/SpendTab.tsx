@@ -46,6 +46,7 @@ export default function SpendTab(
   const [deviceText, setDeviceText] = useState("");
   const [entityId, setEntityId] = useState("");
   const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
   const [category, setCategory] = useState<"minor" | "major">("minor");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   // The saved-statement workflow — same "explicit Generate, then optionally
@@ -61,7 +62,7 @@ export default function SpendTab(
   const resetForm = () => {
     setAdding(false); setEditingId(null);
     setLabel(""); setDeviceText(""); setEntityId("");
-    setAmount(""); setPhotoIds([]); setCategory("minor");
+    setAmount(""); setNote(""); setPhotoIds([]); setCategory("minor");
   };
 
   const openEditor = (c: FmCost) => {
@@ -69,6 +70,7 @@ export default function SpendTab(
     setAdding(true);
     setLabel(c.label);
     setAmount(String(c.amountIdr));
+    setNote(c.note ?? "");
     setCategory(c.category);
     setPhotoIds(c.photoIds);
     setEntityId(c.entityId ?? "");
@@ -175,6 +177,14 @@ export default function SpendTab(
             <input value={label} onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g. Gas top-up and filter clean" />
           </label>
+          {/* The same free note a fault carries, for the same reason: the
+              person reading this in six months is not the person who typed
+              the one-line label. */}
+          <label className="fm-field">
+            <span>Notes (optional)</span>
+            <textarea value={note} rows={2} onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. Second refill this quarter — check for a leak" />
+          </label>
           <label className="fm-field">
             <span>Amount (IDR)</span>
             <input value={amount} inputMode="numeric"
@@ -208,6 +218,7 @@ export default function SpendTab(
               onClick={async () => {
                 const fields = {
                   amountIdr, label: label.trim(), category, photoIds,
+                  note: note.trim() || undefined,
                   entityId: entityId || undefined,
                   deviceLabel: deviceText.trim() || undefined,
                   room: entityId ? config.entityMap[entityId]?.room : undefined,
@@ -241,6 +252,7 @@ export default function SpendTab(
                 <span className="fm-clause">{c.category === "minor" ? "Minor" : "Major"}</span>
               </div>
               <div className="fm-row-sub muted">{localStamp(c.at)}</div>
+              {c.note && <div className="fm-timeline-note">{c.note}</div>}
               {/* The receipt itself, openable — the whole point of attaching
                   one is that somebody can later check it. */}
               {c.photoIds.length > 0 && (

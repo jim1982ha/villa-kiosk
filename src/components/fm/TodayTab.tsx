@@ -13,6 +13,7 @@ import { scheduleBoard, formatIdr, localStamp, shortDate, type ScheduleStatus } 
 import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
 import { budgetStatus, wouldExceedCap } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
+import RecentWorkList from "./RecentWorkList";
 
 const STATE_LABEL: Record<ScheduleStatus["state"], string> = {
   overdue: "Overdue",
@@ -56,6 +57,10 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           <strong> Schedule</strong> tab. Each task tracks its own interval,
           due date and completion history from there.
         </p>
+        {/* Even with no schedule configured, work already logged — a fault
+            fixed, say — is part of the record and must not vanish behind an
+            empty-state screen. */}
+        <RecentWorkList />
       </div>
     );
   }
@@ -134,6 +139,10 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           </div>
         ))}
       </div>
+
+      {/* What has actually been done, under what is still due. Completions
+          were previously logged and then never shown anywhere. */}
+      <RecentWorkList />
 
       {openId && (
         <LogCompletion

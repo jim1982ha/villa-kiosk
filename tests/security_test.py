@@ -243,6 +243,10 @@ t("elevation code compared in constant time",
 t("elevation attempts are rate limited",
   "_auth_failures" in inspect.getsource(proxy.auth_elevate_handler), True)
 
+# _fm_write_guard reads the caller's role; stub it rather than faking a
+# request object, so each block below states plainly which role it is testing.
+proxy._role_for = lambda request: "owner"
+
 _doc = {
     "tickets": [{"id": "tk1", "photoIds": ["p1"]}, {"id": "tk2", "photoIds": []}],
     "costs": [{"id": "co1", "photoIds": ["p1", "p2"]}],
@@ -304,12 +308,75 @@ t("an expired elevation is refused",
   proxy._fm_write_guard(None, {"elevation": _stale}, _doc,
                         without("tickets", "tk1")) is not None, True)
 
-# "Delete" must mean the JPEG leaves /data too — but only when nothing else
-# still points at it, or erasing one record would blank another's evidence.
-t("an erased record's own photo is orphaned",
-  proxy._fm_photo_ids(_doc, {"costs": {"co1"}}), {"p2"})
-t("a photo shared with a surviving record is kept",
-  "p1" in proxy._fm_photo_ids(_doc, {"costs": {"co1"}}), False)
+# "Delete" must mean the JPEG leaves /data too. Reference counting is what
+# decides that now — every photo the document still points at, anywhere,
+# including a fault's per-stage update photos.
+t("referenced ids include every record's photos",
+  proxy._fm_referenced_photo_ids(_doc), {"p1", "p2"})
+t("referenced ids include a fault update's photos",
+  proxy._fm_referenced_photo_ids(
+      {"tickets": [{"id": "t", "photoIds": [],
+                    "updates": [{"photoIds": ["u1"]}]}]}), {"u1"})
+t("a photo shared with a surviving record is still referenced",
+  "p1" in proxy._fm_referenced_photo_ids(without("costs", "co1")), True)
+t("a photo only the erased record held is no longer referenced",
+  "p2" in proxy._fm_referenced_photo_ids(without("costs", "co1")), False)
+t("evidence deletion rejects a traversing id", proxy._delete_evidence("../../etc/passwd"), False)
+t("evidence deletion rejects an empty id", proxy._delete_evidence(""), False)
+
+# ------------------------------------------------- guest fault reporting
+# A guest may APPEND a fault report and do nothing else. The rule is the shape
+# of the change, not the role — a role check alone would hand the whole
+# maintenance record to anyone holding a guest session.
+section("guests: may add a fault report, and nothing else")
+
+_g_old = {"tickets": [{"id": "t1", "status": "open"}], "costs": [{"id": "c1"}],
+          "completions": [], "schedules": [], "savedDocuments": []}
+
+
+def guest_write(new):
+    proxy._role_for = lambda request: "guest"
+    try:
+        return proxy._fm_write_guard(None, {}, _g_old, new) is None
+    finally:
+        proxy._role_for = lambda request: "owner"
+
+
+def with_tickets(tickets, **rest):
+    d = {k: list(v) for k, v in _g_old.items()}
+    d["tickets"] = tickets
+    d.update(rest)
+    return d
+
+
+_good = {"id": "t2", "status": "open", "reportedBy": "guest", "photoIds": []}
+t("guest may append an open report",
+  guest_write(with_tickets([_g_old["tickets"][0], _good])), True)
+t("guest may not remove a fault", guest_write(with_tickets([])), False)
+t("guest may not edit an existing fault",
+  guest_write(with_tickets([{"id": "t1", "status": "resolved"}, _good])), False)
+t("guest may not reorder to hide an edit",
+  guest_write(with_tickets([_good, _g_old["tickets"][0]])), False)
+t("guest may not file an already-resolved fault",
+  guest_write(with_tickets([_g_old["tickets"][0], {**_good, "status": "resolved"}])), False)
+t("guest may not attach a cost to their report",
+  guest_write(with_tickets([_g_old["tickets"][0], {**_good, "costId": "c1"}])), False)
+t("guest may not omit the guest marker",
+  guest_write(with_tickets([_g_old["tickets"][0], {**_good, "reportedBy": None}])), False)
+t("guest may not touch spend",
+  guest_write(with_tickets([_g_old["tickets"][0], _good], costs=[])), False)
+t("guest may not touch schedules",
+  guest_write(with_tickets([_g_old["tickets"][0], _good], schedules=[{"id": "s"}])), False)
+t("guest may not rewrite an unknown future field",
+  guest_write(with_tickets([_g_old["tickets"][0], _good], somethingNew=[1])), False)
+t("guest may not bulk-fill the store",
+  guest_write(with_tickets([_g_old["tickets"][0]]
+                           + [{**_good, "id": f"t{i}"} for i in range(9)])), False)
+t("guest write with no new report is refused",
+  guest_write(with_tickets([_g_old["tickets"][0]])), False)
+t("an owner is not held to the guest shape",
+  proxy._fm_write_guard(None, {}, _g_old,
+                        with_tickets([_g_old["tickets"][0]], schedules=[{"id": "s"}])), None)
 
 print(f"\n{PASSED} passed, {FAILED} failed")
 sys.exit(1 if FAILED else 0)

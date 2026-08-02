@@ -21,7 +21,8 @@ import { useStoreRefresh, STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/us
 import { useSyncReporter } from "@/utils/syncTelemetry";
 import {
   EMPTY_FM_DATA,
-  type FmCompletion, type FmCost, type FmData, type FmSavedDocument, type FmSchedule, type FmTicket,
+  type FmCompletion, type FmCost, type FmData, type FmSavedDocument, type FmSchedule,
+  type FmTicket, type FmTicketStatus,
 } from "./fmTypes";
 
 interface FmDataContextValue {
@@ -52,12 +53,28 @@ interface FmDataContextValue {
    *  code, because that destroys the record rather than fixing it. */
   updateCost: (id: string, patch: Partial<FmCost>) => Promise<void>;
   addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">) => Promise<void>;
+  /** Move a fault to its next stage AND record the proof behind that move.
+   *
+   *  One mutator for every transition rather than one per stage: they differ
+   *  only in whether money changed hands. Resolving additionally files a
+   *  completion linked back to the ticket (FmCompletion.ticketId), so the
+   *  fault and the work that fixed it stop being unrelated records — that
+   *  link is what lets a report say "this fault, fixed on this date, at this
+   *  cost". */
+  advanceTicket: (
+    id: string,
+    to: FmTicketStatus,
+    step: { by?: string; note?: string; photoIds: string[] },
+    cost?: Omit<FmCost, "id" | "at" | "photoIds">,
+  ) => Promise<void>;
   updateTicket: (id: string, patch: Partial<FmTicket>) => Promise<void>;
   /** Erase a spend entry for good. Needs a single-use superadmin token — the
    *  server rejects the write without one, so this is not a UI-level rule. */
   removeCost: (id: string, elevation: string) => Promise<void>;
   /** Erase a fault, its history and its evidence photos. Superadmin only. */
   removeTicket: (id: string, elevation: string) => Promise<void>;
+  /** Erase a logged completion and the cost logged with it. Superadmin only. */
+  removeCompletion: (id: string, elevation: string) => Promise<void>;
   /** Keep a generated report/spend statement (see FmSavedDocument) so it can
    *  be reopened or handed over later without regenerating it. */
   saveDocument: (doc: Omit<FmSavedDocument, "id" | "generatedAt">) => Promise<void>;
@@ -277,6 +294,19 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const removeTicket = useCallback((id: string, elevation: string) =>
     mutate((d) => ({ ...d, tickets: d.tickets.filter((t) => t.id !== id) }), elevation), [mutate]);
 
+  const removeCompletion = useCallback((id: string, elevation: string) =>
+    mutate((d) => {
+      const gone = d.completions.find((c) => c.id === id);
+      return {
+        ...d,
+        completions: d.completions.filter((c) => c.id !== id),
+        // The cost was logged as part of this completion — one event, so
+        // erasing it erases both. Leaving the spend behind would leave money
+        // in the accounts attributed to work with no record.
+        costs: gone?.costId ? d.costs.filter((c) => c.id !== gone.costId) : d.costs,
+      };
+    }, elevation), [mutate]);
+
   const addTicket = useCallback((t: Omit<FmTicket, "id" | "openedAt" | "status">) =>
     mutate((d) => ({
       ...d,
@@ -300,6 +330,51 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       }),
     })), [mutate]);
 
+  const advanceTicket = useCallback((
+    id: string,
+    to: FmTicketStatus,
+    step: { by?: string; note?: string; photoIds: string[] },
+    cost?: Omit<FmCost, "id" | "at" | "photoIds">,
+  ) => mutate((d) => {
+    const ticket = d.tickets.find((t) => t.id === id);
+    if (!ticket) return d;
+    const at = new Date().toISOString();
+    const resolving = to === "resolved";
+    const costId = resolving && cost ? fmId("co") : undefined;
+    return {
+      ...d,
+      tickets: d.tickets.map((t) => {
+        if (t.id !== id) return t;
+        return {
+          ...t,
+          status: to,
+          // Stamped only on the way IN to resolved, and cleared if the fault
+          // is later reopened — a stale resolution time would silently
+          // corrupt every mean-time-to-resolution figure derived from it.
+          resolvedAt: resolving ? at : undefined,
+          // Evidence gathered at the moment of the step belongs on the fault
+          // itself too: that is the record anyone later opens to see what
+          // actually happened, without walking the timeline.
+          photoIds: [...t.photoIds, ...step.photoIds],
+          costId: costId ?? t.costId,
+          updates: [...(t.updates ?? []), { at, status: to, ...step }],
+        };
+      }),
+      // Only a resolution produces WORK. Picking a fault up is a step in its
+      // life, not a maintenance completion, and logging one for it would
+      // inflate every "work done" count in the record.
+      completions: resolving
+        ? [...d.completions, {
+            id: fmId("cp"), scheduleId: "", ticketId: id, at,
+            by: step.by ?? "—", note: step.note, photoIds: step.photoIds, costId,
+          }]
+        : d.completions,
+      costs: costId
+        ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }]
+        : d.costs,
+    };
+  }), [mutate]);
+
   const saveDocument = useCallback((doc: Omit<FmSavedDocument, "id" | "generatedAt">) =>
     mutate((d) => ({
       ...d,
@@ -317,7 +392,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       data, ready, saveError, reload,
       addSchedule, updateSchedule, removeSchedule, removeAllSchedules,
       logCompletion, addCost, updateCost, addTicket, updateTicket,
-      removeCost, removeTicket,
+      removeCost, removeTicket, removeCompletion, advanceTicket,
       saveDocument, removeDocument, registerWatcher,
     }}>
       {children}

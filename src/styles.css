@@ -2307,6 +2307,49 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 .panel-footer-left { display: flex; align-items: center; gap: 8px; }
 
+/* A fault's own history, on its card. Left rail of dots so the sequence reads
+   as a sequence, not three stacked paragraphs. */
+.fm-timeline { list-style: none; margin: 6px 0 0; padding: 0 0 0 2px; display: flex; flex-direction: column; gap: 6px; }
+.fm-timeline li { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; }
+.fm-timeline-dot {
+  flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 4px;
+  background: var(--text-dim);
+}
+.fm-timeline-dot.in_progress { background: var(--status-warning); }
+.fm-timeline-dot.resolved { background: var(--status-ok); }
+.fm-timeline-head { font-weight: 600; }
+.fm-timeline-note {
+  color: var(--text-secondary); font-size: 12px; margin-top: 2px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+/* A section header that folds its own content away — used for the offline
+   shortlist, which is a useful shortcut when the fault IS one of those
+   devices and pure noise otherwise. */
+.fm-disclosure {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none; padding: 4px 0; cursor: pointer;
+  color: var(--text-secondary); font-size: 12.5px; text-align: left;
+  min-height: var(--touch-min);
+}
+.fm-disclosure:hover { color: var(--text-primary); }
+
+/* Marks a report filed by a guest: a symptom noticed from inside the villa,
+   not a diagnosis — which is how the row should be read when triaging. */
+.fm-clause.guest {
+  color: var(--status-warning);
+  background: color-mix(in srgb, var(--status-warning) 14%, transparent);
+}
+
+/* The guest's one-screen report form. */
+.guest-report { width: min(480px, 100%); }
+.guest-report-done {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 28px 24px; text-align: center; color: var(--status-ok);
+}
+.guest-report-done h3 { margin: 0; font-size: 17px; color: var(--text-primary); }
+.guest-report-done p { max-width: 300px; }
+
 /* Device-picker suggestion rows (Faults/Spend). Two lines: the friendly name,
    then the entity_id and room. The id is what actually identifies a device —
    a label like "Bedroom 1" names nothing an operator can act on — so it is

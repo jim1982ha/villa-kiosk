@@ -5,10 +5,18 @@
 // villa's ACTUAL live state, which is the one thing a paper checklist can't do.
 // A failing check names the devices behind it and opens them directly.
 
-import { CheckCircle2, AlertTriangle, XCircle, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, AlertTriangle, XCircle, ChevronRight, Camera } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { displayLabelFor } from "@/config/EntityMap";
+import { resolveSiteTitle } from "@/config/AppConfig";
+import { useFmData } from "@/fm/FmDataContext";
+import { monthKey } from "@/fm/fmEngine";
+import { buildReadinessSnapshot } from "@/fm/fmReport";
+import type { FmSavedDocument } from "@/fm/fmTypes";
+import SavedDocumentsList from "./SavedDocumentsList";
+import ReportPreview from "./ReportPreview";
 import type { CheckState, ReadinessCheck, ReadinessReport } from "@/fm/readiness";
 
 const ICON: Record<CheckState, typeof CheckCircle2> = {
@@ -50,7 +58,10 @@ export default function ReadinessTab({
   onOpenCheckDevices: (check: ReadinessCheck) => void;
 }) {
   const { config } = useConfig();
-  const { entities } = useHA();
+  const { entities, haConfig } = useHA();
+  const { saveDocument } = useFmData();
+  const [saved, setSaved] = useState(false);
+  const [viewing, setViewing] = useState<FmSavedDocument | null>(null);
 
   const headline = report.overall === "pass"
     ? "Ready for the next guest"
@@ -62,12 +73,31 @@ export default function ReadinessTab({
 
   return (
     <div className="fm-stack">
+      {/* Freezing the check turns it from a live readout into evidence — see
+          buildReadinessSnapshot. Same generate-and-keep shape as the report
+          and spend statement, and it lands in the same saved-documents store,
+          so a handover pack can include the check actually run on the day. */}
       <div className={`fm-headline ${report.overall}`}>
         <span className="fm-headline-icon"><HeadlineIcon size={22} /></span>
         <div className="fm-headline-text">
           <strong>{headline}</strong>
           <span className="muted">{report.passed} of {report.total} checks passing</span>
         </div>
+        <button
+          className="btn ghost"
+          style={{ marginLeft: "auto" }}
+          onClick={async () => {
+            await saveDocument({
+              kind: "readiness",
+              month: monthKey(Date.now()),
+              markdown: buildReadinessSnapshot(report, resolveSiteTitle(config, haConfig?.location_name)),
+            });
+            setSaved(true);
+            window.setTimeout(() => setSaved(false), 2500);
+          }}
+        >
+          <Camera size={15} /> {saved ? "Saved" : "Save snapshot"}
+        </button>
       </div>
 
       <div className="fm-list">
@@ -117,6 +147,15 @@ export default function ReadinessTab({
           );
         })}
       </div>
+
+      <SavedDocumentsList kind="readiness" onOpen={setViewing} />
+      {viewing && (
+        <div className="fm-stack">
+          <button className="btn ghost" style={{ alignSelf: "flex-start" }}
+            onClick={() => setViewing(null)}>Close snapshot</button>
+          <ReportPreview markdown={viewing.markdown} />
+        </div>
+      )}
     </div>
   );
 }

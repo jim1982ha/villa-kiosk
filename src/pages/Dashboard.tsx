@@ -22,6 +22,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import FacilityModal from "@/components/fm/FacilityModal";
+import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
@@ -56,6 +57,7 @@ export default function Dashboard() {
   // Facility workspace: the facility manager (whose job it is) and the owner
   // (accountable for the property, signs off the monthly report).
   const canManageFacility = role != null && hasCapability(role, "manageFacility");
+  const canReportFault = role != null && hasCapability(role, "reportFault");
   const canOpenSettings = role != null && hasCapability(role, "openSettings");
   const canEditConfig = role != null && hasCapability(role, "editConfig");
   // Read inside the onCalibrated/onReady effect below (which intentionally
@@ -74,6 +76,8 @@ export default function Dashboard() {
    *  panel's "report a fault" shortcut, cleared as soon as the modal has
    *  consumed it so reopening Facility later doesn't resurrect the form. */
   const [faultForEntity, setFaultForEntity] = useState<string | null>(null);
+  /** Device a GUEST is reporting a problem with (see GuestReportModal). */
+  const [guestReportFor, setGuestReportFor] = useState<string | null>(null);
   // When Advanced Settings is opened from a device panel's edit shortcut, this
   // holds the entity_id to pre-filter the entity table on (null = opened from
   // Settings, so "Back" returns to Settings rather than just closing).
@@ -628,11 +632,19 @@ export default function Dashboard() {
             // Same capability that gates the Facility workspace itself —
             // offering a shortcut into a screen the profile can't open would
             // be a dead end.
-            onReportFault: canManageFacility
+            // Every profile can report; only some can MANAGE. A guest gets a
+            // one-screen report form, an owner/facility manager lands in the
+            // Faults tab with the device filled in — same button, same intent,
+            // the destination differs only by what the profile can act on.
+            onReportFault: canReportFault
               ? () => {
                   setActivePanel(null);
-                  setFaultForEntity(activePanel.entityId);
-                  setFacilityOpen(true);
+                  if (canManageFacility) {
+                    setFaultForEntity(activePanel.entityId);
+                    setFacilityOpen(true);
+                  } else {
+                    setGuestReportFor(activePanel.entityId);
+                  }
                 }
               : undefined,
             // The device's exact map badge (same glyph/colour as the 3D view),
@@ -766,6 +778,13 @@ export default function Dashboard() {
           onOpenEntity={(id) => { setFacilityOpen(false); openEntityPanel(id); }}
           reportFaultFor={faultForEntity ?? undefined}
           onFaultFormOpened={() => setFaultForEntity(null)}
+        />
+      )}
+
+      {guestReportFor !== null && (
+        <GuestReportModal
+          entityId={guestReportFor}
+          onClose={() => setGuestReportFor(null)}
         />
       )}
 

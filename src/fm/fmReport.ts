@@ -210,3 +210,37 @@ export function buildSpendStatement(fm: FmData, month: string, villaName: string
     + `in the kiosk and available on request._`);
   return L.join("\n");
 }
+
+
+/** A point-in-time readiness snapshot, as markdown.
+ *
+ * Readiness is computed live from device state, which makes it useless as
+ * evidence: "was the villa ready before the last guest arrived?" cannot be
+ * answered after the fact, because the answer is recomputed every time anyone
+ * looks. Saving one freezes it, exactly like the monthly report and the spend
+ * statement — same store, same "generate then save" shape, so a handover pack
+ * can include the check that was actually run on the day.
+ */
+export function buildReadinessSnapshot(report: ReadinessReport, villaName: string): string {
+  const now = new Date();
+  const verdict = report.overall === "pass"
+    ? "READY"
+    : report.overall === "warn" ? "READY, WITH FINDINGS" : "NOT READY";
+  const lines = [
+    `# Readiness snapshot — ${villaName}`,
+    "",
+    `**${verdict}** — ${report.passed} of ${report.total} checks passing.`,
+    "",
+    `Taken ${now.toLocaleString()}.`,
+    "",
+    "| Check | Result | Finding |",
+    "| --- | --- | --- |",
+  ];
+  for (const c of report.checks) {
+    const state = c.state === "pass" ? "Pass" : c.state === "warn" ? "Warning" : "Fail";
+    // Pipes inside a finding would break the table row.
+    lines.push(`| ${c.label} | ${state} | ${c.detail.replace(/\|/g, "/")} |`);
+  }
+  lines.push("", "_Computed from live device state at the moment shown above._");
+  return lines.join("\n");
+}

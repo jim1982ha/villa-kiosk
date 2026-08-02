@@ -53,7 +53,14 @@ export interface FmSchedule {
 /** One performance of a scheduled task. */
 export interface FmCompletion {
   id: string;
+  /** The scheduled task this completes. Empty for work that answers a FAULT
+   *  rather than a schedule — see ticketId. */
   scheduleId: string;
+  /** The fault this work resolved, when the completion was logged from a
+   *  ticket. Without it a fault and the work that fixed it are two unrelated
+   *  records, and no report can say "this fault, fixed on this date, at this
+   *  cost" — which is the sentence the evidence exists to support. */
+  ticketId?: string;
   /** ISO timestamp of when the work was done (not when it was logged). */
   at: string;
   by: string;
@@ -72,6 +79,10 @@ export interface FmCost {
   amountIdr: number;
   label: string;
   category: "minor" | "major";
+  /** Free note — what the spend was actually for, beyond its one-line label.
+   *  The same field faults have, for the same reason: the person reading this
+   *  in six months is not the person who typed it. */
+  note?: string;
   room?: string;
   entityId?: string;
   /** The device this spend is against, as text — the entity's display name at
@@ -84,6 +95,24 @@ export interface FmCost {
 }
 
 export type FmTicketStatus = "open" | "in_progress" | "resolved";
+
+/** One recorded step in a fault's life — raised, picked up, resolved.
+ *
+ *  A status used to be a bare word with a timestamp: the record could say a
+ *  fault moved to "in progress" but not who picked it up or what they found,
+ *  and mean-time-to-resolution rested on exactly that. An update is the proof
+ *  behind the transition, captured at the moment it happens rather than
+ *  reconstructed afterwards. Everything but the timestamp and the status is
+ *  optional — a dialog that BLOCKS progress until it is filled in gets
+ *  satisfied with junk, or the fault is simply left where it is. */
+export interface FmTicketUpdate {
+  at: string;
+  /** The status this update moved the fault TO. */
+  status: FmTicketStatus;
+  by?: string;
+  note?: string;
+  photoIds: string[];
+}
 
 /** A fault raised against a device or room. */
 export interface FmTicket {
@@ -99,17 +128,27 @@ export interface FmTicket {
   note?: string;
   photoIds: string[];
   costId?: string;
+  /** Every status change, in order. Optional because faults raised before
+   *  this existed have none — read it as "no steps recorded", never as an
+   *  error. */
+  updates?: FmTicketUpdate[];
+  /** Set when a GUEST raised this rather than the owner or facility manager.
+   *  Kept because it changes how the row should be read: a guest reports a
+   *  symptom from inside the villa ("the aircon in bedroom 2 is noisy"), not
+   *  a diagnosis, and whoever triages it should know that before acting. */
+  reportedBy?: "guest";
 }
 
 /** A generated markdown document the operator chose to keep — the monthly
- *  owner-report annex (ReportTab) or a spend statement (SpendTab). Kept
+ *  owner-report annex (ReportTab), a spend statement (SpendTab), or a
+ *  point-in-time readiness snapshot (ReadinessTab). Kept
  *  verbatim as generated (not recomputed live) so a saved document stays a
  *  point-in-time record even if the underlying schedules/costs/tickets
  *  change afterwards — the same reasoning ReportTab's own "Generate" button
  *  (an explicit action, not a live re-render) already follows. */
 export interface FmSavedDocument {
   id: string;
-  kind: "report" | "spend";
+  kind: "report" | "spend" | "readiness";
   /** The period the document is ABOUT ("2026-06"), not when it was saved. */
   month: string;
   markdown: string;

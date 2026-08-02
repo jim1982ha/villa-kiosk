@@ -11,7 +11,7 @@
 // all — a spare part, or something not yet wired into Home Assistant.
 
 import { useEffect, useState } from "react";
-import { Plus, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Wrench } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { displayLabelFor } from "@/config/EntityMap";
@@ -20,6 +20,7 @@ import { localStamp, ticketStats } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
+import FaultStageModal from "./FaultStageModal";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 
 const NEXT: Record<FmTicketStatus, FmTicketStatus | null> = {
@@ -67,6 +68,9 @@ export default function FaultsTab(
   const [deviceText, setDeviceText] = useState("");
   const [entityId, setEntityId] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
+  /** The fault whose stage change is being recorded, and where it's going. */
+  const [staging, setStaging] = useState<{ ticket: FmTicket; to: FmTicketStatus } | null>(null);
+  const [showBroken, setShowBroken] = useState(false);
 
   const resetForm = () => {
     setAdding(false); setEditingId(null);
@@ -152,10 +156,22 @@ export default function FaultsTab(
       {adding && (
         <div className="fm-form">
           <h3>{editingId ? "Edit fault" : "Raise a fault"}</h3>
+          {/* Collapsed by default. It is a useful shortcut when the fault
+              you're raising IS one of these, and pure noise otherwise — and
+              on a phone an expanded list of ten chips pushed the description
+              field, the one thing every fault needs, below the fold. */}
           {broken.length > 0 && !editingId && (
             <div className="fm-field">
-              <span>Devices Home Assistant reports as offline</span>
-              <div className="fm-chiprow">
+              <button
+                type="button"
+                className="fm-disclosure"
+                onClick={() => setShowBroken((v) => !v)}
+                aria-expanded={showBroken}
+              >
+                {showBroken ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                Devices Home Assistant reports as offline ({broken.length})
+              </button>
+              <div className="fm-chiprow" hidden={!showBroken}>
                 {broken.slice(0, 10).map((id) => (
                   <button
                     key={id}
@@ -241,6 +257,9 @@ export default function FaultsTab(
               <div className="fm-row-title">
                 <strong>{t.title}</strong>
                 {t.room && <span className="fm-clause">{t.room}</span>}
+                {/* Read this row differently: a guest reports a symptom from
+                    inside the villa, not a diagnosis. */}
+                {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
               </div>
               <div className="fm-row-sub muted">
                 Opened {localStamp(t.openedAt)}
@@ -250,6 +269,25 @@ export default function FaultsTab(
                   is a claim; a thumbnail you can open is the evidence. */}
               {t.photoIds.length > 0 && (
                 <EvidenceRow photoIds={t.photoIds} onChange={NO_PHOTO_EDIT} disabled />
+              )}
+              {/* The fault's own history. Rendered on the card rather than
+                  behind another tap: "what has actually been done about this"
+                  is the question anyone opening the Faults tab is asking. */}
+              {(t.updates?.length ?? 0) > 0 && (
+                <ol className="fm-timeline">
+                  {t.updates!.map((u, i) => (
+                    <li key={i}>
+                      <span className={`fm-timeline-dot ${u.status}`} aria-hidden="true" />
+                      <div>
+                        <span className="fm-timeline-head">
+                          {LABEL[u.status]}
+                          <span className="muted"> · {localStamp(u.at)}{u.by ? ` · ${u.by}` : ""}</span>
+                        </span>
+                        {u.note && <div className="fm-timeline-note">{u.note}</div>}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
               )}
               {(t.entityId || t.deviceLabel) && (
                 <div className="fm-chiprow">
@@ -273,13 +311,24 @@ export default function FaultsTab(
             </span>
             {NEXT[t.status] && (
               <button className="btn ghost"
-                onClick={(e) => { e.stopPropagation(); void updateTicket(t.id, { status: NEXT[t.status]! }); }}>
+                // Never a bare status flip any more: every transition goes
+                // through the same dialog, so the record always carries who
+                // and what behind the change.
+                onClick={(e) => { e.stopPropagation(); setStaging({ ticket: t, to: NEXT[t.status]! }); }}>
                 Mark {LABEL[NEXT[t.status]!].toLowerCase()}
               </button>
             )}
           </ErasableRow>
         ))}
       </div>
+
+      {staging && (
+        <FaultStageModal
+          ticket={staging.ticket}
+          to={staging.to}
+          onClose={() => setStaging(null)}
+        />
+      )}
     </div>
   );
 }

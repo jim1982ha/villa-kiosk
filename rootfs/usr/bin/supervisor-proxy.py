@@ -904,6 +904,14 @@ FM_RECORD_COLLECTIONS = ("schedules", "completions", "costs", "tickets", "savedD
 # code in front of those would be friction bought with nothing.
 FM_PROTECTED_COLLECTIONS = ("completions", "costs", "tickets")
 
+# Roles that may edit the maintenance record itself. A guest is a writer of
+# the store (see _fm_guest_write_ok) but not one of these.
+FM_FULL_WRITER_ROLES = ("owner", "ops")
+
+# A guest may append at most this many reports in one write. One is the normal
+# case; the cap only exists so a scripted session cannot bulk-fill the store.
+FM_GUEST_MAX_NEW_TICKETS = 3
+
 
 def _fm_ids(doc) -> dict:
     """{collection: {id, ...}} for whatever this document actually contains."""
@@ -917,21 +925,60 @@ def _fm_ids(doc) -> dict:
     return out
 
 
-def _fm_photo_ids(doc, removed: dict) -> set:
-    """Evidence photo ids belonging ONLY to the records being removed."""
-    keep, drop = set(), set()
+def _fm_guest_write_ok(old, new) -> bool:
+    """True when this write is one a GUEST is allowed to make.
+
+    A guest living in the villa is the person most likely to NOTICE something
+    broken, and until now had no way to say so — the Facility workspace is
+    owner/ops only, so a broken air-conditioner reached the record only if the
+    guest happened to tell someone. Letting them raise a fault closes that,
+    but a guest must not be able to edit the maintenance record itself.
+
+    So the rule is not a role, it is the SHAPE of the change: every collection
+    except `tickets` must be byte-identical, and `tickets` may only gain
+    entries — no removal, no edit of one that already exists. A guest can add
+    a report and nothing else, including to their own report once it is filed.
+    Triage, status, cost and resolution stay with owner/ops.
+    """
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return False
     for name in FM_RECORD_COLLECTIONS:
-        items = doc.get(name) if isinstance(doc, dict) else None
-        if not isinstance(items, list):
+        if name == "tickets":
             continue
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            photos = it.get("photoIds")
-            ids = {str(p) for p in photos} if isinstance(photos, list) else set()
-            (drop if str(it.get("id")) in removed.get(name, set()) else keep).update(ids)
-    # A photo still referenced by a surviving record is never deleted.
-    return drop - keep
+        if old.get(name, []) != new.get(name, []):
+            return False
+    # Any key this server version doesn't know about must also be untouched —
+    # a newer client's field is not a licence to rewrite it from a guest
+    # session.
+    known = set(FM_RECORD_COLLECTIONS)
+    for key in set(old) | set(new):
+        if key not in known and old.get(key) != new.get(key):
+            return False
+
+    old_tickets = old.get("tickets") or []
+    new_tickets = new.get("tickets") or []
+    if not isinstance(new_tickets, list) or len(new_tickets) < len(old_tickets):
+        return False
+    # Existing tickets must survive UNCHANGED and in place; only appended
+    # entries are new. Comparing element-wise rather than by id also rejects
+    # a reordering that hides an edit.
+    if new_tickets[:len(old_tickets)] != old_tickets:
+        return False
+    added = new_tickets[len(old_tickets):]
+    if not added or len(added) > FM_GUEST_MAX_NEW_TICKETS:
+        return False
+    for t in added:
+        if not isinstance(t, dict):
+            return False
+        # A guest files an OPEN report and cannot pre-resolve it, backdate it,
+        # or attach a cost to the villa's accounts.
+        if t.get("status") != "open":
+            return False
+        if t.get("resolvedAt") is not None or t.get("costId") is not None:
+            return False
+        if t.get("reportedBy") != "guest":
+            return False
+    return True
 
 
 def _fm_write_guard(request: web.Request, body, old, new):
@@ -947,6 +994,14 @@ def _fm_write_guard(request: web.Request, body, old, new):
     the button would leave the capability wide open to anyone holding a normal
     session and a JSON editor.
     """
+    # Guests get a deliberately narrow write: appending a fault report, and
+    # nothing else. Checked FIRST because it is the tighter rule — a guest
+    # write that isn't a plain report is refused whatever else it contains.
+    if _role_for(request) not in FM_FULL_WRITER_ROLES:
+        if not _fm_guest_write_ok(old, new):
+            return _forbidden("A guest may only add a fault report.")
+        return None
+
     new_ids = _fm_ids(new)
     removed = {
         name: _fm_ids(old)[name] - new_ids[name]
@@ -964,25 +1019,97 @@ def _fm_write_guard(request: web.Request, body, old, new):
     return None
 
 
+def _fm_referenced_photo_ids(doc) -> set:
+    """Every evidence photo id the document still points at, anywhere."""
+    ids = set()
+    if not isinstance(doc, dict):
+        return ids
+    for name in FM_RECORD_COLLECTIONS:
+        items = doc.get(name)
+        if not isinstance(items, list):
+            continue
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            for field in ("photoIds",):
+                photos = it.get(field)
+                if isinstance(photos, list):
+                    ids.update(str(p) for p in photos)
+            # A fault's per-stage updates carry their own photos (see
+            # FmTicketUpdate) — missing these would delete a live photo.
+            updates = it.get("updates")
+            if isinstance(updates, list):
+                for u in updates:
+                    if isinstance(u, dict) and isinstance(u.get("photoIds"), list):
+                        ids.update(str(p) for p in u["photoIds"])
+    return ids
+
+
+def _delete_evidence(photo_id: str) -> bool:
+    """Remove one evidence JPEG, with the id and the resolved path both
+    checked — this deletes a file from a path built out of stored data."""
+    if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
+        return False
+    path = os.path.join(FM_EVIDENCE_DIR, f"{photo_id}.jpg")
+    if os.path.realpath(os.path.dirname(path)) != os.path.realpath(FM_EVIDENCE_DIR):
+        return False
+    try:
+        os.unlink(path)
+        return True
+    except OSError:
+        return False
+
+
 def _fm_after_write(old, new) -> None:
-    """Purge evidence photos orphaned by an authorised delete, so "delete"
-    means the JPEG is gone from /data too, not just its reference."""
-    removed = {
-        name: old_ids - _fm_ids(new)[name]
-        for name, old_ids in _fm_ids(old).items()
-    }
-    if not any(removed.values()):
-        return
-    for photo_id in _fm_photo_ids(old, removed):
-        if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
+    """Collect evidence photos the maintenance record no longer points at.
+
+    Runs on EVERY write, not only on a delete. The earlier version only fired
+    when a whole record was erased, which left two ways for JPEGs to pile up
+    in /data forever:
+
+      * editing a record to remove one photo (the x on a thumbnail) dropped
+        the reference and kept the file;
+      * a photo uploaded into a form that was then cancelled was never
+        referenced by anything at all.
+
+    Both are now handled by the same rule — a file nobody references is
+    garbage — with a grace period so a photo attached to a form that is still
+    open on someone's phone is never swept out from under them. The retention
+    sweep is separate and answers a different question (old evidence, still
+    referenced), so both run here.
+    """
+    referenced = _fm_referenced_photo_ids(new)
+
+    # 1. Anything this write dropped a reference to goes immediately: it was
+    #    referenced a moment ago, so there is no in-flight form to protect.
+    for photo_id in _fm_referenced_photo_ids(old) - referenced:
+        _delete_evidence(photo_id)
+
+    # 2. Anything on disk that nothing has EVER referenced and is older than
+    #    the grace window — the cancelled-form case.
+    cutoff = time.time() - FM_EVIDENCE_ORPHAN_GRACE_SECONDS
+    try:
+        names = os.listdir(FM_EVIDENCE_DIR)
+    except OSError:
+        names = []
+    for name in names:
+        if not name.endswith(".jpg"):
             continue
-        path = os.path.join(FM_EVIDENCE_DIR, f"{photo_id}.jpg")
-        if os.path.realpath(os.path.dirname(path)) != os.path.realpath(FM_EVIDENCE_DIR):
+        photo_id = name[:-4]
+        if photo_id in referenced:
             continue
+        path = os.path.join(FM_EVIDENCE_DIR, name)
         try:
-            os.unlink(path)
+            if os.path.getmtime(path) >= cutoff:
+                continue      # still inside the grace window
         except OSError:
-            pass
+            continue
+        _delete_evidence(photo_id)
+
+    # 3. Retention: referenced or not, evidence past the window goes. Kept on
+    #    this path as well as the upload path so a villa that stops uploading
+    #    still ages out its old evidence.
+    _prune_fm_evidence()
 
 
 async def auth_verify_handler(request: web.Request) -> web.Response:
@@ -1519,6 +1646,12 @@ FM_EVIDENCE_MAX_BYTES = 3_000_000     # generous headroom over a downscaled JPEG
 FM_EVIDENCE_RETENTION_DAYS = 550      # ~18 months: covers a 12-month agreement
                                       # plus the yield-up/dispute window after it
 FM_EVIDENCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
+# How long an unreferenced photo is kept before it is treated as garbage. It
+# exists solely to cover the gap between "uploaded" and "saved": the client
+# uploads a photo the moment it is picked, and the record referencing it is
+# not written until the operator presses Save. A form left open over lunch
+# must not have its attachments deleted underneath it.
+FM_EVIDENCE_ORPHAN_GRACE_SECONDS = 12 * 3600
 _JPEG_MAGIC = b"\xff\xd8\xff"
 
 
@@ -1547,8 +1680,11 @@ async def fm_evidence_post_handler(request: web.Request) -> web.Response:
     operator action, never a guest one."""
     if not _authorized(request):
         return _unauthorized()
-    if _role_for(request) not in ("owner", "ops"):
-        return _forbidden("Only the owner or facility manager may add evidence.")
+    # Guests too: a photo of the cracked panel is the most useful thing a
+    # guest can contribute, and is worthless if they cannot attach it. What a
+    # guest may then DO with it stays narrow — see _fm_guest_write_ok.
+    if _role_for(request) not in ("owner", "ops", "guest"):
+        return _forbidden("You do not have permission to add evidence.")
     photo_id = request.query.get("id", "")
     if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
         return web.json_response({"error": "bad photo id"}, status=400)
@@ -1613,7 +1749,11 @@ device_config_get_handler, device_config_put_handler = _json_store_handlers(
 # only difference is who may write it.
 fm_data_get_handler, fm_data_put_handler = _json_store_handlers(
     FM_DATA_FILE, "data", {}, FM_DATA_MAX_BYTES, "facility manager data",
-    writer_roles=("owner", "ops"),
+    # "guest" is admitted at the ROLE gate but constrained by the write guard
+    # to appending a fault report (see _fm_guest_write_ok) — the role check
+    # alone would be far too broad. Everything else about the maintenance
+    # record stays owner/ops.
+    writer_roles=("owner", "ops", "guest"),
     write_guard=_fm_write_guard, after_write=_fm_after_write)
 
 
