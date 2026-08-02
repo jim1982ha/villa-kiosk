@@ -1088,6 +1088,20 @@ export class EntityVisuals {
     }
   }
 
+  /** Where indexMeshes' time actually went, for the load telemetry.
+   *
+   *  indexMeshes is the single heaviest post-processing step (742–4,070 ms in
+   *  the field) and has been reported as ONE number, which is enough to know
+   *  it matters and not enough to fix it. Optimising a renderer this app took
+   *  months to stabilise on iOS, on a guess about which pass dominates, is how
+   *  a working villa becomes a broken one — so the split gets measured on real
+   *  devices first. Plain counters, no timers left running. */
+  private stats = { probeMs: 0, probeRays: 0, probeHits: 0, labelsMs: 0 };
+  /** Last pass's breakdown; read by SceneManager into the `load` event. */
+  indexStats(): Readonly<{ probeMs: number; probeRays: number; probeHits: number; labelsMs: number }> {
+    return this.stats;
+  }
+
   /** Cache for surfaceBelow(), cleared at the start of every indexMeshes.
    *  Key is a coarse spatial bucket — see that method for why. */
   private surfaceBelowCache = new Map<string, number | null>();
@@ -1124,13 +1138,20 @@ export class EntityVisuals {
   private surfaceBelow(x: number, y: number, z: number, exclude?: AbstractMesh): number | null {
     const key = `${Math.round(x / 4)}:${Math.round(y)}:${Math.round(z / 4)}`;
     const cached = this.surfaceBelowCache.get(key);
+    this.stats.probeHits += 1;
     if (cached !== undefined) return cached;
+    // Only a cache MISS casts a ray; probeRays vs probeHits is the bucketing's
+    // real-world hit rate, which is the number that says whether a finer grid
+    // would help or is already exhausted.
+    const t0 = performance.now();
+    this.stats.probeRays += 1;
     const hit = this.scene.pickWithRay(
       new Ray(new Vector3(x, y, z), Vector3.Down(), 8),
       (candidate) => candidate !== exclude && candidate.getTotalVertices() > 0
         && !/^(halo_|label_|marker)/i.test(candidate.name),
     );
     const result = hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : null;
+    this.stats.probeMs += performance.now() - t0;
     this.surfaceBelowCache.set(key, result);
     return result;
   }
@@ -1140,6 +1161,7 @@ export class EntityVisuals {
     // Geometry may have changed since the last pass — start from a clean probe
     // cache rather than reusing answers about a scene that no longer exists.
     this.surfaceBelowCache.clear();
+    this.stats = { probeMs: 0, probeRays: 0, probeHits: 0, labelsMs: 0 };
     // Dispose previously created light sources + shadow maps before re-indexing.
     this.disposeLights();
     this.disposeLabelAnchors();
@@ -1446,7 +1468,10 @@ export class EntityVisuals {
     // direction data survives on this.cameraDirections, and byEntity has just
     // been rebuilt above, so everything the build needs is in place.
     this.buildCameraBeams();
+    const tLabels = performance.now();
     this.rebuildLabels(); // labels are always shown
+    this.stats.labelsMs = Math.round(performance.now() - tLabels);
+    this.stats.probeMs = Math.round(this.stats.probeMs);
   }
 
   /** A rectangular LED cove (e.g. the dining-table or sofa-area perimeter) is

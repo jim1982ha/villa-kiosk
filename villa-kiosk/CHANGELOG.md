@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.77.0
+
+### Changes
+- **Split the heaviest load step so the next field report says which part of it is slow.** `indexMeshes` — entity binding, light creation, badge building — has been reported as one number, and in the field it ranges from 742ms to 4,070ms. That is enough to know it matters and not enough to fix it. The `load` event now also carries `probeMs` and `probeRays` (the downward floor raycasts, historically THE bottleneck here), `probeHits` (so the bucketing cache's real hit rate is visible — the number that says whether a finer grid would help or is already exhausted), and `labelsMs` (badge construction).
+- Deliberately measurement before surgery. This renderer took months to stabilise on iOS and is now targeted at an offline iPad; optimising it on a guess about which pass dominates is how a working villa becomes a broken one. The counters are plain accumulators — nothing runs between loads, and nothing is fetched.
+
 ## 2.76.1
 
 ### Changes

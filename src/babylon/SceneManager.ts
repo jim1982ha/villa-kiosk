@@ -1133,6 +1133,9 @@ export class SceneManager {
     if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
     this.visuals.indexMeshes(result.meshes); // entity badges/lights/state visuals — the single heaviest step
     mark("indexMeshes");
+    // Split the heaviest step so the next field report says WHICH part of it
+    // is slow, instead of only that it is.
+    Object.assign(phases, this.visuals.indexStats());
 
     await yieldAndDiscount();
     if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
