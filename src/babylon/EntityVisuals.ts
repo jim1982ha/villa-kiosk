@@ -69,7 +69,7 @@ import { pointInPolygon } from "@/utils/geometry";
 import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
-import { blocksCameraBeam } from "./meshRoles";
+import { blocksCameraBeam, isStructureMesh } from "./meshRoles";
 import { axisWorldScale } from "./meshUnits";
 import { LightPool } from "./LightPools";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
@@ -1199,13 +1199,51 @@ export class EntityVisuals {
     // real-world hit rate, which is the number that says whether a finer grid
     // would help or is already exhausted.
     const t0 = performance.now();
-    this.stats.probeRays += 1;
-    const hit = this.scene.pickWithRay(
-      new Ray(new Vector3(x, y, z), Vector3.Down(), 8),
-      (candidate) => candidate !== exclude && candidate.getTotalVertices() > 0
-        && !/^(halo_|label_|marker)/i.test(candidate.name),
-    );
-    const result = hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : null;
+    // Structure only (walls/floors/ceilings) — deliberately NOT "any solid
+    // mesh below", the same restriction blocksCameraBeam already applies to
+    // furniture for the identical reason (see meshRoles.ts). Without it, a
+    // light-pool probe over a table or desk hits the FURNITURE's top surface
+    // instead of the floor beneath it — not a miss at all, just the wrong
+    // answer — and the pool paints a glow patch at tabletop height that reads
+    // as "floating" against the actual floor around it. This is the case a
+    // field report traced to exactly that: a dining table sitting directly
+    // under a ceiling light.
+    const predicate = (candidate: AbstractMesh) =>
+      candidate !== exclude && candidate.getTotalVertices() > 0
+      && !/^(halo_|label_|marker)/i.test(candidate.name)
+      && isStructureMesh(candidate);
+    const cast = (px: number, pz: number): number | null => {
+      this.stats.probeRays += 1;
+      const hit = this.scene.pickWithRay(
+        // 20, not the villa's actual max floor-to-fixture height: a probe
+        // that comes up short here has no better answer than the nudge
+        // retry below — a ray this generous only pays for itself on an
+        // actual miss, and cheaply removes one whole class of those misses
+        // outright.
+        new Ray(new Vector3(px, y, pz), Vector3.Down(), 20), predicate,
+      );
+      return hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : null;
+    };
+    let result = cast(x, z);
+    // A miss straight down from the exact probe point CAN still mean it
+    // landed on a hairline seam between two adjacent floor polygons — floor
+    // meshes are exported per ROOM, and adjoining edges don't always weld to
+    // bit-identical coordinates, leaving a gap too thin to see but real
+    // enough for a ray to slip through — most likely for a fixture sitting
+    // right at (or very near) a wall, exactly where two rooms' floors meet.
+    // Nudging a few cm off in each direction and retrying routes around that
+    // gap without needing to know which side of it the room's interior is
+    // on. Giving up outright (see this method's callers) is the last resort
+    // for a spot with genuinely no floor below at all (e.g. an outdoor
+    // fixture over water) once both this and the structure-only predicate
+    // above have had their say.
+    if (result === null) {
+      const NUDGE = 0.12;
+      for (const [dx, dz] of [[NUDGE, 0], [-NUDGE, 0], [0, NUDGE], [0, -NUDGE]]) {
+        result = cast(x + dx, z + dz);
+        if (result !== null) break;
+      }
+    }
     this.stats.probeMs += performance.now() - t0;
     this.surfaceBelowCache.set(key, result);
     return result;
@@ -1439,16 +1477,39 @@ export class EntityVisuals {
               : [{ x: cx, z: cz, scale: 1 }, { x: cx, z: min.z, scale: 0.5 }, { x: cx, z: max.z, scale: 0.5 }])
             : [{ x: cx, z: cz, scale: 1 }];
 
-          const pools = spots.map(({ x, z, scale }, i) => {
-            const fixturePos = new Vector3(x, bb.centerWorld.y, z);
-            const surfaceY = this.surfaceBelow(fixturePos.x, fixturePos.y, fixturePos.z, m);
-            const floorPos = surfaceY !== null
-              ? new Vector3(fixturePos.x, surfaceY + 0.02, fixturePos.z)
-              : new Vector3(fixturePos.x, fixturePos.y - 1, fixturePos.z);
-            const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}_${i}`, floorPos, LIGHT_POOL_RADIUS);
-            pool.intensityScale = scale;
-            return pool;
-          });
+          const pools = spots
+            .map(({ x, z, scale }, i) => {
+              const fixturePos = new Vector3(x, bb.centerWorld.y, z);
+              const surfaceY = this.surfaceBelow(fixturePos.x, fixturePos.y, fixturePos.z, m);
+              // No floor found within the probe's reach: the old fallback
+              // placed the pool 1m below the fixture regardless — a glow
+              // patch floating at roughly window/furniture height instead of
+              // on the floor, reported (accurately) as "a disk floating in
+              // the air". No pool at all — this one spot just reads as an
+              // unlit fixture — is a far smaller miss than a wrongly-placed
+              // glow, and this ray is now generous enough (20, see
+              // surfaceBelow) that a genuine miss should be rare.
+              //
+              // Logged rather than silently swallowed: a reported "floating
+              // disc" turned out NOT to be the near-a-wall floor-seam case
+              // this method's nudge retry targets (the fixture was confirmed
+              // mid-room), so the real cause is still open. This is the one
+              // piece of evidence that can actually settle it next time —
+              // visible on the kiosk itself via ?debug, no devtools needed.
+              if (surfaceY === null) {
+                tapDebug(
+                  `light pool: no floor found below ${m.name} at world `
+                  + `(${fixturePos.x.toFixed(2)}, ${fixturePos.y.toFixed(2)}, ${fixturePos.z.toFixed(2)}) `
+                  + `even after the seam-nudge retry — fixture skipped (was a floating disc before this fix).`,
+                );
+                return null;
+              }
+              const floorPos = new Vector3(fixturePos.x, surfaceY + 0.02, fixturePos.z);
+              const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}_${i}`, floorPos, LIGHT_POOL_RADIUS);
+              pool.intensityScale = scale;
+              return pool;
+            })
+            .filter((p): p is LightPool => p !== null);
           this.meshLightPools.set(m.uniqueId, pools);
         }
       }

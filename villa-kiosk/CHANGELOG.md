@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.81.2
+
+### Fixed
+- **A baked-mode light's floor "glow pool" could paint at furniture height instead of on the floor** — reported and confirmed from screenshots as a warm disc floating in mid-air under a ceiling fixture, over a dining table. The floor-finding probe behind these pools (`EntityVisuals.surfaceBelow`) casts a ray straight down from the fixture and paints the glow at the first solid thing it hits — and its predicate accepted ANY mesh with geometry, furniture included. A table sitting directly under a ceiling light is exactly what that ray was told counts as "the floor". This is the same class of bug `blocksCameraBeam` was already written to avoid for camera motion beams (see `meshRoles.ts`): furniture isn't the villa's structure, and letting it stand in for structure gives the wrong answer even though the raycast itself works perfectly. The probe is now restricted to structure meshes only (walls/floors/ceilings, via `isStructureMesh`) — the same distinction already used there — so it always finds the real floor slab beneath whatever furniture happens to be in the way.
+- **Two smaller misses in the same code, worth fixing alongside it rather than separately.** The ray only reached 8m down, generous for an ordinary room but not for every case; it's now 20m. And a genuine miss (nothing at all below — an outdoor fixture with no floor in reach, say) used to paint the pool 1m below the fixture regardless of what was actually there; it now skips the pool for that one spot instead, and logs the exact fixture and world position via `tapDebug` (visible on-device with `?debug`) so a future report can be pinned down immediately instead of guessed at again.
+
 ## 2.81.1
 
 ### Fixed
