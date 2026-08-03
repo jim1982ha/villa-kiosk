@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useConfig } from "@/config/ConfigContext";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { extractEmbeddedRoomDataJson } from "@/utils/glbRoomDataExtractor";
-import { fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type AddonConfig } from "@/utils/storage";
+import { fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, clearVersionedModelUrlCache, type AddonConfig } from "@/utils/storage";
 import { getLoadedModelInfo } from "@/utils/modelInfo";
 
 export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
@@ -68,6 +68,7 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
       // clients on their next open).
       if (kind === "rooms") applyRoomData(await file.text());
       clearAddonConfigCache();
+      clearVersionedModelUrlCache();
       setAddonCfg(await fetchAddonConfig());
       const mb = size / 1_000_000;
       setUploadMsg({ text: `Uploaded ${mb < 1 ? `${(size / 1000).toFixed(0)} KB` : `${mb.toFixed(1)} MB`} → ${path}. Reloading…`, ok: true });

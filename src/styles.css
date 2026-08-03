@@ -2085,6 +2085,19 @@ label.toggle span { user-select: none; line-height: 1.4; }
   /* Room badge: smaller display type so longer names stay on one centred line. */
   .room-label { top: calc(58px + var(--safe-top)); padding: 7px 18px; }
   .room-title { font-size: 20px; }
+
+  /* A device panel's Mode/Fan-speed/Preset row (ACPanel, FanPanel) is short
+     by desktop standards but on a narrow phone its buttons routinely exceed
+     the panel's width — up to 7-8 HVAC/fan modes side by side. The base
+     .scroll variant handles that with flex-wrap:nowrap + overflow-x:auto,
+     which is fine on desktop (there's usually room, and a mouse can scroll
+     the overflow) but on a touchscreen with no visible scrollbar it just
+     reads as a cut-off button: the last item is sliced by the panel's own
+     edge with no affordance hinting there's more to swipe to. Every button
+     is a single short word already (see MODE_LABELS/fan modes), so letting
+     the row wrap instead — same as the plain .row-buttons variant — shows
+     every option without needing to discover a hidden scroll. */
+  .row-buttons.scroll { flex-wrap: wrap; overflow-x: visible; padding-bottom: 0; }
 }
 
 /* ---- Profile gate (RBAC entry screen + passcode pad) ---- */

@@ -238,10 +238,11 @@ export default function SummaryGroupPanel({
       id, type, config.entityMap[id]?.category, e.attributes.device_class as string | undefined);
     const label = displayLabelFor(id, config.entityMap[id]?.label, e.attributes.friendly_name);
     const unit = (e.attributes.unit_of_measurement as string | undefined) ?? "";
+    const curTemp = e.attributes.current_temperature as number | null | undefined;
     const stateText = isUnavailable(e)
       ? "Unavailable"
       : domain === "climate"
-        ? `${Math.round((e.attributes.current_temperature as number | undefined) ?? 0)}°`
+        ? (curTemp == null ? "--" : `${Math.round(curTemp)}°`)
         : `${pretty(e.state)}${unit ? ` ${unit}` : ""}`;
 
     const isLock = domain === "lock";

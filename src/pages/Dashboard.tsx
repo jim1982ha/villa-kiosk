@@ -140,6 +140,12 @@ export default function Dashboard() {
     }
     return augmented;
   }, [mappedEntityIds, config.entityMap, dismissedIds]);
+  // Mirrored into a ref for the motion-toast subscription below, which reads
+  // it from inside a subscribeAll callback set up once ([subscribeAll] only)
+  // — a plain closure over the memo would freeze on whatever set existed at
+  // subscribe time.
+  const effectiveMappedIdsRef = useRef(effectiveMappedEntityIds);
+  effectiveMappedIdsRef.current = effectiveMappedEntityIds;
   // Diagnostic/hidden-in-HA entities are excluded UNLESS they're actually on
   // the map (effectiveMappedEntityIds — real geometry, or linked/motion to
   // something that has it): the same distinction the map badge itself uses
@@ -353,6 +359,12 @@ export default function Dashboard() {
       const isMotion = MOTION_DEVICE_CLASSES.has(deviceClass ?? "")
         || /(^|[._])(motion|presence|occupancy|pir)([._]|$)/.test(id);
       if (!isMotion) return;
+      // Only announce a sensor actually configured somewhere in the app —
+      // real geometry in the model, or another mapping's Linked entity /
+      // Motion sensor field (see effectiveMappedEntityIds above). Without
+      // this, any motion/presence/occupancy sensor HA happens to expose
+      // fires the toast, configured or not.
+      if (!effectiveMappedIdsRef.current.has(id)) return;
 
       const on = e.state === "on";
       const prev = wasOn.get(id);

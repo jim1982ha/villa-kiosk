@@ -23,6 +23,33 @@ import {
   noteLoadSuccess, clearCrashLoop, noteContextLoss, captureError, buildReport,
 } from "@/utils/diagnostics";
 import type { EntityMapping } from "@/types/scene.types";
+import type { ParsedRoomData } from "@/utils/sh3dParser";
+
+type RoomsSyncResult =
+  | { ok: true; rooms: ParsedRoomData["rooms"]; entities: ParsedRoomData["entities"] }
+  | { ok: false; status: number }
+  | { ok: false; error: Error };
+
+/** Fetch + parse the central ".rooms.json" sidecar. Pulled out of the load
+ *  effect so it can be STARTED the moment addonCfg.model_path is known —
+ *  before the (multi-second) GLB import even begins, since this fetch has no
+ *  dependency on the model's bytes or decode. Awaiting its result only
+ *  happens later, once loadModel has resolved, by which point this has
+ *  usually already finished in the background — see the call site. */
+async function fetchRoomsSync(modelPath: string): Promise<RoomsSyncResult> {
+  const roomsPath = roomsPathFor(modelPath);
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 5000);
+    const resp = await fetch(await versionedModelUrl(roomsPath), { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!resp.ok) return { ok: false, status: resp.status };
+    const { rooms, entities } = parseRoomData(await resp.text());
+    return { ok: true, rooms, entities };
+  } catch (err) {
+    return { ok: false, error: err as Error };
+  }
+}
 
 interface Props {
   onManager: (m: SceneManager | null) => void;
@@ -173,6 +200,11 @@ export default function BabylonCanvas({
       try {
         noteLoadPhase("fetch-config");
         const addonCfg = await fetchAddonConfig();
+        // Started here, not where it's awaited below: this fetch depends only
+        // on addonCfg.model_path, so kicking it off now lets its round-trip
+        // run in the shadow of the GLB's own multi-second import instead of
+        // adding to the critical path serially after it.
+        const roomsSyncPromise = addonCfg.model_path ? fetchRoomsSync(addonCfg.model_path) : null;
         let data: ArrayBuffer | null = null;
         /** Whether the profile screen's background download was reusable. */
         let usedPrefetch = false;
@@ -263,6 +295,11 @@ export default function BabylonCanvas({
         // cache hit / no Content-Length skips readWithProgress's onProgress).
         setReconnecting(false);
         const tFetchDone = performance.now();
+        // Diagnostic-only (Settings' "which file is loaded" fingerprint) and
+        // needed by nothing downstream — started now, alongside the bytes
+        // it hashes, instead of after loadModel resolves, so it runs in the
+        // shadow of the decode rather than adding to it.
+        const sha256Promise = sha256Hex(data);
         // The heavy step and the usual iOS OOM point: Draco decode + texture
         // decode + GPU upload of the whole villa.
         noteLoadPhase("import-mesh");
@@ -280,7 +317,7 @@ export default function BabylonCanvas({
         setLoadedModelInfo({
           url: loadedSource,
           bytes: data.byteLength,
-          sha256: await sha256Hex(data),
+          sha256: await sha256Promise,
           meshCount: meshNames.length,
           fetchMs: Math.round(tFetchDone - tFetchStart),
           parseMs: Math.round(tParseDone - tFetchDone),
@@ -389,52 +426,50 @@ export default function BabylonCanvas({
         // config (the common re-open case) we skip it entirely, so there's no
         // rebuild and no delay. A hung/missing fetch never blocks the reveal
         // (short timeout + it just proceeds without the refresh).
-        if (fromAddon && addonCfg.model_path) {
+        //
+        // roomsSyncPromise was STARTED back when addonCfg first resolved, in
+        // parallel with the GLB's own import — by now it has usually already
+        // settled, so this await is normally instant rather than a fresh
+        // multi-hundred-ms round-trip stacked onto the critical path.
+        if (fromAddon && addonCfg.model_path && roomsSyncPromise) {
           noteLoadPhase("post-process");
-          const roomsPath = roomsPathFor(addonCfg.model_path);
-          try {
-            const ctrl = new AbortController();
-            const tid = setTimeout(() => ctrl.abort(), 5000);
-            const roomsResp = await fetch(await versionedModelUrl(roomsPath), { signal: ctrl.signal });
-            clearTimeout(tid);
-            if (!cancelled && !roomsResp.ok) {
+          const roomsPath = roomsPathFor(addonCfg.model_path); // for the messages below only
+          const result = await roomsSyncPromise;
+          if (!cancelled) {
+            if (!result.ok && "status" in result) {
               setSh3dSyncMsg(
-                `Central room data (${roomsPath}) not found (HTTP ${roomsResp.status}) — room names ` +
+                `Central room data (${roomsPath}) not found (HTTP ${result.status}) — room names ` +
                 "weren't refreshed. Re-run the Blender pipeline and upload the .rooms.json in Settings.",
               );
-            } else if (!cancelled && roomsResp.ok) {
-              const { rooms, entities: sh3dEntities } = parseRoomData(await roomsResp.text());
-              if (!cancelled) {
-                // Compare by CONTENT, not reference: parseRoomData returns fresh
-                // arrays every open, so a reference check would force the
-                // rebuild on every load even when nothing actually changed.
-                const cur = configRef.current;
-                const sameRooms = JSON.stringify(cur.sh3dRooms ?? []) === JSON.stringify(rooms);
-                const sameEnts = JSON.stringify(cur.sh3dEntities ?? []) === JSON.stringify(sh3dEntities);
-                if (!sameRooms || !sameEnts) {
-                  // If the central plan's room SET changed (admin swapped the
-                  // file), drop stale rooms so only the new plan's remain — the
-                  // scene re-calibrates from the fresh set. Same set: leave
-                  // teleportPoints alone so user-added rooms + saved overview
-                  // poses survive.
-                  const prevNames = (cur.sh3dRooms ?? []).map((r) => r.name).sort().join("|");
-                  const nextNames = rooms.map((r) => r.name).sort().join("|");
-                  update(prevNames !== nextNames
-                    ? { sh3dRooms: rooms, sh3dEntities, teleportPoints: [] }
-                    : { sh3dRooms: rooms, sh3dEntities });
-                  // Give React a beat to commit + run the config effect (whose
-                  // updateConfig does the structural rebuild) BEHIND the overlay,
-                  // so we reveal an already-settled, interactive villa.
-                  await new Promise<void>((r) =>
-                    requestAnimationFrame(() => requestAnimationFrame(() => r())));
-                }
+            } else if (!result.ok) {
+              if (result.error.name !== "AbortError") {
+                console.warn("[BabylonCanvas] central room-data refresh failed", result.error);
+                setSh3dSyncMsg(`Failed to refresh room names from the central .rooms.json: ${result.error.message}`);
               }
-            }
-          } catch (err) {
-            if ((err as Error).name !== "AbortError") {
-              console.warn("[BabylonCanvas] central room-data refresh failed", err);
-              if (!cancelled) {
-                setSh3dSyncMsg(`Failed to refresh room names from the central .rooms.json: ${(err as Error).message}`);
+            } else {
+              const { rooms, entities: sh3dEntities } = result;
+              // Compare by CONTENT, not reference: parseRoomData returns fresh
+              // arrays every open, so a reference check would force the
+              // rebuild on every load even when nothing actually changed.
+              const cur = configRef.current;
+              const sameRooms = JSON.stringify(cur.sh3dRooms ?? []) === JSON.stringify(rooms);
+              const sameEnts = JSON.stringify(cur.sh3dEntities ?? []) === JSON.stringify(sh3dEntities);
+              if (!sameRooms || !sameEnts) {
+                // If the central plan's room SET changed (admin swapped the
+                // file), drop stale rooms so only the new plan's remain — the
+                // scene re-calibrates from the fresh set. Same set: leave
+                // teleportPoints alone so user-added rooms + saved overview
+                // poses survive.
+                const prevNames = (cur.sh3dRooms ?? []).map((r) => r.name).sort().join("|");
+                const nextNames = rooms.map((r) => r.name).sort().join("|");
+                update(prevNames !== nextNames
+                  ? { sh3dRooms: rooms, sh3dEntities, teleportPoints: [] }
+                  : { sh3dRooms: rooms, sh3dEntities });
+                // Give React a beat to commit + run the config effect (whose
+                // updateConfig does the structural rebuild) BEHIND the overlay,
+                // so we reveal an already-settled, interactive villa.
+                await new Promise<void>((r) =>
+                  requestAnimationFrame(() => requestAnimationFrame(() => r())));
               }
             }
           }

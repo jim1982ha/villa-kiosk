@@ -163,6 +163,30 @@ export function roomsPathFor(modelPath: string): string {
 // cache still hits.
 const LAST_MODEL_TAG_PREFIX = "villa-kiosk:model-tag:";
 
+// versionedModelUrl is called from at least two independent places on every
+// load (main.tsx's startModelPrefetch AND BabylonCanvas's own load effect,
+// each racing to resolve the SAME relPath) — each call used to fire its own
+// live HEAD probe. Under a flaky/congested network, one call's probe can time
+// out while the other succeeds, and the timed-out one then falls back to
+// whatever tag was in localStorage — which can be a DIFFERENT tag than the
+// one the other call just resolved. Two callers disagreeing on the model's
+// `?v=` breaks prefetch reuse (claimPrefetch rejects on a URL mismatch,
+// silently discarding an already-downloaded GLB and re-fetching from scratch)
+// and fragments the floor-probe cache (keyed on this same URL) for what is
+// otherwise byte-identical geometry. Memoizing per relPath — one real HEAD
+// probe per page life, every other caller awaits its result — makes that
+// class of mismatch structurally impossible instead of just unlikely.
+const _versionedUrlCache = new Map<string, Promise<string>>();
+
+export function versionedModelUrl(relPath: string): Promise<string> {
+  let p = _versionedUrlCache.get(relPath);
+  if (!p) {
+    p = resolveVersionedModelUrl(relPath);
+    _versionedUrlCache.set(relPath, p);
+  }
+  return p;
+}
+
 /**
  * Resolve a central model file (GLB/SH3D) to a version-stamped URL so the
  * service worker can cache it aggressively (cache-first) yet still pick up a
@@ -174,7 +198,7 @@ const LAST_MODEL_TAG_PREFIX = "villa-kiosk:model-tag:";
  * the last tag that worked (see LAST_MODEL_TAG_PREFIX) rather than an
  * unversioned URL, so a flaky probe doesn't force a fresh download.
  */
-export async function versionedModelUrl(relPath: string): Promise<string> {
+async function resolveVersionedModelUrl(relPath: string): Promise<string> {
   // The add-on's nginx serves central files at /model/ (an alias onto the
   // add-on's /data volume, session-gated). Resolved against the base path so it
   // works both in the sidebar (Ingress prefix) and on the direct hostname.
@@ -212,6 +236,14 @@ let _addonConfigCache: AddonConfig | null = null;
  *  (e.g. right after a central upload changes the effective paths). */
 export function clearAddonConfigCache(): void {
   _addonConfigCache = null;
+}
+
+/** Drop every memoized versionedModelUrl() result — call alongside
+ *  clearAddonConfigCache() right after a central upload, so the next resolve
+ *  does a real HEAD probe instead of replaying the pre-upload tag/URL for the
+ *  rest of this page's life. */
+export function clearVersionedModelUrlCache(): void {
+  _versionedUrlCache.clear();
 }
 
 // HA's Ingress gateway rejects any single request over ~16 MB with HTTP 413
