@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.81.1
+
+### Fixed
+- **A camera's live view still showed portrait-style chrome (title bar on top, controls along the bottom) even when the iPad was actually held in landscape** — reported as "still looks portrait" despite the device being rotated. The side-rail rearrangement that already handles this correctly on a landscape phone was gated on `(orientation: landscape) and (max-height: 560px)`: a landscape phone is short enough to match that height cap, but an iPad in landscape never is (800px+), so it silently kept the portrait layout instead. Re-gated on `pointer: coarse` — a signal for "this is a touchscreen", true for any phone or tablet regardless of its actual height, and false for a mouse/trackpad desktop window that happens to be wide-but-short, which is the distinction that actually matters here. The rail's existing `clamp()` sizing on button/gap dimensions already self-limits at the top end, so nothing needed retuning for the taller viewport.
+- **The bottom tile bar sat well clear of the screen's true edge on an iPad, in both orientations, reading as dead space next to how it correctly sits flush on desktop.** The bar's `bottom` offset is a flat 20px plus `env(safe-area-inset-bottom)`, meant to keep it clear of an iPhone's home-indicator gesture zone; an iPad without a physical Home button reports the same ~20pt inset for the same reason, so the two stacked into a bigger gap than the tile row actually needs to clear it. Desktop has no such gesture zone at all, which is why only desktop looked "right" next to it. Added a `pointer: coarse` (tablet-width-and-up; the phone rule's own already-tuned 14px is untouched) override trimming the flat term to 8px — the safe-area term alone already clears the gesture zone, so the flat part is just breathing room now, not a second margin stacked on top of it.
+
 ## 2.81.0
 
 ### Fixed

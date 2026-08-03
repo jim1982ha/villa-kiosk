@@ -697,7 +697,12 @@ button {
 .summary-bar {
   /* bottom safe-area only — horizontally centred, so left/right insets
      don't apply the way they do for an edge-anchored bar. Without this the
-     tile row could sit under the home-indicator gesture area on an iPhone. */
+     tile row could sit under the home-indicator gesture area on an iPhone.
+     A tablet-class touch device gets a tighter flat term below (the
+     safe-area term alone already clears its gesture zone) — see the
+     pointer:coarse override below this rule. Desktop has no such gesture
+     zone at all, so its own 20px stays as the plain breathing room it always
+     was. */
   position: absolute; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
   z-index: 21; pointer-events: auto;
   display: flex; gap: 8px; align-items: stretch;
@@ -725,6 +730,19 @@ button {
   backdrop-filter: blur(8px); /* background: shared HUD-section glass, above */
   border: 1px solid var(--hairline); box-shadow: 0 8px 28px var(--shadow);
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+/* Tablet-class touch device (iPad, not a phone — the phone-width rule further
+   down already has its own tuned 14px and is untouched here): the base
+   rule's flat 20px plus a real safe-area-inset-bottom (Apple gives a tablet
+   without a physical Home button the same ~20pt gesture-zone inset an iPhone
+   gets) reads as an oversized dead gap under the tile row that desktop never
+   shows, since desktop has no such gesture zone to clear at all — reported as
+   "the bar doesn't sit at the bottom", reproducing in both orientations
+   (confirms it's this flat value, not anything landscape-specific). Scoped to
+   pointer:coarse plus a width floor so a genuine desktop window narrowed to
+   tablet width doesn't pick this up by accident. */
+@media (pointer: coarse) and (min-width: 721px) {
+  .summary-bar { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
 }
 .summary-bar::-webkit-scrollbar { display: none; }
 .summary-scene { display: flex; }
@@ -1251,7 +1269,17 @@ input[type="range"]::-moz-range-thumb {
    opposite edges — no DOM change, and no wrapper left in the middle of the
    flex line. It also makes the row measure 0 height, which correctly zeroes
    the portrait centring margin (see CameraPanel's bottomRowRef). */
-@media (orientation: landscape) and (max-height: 560px) {
+/* Gated on touch capability (pointer: coarse), NOT viewport height — the
+   original max-height:560px cap was written against a landscape PHONE (short
+   once rotated) and correctly rearranged its camera controls to the side
+   rails so the video keeps most of the height. An iPad in landscape is never
+   under 560px tall, so it silently kept the portrait-style top/bottom chrome
+   instead — reported as "still looks portrait" even though the device is
+   landscape. pointer:coarse is true for any touchscreen (phone or tablet)
+   regardless of its actual height, and false for a mouse/trackpad-driven
+   desktop window that happens to be wide-but-short — the distinction that
+   actually matters here, not the device's absolute size. */
+@media (orientation: landscape) and (pointer: coarse) {
   .camera-fullscreen { flex-direction: row; align-items: stretch; }
   .camera-bottom-row { display: contents; }
 
