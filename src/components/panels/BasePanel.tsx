@@ -34,7 +34,7 @@ interface Props {
 }
 
 export default function BasePanel({ title, room, icon, className, headerActions, onClose, children }: Props) {
-  const { onEdit, onReportFault, badge, onSetBadgeColor, linked } = usePanelActions();
+  const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion } = usePanelActions();
   const [colorOpen, setColorOpen] = useState(false);
 
   useEffect(() => {
@@ -109,6 +109,25 @@ export default function BasePanel({ title, room, icon, className, headerActions,
                 <div className="panel-linked-label" title={linked.label}>{linked.label}</div>
                 <div className="muted" style={{ fontSize: 11 }}>
                   {linked.isOn ? "On" : "Off"} · linked entity
+                </div>
+              </div>
+            </div>
+          )}
+          {/* The camera's motion sensor, if one is configured (Advanced
+              Settings' "Motion sensor" field) — read-only, unlike the linked-
+              entity switch above: this reports HA's own state, it isn't
+              something this panel can flip. Reuses the same plain status dot
+              the connection indicator uses (.conn-dot) rather than the
+              toggle control, so it doesn't read as tappable when it isn't. */}
+          {motion && (
+            <div className="panel-linked-row">
+              <span className={`conn-dot${motion.isOn ? " online" : ""}`} style={{ marginRight: 10 }}>
+                <span className="dot" />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div className="panel-linked-label" title={motion.label}>{motion.label}</div>
+                <div className="muted" style={{ fontSize: 11 }}>
+                  {motion.isOn ? "Motion detected" : "Clear"} · motion sensor
                 </div>
               </div>
             </div>

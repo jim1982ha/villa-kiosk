@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.82.0
+
+### Fixed
+- **A shared configuration edit (e.g. binding a camera's motion sensor) could show up on every device reached through the HA sidebar/Ingress but silently NOT on the same client's own installed PWA/direct-hostname session** — two different configurations for what is supposed to be one shared store, reported and reproduced firsthand by switching how the same client opened the kiosk. Every shared-store GET handler in `supervisor-proxy.py` (`/device-config`, `/fm-data`, `/telemetry`, `/addon-config`) sent its response with no `Cache-Control` header at all. Under Ingress that's harmless — HA's own Supervisor proxies the request straight through, nothing else sits in between. The standalone/direct-hostname path is exactly where a user's own reverse proxy, tunnel or CDN commonly sits in front of the add-on's exposed port, and without an explicit `no-store` any such layer is free to cache a plain GET under its own default policy — serving a stale copy of a store that's supposed to change the instant any device edits it. All four endpoints (plus the 409-conflict response, which hands a rejected write the fresher copy it's meant to rebase onto) now send `Cache-Control: no-store` explicitly. The client-side refresh trigger (`useStoreRefresh`) was checked too and has no origin-dependent code — the gap was entirely server-side. `security_test.py` still passes 165/165 after the change.
+
+### Changed
+- **A camera's configured motion sensor is now shown in the camera's own panel.** Setting Advanced Settings' "Motion sensor" field previously had no visible effect anywhere outside that settings screen — the generic "Linked entity" field has always rendered as an on/off switch right in the panel header, but a camera's motion link, a distinct and camera-only field, showed nowhere at all. Added the same placement: a read-only row (no toggle — this reports HA's own state, it isn't something the panel can flip) showing the sensor's label and live "Motion detected" / "Clear" reading, reusing the existing connection-status dot rather than the interactive toggle control so it doesn't read as tappable when it isn't.
+
 ## 2.81.2
 
 ### Fixed

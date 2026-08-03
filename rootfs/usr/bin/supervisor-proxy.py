@@ -686,7 +686,12 @@ async def addon_config_handler(request: web.Request) -> web.Response:
     """
     if not _model_authorized(request):
         return _unauthorized()
-    return web.json_response(_effective_paths())
+    # Same reasoning as the shared-store GETs above: this changes the moment
+    # an owner uploads a new model, every client is expected to notice within
+    # one refresh, and the standalone/direct-hostname path is exactly where a
+    # user's own reverse proxy/tunnel/CDN could otherwise cache a stale
+    # model_path indefinitely.
+    return web.json_response(_effective_paths(), headers={"Cache-Control": "no-store"})
 
 
 async def auth_check_handler(request: web.Request) -> web.Response:
@@ -1584,7 +1589,21 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
     async def get_handler(request: web.Request) -> web.Response:
         if not _authorized(request):
             return _unauthorized()
-        return web.json_response({key: _read_json_store(path, empty), "rev": _store_revision(path)})
+        # This store changes on every edit from any device and every client
+        # is expected to see the current value within one heartbeat (see
+        # useStoreRefresh) — not "eventually", and never a stale copy served
+        # by something outside this add-on's own control. Under Ingress
+        # there is no intermediary to worry about (HA's Supervisor proxies
+        # straight through); the direct/standalone hostname is exactly where
+        # a user-added reverse proxy, tunnel or CDN sits in front of this
+        # response, and none of those honour a cache policy this handler
+        # never stated. no-store is explicit rather than assumed — confirmed
+        # in the field as the cause of one client's shared config silently
+        # disagreeing with every other client's.
+        return web.json_response(
+            {key: _read_json_store(path, empty), "rev": _store_revision(path)},
+            headers={"Cache-Control": "no-store"},
+        )
 
     async def put_handler(request: web.Request) -> web.Response:
         if not _authorized(request):
@@ -1616,9 +1635,14 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
             if expected_rev is not None:
                 current_rev = _store_revision(path)
                 if expected_rev != current_rev:
+                    # The fresher copy a caller rebases its retry onto — an
+                    # intermediary caching THIS would be actively harmful,
+                    # not just stale, so it gets the same explicit no-store
+                    # as the GET above rather than relying on 409 responses
+                    # not normally being cacheable.
                     return web.json_response(
                         {"error": "conflict", key: stored, "rev": current_rev},
-                        status=409)
+                        status=409, headers={"Cache-Control": "no-store"})
             if write_guard is not None:
                 veto = write_guard(request, body, stored, value)
                 if veto is not None:
@@ -1682,7 +1706,8 @@ async def telemetry_get_handler(request: web.Request) -> web.Response:
     events = _read_json_store(TELEMETRY_FILE, [])
     if request.query.get("clear") == "1":
         _write_json_store(TELEMETRY_FILE, json.dumps([]))
-    return web.json_response({"events": events, "count": len(events)})
+    return web.json_response(
+        {"events": events, "count": len(events)}, headers={"Cache-Control": "no-store"})
 
 
 # ── Facility Manager data + photo evidence ───────────────────────────────────

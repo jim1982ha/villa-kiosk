@@ -413,6 +413,17 @@ export default function Dashboard() {
     linkedSend,
   );
 
+  // The open panel's MOTION sensor (EntityMapping.motionEntityId) — camera-
+  // only, and read-only: unlike linkedEntityId this drives the map's
+  // detection beam from HA's own report, not something a switch can flip, so
+  // there's no optimistic hook here, just the live state. Configured in
+  // Advanced Settings' "Motion sensor" field but, until now, never actually
+  // shown anywhere in the panel itself — a camera could have one wired up
+  // with no way to see that from the panel that camera opens.
+  const motionEntityId = activePanel?.mapping.type === "camera"
+    ? (config.entityMap[activePanel.entityId] ?? activePanel.mapping).motionEntityId
+    : undefined;
+
   // Open the app in the bird's-eye overview by default — seeing the whole villa
   // at a glance is the natural landing view. One-shot: fires the first time the
   // scene becomes ready (model loaded + fitted) and never overrides the user's
@@ -724,6 +735,18 @@ export default function Dashboard() {
                     entities[linkedEntityId]?.attributes.friendly_name),
                   isOn: linkedToggle.isOn,
                   toggle: linkedToggle.toggle,
+                }
+              : undefined,
+            // Read-only — see motionEntityId's own comment above for why this
+            // has no toggle. Shown regardless of canControl (a guest can't
+            // flip it either way, but knowing a camera has motion detection
+            // wired up is not a control action).
+            motion: motionEntityId
+              ? {
+                  label: displayLabelFor(
+                    motionEntityId, config.entityMap[motionEntityId]?.label,
+                    entities[motionEntityId]?.attributes.friendly_name),
+                  isOn: entities[motionEntityId]?.state === "on",
                 }
               : undefined,
           }}

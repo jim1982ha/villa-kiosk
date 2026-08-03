@@ -66,6 +66,20 @@ export interface PanelActions {
     isOn: boolean;
     toggle: () => void;
   };
+  /** The open camera's MOTION sensor (EntityMapping.motionEntityId), when one
+   *  is configured — camera-only, unlike linkedEntityId above. Read-only: it
+   *  reports what HA already knows (and drives the map's detection beam), not
+   *  something this panel can flip, so there is no toggle — just the current
+   *  reading, so a camera's own panel can finally show that a motion sensor
+   *  is wired up to it at all instead of that being invisible outside
+   *  Advanced Settings. Undefined = no motion sensor configured for this
+   *  camera, or the open panel isn't a camera. */
+  motion?: {
+    /** Resolved display name of the motion sensor entity. */
+    label: string;
+    /** Live state — "Motion detected" vs "Clear". */
+    isOn: boolean;
+  };
 }
 
 const PanelActionsContext = createContext<PanelActions>({});
