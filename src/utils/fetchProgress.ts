@@ -45,7 +45,7 @@ const MODEL_FETCH_RETRY_BUDGET_MS = 120_000;
  *  no caching" (see public/sw.js, where it's the very first fetch-handler
  *  check). Kept in sync by name only — the two files can't import from each
  *  other, so if you rename it, rename it there too. */
-export const SW_BYPASS_PARAM = "vk-sw-bypass";
+const SW_BYPASS_PARAM = "vk-sw-bypass";
 
 /** Same URL, marked so the service worker steps out of the way entirely.
  *  Query params don't affect nginx's /model/ routing (`try_files $uri`

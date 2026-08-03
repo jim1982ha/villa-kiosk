@@ -85,6 +85,34 @@
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
     system-ui, "Segoe UI", Roboto, sans-serif;
 
+  /* ---- Type scale ----
+     One ladder, eight steps. This replaced 22 distinct hand-written px values
+     that had drifted apart over time, including pairs too close to be a
+     deliberate distinction (12 vs 12.5, 13 vs 13.5) and ten sizes used
+     exactly once each. A reader can't name the difference between 12px and
+     12.5px, but the accumulation of near-misses is what makes an interface
+     read as assembled rather than designed.
+
+     Steps are named by ROLE, not by number, so a new surface picks the one
+     that matches what it IS (a caption, a body line, a section title) rather
+     than eyeballing a pixel value — which is how the drift started. If a new
+     size seems necessary, the right move is almost always the nearest step. */
+  --text-2xs: 11px;   /* dense metadata: chip counts, timeline ticks */
+  --text-xs: 12px;    /* captions, secondary meta under a label */
+  --text-sm: 13px;    /* form labels, table cells, muted body */
+  --text-base: 14px;  /* default UI text */
+  --text-md: 15px;    /* emphasised rows, primary buttons */
+  --text-lg: 18px;    /* card/section titles */
+  --text-xl: 20px;    /* panel + modal headings */
+  --text-2xl: 28px;   /* the one-per-screen headline */
+  /* Display sizes stay separate from the UI ladder above: these are the
+     deliberately oversized readouts (a climate panel's current temperature,
+     the profile gate's villa name), where the size IS the design rather than
+     a step in a text hierarchy. */
+  --text-display-sm: 32px;
+  --text-display: 40px;
+  --text-display-lg: 64px;
+
   /* Sizing */
   --panel-radius: 16px;
   --panel-padding: 24px;
@@ -253,14 +281,14 @@ button {
 }
 
 /* --- Typography scale --- */
-.room-title { font-family: var(--font-display); font-size: 28px; font-weight: 300; letter-spacing: 0.05em; }
+.room-title { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 300; letter-spacing: 0.05em; }
 /* Small section caption ("LAST 24 HOURS", …). Slightly smaller and lighter
    than it was: at 13px/500 it competed with the actual content underneath it
    instead of quietly labelling it. */
-.entity-label { font-family: var(--font-ui); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-dim); }
-.value-large { font-family: var(--font-ui); font-size: 48px; font-weight: 200; line-height: 1; }
-.value-unit { font-family: var(--font-ui); font-size: 18px; font-weight: 400; color: var(--text-secondary); }
-.body-text { font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
+.entity-label { font-family: var(--font-ui); font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-dim); }
+.value-large { font-family: var(--font-ui); font-size: var(--text-display-lg); font-weight: 200; line-height: 1; }
+.value-unit { font-family: var(--font-ui); font-size: var(--text-lg); font-weight: 400; color: var(--text-secondary); }
+.body-text { font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.5; }
 
 /* --- App shell --- */
 .app-root { position: fixed; inset: 0; }
@@ -274,7 +302,7 @@ button {
   border-radius: 12px;
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: var(--text-md);
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -349,7 +377,7 @@ button {
   position: absolute; top: 1px; right: 1px; min-width: 14px; height: 14px;
   padding: 0 3px; border-radius: 999px;
   background: var(--status-danger); color: #fff;
-  font-size: 9px; font-weight: 700; line-height: 14px; text-align: center;
+  font-size: var(--text-2xs); font-weight: 700; line-height: 14px; text-align: center;
   box-shadow: 0 0 0 1.5px var(--bg-overlay);
 }
 
@@ -402,7 +430,7 @@ button {
    the name never washes out. */
 .hud-brand {
   justify-self: start; display: flex; align-items: center; gap: 10px;
-  font-family: var(--font-display); font-size: 22px; font-weight: 500;
+  font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 500;
   /* Same squircle every other HUD section chip uses (icon buttons, the floor
      stack, the category group) — this used to be a full capsule (999px),
      the one section shape that didn't match the rest of the HUD. */
@@ -437,7 +465,7 @@ button {
 }
 .hud-menu-header {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  font-size: 12px; color: var(--text-secondary);
+  font-size: var(--text-xs); color: var(--text-secondary);
   padding: 8px 10px 6px;
   border-bottom: 1px solid var(--hairline); margin-bottom: 4px;
   white-space: nowrap;
@@ -446,7 +474,7 @@ button {
   display: flex; align-items: center; gap: 10px;
   width: 100%; padding: 11px 10px;
   background: transparent; border: none; border-radius: 10px;
-  color: var(--text-primary); font-size: 14px; text-align: left;
+  color: var(--text-primary); font-size: var(--text-base); text-align: left;
   cursor: pointer;
 }
 .hud-menu-item svg { flex: 0 0 auto; color: var(--text-secondary); }
@@ -510,7 +538,7 @@ button {
 /* Time sits inside the brand chip, right of the villa name — a hairline
    divider separates it instead of a nested pill-in-pill. */
 .hud-clock {
-  font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600;
+  font-variant-numeric: tabular-nums; font-size: var(--text-md); font-weight: 600;
   color: var(--text-secondary);
   padding-left: 10px; margin-left: 2px; border-left: 1px solid var(--hairline);
 }
@@ -526,7 +554,7 @@ button {
    radial fans out symmetrically over the full height. */
 /* The Rooms dial button + the 1F/2F floor toggle now flow together in the
    left-column .hud-stack (see HUD). "1F"/"2F" are text, not icons. */
-.hud-floor-btn { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
+.hud-floor-btn { font-size: var(--text-sm); font-weight: 700; letter-spacing: 0.02em; }
 
 /* Rooms dial popup: tappable floating chips on arcs beside the button (see
    RadialRoomMenu). The full-screen backdrop catches an outside tap to dismiss;
@@ -536,7 +564,7 @@ button {
   position: fixed; transform: translate(-50%, -50%);
   display: flex; align-items: center; justify-content: center;
   padding: 7px 13px; border-radius: 999px; white-space: nowrap; cursor: pointer;
-  font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+  font-size: var(--text-xs); font-weight: 600; color: var(--text-primary);
   background: var(--bg-overlay); border: 1px solid var(--hairline-strong);
   box-shadow: 0 6px 20px var(--shadow); backdrop-filter: blur(8px);
   max-width: 190px; overflow: hidden;
@@ -563,7 +591,7 @@ button {
   transform: translateX(-50%);
   display: flex; align-items: center; gap: 8px;
   padding: 10px 18px; border-radius: 999px; white-space: nowrap; cursor: pointer;
-  font-size: 13px; font-weight: 600; color: var(--text-primary);
+  font-size: var(--text-sm); font-weight: 600; color: var(--text-primary);
   background: var(--bg-overlay); border: 1px solid var(--hairline-strong);
   box-shadow: 0 6px 20px var(--shadow); backdrop-filter: blur(8px);
   animation: radial-pop 0.12s ease-out;
@@ -623,7 +651,7 @@ button {
   border: 1px solid var(--status-danger); color: var(--status-danger);
   padding: 10px 18px; border-radius: 999px; z-index: 70;
   animation: fadeSlide 0.3s ease-out;
-  max-width: 86vw; font-size: 14px;
+  max-width: 86vw; font-size: var(--text-base);
 }
 /* Neutral variant (AppNotice) — a general "heads up", not a failure, so it
    doesn't borrow the danger-red tone the plain .service-toast uses for a
@@ -682,7 +710,7 @@ button {
 .overview-hint {
   max-width: min(60vw, 460px);
   background: var(--bg-overlay); color: var(--text-secondary);
-  padding: 10px 14px; border-radius: 14px; font-size: 12px; line-height: 1.4;
+  padding: 10px 14px; border-radius: 14px; font-size: var(--text-xs); line-height: 1.4;
   backdrop-filter: blur(10px);
   border: 1px solid var(--hairline);
   box-shadow: 0 6px 24px var(--shadow);
@@ -771,11 +799,11 @@ button {
 .summary-tile-icon svg { width: 24px; height: 24px; }
 .summary-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.18; gap: 1px; }
 .summary-tile-label {
-  font-size: 12px; font-weight: 500; color: var(--text-secondary);
+  font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary);
   text-transform: uppercase; letter-spacing: 0.02em;
 }
 .summary-tile-value {
-  font-size: 18px; font-weight: 600; color: var(--text-primary);
+  font-size: var(--text-lg); font-weight: 600; color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -802,7 +830,7 @@ button {
   display: flex; align-items: center; gap: 10px;
   padding: 11px 12px; border-radius: 11px;
   background: transparent; border: none; cursor: pointer;
-  color: var(--text-primary); font-size: 15px; font-weight: 600;
+  color: var(--text-primary); font-size: var(--text-md); font-weight: 600;
   text-align: left; white-space: nowrap;
 }
 .summary-scene-item:hover { background: var(--bg-input); }
@@ -825,7 +853,7 @@ button {
    .summary-offmap-heading (a sub-level of it, not a peer): no border/accent
    colour, just enough weight to separate one room's devices from the next. */
 .summary-room-heading {
-  margin: 10px 2px 6px; font-size: 11px; font-weight: 600;
+  margin: 10px 2px 6px; font-size: var(--text-2xs); font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim);
 }
 .summary-room-heading:first-child { margin-top: 0; }
@@ -842,7 +870,7 @@ button {
 /* HA-only devices (no geometry in this villa model) — listed after the mapped
    ones under this heading and tinted, so it's clear they're not on the map. */
 .summary-offmap-heading {
-  margin: 18px 0 8px; font-size: 12px; font-weight: 600;
+  margin: 18px 0 8px; font-size: var(--text-xs); font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent);
   border-top: 1px solid var(--hairline); padding-top: 14px;
 }
@@ -867,7 +895,7 @@ button {
    the icon needs to sit OUTSIDE the ellipsis-truncating span, not inside it. */
 .summary-entity-name-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .summary-entity-name {
-  font-size: 15px; font-weight: 600; min-width: 0;
+  font-size: var(--text-md); font-weight: 600; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* A user explicitly hid this entity in HA (registry hidden_by) — shown only
@@ -876,7 +904,7 @@ button {
    elsewhere doesn't just quietly appear with no indication anything's
    different about it. */
 .summary-entity-hidden-icon { flex: 0 0 auto; color: var(--text-dim); }
-.summary-entity-state { font-size: 12.5px; color: var(--text-secondary); }
+.summary-entity-state { font-size: var(--text-xs); color: var(--text-secondary); }
 .summary-entity-chevron { color: var(--text-dim); flex: 0 0 auto; }
 
 /* Inline on/off switch (a compact version of the panels' PowerToggle). */
@@ -904,7 +932,7 @@ button {
   border: 1px solid var(--hairline);
 }
 .panel-linked-label {
-  font-size: 14px; font-weight: 600;
+  font-size: var(--text-base); font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -948,7 +976,7 @@ button {
   .summary-tile { min-width: 96px; padding: 9px 14px 9px 9px; gap: 10px; }
   .summary-tile-icon { width: 40px; height: 40px; }
   .summary-tile-icon svg { width: 21px; height: 21px; }
-  .summary-tile-value { font-size: 16px; }
+  .summary-tile-value { font-size: var(--text-md); }
 }
 
 /* --- Virtual joystick --- */
@@ -998,11 +1026,11 @@ button {
      that echoes an arbitrary, unbounded device name (every other modal's
      title is a short fixed string), so it gets more of the row before
      truncating instead of the same size as e.g. Settings' fixed heading. */
-  margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 18px;
+  margin: 0; font-family: var(--font-display); font-weight: 600; font-size: var(--text-lg);
   letter-spacing: -0.015em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
-.panel-header .room { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
+.panel-header .room { font-size: var(--text-xs); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
 .panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
 /* Real map badge shown in the panel header. As a button it's a colour editor. */
 .panel-icon .panel-badge-img, .panel-badge-btn .panel-badge-img { width: 44px; height: 44px; display: block; border-radius: 12px; }
@@ -1031,7 +1059,7 @@ button {
 .badge-swatch.custom {
   display: flex; align-items: center; gap: 8px; width: auto; aspect-ratio: auto;
   padding: 8px 12px; background: var(--bg-input); color: var(--text-primary);
-  font-size: 13px; box-shadow: none; border: 1px solid var(--hairline);
+  font-size: var(--text-sm); box-shadow: none; border: 1px solid var(--hairline);
 }
 .badge-swatch.custom input[type="color"] { width: 26px; height: 26px; border: none; background: none; padding: 0; cursor: pointer; }
 /* Text-labelled button(s), right-aligned, no separator above (see
@@ -1087,7 +1115,7 @@ input[type="range"]::-moz-range-thumb {
 .big-toggle {
   width: 100%; min-height: 84px; border-radius: 18px;
   display: flex; align-items: center; justify-content: center; gap: 14px;
-  font-size: 20px; font-weight: 600; transition: all 0.2s;
+  font-size: var(--text-xl); font-weight: 600; transition: all 0.2s;
   background: var(--bg-input); color: var(--text-secondary);
 }
 .big-toggle.on { background: linear-gradient(135deg, var(--accent), var(--accent-strong)); color: var(--text-on-accent); }
@@ -1112,10 +1140,10 @@ input[type="range"]::-moz-range-thumb {
 
 /* --- Temperature control --- */
 .temp-display { text-align: center; margin: 12px 0 20px; }
-.temp-display .big { font-size: 64px; font-weight: 200; }
+.temp-display .big { font-size: var(--text-display-lg); font-weight: 200; }
 .temp-stepper { display: flex; align-items: center; justify-content: center; gap: 24px; margin: 16px 0; }
-.temp-stepper button { width: 64px; height: 64px; border-radius: 50%; background: var(--bg-input); font-size: 28px; }
-.temp-stepper .target { font-size: 36px; font-weight: 300; min-width: 110px; text-align: center; }
+.temp-stepper button { width: 64px; height: 64px; border-radius: 50%; background: var(--bg-input); font-size: var(--text-2xl); }
+.temp-stepper .target { font-size: var(--text-display); font-weight: 300; min-width: 110px; text-align: center; }
 
 /* --- Camera fullscreen --- */
 /* --cam-rail: thickness of the side status rail in the phone-landscape
@@ -1154,7 +1182,7 @@ input[type="range"]::-moz-range-thumb {
 }
 .camera-header .label {
   pointer-events: auto;
-  font-size: 18px; background: rgba(0,0,0,0.5); color: #fff;
+  font-size: var(--text-lg); background: rgba(0,0,0,0.5); color: #fff;
   padding: 8px 16px; border-radius: 10px; min-width: 0; display: inline-block;
 }
 /* "Reset zoom" pill, on its own line under the title — replaces a button that
@@ -1163,7 +1191,7 @@ input[type="range"]::-moz-range-thumb {
    line under the label without needing a wrapping container. */
 .camera-zoom-pill {
   pointer-events: auto; display: flex; align-items: center; gap: 6px;
-  margin-top: 8px; font-size: 13px; font-weight: 500;
+  margin-top: 8px; font-size: var(--text-sm); font-weight: 500;
   background: rgba(0,0,0,0.5); color: #fff;
   padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.25);
 }
@@ -1356,7 +1384,7 @@ input[type="range"]::-moz-range-thumb {
   overflow-y: auto;
   animation: fadeIn 0.2s ease-out;
 }
-.teleport-grid h2 { font-family: var(--font-display); font-weight: 300; font-size: 32px; text-align: center; margin: 0 0 28px; }
+.teleport-grid h2 { font-family: var(--font-display); font-weight: 300; font-size: var(--text-display-sm); text-align: center; margin: 0 0 28px; }
 .tp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; max-width: 900px; margin: 0 auto; }
 .tp-card {
   height: 120px; border-radius: 16px; background: var(--bg-card);
@@ -1365,14 +1393,14 @@ input[type="range"]::-moz-range-thumb {
   background-size: cover; background-position: center;
 }
 .tp-card .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, transparent, var(--card-scrim)); }
-.tp-card span { position: relative; font-family: var(--font-display); font-size: 20px; font-weight: 400; color: #fff; }
-.tp-card .floor-tag { position: absolute; top: 10px; right: 12px; font-size: 11px; color: #fff; background: rgba(0,0,0,0.4); padding: 3px 8px; border-radius: 6px; }
+.tp-card span { position: relative; font-family: var(--font-display); font-size: var(--text-xl); font-weight: 400; color: #fff; }
+.tp-card .floor-tag { position: absolute; top: 10px; right: 12px; font-size: var(--text-2xs); color: #fff; background: rgba(0,0,0,0.4); padding: 3px 8px; border-radius: 6px; }
 .tp-card .tp-delete { position: absolute; top: 8px; left: 10px; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(0,0,0,0.45); color: #fff; }
 .tp-card .tp-delete:hover { color: var(--status-danger); }
 .tp-card.tp-add { align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--accent); border-style: dashed; background: transparent; }
-.tp-card.tp-add span { font-family: var(--font-ui); font-size: 14px; color: var(--accent); }
+.tp-card.tp-add span { font-family: var(--font-ui); font-size: var(--text-base); color: var(--accent); }
 /* --- Modals / wizard --- */
-.modal-backdrop { position: absolute; inset: 0; z-index: 70; background: var(--scrim-strong); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.modal-backdrop { position: absolute; inset: 0; z-index: 70; background: var(--scrim-strong); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; animation: modal-backdrop-in 0.16s ease-out; }
 /* Solid, not frosted glass — every dialog (Settings, a device panel, the
    Config Editor…) reads as content to focus on, unlike the HUD's own glass
    chrome over the 3D scene (.icon-btn/.hud-group/.hud-stack/.hud-menu etc.,
@@ -1388,11 +1416,27 @@ input[type="range"]::-moz-range-thumb {
   box-shadow:
     0 32px 80px -12px var(--shadow),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  /* Every dialog in the app used to appear INSTANTLY — no transition at all,
+     while smaller things around it (the radial room menu, the room label, tap
+     ripples) were already animated. A dialog that pops into existence is the
+     most-noticed "unfinished" tell in an otherwise polished UI, and since all
+     ten dialog surfaces share this one shell, animating here fixes them
+     together rather than per-component. Deliberately short (0.18s) and
+     lightly scaled: this is chrome the user summoned on purpose and wants to
+     interact with immediately — the motion should acknowledge the open, not
+     make anyone wait for it. Only transform/opacity are animated, both
+     GPU-composited, so nothing here can cost a frame on the iPad. */
+  animation: modal-in 0.18s cubic-bezier(0.2, 0, 0.2, 1);
+}
+@keyframes modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .modal h2 { font-family: var(--font-display); font-weight: 600; margin: 0; letter-spacing: -0.01em; }
 .modal .sub { color: var(--text-secondary); margin: 0 0 22px; }
-.modal label { display: block; font-size: 13px; color: var(--text-secondary); margin: 14px 0 6px; }
-.modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: 15px; }
+.modal label { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin: 14px 0 6px; }
+.modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: var(--text-md); }
 .modal input:focus, .modal select:focus { border-color: var(--accent); outline: none; }
 .modal-actions { display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end; }
 
@@ -1455,7 +1499,7 @@ input[type="range"]::-moz-range-thumb {
   display: block; color: var(--text-secondary);
   font-size: var(--field-label-size); margin: 14px 0 var(--field-label-gap);
 }
-.settings-body label.toggle { display: flex; align-items: center; gap: 12px; margin-top: 12px; cursor: pointer; font-size: 15px; color: var(--text-primary); }
+.settings-body label.toggle { display: flex; align-items: center; gap: 12px; margin-top: 12px; cursor: pointer; font-size: var(--text-md); color: var(--text-primary); }
 /* No separator above this footer, same reasoning as .panel-footer (device
    panels) — the same visual rule applied once here since this ONE class
    already backs every settings-style modal (Settings, Advanced Settings,
@@ -1463,7 +1507,7 @@ input[type="range"]::-moz-range-thumb {
 .settings-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; background: var(--bg-overlay); }
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
-.settings-section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin: 22px 0 8px; font-weight: 600; }
+.settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin: 22px 0 8px; font-weight: 600; }
 /* The collapsible variant (ConfigEditorModal's auto-detected-entities /
    device-telemetry sections) — same label typography, made clickable. Reset
    to a plain full-width row (buttons carry their own background/border/
@@ -1496,13 +1540,13 @@ input[type="range"]::-moz-range-thumb {
 
 /* First-run orientation card (FirstRunTips). */
 .first-run-tip-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
-.first-run-tip-list li { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; line-height: 1.5; }
+.first-run-tip-list li { display: flex; align-items: flex-start; gap: 12px; font-size: var(--text-base); line-height: 1.5; }
 .first-run-tip-list li > svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
 .first-run-dot-demo { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 
 /* Map colours legend (LegendModal). */
 .legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin-top: 10px; }
-.legend-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.legend-row { display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); }
 .legend-swatch { width: 20px; height: 20px; border-radius: 7px; flex-shrink: 0; border: 1px solid var(--hairline); }
 .legend-swatch-round { border-radius: 50%; }
 @media (max-width: 480px) {
@@ -1513,7 +1557,7 @@ input[type="range"]::-moz-range-thumb {
 .segmented { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg-input); }
 .segmented button {
   flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 7px;
-  min-height: 40px; border-radius: 9px; font-size: 14px; font-weight: 500;
+  min-height: 40px; border-radius: 9px; font-size: var(--text-base); font-weight: 500;
   color: var(--text-secondary); transition: background 0.15s, color 0.15s;
 }
 .segmented button svg { flex: 0 0 auto; }
@@ -1562,7 +1606,7 @@ input[type="range"]::-moz-range-thumb {
   background: var(--bg-overlay); backdrop-filter: blur(12px);
   border: 1px solid var(--hairline-strong); border-radius: 12px;
   box-shadow: 0 10px 32px var(--shadow);
-  font-size: 12.5px; line-height: 1.5; color: var(--text-secondary);
+  font-size: var(--text-xs); line-height: 1.5; color: var(--text-secondary);
   opacity: 0; visibility: hidden; transform: translateY(4px);
   transition: opacity 0.14s, transform 0.14s, visibility 0.14s;
   text-align: left; white-space: normal;
@@ -1588,9 +1632,9 @@ input[type="range"]::-moz-range-thumb {
 .info-pop .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
 .info-pop .row span:first-child { color: var(--text-dim); flex: 0 0 auto; }
 .info-pop .row span:last-child { color: var(--text-primary); word-break: break-all; text-align: right; }
-.info-pop code { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; }
+.info-pop code { font-family: ui-monospace, monospace; font-size: var(--text-2xs); word-break: break-all; }
 
-.test-result { margin-top: 12px; padding: 10px 14px; border-radius: 10px; font-size: 14px; }
+.test-result { margin-top: 12px; padding: 10px 14px; border-radius: 10px; font-size: var(--text-base); }
 .test-result.ok { background: color-mix(in srgb, var(--status-on) 18%, transparent); color: var(--status-on); }
 .test-result.fail { background: color-mix(in srgb, var(--status-danger) 18%, transparent); color: var(--status-danger); }
 
@@ -1601,7 +1645,7 @@ label.toggle {
   gap: 12px;
   margin-top: 12px;
   cursor: pointer;
-  font-size: 15px;
+  font-size: var(--text-md);
   color: var(--text-primary);
 }
 label.toggle input[type="checkbox"] {
@@ -1648,7 +1692,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
    entities is unreadable on desktop (cramped, wrapping mid-word). One card per
    entity, each cell labelled by its column via data-label, reads cleanly at
    any width — the same layout mobile always used. */
-.config-table { width: 100%; font-size: 14px; }
+.config-table { width: 100%; font-size: var(--text-base); }
 .config-table thead { display: none; }
 .config-table, .config-table tbody, .config-table tr, .config-table td { display: block; width: 100%; }
 .config-table tr {
@@ -1661,7 +1705,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .config-table td::before {
   content: attr(data-label);
   flex: 0 0 108px; color: var(--text-secondary);
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; text-align: left;
+  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; text-align: left;
 }
 /* Paired narrow fields (Linked entity + Motion sensor) share one line from
    tablet width up — each is a short picker, so a full row each wasted
@@ -1695,14 +1739,14 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .config-search svg { flex: 0 0 auto; color: var(--text-dim); }
 .config-search input {
   flex: 1 1 auto; min-width: 0; border: none; background: transparent;
-  padding: 10px 0; color: var(--text-primary); font-size: 14px;
+  padding: 10px 0; color: var(--text-primary); font-size: var(--text-base);
 }
 .config-search input:focus { outline: none; }
 /* Compact variant — sized to sit inline at pill height (GroupedDevices'
    "add another member" row, alongside its 4px/8px-padded member pills)
    instead of the full standalone-field size above. */
 .config-search-compact { padding: 0 8px; border-radius: 999px; }
-.config-search-compact input { padding: 5px 0; font-size: 12px; }
+.config-search-compact input { padding: 5px 0; font-size: var(--text-xs); }
 /* Inside the Config Editor's entity table/cards, the generic
    ".config-table input:not([type=checkbox])" rule (background: var(--bg-input))
    outranks ".config-search input"'s own transparent background — same class
@@ -1818,7 +1862,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
    were nearly invisible specifically in dark mode (black text on a dark
    panel) and the grid/tooltip border was similarly off in both themes. */
 .spark-grid { stroke: var(--hairline); stroke-width: 1; opacity: 0.35; }
-.spark-axis { font-size: 10px; fill: var(--text-secondary); }
+.spark-axis { font-size: var(--text-2xs); fill: var(--text-secondary); }
 .spark-crosshair { stroke: var(--text-secondary); stroke-width: 1; opacity: 0.55; }
 .spark-tip {
   position: absolute; z-index: 5; pointer-events: none;
@@ -1826,10 +1870,10 @@ label.toggle span { user-select: none; line-height: 1.4; }
   padding: 5px 8px; border-radius: 8px; white-space: nowrap;
   background: var(--bg-overlay); backdrop-filter: blur(8px);
   border: 1px solid var(--hairline); box-shadow: 0 4px 14px rgba(0,0,0,0.35);
-  font-size: 12px; color: var(--text-primary); line-height: 1.35;
+  font-size: var(--text-xs); color: var(--text-primary); line-height: 1.35;
 }
-.spark-tip strong { font-size: 13px; }
-.spark-tip .spark-tip-time, .spark-tip span:last-child { color: var(--text-secondary); font-size: 11px; }
+.spark-tip strong { font-size: var(--text-sm); }
+.spark-tip .spark-tip-time, .spark-tip span:last-child { color: var(--text-secondary); font-size: var(--text-2xs); }
 .state-timeline { position: relative; width: 100%; height: 78px; border-radius: 8px; overflow: hidden; background: var(--bg-input); }
 .state-timeline-seg { position: absolute; top: 0; bottom: 0; }
 .state-timeline-cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.85); box-shadow: 0 0 3px rgba(0,0,0,0.5); pointer-events: none; }
@@ -1864,7 +1908,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   border: 1px solid var(--status-danger); border-radius: 14px;
   padding: 10px 14px; max-width: 92vw;
   box-shadow: 0 6px 24px var(--shadow);
-  font-size: 13px; color: var(--text-primary);
+  font-size: var(--text-sm); color: var(--text-primary);
 }
 .sh3d-sync-banner svg:first-child { color: var(--status-danger); flex-shrink: 0; }
 .sh3d-sync-banner button {
@@ -1975,6 +2019,29 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .hud-center { gap: 4px; }
   .hud-right { gap: 6px; }
   .hud-center .icon-btn { width: 32px; height: 32px; }
+  /* These shrink to 32px because the centred category row genuinely runs out
+     of width on a phone (the comments around this block record real overflow
+     bugs fixed by exactly that) — but 32px is below both this codebase's own
+     --touch-min (44px) and the WCAG 2.5.8 / Apple HIG minimum, on the most-
+     tapped controls in the app, on the device where a mis-tap costs the most.
+     Growing them back would re-break the layout that was hard-won here.
+     Instead the VISUAL size stays 32px and the TOUCH target is expanded to 44
+     with a centred invisible overlay — which is what the accessibility
+     guidance actually measures (the pointer target area, not the painted
+     pixels). The overlay is the button's own ::after so it moves with it and
+     needs no markup change; it can overlap a neighbour's visual box without
+     stealing its taps, because the row's 4px gap plus each button's own
+     overlay means the nearest competing CENTRE is still ~36px away. */
+  .hud-center .icon-btn, .hud-overflow .icon-btn, .hud-menu-stepper .icon-btn { position: relative; }
+  .hud-center .icon-btn::after,
+  .hud-overflow .icon-btn::after,
+  .hud-menu-stepper .icon-btn::after {
+    content: "";
+    position: absolute; top: 50%; left: 50%;
+    width: var(--touch-min); height: var(--touch-min);
+    transform: translate(-50%, -50%);
+    /* Purely a hit area — never paints, never affects layout. */
+  }
   /* Dropped, not just visually redundant: it's ALREADY duplicated in the
      overflow menu's header (see HUD.tsx, the hud-menu-header conn-dot) so
      reachability doesn't regress, and removing it is what actually frees
@@ -2112,7 +2179,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 
   /* Room badge: smaller display type so longer names stay on one centred line. */
   .room-label { top: calc(58px + var(--safe-top)); padding: 7px 18px; }
-  .room-title { font-size: 20px; }
+  .room-title { font-size: var(--text-xl); }
 
   /* A device panel's Mode/Fan-speed/Preset row (ACPanel, FanPanel) is short
      by desktop standards but on a narrow phone its buttons routinely exceed
@@ -2150,9 +2217,9 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 
 .profile-select { width: min(920px, 100%); text-align: center; }
-.profile-title { font-family: var(--font-display); font-size: 40px; margin: 0 0 6px; }
-.profile-sub { color: var(--text-secondary); margin: 0 0 26px; font-size: 16px; }
-.profile-error { color: var(--status-danger); margin: 0 0 18px; font-size: 14px; }
+.profile-title { font-family: var(--font-display); font-size: var(--text-display); margin: 0 0 6px; }
+.profile-sub { color: var(--text-secondary); margin: 0 0 26px; font-size: var(--text-md); }
+.profile-error { color: var(--status-danger); margin: 0 0 18px; font-size: var(--text-base); }
 
 .profile-cards { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
 .profile-card {
@@ -2167,8 +2234,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .profile-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .profile-card:disabled { opacity: 0.55; cursor: default; transform: none; }
 .profile-card svg { color: var(--accent); }
-.profile-card-name { font-size: 19px; font-weight: 600; }
-.profile-card-desc { font-size: 13.5px; color: var(--text-secondary); line-height: 1.45; }
+.profile-card-name { font-size: var(--text-xl); font-weight: 600; }
+.profile-card-desc { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.45; }
 
 /* Passcode pad */
 .pinpad {
@@ -2181,12 +2248,12 @@ label.toggle span { user-select: none; line-height: 1.4; }
   position: absolute; top: 14px; left: 14px;
   display: inline-flex; align-items: center; gap: 6px;
   background: none; border: none; cursor: pointer;
-  color: var(--text-secondary); font-size: 14px; padding: 8px;
+  color: var(--text-secondary); font-size: var(--text-base); padding: 8px;
   min-height: var(--touch-min);
 }
 .pinpad-back:hover, .pinpad-back:focus-visible { color: var(--text-primary); }
-.pinpad-title { font-family: var(--font-display); font-size: 28px; margin: 26px 0 2px; }
-.pinpad-sub { color: var(--text-secondary); margin: 0 0 18px; font-size: 14px; }
+.pinpad-title { font-family: var(--font-display); font-size: var(--text-2xl); margin: 26px 0 2px; }
+.pinpad-sub { color: var(--text-secondary); margin: 0 0 18px; font-size: var(--text-base); }
 
 .pinpad-dots { display: flex; gap: 14px; justify-content: center; margin-bottom: 8px; }
 .pinpad-dot {
@@ -2196,15 +2263,15 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .pinpad-dot.filled { background: var(--accent); border-color: var(--accent); }
 
 /* Reserve a fixed line so the layout never jumps between idle/error/lockout. */
-.pinpad-status { min-height: 22px; font-size: 13.5px; margin-bottom: 10px; }
-.pinpad-help { font-size: 12.5px; margin: -4px 0 14px; max-width: 264px; margin-left: auto; margin-right: auto; text-align: center; }
+.pinpad-status { min-height: 22px; font-size: var(--text-sm); margin-bottom: 10px; }
+.pinpad-help { font-size: var(--text-xs); margin: -4px 0 14px; max-width: 264px; margin-left: auto; margin-right: auto; text-align: center; }
 
 .pinpad-keys {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
   max-width: 264px; margin: 0 auto;
 }
 .pinpad-key {
-  min-height: 60px; font-size: 22px; font-weight: 500;
+  min-height: 60px; font-size: var(--text-2xl); font-weight: 500;
   border-radius: 14px; border: 1px solid var(--hairline);
   background: var(--bg-input); color: var(--text-primary); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
@@ -2222,7 +2289,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .hud-profile {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 0 4px 0 8px; /* room for the name on the left, snug on the button */
-  font-size: 13px; color: var(--text-secondary);
+  font-size: var(--text-sm); color: var(--text-secondary);
   white-space: nowrap;
 }
 /* .hud-group .icon-btn already resets size/chrome for every button in the
@@ -2231,7 +2298,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .hud-profile .icon-btn { width: 38px; height: 38px; }
 
 @media (max-width: 640px), (max-height: 560px) {
-  .profile-title { font-size: 30px; }
+  .profile-title { font-size: var(--text-display-sm); }
   .profile-cards { gap: 12px; }
   .profile-card { min-height: 140px; flex-basis: 100%; max-width: 420px; }
   .pinpad-key { min-height: 54px; }
@@ -2264,7 +2331,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
      per normal font metrics) added asymmetric space the 16px icon next to it
      doesn't have, so align-items:center still read as the TEXT sitting a
      couple px off-centre against the icon despite both being flex-centred. */
-  font-size: 14px; line-height: 1; cursor: pointer;
+  font-size: var(--text-base); line-height: 1; cursor: pointer;
 }
 .fm-tab:hover { background: var(--bg-input); }
 .fm-tab.active { background: var(--accent); color: var(--text-on-accent); }
@@ -2282,8 +2349,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
   padding: 12px 14px; border-radius: 12px;
   background: var(--bg-card); border: 1px solid var(--hairline);
 }
-.fm-stat .n { font-size: 22px; font-weight: 700; line-height: 1.1; }
-.fm-stat .l { font-size: 12px; color: var(--text-dim); }
+.fm-stat .n { font-size: var(--text-2xl); font-weight: 700; line-height: 1.1; }
+.fm-stat .l { font-size: var(--text-xs); color: var(--text-dim); }
 .fm-stat.good .n { color: var(--status-on); }
 .fm-stat.warn .n { color: var(--status-warning); }
 .fm-stat.bad  .n { color: var(--status-danger); }
@@ -2315,7 +2382,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
    ReadinessTab's "All devices reporting" card, the one check with an inline
    action. */
 .fm-row-title-action { margin-left: auto; }
-.fm-row-sub { font-size: 12.5px; }
+.fm-row-sub { font-size: var(--text-xs); }
 
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status
@@ -2364,7 +2431,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-lightbox-count {
   position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
   left: 50%; transform: translateX(-50%);
-  color: rgba(255, 255, 255, 0.8); font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.8); font-size: var(--text-xs);
 }
 
 /* Square icon-only variant of .btn, for a secondary action that sits beside a
@@ -2386,7 +2453,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* A fault's own history, on its card. Left rail of dots so the sequence reads
    as a sequence, not three stacked paragraphs. */
 .fm-timeline { list-style: none; margin: 6px 0 0; padding: 0 0 0 2px; display: flex; flex-direction: column; gap: 6px; }
-.fm-timeline li { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; }
+.fm-timeline li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--text-xs); }
 .fm-timeline-dot {
   flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 4px;
   background: var(--text-dim);
@@ -2395,7 +2462,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-timeline-dot.resolved { background: var(--status-ok); }
 .fm-timeline-head { font-weight: 600; }
 .fm-timeline-note {
-  color: var(--text-secondary); font-size: 12px; margin-top: 2px;
+  color: var(--text-secondary); font-size: var(--text-xs); margin-top: 2px;
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 
@@ -2405,7 +2472,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-disclosure {
   display: inline-flex; align-items: center; gap: 6px;
   background: none; border: none; padding: 4px 0; cursor: pointer;
-  color: var(--text-secondary); font-size: 12.5px; text-align: left;
+  color: var(--text-secondary); font-size: var(--text-xs); text-align: left;
   min-height: var(--touch-min);
 }
 .fm-disclosure:hover { color: var(--text-primary); }
@@ -2423,7 +2490,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   padding: 28px 24px; text-align: center; color: var(--status-ok);
 }
-.guest-report-done h3 { margin: 0; font-size: 17px; color: var(--text-primary); }
+.guest-report-done h3 { margin: 0; font-size: var(--text-lg); color: var(--text-primary); }
 .guest-report-done p { max-width: 300px; }
 
 /* Device-picker suggestion rows (Faults/Spend). Two lines: the friendly name,
@@ -2438,15 +2505,15 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 .fm-picker-meta {
   display: flex; align-items: baseline; gap: 8px;
-  font-size: 11px; min-width: 0;
+  font-size: var(--text-2xs); min-width: 0;
 }
 .fm-picker-meta code {
-  font-size: 11px; opacity: 0.9;
+  font-size: var(--text-2xs); opacity: 0.9;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .fm-picker-meta > span { white-space: nowrap; flex: none; }
 .fm-picker-flag {
-  flex: none; font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase;
+  flex: none; font-size: var(--text-2xs); letter-spacing: 0.03em; text-transform: uppercase;
   padding: 1px 6px; border-radius: 999px;
 }
 .fm-picker-flag.offline {
@@ -2484,24 +2551,24 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 .superadmin-prompt-head {
   display: inline-flex; align-items: center; gap: 8px;
-  color: var(--status-danger); font-size: 13px; letter-spacing: 0.04em;
+  color: var(--status-danger); font-size: var(--text-sm); letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .superadmin-prompt-detail {
-  margin: 0; text-align: center; font-size: 13.5px; color: var(--text-secondary);
+  margin: 0; text-align: center; font-size: var(--text-sm); color: var(--text-secondary);
   max-width: 320px;
 }
-.superadmin-prompt-note { margin: 0; text-align: center; font-size: 13.5px; max-width: 320px; }
+.superadmin-prompt-note { margin: 0; text-align: center; font-size: var(--text-sm); max-width: 320px; }
 .fm-amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 
 .fm-clause {
-  font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  font-size: var(--text-2xs); padding: 1px 7px; border-radius: 999px;
   background: var(--bg-input); color: var(--text-dim); white-space: nowrap;
 }
 /* The actual status carrier: a filled pill, same family as a GitHub/Linear
    status chip — reads as a deliberate label, not a colour-coded rule. */
 .fm-badge {
-  font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+  font-size: var(--text-2xs); font-weight: 600; padding: 3px 9px; border-radius: 999px;
   white-space: nowrap; background: var(--bg-input); color: var(--text-secondary);
 }
 .fm-badge.overdue, .fm-badge.never { background: var(--status-danger); color: #fff; }
@@ -2523,7 +2590,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 .fm-headline-icon { flex: 0 0 auto; display: flex; color: var(--status-on); }
 .fm-headline-text { display: flex; flex-direction: column; gap: 2px; }
-.fm-headline strong { font-size: 17px; }
+.fm-headline strong { font-size: var(--text-lg); }
 .fm-headline.warn {
   background: color-mix(in srgb, var(--status-warning) 6%, var(--bg-card));
   border-color: color-mix(in srgb, var(--status-warning) 25%, var(--hairline));
@@ -2538,7 +2605,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* Chips that jump to a device — interactive, so they look interactive. */
 .fm-chiprow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .fm-entity-chip {
-  font-size: 12px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  font-size: var(--text-xs); padding: 4px 10px; border-radius: 999px; cursor: pointer;
   background: var(--bg-input); color: var(--text-primary);
   border: 1px solid var(--hairline);
 }
@@ -2550,7 +2617,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   padding: 16px; border-radius: 12px;
   background: var(--bg-card); border: 1px solid var(--hairline-strong);
 }
-.fm-form h3 { margin: 0; font-size: 16px; }
+.fm-form h3 { margin: 0; font-size: var(--text-md); }
 .fm-field { display: flex; flex-direction: column; gap: var(--field-label-gap); }
 .fm-field > span { font-size: var(--field-label-size); color: var(--text-secondary); }
 /* DIRECT children only. A descendant selector here reached into every nested
@@ -2566,7 +2633,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
    actually has one. Grouping the three controls is also what stops the next
    textarea from needing its own rule. */
 .fm-field > input, .fm-field > select, .fm-field > textarea {
-  padding: 10px 12px; border-radius: 10px; font-size: 15px;
+  padding: 10px 12px; border-radius: 10px; font-size: var(--text-md);
   background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline);
   /* Width comes from the column, never from `cols`; the border box keeps the
      padding inside it so the field lines up with the inputs above and below. */
@@ -2581,7 +2648,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-field > input::placeholder, .fm-field > textarea::placeholder { color: var(--text-dim); }
 
 .fm-banner {
-  padding: 10px 12px; border-radius: 10px; font-size: 13.5px;
+  padding: 10px 12px; border-radius: 10px; font-size: var(--text-sm);
   background: var(--bg-input); color: var(--text-secondary);
 }
 .fm-banner.warn {
@@ -2589,7 +2656,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   color: var(--text-primary);
   border: 1px solid var(--status-warning);
 }
-.fm-inline-error { font-size: 12.5px; color: var(--status-danger); }
+.fm-inline-error { font-size: var(--text-xs); color: var(--status-danger); }
 
 /* Spend-vs-cap meter. The bar fill IS the state indicator — a number alone
    doesn't convey "how close am I" at a glance, and that proximity is the
@@ -2609,12 +2676,12 @@ label.toggle span { user-select: none; line-height: 1.4; }
   border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
 }
 .fm-cap-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.fm-cap-head strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.fm-cap-head strong { font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
 .fm-cap-bar { height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
 .fm-cap-bar > span { display: block; height: 100%; background: var(--status-on); }
 .fm-cap.approaching .fm-cap-bar > span { background: var(--status-warning); }
 .fm-cap.exceeded .fm-cap-bar > span { background: var(--status-danger); }
-.fm-cap-note { margin: 0; font-size: 13px; color: var(--text-secondary); }
+.fm-cap-note { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); }
 
 /* Evidence thumbnails */
 .fm-evidence { display: flex; flex-direction: column; gap: 6px; }
@@ -2634,7 +2701,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-thumb-add {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 3px; cursor: pointer; color: var(--text-secondary);
-  border-style: dashed; font-size: 11px;
+  border-style: dashed; font-size: var(--text-2xs);
 }
 .fm-thumb-add:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -2642,7 +2709,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   padding: 32px 20px; text-align: center; color: var(--text-dim);
 }
-.fm-empty h3 { margin: 0; font-size: 17px; color: var(--text-primary); }
+.fm-empty h3 { margin: 0; font-size: var(--text-lg); color: var(--text-primary); }
 .fm-empty p { max-width: 46ch; }
 
 /* The generated report, rendered as a document (ReportPreview) rather than a
@@ -2651,25 +2718,25 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-report-doc {
   padding: 16px 18px; border-radius: 12px; max-height: 45vh; overflow: auto;
   background: var(--bg-input); border: 1px solid var(--hairline);
-  font-size: 13.5px; line-height: 1.55; word-break: break-word;
+  font-size: var(--text-sm); line-height: 1.55; word-break: break-word;
 }
 .fm-report-h1 {
-  font-family: var(--font-display); font-weight: 400; font-size: 19px;
+  font-family: var(--font-display); font-weight: 400; font-size: var(--text-xl);
   margin: 0 0 10px;
 }
 .fm-report-h2 {
-  font-size: 15px; font-weight: 700; margin: 20px 0 8px;
+  font-size: var(--text-md); font-weight: 700; margin: 20px 0 8px;
   padding-top: 14px; border-top: 1px solid var(--hairline);
 }
 .fm-report-doc > .fm-report-h2:first-child { margin-top: 0; padding-top: 0; border-top: none; }
-.fm-report-h3 { font-size: 13.5px; font-weight: 600; margin: 14px 0 6px; color: var(--text-secondary); }
+.fm-report-h3 { font-size: var(--text-sm); font-weight: 600; margin: 14px 0 6px; color: var(--text-secondary); }
 .fm-report-p { margin: 0 0 8px; }
 .fm-report-note { margin: 0 0 8px; }
 .fm-report-hr { border: none; border-top: 1px solid var(--hairline); margin: 16px 0; }
 .fm-report-ul { margin: 0 0 10px; padding-left: 20px; }
 .fm-report-ul li { margin: 3px 0; }
 .fm-report-table-wrap { overflow-x: auto; margin: 0 0 12px; }
-.fm-report-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.fm-report-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
 .fm-report-table th, .fm-report-table td {
   text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--hairline);
   white-space: nowrap;
@@ -2689,3 +2756,64 @@ label.toggle span { user-select: none; line-height: 1.4; }
   border: 1px solid color-mix(in srgb, var(--status-danger) 35%, transparent);
 }
 .config-stale-notice .btn { flex: 0 0 auto; }
+
+/* ---- Reduced motion ----------------------------------------------------
+   The OS-level "reduce motion" preference, honoured app-wide. This matters
+   more here than in an ordinary web app for two reasons: this is a KIOSK,
+   often wall-mounted and permanently in view, and several of its animations
+   are ambient and indefinite rather than one-shot — the sensor-pulse, the
+   loading-skeleton sweep, the pending-toggle throb, the connecting dot. For
+   a motion-sensitive user, "subtle movement that never stops in the corner
+   of the room" is the worst case, not a transient one.
+
+   Deliberately NOT `animation: none`: killing a keyframe outright can strand
+   an element on frame 0 (a skeleton stuck mid-sweep, a dot stuck dim), which
+   swaps a motion problem for a correctness one. Instead durations collapse
+   to ~0 so every animation lands immediately on its FINAL state, and
+   infinite loops are cut to one iteration. State still changes, transitions
+   still "complete", nothing moves.
+
+   Applied last in the file so it wins on specificity ties without needing
+   !important on individual rules. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* The tap ripple is PURELY decorative motion with no end state worth
+     landing on (it exists only to acknowledge a tap the 3D scene can't
+     otherwise confirm) — the status pill and the service toast already
+     report the same outcome in text, so removing it costs no information. */
+  .tap-ripple { display: none; }
+}
+
+/* ---- Connection banner (ConnectionBanner.tsx) -------------------------
+   Sits at the TOP EDGE, full width, rather than borrowing the centred pill
+   shape .service-toast uses. That is deliberate: a toast is transient and
+   dismissible-by-waiting, while this stays for as long as the problem does,
+   and the two must not be mistaken for each other. Full-bleed also survives
+   the phone tier that hides the brand chip's connection dot — the exact case
+   this exists for.
+
+   Warning-amber, not danger-red: the socket dropping is recoverable and
+   usually self-heals in seconds. Red here would put a permanent-looking
+   alarm on a wall display for something that resolves on its own, and would
+   collide with the red this app already reserves for a device that needs
+   attention (an unlocked door, a leak). */
+.connection-banner {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 75;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: calc(8px + var(--safe-top)) 16px 8px;
+  background: color-mix(in srgb, var(--status-warning) 16%, var(--bg-modal));
+  border-bottom: 1px solid color-mix(in srgb, var(--status-warning) 45%, transparent);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  text-align: center;
+  animation: fadeIn 0.2s ease-out;
+  /* Never eat a tap meant for the HUD underneath: the banner is purely
+     informational and has no controls of its own. */
+  pointer-events: none;
+}
+.connection-banner svg { flex: 0 0 auto; color: var(--status-warning); }

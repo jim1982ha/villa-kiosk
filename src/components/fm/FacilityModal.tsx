@@ -17,6 +17,7 @@
 // jarring. See that class's own comment in styles.css.
 
 import { useMemo, useState } from "react";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import {
   ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog, TriangleAlert,
 } from "lucide-react";
@@ -67,6 +68,8 @@ export default function FacilityModal({
    *  actual device instead of leaving the operator to hunt for it. */
   onOpenEntity: (entityId: string) => void;
 }) {
+  // Focus trap + Escape + focus restore (see useModalA11y).
+  const dialogRef = useModalA11y(onClose);
   // Landing on Faults rather than Today when the operator arrived by tapping
   // "report a fault" on a device: they have already said what they want.
   const [tab, setTab] = useState<Tab>(reportFaultFor ? "faults" : "today");
@@ -137,8 +140,12 @@ export default function FacilityModal({
     <>
       <div className="modal-backdrop" onClick={onClose}>
         <div
+          ref={dialogRef}
           className="modal settings-modal config-editor-modal modal-fixed-height"
           onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Facility workspace"
         >
           <div className="settings-header">
             <h2>Facility</h2>
@@ -192,7 +199,7 @@ export default function FacilityModal({
           </div>
 
           <div className="settings-footer" style={{ justifyContent: "space-between" }}>
-            <span className="muted body-text" style={{ fontSize: 12 }}>
+            <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
               Maintenance intervals and the spend cap are set in the Schedule tab
             </span>
             <button className="btn primary" onClick={onClose}>Close</button>

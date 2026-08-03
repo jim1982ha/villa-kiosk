@@ -136,7 +136,7 @@ export default function ReadinessTab({
                       </button>
                     ))}
                     {c.entityIds.length > 8 && (
-                      <span className="muted" style={{ fontSize: 12 }}>
+                      <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
                         +{c.entityIds.length - 8} more
                       </span>
                     )}

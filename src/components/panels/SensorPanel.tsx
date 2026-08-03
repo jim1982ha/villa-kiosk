@@ -109,7 +109,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
                 reading that was never taken. */}
             <div
               className={`status-pill ${unavailable ? "unavailable" : binaryPillTone}`}
-              style={{ fontSize: 20, padding: "14px 24px" }}
+              style={{ fontSize: "var(--text-xl)", padding: "14px 24px" }}
             >
               {unavailable
                 ? <AlertTriangle size={22} />

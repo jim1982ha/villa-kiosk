@@ -81,7 +81,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
         <div className="row-buttons" style={{ marginBottom: 18 }}>
           {rows.map((r) => (
             <div key={r.id} className="center" style={{ flex: 1, minWidth: 90 }}>
-              <div className="value-large" style={{ fontSize: 26 }}>
+              <div className="value-large" style={{ fontSize: "var(--text-2xl)" }}>
                 {/* A SINGLE offline member inside an otherwise-live group can't
                     take over the whole panel, so it shows the shared pill
                     inline — same wording/styling, just scoped to that reading.
@@ -91,7 +91,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
                     a bit smaller, matching how SensorPanel already does it. */}
                 {r.unavailable
                   ? <span className="status-pill unavailable">UNAVAILABLE</span>
-                  : <>{r.value}{r.unit && <span className="value-unit" style={{ fontSize: 15, marginLeft: 3 }}>{r.unit}</span>}</>}
+                  : <>{r.value}{r.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.unit}</span>}</>}
               </div>
               <div className="muted body-text">{r.label}</div>
             </div>
@@ -106,7 +106,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
             a={{ data: history[numericRows[0].id] ?? [], color: SERIES_COLORS[0], unit: numericRows[0].unit, label: numericRows[0].label }}
             b={{ data: history[numericRows[1].id] ?? [], color: SERIES_COLORS[1], unit: numericRows[1].unit, label: numericRows[1].label }}
           />
-          <div className="row" style={{ gap: 16, marginTop: 8, fontSize: 12 }}>
+          <div className="row" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)" }}>
             <span className="muted">
               <span style={{ color: SERIES_COLORS[0] }}>●</span> {numericRows[0].label}
             </span>

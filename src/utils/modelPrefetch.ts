@@ -5,23 +5,25 @@
 // no cost while it's in flight, so it always safely runs while the user is
 // still on the interactive profile-select/PIN screen.
 //
-// v2.29.0 also had ProfileGate mount the actual Babylon scene early (so the
-// DECODE — Draco geometry + textures + GPU upload + this app's own
-// mesh-indexing pass, 4.5-6.4 SECONDS measured on a real villa — would run
-// before login too). v2.30.1 reverted that: the decode is largely
-// synchronous, main-thread-blocking work, and running it while the gate
-// screen showed froze every click on it. v2.30.2 restores early scene mount
-// as an explicit, informed trade-off (user's call, after being told the
-// alternative — genuinely zero-blocking pre-login decode — needs moving the
-// whole Babylon layer into a Web Worker via OffscreenCanvas, a large,
-// separate rewrite not attempted here): `onPrefetchAvailable` below signals
-// ProfileGate once /model/ is confirmed reachable, same as v2.29.0, but
-// paired with SceneManager.loadModel now yielding between its major
-// top-level steps (see its own comments) to shrink — not eliminate — the
-// longest uninterrupted blocking stretch. iOS is still excluded from early
-// mount regardless (see ProfileGate) for its own, unrelated reason: a heavy
-// villa can exceed iOS's per-tab memory ceiling, and early-mounting there
-// would retrigger that crash automatically on every reload before login.
+// ONLY the bytes. This file used to also drive an early pre-login SCENE MOUNT
+// (v2.29.0, restored in v2.30.2) via an `onPrefetchAvailable` signal that told
+// ProfileGate "/model/ is reachable, safe to mount now". That whole strategy
+// was abandoned in v2.79.0: choosing a profile takes longer than the idle wait
+// the mount was gated behind, so the decode had already started by the time
+// the passcode pad opened — and a running synchronous decode cannot be paused,
+// which meant dropped digits on the one screen where a mis-tap is
+// indistinguishable from a stutter. Pre-login decode is now disabled on every
+// platform (ProfileGate's showChildrenEarly = isSwitch), so nothing has
+// consumed that signal since.
+//
+// The signal's machinery (an AvailabilityListener type, a listener Set, a
+// subscribe function and the broadcast that fired it) outlived the feature by
+// several releases — dead on every load, and its docstring still described a
+// consumer that no longer existed, which is the more expensive half of the
+// problem: it told the next reader the pre-login mount was still live. Removed
+// with the feature it served. Reviving early mount means reviving the decode
+// question first (a Web Worker via OffscreenCanvas), at which point the signal
+// is trivial to reinstate.
 //
 // /addon-config and /model/ both require a session cookie by default (see
 // supervisor-proxy.py's _authorized()) — Ingress-sourced requests are
@@ -39,7 +41,6 @@ import { fetchAddonConfig, versionedModelUrl } from "./storage";
 import { readWithProgress } from "./fetchProgress";
 
 type ProgressListener = (frac: number) => void;
-type AvailabilityListener = () => void;
 
 interface PrefetchEntry {
   url: string;
@@ -50,7 +51,6 @@ interface PrefetchEntry {
 
 let state: "idle" | "pending" | "done" = "idle";
 let entry: PrefetchEntry | null = null;
-const availabilityListeners = new Set<AvailabilityListener>();
 
 /** Fire-and-forget: kick off the background GLB download if nothing is
  *  already in flight or done. Safe to call repeatedly (profile-select mount,
@@ -89,27 +89,9 @@ export function startModelPrefetch(): void {
     // unhandled rejection. A caller that DOES claim it awaits the same
     // promise and handles the error itself.
     e.promise.catch(() => {});
-    // We KNOW at this point that /model/ + /addon-config are reachable right
-    // now (the fetch() call above was accepted — its eventual success/failure
-    // doesn't change that) — safe for ProfileGate to mount the real scene
-    // early, since BabylonCanvas's own load effect will find a model waiting
-    // for it instead of hitting the same 401 this call would have hit before
-    // now. Fire even if e.promise later fails; BabylonCanvas's normal error
-    // handling (behind the opaque auth-screen overlay either way) covers that.
-    availabilityListeners.forEach((l) => l());
   })().catch(() => {
     state = "idle";
   });
-}
-
-/** Notify `fn` once /model/ becomes confirmed-reachable (immediately, if a
- *  prefetch already succeeded before this was called). Used by ProfileGate to
- *  decide it's safe to mount the real scene before login — see its docstring.
- *  Returns an unsubscribe function. */
-export function onPrefetchAvailable(fn: AvailabilityListener): () => void {
-  if (entry) fn();
-  availabilityListeners.add(fn);
-  return () => availabilityListeners.delete(fn);
 }
 
 /** If a prefetch for this EXACT model URL is in flight or finished, hand it

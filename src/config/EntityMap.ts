@@ -48,7 +48,7 @@ export const ENTITY_MAP: Record<string, EntityMapping> = {};
  * convention. Meshes named with a real entity_id — what the pipeline actually
  * emits — are matched by strategies 1 and 3 and never needed this.
  */
-export const MESH_ALIASES: Record<string, string> = {};
+const MESH_ALIASES: Record<string, string> = {};
 
 /** Infer a panel/entity type from an entity_id domain prefix. */
 export function inferTypeFromEntityId(entityId: string): EntityType | null {
@@ -112,7 +112,7 @@ export function prettifyEntitySlug(entityId: string): string {
  * prettified local part ("light.living_room" → "Living Room"). One place so the
  * same derivation isn't re-implemented in every binding/marker/config site.
  */
-export function labelFromEntityId(entityId: string, friendlyName?: string): string {
+function labelFromEntityId(entityId: string, friendlyName?: string): string {
   return friendlyName?.trim() || prettifyEntitySlug(entityId);
 }
 
@@ -125,7 +125,7 @@ export function labelFromEntityId(entityId: string, friendlyName?: string): stri
  *  friendly_name) has arrived over the websocket — this label then sits
  *  permanently in config, indistinguishable from a deliberate customisation,
  *  even though a proper name was available moments later. */
-export function looksLikeRawFallbackLabel(entityId: string, label: string): boolean {
+function looksLikeRawFallbackLabel(entityId: string, label: string): boolean {
   // Compare NORMALISED forms (underscores → spaces, whitespace collapsed,
   // lower-cased) on BOTH sides. Normalising only the entity_id — as this did
   // originally — missed the very common case of a label that is the raw slug

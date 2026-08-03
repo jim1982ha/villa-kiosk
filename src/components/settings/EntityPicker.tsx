@@ -135,7 +135,7 @@ export default function EntityPicker({
             >
               <span style={{ flex: 1, textAlign: "left" }}>
                 Use "{query.trim()}"
-                <div className="muted" style={{ fontSize: 11 }}>entity not in HA yet — will activate when it appears</div>
+                <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>entity not in HA yet — will activate when it appears</div>
               </span>
             </button>
           )}
@@ -154,9 +154,9 @@ export default function EntityPicker({
             >
               <span style={{ flex: 1, textAlign: "left" }}>
                 {e.attributes.friendly_name ?? e.entity_id}
-                <div className="muted" style={{ fontSize: 11 }}>{e.entity_id}</div>
+                <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>{e.entity_id}</div>
               </span>
-              <span className="muted" style={{ fontSize: 11 }}>{e.state}</span>
+              <span className="muted" style={{ fontSize: "var(--text-2xs)" }}>{e.state}</span>
             </button>
           ))}
         </div>

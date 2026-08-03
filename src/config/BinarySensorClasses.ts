@@ -37,7 +37,7 @@ const DEFAULT_INFO: BinarySensorClassInfo = {
   onLabel: "On", offLabel: "Off", icon: Activity, alarmState: "on",
 };
 
-export const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
+const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
   // Actual hazards — "on" is the problem.
   moisture:        { onLabel: "Leak detected", offLabel: "No leak", icon: Droplets, alarmState: "on" },
   smoke:           { onLabel: "Smoke detected", offLabel: "Clear", icon: Flame, alarmState: "on" },

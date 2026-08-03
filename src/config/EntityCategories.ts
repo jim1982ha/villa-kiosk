@@ -73,7 +73,7 @@ export function categoryGradient(category: Category, override?: string): string 
 
 /** Default category by device TYPE. Anything not listed here (and not caught by
  *  a device_class rule below) falls into "others". */
-export const DEFAULT_CATEGORY_BY_TYPE: Partial<Record<EntityType, Category>> = {
+const DEFAULT_CATEGORY_BY_TYPE: Partial<Record<EntityType, Category>> = {
   light: "light",
   camera: "access_control",
   lock: "access_control",
@@ -97,7 +97,7 @@ function legacyDefaultCategory(type: EntityType): Category {
 
 /** Per-entity_id exceptions, checked BEFORE everything below — for specific
  *  devices that shouldn't follow their domain's default. */
-export const CATEGORY_EXCEPTIONS: Partial<Record<string, Category>> = {
+const CATEGORY_EXCEPTIONS: Partial<Record<string, Category>> = {
 };
 
 // device_class sets that redirect a generic domain to a specific category.

@@ -28,6 +28,7 @@ import { isCategoryAllowed } from "@/auth/permissions";
 import { CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient } from "@/config/EntityCategories";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
+import { successFeedback } from "@/utils/haptics";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
@@ -161,15 +162,27 @@ function deriveTiles(
   const climates = byDomain("climate");
   if (climates.length) {
     const active = climates.filter((e) => e.state !== "off" && !OFF_STATES.has(e.state));
+    // ONLY real current_temperature readings — never a fallback to `temperature`
+    // (the TARGET setpoint). That fallback used to mean this tile could show a
+    // bare "26°C" that was actually one unit's target, not a measured room
+    // temperature, with nothing to say which — reported as exactly that
+    // confusion. Averaging real readings across several rooms is still a
+    // meaningful "how warm is the house" glance value; averaging two units'
+    // independently-set TARGETS is not a real quantity at all (a living room
+    // aimed at 26° and a bedroom aimed at 18° do not average to a "22°" that
+    // means anything). With no real reading available, this now falls back to
+    // the shared on/off phrasing instead of ever showing a number that isn't
+    // actually a temperature.
     const temps = active
-      .map((e) => e.attributes.current_temperature ?? e.attributes.temperature)
+      .map((e) => e.attributes.current_temperature)
       .filter((t): t is number => typeof t === "number");
     const avg = temps.length ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : null;
     tiles.push({
       id: "__climate", icon: Snowflake, label: "AC",
-      // Average temperature is the more useful glance value while anything is
-      // running; otherwise defer to the shared phrasing so "All Off" here
-      // matches "All Off" on the Lights tile beside it.
+      // Average CURRENT temperature is the more useful glance value while
+      // anything is running and actually reporting one; otherwise defer to
+      // the shared phrasing so "All Off" here matches "All Off" on the Lights
+      // tile beside it (and "3 On" with no reading reads the same way too).
       value: active.length && avg !== null
         ? `${avg}°C`
         : onOffSummary(active.length, climates.length),
@@ -369,7 +382,13 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
           <SceneMenu
             scenes={scenes}
             canRun={canRunScenes}
-            apply={(s) => { void callService("scene", "turn_on", {}, { entity_id: s.entityId }); }}
+            apply={(s) => {
+              // Running a scene changes several rooms at once and the
+              // result is usually not visible from where you tapped —
+              // the strongest case in the app for a confirming haptic.
+              successFeedback();
+              void callService("scene", "turn_on", {}, { entity_id: s.entityId });
+            }}
           />
         )}
       </div>

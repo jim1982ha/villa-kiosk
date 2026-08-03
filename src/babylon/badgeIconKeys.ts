@@ -33,7 +33,7 @@ export const TYPE_ICON_KEY: Record<EntityType, string> = {
 
 /** device_class -> glyph, for binary_sensor entities. Mirrors
  *  BinarySensorClasses.ts's own icon per class. */
-export const BINARY_SENSOR_ICON_KEY: Record<string, string> = {
+const BINARY_SENSOR_ICON_KEY: Record<string, string> = {
   moisture: "droplets",
   smoke: "flame",
   gas: "wind",

@@ -59,7 +59,7 @@ export function pickSharedConfig(config: AppConfig): SharedDeviceConfig {
  *  THIS app version knows, dropping anything unrecognised — so a store written
  *  by a newer version can't inject unknown keys into config. Absent/wrong-typed
  *  fields are simply omitted, letting the caller keep its current value. */
-export function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
+function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
   if (!raw || typeof raw !== "object") return {};
   const b = raw as Record<string, unknown>;
   const out: Record<string, unknown> = {};

@@ -7,6 +7,7 @@
 // nothing to reload on the way out.
 
 import { useState, type ReactNode } from "react";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import { ChevronDown, ChevronRight, Upload } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -97,6 +98,8 @@ function VillaCoordinates() {
 }
 
 export default function ConfigEditorModal({ onBack, focusEntityId, onModelChanged }: Props) {
+  // Focus trap + Escape + focus restore (see useModalA11y).
+  const dialogRef = useModalA11y(onBack);
   const { role } = useProfile();
   const canUploadModel = role === "owner";
   // Central GLB/room-data upload — Owner only. Lives in this modal's OWN
@@ -108,8 +111,12 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
   return (
     <div className="modal-backdrop" onClick={onBack}>
       <div
+        ref={dialogRef}
         className="modal settings-modal config-editor-modal"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Advanced settings"
       >
         <div className="settings-header">
           <h2>Advanced Settings</h2>
@@ -151,7 +158,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           )}
           <div className="settings-section-title">Villa location</div>
           <VillaCoordinates />
-          <p className="muted body-text" style={{ marginTop: 6, fontSize: 12 }}>
+          <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
             Drives sun position and day/night for this villa.
           </p>
 
@@ -181,7 +188,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
         </div>
 
         <div className="settings-footer" style={{ justifyContent: "space-between" }}>
-          <span className="muted body-text" style={{ fontSize: 12 }}>v{__APP_VERSION__}</span>
+          <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>v{__APP_VERSION__}</span>
           <button className="btn primary" onClick={onBack}>Close</button>
         </div>
       </div>

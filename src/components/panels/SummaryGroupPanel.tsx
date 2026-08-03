@@ -11,6 +11,7 @@
 import { useState, type ComponentType } from "react";
 import { ChevronRight, Sparkles, Power, PowerOff, EyeOff } from "lucide-react";
 import BasePanel from "./BasePanel";
+import EntityRowToggle from "./EntityRowToggle";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -239,10 +240,19 @@ export default function SummaryGroupPanel({
     const label = displayLabelFor(id, config.entityMap[id]?.label, e.attributes.friendly_name);
     const unit = (e.attributes.unit_of_measurement as string | undefined) ?? "";
     const curTemp = e.attributes.current_temperature as number | null | undefined;
+    const targetTemp = e.attributes.temperature as number | null | undefined;
+    // Current AND target, not current alone — the bottom summary bar's own
+    // "AC" tile only ever shows a real current-temperature average (never a
+    // target substituted in its place, see SummaryBar.tsx), and a lone
+    // number here with no label reads exactly as ambiguously: reported as
+    // "is this 26° the room or the setpoint?". "→" keeps both in the same
+    // compact space this row already had for one.
     const stateText = isUnavailable(e)
       ? "Unavailable"
       : domain === "climate"
-        ? (curTemp == null ? "--" : `${Math.round(curTemp)}°`)
+        ? (curTemp == null
+            ? (targetTemp == null ? "--" : `→ ${Math.round(targetTemp)}°`)
+            : (targetTemp == null ? `${Math.round(curTemp)}°` : `${Math.round(curTemp)}° → ${Math.round(targetTemp)}°`))
         : `${pretty(e.state)}${unit ? ` ${unit}` : ""}`;
 
     const isLock = domain === "lock";
@@ -286,16 +296,12 @@ export default function SummaryGroupPanel({
           <ChevronRight size={18} className="summary-entity-chevron" />
         </button>
         {canToggle && (
-          <button
-            className={`summary-entity-toggle${toggleOn ? " on" : ""}`}
-            onClick={doToggle}
-            role="switch"
-            aria-checked={toggleOn}
-            aria-label={`${label}: ${toggleOn ? "on" : "off"}`}
-            title={toggleOn ? "Turn off" : "Turn on"}
-          >
-            <span className="knob" />
-          </button>
+          <EntityRowToggle
+            entityId={id}
+            actualOn={toggleOn}
+            label={label}
+            onToggle={doToggle}
+          />
         )}
       </div>
     );

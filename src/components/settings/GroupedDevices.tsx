@@ -92,10 +92,10 @@ export default function GroupedDevices() {
           the groups list, separated from it by a rule that made sense in
           that order but not in this one. */}
       <div style={{ marginBottom: 20 }}>
-        <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
+        <label style={{ display: "block", marginBottom: 6, fontSize: "var(--text-sm)", fontWeight: 500 }}>
           New group
         </label>
-        <p className="muted body-text" style={{ fontSize: 11, marginBottom: 10 }}>
+        <p className="muted body-text" style={{ fontSize: "var(--text-2xs)", marginBottom: 10 }}>
           Pick the entity that should keep the map badge (e.g. temperature) — add
           the rest as members once the group is created.
         </p>
@@ -125,9 +125,9 @@ export default function GroupedDevices() {
             {/* flex:1 + minWidth:0 + overflowWrap so a long entity_id with no
                 friendly_name (one unbreakable underscore-joined token) wraps
                 inside the row instead of pushing the delete button off-screen. */}
-            <div style={{ fontSize: 13, fontWeight: 500, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
+            <div style={{ fontSize: "var(--text-sm)", fontWeight: 500, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
               {entityLabel(config, entities, group.primaryEntityId)}
-              <div className="muted body-text" style={{ fontSize: 11, marginTop: 2, overflowWrap: "anywhere" }}>
+              <div className="muted body-text" style={{ fontSize: "var(--text-2xs)", marginTop: 2, overflowWrap: "anywhere" }}>
                 {group.primaryEntityId} — primary (keeps the map badge)
               </div>
             </div>
@@ -146,7 +146,7 @@ export default function GroupedDevices() {
                 key={id}
                 className="body-text"
                 style={{
-                  display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12,
+                  display: "inline-flex", alignItems: "center", gap: 6, fontSize: "var(--text-xs)",
                   padding: "4px 8px", borderRadius: 999, background: "var(--bg-input)",
                   maxWidth: "100%", overflowWrap: "anywhere",
                 }}
@@ -190,13 +190,13 @@ export default function GroupedDevices() {
           className="row spread"
           style={{ padding: "8px 0", borderTop: "1px solid var(--hairline)" }}
         >
-          <span className="body-text" style={{ fontSize: 12, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
+          <span className="body-text" style={{ fontSize: "var(--text-xs)", flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
             {entityLabel(config, entities, s.primaryEntityId)} <span className="muted">+</span>{" "}
             {entityLabel(config, entities, s.memberEntityId)}
           </span>
           <button
             className="btn ghost"
-            style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }}
+            style={{ padding: "5px 10px", fontSize: "var(--text-xs)", flexShrink: 0 }}
             onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}
           >
             Group these

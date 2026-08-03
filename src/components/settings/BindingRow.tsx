@@ -44,7 +44,7 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
       <div className="row spread" style={{ gap: 12 }}>
         <div
           style={{
-            flex: "0 0 34%", fontSize: 12, color: "var(--text-secondary)",
+            flex: "0 0 34%", fontSize: "var(--text-xs)", color: "var(--text-secondary)",
             wordBreak: "break-all", display: "flex", alignItems: "center", gap: 6,
           }}
         >
@@ -68,7 +68,7 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
       {meta && (
         <div className="row" style={{ gap: 10, marginTop: 10, paddingLeft: "calc(34% + 12px)", flexWrap: "wrap" }}>
           <select
-            style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
+            style={{ fontSize: "var(--text-xs)", padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
             value={meta.type}
             onChange={(e) => draftField({ type: e.target.value as EntityType })}
             title="Panel type"
@@ -76,7 +76,7 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
             {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
           <select
-            style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
+            style={{ fontSize: "var(--text-xs)", padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
             value={effectiveCategory(entityId, meta.type, meta.category)}
             onChange={(e) => draftField({ category: e.target.value as Category })}
             title="Which map filter group this device belongs to"
@@ -84,14 +84,14 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
             {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
           </select>
           <input
-            style={{ flex: 1, minWidth: 80, fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
+            style={{ flex: 1, minWidth: 80, fontSize: "var(--text-xs)", padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
             placeholder="Label"
             value={meta.label}
             onChange={(e) => draftField({ label: e.target.value }, 500)}
             title="Display name"
           />
           <input
-            style={{ flex: 1, minWidth: 80, fontSize: 12, padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
+            style={{ flex: 1, minWidth: 80, fontSize: "var(--text-xs)", padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
             placeholder="Room"
             value={meta.room}
             onChange={(e) => draftField({ room: e.target.value }, 500)}
@@ -113,7 +113,7 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
                   title="Per-light brightness override on top of this light's live Home Assistant brightness and the global Light effect strength setting. 0% = no change."
                   aria-label={`Intensity override for ${entityId}`}
                 />
-                <span className="muted" style={{ fontSize: 12, minWidth: 36, textAlign: "right" }}>
+                <span className="muted" style={{ fontSize: "var(--text-xs)", minWidth: 36, textAlign: "right" }}>
                   {pct > 0 ? "+" : ""}{pct}%
                 </span>
               </div>

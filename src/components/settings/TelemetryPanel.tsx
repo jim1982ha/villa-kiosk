@@ -185,18 +185,18 @@ export default function TelemetryPanel() {
               style={{
                 display: "flex", gap: 10, alignItems: "baseline",
                 padding: "8px 0", borderTop: i ? "1px solid var(--hairline)" : "none",
-                fontSize: 13,
+                fontSize: "var(--text-sm)",
               }}
               title={e.ua}
             >
               <span style={{ flex: "0 0 auto", fontWeight: 600, color: TONE[e.kind] ?? "var(--text-primary)" }}>
                 {e.kind}
               </span>
-              <span className="muted" style={{ flex: "0 0 auto", fontSize: 11 }}>
+              <span className="muted" style={{ flex: "0 0 auto", fontSize: "var(--text-2xs)" }}>
                 {shortUA(e.ua)}{e.role ? ` · ${e.role}` : ""}
               </span>
               <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>{summarise(e)}</span>
-              <span className="muted" style={{ flex: "0 0 auto", fontSize: 11 }}>
+              <span className="muted" style={{ flex: "0 0 auto", fontSize: "var(--text-2xs)" }}>
                 {e.at?.replace("T", " ").replace("+00:00", "Z") ?? ""}
               </span>
             </div>
@@ -204,7 +204,7 @@ export default function TelemetryPanel() {
         </div>
       )}
       {!!events?.length && events.length > VISIBLE_ROWS && (
-        <p className="muted body-text" style={{ marginTop: 8, fontSize: 12 }}>
+        <p className="muted body-text" style={{ marginTop: 8, fontSize: "var(--text-xs)" }}>
           Showing the newest {VISIBLE_ROWS} of {events.length} — use <strong>Copy all</strong> or
           <strong> Download .json</strong> above for the rest.
         </p>

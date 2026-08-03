@@ -151,7 +151,7 @@ export default function StateTimeline({ data, hours = 24, colorFor, height, lege
         )}
       </div>
       {legend && legend.length > 1 && (
-        <div className="row" style={{ gap: 16, marginTop: 8, fontSize: 12, flexWrap: "wrap" }}>
+        <div className="row" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)", flexWrap: "wrap" }}>
           {legend.map((l) => (
             <span className="muted" key={l.state}>
               <span style={{ color: l.color }}>●</span> {l.label ?? l.state}

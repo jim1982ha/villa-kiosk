@@ -113,7 +113,7 @@ function EntityMapRow({
             <div className="remap-actions">
               <button
                 className="btn primary"
-                style={{ padding: "5px 8px", fontSize: 12 }}
+                style={{ padding: "5px 8px", fontSize: "var(--text-xs)" }}
                 disabled={!remapNewId || remapNewId === entryKey}
                 onClick={() => remapNewId && onRemapApply(entryKey, remapNewId)}
               >
@@ -121,7 +121,7 @@ function EntityMapRow({
               </button>
               <button
                 className="btn ghost"
-                style={{ padding: "5px 8px", fontSize: 12 }}
+                style={{ padding: "5px 8px", fontSize: "var(--text-xs)" }}
                 onClick={onRemapCancel}
               >
                 <X size={13} /> Cancel
@@ -164,7 +164,7 @@ function EntityMapRow({
 
       {editing && (
         <td data-label="">
-          <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>
+          <span style={{ fontSize: "var(--text-2xs)", color: "var(--text-secondary)" }}>
             Mesh stays, entity ID changes — no model rebuild needed.
           </span>
         </td>
@@ -228,7 +228,7 @@ function EntityMapRow({
                     title="Per-light brightness override on top of this light's live Home Assistant brightness and the global Light effect strength setting. 0% = no change."
                     aria-label={`Intensity override for ${m.entityId}`}
                   />
-                  <span className="muted" style={{ fontSize: 12, minWidth: 40, textAlign: "right" }}>
+                  <span className="muted" style={{ fontSize: "var(--text-xs)", minWidth: 40, textAlign: "right" }}>
                     {pct > 0 ? "+" : ""}{pct}%
                   </span>
                 </div>

@@ -56,7 +56,7 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
         <button onClick={() => commit(target + step)} aria-label="Raise target temperature" disabled={unavailable}><Plus size={26} /></button>
       </div>
       {limits && !unavailable && (
-        <div className="muted" style={{ textAlign: "center", fontSize: 13 }}>
+        <div className="muted" style={{ textAlign: "center", fontSize: "var(--text-sm)" }}>
           Adjustable between {min}–{max} °C
         </div>
       )}

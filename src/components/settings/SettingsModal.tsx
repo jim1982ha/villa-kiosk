@@ -8,6 +8,7 @@
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
 import { useState } from "react";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import {
   Sliders, Sun, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
 } from "lucide-react";
@@ -53,6 +54,11 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
     pending.draft(SETTINGS_DRAFT_KEY, { ...pending.drafts[SETTINGS_DRAFT_KEY], ...patch });
   const flushPending = () => pending.flush(SETTINGS_DRAFT_KEY);
   const closeModal = () => { flushPending(); onClose(); };
+  // Focus trap + Escape + focus restore (see useModalA11y). Declared AFTER
+  // closeModal deliberately — it closes over it, and this modal's close path
+  // has to flush the debounced settings draft, so Escape must run the same
+  // flush-then-close that the Close button and backdrop click do.
+  const dialogRef = useModalA11y(closeModal);
 
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);
   const [eyeHeight, setEyeHeight] = useState(config.eyeHeight ?? 1.7);
@@ -88,7 +94,14 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
 
   return (
     <div className="modal-backdrop" onClick={closeModal}>
-      <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="modal settings-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+      >
         <div className="settings-header">
           <h2>Settings</h2>
           {/* Theme selector + day/night invert live together in the header,
@@ -213,7 +226,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             />
           </div>
         </div>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
           Overall scene exposure, and how much extra dimming applies at night. Both update live.
         </p>
 
@@ -229,7 +242,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           onChange={(e) => applyRender({ lightPoolIntensity: Number(e.target.value) })}
         />
 
-        <p className="muted body-text" style={{ marginTop: 10, fontSize: 11 }}>
+        <p className="muted body-text" style={{ marginTop: 10, fontSize: "var(--text-2xs)" }}>
           Badge size — {(config.entityIconScale ?? 1.0).toFixed(2)}× — is set with
           the +/- buttons next to the category filters in the top bar.
         </p>
@@ -267,7 +280,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             </button>
           </div>
         </div>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: 11 }}>
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
           Classic: icon badge with a value pill. Card: coloured card with icon &amp; value inline —
           both show the same information, purely a look preference.
         </p>

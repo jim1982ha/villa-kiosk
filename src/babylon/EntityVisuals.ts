@@ -76,6 +76,14 @@ import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./ba
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
 import { COSMETIC_MAPPING_FIELDS } from "./entityMapDiff";
+// Pose-word resolution (which "__<word>" mesh variant a live state asks for)
+// — pure logic, extracted to keep this file to the things that actually touch
+// the scene. See meshVariants.ts for the vocabulary rules themselves.
+import {
+  pickNearestVariant, desiredVariantWord, orderVariantWords,
+} from "./meshVariants";
+// Pure label/chip overlap geometry — see labelLayout.ts.
+import { relaxBoxes, chipWidthPx, type Nudgeable } from "./labelLayout";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 1.3;
@@ -109,145 +117,6 @@ function clampRatio(ratio: number | undefined): number {
   return Math.max(-1, Math.min(1, ratio ?? 0));
 }
 
-// ── Multi-mesh visual variants (e.g. a curtain's closed/half/open poses) ────
-// See EntityMap.extractVariantSuffix's docstring for the "__<variant>" mesh-
-// naming convention this reads.
-//
-// There is NO per-type vocabulary any more — not one table, not one exception.
-// The rule is uniform for every entity type, current or future:
-//
-//   desired pose word = the entity's own live STATE, sanitised
-//                       (sanitizeVariantWord), EXCEPT that anything
-//                       recognisably "part-way" resolves to "half".
-//
-// "half" is the one VIRTUAL word — it has no HA state string of its own — and
-// it is available to EVERY type, not just cover. Two universal ways to be
-// part-way, neither type-specific:
-//   * a numeric level attribute strictly between its extremes — a cover at
-//     current_position 50, a light at brightness 128, a fan at percentage 40;
-//   * a transitional state (opening/closing/locking/…) — a device
-//     mid-movement is by definition between its two rest poses.
-// So "cover.x__half" and "light.y__half" now mean exactly the same thing and
-// go through exactly the same code. Authoring "__half" is always optional: an
-// entity with only two poses just falls back to the nearest one it does have.
-//
-// WORD_RANK is the ordering used for that nearest-available fallback — NOT a
-// vocabulary (it never decides which words are legal, and an unlisted word is
-// perfectly authorable, it just sorts to the middle). It exists so "nearest"
-// means something: the authored words are ordered rest → part-way → active,
-// which is what makes a missing "__half" fall to a sensible neighbour instead
-// of to whatever order the meshes happened to be indexed in.
-//
-// A desired word that ISN'T authored resolves to the LOWEST-ranked pose (see
-// pickNearestVariant with an index of -1), i.e. the rest/off/closed/locked
-// one. That single rule replaces every previous per-type fail-safe: a lock
-// reporting "jammed", any entity reporting "unavailable"/"unknown", a state
-// nobody authored a mesh for — all land on the safe, closed, at-rest pose
-// rather than implying a door is open or a device is running.
-const WORD_RANK: Record<string, number> = {
-  // rest / inactive / safe — also the fallback for any unauthored state
-  closed: 0, off: 0, locked: 0, idle: 0, standby: 0, docked: 0,
-  // the virtual part-way pose
-  half: 1,
-  // active
-  open: 2, on: 2, unlocked: 2, playing: 2, running: 2, cleaning: 2,
-};
-const UNRANKED_WORD = 1; // unknown/custom words sort with "half", in the middle
-
-/** Numeric "how far along is it" attributes, with the value that means 100%.
- *  Any entity exposing one of these can express the virtual "half" pose. */
-const LEVEL_ATTRS: ReadonlyArray<readonly [string, number]> = [
-  ["current_position", 100], // cover
-  ["brightness", 255],       // light
-  ["percentage", 100],       // fan
-  ["volume_level", 1],       // media_player
-];
-/** Outside these bounds a level reads as fully at one end, not part-way.
- *  Matches the old cover-specific 15/85 split, now applied to every type. */
-const HALF_LOW = 0.15;
-const HALF_HIGH = 0.85;
-/** States that mean "mid-transition" — part-way by definition, whatever the
- *  device is. Not a vocabulary: purely extra ways to reach the "half" pose. */
-const TRANSITIONAL_STATES = new Set([
-  "opening", "closing", "locking", "unlocking", "arming", "pending", "buffering",
-]);
-
-/** The available variant word nearest `desired` in `order` (by index
- *  distance) — e.g. a cover authored with only "closed"/"open" meshes (no
- *  "half") still shows something sensible for a live half-open position,
- *  rather than showing nothing or crashing. Ties are broken toward the LATER
- *  word in `order` (for cover's [closed, half, open], that biases toward
- *  "open" — the same default an unsuffixed mesh already gets elsewhere in
- *  this mechanism, rather than depending on incidental mesh-iteration
- *  order). `available` is assumed non-empty (callers already check that). */
-function pickNearestVariant(order: string[], desired: string, available: Iterable<string>): string {
-  let best: string | null = null;
-  let bestIndex = -1;
-  let bestDist = Infinity;
-  const desiredIndex = order.indexOf(desired);
-  for (const word of available) {
-    if (word === desired) return word;
-    const idx = order.indexOf(word);
-    const dist = Math.abs(idx - desiredIndex);
-    if (dist < bestDist || (dist === bestDist && idx > bestIndex)) {
-      bestDist = dist; best = word; bestIndex = idx;
-    }
-  }
-  // best is only ever null if `available` was empty, which callers rule out.
-  return best!;
-}
-
-/** Reproduce EntityMap.extractVariantSuffix's mesh-suffix parsing
- *  (`/__([a-z0-9]+)$/i`, lowercased) on a live HA STATE string, so a mesh
- *  authored `<entity>__<word>` and a state string resolve to the same
- *  comparable token. "Not Home", "not_home" and "NOT-HOME" all sanitise to
- *  "nothome" — the ONLY suffix a mesh could actually carry, since the export
- *  pipeline's own suffix regex has no underscore/hyphen/space in its
- *  character class either. Multi-word states are therefore still authorable,
- *  just as one run with no separator. */
-function sanitizeVariantWord(rawState: string): string {
-  return rawState.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-/** The pose word an entity's CURRENT state asks for — universal, no type
- *  branch. Its live state, sanitised, except that anything part-way (a
- *  mid-range level attribute, or a transitional state) asks for the virtual
- *  "half" instead. Callers never need to know the entity's type. */
-function desiredVariantWord(entity: HassEntity): string {
-  for (const [attr, full] of LEVEL_ATTRS) {
-    const v = entity.attributes?.[attr];
-    if (typeof v === "number" && Number.isFinite(v) && full > 0) {
-      const f = v / full;
-      // Only a level that's genuinely mid-range means "half"; at either end
-      // the entity's own state word (open/closed/on/off/…) is the truth.
-      if (f > HALF_LOW && f < HALF_HIGH) return "half";
-      break; // one level attribute is enough; at an extreme, fall through
-    }
-  }
-  const word = sanitizeVariantWord(entity.state);
-  return TRANSITIONAL_STATES.has(word) ? "half" : word;
-}
-
-/** Pose words ordered rest → part-way → active, so pickNearestVariant's
- *  "nearest" is meaningful. Stable for equal ranks so two custom words keep a
- *  deterministic order rather than depending on mesh indexing.
- *
- *  "half" is ALWAYS included even when no "__half" mesh was authored: it needs
- *  a position in this list for distance to be measurable from it. Without the
- *  virtual slot, a curtain at 50% (or a light at half brightness) authored
- *  with only two poses measured "half" at index -1 and collapsed to the rest
- *  pose — a half-open curtain rendering as fully CLOSED. With it, the two
- *  neighbours are equidistant and the tie breaks toward the later/active one
- *  (open, on), which is the sane read for "it's partly on". Callers pick their
- *  default from the AUTHORED words only (see variantWordsFor) so this virtual
- *  entry can never itself be chosen as a pose. */
-function orderVariantWords(words: Iterable<string>): string[] {
-  return [...new Set([...words, "half"])].sort((a, b) => {
-    const ra = WORD_RANK[a] ?? UNRANKED_WORD;
-    const rb = WORD_RANK[b] ?? UNRANKED_WORD;
-    return ra !== rb ? ra - rb : a.localeCompare(b);
-  });
-}
 
 // A SweetHome "line light" (the Sweet Home Light plugin's linear LED strip) is
 // mounted flush against a ceiling/wall. A PointLight placed ON the strip sits
@@ -426,64 +295,6 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  * contact, exit only once clearly separated) that keeps a room from
  * flickering between the two while the camera hovers near the boundary.
  */
-/** Relaxation sweeps before giving up on separating room-cluster chips.
- *  Costs nothing in the common case — the loop exits the moment it settles. */
-const RELAX_ITERATIONS = 24;
-
-/** A point that can be nudged: screen anchor plus the offset applied to it. */
-interface Nudgeable { x: number; y: number; off: { x: number; y: number } }
-
-/**
- * Push overlapping screen boxes apart, minimum-translation, and report what
- * couldn't be resolved. Used ONLY for room-cluster chips (each anchored at a
- * fixed world-space centroid, so a little travel costs nothing in meaning) —
- * individual device badges are never nudged, see the header comment above.
- * The subtleties here (resolve along the axis of LEAST penetration; relax
- * from zero every frame rather than easing toward a target, which fed the
- * render loop and made chips shake; clamp travel AFTER solving and measure
- * the residual against the clamped result, i.e. against what is actually
- * drawn) were all bought with field bugs and are not worth reimplementing.
- *
- * `gap` is the breathing room added between boxes; `maxOff` is how far a box
- * may travel from its anchor before it stops meaning anything — for a chip
- * (the only caller now) that budget can be generous, since it labels a whole
- * room rather than pointing at one device (see CLUSTER_MAX_NUDGE_HEIGHTS).
- */
-function relaxBoxes(
-  pts: Nudgeable[],
-  boxes: { halfW: number; halfH: number; cy: number }[],
-  gap: number,
-  maxOff: number,
-): void {
-  for (const p of pts) { p.off.x = 0; p.off.y = 0; }
-  for (let iter = 0; iter < RELAX_ITERATIONS; iter++) {
-    let moved = false;
-    for (let i = 0; i < pts.length; i++) {
-      for (let j = i + 1; j < pts.length; j++) {
-        const a = pts[i], b = pts[j], ba = boxes[i], bb = boxes[j];
-        const dx = (b.x + b.off.x) - (a.x + a.off.x);
-        const dy = (b.y + b.off.y + bb.cy) - (a.y + a.off.y + ba.cy);
-        const ox = ba.halfW + bb.halfW + gap - Math.abs(dx); // >0 = overlapping
-        const oy = ba.halfH + bb.halfH + gap - Math.abs(dy);
-        if (ox <= 0 || oy <= 0) continue; // clear on at least one axis
-        if (ox < oy) {
-          const s = dx === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dx);
-          a.off.x -= (ox / 2) * s; b.off.x += (ox / 2) * s;
-        } else {
-          const s = dy === 0 ? ((i * 31 + j) % 2 ? 1 : -1) : Math.sign(dy);
-          a.off.y -= (oy / 2) * s; b.off.y += (oy / 2) * s;
-        }
-        moved = true;
-      }
-    }
-    if (!moved) break;
-  }
-
-  for (const p of pts) {
-    const len = Math.hypot(p.off.x, p.off.y);
-    if (len > maxOff) { p.off.x *= maxOff / len; p.off.y *= maxOff / len; }
-  }
-}
 /**
  * Grouping thresholds. The ONE decision they govern: when a room's own badges
  * give way to that room's cluster chip.
@@ -602,13 +413,6 @@ const CLUSTER_COUNT_DIAMETER_PX = 20;
 const CLUSTER_COUNT_FONT_PX = 11;
 /** Estimated advance width per character at CLUSTER_FONT_PX/weight 600, plus
  *  the TextBlock's own left+right padding. Babylon computes the real width
- *  during layout (adaptWidthToChildren), which isn't readable before the
- *  frame is drawn — this only has to be close enough to keep chips apart. */
-const CLUSTER_CHAR_PX = 8.2;
-const CLUSTER_TEXT_PAD_PX = 24;
-function chipWidthPx(text: string): number {
-  return text.length * CLUSTER_CHAR_PX + CLUSTER_TEXT_PAD_PX;
-}
 const NO_ROOM_LABEL = "Other";
 
 /** A badge that survived the per-entity culls (category / floor / enabled),
@@ -665,6 +469,10 @@ const FAN_MAX_RAD_PER_SEC = 6.2;
 // plain bbox-midpoint) and the pole visibly orbits in a small circle instead
 // of spinning in place.
 const FAN_AXIS_TOP_SLICE = 0.25;
+
+/** Bucket name for badges whose entity has no room configured — they still
+ *  cluster together rather than each becoming its own singleton chip. */
+const NO_ROOM_LABEL = "Other";
 
 interface LabelControls {
   container: StackPanel;
@@ -1485,17 +1293,16 @@ export class EntityVisuals {
               // placed the pool 1m below the fixture regardless — a glow
               // patch floating at roughly window/furniture height instead of
               // on the floor, reported (accurately) as "a disk floating in
-              // the air". No pool at all — this one spot just reads as an
-              // unlit fixture — is a far smaller miss than a wrongly-placed
-              // glow, and this ray is now generous enough (20, see
-              // surfaceBelow) that a genuine miss should be rare.
-              //
-              // Logged rather than silently swallowed: a reported "floating
-              // disc" turned out NOT to be the near-a-wall floor-seam case
-              // this method's nudge retry targets (the fixture was confirmed
-              // mid-room), so the real cause is still open. This is the one
-              // piece of evidence that can actually settle it next time —
-              // visible on the kiosk itself via ?debug, no devtools needed.
+              // the air" and traced to surfaceBelow's predicate accepting
+              // furniture as a floor hit (now fixed via isStructureMesh — see
+              // that method). No pool at all — this one spot just reads as
+              // an unlit fixture — is a far smaller miss than a wrongly-
+              // placed glow, and with structure-only hits plus a 20m ray and
+              // the seam-nudge retry, an actual miss here should now mean
+              // there is genuinely no floor within reach (an outdoor fixture
+              // over water, say). Logged rather than silently swallowed so
+              // that rarer case is still visible on the kiosk itself via
+              // ?debug, without needing devtools.
               if (surfaceY === null) {
                 tapDebug(
                   `light pool: no floor found below ${m.name} at world `

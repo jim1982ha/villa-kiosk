@@ -1448,25 +1448,19 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     if upload_id:
         return await _chunked_upload(request, kind, dest, upload_id)
 
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(dest), suffix=".part")
-    try:
-        with os.fdopen(fd, "wb") as out:
-            total = await _stream_upload_body(
-                request, out, kind, check_magic=True, base=0)
+    # Atomic temp-file-then-replace, with 0644 so nginx (running unprivileged)
+    # can serve the result — see atomic_write, which owns both rules now.
+    async def _stream(out):
+        total = await _stream_upload_body(
+            request, out, kind, check_magic=True, base=0)
         if total == 0:
+            # Raised INSIDE the writer so atomic_write_async's cleanup runs and
+            # the half-written temp file goes away — the live model is never
+            # touched, since the replace hasn't happened yet.
             raise web.HTTPBadRequest(text="empty upload")
-        # mkstemp() creates the temp file 0600 (root-only). nginx workers run
-        # unprivileged, so a 0600 model file makes nginx return HTTP 403 when it
-        # tries to serve /model/... . Relax to 0644 (world-readable, matching a
-        # file copied in via Samba/SSH) before the atomic replace.
-        os.chmod(tmp, 0o644)
-        os.replace(tmp, dest)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+        return total
+
+    total = await atomic_write_async(dest, _stream)
 
     _write_upload_sidecar(request, dest)
     rel = os.path.relpath(dest, os.path.realpath(DATA_ROOT))
@@ -1496,6 +1490,76 @@ DEVICE_CONFIG_FILE = "/data/device-config.json"
 DEVICE_CONFIG_MAX_BYTES = 8_000_000
 
 
+def atomic_write(dest: str, write_body, binary: bool = True, mode: int = 0o644) -> None:
+    """Write `dest` atomically: a fresh temp file in the SAME directory, then
+    os.replace() over the target. A reader (or nginx) therefore sees either the
+    whole previous file or the whole new one, never a half-written one, and a
+    failure part-way through leaves the existing file untouched.
+
+    `write_body(out)` receives the open temp file handle and does the actual
+    writing; it may be a plain function or a coroutine (awaited by
+    atomic_write_async below), which is what lets a streamed upload and a
+    small in-memory blob share this one implementation.
+
+    THIS EXISTS BECAUSE IT WAS WRITTEN THREE TIMES. The JSON store and the
+    model upload each had a correct copy; the FM evidence-photo write had a
+    THIRD that looked equivalent and was not — it used a predictable
+    "<dest>.part" name instead of mkstemp (so two concurrent uploads of the
+    same id raced each other, and a pre-existing file or symlink at that path
+    was inherited rather than refused), and it had no failure cleanup at all,
+    so any exception mid-write orphaned a .part file in /data forever. Three
+    copies of a security-relevant primitive is three chances to get it subtly
+    wrong, and that is exactly what happened; there is now one.
+
+    mkstemp() creates the file 0600 (root-only). nginx workers run
+    unprivileged, so anything nginx must later serve (the model, evidence
+    photos) needs the default 0644 before the replace — hence `mode` rather
+    than leaving it at mkstemp's default.
+    """
+    directory = os.path.dirname(dest)
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=directory, suffix=".part")
+    try:
+        opener = os.fdopen(fd, "wb" if binary else "w",
+                           **({} if binary else {"encoding": "utf-8"}))
+        with opener as out:
+            write_body(out)
+        os.chmod(tmp, mode)
+        os.replace(tmp, dest)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+async def atomic_write_async(dest: str, write_body, binary: bool = True,
+                             mode: int = 0o644):
+    """`atomic_write` for an async producer — a streamed request body. Same
+    guarantees, same cleanup; `write_body(out)` is awaited and its return value
+    is passed back to the caller (the upload handlers use it for the byte
+    count). Kept separate rather than making atomic_write itself async so the
+    many synchronous callers don't all have to await."""
+    directory = os.path.dirname(dest)
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=directory, suffix=".part")
+    try:
+        opener = os.fdopen(fd, "wb" if binary else "w",
+                           **({} if binary else {"encoding": "utf-8"}))
+        with opener as out:
+            result = await write_body(out)
+        os.chmod(tmp, mode)
+        os.replace(tmp, dest)
+        return result
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def _read_json_store(path: str, empty):
     """Parse a shared store, degrading to `empty` for absent/corrupt/wrong-typed
     files — a store that can't be read must never take the kiosk down, it just
@@ -1512,19 +1576,9 @@ def _write_json_store(path: str, payload: str) -> None:
     """Atomic overwrite (temp file + os.replace) so a partial or failed write
     can never leave the live store truncated — readers either see the whole
     previous version or the whole new one."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".part")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as out:
-            out.write(payload)
-        os.chmod(tmp, 0o644)
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+    def _write(out):
+        out.write(payload)
+    atomic_write(path, _write, binary=False)
 
 
 def _store_revision(path: str) -> str:
@@ -1794,11 +1848,14 @@ async def fm_evidence_post_handler(request: web.Request) -> web.Response:
     if not bytes(body).startswith(_JPEG_MAGIC):
         return web.json_response({"error": "not a JPEG"}, status=400)
 
-    tmp = f"{dest}.part"
-    with open(tmp, "wb") as out:
-        out.write(body)
-    os.chmod(tmp, 0o644)
-    os.replace(tmp, dest)
+    # Was a hand-rolled temp-then-replace using a PREDICTABLE "<dest>.part"
+    # path and no failure cleanup: two concurrent posts of the same id raced
+    # each other through the same temp file, an existing file/symlink at that
+    # path was inherited rather than refused, and any exception mid-write
+    # orphaned the .part in /data permanently. atomic_write has none of those
+    # (fresh mkstemp name, cleanup on every failure path) and is the same
+    # primitive the model upload and the JSON stores use.
+    atomic_write(dest, lambda out: out.write(body))
     pruned = _prune_fm_evidence()
     return web.json_response({"ok": True, "id": photo_id, "bytes": len(body), "pruned": pruned})
 

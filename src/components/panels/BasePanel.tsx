@@ -11,10 +11,11 @@
 // .panel-header .title h2 in styles.css) instead of fighting a footer button
 // for room.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { usePanelActions } from "./PanelActionsContext";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import BadgeColorModal from "./BadgeColorModal";
 
 interface Props {
@@ -36,12 +37,12 @@ interface Props {
 export default function BasePanel({ title, room, icon, className, headerActions, onClose, children }: Props) {
   const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion } = usePanelActions();
   const [colorOpen, setColorOpen] = useState(false);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  // Escape + focus trap + focus restore, from one place (see useModalA11y).
+  // This replaced a local Escape-only listener: behind every one of these
+  // panels sits the live villa canvas and HUD, so a Tab out of an open panel
+  // used to walk straight into controls the user couldn't see behind the
+  // scrim.
+  const dialogRef = useModalA11y(onClose);
 
   // The exact map badge for this device (glyph + colour), shown in the header.
   // Clickable — when the profile may edit config — to recolour just this badge.
@@ -75,7 +76,14 @@ export default function BasePanel({ title, room, icon, className, headerActions,
 
   return (
     <div className="modal-backdrop panel-modal-backdrop" onClick={onClose}>
-      <div className={`modal panel-modal${className ? ` ${className}` : ""}`} onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className={`modal panel-modal${className ? ` ${className}` : ""}`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={room ? `${title}, ${room}` : title}
+      >
         <div className="panel-header">
           <div className="title">
             {headerIcon}
@@ -107,7 +115,7 @@ export default function BasePanel({ title, room, icon, className, headerActions,
               </button>
               <div style={{ minWidth: 0 }}>
                 <div className="panel-linked-label" title={linked.label}>{linked.label}</div>
-                <div className="muted" style={{ fontSize: 11 }}>
+                <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>
                   {linked.isOn ? "On" : "Off"} · linked entity
                 </div>
               </div>
@@ -126,7 +134,7 @@ export default function BasePanel({ title, room, icon, className, headerActions,
               </span>
               <div style={{ minWidth: 0 }}>
                 <div className="panel-linked-label" title={motion.label}>{motion.label}</div>
-                <div className="muted" style={{ fontSize: 11 }}>
+                <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>
                   {motion.isOn ? "Motion detected" : "Clear"} · motion sensor
                 </div>
               </div>

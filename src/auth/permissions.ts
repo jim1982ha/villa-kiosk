@@ -68,7 +68,7 @@ export interface RolePermissions {
  *             (maintenance schedule, evidence, spend, faults). Still no
  *             config/model administration — that stays with the owner.
  */
-export const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
+const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
   guest: {
     allowedCategories: ["comfort", "light", "network", "access_control"],
     deniedTypes: ["camera", "binary_sensor"],
@@ -107,12 +107,12 @@ export function isCategoryAllowed(role: Role, category: Category): boolean {
 }
 
 /** Categories the role must never see — merged into the scene's hidden set. */
-export function deniedCategories(role: Role): Category[] {
+function deniedCategories(role: Role): Category[] {
   return CATEGORY_ORDER.filter((c) => !isCategoryAllowed(role, c));
 }
 
 /** Full per-entity check: category allowed AND type not denied. */
-export function isEntityAllowed(role: Role, type: EntityType, category: Category): boolean {
+function isEntityAllowed(role: Role, type: EntityType, category: Category): boolean {
   return isCategoryAllowed(role, category) && !PERMISSION_MATRIX[role].deniedTypes.includes(type);
 }
 

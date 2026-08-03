@@ -560,8 +560,17 @@ export default function BabylonCanvas({
       <canvas ref={canvasRef} className="babylon-canvas" />
       {status === "loading" && (
         <div className="center-overlay">
-          <div className="spinner" />
-          <div className="muted">
+          {/* aria-hidden: the spinner conveys nothing the status text below
+              doesn't already say, and an unlabelled decorative element is
+              noise to a screen reader. */}
+          <div className="spinner" aria-hidden="true" />
+          {/* role=status + aria-live=polite: the villa can take several
+              seconds to decode, and without this a screen-reader user got
+              silence between sign-in and the map appearing, with no way to
+              tell "still working" from "finished, but empty". aria-busy
+              marks the region as in-flight for assistive tech that reports
+              it. Progress is announced politely, so it never interrupts. */}
+          <div className="muted" role="status" aria-live="polite" aria-busy="true">
             {reconnecting
               ? "Connection to the villa is unstable — reconnecting…"
               : `Loading the villa…${progress > 0 && progress < 1 ? ` ${Math.round(progress * 100)}%` : ""}`}

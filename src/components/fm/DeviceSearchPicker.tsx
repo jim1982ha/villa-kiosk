@@ -150,12 +150,12 @@ export default function DeviceSearchPicker({
       </div>
 
       {matchedEntityId && !open && (
-        <div className="muted body-text" style={{ marginTop: 6, fontSize: 12 }}>
+        <div className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
           Linked to <strong>{matchedEntityId}</strong>
         </div>
       )}
       {!matchedEntityId && value.trim() && !open && (
-        <div className="muted body-text" style={{ marginTop: 6, fontSize: 12 }}>
+        <div className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
           No matching device — this will be saved as free text.
         </div>
       )}
@@ -169,7 +169,7 @@ export default function DeviceSearchPicker({
           }}
         >
           {results.length === 0 && (
-            <div className="muted body-text" style={{ padding: 12, fontSize: 13 }}>
+            <div className="muted body-text" style={{ padding: 12, fontSize: "var(--text-sm)" }}>
               No device matches "{value.trim()}" — it will be saved as free text.
             </div>
           )}

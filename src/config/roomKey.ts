@@ -26,8 +26,14 @@ export function roomKey(name: string | undefined | null): string {
   return (name ?? "").trim().toLowerCase();
 }
 
-/** True when two room names refer to the same room. */
-export function sameRoom(a: string | undefined | null, b: string | undefined | null): boolean {
-  const key = roomKey(a);
-  return key !== "" && key === roomKey(b);
-}
+// There was a `sameRoom(a, b)` convenience here too, and it had no callers in
+// the entire app. Not an oversight to correct by finding it work: every real
+// comparison site normalises ONE side once and reuses it —
+//     const key = roomKey(room);
+//     ...list.filter((r) => roomKey(r.name) === key)
+// — because the comparisons happen in loops, so a two-argument helper would
+// re-normalise the fixed side on every iteration. Deleted rather than kept
+// "for symmetry": an exported function with no callers still has to be read,
+// understood and maintained by everyone who opens this file, and this one was
+// additionally named in CLAUDE.md as a rule to follow, which made the
+// documentation describe a convention the code did not actually have.

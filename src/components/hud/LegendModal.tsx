@@ -8,6 +8,7 @@
 
 import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
 import { ALERT_RED_HEX } from "@/babylon/colors";
+import { useModalA11y } from "@/hooks/useModalA11y";
 
 /** What the MAP badge actually does per state — mirrors EntityVisuals'
  *  BADGE_RING exactly (red ring for on/alert, no ring when off/idle, the whole
@@ -32,6 +33,8 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
 ];
 
 export default function LegendModal({ onClose }: { onClose: () => void }) {
+  // Focus trap + Escape + focus restore (see useModalA11y).
+  const dialogRef = useModalA11y(onClose);
   return (
     // Same shell as every other full modal (Settings, Config Editor, group
     // panels) — .settings-modal's 780px width, not the narrow device-panel
@@ -39,7 +42,14 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
     // the outer width too means this is a genuine "same modal, different
     // content" reuse instead of its own one-off sizing.
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal settings-modal legend-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="modal settings-modal legend-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Map colours"
+      >
         <div className="settings-header">
           <h2>Map colours</h2>
         </div>
@@ -80,7 +90,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
                 />
                 <span>
                   <strong>{b.label}</strong>
-                  <span className="muted" style={{ display: "block", fontSize: 12 }}>{b.note}</span>
+                  <span className="muted" style={{ display: "block", fontSize: "var(--text-xs)" }}>{b.note}</span>
                 </span>
               </div>
             ))}
@@ -96,7 +106,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
                 <span className="legend-swatch legend-swatch-round" style={{ background: s.swatch }} />
                 <span>
                   <strong>{s.label}</strong>
-                  <span className="muted" style={{ display: "block", fontSize: 12 }}>{s.note}</span>
+                  <span className="muted" style={{ display: "block", fontSize: "var(--text-xs)" }}>{s.note}</span>
                 </span>
               </div>
             ))}

@@ -38,7 +38,7 @@ const DUE_SOON_FRACTION = 0.8;
 /** The latest completion of a schedule, by the time the work was DONE (`at`),
  *  not by when it happened to be logged — a task logged late is still evidence
  *  of on-time work, and the contract cares about the work. */
-export function lastCompletion(
+function lastCompletion(
   completions: readonly FmCompletion[], scheduleId: string,
 ): FmCompletion | null {
   let best: FmCompletion | null = null;

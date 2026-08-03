@@ -14,7 +14,7 @@ import {
 /** Narrow an arbitrary parsed value to FmData, dropping anything unrecognised.
  *  A store written by a newer app version must not be able to inject unknown
  *  shapes; a store written by an older one must not crash this one. */
-export function parseFmData(raw: unknown): FmData {
+function parseFmData(raw: unknown): FmData {
   if (!raw || typeof raw !== "object") return { ...EMPTY_FM_DATA };
   const b = raw as Record<string, unknown>;
   const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);

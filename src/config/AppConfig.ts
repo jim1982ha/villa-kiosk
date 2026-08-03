@@ -28,7 +28,7 @@ export function clampIconScale(v: number | undefined): number {
 }
 
 /** Model transform matching the coordinates baked into TeleportPoints.ts. */
-export const DEFAULT_MODEL_TRANSFORM: ModelTransform = {
+const DEFAULT_MODEL_TRANSFORM: ModelTransform = {
   scale: 0.01,
   centreX: 1206,
   centreZ: 614,

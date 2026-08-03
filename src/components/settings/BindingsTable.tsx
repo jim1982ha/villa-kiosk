@@ -114,10 +114,10 @@ export default function BindingsTable() {
       </datalist>
 
       <div style={{ marginBottom: 20 }}>
-        <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
+        <label style={{ display: "block", marginBottom: 6, fontSize: "var(--text-sm)", fontWeight: 500 }}>
           Pre-configure a new entity
         </label>
-        <p className="muted body-text" style={{ fontSize: 11, marginBottom: 10 }}>
+        <p className="muted body-text" style={{ fontSize: "var(--text-2xs)", marginBottom: 10 }}>
           Sets the label, room and panel type for an entity whose 3D object is
           named after its entity ID. Useful to configure in advance — it
           activates automatically when the matching model is uploaded.
@@ -132,7 +132,7 @@ export default function BindingsTable() {
               placeholder="Search or type entity_id…"
             />
             {newId && (
-              <div className="muted body-text" style={{ marginTop: 6, fontSize: 12 }}>
+              <div className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
                 Selected: <strong style={{ color: "var(--accent)" }}>{newId}</strong>
                 {config.entityMap[newId] && (
                   <span style={{ marginLeft: 8, color: "var(--status-danger, #c0504d)" }}>
@@ -208,7 +208,7 @@ export default function BindingsTable() {
             <div
               style={{
                 flex: "0 0 34%",
-                fontSize: 12,
+                fontSize: "var(--text-xs)",
                 color: "var(--text-secondary)",
                 wordBreak: "break-all",
               }}
@@ -260,13 +260,13 @@ export default function BindingsTable() {
               style={{ gap: 12, padding: "8px 0", borderTop: "1px solid var(--hairline)" }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13 }}>{entities[id]?.attributes.friendly_name || id}</div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", wordBreak: "break-all" }}>
+                <div style={{ fontSize: "var(--text-sm)" }}>{entities[id]?.attributes.friendly_name || id}</div>
+                <div style={{ fontSize: "var(--text-2xs)", color: "var(--text-secondary)", wordBreak: "break-all" }}>
                   {id}
                 </div>
               </div>
               {entityAreaNames[id] && (
-                <div style={{ fontSize: 12, color: "var(--text-secondary)", flex: "0 0 auto" }}>
+                <div style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", flex: "0 0 auto" }}>
                   {entityAreaNames[id]}
                 </div>
               )}

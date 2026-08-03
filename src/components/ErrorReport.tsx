@@ -111,7 +111,7 @@ export default function ErrorReport({ title, hint, detail, actions }: Props) {
               minHeight: 240,
               resize: "vertical",
               fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-              fontSize: 11,
+              fontSize: "var(--text-2xs)",
               lineHeight: 1.5,
               color: "var(--text-secondary)",
               background: "color-mix(in srgb, var(--text-primary) 6%, transparent)",
