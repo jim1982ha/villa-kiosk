@@ -145,10 +145,21 @@ export default function BabylonCanvas({
     }
     noteLoadStart();
 
+    // performance.now() is measured from timeOrigin = NAVIGATION START, so this
+    // single read is "how long the page took to get here": HTML, the ~6.6MB JS
+    // bundle's download + parse + compile, React mounting, and the profile gate
+    // resolving a stored session. None of that has ever been measured — the
+    // load telemetry started at the model fetch — which is why the reported
+    // parseMs (~2.1s desktop) was only about a third of the wait users actually
+    // sit through (5-7s, cross-checked against the gap between the pageshow and
+    // load records' own timestamps). Everything below exists to close that gap.
+    const tBoot = performance.now();
+
     let cancelled = false;
     const canvasEl = canvasRef.current;
 
     let manager: SceneManager;
+    const tEngineStart = performance.now();
     try {
       noteLoadPhase("engine-init");
       manager = new SceneManager(canvasEl, {
@@ -166,6 +177,7 @@ export default function BabylonCanvas({
       setStatus("error");
       return;
     }
+    const tEngineDone = performance.now();
     managerRef.current = manager;
     onManager(manager);
 
@@ -191,7 +203,9 @@ export default function BabylonCanvas({
       let loadErrorCode = "MODEL_LOAD_FAILED";
       try {
         noteLoadPhase("fetch-config");
+        const tConfigStart = performance.now();
         const addonCfg = await fetchAddonConfig();
+        const tConfigDone = performance.now();
         // Started here, not where it's awaited below: this fetch depends only
         // on addonCfg.model_path, so kicking it off now lets its round-trip
         // run in the shadow of the GLB's own multi-second import instead of
@@ -321,7 +335,21 @@ export default function BabylonCanvas({
         // turns "the app is slow" into an actionable number — and it's per
         // DEVICE, so a phone that parses 5x slower than the desktop shows up
         // as itself rather than as an anecdote.
-        reportTelemetry("load", {
+        const sendLoadTelemetry = (revealMs: number, totalMs: number) => reportTelemetry("load", {
+          // ── The window that was previously invisible ────────────────────
+          // bootMs: navigation start → this scene effect (HTML + the ~6.6MB JS
+          // bundle's download/parse/compile + React mount + session resolve).
+          // engineMs: constructing SceneManager (WebGL context, Babylon engine).
+          // configMs: the /addon-config round trip.
+          // revealMs: parse done → overlay actually lifted (sha256 over the
+          //   whole GLB, mesh catalog write, auto-detect, per-entity state
+          //   paint, the rooms-sync await and its double-rAF settle).
+          // totalMs: navigation start → villa visible. THE number to judge.
+          bootMs: Math.round(tBoot),
+          engineMs: Math.round(tEngineDone - tEngineStart),
+          configMs: Math.round(tConfigDone - tConfigStart),
+          revealMs: Math.round(revealMs),
+          totalMs: Math.round(totalMs),
           // Did the background download started on the profile screen actually
           // get used? Without this, "is the pre-load working?" was a question
           // nobody could answer from a device they don't hold — the phase
@@ -345,6 +373,7 @@ export default function BabylonCanvas({
 
         // Expose mesh names for the binding UI.
         saveMeshCatalog(meshNames);
+
         // Auto-populate entityMap from meshes whose names are HA entity IDs
         // (cameras, fans, lights, etc.) so they appear in the Config Editor.
         // Room is NOT resolved/stamped here any more — it's no longer part of
@@ -452,6 +481,12 @@ export default function BabylonCanvas({
 
         // Everything is applied and settled — reveal the interactive villa.
         setStatus("ready");
+        // Reported HERE, not where it is built above: only at this point do
+        // revealMs/totalMs exist, and this is also the first moment sending it
+        // costs the user nothing (it is a fire-and-forget POST that used to sit
+        // in front of the reveal).
+        const tReady = performance.now();
+        sendLoadTelemetry(tReady - tParseDone, tReady);
         // Success: clear the crash-loop counter so a later legitimate reload
         // isn't mistaken for a loop, and stop the context-loss guard from
         // hijacking the screen once we're up.

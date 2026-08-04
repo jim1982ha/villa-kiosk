@@ -520,6 +520,9 @@ export class SceneManager {
           : this.firstPersonSpawn();
         this.floors.switchToFloor(spawn.floor);
         this.camera.teleport(spawn, true);
+        // This branch places the walker itself, so the deferred default-spawn
+        // pass has nothing left to do — see ensureFirstPersonSpawn.
+        this.spawnApplied = true;
       }
       // Restore the real sky for the immersive walk-through view.
       this.sky.setEnabled(true);
@@ -536,6 +539,26 @@ export class SceneManager {
   /** The default first-person landing pose. Always on the GROUND FLOOR: the foot
    *  of the staircase if we can locate it, else a ground-floor living/entry room,
    *  else the first ground-floor room, else the origin. Never a 2F room. */
+  /** Whether the (expensive) first-person spawn pose has been applied yet. */
+  private spawnApplied = false;
+
+  /**
+   * Place the first-person walker at its default pose — foot of the staircase
+   * on the ground floor. Costs 16+ `pickWithRay` probes against un-octree'd
+   * structure geometry (bestFacing) plus a floor estimate, which is why it is
+   * NOT on the reveal path any more: the villa reveals through the overview
+   * camera, so this pose is invisible until someone actually switches to
+   * Runs one frame after the reveal (loadModel's deferred block). A user-driven
+   * switch to first-person does NOT depend on this: setViewMode's own
+   * first-person branch computes and applies a spawn itself (and sets the flag
+   * below), so a switch can never catch an un-placed walker. Idempotent.
+   */
+  private ensureFirstPersonSpawn(): void {
+    if (this.spawnApplied || this.disposed) return;
+    this.spawnApplied = true;
+    this.camera.teleport(this.firstPersonSpawn(), true);
+  }
+
   private firstPersonSpawn(): TeleportPoint {
     const eye = this.config.eyeHeight ?? 1.7;
     const ground = (p: TeleportPoint) => p.floor === 1;
@@ -1140,16 +1163,22 @@ export class SceneManager {
     // is slow, instead of only that it is.
     Object.assign(phases, this.visuals.indexStats());
 
-    await yieldAndDiscount();
+    // NO yield before this one: applyStructure measures 2-19ms in the field
+    // (see the `applyStructure` phase in load telemetry), so parking ~110ms on
+    // MacBook / ~300ms on Android in a yieldFrame ahead of it cost an order of
+    // magnitude more than the step it was protecting. The yield above, ahead of
+    // the genuinely heavy indexMeshes, is kept.
     if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
     this.applyStructure(result.meshes); // solid walls + collisions + hidden ceilings
     mark("applyStructure");
 
-    // Spawn at the default first-person pose (foot of the staircase on the ground
-    // floor). Uses the stair GEOMETRY, so it doesn't need calibration to have run.
-    this.camera.teleport(this.firstPersonSpawn(), true);
-
-    // The villa is correct and interactive now — reveal it.
+    // The villa is correct and interactive now — reveal it. The first-person
+    // spawn pose is NOT computed here any more (see ensureFirstPersonSpawn):
+    // it costs 16+ un-octree'd raycasts — 700-790ms on the target iPad, 5.9s
+    // in the worst field sample — for a camera that is not even rendering at
+    // this point (the reveal runs through the OVERVIEW camera, see the
+    // constructor's own note), so it belongs in the deferred block below with
+    // the other raycast-heavy passes.
     this.markReady();
     this.requestRender(1000);
     mark("spawn");
@@ -1166,6 +1195,7 @@ export class SceneManager {
       this.camera.indexTeleportAnchors(result.meshes);
       this.applyHighlight(result.meshes); // blue glow on bound meshes (if enabled)
       this.calibrateRooms(result.meshes); // plan→world fit + room glow (fires onCalibrated)
+      this.ensureFirstPersonSpawn();      // 16+ raycasts — never on the reveal path
       this.requestRender();
     });
 

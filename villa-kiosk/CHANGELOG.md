@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.94.0
+
+### Fixed — the load telemetry was measuring about a third of the actual wait
+- **Reported as "I wait much longer than these numbers say", and correct.** The `load` record started its clock at the model fetch and stopped it when parsing finished, so `parseMs` (~2.1s on desktop) described only the middle of the load. Cross-checking each device's own `pageshow` record against its `load` record puts the real wall-clock at **5–7s on desktop, 5–10s on Android** — meaning roughly two thirds of the wait had never appeared in any measurement, and every optimisation aimed at those numbers was aimed at the smaller half of the problem. Five new fields close the gap: `bootMs` (navigation start → the scene effect: HTML, the ~6.6MB JS bundle's download/parse/compile, React mount, session resolve — all of it previously invisible), `engineMs` (WebGL/Babylon engine construction), `configMs` (the `/addon-config` round trip), `revealMs` (parse finished → overlay actually lifted: the GLB-wide sha256, the mesh-catalog write, auto-detect, the per-entity state paint, the rooms-sync await and its double-rAF settle), and `totalMs` (navigation start → villa visible — the number to actually judge a load by). The telemetry POST also moved off the reveal path: it used to be built and fired *before* the villa appeared, and now goes out immediately after.
+
+### Performance — two costs removed from the reveal path
+- **The default first-person spawn pose no longer blocks the reveal.** `firstPersonSpawn()` fires 16+ `pickWithRay` probes against un-octree'd structure geometry (`bestFacing`) plus a floor estimate — the same un-accelerated-raycast pathology already fixed for the per-room floor probes, just never applied here. It measured 150–170ms on desktop, **700–790ms on the target iPad, and 5,888ms in the worst field sample**, all to place a camera that **is not rendering at that moment**: the reveal deliberately runs through the overview camera. Moved into the deferred block that already exists for exactly this class of work, one frame after the reveal. Nothing regresses on a real mode switch — `setViewMode("first-person")` already computed and applied its own spawn independently, and now marks the deferred pass as done so the raycasts never run twice.
+- **Dropped the `yieldFrame()` in front of `applyStructure`.** That step measures 2–19ms in the field, and the yield ahead of it was parking ~110ms (desktop) to ~375ms (Android) — an order of magnitude more than the work it was yielding for. Its stated purpose was keeping the pre-login profile gate responsive during a decode, but that decode has not run pre-login since 2.79.x set `showChildrenEarly = isSwitch`, so it was protecting a screen that no longer exists at that moment. The yield ahead of `indexMeshes` (genuinely heavy, 250–980ms) is kept.
+
 ## 2.93.0
 
 ### New — "Confirm before toggling" for a critical device modelled as a plain switch
