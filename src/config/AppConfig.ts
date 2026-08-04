@@ -87,13 +87,13 @@ export interface RenderConfig {
    *  real dynamic PointLight's intensity in non-baked villas (it was a
    *  silent no-op there before 2.31.0). 1 = default. */
   lightPoolIntensity: number;
-  /** Manually INVERT the automatic day/night look (sun-position/sun.sun
-   *  driven): real daytime renders the night look and vice versa. Surfaced
-   *  in Settings only for BAKED villas (where day/night is a dramatic
-   *  atlas crossfade worth previewing/overriding on demand), but honoured
-   *  everywhere. Optional and untouched by "Reset look", so resetting the
-   *  rest of the look never resets it. */
-  dayNightInvert?: boolean;
+  /** Override the automatic day/night look (sun-position/sun.sun driven):
+   *  "day"/"night" PIN the look regardless of the real time or HA's sun.sun
+   *  state; "auto" (or unset) follows it live, as always. Surfaced in
+   *  Settings only for BAKED villas (where day/night is a dramatic atlas
+   *  crossfade worth previewing/overriding on demand), but honoured
+   *  everywhere. Optional, and never reset alongside the rest of the look. */
+  dayNightPreview?: "day" | "auto" | "night";
 }
 
 /** The fixed render look every install starts from — was the "high" tier of

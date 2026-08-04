@@ -453,14 +453,32 @@ export default function Dashboard() {
     setHasOverviewDefault(manager?.hasOverviewDefault() ?? false);
   }, [manager]);
 
-  // Tap the anchor button → jump to the saved default (if any).
-  const applyOverviewDefault = useCallback((): boolean => manager?.applyOverviewDefault() ?? false, [manager]);
+  // Tap the brand icon (see HUD.tsx's .hud-brand + useHomeAnchor) → jump to
+  // the saved default. Unlike the old floor-stack anchor button (overview
+  // mode only), this icon is always visible, so a press from first-person
+  // switches into overview FIRST — setViewMode("overview") already applies
+  // the saved default itself (or auto-fits, if none), see
+  // SceneManager.setViewMode — before reporting whether one existed.
+  const applyOverviewDefault = useCallback((): boolean => {
+    if (!manager) return false;
+    if (manager.getViewMode() !== "overview") {
+      manager.setViewMode("overview");
+      setViewMode("overview");
+      return manager.hasOverviewDefault();
+    }
+    return manager.applyOverviewDefault();
+  }, [manager]);
 
-  // Long-press / right-click the anchor button → (re)define the default as
-  // the current angle/tilt/zoom/pan.
-  const saveOverviewDefault = useCallback(() => {
-    manager?.saveOverviewDefault();
+  // Long-press / right-click the brand icon → (re)define the default as the
+  // CURRENT overview framing. Meaningless outside overview (there's no
+  // framing to capture) — same guard SceneManager.saveOverviewDefault
+  // already enforces; the boolean return just lets the confirmation flash
+  // say so instead of silently doing nothing.
+  const saveOverviewDefault = useCallback((): boolean => {
+    if (!manager || manager.getViewMode() !== "overview") return false;
+    manager.saveOverviewDefault();
     setHasOverviewDefault(true);
+    return true;
   }, [manager]);
 
   const onFloorChange = useCallback(

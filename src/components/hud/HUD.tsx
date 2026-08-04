@@ -37,7 +37,8 @@ import { ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX, clampIconScale } from "@/
 import { unavailableDeviceIds } from "@/config/deviceGroups";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
-import ViewControls, { DefaultViewButton } from "./ViewControls";
+import ViewControls from "./ViewControls";
+import { useHomeAnchor } from "./useHomeAnchor";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 import LegendModal from "./LegendModal";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -69,16 +70,18 @@ interface Props {
   onMove: (x: number, y: number) => void;
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
-  /** Whether THIS device has a saved default overview framing (button's
-   *  pressed/lit state). */
+  /** Whether THIS device has a saved default overview framing — drives the
+   *  brand icon's "not set yet" dot (see .hud-brand / useHomeAnchor), never
+   *  a lit/active highlight (that would look like a stray toggle on the
+   *  villa name rather than the app icon it still is). */
   hasOverviewDefault: boolean;
-  /** Tap: jump to this device's saved default view right now. Returns false
-   *  (no saved default to jump to) so the caller can show the right hint. */
+  /** Tap the brand icon: jump to this device's saved default view, switching
+   *  into overview first if needed. Returns false when nothing is saved. */
   onApplyOverviewDefault: () => boolean;
-  /** Long-press / right-click: (re)define the default as the overview
-   *  camera's current angle/tilt/zoom/pan — reapplied every time the app
-   *  lands in overview from now on. */
-  onSaveOverviewDefault: () => void;
+  /** Long-press / right-click the brand icon: (re)define the default as the
+   *  overview camera's current angle/tilt/zoom/pan. Returns false when not
+   *  currently in overview (nothing to capture). */
+  onSaveOverviewDefault: () => boolean;
   /** Entities with real geometry in the loaded model (see
    *  manager.mappedEntityIds) — same set SummaryBar uses, for the
    *  unavailable-devices list's "not on the map" section. */
@@ -117,6 +120,8 @@ export default function HUD({
   const clock = useClock();
   const title = resolveSiteTitle(config, haConfig?.location_name);
   const floors = [1, 2];
+  const { flash: homeFlash, buttonProps: homeButtonProps } =
+    useHomeAnchor(onApplyOverviewDefault, onSaveOverviewDefault);
 
   // Every DEVICE HA currently reports as unavailable/unknown/never-reported.
   // Shared with fm/readiness.ts's "All devices reporting" check — see
@@ -414,7 +419,25 @@ export default function HUD({
             stays put. The dot has a duplicate in the overflow menu below
             (its header) for reachability once it drops here. */}
         <div className="hud-brand">
-          <Home size={22} />
+          {/* Tap: jump to this device's saved default overview view (see
+              useHomeAnchor) — replaces the old floor-stack "anchor" button,
+              which only ever showed up in overview mode; this one is always
+              reachable. A small dot appears ONLY while no default is saved
+              yet (an invitation to long-press and set one) — deliberately
+              never an .active/lit background once one IS set, which would
+              read as a stray toggle sitting on the app icon rather than the
+              brand mark it still is the rest of the time. */}
+          <button
+            type="button"
+            className={`hud-home-btn${hasOverviewDefault ? "" : " has-hold-action"}`}
+            {...homeButtonProps}
+            title="Tap for this device's default view · long-press / right-click to set it to the current view"
+            aria-label="Go to this device's default overview view"
+            aria-describedby="home-btn-hint"
+          >
+            <Home size={22} />
+          </button>
+          <span id="home-btn-hint" className="sr-only">Hold Space (or right-click) to save the current view as the default</span>
           <span className="hud-title">{title}</span>
           <span
             className={`conn-dot ${connClass}`}
@@ -427,6 +450,17 @@ export default function HUD({
           {/* Time sits right next to the villa name + connection dot. */}
           <span className="hud-clock">{clock}</span>
         </div>
+        {homeFlash && (
+          <div className="overview-hint hud-home-hint">
+            {homeFlash === "applied"
+              ? "Jumped to this device's default view."
+              : homeFlash === "saved"
+                ? "Default view updated for this device — it'll open here every reload."
+                : homeFlash === "unavailable"
+                  ? "Switch to overview (bird's-eye) view first to set a default."
+                  : "No default view saved yet — long-press (or right-click) to set one."}
+          </div>
+        )}
 
         {/* Category filter: which device categories show their state tag on
             the map. Lit = category shown. Icon + tooltip only, no text. */}
@@ -462,9 +496,10 @@ export default function HUD({
                   onPointerCancel={onCatPointerUp}
                   onContextMenu={(e) => e.preventDefault()}
                   onClick={onCatClick(cat)}
-                  // Space-only (not Enter) — same reasoning as DefaultViewButton's
-                  // own hold gesture: a <button> fires its click on Enter's
-                  // KEYDOWN but Space's KEYUP, so only Space can time a real hold.
+                  // Space-only (not Enter) — same reasoning as the brand icon's
+                  // own hold gesture (useHomeAnchor): a <button> fires its click
+                  // on Enter's KEYDOWN but Space's KEYUP, so only Space can time
+                  // a real hold.
                   onKeyDown={(e) => { if (e.key === " " && !e.repeat) onCatPointerDown(cat)(); }}
                   onKeyUp={(e) => { if (e.key === " ") onCatPointerUp(); }}
                   title={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map — hold to list them`}
@@ -759,25 +794,23 @@ export default function HUD({
         />
       )}
 
-      {/* Left column: the floor toggle (1F / 2F — now the ONLY entry to the
-          rooms dial, no separate Rooms button any more) and, overview only,
-          the default-view anchor as a 4th button — same section as the floor
-          controls rather than off on its own in the bottom-left corner,
-          since it's the same kind of "where am I looking" control. A plain
-          tap/click on 1F/2F keeps the original behaviour (switch to that
-          floor, frame its whole bird's-eye view); a LONG-PRESS opens the
-          radial room-picker dial, pre-scoped to THAT floor's rooms — see
-          openRadialForFloor. The anchor button taps to jump to this device's
-          saved default view, long-press/right-click to (re)define it. Right
-          below, as its OWN dedicated section (not merged into this stack —
-          it's a different kind of control, "how am I looking" rather than
-          "where"), the first-person/bird's-eye view TOGGLE: it used to be a
-          lone standalone button in the bottom-left corner, with nothing else
-          there to explain it and nothing to stop the (separately, absolutely
-          positioned) SummaryBar's tile row from visually extending over it on
-          a narrow phone. Neither the bottom bar (kept free for the tiles +
-          joystick) nor the top bar (already tight on a phone) had room for a
-          clearly-labelled home. */}
+      {/* Left column: the floor toggle (1F / 2F — the ONLY entry to the
+          rooms dial, no separate Rooms button any more). A plain tap/click
+          on 1F/2F keeps the original behaviour (switch to that floor, frame
+          its whole bird's-eye view); a LONG-PRESS opens the radial
+          room-picker dial, pre-scoped to THAT floor's rooms — see
+          openRadialForFloor. (The default-view "anchor" that used to live
+          here as a 4th button has moved onto the brand icon in the top bar —
+          see .hud-brand above — so it's reachable from both view modes, not
+          just overview.) Right below, as its OWN dedicated section (not
+          merged into this stack — it's a different kind of control, "how am
+          I looking" rather than "where"), the first-person/bird's-eye view
+          TOGGLE: it used to be a lone standalone button in the bottom-left
+          corner, with nothing else there to explain it and nothing to stop
+          the (separately, absolutely positioned) SummaryBar's tile row from
+          visually extending over it on a narrow phone. Neither the bottom
+          bar (kept free for the tiles + joystick) nor the top bar (already
+          tight on a phone) had room for a clearly-labelled home. */}
       <div className="hud-left-col">
         <div className="hud-stack">
           {availFloors.map((f) => (
@@ -801,13 +834,6 @@ export default function HUD({
             </button>
           ))}
           <span id="floor-btn-hint" className="sr-only">Hold (or hold Enter/Space) for this floor's rooms</span>
-          {viewMode === "overview" && (
-            <DefaultViewButton
-              hasOverviewDefault={hasOverviewDefault}
-              onApplyOverviewDefault={onApplyOverviewDefault}
-              onSaveOverviewDefault={onSaveOverviewDefault}
-            />
-          )}
         </div>
       </div>
 

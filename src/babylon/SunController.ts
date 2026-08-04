@@ -98,11 +98,18 @@ export class SunController {
   applyRealSun(date = new Date()): void {
     const { latitude, longitude } = this.config;
     const { azimuth, altitude: realAltitude } = getSunPosition(date, latitude, longitude);
-    // Settings' "Invert day/night" (baked villas): mirror the sun across the
-    // horizon — everything downstream (isDay, light dir, sky dir, the
-    // twilight nightT ramp) then derives the opposite look consistently,
-    // including a plausible above-horizon sun position for a forced day.
-    const altitude = this.config.render?.dayNightInvert ? -realAltitude : realAltitude;
+    // Settings' day/night preview (baked villas): "day"/"night" PIN the sun
+    // to the matching side of the horizon regardless of the real altitude —
+    // everything downstream (isDay, light dir, sky dir, the twilight nightT
+    // ramp) then derives that look consistently, including a plausible
+    // above-horizon sun position for a forced day. Math.abs (not a sign
+    // flip) is what makes it an absolute PIN rather than a relative invert —
+    // forcing "day" at 3am and forcing "day" at noon must look the same.
+    const preview = this.config.render?.dayNightPreview ?? "auto";
+    const altitude =
+      preview === "day" ? Math.abs(realAltitude)
+      : preview === "night" ? -Math.abs(realAltitude)
+      : realAltitude;
     const isDay = altitude > 0;
 
     // Direction the light travels: from the sun toward the scene. Floored at
@@ -137,9 +144,10 @@ export class SunController {
 
   /** Override from HA sun.sun entity ("above_horizon" | "below_horizon"). */
   applyHaSunState(state: string): void {
-    // Same "Invert day/night" honoured here so the HA-driven path can't
+    // Same day/night preview honoured here so the HA-driven path can't
     // silently undo the override on the next sun.sun state event.
-    const isDay = (state === "above_horizon") !== !!this.config.render?.dayNightInvert;
+    const preview = this.config.render?.dayNightPreview ?? "auto";
+    const isDay = preview === "day" ? true : preview === "night" ? false : state === "above_horizon";
     const dir = isDay ? new Vector3(-0.4, -1, -0.6) : new Vector3(-0.2, -1, -0.2);
     // No real azimuth/altitude from the binary HA state — mirror the
     // lighting direction below the horizon (positive Y) for the sky at

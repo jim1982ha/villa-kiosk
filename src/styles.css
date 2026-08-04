@@ -430,7 +430,13 @@ button {
    the name never washes out. */
 .hud-brand {
   justify-self: start; display: flex; align-items: center; gap: 10px;
-  font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 500;
+  /* --text-xl (20px), not --text-2xl (28px, "the one-per-screen headline" —
+     used by things like the profile gate's villa name and panel headings):
+     that step read as oversized for a chip that's on screen at all times,
+     not a one-per-screen moment. This is the value the chip shipped with for
+     most of the app's life, before the --text-* scale rollout (2.83.0)
+     mapped it to the wrong step. */
+  font-family: var(--font-display); font-size: var(--text-xl); font-weight: 500;
   /* Same squircle every other HUD section chip uses (icon buttons, the floor
      stack, the category group) — this used to be a full capsule (999px),
      the one section shape that didn't match the rest of the HUD. */
@@ -613,22 +619,38 @@ button {
   display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
 .hud-left-col > * { pointer-events: auto; }
-/* The floor/rooms stack now also hosts the default-view anchor button (its
-   4th row) — its confirmation flash (.hud-anchor-hint, DefaultViewButton)
-   used to sit in NORMAL FLOW above the standalone bottom-left button pair
-   (.overview-help's column layout); inside this stack a block child would
-   instead shove the button rows apart every time it appears, so it's
-   floated out to the right of the stack instead, same tooltip look
-   (.overview-hint), just positioned rather than flowed. */
-.hud-left-col .hud-stack { position: relative; }
-/* width: max-content — without an explicit width, an absolutely-positioned
-   box anchored via `left: calc(100% + Xpx)` past its own (narrow, ~44px)
-   containing block's edge has its shrink-to-fit available width computed
-   against that narrow container instead of the viewport, which collapsed it
-   to near-nothing and wrapped almost every word onto its own line. Sizing to
-   content directly (still capped by .overview-hint's own max-width) fixes it
-   regardless of that coordinate-system quirk. */
-.hud-anchor-hint { position: absolute; left: calc(100% + 10px); bottom: 0; z-index: 5; width: max-content; }
+
+/* The brand icon's "go home" button (see HUD.tsx's .hud-brand +
+   useHomeAnchor) — same gesture the removed floor-stack anchor button used
+   to offer (tap = jump to the saved default, long-press/right-click = set
+   it), just always reachable now instead of overview-mode only. Reset to a
+   plain unstyled button first: it sits among the villa name/clock/connection
+   dot rather than in a row of .icon-btn squares, so it must NOT pick up
+   icon-btn's chrome, only a light hover/focus cue of its own. */
+.hud-home-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  position: relative; flex: 0 0 auto;
+  background: none; border: none; padding: 4px; margin: -4px;
+  border-radius: 8px; cursor: pointer; color: inherit;
+}
+.hud-home-btn:hover, .hud-home-btn:focus-visible { background: var(--bg-input); }
+.hud-home-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Invisible 44px hit area (see the phone touch-target overlay further down
+   for the same technique) — on ::before, not ::after, because ::after is
+   already spoken for by .has-hold-action's "hold does more" dot below. */
+.hud-home-btn::before {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: var(--touch-min); height: var(--touch-min);
+  transform: translate(-50%, -50%);
+}
+/* The confirmation flash (applied/saved/etc.) renders as a TOPBAR-level
+   sibling of .hud-brand, not a child of it — .hud-brand clips overflow to
+   stop a long villa name from wrapping (see its own comment), which would
+   clip this too if it were nested inside. */
+.hud-home-hint {
+  position: absolute; top: calc(100% + 8px); z-index: 5;
+  left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
+}
 
 .room-label {
   /* Same safe-area treatment as .service-toast right below — this banner
@@ -1567,6 +1589,18 @@ input[type="range"]::-moz-range-thumb {
    full-width, square buttons — the Sun/Moon/Monitor glyphs are self-explanatory. */
 .segmented-icons { flex: 0 0 auto; gap: 3px; padding: 3px; }
 .segmented-icons button { flex: 0 0 auto; width: 38px; min-height: 34px; gap: 0; }
+
+/* Responsive label swap (Summary bar's toggle, SettingsModal): the full name
+   normally, a shorter one once the modal narrows enough that it'd otherwise
+   wrap onto its own line instead of sitting beside Classic/Card. No existing
+   JS matchMedia pattern in this codebase for a text swap — CSS show/hide of
+   two spans keeps it consistent with how every other breakpoint-driven label
+   change here works (e.g. .hud-title's own media queries). */
+.settings-label-short { display: none; }
+@media (max-width: 560px) {
+  .settings-label-full { display: none; }
+  .settings-label-short { display: inline; }
+}
 
 
 /* Villa Latitude/Longitude pair in the Config Editor — full modal width,

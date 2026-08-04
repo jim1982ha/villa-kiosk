@@ -104,48 +104,30 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
       >
         <div className="settings-header">
           <h2>Settings</h2>
-          {/* Theme selector + day/night invert live together in the header,
-              icon-only + right-aligned — self-explanatory glyphs, no Save
-              step (both apply and persist instantly). */}
+          {/* Theme selector lives in the header, icon-only + right-aligned —
+              self-explanatory glyphs, no Save step (applies and persists
+              instantly). The day/night preview override used to sit here too
+              (a single invert toggle) — it's now a 3-way Day/Auto/Night
+              control down by the Brightness/Night dimming sliders it's most
+              related to, see the "Render quality & look" section below. */}
           {can("customizeAppearance") && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div className="segmented segmented-icons" role="group" aria-label="Theme">
-                {([
-                  { key: "light", label: "Light theme", icon: Sun },
-                  { key: "dark", label: "Dark theme", icon: Moon },
-                  { key: "auto", label: "Auto (system) theme", icon: Monitor },
-                ] as const).map(({ key, label, icon: Icon }) => (
-                  <button
-                    key={key}
-                    className={config.theme === key ? "active" : ""}
-                    onClick={() => update({ theme: key })}
-                    aria-pressed={config.theme === key}
-                    title={label}
-                    aria-label={label}
-                  >
-                    <Icon size={17} />
-                  </button>
-                ))}
-              </div>
-              {/* Baked villas only: their day/night is a dramatic pre-rendered
-                  atlas crossfade driven by the real sun — this forces the
-                  OPPOSITE look on demand (preview the night render at noon, or
-                  lift a villa back to daylight after dark). Hidden for
-                  non-baked villas, whose day/night is just a lighting dim —
-                  not worth a dedicated toggle. A single active/inactive icon
-                  button (not a checkbox) so it sits naturally beside the
-                  theme selector rather than as a labelled row further down. */}
-              {(manager?.renderFx.isBaked() ?? false) && (
+            <div className="segmented segmented-icons" role="group" aria-label="Theme">
+              {([
+                { key: "light", label: "Light theme", icon: Sun },
+                { key: "dark", label: "Dark theme", icon: Moon },
+                { key: "auto", label: "Auto (system) theme", icon: Monitor },
+              ] as const).map(({ key, label, icon: Icon }) => (
                 <button
-                  className={`icon-btn header-icon-btn${render.dayNightInvert ? " active" : ""}`}
-                  onClick={() => applyRender({ dayNightInvert: !render.dayNightInvert })}
-                  aria-pressed={!!render.dayNightInvert}
-                  title="Invert day/night preview"
-                  aria-label="Invert day/night preview"
+                  key={key}
+                  className={config.theme === key ? "active" : ""}
+                  onClick={() => update({ theme: key })}
+                  aria-pressed={config.theme === key}
+                  title={label}
+                  aria-label={label}
                 >
-                  <SunMoon size={18} />
+                  <Icon size={17} />
                 </button>
-              )}
+              ))}
             </div>
           )}
         </div>
@@ -182,8 +164,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
 
         {/* Blue-glow (a render/interaction toggle) and Natural scrolling (an
             Overview-camera toggle) don't share a topic — paired on one row,
-            as single-button segmented toggles matching Bottom Summary bar's
-            style below, purely for density at the user's request. */}
+            as single-button segmented toggles matching Summary bar's style
+            below, purely for density at the user's request. */}
         <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
           <div className="segmented" role="group" aria-label="Blue glow for clickable devices" style={{ flex: "1 1 160px" }}>
             <button
@@ -207,27 +189,57 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           </div>
         </div>
 
-        {/* Invert day/night moved to the header, next to the theme selector
-            (a single active/inactive icon button) — see the .segmented-icons
-            block above. */}
-        <div className="slider-pair" style={{ marginTop: 14 }}>
-          <div>
+        {/* Brightness/Night dimming apply to every villa; the day/night
+            preview override (moved here from the header, no longer a single
+            invert toggle — see AppConfig's dayNightPreview) only means
+            anything for BAKED villas, whose day/night is a dramatic
+            pre-rendered atlas crossfade worth previewing/overriding on
+            demand rather than a plain lighting dim. .row + flex-wrap (not
+            .slider-pair, which is a strict 2-col grid shared with the Eye
+            height/Walk speed pair below — a 3rd item would either squeeze
+            those or need its own copy of that class) so the segmented
+            control sits on the same line when there's room and drops to its
+            own line first on a narrow screen, same pattern as the Clickable
+            Glow/Natural Scroll row above. */}
+        <div className="row" style={{ gap: 12, marginTop: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
             <label>Brightness · {render.exposure.toFixed(2)}×</label>
             <input
               type="range" min={0.6} max={2} step={0.05} value={render.exposure}
               onChange={(e) => applyRender({ exposure: Number(e.target.value) })}
             />
           </div>
-          <div>
+          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
             <label>Night dimming · {render.nightDimming.toFixed(1)}×</label>
             <input
               type="range" min={0} max={1} step={0.1} value={render.nightDimming}
               onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
             />
           </div>
+          {(manager?.renderFx.isBaked() ?? false) && (
+            <div className="segmented segmented-icons" role="group" aria-label="Day/night preview" style={{ flex: "0 0 auto", alignSelf: "flex-end" }}>
+              {([
+                { key: "day", label: "Force day view", icon: Sun },
+                { key: "auto", label: "Follow the real day/night cycle", icon: SunMoon },
+                { key: "night", label: "Force night view", icon: Moon },
+              ] as const).map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  className={(render.dayNightPreview ?? "auto") === key ? "active" : ""}
+                  onClick={() => applyRender({ dayNightPreview: key })}
+                  aria-pressed={(render.dayNightPreview ?? "auto") === key}
+                  title={label}
+                  aria-label={label}
+                >
+                  <Icon size={17} />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
-          Overall scene exposure, and how much extra dimming applies at night. Both update live.
+          Overall scene exposure, and how much extra dimming applies at night — both update live.
+          {(manager?.renderFx.isBaked() ?? false) && " Day/night preview forces this villa's baked look, or follows the real cycle on Auto."}
         </p>
 
         {/* Light effect strength scales a lit fixture's room illumination in
@@ -269,14 +281,19 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               reuses the exact same pill styling as the badge-style pair above
               rather than a checkbox row, at the user's request. flex-basis
               matches its neighbour's so the two share a row on a roomy
-              screen and each drop to full width on a phone (flex-wrap). */}
-          <div className="segmented" role="group" aria-label="Bottom summary bar" style={{ flex: "1 1 200px" }}>
+              screen and each drop to full width on a phone (flex-wrap). The
+              label itself shortens further under 560px (see .settings-label-
+              short/-full in styles.css) so it still fits beside Classic/Card
+              on that same line instead of forcing an early wrap. */}
+          <div className="segmented" role="group" aria-label="Summary bar" style={{ flex: "1 1 200px" }}>
             <button
               className={(config.showSummaryBar ?? true) ? "active" : ""}
               onClick={() => update({ showSummaryBar: !(config.showSummaryBar ?? true) })}
               aria-pressed={config.showSummaryBar ?? true}
             >
-              <PanelBottom size={16} /> Bottom Summary bar
+              <PanelBottom size={16} />
+              <span className="settings-label-full">Summary bar</span>
+              <span className="settings-label-short">Bottom Bar</span>
             </button>
           </div>
         </div>
