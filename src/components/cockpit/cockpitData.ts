@@ -173,6 +173,10 @@ export interface RoomGroup {
    *  floor plan geometry to read a storey from). */
   floor: number | null;
   count: number;
+  /** Every selectable device resolved to this room — lets the Cockpit pivot
+   *  row drill into the same SummaryGroupPanel every other device list in
+   *  the app already uses, instead of a bespoke list view. */
+  entityIds: string[];
 }
 
 /** Devices bucketed by resolved room, each joined to its floor via sh3dRooms
@@ -187,14 +191,17 @@ export function buildRoomGroups(
   const floorByRoom = new Map<string, number>();
   for (const r of sh3dRooms ?? []) floorByRoom.set(roomKey(r.name), r.floor ?? 1);
 
-  const counts = new Map<string, number>();
+  const idsByRoom = new Map<string, string[]>();
   for (const id of selectableIds) {
     const room = resolvedRooms[id]?.trim() || NO_ROOM;
-    counts.set(room, (counts.get(room) ?? 0) + 1);
+    const list = idsByRoom.get(room) ?? [];
+    list.push(id);
+    idsByRoom.set(room, list);
   }
-  return [...counts.entries()]
-    .map(([room, count]) => ({
-      room, count, floor: room === NO_ROOM ? null : (floorByRoom.get(roomKey(room)) ?? null),
+  return [...idsByRoom.entries()]
+    .map(([room, entityIds]) => ({
+      room, count: entityIds.length, entityIds,
+      floor: room === NO_ROOM ? null : (floorByRoom.get(roomKey(room)) ?? null),
     }))
     .sort((a, b) => {
       if (a.room === NO_ROOM) return b.room === NO_ROOM ? 0 : 1;
@@ -207,16 +214,23 @@ export interface FloorGroup {
   /** null = rooms with no resolvable floor (including the "Other" bucket). */
   floor: number | null;
   count: number;
+  /** Every selectable device on this floor — the union of its rooms'
+   *  entityIds, same reasoning as RoomGroup's own field above. */
+  entityIds: string[];
 }
 
 /** Re-bucket buildRoomGroups' output by floor instead of room — the same
  *  underlying counts, pivoted, so the two views can never disagree with each
  *  other the way two independently-computed totals eventually would. */
 export function buildFloorGroups(roomGroups: RoomGroup[]): FloorGroup[] {
-  const counts = new Map<number | null, number>();
-  for (const g of roomGroups) counts.set(g.floor, (counts.get(g.floor) ?? 0) + g.count);
-  return [...counts.entries()]
-    .map(([floor, count]) => ({ floor, count }))
+  const idsByFloor = new Map<number | null, string[]>();
+  for (const g of roomGroups) {
+    const list = idsByFloor.get(g.floor) ?? [];
+    list.push(...g.entityIds);
+    idsByFloor.set(g.floor, list);
+  }
+  return [...idsByFloor.entries()]
+    .map(([floor, entityIds]) => ({ floor, count: entityIds.length, entityIds }))
     .sort((a, b) => (a.floor ?? Infinity) - (b.floor ?? Infinity));
 }
 

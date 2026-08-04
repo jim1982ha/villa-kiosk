@@ -1649,36 +1649,32 @@ input[type="range"]::-moz-range-thumb {
   .settings-row-half { flex: 1 1 calc(50% - 5px); }
 }
 
-/* Floating badge style row (SettingsModal): Default+Card vs. a single Dock
-   button is a lopsided pair, unlike .settings-row-half's roughly-equal
-   groups above — splitting evenly would starve the wider group while
-   leaving Dock's half mostly empty. Each group instead sizes to its own
-   content (flex: 0 1 auto) but CAN shrink (min-width: 0 — a flex item's
-   default min-width floors at its content's min-content size otherwise,
-   the same gotcha that defeated the plain percentage split tried here
-   before) and the row never wraps (nowrap): if the two together are ever
-   still too wide for the line, they compress and truncate with an
-   ellipsis rather than dropping a whole label or wrapping to a second
-   row. */
+/* Badge & bottom bar style row (SettingsModal): Default+Card vs. a single
+   Dock button is a lopsided pair, unlike .settings-row-half's roughly-equal
+   groups above — an even 50/50 split would starve the wider group while
+   leaving Dock's half mostly empty. Weighted 2:1 instead (first group gets
+   twice the share), and BOTH groups grow to fill the row edge-to-edge like
+   every other settings row, rather than sizing to their own content and
+   leaving the rest of the line blank (reported from a screenshot: the row
+   visibly stopped partway across the modal). Buttons inside revert to
+   .segmented button's own default flex: 1 1 0 (no override needed here) —
+   the nested-flex quirk that previously made a zero flex-basis button
+   truncate its own label ("Def…") only bites when the button's parent is
+   itself shrink-to-fit (flex: 0 1 auto, which this row used before this
+   rewrite); once the parent has an assigned share of the row to grow into
+   instead of auto-sizing to content, that quirk doesn't apply. */
 .badge-style-row { flex-wrap: nowrap; }
-.badge-style-row .settings-row-half { flex: 0 1 auto; min-width: 0; }
-/* flex: 0 0 auto (NOT the shared .segmented button's 1 1 0) — a zero
-   flex-basis on these buttons was quietly breaking the GROUP's own
-   shrink-to-fit sizing above: a flex item with basis 0 contributes nothing
-   of its content size to its parent's "auto" (max-content) calculation in
-   some browsers' nested-flex sizing, so the group measured itself far
-   narrower than its actual rendered content and truncated with an ellipsis
-   even with plenty of real width free in the row (reported: "Default"
-   showing as "Def…" with most of the row still empty). Buttons sizing to
-   their own content instead — fine here, since this group was never meant
-   to stretch edge-to-edge like the Theme selector's does. */
-.badge-style-row .settings-row-half button { flex: 0 0 auto; min-width: 0; }
-/* The ellipsis has to land on the TEXT specifically, not the button — a
-   flex container (which .segmented button is, for its icon+label children)
-   doesn't apply text-overflow across its children as a group, it only
-   clips them, so without this the label would hard-cut with no "…". Needs
-   its own min-width: 0 too — it's a flex item of the button just like the
-   icon is, so it inherits the same content-floored min-width by default. */
+.badge-style-row .settings-row-half { min-width: 0; }
+.badge-style-row .settings-row-half:first-of-type { flex: 2 1 0; }
+.badge-style-row .settings-row-half:last-of-type { flex: 1 1 0; }
+/* Safety net, not the primary fix above: on an extremely narrow screen or a
+   long translated label, the buttons can still run out of room even while
+   growing to fill the row. The ellipsis has to land on the TEXT
+   specifically, not the button — a flex container (which .segmented button
+   is, for its icon+label children) doesn't apply text-overflow across its
+   children as a group, it only clips them. Needs its own min-width: 0 too —
+   it's a flex item of the button just like the icon is, so it inherits the
+   same content-floored min-width by default. */
 .badge-style-row .settings-row-half button .badge-btn-label,
 .badge-style-row .settings-row-half button .settings-label-full,
 .badge-style-row .settings-row-half button .settings-label-short {
@@ -2992,7 +2988,20 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .cockpit-category-label { font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); }
 
 .cockpit-pivot-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-.cockpit-pivot-row { display: flex; align-items: center; gap: 10px; }
+/* A real button (tap opens that room/floor's own device list, SummaryGroupPanel
+   reused from every other device-group view in the app) — reset to plain row
+   chrome first since a <button> otherwise brings its own border/background,
+   then the SAME layout the row always had (flex/gap unchanged) plus a hover
+   cue and the trailing chevron below. .cockpit-pivot-label itself is
+   untouched — only the row's own container gained interactivity. */
+.cockpit-pivot-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: none; border: none; padding: 3px 4px; margin: -3px -4px;
+  border-radius: 8px; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.cockpit-pivot-row:hover, .cockpit-pivot-row:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
 .cockpit-pivot-label {
   flex: 0 0 130px; font-size: var(--text-sm); color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -3000,6 +3009,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .cockpit-pivot-bar { flex: 1 1 auto; height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
 .cockpit-pivot-bar-fill { height: 100%; background: var(--accent); border-radius: inherit; }
 .cockpit-pivot-count { flex: 0 0 26px; text-align: right; font-size: var(--text-xs); }
+.cockpit-pivot-chevron { flex: 0 0 auto; }
 
 .cockpit-energy-value { font-size: var(--text-display-sm); font-weight: 600; color: var(--text-primary); margin: 4px 0 0; }
 

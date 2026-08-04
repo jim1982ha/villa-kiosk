@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.88.0
+
+### New — Cockpit's room/floor pivot drills into the same device list every other room view uses
+- **Tapping a room or floor row in Cockpit's "By room"/"By floor" pivot now opens that room/floor's actual device list**, with the same trailing chevron and inline controls (toggle a light, unlock a door) every other "all the devices in X" view in the app already offers — the pivot used to be a read-only bar chart with no way to see WHICH devices made up a room's count. Reuses `SummaryGroupPanel`, the same modal room clusters on the 3D map and the bottom Summary bar's tiles already open, rather than a bespoke list. Works for the "Other" bucket on both pivots too. `cockpitData.ts`'s `buildRoomGroups`/`buildFloorGroups` now carry each bucket's actual `entityIds` alongside its count, not just the count.
+
+### Fixed — Settings' badge-style row stopped partway across the modal
+- **The "Floating badge style" row (Default/Card + the bottom-bar Dock toggle) visibly stopped short of the modal's right edge, leaving dead space**, reported from a screenshot. 2.87.0 had fixed a truncation bug in this same row by making both button groups size to their own content (shrink-to-fit) rather than grow — which fixed the truncation but meant the row no longer filled the line at all once the fix was in. Both groups now grow to fill the row edge-to-edge, weighted 2:1 (Default+Card is genuinely wider content than a single Dock button, so an even 50/50 split would starve the pair) — the previous truncation bug doesn't return, because that bug specifically required a shrink-to-fit PARENT, which growing groups no longer are. Renamed "Floating badge style" → "Badge & bottom bar style" in the same pass: the old name only ever described the first of the two controls (the on-map entity badge look), not the second (whether the bottom bar shows at all).
+
 ## 2.87.1
 
 ### Fixed — top-bar brand chip out of step with its own sizing rules

@@ -274,15 +274,16 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           the +/- buttons next to the category filters in the top bar.
         </p>
 
-        <label style={{ marginTop: 16, display: "block" }}>Floating badge style</label>
-        {/* Not an even 50/50 split like the row above (see .badge-style-row
-            in styles.css) — Default+Card is genuinely wider content than a
-            single "Dock" button, so forcing them to equal halves would
-            starve the pair while leaving Dock's half mostly empty. Each
-            group instead takes only what its own content needs and the row
-            never wraps, shrinking + truncating with an ellipsis as a last
-            resort rather than dropping to icon-only — the previous fix —
-            which the user asked to undo (the labels should stay visible). */}
+        <label style={{ marginTop: 16, display: "block" }}>Badge &amp; bottom bar style</label>
+        {/* "Floating badge style" only ever named the first of these two
+            controls (Default/Card, the on-map entity badge look) — the
+            second is a completely different feature (whether the bottom
+            Summary bar/Dock shows at all), so the old title undersold what
+            the row actually controls. Not an even 50/50 split (see
+            .badge-style-row in styles.css) — Default+Card is genuinely
+            wider content than a single "Dock" button, so forcing equal
+            halves would starve the pair while leaving Dock's half mostly
+            empty; both groups instead grow to fill the row, weighted 2:1. */}
         <div className="row badge-style-row" style={{ gap: 10, marginTop: 6 }}>
           <div className="segmented settings-row-half" role="group" aria-label="Floating badge style">
             <button

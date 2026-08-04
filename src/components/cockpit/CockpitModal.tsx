@@ -7,13 +7,17 @@
 // so there is no separate drill-down any more — one that only ever showed
 // the exact same rows already on screen was pure ceremony.
 //
-// Every section here is read-only reporting — no controls beyond drilling
-// into a device's own panel — and everything routes through
-// selectableDeviceIds/entityMap/resolvedRooms, never a raw HA domain query
-// (see cockpitData.ts's own docstring for why that matters concretely, not
-// just in principle). See the villa-kiosk memory's Cockpit plan for the full
-// design history and what was deliberately left out (Zigbee/Z-Wave radio
-// health, HA's own Area registry for grouping, presence tracking) and why.
+// Every section here is read-only reporting on its own face — the one
+// exception is the room/floor pivot below, whose rows drill into
+// SummaryGroupPanel (the same device-list-with-inline-controls modal every
+// other "all the devices in X" view in the app already opens), rather than
+// only being able to jump to one device's own panel. Everything here routes
+// through selectableDeviceIds/entityMap/resolvedRooms, never a raw HA domain
+// query (see cockpitData.ts's own docstring for why that matters concretely,
+// not just in principle). See the villa-kiosk memory's Cockpit plan for the
+// full design history and what was deliberately left out (Zigbee/Z-Wave
+// radio health, HA's own Area registry for grouping, presence tracking) and
+// why.
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -24,11 +28,13 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
+import { hasCapability } from "@/auth/permissions";
 import { useFmData } from "@/fm/FmDataContext";
 import { unavailableDeviceIds, selectableDeviceIds } from "@/config/deviceGroups";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categoryGradient } from "@/config/EntityCategories";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
+import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import {
   buildAttentionItems, villaHealthFrom, buildCategoryTiles, buildRoomGroups, buildFloorGroups,
   buildActivityFeed, type AttentionItem, type AttentionKind, type ActivityEntry,
@@ -54,6 +60,12 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
   const { data: fmData } = useFmData();
   const dialogRef = useModalA11y(onClose);
   const [pivot, setPivot] = useState<"room" | "floor">("room");
+  // Drill-down opened by tapping a room/floor row below — reuses
+  // SummaryGroupPanel, the same device-list modal every other "all the
+  // devices in X" view in the app already opens (room clusters on the map,
+  // the bottom Summary bar's tiles), rather than a bespoke list here.
+  const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[] } | null>(null);
+  const canControl = role != null && hasCapability(role, "controlEntities");
 
   const unavailableIds = useMemo(
     () => unavailableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
@@ -131,14 +143,18 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
   // for the same idea.
   const pivotRows = useMemo(
     () => (pivot === "room"
-      ? roomGroups.map((g) => ({ key: g.room, label: g.room, count: g.count }))
-      : floorGroups.map((g) => ({ key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : "Other", count: g.count }))
+      ? roomGroups.map((g) => ({ key: g.room, label: g.room, count: g.count, entityIds: g.entityIds }))
+      : floorGroups.map((g) => ({
+          key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : "Other",
+          count: g.count, entityIds: g.entityIds,
+        }))
     ),
     [pivot, roomGroups, floorGroups],
   );
   const pivotTotal = pivotRows.reduce((sum, g) => sum + g.count, 0);
 
   return (
+    <>
     <div className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
@@ -208,11 +224,19 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
             {pivotRows.map((row) => {
               const pct = pivotTotal > 0 ? Math.round((row.count / pivotTotal) * 100) : 0;
               return (
-                <div key={row.key} className="cockpit-pivot-row">
+                <button
+                  key={row.key}
+                  type="button"
+                  className="cockpit-pivot-row"
+                  onClick={() => setPivotDrill({ label: row.label, entityIds: row.entityIds })}
+                  title={`Show ${row.label}'s devices`}
+                  aria-label={`Show ${row.label}'s devices — ${row.count} device${row.count === 1 ? "" : "s"}`}
+                >
                   <span className="cockpit-pivot-label">{row.label}</span>
                   <div className="cockpit-pivot-bar"><div className="cockpit-pivot-bar-fill" style={{ width: `${pct}%` }} /></div>
                   <span className="cockpit-pivot-count muted">{row.count}</span>
-                </div>
+                  <ChevronRight size={14} className="cockpit-pivot-chevron muted" />
+                </button>
               );
             })}
           </div>
@@ -256,6 +280,16 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
         </div>
       </div>
     </div>
+    {pivotDrill && (
+      <SummaryGroupPanel
+        group={{ title: pivotDrill.label, icon: pivot === "room" ? MapPin : Building2, entityIds: pivotDrill.entityIds }}
+        canControl={canControl}
+        mappedEntityIds={mappedEntityIds}
+        onClose={() => setPivotDrill(null)}
+        onOpenEntity={(id) => { setPivotDrill(null); onOpenEntity(id); }}
+      />
+    )}
+    </>
   );
 }
 
