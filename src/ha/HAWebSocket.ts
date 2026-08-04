@@ -4,7 +4,7 @@
 
 import type {
   EnergyPrefs, HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntity, HassEntityRegistryEntry,
-  HassServiceTarget, StatisticIdInfo, StatisticPeriod,
+  HassServiceTarget, RawLogbookEntry, StatisticIdInfo, StatisticPeriod,
 } from "@/types/ha.types";
 import { ingressWsUrl } from "./ingress";
 import { captureError } from "@/utils/diagnostics";
@@ -384,6 +384,15 @@ export class HAWebSocket {
    *  live data (never shipped/assumed by this app). */
   async getAreaRegistry(): Promise<HassAreaRegistryEntry[]> {
     return this.sendMessage<HassAreaRegistryEntry[]>("config/area_registry/list");
+  }
+
+  /** Logbook events since `startTime` (ISO string) — verified against a live
+   *  instance to be the reliable path (matches what HA's own frontend
+   *  logbook uses); the classic REST `/api/logbook/<timestamp>` endpoint did
+   *  not return usable data in the same test. Each entry's `when` is epoch
+   *  SECONDS, not ms or ISO — see HALogbookAPI.ts's RawLogbookEntry. */
+  async getLogbookEvents(startTime: string): Promise<RawLogbookEntry[]> {
+    return this.sendMessage<RawLogbookEntry[]>("logbook/get_events", { start_time: startTime });
   }
 
   /** The Energy Dashboard's own configuration — which statistic IDs it

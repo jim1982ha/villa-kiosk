@@ -216,7 +216,6 @@ export default function FacilityModal({
 
       {cockpitOpen && (
         <CockpitModal
-          canControl={canControl}
           mappedEntityIds={mappedEntityIds}
           onClose={() => setCockpitOpen(false)}
           onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}

@@ -14,7 +14,7 @@ import { roomKey } from "@/config/roomKey";
 import { scheduleBoard } from "@/fm/fmEngine";
 import type { FmData } from "@/fm/fmTypes";
 import { isOn } from "@/utils/entityState";
-import type { HassEntity } from "@/types/ha.types";
+import type { HassEntity, RawLogbookEntry } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
 
 export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
@@ -218,4 +218,71 @@ export function buildFloorGroups(roomGroups: RoomGroup[]): FloorGroup[] {
   return [...counts.entries()]
     .map(([floor, count]) => ({ floor, count }))
     .sort((a, b) => (a.floor ?? Infinity) - (b.floor ?? Infinity));
+}
+
+export interface ActivityEntry {
+  /** epoch ms (RawLogbookEntry.when is epoch SECONDS — converted once here). */
+  t: number;
+  name: string;
+  message: string;
+}
+
+/**
+ * Turn one raw logbook row into a readable line. Only automation/script
+ * entries carry a real HA-authored `message` (the computed trigger cause) —
+ * used verbatim, since reproducing THAT is exactly the kind of thing this
+ * app has no business re-implementing. A plain state change (a motion
+ * sensor, a lock, a light) arrives with just a raw `state` and no sentence —
+ * HA's own frontend builds that text client-side, the API doesn't hand it
+ * over — so this reuses the kiosk's OWN existing state vocabulary
+ * (BinarySensorClasses' on/off wording, the same table SensorPanel/badges
+ * already read) rather than showing a bare "on"/"off", or invents nothing
+ * and falls back to the raw state, capitalised, for domains with no such
+ * table (lock, switch, light, …). Returns null when there's truly nothing
+ * to show (no entity_id, no message, no state).
+ */
+export function describeLogbookEntry(
+  raw: RawLogbookEntry,
+  entities: Record<string, HassEntity>,
+  entityMap: Record<string, EntityMapping>,
+): ActivityEntry | null {
+  const t = raw.when * 1000;
+  if (!Number.isFinite(t)) return null;
+
+  if (raw.message) {
+    return { t, name: raw.name ?? raw.entity_id ?? "", message: raw.message };
+  }
+  if (!raw.entity_id || raw.state == null) return null;
+
+  const entity = entities[raw.entity_id];
+  const mapping = entityMap[raw.entity_id];
+  const name = displayLabelFor(raw.entity_id, mapping?.label, raw.name ?? (entity?.attributes.friendly_name as string | undefined));
+
+  if (raw.entity_id.startsWith("binary_sensor.")) {
+    const info = binarySensorClassInfo(entity?.attributes.device_class as string | undefined);
+    return { t, name, message: raw.state === "on" ? info.onLabel : info.offLabel };
+  }
+  return { t, name, message: raw.state.charAt(0).toUpperCase() + raw.state.slice(1) };
+}
+
+/** Describe + filter to the villa's own selectable devices (HA's raw
+ *  logbook is unfiltered and genuinely noisy — a bare date/time helper alone
+ *  produced roughly one entry every six seconds in a real pull) + sort
+ *  newest first. `limit` bounds the RENDERED list, logged via the caller if
+ *  entries are actually dropped — this is a "most recent 20" UI choice, not
+ *  a silent data cap. */
+export function buildActivityFeed(
+  raw: RawLogbookEntry[],
+  entities: Record<string, HassEntity>,
+  entityMap: Record<string, EntityMapping>,
+  selectableIds: readonly string[],
+  limit = 20,
+): ActivityEntry[] {
+  const known = new Set(selectableIds);
+  const described = raw
+    .filter((r) => r.entity_id && known.has(r.entity_id))
+    .map((r) => describeLogbookEntry(r, entities, entityMap))
+    .filter((e): e is ActivityEntry => e !== null)
+    .sort((a, b) => b.t - a.t);
+  return described.slice(0, limit);
 }

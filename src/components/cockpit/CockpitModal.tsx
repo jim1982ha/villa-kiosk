@@ -2,9 +2,10 @@
 // The villa's whole-house status report — a graceful, non-technical "how is
 // everything" glance, reachable from the same alert icon that used to open a
 // bare Unavailable-devices list directly (see HUD.tsx/FacilityModal.tsx —
-// repointed, not a new button). That list isn't gone: it's the "Show all"
-// drill-down at the bottom of Needs Attention, reusing SummaryGroupPanel
-// unmodified.
+// repointed, not a new button). That list isn't gone: Needs Attention below
+// already lists every unavailable device individually (nothing is capped),
+// so there is no separate drill-down any more — one that only ever showed
+// the exact same rows already on screen was pure ceremony.
 //
 // Every section here is read-only reporting — no controls beyond drilling
 // into a device's own panel — and everything routes through
@@ -26,19 +27,17 @@ import { useProfile } from "@/auth/ProfileContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { unavailableDeviceIds, selectableDeviceIds } from "@/config/deviceGroups";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categoryGradient } from "@/config/EntityCategories";
-import { fetchLogbook, type LogbookEntry } from "@/ha/HALogbookAPI";
+import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
-import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import {
   buildAttentionItems, villaHealthFrom, buildCategoryTiles, buildRoomGroups, buildFloorGroups,
-  type AttentionItem, type AttentionKind,
+  buildActivityFeed, type AttentionItem, type AttentionKind, type ActivityEntry,
 } from "./cockpitData";
 
 export interface CockpitModalProps {
   onClose: () => void;
   mappedEntityIds: Set<string>;
   onOpenEntity: (entityId: string) => void;
-  canControl: boolean;
 }
 
 const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
@@ -48,13 +47,12 @@ const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
   alarm: TriangleAlert,
 };
 
-export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity, canControl }: CockpitModalProps) {
+export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }: CockpitModalProps) {
   const { entities, ws } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
   const { data: fmData } = useFmData();
   const dialogRef = useModalA11y(onClose);
-  const [showUnavailable, setShowUnavailable] = useState(false);
   const [pivot, setPivot] = useState<"room" | "floor">("room");
 
   const unavailableIds = useMemo(
@@ -81,24 +79,25 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity, c
   );
   const floorGroups = useMemo(() => buildFloorGroups(roomGroups), [roomGroups]);
 
-  // Recent activity — HA's own Logbook, fetched once on open (a report you
-  // glance at, not a live-updating feed; re-opening Cockpit re-fetches).
-  // Filtered to this villa's own selectable devices client-side: HA's raw
-  // logbook is unfiltered and genuinely noisy (a bare date/time helper alone
-  // produced roughly one entry every six seconds in a real pull).
-  const [activity, setActivity] = useState<LogbookEntry[] | "loading" | "error">("loading");
+  // Recent activity — HA's own Logbook (via websocket, see HALogbookAPI.ts
+  // for why not the classic REST endpoint), fetched once on open (a report
+  // you glance at, not a live-updating feed; re-opening Cockpit re-fetches).
+  // Described + filtered to this villa's own selectable devices in
+  // cockpitData.ts's buildActivityFeed — HA's raw logbook is unfiltered and
+  // genuinely noisy (a bare date/time helper alone produced roughly one
+  // entry every six seconds in a real pull).
+  const [rawActivity, setRawActivity] = useState<Awaited<ReturnType<typeof fetchLogbookEvents>> | "loading" | "error">("loading");
   useEffect(() => {
     let cancelled = false;
-    fetchLogbook(6)
-      .then((entries) => { if (!cancelled) setActivity(entries); })
-      .catch(() => { if (!cancelled) setActivity("error"); });
+    fetchLogbookEvents(ws, 6)
+      .then((entries) => { if (!cancelled) setRawActivity(entries); })
+      .catch(() => { if (!cancelled) setRawActivity("error"); });
     return () => { cancelled = true; };
-  }, []);
-  const villaActivity = useMemo(() => {
-    if (!Array.isArray(activity)) return activity;
-    const known = new Set(selectableIds);
-    return activity.filter((e) => e.entityId && known.has(e.entityId)).slice(0, 20);
-  }, [activity, selectableIds]);
+  }, [ws]);
+  const villaActivity = useMemo((): ActivityEntry[] | "loading" | "error" => {
+    if (!Array.isArray(rawActivity)) return rawActivity;
+    return buildActivityFeed(rawActivity, entities, config.entityMap, selectableIds);
+  }, [rawActivity, entities, config.entityMap, selectableIds]);
 
   // Energy today — only when the install has an Energy Dashboard configured
   // AND its grid source actually resolves to recorded statistics (see
@@ -124,159 +123,139 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity, c
     return Object.values(entities).filter((e) => e.entity_id.startsWith("update.") && e.state === "on").length;
   }, [entities, role]);
 
+  // "Other" (not "Unplaced" or any other invented word) for the no-floor
+  // bucket — the SAME label the room pivot's own no-room bucket already
+  // uses (cockpitData.ts's NO_ROOM), which is itself the one term every
+  // room/category grouping across the app already uses for "doesn't
+  // resolve to one of the real ones". Reusing it here, not a second word
+  // for the same idea.
   const pivotRows = useMemo(
     () => (pivot === "room"
       ? roomGroups.map((g) => ({ key: g.room, label: g.room, count: g.count }))
-      : floorGroups.map((g) => ({ key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : "Unplaced", count: g.count }))
+      : floorGroups.map((g) => ({ key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : "Other", count: g.count }))
     ),
     [pivot, roomGroups, floorGroups],
   );
   const pivotTotal = pivotRows.reduce((sum, g) => sum + g.count, 0);
 
   return (
-    <>
-      <div className="modal-backdrop" onClick={onClose}>
-        <div
-          ref={dialogRef}
-          className="modal settings-modal cockpit-modal modal-fixed-height"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Villa Cockpit"
-        >
-          <div className="settings-header">
-            <h2>Cockpit</h2>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        ref={dialogRef}
+        className="modal settings-modal cockpit-modal modal-fixed-height"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Villa Cockpit"
+      >
+        <div className="settings-header">
+          <h2>Cockpit</h2>
+        </div>
+
+        <div className="settings-body">
+          {/* ── Villa health headline ──────────────────────────────── */}
+          <div className={`cockpit-health cockpit-health-${health.level}`}>
+            {health.level === "ok" ? <CheckCircle2 size={22} /> : <TriangleAlert size={22} />}
+            <span>{health.summary}</span>
           </div>
 
-          <div className="settings-body">
-            {/* ── Villa health headline ──────────────────────────────── */}
-            <div className={`cockpit-health cockpit-health-${health.level}`}>
-              {health.level === "ok" ? <CheckCircle2 size={22} /> : <TriangleAlert size={22} />}
-              <span>{health.summary}</span>
-            </div>
-
-            {/* ── Needs attention ────────────────────────────────────── */}
-            {attentionItems.length > 0 && (
-              <>
-                <div className="settings-section-title">Needs attention</div>
-                <div className="cockpit-attention-list">
-                  {attentionItems.map((item) => (
-                    <CockpitAttentionRow key={item.id} item={item} onOpenEntity={onOpenEntity} />
-                  ))}
-                </div>
-                {unavailableIds.length > 0 && (
-                  <button
-                    className="btn ghost cockpit-show-all"
-                    onClick={() => setShowUnavailable(true)}
-                  >
-                    Show all unavailable devices ({unavailableIds.length}) <ChevronRight size={14} />
-                  </button>
-                )}
-              </>
-            )}
-
-            {/* ── Category grid ──────────────────────────────────────── */}
-            <div className="settings-section-title">By category</div>
-            <div className="cockpit-category-grid">
-              {categoryTiles.map((tile) => {
-                const Icon = CATEGORY_ICONS[tile.category];
-                return (
-                  <div key={tile.category} className="cockpit-category-tile">
-                    <div className="cockpit-category-icon" style={{ background: categoryGradient(tile.category) }}>
-                      <Icon size={18} />
-                    </div>
-                    <div>
-                      <div className="cockpit-category-label">{CATEGORY_LABELS[tile.category]}</div>
-                      <div className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-                        {tile.total === 0 ? "None" : `${tile.total} device${tile.total === 1 ? "" : "s"}${tile.onCount > 0 ? ` · ${tile.onCount} on` : ""}`}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* ── Room / floor pivot ─────────────────────────────────── */}
-            <div className="settings-section-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span>By {pivot === "room" ? "room" : "floor"}</span>
-              <div className="segmented" role="group" aria-label="Group by" style={{ flex: "0 0 auto" }}>
-                <button className={pivot === "room" ? "active" : ""} onClick={() => setPivot("room")} aria-pressed={pivot === "room"}>
-                  <MapPin size={14} /> Room
-                </button>
-                <button className={pivot === "floor" ? "active" : ""} onClick={() => setPivot("floor")} aria-pressed={pivot === "floor"}>
-                  <Building2 size={14} /> Floor
-                </button>
-              </div>
-            </div>
-            <div className="cockpit-pivot-list">
-              {pivotRows.map((row) => {
-                const pct = pivotTotal > 0 ? Math.round((row.count / pivotTotal) * 100) : 0;
-                return (
-                  <div key={row.key} className="cockpit-pivot-row">
-                    <span className="cockpit-pivot-label">{row.label}</span>
-                    <div className="cockpit-pivot-bar"><div className="cockpit-pivot-bar-fill" style={{ width: `${pct}%` }} /></div>
-                    <span className="cockpit-pivot-count muted">{row.count}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* ── Energy today (only when it resolves) ───────────────── */}
-            {energy && (
-              <>
-                <div className="settings-section-title"><Zap size={15} style={{ verticalAlign: -2 }} /> Energy today</div>
-                <p className="cockpit-energy-value">{energy.kwh.toFixed(1)} <span className="muted body-text">kWh</span></p>
-              </>
-            )}
-
-            {/* ── Recent activity ─────────────────────────────────────── */}
-            <div className="settings-section-title"><Activity size={15} style={{ verticalAlign: -2 }} /> Recent activity</div>
-            {villaActivity === "loading" && <p className="muted body-text">Loading…</p>}
-            {villaActivity === "error" && <p className="muted body-text">Couldn't reach Home Assistant's activity log.</p>}
-            {Array.isArray(villaActivity) && villaActivity.length === 0 && (
-              <p className="muted body-text">Nothing in the last 6 hours.</p>
-            )}
-            {Array.isArray(villaActivity) && villaActivity.length > 0 && (
-              <div className="cockpit-activity-list">
-                {villaActivity.map((e, i) => (
-                  <div key={`${e.t}-${i}`} className="cockpit-activity-row">
-                    <span className="cockpit-activity-time muted">{new Date(e.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                    <span className="cockpit-activity-text"><strong>{e.name}</strong> {e.message}</span>
-                  </div>
+          {/* ── Needs attention ────────────────────────────────────── */}
+          {attentionItems.length > 0 && (
+            <>
+              <div className="settings-section-title">Needs attention</div>
+              <div className="cockpit-attention-list">
+                {attentionItems.map((item) => (
+                  <CockpitAttentionRow key={item.id} item={item} onOpenEntity={onOpenEntity} />
                 ))}
               </div>
-            )}
+            </>
+          )}
 
-            {/* ── Updates available (Owner only, small) ──────────────── */}
-            {updatesAvailable !== null && updatesAvailable > 0 && (
-              <p className="cockpit-updates muted body-text">
-                <RefreshCw size={13} style={{ verticalAlign: -2 }} /> {updatesAvailable} update{updatesAvailable === 1 ? "" : "s"} available
-              </p>
-            )}
+          {/* ── Category grid ──────────────────────────────────────── */}
+          <div className="settings-section-title">By category</div>
+          <div className="cockpit-category-grid">
+            {categoryTiles.map((tile) => {
+              const Icon = CATEGORY_ICONS[tile.category];
+              return (
+                <div key={tile.category} className="cockpit-category-tile">
+                  <div className="cockpit-category-icon" style={{ background: categoryGradient(tile.category) }}>
+                    <Icon size={18} />
+                  </div>
+                  <div>
+                    <div className="cockpit-category-label">{CATEGORY_LABELS[tile.category]}</div>
+                    <div className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
+                      {tile.total === 0 ? "None" : `${tile.total} device${tile.total === 1 ? "" : "s"}${tile.onCount > 0 ? ` · ${tile.onCount} on` : ""}`}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          <div className="settings-footer">
-            <button className="btn primary" onClick={onClose}>Close</button>
+          {/* ── Room / floor pivot ─────────────────────────────────── */}
+          <div className="settings-section-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span>By {pivot === "room" ? "room" : "floor"}</span>
+            <div className="segmented" role="group" aria-label="Group by" style={{ flex: "0 0 auto" }}>
+              <button className={pivot === "room" ? "active" : ""} onClick={() => setPivot("room")} aria-pressed={pivot === "room"}>
+                <MapPin size={14} /> Room
+              </button>
+              <button className={pivot === "floor" ? "active" : ""} onClick={() => setPivot("floor")} aria-pressed={pivot === "floor"}>
+                <Building2 size={14} /> Floor
+              </button>
+            </div>
           </div>
+          <div className="cockpit-pivot-list">
+            {pivotRows.map((row) => {
+              const pct = pivotTotal > 0 ? Math.round((row.count / pivotTotal) * 100) : 0;
+              return (
+                <div key={row.key} className="cockpit-pivot-row">
+                  <span className="cockpit-pivot-label">{row.label}</span>
+                  <div className="cockpit-pivot-bar"><div className="cockpit-pivot-bar-fill" style={{ width: `${pct}%` }} /></div>
+                  <span className="cockpit-pivot-count muted">{row.count}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Energy today (only when it resolves) ───────────────── */}
+          {energy && (
+            <>
+              <div className="settings-section-title"><Zap size={15} style={{ verticalAlign: -2 }} /> Energy today</div>
+              <p className="cockpit-energy-value">{energy.kwh.toFixed(1)} <span className="muted body-text">kWh</span></p>
+            </>
+          )}
+
+          {/* ── Recent activity ─────────────────────────────────────── */}
+          <div className="settings-section-title"><Activity size={15} style={{ verticalAlign: -2 }} /> Recent activity</div>
+          {villaActivity === "loading" && <p className="muted body-text">Loading…</p>}
+          {villaActivity === "error" && <p className="muted body-text">Couldn't reach Home Assistant's activity log.</p>}
+          {Array.isArray(villaActivity) && villaActivity.length === 0 && (
+            <p className="muted body-text">Nothing in the last 6 hours.</p>
+          )}
+          {Array.isArray(villaActivity) && villaActivity.length > 0 && (
+            <div className="cockpit-activity-list">
+              {villaActivity.map((e, i) => (
+                <div key={`${e.t}-${i}`} className="cockpit-activity-row">
+                  <span className="cockpit-activity-time muted">{new Date(e.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="cockpit-activity-text"><strong>{e.name}</strong> {e.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Updates available (Owner only, small) ──────────────── */}
+          {updatesAvailable !== null && updatesAvailable > 0 && (
+            <p className="cockpit-updates muted body-text">
+              <RefreshCw size={13} style={{ verticalAlign: -2 }} /> {updatesAvailable} update{updatesAvailable === 1 ? "" : "s"} available
+            </p>
+          )}
+        </div>
+
+        <div className="settings-footer">
+          <button className="btn primary" onClick={onClose}>Close</button>
         </div>
       </div>
-
-      {showUnavailable && (
-        <SummaryGroupPanel
-          group={{ title: "Unavailable devices", icon: TriangleAlert, entityIds: unavailableIds }}
-          canControl={canControl}
-          mappedEntityIds={mappedEntityIds}
-          onClose={() => setShowUnavailable(false)}
-          onOpenEntity={(id) => { setShowUnavailable(false); onOpenEntity(id); }}
-          hideBulkToggle
-          // Same reasoning as the HUD's own copy of this panel: a
-          // troubleshooting list, not a device-control summary — a hidden or
-          // "diagnostic" entity going offline is exactly what it exists to
-          // surface.
-          filterSuppressed={false}
-        />
-      )}
-    </>
+    </div>
   );
 }
 

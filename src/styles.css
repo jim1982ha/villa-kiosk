@@ -1637,7 +1637,17 @@ input[type="range"]::-moz-range-thumb {
    row. */
 .badge-style-row { flex-wrap: nowrap; }
 .badge-style-row .settings-row-half { flex: 0 1 auto; min-width: 0; }
-.badge-style-row .settings-row-half button { min-width: 0; }
+/* flex: 0 0 auto (NOT the shared .segmented button's 1 1 0) — a zero
+   flex-basis on these buttons was quietly breaking the GROUP's own
+   shrink-to-fit sizing above: a flex item with basis 0 contributes nothing
+   of its content size to its parent's "auto" (max-content) calculation in
+   some browsers' nested-flex sizing, so the group measured itself far
+   narrower than its actual rendered content and truncated with an ellipsis
+   even with plenty of real width free in the row (reported: "Default"
+   showing as "Def…" with most of the row still empty). Buttons sizing to
+   their own content instead — fine here, since this group was never meant
+   to stretch edge-to-edge like the Theme selector's does. */
+.badge-style-row .settings-row-half button { flex: 0 0 auto; min-width: 0; }
 /* The ellipsis has to land on the TEXT specifically, not the button — a
    flex container (which .segmented button is, for its icon+label children)
    doesn't apply text-overflow across its children as a group, it only
@@ -2939,7 +2949,6 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   font-size: var(--text-sm); color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.cockpit-show-all { width: 100%; justify-content: center; gap: 6px; margin-top: 10px; }
 
 .cockpit-category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 4px; }
 .cockpit-category-tile { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: var(--bg-input); }

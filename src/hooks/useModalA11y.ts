@@ -43,7 +43,26 @@ function focusableWithin(root: HTMLElement): HTMLElement[] {
  */
 export function useModalA11y(onClose?: () => void) {
   const ref = useRef<HTMLDivElement>(null);
+  // Latest onClose, read by the Escape handler below WITHOUT being a
+  // dependency of the mount effect — see that effect's own comment for why
+  // that distinction is load-bearing, not stylistic.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
+  // Deliberately empty deps: this must run exactly once per mount, not once
+  // per onClose identity. A caller commonly passes an inline arrow function
+  // (`onClose={() => setOpen(false)}`), which is a NEW reference every
+  // render — if this effect depended on it, it would tear down and re-run
+  // on every one of the caller's re-renders, and "re-run" here means
+  // re-focusing the first control. Confirmed in the field: HUD.tsx passes
+  // exactly such an inline onClose and re-renders on every single HA
+  // state_changed event (any light/sensor in the house), so with `[onClose]`
+  // in the deps, opening Cockpit and having literally anything else in the
+  // villa change state re-ran "focus the first control" — which scrolls it
+  // into view — making the whole modal appear to snap back to the top
+  // while scrolling, and a room/floor toggle "flash". The Escape key still
+  // always calls the CURRENT onClose (via the ref above), so closing
+  // behaviour is unaffected by fixing this.
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
@@ -67,9 +86,9 @@ export function useModalA11y(onClose?: () => void) {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && onClose) {
+      if (e.key === "Escape" && onCloseRef.current) {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab") return;
@@ -108,7 +127,8 @@ export function useModalA11y(onClose?: () => void) {
         previouslyFocused.focus();
       }
     };
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return ref;
 }

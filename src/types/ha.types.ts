@@ -105,6 +105,24 @@ export interface HassAreaRegistryEntry {
   name: string;
 }
 
+/** One row of `logbook/get_events` — verified directly against a live
+ *  instance rather than assumed: `when` is epoch SECONDS (not ms, not ISO),
+ *  and only automation/script-triggered entries carry a real `message` (the
+ *  computed trigger cause) — a plain state change (a motion sensor, a lock)
+ *  arrives with just `state`/`entity_id`, no sentence, because HA's own
+ *  frontend builds that text client-side rather than the API supplying it.
+ *  See cockpitData.ts's describeLogbookEntry for how this app fills that gap
+ *  using its OWN existing state vocabulary, not a re-implementation of HA's
+ *  logbook describers. */
+export interface RawLogbookEntry {
+  when: number;
+  state?: string;
+  message?: string;
+  name?: string;
+  entity_id?: string;
+  domain?: string;
+}
+
 /** Subset of `energy/get_prefs`'s response — only the statistic IDs the
  *  Energy Dashboard is configured against, never the values themselves (see
  *  HAWebSocket.getStatisticsDuringPeriod for those). Both arrays are empty,

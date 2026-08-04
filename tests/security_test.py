@@ -157,7 +157,6 @@ t("guest light/turn_on", proxy._rest_call_allowed("guest", "services/light/turn_
 t("guest history", proxy._rest_call_allowed("guest", "history/period/2026-01-01T00:00:00Z"), True)
 t("history with a +08:00 offset",
   proxy._rest_call_allowed("guest", "history/period/2026-01-01T00:00:00+08:00"), True)
-t("guest logbook", proxy._rest_call_allowed("guest", "logbook/2026-01-01T00:00:00Z"), True)
 t("ops camera_proxy", proxy._rest_call_allowed("ops", "camera_proxy/camera.gate"), True)
 t("ops camera stream", proxy._rest_call_allowed("ops", "camera_proxy_stream/camera.gate"), True)
 t("guest camera denied", proxy._rest_call_allowed("guest", "camera_proxy/camera.gate"), False)
@@ -187,7 +186,8 @@ for frame in ("auth", "ping", "pong", "subscribe_events", "get_states",
 section("websocket frames: read-only registry/config lists permitted for every role")
 for frame in ("get_config", "config/entity_registry/list",
               "config/device_registry/list", "config/area_registry/list",
-              "energy/get_prefs", "recorder/list_statistic_ids", "recorder/statistics_during_period"):
+              "energy/get_prefs", "recorder/list_statistic_ids", "recorder/statistics_during_period",
+              "logbook/get_events"):
     t(f"{frame} permitted", frame in proxy.ALLOWED_WS_TYPES, True)
 
 # ------------------------------------------- shared store write boundary

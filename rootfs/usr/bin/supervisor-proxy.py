@@ -453,12 +453,14 @@ _SERVICES_PATH_RE = re.compile(r"^services/([^/]+)/([^/]+)/?$")
 # facility-manager sessions, which is how this was caught.
 _SAFE_TAIL_RE = re.compile(r"^[A-Za-z0-9_\-./:+]+$")
 # The ONLY non-service REST paths the kiosk itself requests (see
-# src/ha/HAHistoryAPI.ts, src/ha/HALogbookAPI.ts and HACameraProxy.ts).
-# Everything else a non-owner might ask for is denied by default. "logbook/"
-# is read-only (same category as history/period/ above it) — added for the
-# Cockpit page's recent-activity feed, which reads Home Assistant's own
-# Logbook rather than re-deriving readable event text client-side.
-_NON_OWNER_REST_PREFIXES = ("history/period/", "logbook/", "camera_proxy/", "camera_proxy_stream/")
+# src/ha/HAHistoryAPI.ts and HACameraProxy.ts). Everything else a non-owner
+# might ask for is denied by default. The Cockpit page's recent-activity
+# feed (src/ha/HALogbookAPI.ts) reads Home Assistant's own Logbook over the
+# WEBSOCKET (logbook/get_events, see ALLOWED_WS_TYPES below), not this REST
+# path — verified against a live instance that the classic REST
+# `/api/logbook/<timestamp>` endpoint used here originally did not return
+# usable data, so there is nothing to allowlist here for it.
+_NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_stream/")
 # Guests unlock doors — deliberately. A guest is the person staying in the
 # villa, and permissions.ts puts access_control in their categories for exactly
 # that reason. The guest profile is PIN-protected in this deployment, so the
@@ -500,8 +502,16 @@ _NON_OWNER_REST_PREFIXES = ("history/period/", "logbook/", "camera_proxy/", "cam
 # data (an Energy Dashboard source can reference a statistic ID that no
 # longer resolves — e.g. after an unrelated entity rename — so the client
 # cross-checks before trusting one), and recorder/statistics_during_period
-# reads the pre-aggregated "change" for a real statistic over a period. All
-# three are read-only, same as the registry list calls above.
+# reads the pre-aggregated "change" for a real statistic over a period.
+#
+# logbook/get_events, same category once more, is how the Cockpit page's
+# recent-activity feed reads Home Assistant's own Logbook — verified against
+# a live instance to be the reliable path (matches what HA's own frontend
+# logbook uses); the classic REST /api/logbook/<timestamp> endpoint tried
+# first did not return usable data in the same test, which is why this is a
+# websocket entry and there is no matching REST prefix for it.
+#
+# All of the above are read-only, same as the registry list calls above.
 ALLOWED_WS_TYPES = frozenset({
     "auth", "ping", "pong",
     "subscribe_events", "unsubscribe_events",
@@ -509,6 +519,7 @@ ALLOWED_WS_TYPES = frozenset({
     "get_config",
     "config/entity_registry/list", "config/device_registry/list", "config/area_registry/list",
     "energy/get_prefs", "recorder/list_statistic_ids", "recorder/statistics_during_period",
+    "logbook/get_events",
 })
 
 

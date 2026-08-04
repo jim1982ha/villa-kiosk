@@ -29,7 +29,7 @@ import {
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { isCategoryAllowed, hasCapability } from "@/auth/permissions";
+import { isCategoryAllowed } from "@/auth/permissions";
 import { ROLE_LABELS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_ICONS, categoryGradient } from "@/config/EntityCategories";
@@ -150,7 +150,6 @@ export default function HUD({
     const openFaults = fmData.tickets.filter((t) => t.status !== "resolved").length;
     return lateTasks + openFaults;
   }, [fmData]);
-  const canControlAny = role != null && hasCapability(role, "controlEntities");
 
   // ── Floor buttons now do double duty, no separate Rooms button any more:
   // a normal tap/click keeps the original behaviour (switch to that floor,
@@ -785,7 +784,6 @@ export default function HUD({
 
       {cockpitOpen && (
         <CockpitModal
-          canControl={canControlAny}
           mappedEntityIds={mappedEntityIds}
           onClose={() => setCockpitOpen(false)}
           onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
