@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.91.0
+
+### Fixed — the floor pivot ignored Home Assistant's own Floors feature entirely
+- **A device correctly resolved to its right ROOM (Corridor) but still landed in the floor pivot's "Other" bucket, even though that room's Area is assigned to "2F" in Home Assistant.** Root cause: unlike room resolution (which the 2.85.0 rework made HA's own Area assignment the authoritative source, geometry only the fallback), the floor-pivot's storey lookup had never been given the same treatment — it only ever read the floor-plan's own static per-room `floor` value (`config.sh3dRooms`, matched by room NAME against whatever the floor-plan file happened to call that space), with no live HA signal at all. Confirmed directly against a live instance before fixing: Home Assistant's own Floor registry has "Corridor" correctly assigned to floor "2F" — the data was right, the app simply never asked for it. Home Assistant's own **Floors** feature (an Area's optional parent grouping, distinct from and newer than the per-room floor-plan data) is now read the same way Areas already are — a new `entity_id -> floor number` map (`HAStateStore.tsx`'s `entityFloorNumbers`, live via a new `config/floor_registry/list` read + `floor_registry_updated` subscription) wins whenever any device in a room has one, with the floor-plan's own geometry staying the fallback for whatever HA hasn't organised into a Floor yet — the identical "HA wins, geometry is the fallback" precedence room resolution already uses. HA's own `level` field on a Floor is optional and wasn't trustworthy on its own in a live test (one floor had it set, the sibling floor didn't) — a leading digit parsed from the Floor's own name ("1F"/"2F", the same convention this app's UI already displays floors with) is checked first, `level` only as a secondary fallback. New read-only websocket command allowlisted for every role (`config/floor_registry/list`, same category as the existing entity/device/area registry reads), covered by a new `security_test.py` assertion (174/174 passing).
+
 ## 2.90.0
 
 ### Fixed — a camera's Linked entity/Motion sensor always resolved to "Other"

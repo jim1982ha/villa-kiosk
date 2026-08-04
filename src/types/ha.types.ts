@@ -99,10 +99,28 @@ export interface HassDeviceRegistryEntry {
 }
 
 /** Subset of `config/area_registry/list`'s rows — id → human-readable name,
- *  the only two fields the room-suggestion signal needs. */
+ *  plus `floor_id` (HA's own Floors feature — an Area optionally belongs to
+ *  one) so a device's storey can be resolved from HA the same way its room
+ *  already is, rather than only from the floor-plan's own per-room `floor`
+ *  value (see HAStateStore's entityFloorNumbers / cockpitData.ts's
+ *  buildRoomGroups). Null for an area with no Floor assigned. */
 export interface HassAreaRegistryEntry {
   area_id: string;
   name: string;
+  floor_id: string | null;
+}
+
+/** One row of `config/floor_registry/list` — id, human-readable name, and
+ *  HA's own optional numeric `level` (NOT guaranteed set: a real villa's own
+ *  "2F" floor had `level: null` while "1F" had `level: 1`, so this app
+ *  prefers parsing a leading digit out of `name` first — "1F"/"2F" is also
+ *  exactly how this app's OWN UI already labels floors — falling back to
+ *  `level` only when the name has none (see EntityMap.ts's
+ *  resolveEntityFloor). */
+export interface HassFloorRegistryEntry {
+  floor_id: string;
+  name: string;
+  level: number | null;
 }
 
 /** One row of `logbook/get_events` — verified directly against a live

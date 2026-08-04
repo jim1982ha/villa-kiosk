@@ -186,6 +186,7 @@ for frame in ("auth", "ping", "pong", "subscribe_events", "get_states",
 section("websocket frames: read-only registry/config lists permitted for every role")
 for frame in ("get_config", "config/entity_registry/list",
               "config/device_registry/list", "config/area_registry/list",
+              "config/floor_registry/list",
               "energy/get_prefs", "recorder/list_statistic_ids", "recorder/statistics_during_period",
               "logbook/get_events"):
     t(f"{frame} permitted", frame in proxy.ALLOWED_WS_TYPES, True)

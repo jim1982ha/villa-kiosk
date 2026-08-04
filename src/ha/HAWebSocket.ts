@@ -4,7 +4,7 @@
 
 import type {
   EnergyPrefs, HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntity, HassEntityRegistryEntry,
-  HassServiceTarget, RawLogbookEntry, StatisticIdInfo, StatisticPeriod,
+  HassFloorRegistryEntry, HassServiceTarget, RawLogbookEntry, StatisticIdInfo, StatisticPeriod,
 } from "@/types/ha.types";
 import { ingressWsUrl } from "./ingress";
 import { captureError } from "@/utils/diagnostics";
@@ -384,6 +384,13 @@ export class HAWebSocket {
    *  live data (never shipped/assumed by this app). */
   async getAreaRegistry(): Promise<HassAreaRegistryEntry[]> {
     return this.sendMessage<HassAreaRegistryEntry[]>("config/area_registry/list");
+  }
+
+  /** Floor registry rows — HA's own Floors feature, an Area's optional
+   *  parent grouping. See HassFloorRegistryEntry for why `level` alone
+   *  isn't trusted. */
+  async getFloorRegistry(): Promise<HassFloorRegistryEntry[]> {
+    return this.sendMessage<HassFloorRegistryEntry[]>("config/floor_registry/list");
   }
 
   /** Logbook events since `startTime` (ISO string) — verified against a live

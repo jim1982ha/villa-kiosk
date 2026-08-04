@@ -214,6 +214,34 @@ export function resolveEntityRoom(
   return areaName || geometricRoom || "";
 }
 
+/**
+ * Same precedence as resolveEntityRoom, for STOREY instead of room: HA's own
+ * Floor (via the device's Area — see HassAreaRegistryEntry.floor_id) wins
+ * whenever one is assigned; the floor-plan's own per-room `floor` value
+ * (sh3dRooms, matched by room NAME — see cockpitData.ts's buildRoomGroups)
+ * is the fallback for whatever HA hasn't organised into a Floor yet.
+ *
+ * `haFloorName` is checked BEFORE `haFloorLevel`, not after: HA's `level` is
+ * an optional, user-set integer with no forced meaning (a real villa had
+ * "1F" at level 1 but "2F" at level null — set for one floor and not the
+ * other), whereas this app's own UI already labels every floor "1F"/"2F"
+ * throughout (the HUD's floor toggle, Cockpit's floor pivot), so a leading
+ * digit in the Floor's own name is the more reliable, convention-matching
+ * signal whenever it's present.
+ */
+export function resolveEntityFloor(
+  haFloorName: string | undefined,
+  haFloorLevel: number | null | undefined,
+  geometricFloor: number | null,
+): number | null {
+  if (haFloorName) {
+    const digits = haFloorName.match(/\d+/);
+    if (digits) return Number(digits[0]);
+  }
+  if (haFloorLevel != null) return haFloorLevel;
+  return geometricFloor;
+}
+
 /** Passthrough kept for its call sites. Categories are no longer pinned onto a
  *  mapping — they're derived from device type + device_class at read time (see
  *  effectiveCategory / EntityCategories.ts), so a mapping's `category` is left

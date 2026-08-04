@@ -54,7 +54,7 @@ const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
 };
 
 export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }: CockpitModalProps) {
-  const { entities, ws } = useHA();
+  const { entities, ws, entityFloorNumbers } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
   const { data: fmData } = useFmData();
@@ -86,8 +86,8 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
     [selectableIds, entities, config.entityMap],
   );
   const roomGroups = useMemo(
-    () => buildRoomGroups(selectableIds, resolvedRooms, config.sh3dRooms),
-    [selectableIds, resolvedRooms, config.sh3dRooms],
+    () => buildRoomGroups(selectableIds, resolvedRooms, config.sh3dRooms, entityFloorNumbers),
+    [selectableIds, resolvedRooms, config.sh3dRooms, entityFloorNumbers],
   );
   const floorGroups = useMemo(() => buildFloorGroups(roomGroups), [roomGroups]);
 

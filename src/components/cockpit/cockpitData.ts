@@ -169,8 +169,8 @@ const NO_ROOM = "Other";
 
 export interface RoomGroup {
   room: string;
-  /** null for the "Other" bucket, or a room with no sh3dRooms entry (no
-   *  floor plan geometry to read a storey from). */
+  /** null for the "Other" bucket, or a room with no resolvable floor at all
+   *  (neither HA nor the floor plan has one for it). */
   floor: number | null;
   count: number;
   /** Every selectable device resolved to this room — lets the Cockpit pivot
@@ -179,14 +179,23 @@ export interface RoomGroup {
   entityIds: string[];
 }
 
-/** Devices bucketed by resolved room, each joined to its floor via sh3dRooms
- *  (a room's floor lives on the PLAN geometry, not on the device — see
- *  AppConfig.sh3dRooms). Alphabetical with "Other" always last, same
+/** Devices bucketed by resolved room, each joined to its floor. HA's own
+ *  Floor assignment wins whenever any device in the room has one (via
+ *  entityFloorNumbers — see HAStateStore.tsx); the floor-plan's own per-room
+ *  `floor` value (sh3dRooms, matched by room NAME) is the fallback for
+ *  whatever HA hasn't organised into a Floor yet — same "HA wins, geometry
+ *  is the fallback" precedence resolvedRooms itself already uses. Reported:
+ *  a room whose devices' Areas were all correctly on "2F" in HA still fell
+ *  into the floor pivot's "Other" bucket, because the floor-plan's OWN
+ *  drawn-room data (sh3dRooms) was the only signal ever read for storey —
+ *  it either had no entry matching this room's name, or disagreed with a
+ *  since-reorganised HA Floor. Alphabetical with "Other" always last, same
  *  convention SummaryGroupPanel's own room grouping uses. */
 export function buildRoomGroups(
   selectableIds: readonly string[],
   resolvedRooms: Record<string, string>,
   sh3dRooms: { name: string; floor?: number }[] | undefined,
+  entityFloorNumbers: Record<string, number>,
 ): RoomGroup[] {
   const floorByRoom = new Map<string, number>();
   for (const r of sh3dRooms ?? []) floorByRoom.set(roomKey(r.name), r.floor ?? 1);
@@ -199,10 +208,11 @@ export function buildRoomGroups(
     idsByRoom.set(room, list);
   }
   return [...idsByRoom.entries()]
-    .map(([room, entityIds]) => ({
-      room, count: entityIds.length, entityIds,
-      floor: room === NO_ROOM ? null : (floorByRoom.get(roomKey(room)) ?? null),
-    }))
+    .map(([room, entityIds]) => {
+      const haFloor = entityIds.map((id) => entityFloorNumbers[id]).find((f) => f != null);
+      const floor = room === NO_ROOM ? null : (haFloor ?? floorByRoom.get(roomKey(room)) ?? null);
+      return { room, count: entityIds.length, entityIds, floor };
+    })
     .sort((a, b) => {
       if (a.room === NO_ROOM) return b.room === NO_ROOM ? 0 : 1;
       if (b.room === NO_ROOM) return -1;

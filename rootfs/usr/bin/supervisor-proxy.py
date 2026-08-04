@@ -511,6 +511,12 @@ _NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_st
 # first did not return usable data in the same test, which is why this is a
 # websocket entry and there is no matching REST prefix for it.
 #
+# config/floor_registry/list, same category as the other three registry list
+# calls: HA's own Floors feature (an Area's optional parent grouping), read
+# so a device's storey can resolve from HA the same way its room already
+# does (see HAStateStore.tsx's entityFloorNumbers) instead of only from the
+# floor-plan's own static per-room data.
+#
 # All of the above are read-only, same as the registry list calls above.
 ALLOWED_WS_TYPES = frozenset({
     "auth", "ping", "pong",
@@ -518,6 +524,7 @@ ALLOWED_WS_TYPES = frozenset({
     "get_states", "call_service", "camera/stream",
     "get_config",
     "config/entity_registry/list", "config/device_registry/list", "config/area_registry/list",
+    "config/floor_registry/list",
     "energy/get_prefs", "recorder/list_statistic_ids", "recorder/statistics_during_period",
     "logbook/get_events",
 })

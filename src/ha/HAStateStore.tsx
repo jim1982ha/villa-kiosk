@@ -9,6 +9,7 @@ import {
 } from "react";
 import { HAWebSocket, type ConnectionState } from "./HAWebSocket";
 import { devLog } from "@/utils/devLog";
+import { resolveEntityFloor } from "@/config/EntityMap";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 
 type EntityCallback = (entity: HassEntity) => void;
@@ -48,6 +49,13 @@ interface HAStateContextType {
    *  resolveEntityRoom) — geometric room-polygon detection is the fallback
    *  for whatever this doesn't cover, not the other way around. */
   entityAreaNames: Record<string, string>;
+  /** entity_id -> HA's own Floor NUMBER (via the entity's resolved Area's
+   *  floor_id — see HassAreaRegistryEntry/HassFloorRegistryEntry), live the
+   *  same way entityAreaNames is. Absent for any entity whose Area has no
+   *  Floor assigned (or that resolves to no Area at all) — see
+   *  cockpitData.ts's buildRoomGroups for the geometric (sh3dRooms) fallback
+   *  this feeds into, same precedence as room resolution itself. */
+  entityFloorNumbers: Record<string, number>;
   /** entity_id -> HA's own device_id (from the entity registry) — the
    *  authoritative "these entities belong to the same physical device"
    *  signal, used to suggest device groups (see config/deviceGroups.ts)
@@ -106,6 +114,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const [suppressedEntityIds, setSuppressedEntityIds] = useState<Set<string>>(new Set());
   const [hiddenInHaEntityIds, setHiddenInHaEntityIds] = useState<Set<string>>(new Set());
   const [entityAreaNames, setEntityAreaNames] = useState<Record<string, string>>({});
+  const [entityFloorNumbers, setEntityFloorNumbers] = useState<Record<string, number>>({});
   const [entityDeviceIds, setEntityDeviceIds] = useState<Record<string, string>>({});
   // Mirrors `entities` synchronously (no extra render/effect lag) so
   // getEntitiesSnapshot() below is never stale — see its docstring.
@@ -159,10 +168,12 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   // Registry-only data (get_states never reports hidden_by/entity_category/
   // area_id) — best effort: a profile without registry read access just sees
   // nothing filtered/suggested. Re-run on connect AND on every
-  // entity/device/area registry change (see the subscriptions in connect()
-  // below) — this is what makes entityAreaNames (now the authoritative room
-  // source, see EntityMap.ts's resolveEntityRoom) reflect an HA-side rename
-  // or a device's Area assignment without a reload.
+  // entity/device/area/floor registry change (see the subscriptions in
+  // connect() below) — this is what makes entityAreaNames/entityFloorNumbers
+  // (the authoritative room/storey source, see EntityMap.ts's
+  // resolveEntityRoom/resolveEntityFloor) reflect an HA-side rename, a
+  // device's Area assignment, or an Area's Floor assignment without a
+  // reload.
   const refreshRegistryData = useCallback(async () => {
     try {
       const rows = await ws.getEntityRegistry();
@@ -184,13 +195,14 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       setEntityDeviceIds(deviceIds);
       // Resolve each entity's Area NAME: its own area_id, falling back to its
       // device's (HA's own inheritance rule — most entities carry no area_id
-      // of their own and get it from the device they belong to). Both
+      // of their own and get it from the device they belong to). All three
       // registry fetches are separate best-effort steps so a profile that can
-      // read entities but not devices/areas still gets whatever resolves
-      // rather than losing the whole feature.
-      const [devices, areas] = await Promise.all([
+      // read entities but not devices/areas/floors still gets whatever
+      // resolves rather than losing the whole feature.
+      const [devices, areas, floors] = await Promise.all([
         ws.getDeviceRegistry().catch(() => []),
         ws.getAreaRegistry().catch(() => []),
+        ws.getFloorRegistry().catch(() => []),
       ]);
       if (devices.length === 0 && areas.length === 0) return;
       const areaNameById = new Map(areas.map((a) => [a.area_id, a.name]));
@@ -202,6 +214,23 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
         if (name) resolved[r.entity_id] = name;
       }
       setEntityAreaNames(resolved);
+      // Same inheritance chain, one hop further: entity -> area -> Floor.
+      // See HassAreaRegistryEntry/HassFloorRegistryEntry and
+      // EntityMap.ts's resolveEntityFloor for why `name` is preferred over
+      // HA's own optional `level`.
+      const areaById = new Map(areas.map((a) => [a.area_id, a]));
+      const floorById = new Map(floors.map((f) => [f.floor_id, f]));
+      const resolvedFloors: Record<string, number> = {};
+      for (const r of rows) {
+        const areaId = r.area_id ?? (r.device_id ? deviceAreaById.get(r.device_id) : null);
+        const floorId = areaId ? areaById.get(areaId)?.floor_id : null;
+        const floor = floorId ? floorById.get(floorId) : null;
+        if (floor) {
+          const num = resolveEntityFloor(floor.name, floor.level, null);
+          if (num != null) resolvedFloors[r.entity_id] = num;
+        }
+      }
+      setEntityFloorNumbers(resolvedFloors);
     } catch (err) {
       devLog("[HA] entity_registry/list failed (hidden filter + area names skipped)", err);
     }
@@ -227,7 +256,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
         // the one resolver covers whichever registry actually changed rather
         // than needing three separate handlers.
         const onRegistryChanged = () => { void refreshRegistryData(); };
-        for (const eventType of ["entity_registry_updated", "device_registry_updated", "area_registry_updated"]) {
+        for (const eventType of ["entity_registry_updated", "device_registry_updated", "area_registry_updated", "floor_registry_updated"]) {
           ws.subscribeEvents(eventType, onRegistryChanged)
             .catch((err) => devLog(`[HA] subscribe ${eventType} failed`, err));
         }
@@ -279,6 +308,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       suppressedEntityIds,
       hiddenInHaEntityIds,
       entityAreaNames,
+      entityFloorNumbers,
       entityDeviceIds,
       getEntitiesSnapshot,
       connection,
@@ -292,7 +322,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       lastError,
       serviceError,
     }),
-    [entities, suppressedEntityIds, hiddenInHaEntityIds, entityAreaNames, entityDeviceIds, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
+    [entities, suppressedEntityIds, hiddenInHaEntityIds, entityAreaNames, entityFloorNumbers, entityDeviceIds, getEntitiesSnapshot, connection, haConfig, ws, subscribe, subscribeAll, callService, connect, lastError, serviceError],
   );
 
   return <HAStateContext.Provider value={value}>{children}</HAStateContext.Provider>;
