@@ -6,8 +6,12 @@ import { ProfileProvider } from "@/auth/ProfileContext";
 import ProfileGate from "@/components/auth/ProfileGate";
 import { SuperadminGate } from "@/auth/SuperadminGate";
 import Dashboard from "@/pages/Dashboard";
+import { markBoot } from "@/utils/bootTimeline";
 
 export default function App() {
+  // React reached the app. First-write-wins, so re-renders and StrictMode's
+  // double-invoke are both harmless.
+  markBoot("react");
   return (
     <ConfigProvider>
       <ProfileProvider>

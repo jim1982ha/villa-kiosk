@@ -37,6 +37,13 @@ export function report(kind: TelemetryKind, data: Record<string, unknown> = {}):
   if (disabled) return;
   const body = JSON.stringify({
     kind,
+    // WHICH BUILD produced this event. Its absence once cost a whole
+    // diagnosis: a load record timestamped two minutes after a release was
+    // read as evidence that the release hadn't helped, when the add-on's
+    // frontend ships inside the GHCR image and the device was still running
+    // the previous build entirely. A log that can't identify its own version
+    // invites exactly that mistake, so every event now carries it.
+    v: typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : undefined,
     // Client-side context that helps correlate an event with a device without
     // identifying a person: viewport + devicePixelRatio pin down "which
     // phone", memory (Chrome-only) shows pressure, standalone distinguishes

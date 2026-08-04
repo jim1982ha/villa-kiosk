@@ -4,8 +4,14 @@ import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { installGlobalErrorCapture } from "./utils/diagnostics";
 import { installLifecycleTelemetry } from "./utils/telemetry";
+import { markBoot } from "./utils/bootTimeline";
 import { startModelPrefetch } from "./utils/modelPrefetch";
 import "./styles.css";
+
+// First line of our own code to run: everything before this point is the HTML
+// round trip plus the JS bundle's download/parse/compile, which is precisely
+// the phase the Babylon deep-import work targets and which nothing measured.
+markBoot("js");
 
 // Record uncaught errors / rejections to localStorage so one that fires just
 // before a reload still surfaces in the next load's diagnostics report.

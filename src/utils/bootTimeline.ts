@@ -1,0 +1,147 @@
+// src/utils/bootTimeline.ts
+// Named milestones along the only path that actually matters to a user: the
+// moment they open the kiosk → the villa on screen.
+//
+// WHY THIS EXISTS
+// `bootMs` (navigation start → the scene effect) was one opaque number covering
+// wildly different things: the HTML round trip, the JS bundle's download +
+// parse + compile, React mounting, the profile gate resolving, AND — the part
+// that makes it actively misleading — however long a HUMAN spent choosing a
+// profile and typing a passcode. A load where someone fumbled their PIN for six
+// seconds and a load where the bundle took six seconds to compile produced the
+// same `bootMs`, and only one of them is a bug worth fixing. Every optimisation
+// so far has been judged against a number that silently mixes the two.
+//
+// This module records a handful of first-write-wins marks along that path
+// (idempotent, so React StrictMode's double-invoke and any re-render are
+// harmless) and derives two things the old telemetry could not express:
+//   * WHERE the machine time went — html / bundle / react / gate / scene, each
+//     separately attributable rather than summed into one figure;
+//   * `waitMs`, the stretch the app spent WAITING ON THE PERSON, so `activeMs`
+//     (= totalMs − waitMs) is the number to actually optimise against.
+//
+// It also captures what the browser already knows and nobody was reading: the
+// Navigation Timing breakdown, and — decisively, given how easy it is to
+// measure a build that isn't the one you just shipped — the real decoded size
+// of the JS the device actually executed.
+
+/** Milestones, in the order they happen. */
+export type BootMark =
+  | "js"      // the main bundle's module body ran (bundle is downloaded+compiled)
+  | "react"   // React reached <App> for the first time
+  | "gate"    // a sign-in screen became visible (profile select)
+  | "pin"     // the passcode pad became visible
+  | "auth"    // a session was established (login())
+  | "scene";  // the Babylon scene effect started
+
+const marks = new Map<BootMark, number>();
+
+/** Record a milestone. First write wins — safe to call from a render body, an
+ *  effect that re-runs, or a StrictMode double-mount. */
+export function markBoot(name: BootMark): void {
+  if (!marks.has(name)) marks.set(name, performance.now());
+}
+
+function mark(name: BootMark): number | undefined {
+  return marks.get(name);
+}
+
+/** The document's own Navigation Timing entry, if the browser exposes one. */
+function navEntry(): PerformanceNavigationTiming | undefined {
+  try {
+    return performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Total DECODED bytes of JavaScript this page actually executed, plus how much
+ *  of it crossed the network. `jsKb` is the honest "how big is the bundle on
+ *  this device" figure — it is reported even for a cache/service-worker hit
+ *  (where `transferSize` is 0), which is exactly the case where a stale build
+ *  would otherwise be invisible. This is the field that answers "is the device
+ *  running the build I just shipped?" without anyone having to guess. */
+function scriptWeight(): { jsKb?: number; jsNetKb?: number } {
+  try {
+    const res = performance.getEntriesByType("resource") as PerformanceResourceTiming[];
+    let decoded = 0, transferred = 0;
+    for (const r of res) {
+      if (r.initiatorType !== "script" && !r.name.endsWith(".js")) continue;
+      decoded += r.decodedBodySize || 0;
+      transferred += r.transferSize || 0;
+    }
+    if (!decoded) return {};
+    return { jsKb: Math.round(decoded / 1024), jsNetKb: Math.round(transferred / 1024) };
+  } catch {
+    return {};
+  }
+}
+
+/** The whole picture, flattened into telemetry fields.
+ *
+ *  `total` is the caller's own navigation-start → villa-visible measurement
+ *  (BabylonCanvas already owns that clock); everything else is derived here. */
+export function bootTimeline(total: number): Record<string, number | string | boolean> {
+  const out: Record<string, number | string | boolean> = {};
+  const put = (k: string, v: number | undefined) => {
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) out[k] = Math.round(v);
+  };
+
+  const nav = navEntry();
+  const tJs = mark("js");
+  const tReact = mark("react");
+  const tGate = mark("gate") ?? mark("pin");
+  const tAuth = mark("auth");
+  const tScene = mark("scene");
+
+  // ── Navigation: what the browser did before any of our code existed ──────
+  if (nav) {
+    out.navType = nav.type;
+    // A prerendered document starts its clock earlier than it became visible;
+    // without this the phases below look impossibly fast. Not in every browser
+    // (and not in this TS lib's DOM types), so it is read defensively.
+    put("actMs", (nav as PerformanceNavigationTiming & { activationStart?: number }).activationStart);
+    // workerStart > 0 means the service worker handled this navigation — on the
+    // PWA (which is the villa iPad's actual configuration) that is the normal
+    // path, and its cost has never been separated from "the server was slow".
+    if (nav.workerStart > 0) put("swMs", nav.responseStart - nav.workerStart);
+    put("ttfbMs", nav.responseStart - nav.requestStart);
+    put("htmlMs", nav.responseEnd - nav.responseStart);
+    // Bundle: HTML delivered → our module body ran. This is download + parse +
+    // compile of the JS, the phase the Babylon barrel-import fix targets.
+    if (tJs !== undefined) put("bundleMs", tJs - nav.responseEnd);
+  }
+
+  // ── Our own code, phase by phase ─────────────────────────────────────────
+  if (tJs !== undefined && tReact !== undefined) put("reactMs", tReact - tJs);
+
+  // ── The human ────────────────────────────────────────────────────────────
+  // A gate only appears when there is no restored session. When it does, the
+  // time from it appearing to a session existing is dominated by a person
+  // reading, tapping and typing — NOT by anything worth optimising. Reporting
+  // it separately is what makes `activeMs` meaningful.
+  const gated = tGate !== undefined;
+  out.gated = gated;
+  if (gated) out.pinned = mark("pin") !== undefined;
+  let wait = 0;
+  if (gated && tAuth !== undefined && tGate !== undefined && tAuth > tGate) {
+    wait = tAuth - tGate;
+    put("waitMs", wait);
+  }
+
+  // Passcode accepted → the scene effect actually starting: React committing
+  // the whole authenticated tree (the config/FM/HA providers, Dashboard, then
+  // BabylonCanvas) before one line of villa-loading code runs. This is the
+  // stretch a user experiences as "I typed my PIN and nothing happened yet",
+  // and no measurement has ever covered it. On the restored-session path (no
+  // gate at all) it is measured from React instead, the only earlier anchor.
+  const sceneFrom = tAuth ?? tReact;
+  if (tScene !== undefined && sceneFrom !== undefined) put("mountMs", tScene - sceneFrom);
+
+  // THE number to judge a load by: wall clock minus the part spent waiting on a
+  // person. Equals totalMs whenever a session was already restored.
+  put("activeMs", total - wait);
+
+  Object.assign(out, scriptWeight());
+  return out;
+}

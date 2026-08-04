@@ -11,6 +11,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/roles";
 import { pinRequired as fetchPinRequired, verify, openSession } from "@/auth/PinVerifier";
 import { startModelPrefetch } from "@/utils/modelPrefetch";
+import { markBoot } from "@/utils/bootTimeline";
 import PinPad from "./PinPad";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
@@ -59,6 +60,16 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
       });
     return () => { cancelled = true; };
   }, [role, switching]);
+
+  // Mark the moment a sign-in screen is actually on display. Everything from
+  // here until login() succeeds is a person reading/tapping/typing, not the app
+  // being slow — separating the two is the whole point (see bootTimeline's
+  // `waitMs`/`activeMs`). Declared above the early returns so the hook order is
+  // unconditional; first-write-wins makes the repeat runs harmless.
+  useEffect(() => {
+    if (role && !switching) return;
+    markBoot(pending ? "pin" : "gate");
+  }, [role, switching, pending]);
 
   if (role && !switching) return <>{children}</>;
 

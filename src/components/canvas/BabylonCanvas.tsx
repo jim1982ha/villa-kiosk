@@ -14,6 +14,7 @@ import { fetchModelWithRetry } from "@/utils/fetchProgress";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { report as reportTelemetry } from "@/utils/telemetry";
+import { markBoot, bootTimeline } from "@/utils/bootTimeline";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
 import ModelUploader from "@/components/settings/ModelUploader";
 import ErrorReport from "@/components/ErrorReport";
@@ -154,6 +155,11 @@ export default function BabylonCanvas({
     // sit through (5-7s, cross-checked against the gap between the pageshow and
     // load records' own timestamps). Everything below exists to close that gap.
     const tBoot = performance.now();
+    // The last milestone on the path bootTimeline reconstructs — everything
+    // before it (HTML, bundle, React, and any time a person spent at the
+    // profile/passcode screen) is now separately attributable instead of
+    // collapsing into this single figure.
+    markBoot("scene");
 
     let cancelled = false;
     const canvasEl = canvasRef.current;
@@ -337,6 +343,13 @@ export default function BabylonCanvas({
           revealMs: number, totalMs: number, revealSplit: Record<string, number>,
         ) => reportTelemetry("load", {
           ...revealSplit,
+          // The pre-scene half of the load, split into phases that can each be
+          // acted on — html/bundle/react/gate — plus `waitMs` (time spent
+          // waiting on a HUMAN at the profile or passcode screen) and
+          // `activeMs` (= totalMs − waitMs), which is the figure to optimise
+          // against. `jsKb` reports the DECODED weight of the JS this device
+          // actually ran, so a stale build identifies itself.
+          ...bootTimeline(totalMs),
           // ── The window that was previously invisible ────────────────────
           // bootMs: navigation start → this scene effect (HTML + the ~6.6MB JS
           // bundle's download/parse/compile + React mount + session resolve).

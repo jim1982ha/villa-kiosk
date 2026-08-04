@@ -37,6 +37,12 @@ function shortUA(ua = ""): string {
   return ua.slice(0, 24) || "—";
 }
 
+/** ms → the shortest honest rendering ("840ms", "5.5s"). */
+function ms(v: unknown): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "?";
+  return v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${Math.round(v)}ms`;
+}
+
 /** The one-line summary per event kind — the fields that actually matter for
  *  that kind, rather than a raw JSON dump nobody reads. */
 function summarise(e: TelemetryEvent): string {
@@ -53,8 +59,19 @@ function summarise(e: TelemetryEvent): string {
       // anything was slow — call that out so it isn't read as a regression.
       const parked = typeof e.yield === "number" && e.yield > 1000
         ? ` · ${(e.yield / 1000).toFixed(1)}s parked (tab was hidden)` : "";
-      return `${e.parseMs}ms parse (import ${e.importMs} · post ${e.postMs}), `
-        + `fetch ${e.fetchMs}ms, ${e.meshes} meshes${worst}${parked}`;
+      // Lead with the end-to-end wall clock, not `parseMs`. This line used to
+      // open with parse time, which since 2.95.0 is a minority of the load —
+      // reading it as the headline understated every slow load by seconds.
+      // `waitMs` (a person at the profile/passcode screen) is called out
+      // separately so it is never mistaken for the app being slow.
+      const waited = typeof e.waitMs === "number" && e.waitMs > 0
+        ? `, ${ms(e.waitMs)} waiting on sign-in` : "";
+      const active = typeof e.activeMs === "number" && waited
+        ? ` → ${ms(e.activeMs)} active` : "";
+      const weight = typeof e.jsKb === "number" ? ` · ${e.jsKb}kB js` : "";
+      return `${ms(e.totalMs)} total${waited}${active} · bundle ${ms(e.bundleMs)}`
+        + ` · mount ${ms(e.mountMs)} · parse ${ms(e.parseMs)} · reveal ${ms(e.revealMs)}`
+        + `${weight}${worst}${parked}`;
     }
     case "error":
       return `${e.code}: ${String(e.message ?? "").slice(0, 120)}`;
@@ -193,7 +210,12 @@ export default function TelemetryPanel() {
                 {e.kind}
               </span>
               <span className="muted" style={{ flex: "0 0 auto", fontSize: "var(--text-2xs)" }}>
-                {shortUA(e.ua)}{e.role ? ` · ${e.role}` : ""}
+                {/* The build that produced the event. Without it, an event
+                    logged minutes after a release is indistinguishable from
+                    one produced BY that release — the add-on's frontend ships
+                    inside the GHCR image, so a device can lag a push by a long
+                    way. Older events predate the field and just show nothing. */}
+                {shortUA(e.ua)}{e.role ? ` · ${e.role}` : ""}{e.v ? ` · v${e.v}` : ""}
               </span>
               <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>{summarise(e)}</span>
               <span className="muted" style={{ flex: "0 0 auto", fontSize: "var(--text-2xs)" }}>

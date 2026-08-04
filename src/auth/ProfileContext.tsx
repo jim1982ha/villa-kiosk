@@ -11,6 +11,7 @@ import {
 } from "react";
 import { isRole, type Role } from "./roles";
 import { ingressPath } from "@/ha/ingress";
+import { markBoot } from "@/utils/bootTimeline";
 
 const SESSION_KEY = "villa-kiosk:profile:v1";
 
@@ -54,6 +55,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [switching, setSwitching] = useState(false);
 
   const login = useCallback((next: Role) => {
+    // The single choke point for "a session now exists" — every sign-in path
+    // (un-gated one-tap, passcode accepted, profile switch) ends up here, so
+    // this is the one honest boundary between time spent waiting on a PERSON
+    // and time spent waiting on the APP. See utils/bootTimeline.
+    markBoot("auth");
     try {
       sessionStorage.setItem(SESSION_KEY, JSON.stringify({ role: next, at: Date.now() }));
     } catch {
