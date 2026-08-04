@@ -217,14 +217,16 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             />
           </div>
           {(manager?.renderFx.isBaked() ?? false) && (
-            // alignSelf: stretch (not the flexbox default's opposite,
-            // flex-end) so this matches the FULL height of its slider
-            // siblings — label-plus-track — rather than sitting as a short
-            // pill pinned to their bottom edge. Sunrise, not Sun, for "Day":
-            // the Theme selector above already uses Sun for its Light
-            // option, and the two sat close enough on the same screen to
-            // read as the same control.
-            <div className="segmented segmented-icons" role="group" aria-label="Day/night preview" style={{ flex: "0 0 auto", alignSelf: "stretch" }}>
+            // alignSelf: flex-end — lines the control's BOTTOM edge up with
+            // the bottom of its slider siblings (where the track/thumb sits),
+            // which is the part it should visually match. `stretch` was tried
+            // first and read badly: it grew the control to the FULL
+            // label-plus-track height, producing a tall, blocky pill with
+            // nothing else in the row shaped like it. Sunrise, not Sun, for
+            // "Day": the Theme selector above already uses Sun for its Light
+            // option, and the two sat close enough on the same screen to read
+            // as the same control.
+            <div className="segmented segmented-icons" role="group" aria-label="Day/night preview" style={{ flex: "0 0 auto", alignSelf: "flex-end" }}>
               {([
                 { key: "day", label: "Force day view", icon: Sunrise },
                 { key: "auto", label: "Follow the real day/night cycle", icon: SunMoon },
@@ -269,19 +271,31 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         <label style={{ marginTop: 16, display: "block" }}>Floating badge style</label>
         <div className="row" style={{ gap: 10, marginTop: 6, flexWrap: "wrap" }}>
           <div className="segmented badge-style-row-group" role="group" aria-label="Floating badge style">
+            {/* Text drops to icon-only under 560px (.settings-label-full),
+                same as Summary bar's short label below — NOT just for space,
+                but because a flex item's default min-width is its CONTENT's
+                min-content size, not its flex-basis: giving this group a
+                calc(50%) basis doesn't actually let it shrink past "Classic"
+                + "Card"'s own text width, so the row kept wrapping anyway
+                even with a 50/50 split. Icon-only removes that floor
+                entirely instead of fighting it. */}
             <button
               className={(config.badgeStyle ?? "classic") === "classic" ? "active" : ""}
               onClick={() => update({ badgeStyle: "classic" })}
               aria-pressed={(config.badgeStyle ?? "classic") === "classic"}
+              title="Classic badge style"
+              aria-label="Classic badge style"
             >
-              <Circle size={16} /> Classic
+              <Circle size={16} /> <span className="settings-label-full">Classic</span>
             </button>
             <button
               className={config.badgeStyle === "card" ? "active" : ""}
               onClick={() => update({ badgeStyle: "card" })}
               aria-pressed={config.badgeStyle === "card"}
+              title="Card badge style"
+              aria-label="Card badge style"
             >
-              <CreditCard size={16} /> Card
+              <CreditCard size={16} /> <span className="settings-label-full">Card</span>
             </button>
           </div>
           {/* Single active/inactive button, its own one-item segmented group —
@@ -291,12 +305,10 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               a narrow-screen media query needs to shrink it, which can't
               override an inline style) so the two sit on one line on a roomy
               screen; under 560px each basis shrinks to a even split of the
-              row AND this button's own label shortens further (.settings-
-              label-short/-full) — together that's what keeps both groups on
-              one line on a phone instead of this one wrapping below, which a
-              shorter label alone didn't fix (its flex-basis was still the
-              same 200px minimum, so the browser kept wrapping regardless of
-              how little text was actually inside it). */}
+              row, and this button's own label shortens (.settings-label-
+              short/-full) rather than disappearing outright — a single
+              button has room for a short word where the Classic/Card PAIR
+              didn't. */}
           <div className="segmented badge-style-row-group" role="group" aria-label="Summary bar">
             <button
               className={(config.showSummaryBar ?? true) ? "active" : ""}

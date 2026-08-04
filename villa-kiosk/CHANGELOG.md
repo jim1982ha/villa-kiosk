@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.84.2
+
+### Interface
+- **The Day/Auto/Night control from 2.84.1 still looked wrong, from a second phone screenshot: too tall, a blocky pill next to the sliders rather than matching their scale.** `alignSelf: "stretch"` had matched it to the sliders' FULL height — label text plus track — when what actually needed matching was just the track/thumb part beneath the label, the same visual weight class as the rest of the row. Back to `alignSelf: "flex-end"`, which lines the control's bottom edge up with the bottom of the slider column (where the track sits) and lets it keep its own natural, compact height instead of stretching to fill space nothing else in the row was asking for.
+- **Classic/Card still wrapped onto its own row above Bottom Bar on a phone, even after 2.84.1 gave both groups a 50/50 flex-basis split.** The basis split was the right idea but didn't work: a flex item's default minimum width is set by its CONTENT's min-content size, not by its flex-basis, so telling the Classic/Card group to shrink to 50% didn't actually let it shrink past "Classic" and "Card"'s own text width — the row kept wrapping regardless of the split. Rather than fight that floor, Classic/Card now drop to icon-only under 560px (reusing the same `.settings-label-full` show/hide mechanism Bottom Bar already uses for its own label, just with no short-text replacement — the icons alone read fine at that size), which removes the floor instead of trying to shrink past it.
+
 ## 2.84.1
 
 ### Interface
