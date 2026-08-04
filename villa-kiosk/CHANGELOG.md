@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.90.0
+
+### Fixed — a camera's Linked entity/Motion sensor always resolved to "Other"
+- **Every camera's arm/disarm switch (its `linkedEntityId`) and detection sensor (its `motionEntityId`) fell into Cockpit's "Other" bucket, regardless of what Area they actually have in Home Assistant.** Root cause: the 2.85.0 room-resolution rework computes a live resolved room only for entities that are literal keys of `config.entityMap` — but a linked entity/motion sensor is never a key itself, it only ever exists as a VALUE on the camera's own mapping (the same reason `Dashboard.tsx`'s `effectiveMappedEntityIds` has to separately fold it into the "on the map" set). The resolution loop simply never visited these ids, so they had no resolved room at all and fell straight to "Other" in every room/floor grouping. Confirmed against a live instance before fixing, not assumed: a reported camera's underlying device DOES have its Area set correctly in Home Assistant — the data was always right, the app just never read it for these specific entity_ids. Fixed by resolving every `linkedEntityId`/`motionEntityId` the same way every other entity already is (HA's own Area first, the geometric fallback — always empty for these, since they have no mesh of their own — second). This also restores `EntityVisuals.applyMotionRouting`'s documented fallback, which glows a camera's own room when it has no beam mesh yet, reading the same resolved-rooms map.
+
 ## 2.89.0
 
 ### Fixed — Cockpit's Close button was on the wrong side

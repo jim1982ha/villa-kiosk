@@ -576,6 +576,24 @@ export default function Dashboard() {
       for (const id of Object.keys(config.entityMap)) {
         resolved[id] = resolveEntityRoom(entityAreaNames[id], manager.roomForEntity(id));
       }
+      // A linkedEntityId/motionEntityId TARGET (a camera's arm/disarm switch,
+      // its detection sensor) is never itself a key of config.entityMap —
+      // it's only ever a VALUE on some other device's mapping, the same
+      // reason effectiveMappedEntityIds above has to separately augment
+      // mappedEntityIds with it. This loop was skipping those ids entirely,
+      // so they had no resolvedRooms entry at all and fell to "Other" in
+      // every room/floor grouping regardless of what Area Home Assistant
+      // actually had them in — reported as "linked/motion entities always
+      // show up under Other". Resolved the same way as everything else:
+      // HA's own Area for that specific entity_id (roomForEntity is always
+      // null for these — they have no mesh of their own).
+      for (const mapping of Object.values(config.entityMap)) {
+        for (const linkedId of [mapping.linkedEntityId, mapping.motionEntityId]) {
+          if (linkedId && !(linkedId in resolved)) {
+            resolved[linkedId] = resolveEntityRoom(entityAreaNames[linkedId], manager.roomForEntity(linkedId));
+          }
+        }
+      }
       manager.setResolvedRooms(resolved);
       setResolvedRooms(resolved);
     };
