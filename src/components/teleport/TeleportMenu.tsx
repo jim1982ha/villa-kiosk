@@ -12,7 +12,7 @@
 // purely to host the gesture.
 
 import { X, MapPin, Plus, Trash2 } from "lucide-react";
-import { Axis } from "@babylonjs/core";
+import { Axis } from "@babylonjs/core/Maths/math.axis";
 import { useConfig } from "@/config/ConfigContext";
 import type { TeleportPoint, Vec3 } from "@/types/scene.types";
 import type { SceneManager } from "@/babylon/SceneManager";

@@ -2,7 +2,16 @@
 // Load a GLB into the scene from an ArrayBuffer (IndexedDB) or an uploaded File,
 // and persist uploads to IndexedDB so a refresh doesn't re-upload.
 
-import { SceneLoader, Material, Color3, Vector3, HemisphericLight, DracoCompression, KhronosTextureContainer2, VertexBuffer, type AbstractMesh, type Scene } from "@babylonjs/core";
+import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
+import { Material } from "@babylonjs/core/Materials/material";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
+import { DracoCompression } from "@babylonjs/core/Meshes/Compression/dracoCompression";
+import { KhronosTextureContainer2 } from "@babylonjs/core/Misc/khronosTextureContainer2";
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import type { Scene } from "@babylonjs/core/scene";
 import "@babylonjs/loaders/glTF";
 // Bundle the Draco decoder from @babylonjs/core so a Draco-compressed GLB loads
 // WITHOUT hitting Babylon's default CDN — required for the offline HA-Ingress

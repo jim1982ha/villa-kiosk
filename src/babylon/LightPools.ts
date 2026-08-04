@@ -13,10 +13,14 @@
 // needs a live light indicator — additive blending means it brightens
 // whatever's beneath it instead of covering it like a normal decal would.
 
-import {
-  Mesh, MeshBuilder, StandardMaterial, DynamicTexture, Color3, Constants,
-  type Vector3, type Scene,
-} from "@babylonjs/core";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { Constants } from "@babylonjs/core/Engines/constants";
+import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import type { Scene } from "@babylonjs/core/scene";
 
 const POOL_TEXTURE_SIZE = 128;
 

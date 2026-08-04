@@ -26,7 +26,8 @@
 // `trigger_stair_up/down` meshes (if present) switch floors when the camera
 // walks into them.
 
-import type { AbstractMesh, Scene } from "@babylonjs/core";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import type { Scene } from "@babylonjs/core/scene";
 import type { CameraController } from "./CameraController";
 import { structureRole } from "./meshRoles";
 

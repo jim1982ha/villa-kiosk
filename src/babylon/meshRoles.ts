@@ -29,7 +29,7 @@
 // Adding a new structural fact should mean adding a `vk_*` key here and in the
 // pipeline — never another word list.
 
-import type { AbstractMesh } from "@babylonjs/core";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { normaliseMeshName } from "../config/EntityMap";
 
 /** glTF `extras` keys written by blender_pipeline.py's _stamp_structure_roles.

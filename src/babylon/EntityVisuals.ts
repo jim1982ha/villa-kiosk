@@ -45,14 +45,25 @@
 //
 //   See desiredVariantWord / orderVariantWords / applyStateNamedVariant.
 
-import {
-  Color3, StandardMaterial, PBRMaterial, PointLight, ShadowGenerator,
-  Vector3, Matrix, Quaternion, TransformNode, Ray, VertexBuffer, Material, Mesh,
-  type AbstractMesh, type Scene,
-} from "@babylonjs/core";
-import {
-  AdvancedDynamicTexture, Rectangle, TextBlock, StackPanel, Image, Control,
-} from "@babylonjs/gui";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
+import { PointLight } from "@babylonjs/core/Lights/pointLight";
+import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
+import { Vector3, Matrix, Quaternion } from "@babylonjs/core/Maths/math.vector";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import { Ray } from "@babylonjs/core/Culling/ray";
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
+import { Material } from "@babylonjs/core/Materials/material";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import type { Scene } from "@babylonjs/core/scene";
+import { AdvancedDynamicTexture } from "@babylonjs/gui/2D/advancedDynamicTexture";
+import { Rectangle } from "@babylonjs/gui/2D/controls/rectangle";
+import { TextBlock } from "@babylonjs/gui/2D/controls/textBlock";
+import { StackPanel } from "@babylonjs/gui/2D/controls/stackPanel";
+import { Image } from "@babylonjs/gui/2D/controls/image";
+import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
 import { clampIconScale } from "@/config/AppConfig";

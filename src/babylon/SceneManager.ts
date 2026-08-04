@@ -7,11 +7,16 @@
 // `requestRender()` keeps the loop "awake" for a short window; when nothing asks
 // for frames the loop idles at ~0% GPU. (Core 3Dash idea, generalised.)
 
-import {
-  Engine, Scene, Color3, Color4, Vector3, HemisphericLight, Material, PBRMaterial, Ray,
-  Mesh,
-  type AbstractMesh,
-} from "@babylonjs/core";
+import { Engine } from "@babylonjs/core/Engines/engine";
+import { Scene } from "@babylonjs/core/scene";
+import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
+import { Material } from "@babylonjs/core/Materials/material";
+import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
+import { Ray } from "@babylonjs/core/Culling/ray";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import "@babylonjs/loaders/glTF";
 import { roomKey } from "@/config/roomKey";
 

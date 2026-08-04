@@ -10,13 +10,11 @@
 //   3. SSAO2                             — darkens corners/contacts (depth).
 //   4. IBL (procedural gradient cube)    — soft sky/ground ambient for PBR.
 
-import {
-  ImageProcessingConfiguration,
-  SSAO2RenderingPipeline,
-  RawCubeTexture,
-  Constants,
-  type Scene,
-} from "@babylonjs/core";
+import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration";
+import { SSAO2RenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline";
+import { RawCubeTexture } from "@babylonjs/core/Materials/Textures/rawCubeTexture";
+import { Constants } from "@babylonjs/core/Engines/constants";
+import type { Scene } from "@babylonjs/core/scene";
 import type { RenderConfig } from "@/config/AppConfig";
 import { devLog } from "@/utils/devLog";
 

@@ -2,7 +2,10 @@
 // Drives scene lighting from either the real sun position (configured lat/lng) or the
 // HA sun.sun entity state. Day -> bright blue sky; night -> warm indoor glow.
 
-import { Vector3, Color3, Color4, type Scene, type HemisphericLight } from "@babylonjs/core";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
+import type { Scene } from "@babylonjs/core/scene";
+import type { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import type { LightingSystem } from "./LightingSystem";
 import type { SkyDome } from "./SkyDome";
 import { type AppConfig, DEFAULT_RENDER } from "@/config/AppConfig";

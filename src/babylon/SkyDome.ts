@@ -5,7 +5,11 @@
 // villa's latitude/longitude and the time of day: blue by day, warm at dusk, deep
 // blue at night. No texture assets required (SweetHome's sky never exports to GLB).
 
-import { MeshBuilder, Color3, type Scene, type Mesh, type Vector3 } from "@babylonjs/core";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import type { Scene } from "@babylonjs/core/scene";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { SkyMaterial } from "@babylonjs/materials/sky/skyMaterial";
 
 export class SkyDome {

@@ -30,7 +30,9 @@
 // when false the view moves opposite (traditional). Applied to pan, tilt and zoom
 // so the in-app toggle matches user expectation regardless of the OS setting.
 
-import { ArcRotateCamera, Matrix, Vector3, type Scene } from "@babylonjs/core";
+import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
+import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
+import type { Scene } from "@babylonjs/core/scene";
 import { TapRecognizer } from "./TapRecognizer";
 
 interface OverviewCallbacks {

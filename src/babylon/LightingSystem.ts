@@ -2,9 +2,10 @@
 // Scene lights: a directional "sun" + ambient, driven by SunController, plus a
 // registry of per-entity light glows.
 
-import {
-  DirectionalLight, Vector3, Color3, type Scene,
-} from "@babylonjs/core";
+import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import type { Scene } from "@babylonjs/core/scene";
 
 export class LightingSystem {
   readonly sunLight: DirectionalLight;

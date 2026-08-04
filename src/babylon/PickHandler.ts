@@ -7,9 +7,11 @@
 // both grab/release pointer capture). We keep a lightweight POINTERMOVE
 // listener only to drive the mouse hover cursor.
 
-import {
-  PointerEventTypes, type PointerInfo, type AbstractMesh, type Scene, type Node,
-} from "@babylonjs/core";
+import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
+import type { PointerInfo } from "@babylonjs/core/Events/pointerEvents";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import type { Scene } from "@babylonjs/core/scene";
+import type { Node } from "@babylonjs/core/node";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { tapDebug } from "@/utils/tapDebug";

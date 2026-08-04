@@ -17,10 +17,13 @@
 //     draw a small synthetic circular patch there instead. A name covered by
 //     a real polygon always wins — no redundant circle on top of a real room.
 
-import {
-  Mesh, VertexData, StandardMaterial, Vector3, Ray, MeshBuilder,
-  type Scene,
-} from "@babylonjs/core";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Ray } from "@babylonjs/core/Culling/ray";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import type { Scene } from "@babylonjs/core/scene";
 import { earClipTriangulate, type Pt2 } from "@/utils/geometry";
 import { roomKey } from "@/config/roomKey";
 import { ALERT_RED } from "./colors";

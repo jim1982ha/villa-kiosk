@@ -4,10 +4,18 @@
 // handled via moveWithCollisions each frame. Look-around uses Babylon's built-in
 // touch/mouse rotation.
 
-import {
-  UniversalCamera, Vector3, Animation, CubicEase, EasingFunction, Axis, Ray,
-  type Scene, type AbstractMesh,
-} from "@babylonjs/core";
+import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Animation } from "@babylonjs/core/Animations/animation";
+// Side-effect only: registers Scene.prototype.beginDirectAnimation (used below).
+// @babylonjs/core's barrel used to pull this in for free; a deep import to just
+// "Animations/animation" does NOT — the extension lives in this sibling file.
+import "@babylonjs/core/Animations/animatable";
+import { CubicEase, EasingFunction } from "@babylonjs/core/Animations/easing";
+import { Axis } from "@babylonjs/core/Maths/math.axis";
+import { Ray } from "@babylonjs/core/Culling/ray";
+import type { Scene } from "@babylonjs/core/scene";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint } from "@/types/scene.types";

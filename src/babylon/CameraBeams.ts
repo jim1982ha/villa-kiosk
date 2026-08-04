@@ -8,10 +8,14 @@
 // (EntityMapping.motionEntityId). It is a translucent unlit cone, not a real
 // light — no shadow map, no surface interaction.
 
-import {
-  Color3, MeshBuilder, Quaternion, Ray, StandardMaterial, Vector3,
-  type AbstractMesh, type Mesh, type Scene,
-} from "@babylonjs/core";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Ray } from "@babylonjs/core/Culling/ray";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import type { Scene } from "@babylonjs/core/scene";
 
 const BEAM_COLOR = new Color3(0.95, 0.15, 0.12);
 // A wide "spotlight" cone at ROOM scale. Two rounds of feedback shaped this:

@@ -10,7 +10,7 @@
 // fix that found the same bug in applyHighlight. Centralised here so the next
 // piece of mesh-geometry code doesn't have to rediscover this the hard way.
 
-import type { AbstractMesh } from "@babylonjs/core";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 /** World length (metres) of one LOCAL unit along each of a mesh's local axes.
  *  Divide a target WORLD size by the relevant axis to get the LOCAL value to
