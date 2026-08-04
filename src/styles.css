@@ -1590,11 +1590,65 @@ input[type="range"]::-moz-range-thumb {
 .segmented-icons { flex: 0 0 auto; gap: 3px; padding: 3px; }
 .segmented-icons button { flex: 0 0 auto; width: 38px; min-height: 34px; gap: 0; }
 
-/* Floating badge style row (SettingsModal): Classic/Card and Summary bar
-   share one row on a roomy screen. flex-basis lives here, not as an inline
-   style, specifically so the narrow-screen rule below can shrink it — a
-   media query cannot win against an inline style's specificity. */
-.badge-style-row-group { flex: 1 1 200px; }
+/* Day/Auto/Night control (SettingsModal, next to Brightness/Night dimming):
+   shorter than the ordinary .segmented-icons sizing above so it matches the
+   sliders' TRACK/THUMB, not their full label-plus-track height — the thumb
+   is 28px (see input[type=range]::-webkit-slider-thumb), so 2px padding +
+   a 24px button lands right on it. A scoped override, not a change to the
+   shared rule above, which the Theme selector in the header still uses at
+   its normal 34px. Compact (flex: 0 0 auto) on a roomy screen, where it
+   sits snug beside the sliders — but once the row's own wrap drops it onto
+   a line by itself on a phone, sitting there as a small icon-only cluster
+   with dead space to its right (the sliders above it fill their own lines
+   edge to edge) reads as unfinished, so it fills that line instead, its
+   3 buttons switching from fixed-width icon squares to the ordinary
+   .segmented button's equal-grow behaviour to actually use the width. */
+.daynight-segmented { padding: 2px; flex: 0 0 auto; align-self: flex-end; }
+.daynight-segmented button { min-height: 24px; }
+@media (max-width: 560px) {
+  .daynight-segmented { flex: 1 1 100%; }
+  .daynight-segmented button { flex: 1 1 0; width: auto; }
+}
+
+/* A row of 2 segmented groups of roughly EQUAL content weight sharing one
+   line (SettingsModal): Clickable Glow/Natural Scroll. flex-basis lives in
+   this class, not an inline style, specifically so the narrow-screen rule
+   below can shrink it — a media query cannot win against an inline style's
+   specificity. Desktop already fits both groups on one line at the plain
+   200px basis; the override below is what keeps them together on a phone
+   too instead of one wrapping onto its own row. NOT used by the Floating
+   badge style row below, whose two groups are lopsided in size — see
+   .badge-style-row instead. */
+.settings-row-half { flex: 1 1 200px; }
+@media (max-width: 560px) {
+  .settings-row-half { flex: 1 1 calc(50% - 5px); }
+}
+
+/* Floating badge style row (SettingsModal): Default+Card vs. a single Dock
+   button is a lopsided pair, unlike .settings-row-half's roughly-equal
+   groups above — splitting evenly would starve the wider group while
+   leaving Dock's half mostly empty. Each group instead sizes to its own
+   content (flex: 0 1 auto) but CAN shrink (min-width: 0 — a flex item's
+   default min-width floors at its content's min-content size otherwise,
+   the same gotcha that defeated the plain percentage split tried here
+   before) and the row never wraps (nowrap): if the two together are ever
+   still too wide for the line, they compress and truncate with an
+   ellipsis rather than dropping a whole label or wrapping to a second
+   row. */
+.badge-style-row { flex-wrap: nowrap; }
+.badge-style-row .settings-row-half { flex: 0 1 auto; min-width: 0; }
+.badge-style-row .settings-row-half button { min-width: 0; }
+/* The ellipsis has to land on the TEXT specifically, not the button — a
+   flex container (which .segmented button is, for its icon+label children)
+   doesn't apply text-overflow across its children as a group, it only
+   clips them, so without this the label would hard-cut with no "…". Needs
+   its own min-width: 0 too — it's a flex item of the button just like the
+   icon is, so it inherits the same content-floored min-width by default. */
+.badge-style-row .settings-row-half button .badge-btn-label,
+.badge-style-row .settings-row-half button .settings-label-full,
+.badge-style-row .settings-row-half button .settings-label-short {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* Responsive label swap (Summary bar's toggle, SettingsModal): the full name
    normally, a shorter one once the modal narrows enough that it'd otherwise
@@ -1606,14 +1660,6 @@ input[type="range"]::-moz-range-thumb {
 @media (max-width: 560px) {
   .settings-label-full { display: none; }
   .settings-label-short { display: inline; }
-  /* A shorter label alone isn't enough — the 200px basis above still tells
-     the browser this group needs 200px before it stretches to fill leftover
-     space, so it kept wrapping onto its own line regardless of how little
-     text was actually left inside it. An even split of the row is what
-     actually lets both groups share one line on a phone; each button's own
-     content (icon + a handful of characters) fits comfortably inside its
-     half. */
-  .badge-style-row-group { flex: 1 1 calc(50% - 5px); }
 }
 
 

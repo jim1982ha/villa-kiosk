@@ -51,7 +51,6 @@ interface Props {
    *  every non-editing row so their props stay stable while the one row being
    *  remapped re-renders on its own picker's every keystroke. */
   remapNewId: string | undefined;
-  roomNames: string[];
   matchedRowRef?: RefObject<HTMLTableRowElement>;
   onToggleExpanded: (key: string) => void;
   onStartRemap: (key: string) => void;
@@ -66,7 +65,7 @@ interface Props {
 }
 
 function EntityMapRow({
-  entryKey, mapping, entity, stale, expanded, editing, remapNewId, roomNames, matchedRowRef,
+  entryKey, mapping, entity, stale, expanded, editing, remapNewId, matchedRowRef,
   onToggleExpanded, onStartRemap, onRemapChange, onRemapApply, onRemapCancel, onRemove, onPatch,
 }: Props) {
   // Draft state is now scoped to THIS ROW's own component instance (one hook
@@ -195,22 +194,6 @@ function EntityMapRow({
               onChange={(e) => label.draft("v", e.target.value)}
               onBlur={() => label.flush("v")}
             />
-          </td>
-          <td data-label="Room">
-            <select
-              value={m.room ?? ""}
-              onChange={(e) => draftField({ room: e.target.value })}
-              title="Room this device is in — used for motion-glow and teleport. Pick from the villa's detected rooms."
-            >
-              <option value="">— none —</option>
-              {/* Keep the current value selectable even if it's not (or
-                  no longer) a known room, so editing never silently drops
-                  an existing binding. */}
-              {m.room && !roomNames.includes(m.room) && (
-                <option value={m.room}>{m.room} (custom)</option>
-              )}
-              {roomNames.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
           </td>
           {m.type === "light" && (() => {
             const ratio = intensity.drafts.v ?? m.lightIntensityRatio ?? 0;

@@ -76,6 +76,7 @@ function onOffSummary(onCount: number, total: number): string {
 function deriveTiles(
   entities: Record<string, HassEntity>,
   entityMap: Record<string, EntityMapping>,
+  resolvedRooms: Record<string, string>,
   can: (c: Category) => boolean,
 ): SummaryTile[] {
   const all = Object.values(entities);
@@ -119,18 +120,18 @@ function deriveTiles(
 
   // ── Pool / jacuzzi switches ──────────────────────────────────────────
   // Two independent rules, either one qualifies: the entity's own id/name
-  // reads as pool equipment, OR the ROOM it's configured against (entityMap —
-  // set from the villa's room mapping, not this switch's own name) is the
-  // pool room. The second rule is the more robust one: it catches a switch
-  // named nothing like "pool" (a generic "Filter Pump 2") as long as it's
-  // placed in the Swimming Pool room, without touching the first rule at all.
-  // Anchored against "."/"_"/" "/start/end (room names are human text with
-  // spaces, entity ids use "_") — a bare "spa" would otherwise match inside
-  // e.g. "spartan_gym_relay" (same substring-collision bug class as
+  // reads as pool equipment, OR the ROOM it resolves to (resolvedRooms — HA's
+  // own Area, falling back to GLB geometry, not this switch's own name) is
+  // the pool room. The second rule is the more robust one: it catches a
+  // switch named nothing like "pool" (a generic "Filter Pump 2") as long as
+  // it's placed in the Swimming Pool room, without touching the first rule at
+  // all. Anchored against "."/"_"/" "/start/end (room names are human text
+  // with spaces, entity ids use "_") — a bare "spa" would otherwise match
+  // inside e.g. "spartan_gym_relay" (same substring-collision bug class as
   // EntityCategories' SWITCH_PURPOSE_HINTS).
   const POOL_WORD = /(?:^|[._ ])(?:pool|jacuzzi|jaccuzi|spa)(?:[._ ]|$)/i;
   const poolSwitches = byDomain("switch").filter(
-    (e) => POOL_WORD.test(e.entity_id) || POOL_WORD.test(entityMap[e.entity_id]?.room ?? ""),
+    (e) => POOL_WORD.test(e.entity_id) || POOL_WORD.test(resolvedRooms[e.entity_id] ?? ""),
   );
   if (poolSwitches.length) {
     const on = poolSwitches.some(isOn);
@@ -344,7 +345,7 @@ function SceneMenu({ scenes, canRun, apply }: {
 export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Props) {
   const { entities, suppressedEntityIds, callService } = useHA();
   const { role } = useProfile();
-  const { config } = useConfig();
+  const { config, resolvedRooms } = useConfig();
 
   const [openGroup, setOpenGroup] = useState<SummaryTile | null>(null);
 
@@ -361,8 +362,8 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
   }, [entities, suppressedEntityIds]);
 
   const deviceTiles = useMemo(
-    () => deriveTiles(visibleEntities, config.entityMap, (c) => (role ? isCategoryAllowed(role, c) : false)),
-    [visibleEntities, config.entityMap, role],
+    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false)),
+    [visibleEntities, config.entityMap, resolvedRooms, role],
   );
 
   // A scene spans categories — allow running one if the profile may control ANY.

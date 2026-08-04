@@ -16,11 +16,16 @@ import { Wrench } from "lucide-react";
 import { usePanelActions } from "./PanelActionsContext";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import { useConfig } from "@/config/ConfigContext";
 import BadgeColorModal from "./BadgeColorModal";
 
 interface Props {
   title: string;
-  room?: string;
+  /** The device's own entity_id — its room (live-resolved, see ConfigContext's
+   *  resolvedRooms) is looked up here rather than passed in, so every panel
+   *  reads it the same way instead of each one re-deriving it. Omit for a
+   *  panel that isn't about one specific device (e.g. a group/category view). */
+  entityId?: string;
   icon?: ReactNode;
   /** Extra class on the modal card, for a panel that needs one of the app's
    *  OTHER standard widths (e.g. the group panel uses the Settings width). */
@@ -34,8 +39,10 @@ interface Props {
   children: ReactNode;
 }
 
-export default function BasePanel({ title, room, icon, className, headerActions, onClose, children }: Props) {
+export default function BasePanel({ title, entityId, icon, className, headerActions, onClose, children }: Props) {
   const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion } = usePanelActions();
+  const { resolvedRooms } = useConfig();
+  const room = entityId ? resolvedRooms[entityId] : undefined;
   const [colorOpen, setColorOpen] = useState(false);
   // Escape + focus trap + focus restore, from one place (see useModalA11y).
   // This replaced a local Escape-only listener: behind every one of these

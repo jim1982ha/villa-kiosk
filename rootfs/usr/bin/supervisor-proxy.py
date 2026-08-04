@@ -477,10 +477,24 @@ _NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_st
 # arbitrary-Jinja2 exposure that the REST "template" path already blocks, and
 # "supervisor/api" reaches the Supervisor itself. Enumerating the dangerous
 # frames would have repeated the REST mistake, so this is an allowlist.
+#
+# The four *_registry/list + get_config entries below are READ-only (HA's
+# websocket API has no "list"-suffixed frame that mutates anything — writes are
+# separate "*/create"/"*/update"/"*/delete" frames, e.g. the already-blocked
+# "config/entity_registry/update"). This module's own docstring is explicit
+# that reads are not the boundary this allowlist enforces (get_states/
+# subscribe_events already stream every entity to every role); these four were
+# simply added to the kiosk's client code (src/ha/HAWebSocket.ts, src/ha/
+# HAStateStore.tsx) after this allowlist was written, and nobody revisited it —
+# not a deliberate decision to keep guest/ops blind to room/area names. Kept
+# them out of "the kiosk itself ever sends" framing above since they widen who
+# may send them (every role now, not just owner), not what may be sent.
 ALLOWED_WS_TYPES = frozenset({
     "auth", "ping", "pong",
     "subscribe_events", "unsubscribe_events",
     "get_states", "call_service", "camera/stream",
+    "get_config",
+    "config/entity_registry/list", "config/device_registry/list", "config/area_registry/list",
 })
 
 

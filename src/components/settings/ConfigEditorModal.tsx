@@ -119,7 +119,16 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
         aria-label="Advanced settings"
       >
         <div className="settings-header">
-          <h2>Advanced Settings</h2>
+          {/* tabIndex={-1} + data-autofocus: useModalA11y's default (the
+              FIRST focusable descendant) would otherwise land here on the
+              (i) model-info button — the very next element — whose tooltip
+              is shown on `:focus-within` so keyboard Tab users can reach it
+              too, not just mouse hover. Landing focus there on open then
+              popped the tooltip immediately, with no hover at all. The
+              heading is the conventional dialog-open focus target anyway;
+              tabIndex={-1} makes it programmatically focusable without
+              joining the normal Tab order. */}
+          <h2 tabIndex={-1} data-autofocus>Advanced Settings</h2>
           {canUploadModel && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {glbUpload.addonCfg?.model_path && (

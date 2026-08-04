@@ -178,6 +178,16 @@ for frame in ("auth", "ping", "pong", "subscribe_events", "get_states",
               "call_service", "camera/stream"):
     t(f"{frame} permitted", frame in proxy.ALLOWED_WS_TYPES, True)
 
+# Read-only registry/config list frames — every role, not just owner (the
+# per-entity room lookup added 2026-08-04 needs entity/device/area registry
+# reads to work for guest/ops sessions too, not just owner). Deliberately
+# separate from the mutating "config/entity_registry/update" above, which
+# stays denied — these are the "list" reads, never a write.
+section("websocket frames: read-only registry/config lists permitted for every role")
+for frame in ("get_config", "config/entity_registry/list",
+              "config/device_registry/list", "config/area_registry/list"):
+    t(f"{frame} permitted", frame in proxy.ALLOWED_WS_TYPES, True)
+
 # ------------------------------------------- shared store write boundary
 # The two mutable shared stores are built by ONE factory whose writer_roles
 # parameter is the whole access rule. The FM store previously had a

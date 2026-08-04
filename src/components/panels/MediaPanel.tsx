@@ -15,7 +15,7 @@ export default function MediaPanel({ entity, mapping, onClose }: PanelProps) {
   const title = entity?.attributes.media_title as string | undefined;
 
   return (
-    <BasePanel title={mapping.label} room={mapping.room} icon={<Tv size={22} />} onClose={onClose}>
+    <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Tv size={22} />} onClose={onClose}>
       {unavailable ? <UnavailableNotice device="media player" /> : (
         <>
           <PowerToggle on={on} onClick={() => HAServices.toggleMedia(ws, mapping.entityId)} />

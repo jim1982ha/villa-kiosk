@@ -7,15 +7,14 @@
 // A scene entity's `attributes.entity_id` is HA's own list of every entity
 // that scene touches — already delivered on the exact same get_states/
 // state_changed stream this app already subscribes to. Cross-referencing
-// those ids against config.entityMap's rooms is enough to know which room(s)
-// a scene is "about", so this is a PURE derivation with no storage of its
-// own: nothing here can drift from HA, because there is nothing to keep in
-// sync — every read reflects whatever HA currently has, including a scene
+// those ids against ConfigContext's resolvedRooms is enough to know which
+// room(s) a scene is "about", so this is a PURE derivation with no storage of
+// its own: nothing here can drift from HA, because there is nothing to keep
+// in sync — every read reflects whatever HA currently has, including a scene
 // added, edited or deleted in HA's own editor a moment ago.
 
 import { prettifyEntitySlug } from "./EntityMap";
 import { roomKey } from "@/config/roomKey";
-import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 
 export interface HaSceneInfo {
@@ -23,10 +22,11 @@ export interface HaSceneInfo {
   name: string;
   /** Every entity this scene sets — HA's own attributes.entity_id. */
   memberEntityIds: string[];
-  /** Rooms (config.entityMap) at least one member entity belongs to, deduped
-   *  and in first-seen order. Empty for a scene whose members have no room
-   *  assigned yet, or that touches entities outside this villa's model
-   *  entirely (e.g. a scene that only sets an input_boolean helper). */
+  /** Resolved rooms (ConfigContext's resolvedRooms) at least one member
+   *  entity belongs to, deduped and in first-seen order. Empty for a scene
+   *  whose members have no room resolved yet, or that touches entities
+   *  outside this villa's model entirely (e.g. a scene that only sets an
+   *  input_boolean helper). */
   rooms: string[];
 }
 
@@ -37,7 +37,7 @@ export interface HaSceneInfo {
 export function deriveHaScenes(
   entities: Record<string, HassEntity>,
   suppressedEntityIds: ReadonlySet<string>,
-  entityMap: Record<string, EntityMapping>,
+  resolvedRooms: Record<string, string>,
 ): HaSceneInfo[] {
   const out: HaSceneInfo[] = [];
   for (const [entityId, e] of Object.entries(entities)) {
@@ -47,7 +47,7 @@ export function deriveHaScenes(
     const rooms: string[] = [];
     const seen = new Set<string>();
     for (const id of memberEntityIds) {
-      const room = entityMap[id]?.room?.trim();
+      const room = resolvedRooms[id]?.trim();
       if (room && !seen.has(room)) { seen.add(room); rooms.push(room); }
     }
     out.push({

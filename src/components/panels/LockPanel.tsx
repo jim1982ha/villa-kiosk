@@ -46,7 +46,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel
       title={mapping.label}
-      room={mapping.room}
+      entityId={mapping.entityId}
       icon={locked ? <Lock size={22} /> : <Unlock size={22} />}
       onClose={onClose}
     >

@@ -178,19 +178,40 @@ export function displayLabelFor(
  */
 export function createDefaultMapping(
   entityId: string,
-  opts: { friendlyName?: string; room?: string; type?: EntityType; category?: Category } = {},
+  opts: { friendlyName?: string; type?: EntityType; category?: Category } = {},
 ): EntityMapping {
   const type = opts.type ?? inferTypeFromEntityId(entityId) ?? "sensor";
   return {
     entityId,
     type,
     label: labelFromEntityId(entityId, opts.friendlyName),
-    room: opts.room ?? "",
     // Category is NOT pinned per entity — it's derived from device type +
     // device_class at read time (see effectiveCategory / EntityCategories.ts).
     // Only a value the user explicitly picks in the Config Editor is stored.
     category: opts.category,
   };
+}
+
+/**
+ * THE authoritative rule for "what room is this device in" — Dashboard.tsx's
+ * room-resolution effect calls this once per mapped entity, on every HA
+ * registry change and every scene re-calibration, and pushes the result to
+ * both React (ConfigContext's resolvedRooms) and Babylon (SceneManager.
+ * setResolvedRooms). Room used to be a field on EntityMapping itself,
+ * hand-typed in two separate Advanced Settings editors — which meant it could
+ * silently disagree with Home Assistant's own Area assignment for the same
+ * device, two sources of truth that had no way to reconcile. Now there is
+ * exactly one: HA's Area wins whenever the device has one; geometric
+ * detection (which drawn room polygon the device's own 3D anchor sits
+ * inside) is the fallback for whatever HA hasn't organised into an Area yet.
+ * Nothing in the kiosk writes a room any more — see BindingsTable.tsx /
+ * EntityMapRow.tsx, which used to.
+ */
+export function resolveEntityRoom(
+  areaName: string | undefined,
+  geometricRoom: string | null,
+): string {
+  return areaName || geometricRoom || "";
 }
 
 /** Passthrough kept for its call sites. Categories are no longer pinned onto a
@@ -360,7 +381,7 @@ function resolveMeshUnchecked(
   // 4) Looks like an entity_id we simply don't have metadata for yet — build a
   //    minimal mapping so it is still tappable (graceful unknown-entity handling).
   const inferred = inferTypeFromEntityId(base);
-  if (inferred) return createDefaultMapping(base, { type: inferred, room: "Unmapped" });
+  if (inferred) return createDefaultMapping(base, { type: inferred });
 
   return null;
 }

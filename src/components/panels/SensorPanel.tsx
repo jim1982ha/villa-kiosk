@@ -99,7 +99,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const enumDistinctStates = isEnum ? [...new Set(stateHistory.map((p) => p.state))] : [];
 
   return (
-    <BasePanel title={mapping.label} room={mapping.room} icon={icon} onClose={onClose}>
+    <BasePanel title={mapping.label} entityId={mapping.entityId} icon={icon} onClose={onClose}>
       {isBinary ? (
         <>
           <div className="center" style={{ padding: "12px 0 6px" }}>

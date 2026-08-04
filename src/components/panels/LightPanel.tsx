@@ -25,7 +25,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
   const { data: history, loading: historyLoading } = useStateHistory(mapping.entityId);
 
   return (
-    <BasePanel title={mapping.label} room={mapping.room} icon={<Lightbulb size={22} />} onClose={onClose}>
+    <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Lightbulb size={22} />} onClose={onClose}>
       {unavailable ? <UnavailableNotice device="light" /> : (
         <PowerToggle on={on} onClick={() => HAServices.toggleLight(ws, mapping.entityId)} />
       )}

@@ -74,7 +74,7 @@ export default function FacilityModal({
   // "report a fault" on a device: they have already said what they want.
   const [tab, setTab] = useState<Tab>(reportFaultFor ? "faults" : "today");
   const { entities } = useHA();
-  const { config } = useConfig();
+  const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
   // This panel is the one place facility records are actually read, so while
@@ -117,9 +117,9 @@ export default function FacilityModal({
   // starting point is precisely how the picker ended up offering rows no
   // other screen would show.
   const deviceOptions = useMemo(
-    () => buildDeviceOptions(config.entityMap, entities, config.deviceGroups,
+    () => buildDeviceOptions(config.entityMap, entities, resolvedRooms, config.deviceGroups,
                              mappedEntityIds, config.dismissedEntityIds),
-    [config.entityMap, entities, config.deviceGroups, mappedEntityIds, config.dismissedEntityIds],
+    [config.entityMap, entities, resolvedRooms, config.deviceGroups, mappedEntityIds, config.dismissedEntityIds],
   );
 
   const unavailableIds = useMemo(

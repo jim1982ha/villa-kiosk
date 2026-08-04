@@ -2,8 +2,8 @@
 // One row of BindingsTable's bound-objects list, split out and React.memo'd —
 // same reasoning as EntityMapRow (see its docstring): draft state used to live
 // in a flat Record at BindingsTable's own level, so typing in any one row's
-// Label/Room field re-rendered every other bound row too. Localizing it here
-// means only the row actually being edited re-renders.
+// Label field re-rendered every other bound row too. Localizing it here means
+// only the row actually being edited re-renders.
 
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { Unlink, Link2 } from "lucide-react";
@@ -89,14 +89,6 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
             value={meta.label}
             onChange={(e) => draftField({ label: e.target.value }, 500)}
             title="Display name"
-          />
-          <input
-            style={{ flex: 1, minWidth: 80, fontSize: "var(--text-xs)", padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none" }}
-            placeholder="Room"
-            value={meta.room}
-            onChange={(e) => draftField({ room: e.target.value }, 500)}
-            title="Room name — must match a Rooms-menu name exactly for motion-glow/teleport to find it"
-            list="bindings-room-names"
           />
           {meta.type === "light" && (() => {
             const ratio = intensity.drafts.v ?? meta.lightIntensityRatio ?? 0;

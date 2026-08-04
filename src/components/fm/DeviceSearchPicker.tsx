@@ -55,6 +55,7 @@ export interface DeviceOption {
 export function buildDeviceOptions(
   entityMap: Record<string, EntityMapping>,
   entities: Record<string, HassEntity>,
+  resolvedRooms: Record<string, string>,
   deviceGroups: DeviceGroup[] = [],
   mappedEntityIds: ReadonlySet<string> = new Set(),
   dismissedEntityIds: readonly string[] = [],
@@ -64,7 +65,7 @@ export function buildDeviceOptions(
     .map((id) => ({
       entityId: id,
       label: displayLabelFor(id, entityMap[id]?.label, entities[id]?.attributes.friendly_name),
-      room: entityMap[id]?.room,
+      room: resolvedRooms[id],
       offline: isUnavailable(entities[id]),
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
@@ -72,14 +73,8 @@ export function buildDeviceOptions(
 
 const MAX_RESULTS = 8;
 
-/** "Unmapped" is the placeholder EntityMap.resolveMeshToMapping writes for a
- *  freshly auto-detected device before roomForEntity has worked out where it
- *  actually sits — an internal marker, not a room in the villa. Rendering it
- *  raw put a room-shaped word where a room name goes, which reads as a real
- *  place called "Unmapped". Say what it means instead. */
 function roomHint(room: string | undefined): string {
-  if (!room || room.trim().toLowerCase() === "unmapped") return "no room set";
-  return room;
+  return room?.trim() || "no room set";
 }
 
 export default function DeviceSearchPicker({

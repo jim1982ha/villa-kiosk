@@ -20,9 +20,10 @@ import type { EntityMapping } from "@/types/scene.types";
  *  This started life as a badgeColor-only special case (a colour pick felt
  *  laggy in the picker modal). The same several-second hitch applied to every
  *  OTHER cosmetic edit in Advanced Settings — renaming a device, changing its
- *  room, category or linked/motion entity — each of which re-indexed the whole
+ *  category or linked/motion entity — each of which re-indexed the whole
  *  model per commit for no visual benefit. Generalising the list is what makes
- *  those edits feel instant too.
+ *  those edits feel instant too. (Room used to be here too — it's no longer a
+ *  field on EntityMapping at all, see the type's own comment.)
  *
  *  Adding a field here is a promise that NOTHING in the structural pass reads
  *  it. linkedEntityId/motionEntityId only qualify because EntityVisuals
@@ -30,7 +31,7 @@ import type { EntityMapping } from "@/types/scene.types";
  *  (they were previously built only by indexMeshes) — if you add a field whose
  *  consumer lives in the structural pass, give it the same treatment first. */
 export const COSMETIC_MAPPING_FIELDS = [
-  "label", "room", "category", "badgeColor",
+  "label", "category", "badgeColor",
   "linkedEntityId", "motionEntityId", "lightIntensityRatio",
 ] as const;
 

@@ -33,7 +33,7 @@ export default function SpendTab(
   },
 ) {
   const { data, addCost, updateCost, removeCost, saveDocument } = useFmData();
-  const { config } = useConfig();
+  const { config, resolvedRooms } = useConfig();
   const { haConfig } = useHA();
   const [month, setMonth] = useState(monthKey(Date.now()));
   const [adding, setAdding] = useState(false);
@@ -220,7 +220,7 @@ export default function SpendTab(
                   note: note.trim() || undefined,
                   entityId: entityId || undefined,
                   deviceLabel: deviceText.trim() || undefined,
-                  room: entityId ? config.entityMap[entityId]?.room : undefined,
+                  room: entityId ? resolvedRooms[entityId] : undefined,
                 };
                 // `at` is set once, when the spend happened, and is never
                 // rewritten by a later correction — it is what the monthly

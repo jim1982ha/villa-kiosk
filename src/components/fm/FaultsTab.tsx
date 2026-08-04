@@ -53,7 +53,7 @@ export default function FaultsTab(
   },
 ) {
   const { data, addTicket, updateTicket, removeTicket } = useFmData();
-  const { config } = useConfig();
+  const { resolvedRooms } = useConfig();
   const [adding, setAdding] = useState(false);
   /** Id of the fault being edited, or null when the form is raising a new one.
    *  ONE form serves both: a fault raised in a hurry from a phone (often just
@@ -232,7 +232,7 @@ export default function FaultsTab(
                   title: title.trim(),
                   entityId: entityId || undefined,
                   deviceLabel: deviceText.trim() || undefined,
-                  room: entityId ? config.entityMap[entityId]?.room : undefined,
+                  room: entityId ? resolvedRooms[entityId] : undefined,
                   note: note.trim() || undefined,
                   photoIds,
                 };

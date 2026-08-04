@@ -1,12 +1,14 @@
 // src/components/settings/BindingsTable.tsx
 // Unified editor for all 3D-object → entity bindings. Each row lets you
 // change which entity the object controls AND edit its display metadata
-// (type, label, room, requires-confirmation) — all in one place.
+// (type, label, requires-confirmation) — all in one place. Room is NOT
+// editable here (or anywhere in the kiosk) any more — see config/EntityMap.ts's
+// resolveEntityRoom docstring for why.
 //
 // Each row is its own React.memo'd component (BindingRow) — see its docstring
 // and EntityMapRow's (ConfigEditor.tsx's sibling table) for why: draft state
-// used to live in a flat Record HERE, so typing in any one row's Label/Room
-// field re-rendered every other bound row's JSX too, and this component reads
+// used to live in a flat Record HERE, so typing in any one row's Label field
+// re-rendered every other bound row's JSX too, and this component reads
 // live HA `entities` at the top level, so the same full-list re-render fired
 // on every state_changed event for ANY device in the house, typing or not.
 // bind/unbind/patchMeta are given a STABLE identity (read the latest config
@@ -46,17 +48,6 @@ export default function BindingsTable() {
     });
     setNewId(undefined);
   };
-
-  // The "Room" field below is free text matched EXACTLY (case/whitespace
-  // aside) against a real room's name by RoomHighlight — a typo or a name
-  // that doesn't match any actual room (sh3d polygon or Rooms-menu point)
-  // silently does nothing, with no error anywhere. Suggest the real names as
-  // a native <datalist> autocomplete so a mismatch is visible while typing,
-  // without blocking a not-yet-created room name.
-  const roomNames = useMemo(
-    () => Array.from(new Set(config.teleportPoints.map((p) => p.name))).sort(),
-    [config.teleportPoints],
-  );
 
   const catalog = useMemo(() => loadMeshCatalog(), []);
   const bound = Object.keys(config.meshBindings);
@@ -109,18 +100,14 @@ export default function BindingsTable() {
         model.
       </p>
 
-      <datalist id="bindings-room-names">
-        {roomNames.map((n) => <option key={n} value={n} />)}
-      </datalist>
-
       <div style={{ marginBottom: 20 }}>
         <label style={{ display: "block", marginBottom: 6, fontSize: "var(--text-sm)", fontWeight: 500 }}>
           Pre-configure a new entity
         </label>
         <p className="muted body-text" style={{ fontSize: "var(--text-2xs)", marginBottom: 10 }}>
-          Sets the label, room and panel type for an entity whose 3D object is
-          named after its entity ID. Useful to configure in advance — it
-          activates automatically when the matching model is uploaded.
+          Sets the label and panel type for an entity whose 3D object is named
+          after its entity ID. Useful to configure in advance — it activates
+          automatically when the matching model is uploaded.
         </p>
         <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>

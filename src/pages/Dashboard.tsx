@@ -25,7 +25,7 @@ import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import FacilityModal from "@/components/fm/FacilityModal";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
-import { mappingForEntityId, displayLabelFor } from "@/config/EntityMap";
+import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { dismissedEntitySet } from "@/config/dismissedEntities";
@@ -45,9 +45,9 @@ import type { Category, TeleportPoint } from "@/types/scene.types";
 const MOTION_DEVICE_CLASSES = new Set(["motion", "presence", "occupancy", "moving"]);
 
 export default function Dashboard() {
-  const { config, update } = useConfig();
+  const { config, update, resolvedRooms, setResolvedRooms } = useConfig();
   const { role } = useProfile();
-  const { connect, entities, suppressedEntityIds, ws, haConfig, subscribeAll } = useHA();
+  const { connect, entities, suppressedEntityIds, ws, haConfig, subscribeAll, entityAreaNames } = useHA();
   // ProfileGate does NOT guarantee a signed-in role before this page mounts
   // (v2.30.2's early scene preload — an explicit, informed trade-off, see
   // ProfileGate's modelPreloadable — mounts it pre-login on non-iOS
@@ -66,6 +66,9 @@ export default function Dashboard() {
   // config.teleportPoints from whenever that effect last ran).
   const configRef = useRef(config);
   configRef.current = config;
+  // Same reasoning, for the motion-toast subscription below (deps: [subscribeAll]).
+  const resolvedRoomsRef = useRef(resolvedRooms);
+  resolvedRoomsRef.current = resolvedRooms;
 
   const [manager, setManager] = useState<SceneManager | null>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel | null>(null);
@@ -97,8 +100,8 @@ export default function Dashboard() {
   // next entity update. Computed once here (not per-panel-open) since both
   // the cluster panel below AND SummaryBar's global tile need it.
   const haScenes = useMemo(
-    () => deriveHaScenes(entities, suppressedEntityIds, config.entityMap),
-    [entities, suppressedEntityIds, config.entityMap],
+    () => deriveHaScenes(entities, suppressedEntityIds, resolvedRooms),
+    [entities, suppressedEntityIds, resolvedRooms],
   );
   const [currentFloor, setCurrentFloor] = useState(1);
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
@@ -373,7 +376,7 @@ export default function Dashboard() {
       if (!on || prev === undefined || prev) return; // only a fresh off->on edge
 
       const label = displayLabelFor(id, map?.label, e.attributes?.friendly_name as string | undefined);
-      const room = map?.room;
+      const room = resolvedRoomsRef.current[id];
       // One phrasing for every source: the ROOM alone when known ("Motion
       // detected · Guest Bathroom"), never room + device suffixed together —
       // a camera's own motion entity has no `room` mapped and falls back to
@@ -551,6 +554,39 @@ export default function Dashboard() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manager]);
+
+  // Room resolution: HA's own Area assignment wins whenever a device has
+  // one; geometric detection (which room polygon the device's own mesh sits
+  // inside) is the fallback for whatever HA hasn't organised into an Area
+  // yet. Replaces the old "type a room into Advanced Settings" model — see
+  // config/EntityMap.ts's docstring for the full reasoning. Recomputed
+  // whenever HA's registry data changes (entityAreaNames — live, no reload,
+  // see HAStateStore's *_registry_updated subscriptions), whenever the
+  // entity list itself changes (a device newly mapped), or whenever the
+  // scene's plan-to-world fit changes (same onReady/onCalibrated signals the
+  // teleport-point adopt effect above uses — the geometric fallback needs a
+  // fresh fit exactly like that effect does). Pushed to BOTH React (every
+  // panel reads useConfig().resolvedRooms) and Babylon (SceneManager.
+  // setResolvedRooms — badge grouping and motion-routing's room-highlight
+  // read it there) so the two layers can never disagree.
+  useEffect(() => {
+    if (!manager) return;
+    const recompute = () => {
+      const resolved: Record<string, string> = {};
+      for (const id of Object.keys(config.entityMap)) {
+        resolved[id] = resolveEntityRoom(entityAreaNames[id], manager.roomForEntity(id));
+      }
+      manager.setResolvedRooms(resolved);
+      setResolvedRooms(resolved);
+    };
+    recompute();
+    const offReady = manager.onReady(recompute);
+    const offCal = manager.onCalibrated(recompute);
+    return () => {
+      offReady();
+      offCal();
+    };
+  }, [manager, entityAreaNames, config.entityMap, setResolvedRooms]);
 
   const handleTeleport = useCallback(
     (point: TeleportPoint) => {

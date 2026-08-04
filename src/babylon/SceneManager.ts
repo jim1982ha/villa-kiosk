@@ -1833,11 +1833,18 @@ export class SceneManager {
   }
 
   /** Which real drawn room polygon this entity's own mesh anchor sits
-   *  inside, or null (no anchor yet, or it sits outside every polygon) —
-   *  the geometric room-auto-fill signal BabylonCanvas uses when merging a
-   *  freshly detected entity into config on first load. */
+   *  inside, or null (no anchor yet, or it sits outside every polygon) — the
+   *  geometric room fallback Dashboard.tsx's room-resolution effect uses for
+   *  whatever HA hasn't organised into an Area (see setResolvedRooms). */
   roomForEntity(entityId: string): string | null {
     return this.visuals.roomForEntity(entityId);
+  }
+
+  /** Push the live-resolved entity->room map (HA Area, falling back to
+   *  roomForEntity's geometry) down to the badge-grouping/motion-routing
+   *  layer — see EntityVisuals.setResolvedRooms. */
+  setResolvedRooms(rooms: Record<string, string>): void {
+    this.visuals.setResolvedRooms(rooms);
   }
 
   private disposed = false;

@@ -25,7 +25,7 @@ import EntityMapRow from "./EntityMapRow";
 import type { EntityMapping } from "@/types/scene.types";
 
 export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
-  const { config, update } = useConfig();
+  const { config, update, resolvedRooms } = useConfig();
   const { entities, connected } = useHA();
   // Seed the filter when opened from a device panel's edit shortcut, so that
   // entity's row is shown immediately.
@@ -109,30 +109,19 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     update({ entityMap: next, dismissedEntityIds: [...dismissed] });
   }, [staleIds, update]);
 
-  // Live filter by entity id, label or room — the auto-detected list is long.
+  // Live filter by entity id, label or resolved room — the auto-detected list
+  // is long. Room is no longer part of the mapping itself (see
+  // ConfigContext's resolvedRooms — it's HA's own Area assignment now,
+  // falling back to GLB geometry), so it's looked up per row rather than
+  // read off `m`.
   const entries = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return allEntries;
     return allEntries.filter(([key, m]) =>
       key.toLowerCase().includes(q)
       || (m.label ?? "").toLowerCase().includes(q)
-      || (m.room ?? "").toLowerCase().includes(q));
-  }, [allEntries, search]);
-
-  // The "Room" field is matched EXACTLY (case/whitespace aside) against a real
-  // room's name by RoomHighlight. Offer the real rooms as a proper dropdown so
-  // there's nothing to mistype — sourced from BOTH the calibrated viewpoints
-  // (teleportPoints) AND the parsed .sh3d rooms, so the list is populated even
-  // before calibration has run. A row's current value is always kept in the
-  // list even if it no longer matches a known room, so editing it never drops
-  // an existing binding.
-  const roomNames = useMemo(
-    () => Array.from(new Set([
-      ...config.teleportPoints.map((p) => p.name),
-      ...(config.sh3dRooms ?? []).map((r) => r.name),
-    ].filter(Boolean))).sort(),
-    [config.teleportPoints, config.sh3dRooms],
-  );
+      || (resolvedRooms[key] ?? "").toLowerCase().includes(q));
+  }, [allEntries, search, resolvedRooms]);
 
   // Stable-identity commit path: reads the LATEST config through a ref rather
   // than closing over `config` directly, so `patch`'s own function identity
@@ -243,7 +232,6 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
               <th>Type</th>
               <th>Category</th>
               <th>Label</th>
-              <th>Room</th>
               <th>Linked entity</th>
               <th>Motion sensor</th>
             </tr>
@@ -259,7 +247,6 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                 expanded={expandedKeys.has(key)}
                 editing={remapKey === key}
                 remapNewId={remapKey === key ? remapNewId : undefined}
-                roomNames={roomNames}
                 matchedRowRef={key === initialSearch ? matchedRowRef : undefined}
                 onToggleExpanded={toggleExpanded}
                 onStartRemap={startRemap}

@@ -68,7 +68,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   return (
     <BasePanel
       title={group.label ?? primaryMapping.label}
-      room={primaryMapping.room}
+      entityId={primaryMapping.entityId}
       icon={<Layers size={22} />}
       onClose={onClose}
     >

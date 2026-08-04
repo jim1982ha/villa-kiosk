@@ -165,9 +165,12 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         {/* Blue-glow (a render/interaction toggle) and Natural scrolling (an
             Overview-camera toggle) don't share a topic — paired on one row,
             as single-button segmented toggles matching Summary bar's style
-            below, purely for density at the user's request. */}
+            below, purely for density at the user's request. .settings-
+            row-half's flex-basis (not an inline style — see its own comment)
+            keeps them on that one line on a phone too, matching desktop,
+            not just on a roomy screen. */}
         <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-          <div className="segmented" role="group" aria-label="Blue glow for clickable devices" style={{ flex: "1 1 160px" }}>
+          <div className="segmented settings-row-half" role="group" aria-label="Blue glow for clickable devices">
             <button
               className={config.highlightInteractive ? "active" : ""}
               onClick={() => update({ highlightInteractive: !config.highlightInteractive })}
@@ -177,7 +180,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               <MousePointerClick size={16} /> Clickable Glow
             </button>
           </div>
-          <div className="segmented" role="group" aria-label="Natural scrolling" style={{ flex: "1 1 160px" }}>
+          <div className="segmented settings-row-half" role="group" aria-label="Natural scrolling">
             <button
               className={(config.naturalScrolling ?? true) ? "active" : ""}
               onClick={() => update({ naturalScrolling: !(config.naturalScrolling ?? true) })}
@@ -217,20 +220,23 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             />
           </div>
           {(manager?.renderFx.isBaked() ?? false) && (
-            // alignSelf: flex-end — lines the control's BOTTOM edge up with
-            // the bottom of its slider siblings (where the track/thumb sits),
-            // which is the part it should visually match. `stretch` was tried
-            // first and read badly: it grew the control to the FULL
-            // label-plus-track height, producing a tall, blocky pill with
-            // nothing else in the row shaped like it. Sunrise, not Sun, for
-            // "Day": the Theme selector above already uses Sun for its Light
-            // option, and the two sat close enough on the same screen to read
-            // as the same control.
-            <div className="segmented segmented-icons" role="group" aria-label="Day/night preview" style={{ flex: "0 0 auto", alignSelf: "flex-end" }}>
+            // Sizing lives entirely in .daynight-segmented (styles.css), not
+            // an inline style — a narrow-screen media query needs to override
+            // it (full-width once it wraps onto its own line below the
+            // sliders), which can't win against an inline style's
+            // specificity. alignSelf: flex-end there lines the control's
+            // BOTTOM edge up with the bottom of its slider siblings (where
+            // the track/thumb sits), which is the part it should visually
+            // match — `stretch` was tried first and read badly, growing the
+            // control to the FULL label-plus-track height. Sunrise, not Sun,
+            // for "Day": the Theme selector above already uses Sun for its
+            // Light option, and the two sat close enough on the same screen
+            // to read as the same control.
+            <div className="segmented segmented-icons daynight-segmented" role="group" aria-label="Day/night preview">
               {([
-                { key: "day", label: "Force day view", icon: Sunrise },
-                { key: "auto", label: "Follow the real day/night cycle", icon: SunMoon },
-                { key: "night", label: "Force night view", icon: Moon },
+                { key: "day", label: "Force day view mode", icon: Sunrise },
+                { key: "night", label: "Force night view mode", icon: Moon },
+                { key: "auto", label: "Automatic mode — follows the real day/night cycle", icon: SunMoon },
               ] as const).map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
@@ -269,24 +275,24 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         </p>
 
         <label style={{ marginTop: 16, display: "block" }}>Floating badge style</label>
-        <div className="row" style={{ gap: 10, marginTop: 6, flexWrap: "wrap" }}>
-          <div className="segmented badge-style-row-group" role="group" aria-label="Floating badge style">
-            {/* Text drops to icon-only under 560px (.settings-label-full),
-                same as Summary bar's short label below — NOT just for space,
-                but because a flex item's default min-width is its CONTENT's
-                min-content size, not its flex-basis: giving this group a
-                calc(50%) basis doesn't actually let it shrink past "Classic"
-                + "Card"'s own text width, so the row kept wrapping anyway
-                even with a 50/50 split. Icon-only removes that floor
-                entirely instead of fighting it. */}
+        {/* Not an even 50/50 split like the row above (see .badge-style-row
+            in styles.css) — Default+Card is genuinely wider content than a
+            single "Dock" button, so forcing them to equal halves would
+            starve the pair while leaving Dock's half mostly empty. Each
+            group instead takes only what its own content needs and the row
+            never wraps, shrinking + truncating with an ellipsis as a last
+            resort rather than dropping to icon-only — the previous fix —
+            which the user asked to undo (the labels should stay visible). */}
+        <div className="row badge-style-row" style={{ gap: 10, marginTop: 6 }}>
+          <div className="segmented settings-row-half" role="group" aria-label="Floating badge style">
             <button
               className={(config.badgeStyle ?? "classic") === "classic" ? "active" : ""}
               onClick={() => update({ badgeStyle: "classic" })}
               aria-pressed={(config.badgeStyle ?? "classic") === "classic"}
-              title="Classic badge style"
-              aria-label="Classic badge style"
+              title="Default badge style"
+              aria-label="Default badge style"
             >
-              <Circle size={16} /> <span className="settings-label-full">Classic</span>
+              <Circle size={16} /> <span className="badge-btn-label">Default</span>
             </button>
             <button
               className={config.badgeStyle === "card" ? "active" : ""}
@@ -295,21 +301,17 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               title="Card badge style"
               aria-label="Card badge style"
             >
-              <CreditCard size={16} /> <span className="settings-label-full">Card</span>
+              <CreditCard size={16} /> <span className="badge-btn-label">Card</span>
             </button>
           </div>
           {/* Single active/inactive button, its own one-item segmented group —
               reuses the exact same pill styling as the badge-style pair above
               rather than a checkbox row, at the user's request. Shares
-              .badge-style-row-group's flex-basis (in styles.css, not inline —
-              a narrow-screen media query needs to shrink it, which can't
-              override an inline style) so the two sit on one line on a roomy
-              screen; under 560px each basis shrinks to a even split of the
-              row, and this button's own label shortens (.settings-label-
-              short/-full) rather than disappearing outright — a single
-              button has room for a short word where the Classic/Card PAIR
-              didn't. */}
-          <div className="segmented badge-style-row-group" role="group" aria-label="Summary bar">
+              .settings-row-half's sizing (styles.css) so the two sit on one
+              line even on a phone — this button's own label shortens further
+              there (.settings-label-short/-full) since "Dock" leaves the
+              Default/Card pair the most room. */}
+          <div className="segmented settings-row-half" role="group" aria-label="Summary bar">
             <button
               className={(config.showSummaryBar ?? true) ? "active" : ""}
               onClick={() => update({ showSummaryBar: !(config.showSummaryBar ?? true) })}
@@ -317,7 +319,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             >
               <PanelBottom size={16} />
               <span className="settings-label-full">Summary bar</span>
-              <span className="settings-label-short">Bottom Bar</span>
+              <span className="settings-label-short">Dock</span>
             </button>
           </div>
         </div>

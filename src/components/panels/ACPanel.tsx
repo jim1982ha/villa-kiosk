@@ -42,7 +42,7 @@ export default function ACPanel({ entity, mapping, onClose }: PanelProps) {
   const fanModes = (a?.fan_modes ?? []) as string[];
 
   return (
-    <BasePanel title={mapping.label} room={mapping.room} icon={<Snowflake size={22} />} onClose={onClose}>
+    <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Snowflake size={22} />} onClose={onClose}>
       {unavailable && <UnavailableNotice device="AC" />}
 
       <div className="temp-display">

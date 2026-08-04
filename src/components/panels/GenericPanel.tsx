@@ -15,7 +15,7 @@ export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
   const distinctStates = [...new Set(history.map((p) => p.state))];
 
   return (
-    <BasePanel title={mapping.label} room={mapping.room} icon={<Info size={22} />} onClose={onClose}>
+    <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Info size={22} />} onClose={onClose}>
       <div className="center" style={{ margin: "8px 0 16px" }}>
         <span className="value-large">{entity?.state ?? "unknown"}</span>
       </div>

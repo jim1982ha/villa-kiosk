@@ -39,12 +39,14 @@ interface HAStateContextType {
    *  indication the user made a deliberate choice about it elsewhere. */
   hiddenInHaEntityIds: Set<string>;
   /** entity_id -> HA's own Area name (this entity's registry row, falling
-   *  back to its device's), resolved once from the registry fetch on
-   *  connect. Empty until that resolves, and empty for any entity HA has no
-   *  area assigned to — always this installation's live data, a room-name
-   *  SIGNAL to suggest/cross-check against, never authoritative on its own
-   *  (see roomForEntity's geometric room-polygon test, which wins when it
-   *  has an answer). */
+   *  back to its device's) — LIVE: re-resolved on connect and again every
+   *  time HA reports an entity/device/area registry change (see the
+   *  `*_registry_updated` subscriptions below), so renaming or assigning a
+   *  device's Area in Home Assistant reaches every kiosk session without a
+   *  reload. Empty for any entity HA has no area assigned to. This is now
+   *  the AUTHORITATIVE room source for a device (see config/EntityMap.ts's
+   *  resolveEntityRoom) — geometric room-polygon detection is the fallback
+   *  for whatever this doesn't cover, not the other way around. */
   entityAreaNames: Record<string, string>;
   /** entity_id -> HA's own device_id (from the entity registry) — the
    *  authoritative "these entities belong to the same physical device"
@@ -154,6 +156,57 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     for (const e of all) notify(e);
   }, [ws, notify]);
 
+  // Registry-only data (get_states never reports hidden_by/entity_category/
+  // area_id) — best effort: a profile without registry read access just sees
+  // nothing filtered/suggested. Re-run on connect AND on every
+  // entity/device/area registry change (see the subscriptions in connect()
+  // below) — this is what makes entityAreaNames (now the authoritative room
+  // source, see EntityMap.ts's resolveEntityRoom) reflect an HA-side rename
+  // or a device's Area assignment without a reload.
+  const refreshRegistryData = useCallback(async () => {
+    try {
+      const rows = await ws.getEntityRegistry();
+      setSuppressedEntityIds(new Set(
+        rows
+          .filter((r) => r.hidden_by != null || r.entity_category === "config" || r.entity_category === "diagnostic")
+          .map((r) => r.entity_id),
+      ));
+      setHiddenInHaEntityIds(new Set(
+        rows.filter((r) => r.hidden_by != null).map((r) => r.entity_id),
+      ));
+      // device_id sits directly on the entity registry row — no extra fetch
+      // needed, and it works even when the device/area registry calls below
+      // fail (a profile that can read entities but not devices still gets
+      // this). The authoritative "these entities are really one physical
+      // device" signal — see suggestDeviceGroups.
+      const deviceIds: Record<string, string> = {};
+      for (const r of rows) if (r.device_id) deviceIds[r.entity_id] = r.device_id;
+      setEntityDeviceIds(deviceIds);
+      // Resolve each entity's Area NAME: its own area_id, falling back to its
+      // device's (HA's own inheritance rule — most entities carry no area_id
+      // of their own and get it from the device they belong to). Both
+      // registry fetches are separate best-effort steps so a profile that can
+      // read entities but not devices/areas still gets whatever resolves
+      // rather than losing the whole feature.
+      const [devices, areas] = await Promise.all([
+        ws.getDeviceRegistry().catch(() => []),
+        ws.getAreaRegistry().catch(() => []),
+      ]);
+      if (devices.length === 0 && areas.length === 0) return;
+      const areaNameById = new Map(areas.map((a) => [a.area_id, a.name]));
+      const deviceAreaById = new Map(devices.map((d) => [d.id, d.area_id]));
+      const resolved: Record<string, string> = {};
+      for (const r of rows) {
+        const areaId = r.area_id ?? (r.device_id ? deviceAreaById.get(r.device_id) : null);
+        const name = areaId ? areaNameById.get(areaId) : null;
+        if (name) resolved[r.entity_id] = name;
+      }
+      setEntityAreaNames(resolved);
+    } catch (err) {
+      devLog("[HA] entity_registry/list failed (hidden filter + area names skipped)", err);
+    }
+  }, [ws]);
+
   const connect = useCallback(
     async () => {
       setLastError(null);
@@ -166,62 +219,32 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
           setEntities((prev) => ({ ...prev, [ns.entity_id]: ns }));
           notify(ns);
         });
+        // Live room/hidden/device-group data: a rename, a new Area
+        // assignment, or a device moved between areas in HA reaches every
+        // connected kiosk session the moment HA reports it, same as any
+        // other live state — no reload, no manual re-detect. All three fire
+        // on the same underlying registry-change events HA emits; re-running
+        // the one resolver covers whichever registry actually changed rather
+        // than needing three separate handlers.
+        const onRegistryChanged = () => { void refreshRegistryData(); };
+        for (const eventType of ["entity_registry_updated", "device_registry_updated", "area_registry_updated"]) {
+          ws.subscribeEvents(eventType, onRegistryChanged)
+            .catch((err) => devLog(`[HA] subscribe ${eventType} failed`, err));
+        }
         await hydrate();
         // Pull the instance's location + name so onboarding can auto-fill the
         // map coordinates and the dashboard title without manual entry.
         ws.sendMessage<HAConfig>("get_config")
           .then((cfg) => setHaConfig(cfg))
           .catch((err) => devLog("[HA] get_config failed (onboarding auto-fill skipped)", err));
-        // Registry-only data (get_states never reports hidden_by/entity_category/
-        // area_id) — best effort: a profile without registry read access just
-        // sees nothing filtered/suggested, same as before this existed.
-        ws.getEntityRegistry()
-          .then(async (rows) => {
-            setSuppressedEntityIds(new Set(
-              rows
-                .filter((r) => r.hidden_by != null || r.entity_category === "config" || r.entity_category === "diagnostic")
-                .map((r) => r.entity_id),
-            ));
-            setHiddenInHaEntityIds(new Set(
-              rows.filter((r) => r.hidden_by != null).map((r) => r.entity_id),
-            ));
-            // device_id sits directly on the entity registry row — no extra
-            // fetch needed, and it works even when the device/area registry
-            // calls below fail (a profile that can read entities but not
-            // devices still gets this). The authoritative "these entities are
-            // really one physical device" signal — see suggestDeviceGroups.
-            const deviceIds: Record<string, string> = {};
-            for (const r of rows) if (r.device_id) deviceIds[r.entity_id] = r.device_id;
-            setEntityDeviceIds(deviceIds);
-            // Resolve each entity's Area NAME: its own area_id, falling back to
-            // its device's (HA's own inheritance rule — most entities carry no
-            // area_id of their own and get it from the device they belong to).
-            // Both registry fetches are separate best-effort steps so a profile
-            // that can read entities but not devices/areas still gets whatever
-            // resolves rather than losing the whole feature.
-            const [devices, areas] = await Promise.all([
-              ws.getDeviceRegistry().catch(() => []),
-              ws.getAreaRegistry().catch(() => []),
-            ]);
-            if (devices.length === 0 && areas.length === 0) return;
-            const areaNameById = new Map(areas.map((a) => [a.area_id, a.name]));
-            const deviceAreaById = new Map(devices.map((d) => [d.id, d.area_id]));
-            const resolved: Record<string, string> = {};
-            for (const r of rows) {
-              const areaId = r.area_id ?? (r.device_id ? deviceAreaById.get(r.device_id) : null);
-              const name = areaId ? areaNameById.get(areaId) : null;
-              if (name) resolved[r.entity_id] = name;
-            }
-            setEntityAreaNames(resolved);
-          })
-          .catch((err) => devLog("[HA] entity_registry/list failed (hidden filter + area names skipped)", err));
+        void refreshRegistryData();
       } catch (err) {
         const msg = (err as Error).message;
         setLastError(msg);
         throw err;
       }
     },
-    [ws, hydrate, notify],
+    [ws, hydrate, notify, refreshRegistryData],
   );
 
   // Re-hydrate after an automatic reconnect.

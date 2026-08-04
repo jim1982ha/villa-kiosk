@@ -12,7 +12,11 @@ export interface EntityMapping {
   entityId: string;
   type: EntityType;
   label: string; // Human-readable name for UI panels
-  room: string; // Room for grouping / teleport context
+  // Room is NOT stored here any more — it's live-computed (HA's own Area
+  // assignment, falling back to GLB geometric detection) rather than a
+  // stored/user-editable field, so it can never drift from Home Assistant's
+  // own room organisation. See config/EntityMap.ts's resolveEntityRoom and
+  // ConfigContext's resolvedRooms.
   category?: Category; // Map filter grouping; falls back to categoryForEntity() when unset
   /** Hide this device from the 3D view entirely: no badge/label, no blue
    *  highlight, not tappable — the mesh stays as plain geometry. For devices

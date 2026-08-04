@@ -21,7 +21,7 @@ export default function SwitchPanel({ entity, mapping, onClose }: PanelProps) {
   const toggle = () => HAServices.toggleEntity(ws, mapping.entityId);
 
   return (
-    <BasePanel title={mapping.label} room={mapping.room} icon={<ToggleLeft size={22} />} onClose={onClose}>
+    <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<ToggleLeft size={22} />} onClose={onClose}>
       {unavailable ? <UnavailableNotice device="switch" /> : <PowerToggle on={on} onClick={toggle} />}
 
       <LastDayTimeline data={history} colorFor={onOffColor} loading={historyLoading} />

@@ -11,12 +11,25 @@ interface ConfigContextType {
   update: (patch: Partial<AppConfig>) => void;
   replace: (next: AppConfig) => void;
   reset: () => void;
+  /** entity_id -> room name, live-computed (HA's own Area assignment, falling
+   *  back to GLB geometric detection — see Dashboard.tsx's resolution effect
+   *  and config/EntityMap.ts's resolveEntityRoom) rather than stored/edited
+   *  config. Deliberately NOT part of AppConfig/persisted: every client
+   *  independently computes the same answer from the same HA instance + the
+   *  same GLB, so there is nothing to save or sync. Empty until the scene
+   *  has loaded and HA's registry data has resolved at least once. */
+  resolvedRooms: Record<string, string>;
+  /** Pushed by Dashboard.tsx whenever HA's registry data or the scene's
+   *  plan-to-world calibration changes. Not for general use — every OTHER
+   *  consumer should just read resolvedRooms. */
+  setResolvedRooms: (rooms: Record<string, string>) => void;
 }
 
 const ConfigContext = createContext<ConfigContextType | null>(null);
 
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
+  const [resolvedRooms, setResolvedRooms] = useState<Record<string, string>>({});
 
   const update = useCallback((patch: Partial<AppConfig>) => {
     setConfig((prev) => ({ ...prev, ...patch }));
@@ -51,7 +64,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     document.documentElement.setAttribute("data-theme", config.theme);
   }, [config.theme]);
 
-  const value = useMemo(() => ({ config, update, replace, reset }), [config, update, replace, reset]);
+  const value = useMemo(
+    () => ({ config, update, replace, reset, resolvedRooms, setResolvedRooms }),
+    [config, update, replace, reset, resolvedRooms],
+  );
   return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>;
 }
 

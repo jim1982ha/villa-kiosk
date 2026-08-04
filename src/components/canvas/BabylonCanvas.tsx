@@ -2,7 +2,6 @@
 // Owns the <canvas> + SceneManager lifecycle and wires HA state -> 3D visuals.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { roomKey } from "@/config/roomKey";
 import { AlertTriangle, X } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { useConfig } from "@/config/ConfigContext";
@@ -73,7 +72,7 @@ export default function BabylonCanvas({
   const managerRef = useRef<SceneManager | null>(null);
   const { config, update } = useConfig();
   const { role } = useProfile();
-  const { subscribeAll, getEntitiesSnapshot, entityAreaNames } = useHA();
+  const { subscribeAll, getEntitiesSnapshot } = useHA();
   // What the SCENE is allowed to show for the active profile: role-denied
   // categories folded into the hidden set, denied entities stripped from the
   // entity map. The stored config stays complete (auto-detect below still
@@ -87,13 +86,6 @@ export default function BabylonCanvas({
   // without being recreated (BabylonCanvas mounts once with empty deps).
   const configRef = useRef(config);
   useEffect(() => { configRef.current = config; }, [config]);
-  // Same live-ref pattern, for the same reason: the one-shot loadModel
-  // callback's auto-detect merge (below) wants whatever HA area names have
-  // resolved by the time a model finishes loading, without being recreated
-  // when they arrive (the registry fetch on connect is async and often
-  // hasn't resolved yet at mount — that's fine, it's a best-effort signal).
-  const entityAreaNamesRef = useRef(entityAreaNames);
-  useEffect(() => { entityAreaNamesRef.current = entityAreaNames; }, [entityAreaNames]);
   // The pick callbacks close over live HA state (entities/ws) and config, so they
   // are recreated on every relevant change. The SceneManager is created ONCE, so
   // capturing the callbacks directly would freeze them at their mount-time values
@@ -355,20 +347,15 @@ export default function BabylonCanvas({
         saveMeshCatalog(meshNames);
         // Auto-populate entityMap from meshes whose names are HA entity IDs
         // (cameras, fans, lights, etc.) so they appear in the Config Editor.
+        // Room is NOT resolved/stamped here any more — it's no longer part of
+        // EntityMapping at all (see Dashboard.tsx's room-resolution effect
+        // and config/EntityMap.ts's docstring): every entityMap entry's room
+        // is computed live from HA's Area assignment / GLB geometry, so there
+        // is nothing to seed on first detection.
         const detected = manager.getAutoDetectedMappings();
         if (detected.length > 0) {
           const current = configRef.current;
           const additions: Record<string, EntityMapping> = {};
-          // Rooms this villa's own model actually has — the whitelist an HA
-          // Area name (below) must land in before it's trusted, keyed by the
-          // same normalisation roomOf() etc. use everywhere else so a case
-          // difference can't cause a duplicate room bucket. Prevents a
-          // mismatched/stale HA area ("Guest Room" in HA vs "WIC" in the
-          // plan) from ever inventing a phantom one that no drawn polygon or
-          // teleport point backs. Value is the room's CANONICAL (already-used)
-          // casing, so an accepted HA area name still reads identically to
-          // every other entity already carrying that room.
-          const knownRooms = new Map(current.teleportPoints.map((p) => [roomKey(p.name), p.name]));
           // Live HA state, read once for this whole pass — a mesh literally
           // named after an entity_id (the pipeline's own naming convention)
           // that HA no longer reports (renamed/removed) used to get
@@ -389,20 +376,7 @@ export default function BabylonCanvas({
           for (const m of detected) {
             if (current.entityMap[m.entityId]) continue;
             if (!liveEntities[m.entityId]) continue;
-            // A fresh detection always starts "Unmapped" (resolveMeshUnchecked's
-            // strategy 4) — try to resolve a real room before it's ever saved,
-            // so Advanced Settings doesn't start every device with a blank
-            // room field on every fresh install. Geometric containment (does
-            // this entity's own mesh anchor sit inside a drawn room polygon?)
-            // is tried first since it's exact and villa-specific; HA's own
-            // Area assignment is the fallback for anything with no anchor to
-            // test (or that lands outside every polygon) — accepted only when
-            // it names a room this villa's plan actually has, never blindly.
-            const geoRoom = manager.roomForEntity(m.entityId);
-            const areaName = entityAreaNamesRef.current[m.entityId];
-            const areaRoom = !geoRoom && areaName ? knownRooms.get(roomKey(areaName)) : null;
-            const room = geoRoom ?? areaRoom;
-            additions[m.entityId] = room ? { ...m, room } : m;
+            additions[m.entityId] = m;
           }
           if (Object.keys(additions).length > 0) {
             update({ entityMap: { ...current.entityMap, ...additions } });

@@ -661,6 +661,14 @@ export class EntityVisuals {
   /** Floor-glow overlay for physical (non-camera) motion/presence sensors —
    *  a room, not a direction, is the natural signal for those. */
   private roomHighlight: RoomHighlight;
+  /** entity_id -> room name, pushed by Dashboard.tsx (see SceneManager.
+   *  setResolvedRooms) — HA's own Area assignment wins whenever a device has
+   *  one, geometric room-polygon detection (roomForEntity, below) is the
+   *  fallback for whatever HA hasn't organised into an Area yet. Replaces
+   *  EntityMapping.room, which used to be a stored/user-editable field; this
+   *  one is live-computed and carries no state of its own beyond "whatever
+   *  Dashboard last pushed". Empty for an entity nothing has resolved yet. */
+  private resolvedRooms: Record<string, string> = {};
 
   constructor(
     scene: Scene,
@@ -1722,6 +1730,16 @@ export class EntityVisuals {
     }
   }
 
+  /** Replace the resolved entity->room map (see the field's own docstring) —
+   *  called by SceneManager whenever Dashboard recomputes it (HA registry
+   *  change, or the scene's plan-to-world calibration changing). Cheap: a
+   *  reference swap, no re-index. Badge grouping/clustering and motion-
+   *  routing's room-highlight both read this on their next pass, not
+   *  retroactively — same as every other config-driven visual here. */
+  setResolvedRooms(rooms: Record<string, string>): void {
+    this.resolvedRooms = rooms;
+  }
+
   /** Which drawn room polygon (if any) contains this world-space ground
    *  point — the geometric half of roomForEntity's room auto-fill. Straight
    *  linear scan: called only once per freshly detected entity right after a
@@ -1734,14 +1752,15 @@ export class EntityVisuals {
     return null;
   }
 
-  /** Auto-fill signal for a just-detected entity's room: which real drawn
-   *  room polygon its own mesh anchor sits inside, or null if it sits
-   *  outside every polygon (open ground between rooms, a fixture whose
-   *  anchor sits just past a wall) or the entity has no anchor yet. Purely
-   *  geometric — reads only this villa's own calibrated floor plan, so it
-   *  generalises to any install with zero per-site tuning. Called by
-   *  BabylonCanvas right after a model load, before a fresh mapping's
-   *  "Unmapped" placeholder room is ever saved to config. */
+  /** Geometric room fallback: which real drawn room polygon this entity's
+   *  own mesh anchor sits inside, or null if it sits outside every polygon
+   *  (open ground between rooms, a fixture whose anchor sits just past a
+   *  wall) or the entity has no anchor yet. Purely geometric — reads only
+   *  this villa's own calibrated floor plan, so it generalises to any
+   *  install with zero per-site tuning. Called by Dashboard.tsx's room-
+   *  resolution effect for whatever HA hasn't organised into an Area (see
+   *  resolvedRooms) — HA's own Area assignment wins whenever a device has
+   *  one; this is only ever consulted for the entities it doesn't cover. */
   roomForEntity(entityId: string): string | null {
     const anchor = this.labels.get(entityId)?.anchor;
     if (!anchor) return null;
@@ -2109,15 +2128,16 @@ export class EntityVisuals {
       }
       if (!anyBeam) {
         for (const camId of cameraIds) {
-          const camRoom = this.config.entityMap[camId]?.room;
+          const camRoom = this.resolvedRooms[camId];
           if (camRoom) this.roomHighlight.setActive(camRoom, on);
         }
       }
       return;
     }
     const map = this.config.entityMap[entity.entity_id];
-    if (map?.type === "binary_sensor" && map.room) {
-      this.roomHighlight.setActive(map.room, on);
+    const room = this.resolvedRooms[entity.entity_id];
+    if (map?.type === "binary_sensor" && room) {
+      this.roomHighlight.setActive(room, on);
     }
   }
 
@@ -2596,7 +2616,7 @@ export class EntityVisuals {
   /** A badge's room, normalised — the single definition every grouping,
    *  chip and hit-test path reads, so none of them can disagree. */
   private roomOf(entityId: string): string {
-    return this.config.entityMap[entityId]?.room?.trim() || NO_ROOM_LABEL;
+    return this.resolvedRooms[entityId]?.trim() || NO_ROOM_LABEL;
   }
 
   /** Pixel lift that centres a badge container above its anchor point. */
@@ -2849,9 +2869,10 @@ export class EntityVisuals {
    * projects to a continuous screen path as the camera moves — it physically
    * cannot exhibit the jitter this whole mechanism exists to remove.
    *
-   * Membership comes from EntityMapping.room, the same field SummaryGroupPanel
-   * groups by, so tapping a chip can hand its entity list straight to that
-   * existing modal instead of inventing a second grouping concept.
+   * Membership comes from resolvedRooms (roomOf), the same live-resolved room
+   * SummaryGroupPanel groups by, so tapping a chip can hand its entity list
+   * straight to that existing modal instead of inventing a second grouping
+   * concept.
    */
   private updateClusters(shown: ShownLabel[]): void {
     const layer = this.labelLayer;

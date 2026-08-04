@@ -36,7 +36,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
         : entity?.state ?? "Unknown";
 
   return (
-    <BasePanel title={mapping.label} room={mapping.room} icon={<Blinds size={22} />} onClose={onClose}>
+    <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Blinds size={22} />} onClose={onClose}>
       <div className="center" style={{ marginBottom: 16 }}>
         <span className={`status-pill ${unavailable ? "unavailable" : "off"}`}>{stateLabel}</span>
       </div>

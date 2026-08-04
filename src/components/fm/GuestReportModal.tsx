@@ -36,7 +36,7 @@ export default function GuestReportModal({
   onClose: () => void;
 }) {
   const { addTicket } = useFmData();
-  const { config } = useConfig();
+  const { resolvedRooms } = useConfig();
   const label = useEntityLabel();
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
@@ -68,7 +68,7 @@ export default function GuestReportModal({
       title: title.trim(),
       entityId,
       deviceLabel,
-      room: entityId ? config.entityMap[entityId]?.room : undefined,
+      room: entityId ? resolvedRooms[entityId] : undefined,
       note: note.trim() || undefined,
       photoIds,
       reportedBy: "guest",

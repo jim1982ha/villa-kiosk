@@ -73,8 +73,9 @@ const NO_ROOM = "Other";
 
 const pretty = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
 
-/** Bucket a list of entities by their configured room (EntityMapping.room),
- *  alphabetical with the no-room bucket always last — so scanning a long
+/** Bucket a list of entities by their resolved room (ConfigContext's
+ *  resolvedRooms — HA's own Area assignment, falling back to GLB geometric
+ *  detection), alphabetical with the no-room bucket always last — so scanning a long
  *  device group (e.g. every light in the villa) reads by physical location
  *  instead of one long flat list. */
 function groupByRoom(
@@ -99,14 +100,14 @@ export default function SummaryGroupPanel({
   filterSuppressed = true, roomScenes,
 }: Props) {
   const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
-  const { config } = useConfig();
+  const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
   // Bulk-toggling an entire group (potentially dozens of devices) from one
   // tap is easy to trigger by accident — require an explicit second tap
   // before it actually fires, same pattern as LockPanel's unlock confirm.
   const [confirming, setConfirming] = useState(false);
 
-  const roomOf = (id: string) => config.entityMap[id]?.room?.trim() ?? "";
+  const roomOf = (id: string) => resolvedRooms[id]?.trim() ?? "";
 
   // Substitute a phantom "unavailable" stand-in for any id Home Assistant has
   // no live entity for, rather than dropping it. Dropping was silently hiding
