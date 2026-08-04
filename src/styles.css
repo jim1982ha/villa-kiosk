@@ -1590,6 +1590,12 @@ input[type="range"]::-moz-range-thumb {
 .segmented-icons { flex: 0 0 auto; gap: 3px; padding: 3px; }
 .segmented-icons button { flex: 0 0 auto; width: 38px; min-height: 34px; gap: 0; }
 
+/* Floating badge style row (SettingsModal): Classic/Card and Summary bar
+   share one row on a roomy screen. flex-basis lives here, not as an inline
+   style, specifically so the narrow-screen rule below can shrink it — a
+   media query cannot win against an inline style's specificity. */
+.badge-style-row-group { flex: 1 1 200px; }
+
 /* Responsive label swap (Summary bar's toggle, SettingsModal): the full name
    normally, a shorter one once the modal narrows enough that it'd otherwise
    wrap onto its own line instead of sitting beside Classic/Card. No existing
@@ -1600,6 +1606,14 @@ input[type="range"]::-moz-range-thumb {
 @media (max-width: 560px) {
   .settings-label-full { display: none; }
   .settings-label-short { display: inline; }
+  /* A shorter label alone isn't enough — the 200px basis above still tells
+     the browser this group needs 200px before it stretches to fill leftover
+     space, so it kept wrapping onto its own line regardless of how little
+     text was actually left inside it. An even split of the row is what
+     actually lets both groups share one line on a phone; each button's own
+     content (icon + a handful of characters) fits comfortably inside its
+     half. */
+  .badge-style-row-group { flex: 1 1 calc(50% - 5px); }
 }
 
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.84.1
+
+### Interface
+- **Two follow-ups to 2.84.0's Day/Auto/Night control, reported from a phone screenshot.** The segmented control sat visibly shorter than the Brightness/Night dimming sliders beside it — `alignSelf: "flex-end"` pinned it to their bottom edge instead of matching their full label-plus-track height, so it read as a small pill stapled onto a taller row rather than a same-height sibling. Now `alignSelf: "stretch"`, and the buttons fill that height automatically (`.segmented`'s `align-items` was already the flex default of `stretch`). Separately, the "Day" option used the same `Sun` glyph as the Theme selector's Light option one row up, close enough on the same screen to read as the same control; it's now `Sunrise`, visually distinct while still legible as "day".
+- **The Summary bar toggle still wrapped onto its own row below Classic/Card on a phone, even after 2.84.0 shortened its label to "Bottom Bar".** The label swap only changed the TEXT — both groups' `flex-basis` was still a hardcoded inline `200px`, so the browser kept treating Summary bar as needing 200px of its own before it would share the row, regardless of how little text was actually left inside it once shortened. Moved that basis into a CSS class (`.badge-style-row-group`, an inline style can't be beaten by a media query) and, under 560px, split it `calc(50% - 5px)` between the two groups instead — an even half each, which both fit their now-short content comfortably.
+
 ## 2.84.0
 
 ### Interface

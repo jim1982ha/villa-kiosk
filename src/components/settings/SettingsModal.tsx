@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  Sliders, Sun, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
+  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -217,9 +217,16 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             />
           </div>
           {(manager?.renderFx.isBaked() ?? false) && (
-            <div className="segmented segmented-icons" role="group" aria-label="Day/night preview" style={{ flex: "0 0 auto", alignSelf: "flex-end" }}>
+            // alignSelf: stretch (not the flexbox default's opposite,
+            // flex-end) so this matches the FULL height of its slider
+            // siblings — label-plus-track — rather than sitting as a short
+            // pill pinned to their bottom edge. Sunrise, not Sun, for "Day":
+            // the Theme selector above already uses Sun for its Light
+            // option, and the two sat close enough on the same screen to
+            // read as the same control.
+            <div className="segmented segmented-icons" role="group" aria-label="Day/night preview" style={{ flex: "0 0 auto", alignSelf: "stretch" }}>
               {([
-                { key: "day", label: "Force day view", icon: Sun },
+                { key: "day", label: "Force day view", icon: Sunrise },
                 { key: "auto", label: "Follow the real day/night cycle", icon: SunMoon },
                 { key: "night", label: "Force night view", icon: Moon },
               ] as const).map(({ key, label, icon: Icon }) => (
@@ -261,7 +268,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
 
         <label style={{ marginTop: 16, display: "block" }}>Floating badge style</label>
         <div className="row" style={{ gap: 10, marginTop: 6, flexWrap: "wrap" }}>
-          <div className="segmented" role="group" aria-label="Floating badge style" style={{ flex: "1 1 200px" }}>
+          <div className="segmented badge-style-row-group" role="group" aria-label="Floating badge style">
             <button
               className={(config.badgeStyle ?? "classic") === "classic" ? "active" : ""}
               onClick={() => update({ badgeStyle: "classic" })}
@@ -279,13 +286,18 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           </div>
           {/* Single active/inactive button, its own one-item segmented group —
               reuses the exact same pill styling as the badge-style pair above
-              rather than a checkbox row, at the user's request. flex-basis
-              matches its neighbour's so the two share a row on a roomy
-              screen and each drop to full width on a phone (flex-wrap). The
-              label itself shortens further under 560px (see .settings-label-
-              short/-full in styles.css) so it still fits beside Classic/Card
-              on that same line instead of forcing an early wrap. */}
-          <div className="segmented" role="group" aria-label="Summary bar" style={{ flex: "1 1 200px" }}>
+              rather than a checkbox row, at the user's request. Shares
+              .badge-style-row-group's flex-basis (in styles.css, not inline —
+              a narrow-screen media query needs to shrink it, which can't
+              override an inline style) so the two sit on one line on a roomy
+              screen; under 560px each basis shrinks to a even split of the
+              row AND this button's own label shortens further (.settings-
+              label-short/-full) — together that's what keeps both groups on
+              one line on a phone instead of this one wrapping below, which a
+              shorter label alone didn't fix (its flex-basis was still the
+              same 200px minimum, so the browser kept wrapping regardless of
+              how little text was actually inside it). */}
+          <div className="segmented badge-style-row-group" role="group" aria-label="Summary bar">
             <button
               className={(config.showSummaryBar ?? true) ? "active" : ""}
               onClick={() => update({ showSummaryBar: !(config.showSummaryBar ?? true) })}
