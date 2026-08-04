@@ -117,6 +117,13 @@
   --panel-radius: 16px;
   --panel-padding: 24px;
   --touch-min: 44px;
+  /* Every top-bar chip/pill (.hud-brand, .hud-group) shares this height so the
+     brand chip on the left reads as the same size as the category/alert pills
+     on the right, not a visibly shorter section — see both selectors below.
+     Re-declared (not just relied on via auto-sizing) inside the ≤640px
+     compact-bar query, where the category row's own icon-btn shrinks to 32px
+     and this must shrink to match. */
+  --hud-pill-h: 48px;
   /* One labelled form field, one rhythm. Three surfaces had grown their own
      numbers for the same idea — the Settings body (6px under a 13px label),
      the slider fields (8px) and the Facility forms (5px under a 12px one) —
@@ -387,6 +394,10 @@ button {
   display: flex; align-items: center; gap: 4px;
   border-radius: var(--radius-squircle); padding: 4px;
   border: 1px solid var(--hairline);
+  /* Explicit (not just a side effect of 4px padding + a 38px icon-btn) so
+     .hud-brand can target the exact same number below rather than the two
+     drifting apart the next time either one changes independently. */
+  height: var(--hud-pill-h);
 }
 /* Vertically stacked HUD control block (Room + Switch View under the floor
    switch, on the left). Full-width rows inside a single rounded pill. */
@@ -441,7 +452,16 @@ button {
      stack, the category group) — this used to be a full capsule (999px),
      the one section shape that didn't match the rest of the HUD. */
   border: 1px solid var(--hairline); border-radius: var(--radius-squircle);
-  padding: 6px 16px 6px 10px;
+  /* Height, not vertical padding: a content-driven height (the old rule was
+     `padding: 6px 16px 6px 10px`) came out shorter than .hud-group's own
+     48px (its 38px icon-btn + 4px top/bottom padding + border) because this
+     chip's tallest content — the villa-name text — has a shorter line height
+     than an icon-btn is tall. That read as the brand chip being visibly
+     smaller than the category/alert pills beside it. Fixed height + flex
+     centering (align-items: center above) matches .hud-group exactly
+     instead, and tracks it automatically if --hud-pill-h ever changes. */
+  height: var(--hud-pill-h);
+  padding: 0 16px 0 10px;
   /* Never let the villa name WRAP as its 1fr grid track is squeezed. Without
      this a long name ("The Lys House") broke onto three lines on a narrowed
      desktop window, ballooning the chip vertically until it covered the floor
@@ -630,7 +650,12 @@ button {
 .hud-home-btn {
   display: inline-flex; align-items: center; justify-content: center;
   position: relative; flex: 0 0 auto;
-  background: none; border: none; padding: 4px; margin: -4px;
+  /* Same footprint as the 1F/2F floor buttons (.hud-stack .icon-btn) right
+     below it, so the two left-edge controls read as one consistent size
+     instead of this one looking small next to them. Matched again in the
+     ≤640px compact-bar query, where the floor buttons grow to 40x40. */
+  width: 40px; height: 38px;
+  background: none; border: none;
   border-radius: 8px; cursor: pointer; color: inherit;
 }
 .hud-home-btn:hover, .hud-home-btn:focus-visible { background: var(--bg-input); }
@@ -2098,12 +2123,18 @@ label.toggle span { user-select: none; line-height: 1.4; }
      identify the chip, and the name is also the document title. This is the
      last step before the phone layout hides the brand outright. */
   .hud-title { display: none; }
-  .hud-brand { padding: 6px 10px; gap: 8px; }
+  .hud-brand { padding: 0 10px; gap: 8px; }
 }
 
 @media (max-width: 640px), (max-height: 560px) {
   /* --- Compact top bar so nothing wraps or gets cropped on a phone --- */
-  :root { --hud-side-pad: 10px; }
+  :root {
+    --hud-side-pad: 10px;
+    /* Matches .hud-center's icon-btn shrinking to 32px below (32 + 2×4px
+       padding + 2×1px border) — keeps .hud-brand the same height as the
+       category pill at this tier too, not just the wider ones above. */
+    --hud-pill-h: 42px;
+  }
   .hud-topbar {
     gap: 6px;
     padding-left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
@@ -2186,6 +2217,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
      the two floating icon groups read as the same family of control instead
      of the stack looking undersized next to the summary tiles below it. */
   .hud-stack .icon-btn { width: 40px; height: 40px; }
+  /* Keep the brand icon matching the floor buttons' size at this tier too. */
+  .hud-home-btn { width: 40px; height: 40px; }
 
   /* Dialogs fill the small screen and never crop their header/footer. The body
      scrolls between a pinned header and footer; dvh tracks the real visible

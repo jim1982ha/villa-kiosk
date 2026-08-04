@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.87.1
+
+### Fixed — top-bar brand chip out of step with its own sizing rules
+- **The villa-name chip (home icon + name + connection dot) rendered visibly shorter than the category/alert pill groups beside it, and its home icon looked noticeably smaller than the 1F/2F floor buttons directly below it.** Both were the same root cause: the brand chip's height came from vertical padding around its content rather than an explicit size, and its tallest content (the villa-name text) has a shorter line height than a 38px icon button — so the chip's painted height (~37px) never matched `.hud-group`'s (48px, driven by its 38px icon-btn + padding + border), even though both sit in the same row and read as siblings. The home button itself had never been sized at all; it shrink-wrapped its bare 22px icon glyph while the floor toggle right underneath it is a full 40×38px button. Fixed by giving both `.hud-brand` and `.hud-group` an explicit height off one shared token (`--hud-pill-h`, re-declared to 42px at the ≤640px compact-bar tier where the category row's own icons shrink to 32px) instead of letting them drift apart by content, and sizing `.hud-home-btn` to match `.hud-stack .icon-btn`'s footprint (40×38px, 40×40px at the same compact tier) rather than its icon's raw size.
+
 ## 2.87.0
 
 ### Fixed — a real bug in every modal, not just Cockpit
