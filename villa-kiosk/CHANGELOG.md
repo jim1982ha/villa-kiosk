@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.95.0
+
+### Performance — the biggest phase of the load was bookkeeping behind the spinner
+- **2.94.0's new instrumentation immediately found where the wait actually was, and it was not where anyone had been looking.** A field record: `totalMs 13398` (matching a counted ~12s), split `bootMs 2931` (22%, the JS bundle) + `parseMs 4693` (35%, Babylon's import and our post-processing) + **`revealMs 5655` (42%)** — the stretch between the villa being fully built and interactive, and the loading overlay actually lifting. It was the single largest phase of the entire load, larger than Babylon's own glTF import, and it had never been measured because the old telemetry stopped its clock before it began.
+- **What was in it: work that changes nothing on screen.** A **SHA-256 over the entire 17MB GLB — `await`ed before the reveal** — which exists only as a fingerprint for one row in Settings ("which file is loaded"); a synchronous `JSON.stringify` of ~765 mesh names into localStorage for the binding UI; and the auto-detect pass whose `update()`, on any load that finds a new entity, changes `entityMap`'s key set and so triggers a full multi-second `indexMeshes` re-run (classed STRUCTURAL by `entityMapDiff`). All three now run *after* the villa is visible, in one `finishAfterReveal` step. What remains ahead of the reveal is only what would make the villa **wrong** on screen without it: the per-entity state paint, and the rooms-sync settle (which has its own documented reason — applying it late would leave a rendered-but-frozen map, and in the common re-open case it is skipped entirely anyway).
+- **`revealMs` now reports its own split** (`rvMeshNames` / `rvStates` / `rvRooms`), so whatever is left is attributable rather than hidden behind one number — the exact mistake that let 5.6s go unnoticed until now.
+- Also confirmed by the same record: 2.94.0's two fixes landed as intended — `spawn` fell from 240–350ms to **8ms**, `yield` from 350–750ms to **88ms**. (The `probeMs: 1375` in that record is a one-off: the GLB had just been re-uploaded, so the floor-probe cache correctly missed on its versioned key and re-probed once.)
+
 ## 2.94.0
 
 ### Fixed — the load telemetry was measuring about a third of the actual wait

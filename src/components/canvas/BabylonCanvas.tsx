@@ -316,26 +316,27 @@ export default function BabylonCanvas({
         noteLoadPhase("post-process");
         const tParseDone = performance.now();
 
-        // Fingerprint the GLB that actually loaded, so Settings can prove which
-        // file is in use without needing to toggle an entity. Compare against
-        // `shasum -a 256 <file>.glb` and `ls -l` on disk.
+        // NOTHING between here and setStatus("ready") may be anything other
+        // than "the villa would be WRONG on screen without it". Field
+        // measurement (v2.94.0's revealMs) found this stretch to be the single
+        // largest phase of the whole load — 5,655ms of 13,398ms on Android,
+        // larger than Babylon's own import — because it had accumulated
+        // bookkeeping that merely happened to be written here: a SHA-256 over
+        // the entire 17MB GLB (a diagnostic fingerprint for Settings, AWAITED
+        // before the reveal), a localStorage mesh-catalog write, and the
+        // auto-detect config write. All of that now runs after the reveal, in
+        // `finishAfterReveal` below.
         const meshNames = manager.getBindableMeshNames();
-        setLoadedModelInfo({
-          url: loadedSource,
-          bytes: data.byteLength,
-          sha256: await sha256Promise,
-          meshCount: meshNames.length,
-          fetchMs: Math.round(tFetchDone - tFetchStart),
-          parseMs: Math.round(tParseDone - tFetchDone),
-          importMs: Math.round(importMs),
-          postMs: Math.round(postMs),
-        });
+        const tMeshNames = performance.now();
 
         // Ship the phase split to the add-on. This is the measurement that
         // turns "the app is slow" into an actionable number — and it's per
         // DEVICE, so a phone that parses 5x slower than the desktop shows up
         // as itself rather than as an anecdote.
-        const sendLoadTelemetry = (revealMs: number, totalMs: number) => reportTelemetry("load", {
+        const sendLoadTelemetry = (
+          revealMs: number, totalMs: number, revealSplit: Record<string, number>,
+        ) => reportTelemetry("load", {
+          ...revealSplit,
           // ── The window that was previously invisible ────────────────────
           // bootMs: navigation start → this scene effect (HTML + the ~6.6MB JS
           // bundle's download/parse/compile + React mount + session resolve).
@@ -371,8 +372,36 @@ export default function BabylonCanvas({
           ...phases,
         });
 
-        // Expose mesh names for the binding UI.
-        saveMeshCatalog(meshNames);
+        // Everything that does NOT change what is on screen, run once the villa
+        // is already visible (see the reveal below). Ordered cheapest-first so
+        // the diagnostics land quickly; none of it is awaited by the reveal.
+        const finishAfterReveal = () => {
+          if (cancelled) return;
+          // Expose mesh names for the binding UI. A JSON.stringify of ~765
+          // names into localStorage — synchronous, and worth nothing to a user
+          // staring at a spinner.
+          saveMeshCatalog(meshNames);
+          // Fingerprint the GLB that actually loaded, so Settings can prove
+          // which file is in use without needing to toggle an entity. Compare
+          // against `shasum -a 256 <file>.glb` and `ls -l` on disk. Hashing
+          // 17MB is genuinely expensive on a phone, and this is a diagnostic
+          // read by one Settings row — it used to be AWAITED before the villa
+          // could appear.
+          void sha256Promise.then((sha256) => {
+            if (cancelled) return;
+            setLoadedModelInfo({
+              url: loadedSource,
+              bytes: data.byteLength,
+              sha256,
+              meshCount: meshNames.length,
+              fetchMs: Math.round(tFetchDone - tFetchStart),
+              parseMs: Math.round(tParseDone - tFetchDone),
+              importMs: Math.round(importMs),
+              postMs: Math.round(postMs),
+            });
+          }).catch(() => {});
+          autoDetectEntities();
+        };
 
         // Auto-populate entityMap from meshes whose names are HA entity IDs
         // (cameras, fans, lights, etc.) so they appear in the Config Editor.
@@ -381,6 +410,14 @@ export default function BabylonCanvas({
         // and config/EntityMap.ts's docstring): every entityMap entry's room
         // is computed live from HA's Area assignment / GLB geometry, so there
         // is nothing to seed on first detection.
+        //
+        // Deferred past the reveal (finishAfterReveal): on a load where it DOES
+        // find something new, the `update()` below changes entityMap's key set,
+        // which entityMapDiff classes as STRUCTURAL — a full multi-second
+        // indexMeshes re-run. Behind the spinner that was invisible dead time;
+        // after the reveal the villa is already usable while it settles. In the
+        // steady state nothing is detected and this costs nothing either way.
+        function autoDetectEntities() {
         const detected = manager.getAutoDetectedMappings();
         if (detected.length > 0) {
           const current = configRef.current;
@@ -411,6 +448,7 @@ export default function BabylonCanvas({
             update({ entityMap: { ...current.entityMap, ...additions } });
           }
         }
+        }
         // Paint the current entity states immediately (meshes + markers). Read
         // a live snapshot, NOT the `entities` destructured above — this effect
         // has an empty dependency array (a one-shot "create the scene" run),
@@ -418,6 +456,7 @@ export default function BabylonCanvas({
         // always still {}, since HA's initial hydrate is an async round-trip
         // that hasn't resolved yet) — see getEntitiesSnapshot's docstring.
         Object.values(getEntitiesSnapshot()).forEach((e) => manager.applyEntityState(e));
+        const tStatesPainted = performance.now();
 
         // Sync central room names + calibration from the compact
         // "<model>.rooms.json" sidecar (the Blender pipeline emits it next to
@@ -486,7 +525,16 @@ export default function BabylonCanvas({
         // costs the user nothing (it is a fire-and-forget POST that used to sit
         // in front of the reveal).
         const tReady = performance.now();
-        sendLoadTelemetry(tReady - tParseDone, tReady);
+        sendLoadTelemetry(tReady - tParseDone, tReady, {
+          // revealMs' own split, so the next report says WHICH of these owns
+          // it rather than only that the stretch is slow — the exact mistake
+          // that let the whole 5.6s hide behind one number until v2.94.0.
+          rvMeshNames: Math.round(tMeshNames - tParseDone),
+          rvStates: Math.round(tStatesPainted - tMeshNames),
+          rvRooms: Math.round(tReady - tStatesPainted),
+        });
+        // The villa is on screen; the bookkeeping can have the main thread now.
+        finishAfterReveal();
         // Success: clear the crash-loop counter so a later legitimate reload
         // isn't mistaken for a loop, and stop the context-loss guard from
         // hijacking the screen once we're up.
