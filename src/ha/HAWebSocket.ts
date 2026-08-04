@@ -3,7 +3,8 @@
 // exponential-backoff reconnect with re-subscription. (3Dash-informed patterns.)
 
 import type {
-  HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntity, HassEntityRegistryEntry, HassServiceTarget,
+  EnergyPrefs, HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntity, HassEntityRegistryEntry,
+  HassServiceTarget, StatisticIdInfo, StatisticPeriod,
 } from "@/types/ha.types";
 import { ingressWsUrl } from "./ingress";
 import { captureError } from "@/utils/diagnostics";
@@ -383,6 +384,45 @@ export class HAWebSocket {
    *  live data (never shipped/assumed by this app). */
   async getAreaRegistry(): Promise<HassAreaRegistryEntry[]> {
     return this.sendMessage<HassAreaRegistryEntry[]>("config/area_registry/list");
+  }
+
+  /** The Energy Dashboard's own configuration — which statistic IDs it
+   *  considers "the grid" / per-device consumption. Config only, not values;
+   *  see getStatisticsDuringPeriod for the actual numbers. Resolves to an
+   *  object with (at least) `energy_sources`/`device_consumption` on a
+   *  configured install; a fresh install with no Energy Dashboard set up at
+   *  all returns them as empty arrays, not an error. */
+  async getEnergyPrefs(): Promise<EnergyPrefs> {
+    return this.sendMessage<EnergyPrefs>("energy/get_prefs");
+  }
+
+  /** Which statistic IDs actually have recorded data — an Energy Dashboard
+   *  source can reference one that no longer resolves (e.g. after an
+   *  unrelated entity rename left the OLD name as the recorded statistic_id
+   *  while the dashboard still points at the new entity_id), so callers
+   *  cross-check against this before trusting a configured source. */
+  async listStatisticIds(statisticType: "sum" | "mean" = "sum"): Promise<StatisticIdInfo[]> {
+    return this.sendMessage<StatisticIdInfo[]>("recorder/list_statistic_ids", { statistic_type: statisticType });
+  }
+
+  /** Pre-aggregated statistics for one or more statistic IDs — `change` is
+   *  the consumption WITHIN each returned bucket (HA computes this; no
+   *  client-side sum-of-cumulative-readings math needed). Keyed by
+   *  statistic_id in the response; a statistic with no data in range is
+   *  simply absent from the result, not an empty array. */
+  async getStatisticsDuringPeriod(
+    statisticIds: string[],
+    startTime: string,
+    period: "5minute" | "hour" | "day" | "week" | "month" = "day",
+    endTime?: string,
+  ): Promise<Record<string, StatisticPeriod[]>> {
+    return this.sendMessage<Record<string, StatisticPeriod[]>>("recorder/statistics_during_period", {
+      start_time: startTime,
+      ...(endTime ? { end_time: endTime } : {}),
+      statistic_ids: statisticIds,
+      period,
+      types: ["change"],
+    });
   }
 
   async callService(

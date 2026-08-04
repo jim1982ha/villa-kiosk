@@ -41,7 +41,7 @@ import ViewControls from "./ViewControls";
 import { useHomeAnchor } from "./useHomeAnchor";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 import LegendModal from "./LegendModal";
-import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
+import CockpitModal from "@/components/cockpit/CockpitModal";
 import { useFmData } from "@/fm/FmDataContext";
 import { scheduleBoard } from "@/fm/fmEngine";
 import { formatCountBadge } from "@/utils/countBadge";
@@ -132,7 +132,12 @@ export default function HUD({
       config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
     [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
   );
-  const [unavailableOpen, setUnavailableOpen] = useState(false);
+  // Opens Cockpit (the villa-wide status report), not the bare unavailable-
+  // devices list directly any more — that list is now a drill-down INSIDE
+  // Cockpit's Needs Attention section (see CockpitModal), reached the same
+  // way. Name kept close to its old meaning since this is still the "how
+  // many devices need attention" alert icon; only what it opens changed.
+  const [cockpitOpen, setCockpitOpen] = useState(false);
 
   // Facility attention count: overdue/never-recorded maintenance plus unresolved
   // faults. Surfaced ON the button because the whole point of a schedule is
@@ -580,11 +585,11 @@ export default function HUD({
           <div className="hud-right-inline hud-group">
             <button
               className={`icon-btn${unavailableIds.length > 0 ? " has-alert" : ""}`}
-              onClick={() => setUnavailableOpen(true)}
+              onClick={() => setCockpitOpen(true)}
               title={unavailableIds.length > 0
-                ? `${unavailableIds.length} device${unavailableIds.length === 1 ? "" : "s"} unavailable`
-                : "No unavailable devices"}
-              aria-label="Show unavailable devices"
+                ? `${unavailableIds.length} device${unavailableIds.length === 1 ? "" : "s"} unavailable — open Cockpit`
+                : "Cockpit — villa status at a glance"}
+              aria-label="Open Cockpit — villa status at a glance"
             >
               <TriangleAlert size={18} />
               {unavailableIds.length > 0 && (
@@ -678,8 +683,8 @@ export default function HUD({
                     <span className="dot" />
                   </span>
                 </div>
-                {/* Unavailable/Facility alerts — the same two buttons that
-                    sit beside the profile chip on a roomy screen (see
+                {/* Cockpit/Facility — the same two buttons that sit beside
+                    the profile chip on a roomy screen (see
                     .hud-right-inline), collapsed into menu items here so a
                     phone doesn't lose access to either, just an extra tap
                     to reach them. Count shown inline rather than as a
@@ -687,10 +692,10 @@ export default function HUD({
                 <button
                   role="menuitem"
                   className="hud-menu-item"
-                  onClick={() => { setMenuOpen(false); setUnavailableOpen(true); }}
+                  onClick={() => { setMenuOpen(false); setCockpitOpen(true); }}
                 >
                   <TriangleAlert size={18} />
-                  <span>Unavailable devices{unavailableIds.length > 0 ? ` (${formatCountBadge(unavailableIds.length)})` : ""}</span>
+                  <span>Cockpit{unavailableIds.length > 0 ? ` (${formatCountBadge(unavailableIds.length)})` : ""}</span>
                 </button>
                 {onOpenFacility && (
                   <button
@@ -778,19 +783,12 @@ export default function HUD({
 
       {legendOpen && <LegendModal onClose={() => setLegendOpen(false)} />}
 
-      {unavailableOpen && (
-        <SummaryGroupPanel
-          group={{ title: "Unavailable devices", icon: TriangleAlert, entityIds: unavailableIds }}
+      {cockpitOpen && (
+        <CockpitModal
           canControl={canControlAny}
           mappedEntityIds={mappedEntityIds}
-          onClose={() => setUnavailableOpen(false)}
-          onOpenEntity={(id) => { setUnavailableOpen(false); onOpenEntity(id); }}
-          hideBulkToggle
-          // This is a troubleshooting list, not a device-control summary — a
-          // hidden or "diagnostic" (RSSI, battery…) entity going offline is
-          // exactly what it exists to surface, and filtering it here would
-          // make this modal's row count disagree with the badge's number.
-          filterSuppressed={false}
+          onClose={() => setCockpitOpen(false)}
+          onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
         />
       )}
 

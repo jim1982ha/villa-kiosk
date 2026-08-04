@@ -19,7 +19,7 @@
 import { useMemo, useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog, TriangleAlert,
+  ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -30,6 +30,7 @@ import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
 import { unavailableDeviceIds } from "@/config/deviceGroups";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
+import CockpitModal from "@/components/cockpit/CockpitModal";
 import { buildDeviceOptions } from "./DeviceSearchPicker";
 import TodayTab from "./TodayTab";
 import ReadinessTab from "./ReadinessTab";
@@ -83,7 +84,12 @@ export default function FacilityModal({
   // was to minimise and restore the window (a visibilitychange) or wait out
   // the three-minute heartbeat.
   useFacilityLiveView();
-  const [unavailableOpen, setUnavailableOpen] = useState(false);
+  // Opens Cockpit — see HUD.tsx's identical rename for why (the bare
+  // unavailable-devices list is now a drill-down inside it, not opened
+  // directly). Name kept close to ReadinessTab's own onOpenUnavailableDevices
+  // prop, which is still accurate from ITS perspective: a "N offline" link
+  // that shows those devices, however that's implemented on this end.
+  const [cockpitOpen, setCockpitOpen] = useState(false);
   // The Readiness tab's "View doors" / "View lights" shortcuts. Deliberately
   // NOT the failing check's own (narrower) entityIds — the operator taps
   // "View doors" expecting the SAME modal the bottom-bar "Locks" tile opens
@@ -108,9 +114,10 @@ export default function FacilityModal({
   );
 
   // Same list the HUD's own unavailable-devices badge shows (see
-  // unavailableDeviceIds) — the Readiness tab's quick-link opens this exact
-  // panel rather than a Facility-local reimplementation, so there is only
-  // ever one "unavailable devices" view in the app to keep in sync.
+  // unavailableDeviceIds) — the Readiness tab's quick-link opens the same
+  // Cockpit page that badge does, rather than a Facility-local
+  // reimplementation, so there is only ever one "what needs attention" view
+  // in the app to keep in sync.
   // Built ONCE here and handed to both tabs, the same way unavailableIds is
   // (see FaultsTab's prop docstring): mappedEntityIds only exists at this
   // level, and two tabs each deriving "the villa's devices" from a different
@@ -176,7 +183,7 @@ export default function FacilityModal({
               <ReadinessTab
                 report={readiness}
                 onOpenEntity={onOpenEntity}
-                onOpenUnavailableDevices={() => setUnavailableOpen(true)}
+                onOpenUnavailableDevices={() => setCockpitOpen(true)}
                 onOpenCheckDevices={openCheckDevices}
               />
             )}
@@ -207,17 +214,12 @@ export default function FacilityModal({
         </div>
       </div>
 
-      {unavailableOpen && (
-        <SummaryGroupPanel
-          group={{ title: "Unavailable devices", icon: TriangleAlert, entityIds: unavailableIds }}
+      {cockpitOpen && (
+        <CockpitModal
           canControl={canControl}
           mappedEntityIds={mappedEntityIds}
-          onClose={() => setUnavailableOpen(false)}
-          onOpenEntity={(id) => { setUnavailableOpen(false); onOpenEntity(id); }}
-          hideBulkToggle
-          // Same reasoning as HUD's identical modal (see its call site): a
-          // troubleshooting/readiness list, not a device-control summary.
-          filterSuppressed={false}
+          onClose={() => setCockpitOpen(false)}
+          onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
         />
       )}
 

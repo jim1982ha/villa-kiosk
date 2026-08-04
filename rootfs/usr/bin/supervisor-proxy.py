@@ -453,9 +453,12 @@ _SERVICES_PATH_RE = re.compile(r"^services/([^/]+)/([^/]+)/?$")
 # facility-manager sessions, which is how this was caught.
 _SAFE_TAIL_RE = re.compile(r"^[A-Za-z0-9_\-./:+]+$")
 # The ONLY non-service REST paths the kiosk itself requests (see
-# src/ha/HAHistoryAPI.ts and HACameraProxy.ts). Everything else a non-owner
-# might ask for is denied by default.
-_NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_stream/")
+# src/ha/HAHistoryAPI.ts, src/ha/HALogbookAPI.ts and HACameraProxy.ts).
+# Everything else a non-owner might ask for is denied by default. "logbook/"
+# is read-only (same category as history/period/ above it) — added for the
+# Cockpit page's recent-activity feed, which reads Home Assistant's own
+# Logbook rather than re-deriving readable event text client-side.
+_NON_OWNER_REST_PREFIXES = ("history/period/", "logbook/", "camera_proxy/", "camera_proxy_stream/")
 # Guests unlock doors — deliberately. A guest is the person staying in the
 # villa, and permissions.ts puts access_control in their categories for exactly
 # that reason. The guest profile is PIN-protected in this deployment, so the
@@ -489,12 +492,23 @@ _NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_st
 # not a deliberate decision to keep guest/ops blind to room/area names. Kept
 # them out of "the kiosk itself ever sends" framing above since they widen who
 # may send them (every role now, not just owner), not what may be sent.
+#
+# The three energy/recorder entries below are the same category again, added
+# for the Cockpit page's "Energy today" tile: energy/get_prefs reads which
+# statistic IDs the Energy Dashboard is configured against (not the values),
+# recorder/list_statistic_ids lists which of those actually have recorded
+# data (an Energy Dashboard source can reference a statistic ID that no
+# longer resolves — e.g. after an unrelated entity rename — so the client
+# cross-checks before trusting one), and recorder/statistics_during_period
+# reads the pre-aggregated "change" for a real statistic over a period. All
+# three are read-only, same as the registry list calls above.
 ALLOWED_WS_TYPES = frozenset({
     "auth", "ping", "pong",
     "subscribe_events", "unsubscribe_events",
     "get_states", "call_service", "camera/stream",
     "get_config",
     "config/entity_registry/list", "config/device_registry/list", "config/area_registry/list",
+    "energy/get_prefs", "recorder/list_statistic_ids", "recorder/statistics_during_period",
 })
 
 

@@ -29,6 +29,7 @@ import { CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient } from "@/config/Enti
 import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import { successFeedback } from "@/utils/haptics";
+import { isOn, onOffSummary, OFF_STATES } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
@@ -49,26 +50,6 @@ interface SummaryTile {
   entityIds: string[];
   title: string;
   canControl: boolean;
-}
-
-const OFF_STATES = new Set(["off", "unavailable", "unknown", ""]);
-const isOn = (e: HassEntity | undefined) => !!e && !OFF_STATES.has(e.state);
-
-/** The ONE phrasing every "how many of these are on?" tile uses:
- *    all on   -> "All On"      none on -> "All Off"
- *    some on  -> "3 On"        single  -> plain "On" / "Off"
- *
- *  Written once because these tiles are read as a row and any drift between
- *  them looks like a bug: AC said a bare "Off" while Lights right next to it
- *  said "All Off" for the identical situation. A single device says just
- *  "On"/"Off" — "All Off" for one AC unit would be odd. Callers with a
- *  richer value to show when active (Climate's average temperature) still
- *  override the ON side; the OFF side stays shared so it can't drift again. */
-function onOffSummary(onCount: number, total: number): string {
-  if (total === 0) return "None";
-  if (onCount === 0) return total === 1 ? "Off" : "All Off";
-  if (onCount === total) return total === 1 ? "On" : "All On";
-  return `${onCount} On`;
 }
 
 /** Build the ordered tile list from the live entity snapshot. Pure (no side

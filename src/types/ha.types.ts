@@ -105,6 +105,32 @@ export interface HassAreaRegistryEntry {
   name: string;
 }
 
+/** Subset of `energy/get_prefs`'s response — only the statistic IDs the
+ *  Energy Dashboard is configured against, never the values themselves (see
+ *  HAWebSocket.getStatisticsDuringPeriod for those). Both arrays are empty,
+ *  not absent, on an install with no Energy Dashboard configured at all. */
+export interface EnergyPrefs {
+  energy_sources: { type: string; stat_energy_from?: string }[];
+  device_consumption: { stat_consumption: string }[];
+}
+
+/** One row of `recorder/list_statistic_ids` — which statistic IDs actually
+ *  have recorded data, cross-checked against energy_sources/device_consumption
+ *  before trusting either (a configured source can reference an ID that no
+ *  longer resolves, e.g. after an unrelated entity rename). */
+export interface StatisticIdInfo {
+  statistic_id: string;
+  unit_class: string | null;
+}
+
+/** One bucket of `recorder/statistics_during_period` (types: ["change"]) —
+ *  `change` is the consumption WITHIN this bucket, already computed by HA. */
+export interface StatisticPeriod {
+  start: number;
+  end: number;
+  change: number | null;
+}
+
 export type EntityDomain =
   | "light"
   | "climate"

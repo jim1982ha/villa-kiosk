@@ -1,0 +1,221 @@
+// src/components/cockpit/cockpitData.ts
+// Pure derivation for the Cockpit page — no React, no I/O. Everything here
+// routes through selectableDeviceIds/entityMap/resolvedRooms, never a raw HA
+// domain query: a real villa has hundreds of `switch`/`select`/`button`
+// entities that are internal Zigbee2MQTT device configuration (per-motor
+// calibration, relay-lock toggles), not end-user villa state — a domain-count
+// summary would be actively misleading, not just noisy. See the Cockpit plan
+// memory for how this was verified.
+
+import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
+import { CATEGORY_ORDER, effectiveCategory } from "@/config/EntityCategories";
+import { displayLabelFor } from "@/config/EntityMap";
+import { roomKey } from "@/config/roomKey";
+import { scheduleBoard } from "@/fm/fmEngine";
+import type { FmData } from "@/fm/fmTypes";
+import { isOn } from "@/utils/entityState";
+import type { HassEntity } from "@/types/ha.types";
+import type { Category, EntityMapping } from "@/types/scene.types";
+
+export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
+
+export interface AttentionItem {
+  id: string;
+  kind: AttentionKind;
+  title: string;
+  /** Short status word — "Open", "Overdue", "Leak detected", etc. */
+  detail: string;
+  room?: string;
+  /** Present when this item can be drilled into (opens the entity's own
+   *  panel) — a fault/schedule with no device behind it (a whole-villa task,
+   *  a free-text device description) has none, so it renders as read-only. */
+  entityId?: string;
+}
+
+/**
+ * Everything currently wrong, in one list — replaces the split between the
+ * HUD's unavailable-devices badge and Facility's separate attention badge.
+ * Four sources, each already tracked somewhere in the app, just never
+ * combined: unavailable devices, open faults, overdue/never-recorded
+ * maintenance, and any binary_sensor currently in its device_class's alarm
+ * state (leak/smoke/tamper/etc — BinarySensorClasses' `alarmState`, computed
+ * per class already, just never aggregated across the villa before).
+ */
+export function buildAttentionItems(opts: {
+  unavailableIds: readonly string[];
+  entities: Record<string, HassEntity>;
+  entityMap: Record<string, EntityMapping>;
+  resolvedRooms: Record<string, string>;
+  fmData: FmData;
+  selectableIds: readonly string[];
+}): AttentionItem[] {
+  const { unavailableIds, entities, entityMap, resolvedRooms, fmData, selectableIds } = opts;
+  const items: AttentionItem[] = [];
+
+  for (const id of unavailableIds) {
+    const mapping = entityMap[id];
+    items.push({
+      id: `unavailable:${id}`,
+      kind: "unavailable",
+      title: displayLabelFor(id, mapping?.label, entities[id]?.attributes.friendly_name as string | undefined),
+      detail: "Unavailable",
+      room: resolvedRooms[id],
+      entityId: id,
+    });
+  }
+
+  for (const t of fmData.tickets) {
+    if (t.status === "resolved") continue;
+    items.push({
+      id: `fault:${t.id}`,
+      kind: "fault",
+      title: t.title,
+      detail: t.status === "in_progress" ? "In progress" : "Open fault",
+      room: t.room,
+      entityId: t.entityId,
+    });
+  }
+
+  for (const s of scheduleBoard(fmData)) {
+    if (s.state !== "overdue" && s.state !== "never") continue;
+    items.push({
+      id: `schedule:${s.schedule.id}`,
+      kind: "schedule",
+      title: s.schedule.title,
+      detail: s.state === "never" ? "Never recorded" : "Overdue",
+      room: s.schedule.room,
+      entityId: s.schedule.entityId,
+    });
+  }
+
+  // Every binary_sensor currently reporting its own device_class's "problem"
+  // state — a leak, a tamper trip, low battery, a disconnected sensor.
+  // Restricted to selectableIds (never a raw HA domain scan): a bare
+  // Zigbee2MQTT relay-lock/config sub-entity is technically a binary_sensor
+  // too, and was never meant to be villa-facing.
+  for (const id of selectableIds) {
+    if (!id.startsWith("binary_sensor.")) continue;
+    const entity = entities[id];
+    if (!entity) continue;
+    const info = binarySensorClassInfo(entity.attributes.device_class as string | undefined);
+    if (info.alarmState === "none" || entity.state !== info.alarmState) continue;
+    const mapping = entityMap[id];
+    items.push({
+      id: `alarm:${id}`,
+      kind: "alarm",
+      title: displayLabelFor(id, mapping?.label, entity.attributes.friendly_name as string | undefined),
+      detail: info.alarmState === "on" ? info.onLabel : info.offLabel,
+      room: resolvedRooms[id],
+      entityId: id,
+    });
+  }
+
+  return items;
+}
+
+export type VillaHealthLevel = "ok" | "warn" | "danger";
+
+export interface VillaHealth {
+  level: VillaHealthLevel;
+  summary: string;
+}
+
+/** Unavailable devices and active alarms are the "something is actually
+ *  broken or unsafe right now" tier (danger); open faults and overdue
+ *  maintenance are "needs doing, not urgent" (warn) — a schedule running a
+ *  few days late shouldn't paint the whole villa red the same as a leak
+ *  sensor going off. */
+export function villaHealthFrom(items: AttentionItem[]): VillaHealth {
+  if (items.length === 0) return { level: "ok", summary: "Everything looks fine." };
+  const hasDanger = items.some((i) => i.kind === "unavailable" || i.kind === "alarm");
+  const n = items.length;
+  return {
+    level: hasDanger ? "danger" : "warn",
+    summary: `${n} thing${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} attention.`,
+  };
+}
+
+export interface CategoryTile {
+  category: Category;
+  total: number;
+  onCount: number;
+}
+
+/** One tile per category, count + a generic cross-domain "on" count —
+ *  deliberately non-judgmental (a light being on isn't a problem), kept
+ *  visually separate from the attention list so the page doesn't read as
+ *  "everything is red". */
+export function buildCategoryTiles(
+  selectableIds: readonly string[],
+  entities: Record<string, HassEntity>,
+  entityMap: Record<string, EntityMapping>,
+): CategoryTile[] {
+  const totals = new Map<Category, number>(CATEGORY_ORDER.map((c) => [c, 0]));
+  const ons = new Map<Category, number>(CATEGORY_ORDER.map((c) => [c, 0]));
+  for (const id of selectableIds) {
+    const mapping = entityMap[id];
+    if (!mapping) continue;
+    const entity = entities[id];
+    const cat = effectiveCategory(id, mapping.type, mapping.category, entity?.attributes.device_class as string | undefined);
+    totals.set(cat, (totals.get(cat) ?? 0) + 1);
+    if (isOn(entity)) ons.set(cat, (ons.get(cat) ?? 0) + 1);
+  }
+  return CATEGORY_ORDER.map((category) => ({
+    category, total: totals.get(category) ?? 0, onCount: ons.get(category) ?? 0,
+  }));
+}
+
+const NO_ROOM = "Other";
+
+export interface RoomGroup {
+  room: string;
+  /** null for the "Other" bucket, or a room with no sh3dRooms entry (no
+   *  floor plan geometry to read a storey from). */
+  floor: number | null;
+  count: number;
+}
+
+/** Devices bucketed by resolved room, each joined to its floor via sh3dRooms
+ *  (a room's floor lives on the PLAN geometry, not on the device — see
+ *  AppConfig.sh3dRooms). Alphabetical with "Other" always last, same
+ *  convention SummaryGroupPanel's own room grouping uses. */
+export function buildRoomGroups(
+  selectableIds: readonly string[],
+  resolvedRooms: Record<string, string>,
+  sh3dRooms: { name: string; floor?: number }[] | undefined,
+): RoomGroup[] {
+  const floorByRoom = new Map<string, number>();
+  for (const r of sh3dRooms ?? []) floorByRoom.set(roomKey(r.name), r.floor ?? 1);
+
+  const counts = new Map<string, number>();
+  for (const id of selectableIds) {
+    const room = resolvedRooms[id]?.trim() || NO_ROOM;
+    counts.set(room, (counts.get(room) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([room, count]) => ({
+      room, count, floor: room === NO_ROOM ? null : (floorByRoom.get(roomKey(room)) ?? null),
+    }))
+    .sort((a, b) => {
+      if (a.room === NO_ROOM) return b.room === NO_ROOM ? 0 : 1;
+      if (b.room === NO_ROOM) return -1;
+      return a.room.localeCompare(b.room);
+    });
+}
+
+export interface FloorGroup {
+  /** null = rooms with no resolvable floor (including the "Other" bucket). */
+  floor: number | null;
+  count: number;
+}
+
+/** Re-bucket buildRoomGroups' output by floor instead of room — the same
+ *  underlying counts, pivoted, so the two views can never disagree with each
+ *  other the way two independently-computed totals eventually would. */
+export function buildFloorGroups(roomGroups: RoomGroup[]): FloorGroup[] {
+  const counts = new Map<number | null, number>();
+  for (const g of roomGroups) counts.set(g.floor, (counts.get(g.floor) ?? 0) + g.count);
+  return [...counts.entries()]
+    .map(([floor, count]) => ({ floor, count }))
+    .sort((a, b) => (a.floor ?? Infinity) - (b.floor ?? Infinity));
+}
