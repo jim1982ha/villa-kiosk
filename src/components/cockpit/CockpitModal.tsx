@@ -21,7 +21,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  TriangleAlert, CheckCircle2, AlertOctagon, MapPin, Building2,
+  TriangleAlert, CheckCircle2, AlertOctagon, MapPin, Building2, LayoutGrid,
   Activity, Zap, RefreshCw, ChevronRight,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -59,7 +59,7 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
   const { role } = useProfile();
   const { data: fmData } = useFmData();
   const dialogRef = useModalA11y(onClose);
-  const [pivot, setPivot] = useState<"room" | "floor">("room");
+  const [pivot, setPivot] = useState<"room" | "floor" | "category">("room");
   // Drill-down opened by tapping a room/floor row below — reuses
   // SummaryGroupPanel, the same device-list modal every other "all the
   // devices in X" view in the app already opens (room clusters on the map,
@@ -144,10 +144,12 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
   const pivotRows = useMemo(
     () => (pivot === "room"
       ? roomGroups.map((g) => ({ key: g.room, label: g.room, count: g.count, entityIds: g.entityIds }))
-      : floorGroups.map((g) => ({
-          key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : "Other",
-          count: g.count, entityIds: g.entityIds,
-        }))
+      : pivot === "floor"
+        ? floorGroups.map((g) => ({
+            key: String(g.floor), label: g.floor != null ? `Floor ${g.floor}` : "Other",
+            count: g.count, entityIds: g.entityIds,
+          }))
+        : []
     ),
     [pivot, roomGroups, floorGroups],
   );
@@ -187,30 +189,15 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
             </>
           )}
 
-          {/* ── Category grid ──────────────────────────────────────── */}
-          <div className="settings-section-title">By category</div>
-          <div className="cockpit-category-grid">
-            {categoryTiles.map((tile) => {
-              const Icon = CATEGORY_ICONS[tile.category];
-              return (
-                <div key={tile.category} className="cockpit-category-tile">
-                  <div className="cockpit-category-icon" style={{ background: categoryGradient(tile.category) }}>
-                    <Icon size={18} />
-                  </div>
-                  <div>
-                    <div className="cockpit-category-label">{CATEGORY_LABELS[tile.category]}</div>
-                    <div className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-                      {tile.total === 0 ? "None" : `${tile.total} device${tile.total === 1 ? "" : "s"}${tile.onCount > 0 ? ` · ${tile.onCount} on` : ""}`}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* ── Room / floor pivot ─────────────────────────────────── */}
-          <div className="settings-section-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span>By {pivot === "room" ? "room" : "floor"}</span>
+          {/* ── Room / floor / category breakdown ──────────────────── */}
+          {/* One selector, one section — category used to be its own
+              always-visible block above this pivot, which meant the modal
+              showed two overlapping "how are devices grouped" views at
+              once. Now a third tab on the same Room/Floor toggle, so only
+              one grouping is ever on screen and the section title always
+              names whichever is showing. */}
+          <div className="settings-section-title cockpit-pivot-header">
+            <span>By {pivot}</span>
             <div className="segmented" role="group" aria-label="Group by" style={{ flex: "0 0 auto" }}>
               <button className={pivot === "room" ? "active" : ""} onClick={() => setPivot("room")} aria-pressed={pivot === "room"}>
                 <MapPin size={14} /> Room
@@ -218,28 +205,52 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
               <button className={pivot === "floor" ? "active" : ""} onClick={() => setPivot("floor")} aria-pressed={pivot === "floor"}>
                 <Building2 size={14} /> Floor
               </button>
+              <button className={pivot === "category" ? "active" : ""} onClick={() => setPivot("category")} aria-pressed={pivot === "category"}>
+                <LayoutGrid size={14} /> Category
+              </button>
             </div>
           </div>
-          <div className="cockpit-pivot-list">
-            {pivotRows.map((row) => {
-              const pct = pivotTotal > 0 ? Math.round((row.count / pivotTotal) * 100) : 0;
-              return (
-                <button
-                  key={row.key}
-                  type="button"
-                  className="cockpit-pivot-row"
-                  onClick={() => setPivotDrill({ label: row.label, entityIds: row.entityIds })}
-                  title={`Show ${row.label}'s devices`}
-                  aria-label={`Show ${row.label}'s devices — ${row.count} device${row.count === 1 ? "" : "s"}`}
-                >
-                  <span className="cockpit-pivot-label">{row.label}</span>
-                  <div className="cockpit-pivot-bar"><div className="cockpit-pivot-bar-fill" style={{ width: `${pct}%` }} /></div>
-                  <span className="cockpit-pivot-count muted">{row.count}</span>
-                  <ChevronRight size={14} className="cockpit-pivot-chevron muted" />
-                </button>
-              );
-            })}
-          </div>
+          {pivot === "category" ? (
+            <div className="cockpit-category-grid">
+              {categoryTiles.map((tile) => {
+                const Icon = CATEGORY_ICONS[tile.category];
+                return (
+                  <div key={tile.category} className="cockpit-category-tile">
+                    <div className="cockpit-category-icon" style={{ background: categoryGradient(tile.category) }}>
+                      <Icon size={18} />
+                    </div>
+                    <div>
+                      <div className="cockpit-category-label">{CATEGORY_LABELS[tile.category]}</div>
+                      <div className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
+                        {tile.total === 0 ? "None" : `${tile.total} device${tile.total === 1 ? "" : "s"}${tile.onCount > 0 ? ` · ${tile.onCount} on` : ""}`}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="cockpit-pivot-list">
+              {pivotRows.map((row) => {
+                const pct = pivotTotal > 0 ? Math.round((row.count / pivotTotal) * 100) : 0;
+                return (
+                  <button
+                    key={row.key}
+                    type="button"
+                    className="cockpit-pivot-row"
+                    onClick={() => setPivotDrill({ label: row.label, entityIds: row.entityIds })}
+                    title={`Show ${row.label}'s devices`}
+                    aria-label={`Show ${row.label}'s devices — ${row.count} device${row.count === 1 ? "" : "s"}`}
+                  >
+                    <span className="cockpit-pivot-label">{row.label}</span>
+                    <div className="cockpit-pivot-bar"><div className="cockpit-pivot-bar-fill" style={{ width: `${pct}%` }} /></div>
+                    <span className="cockpit-pivot-count muted">{row.count}</span>
+                    <ChevronRight size={14} className="cockpit-pivot-chevron muted" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* ── Energy today (only when it resolves) ───────────────── */}
           {energy && (
@@ -276,6 +287,14 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
         </div>
 
         <div className="settings-footer">
+          {/* .settings-footer is `justify-content: space-between` for the
+              common case of TWO children (a left-side action + the primary
+              button on the right) — every other single-button footer in the
+              app (SettingsModal, LegendModal, FirstRunTips) pairs the button
+              with an empty spacer as its first child so space-between still
+              pushes it to the right; this one was missing that spacer,
+              which is why it rendered on the left instead. */}
+          <span />
           <button className="btn primary" onClick={onClose}>Close</button>
         </div>
       </div>

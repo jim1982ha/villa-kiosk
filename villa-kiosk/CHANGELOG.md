@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.89.0
+
+### Fixed — Cockpit's Close button was on the wrong side
+- **Cockpit's footer put "Close" on the LEFT, while every other modal in the app puts its primary button on the right.** `.settings-footer` is `justify-content: space-between`, which every other single-button footer (Settings, the Legend modal, the first-run tips card) satisfies with an empty `<span />` as the first child so the lone button still gets pushed to the right; Cockpit's footer was missing that spacer, so with only one child, `space-between` had nothing to push it away from and left it sitting at the start of the row instead. Same fix as those three, not a new pattern.
+
+### Changed — Category folded into the Room/Floor selector
+- **"By category" is no longer its own always-visible block sitting above the room/floor pivot — it's now a third tab on the same Room/Floor toggle**, so the modal only ever shows one "how are the devices grouped" view at a time instead of two overlapping ones, and the section title always names whichever grouping is on screen. The room/floor bar list and the category grid share the exact same header row and selector; picking a tab swaps which one renders below it. The 3-button segmented control this produces is wider than the 2-button one it replaces, so the header row now wraps onto its own line on a narrow phone instead of risking an overflow/clip that hadn't been screenshot-verified yet.
+
 ## 2.88.0
 
 ### New — Cockpit's room/floor pivot drills into the same device list every other room view uses

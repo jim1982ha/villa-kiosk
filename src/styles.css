@@ -2979,6 +2979,13 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* Room/Floor/Category selector header: wraps onto its own line below the
+   "By ___" label on a narrow phone rather than clipping or overflowing —
+   a 3-button segmented control (Category was folded in from its own
+   always-visible section, see CockpitModal) is wider than the 2-button one
+   this row used to hold. */
+.cockpit-pivot-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; row-gap: 6px; }
+
 .cockpit-category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 4px; }
 .cockpit-category-tile { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: var(--bg-input); }
 .cockpit-category-icon {
