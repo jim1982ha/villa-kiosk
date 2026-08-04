@@ -18,6 +18,9 @@ const TYPES: EntityType[] = [
   "assist_satellite",
 ];
 
+// Same gate as EntityMapRow's own — see EntityMapping.requireConfirm.
+const CONFIRM_GATE_TYPES = new Set<EntityType>(["light", "switch", "input_boolean", "fan", "media_player"]);
+
 interface Props {
   mesh: string;
   entityId: string;
@@ -90,6 +93,20 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
             onChange={(e) => draftField({ label: e.target.value }, 500)}
             title="Display name"
           />
+          {CONFIRM_GATE_TYPES.has(meta.type) && (
+            <label
+              className="row"
+              style={{ gap: 6, fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer", flex: "0 0 auto" }}
+            >
+              <input
+                type="checkbox"
+                checked={!!meta.requireConfirm}
+                onChange={(e) => draftField({ requireConfirm: e.target.checked })}
+                title="Ask before toggling — a tap on this device's map badge opens its panel instead of acting instantly, and its panel's own on/off button asks 'Turn on/off?' first. For a device where an accidental toggle has a real physical consequence, e.g. a door release or gate motor modelled as a plain switch."
+              />
+              Confirm before toggling
+            </label>
+          )}
           {meta.type === "light" && (() => {
             const ratio = intensity.drafts.v ?? meta.lightIntensityRatio ?? 0;
             const pct = Math.round(ratio * 100);

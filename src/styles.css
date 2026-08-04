@@ -461,7 +461,14 @@ button {
      centering (align-items: center above) matches .hud-group exactly
      instead, and tracks it automatically if --hud-pill-h ever changes. */
   height: var(--hud-pill-h);
-  padding: 0 16px 0 10px;
+  /* Left padding matches .hud-stack's own 4px (not the right side's 16px,
+     kept for the villa-name text) so the home icon's left edge lines up
+     exactly under the 1F/2F floor buttons directly below it — both are now
+     the same 40px box (see .hud-home-btn), which is what made a mismatched
+     inset (this used to be 10px both sides) actually visible as two
+     same-sized squares not lining up, rather than a small icon floating
+     inside a taller chip. */
+  padding: 0 16px 0 4px;
   /* Never let the villa name WRAP as its 1fr grid track is squeezed. Without
      this a long name ("The Lys House") broke onto three lines on a narrowed
      desktop window, ballooning the chip vertically until it covered the floor
@@ -2119,7 +2126,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
      identify the chip, and the name is also the document title. This is the
      last step before the phone layout hides the brand outright. */
   .hud-title { display: none; }
-  .hud-brand { padding: 0 10px; gap: 8px; }
+  .hud-brand { padding: 0 10px 0 4px; gap: 8px; }
 }
 
 @media (max-width: 640px), (max-height: 560px) {

@@ -33,6 +33,11 @@ import type { EntityMapping } from "@/types/scene.types";
 export const COSMETIC_MAPPING_FIELDS = [
   "label", "category", "badgeColor",
   "linkedEntityId", "motionEntityId", "lightIntensityRatio",
+  // requireConfirm is read only by utils/quickAction.ts's isQuickToggle
+  // (plain JS against config.entityMap, outside the Babylon scene entirely)
+  // and PowerToggle's own React props — it never reaches indexMeshes/
+  // EntityVisuals, so it qualifies exactly like the fields above it.
+  "requireConfirm",
 ] as const;
 
 /** How much work an entityMap replacement actually requires.

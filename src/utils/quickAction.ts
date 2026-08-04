@@ -23,8 +23,14 @@ const TOGGLEABLE = new Set(["light", "switch", "input_boolean", "fan"]);
  * the panel (which surfaces its status and avoids a silent no-op toggle on
  * something HA doesn't currently expose). Dimmable lights are included: a tap
  * toggles them, and their brightness/colour panel is reached via long-press.
+ *
+ * mapping.requireConfirm always wins over the type check: a device the owner
+ * has explicitly flagged as needing confirmation (a door relay modelled as a
+ * plain switch, say) opens its panel on tap like any rich control, where its
+ * own PowerToggle asks before acting — see EntityMapping.requireConfirm.
  */
 export function isQuickToggle(mapping: EntityMapping, entity: HassEntity | undefined): boolean {
   if (!entity) return false; // unmapped / not yet loaded → show the panel
+  if (mapping.requireConfirm) return false;
   return TOGGLEABLE.has(mapping.type);
 }

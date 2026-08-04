@@ -55,7 +55,10 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Fan size={22} />} onClose={onClose}>
       {unavailable ? <UnavailableNotice device="fan" /> : (
-        <PowerToggle on={on} onClick={() => HAServices.toggleFan(ws, mapping.entityId)} />
+        <PowerToggle
+          on={on} onClick={() => HAServices.toggleFan(ws, mapping.entityId)}
+          label={mapping.label} requireConfirm={mapping.requireConfirm}
+        />
       )}
 
       {!unavailable && levels.length > 0 && (

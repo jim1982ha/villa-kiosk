@@ -27,7 +27,10 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Lightbulb size={22} />} onClose={onClose}>
       {unavailable ? <UnavailableNotice device="light" /> : (
-        <PowerToggle on={on} onClick={() => HAServices.toggleLight(ws, mapping.entityId)} />
+        <PowerToggle
+          on={on} onClick={() => HAServices.toggleLight(ws, mapping.entityId)}
+          label={mapping.label} requireConfirm={mapping.requireConfirm}
+        />
       )}
 
       {!unavailable && supportsBrightness && (

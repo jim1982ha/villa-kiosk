@@ -23,6 +23,22 @@ export interface EntityMapping {
    *  modelled ahead of their Home Assistant integration (e.g. ceiling fans not
    *  yet controllable). Toggled per-device in Advanced Settings. */
   disabled?: boolean;
+  /** Explicit per-device opt-in: a plain tap on this device's map badge no
+   *  longer instantly toggles it (see utils/quickAction.ts's isQuickToggle),
+   *  and its panel's own on/off button asks "Turn on/off?" before acting
+   *  (PowerToggle) — the SAME two-step confirm pattern SummaryGroupPanel's
+   *  "Turn all on/off" already uses, not a new one. For a switch/light/fan
+   *  that is really a door release, gate motor, or anything else where an
+   *  accidental tap has a real physical consequence.
+   *
+   *  Deliberately NOT inferred from the entity_id (a relay-controlled lock
+   *  modelled as switch.* has no reliable naming convention — an earlier
+   *  attempt at auto-detecting one from the name was tried, misfired, and
+   *  was reverted; see CLAUDE.md's gotchas) — only ever set by hand in
+   *  Advanced Settings, off by default on every device. A `type: "lock"`
+   *  entity doesn't need this: it already never quick-toggles and already
+   *  has its own two-step confirm on Unlock (see LockPanel). */
+  requireConfirm?: boolean;
   /** The device's CONTROL entity — no domain or type restriction (a switch,
    *  a light, an input_boolean…), configurable on every entity type. Drives
    *  exactly one visual: the badge rings red (the same alert outline any

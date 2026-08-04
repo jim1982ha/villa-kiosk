@@ -32,6 +32,12 @@ const TYPES: EntityType[] = [
   "assist_satellite",
 ];
 
+// Types whose panel actually uses PowerToggle (see EntityMapping.
+// requireConfirm) — a type: "lock" doesn't need this option at all, it
+// already never quick-toggles and already has its own two-step Unlock
+// confirm, so the checkbox isn't shown there rather than offering a no-op.
+const CONFIRM_GATE_TYPES = new Set<EntityType>(["light", "switch", "input_boolean", "fan", "media_player"]);
+
 interface Props {
   entryKey: string;
   mapping: EntityMapping;
@@ -195,6 +201,19 @@ function EntityMapRow({
               onBlur={() => label.flush("v")}
             />
           </td>
+          {CONFIRM_GATE_TYPES.has(m.type) && (
+            <td data-label="Confirm before toggling">
+              <label className="row" style={{ gap: 6, fontSize: "var(--text-xs)", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={!!m.requireConfirm}
+                  onChange={(e) => draftField({ requireConfirm: e.target.checked })}
+                  title="Ask before toggling — a tap on this device's map badge opens its panel instead of acting instantly, and its panel's own on/off button asks 'Turn on/off?' first. For a device where an accidental toggle has a real physical consequence, e.g. a door release or gate motor modelled as a plain switch."
+                />
+                Confirm before toggling
+              </label>
+            </td>
+          )}
           {m.type === "light" && (() => {
             const ratio = intensity.drafts.v ?? m.lightIntensityRatio ?? 0;
             const pct = Math.round(ratio * 100);

@@ -22,7 +22,9 @@ export default function SwitchPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<ToggleLeft size={22} />} onClose={onClose}>
-      {unavailable ? <UnavailableNotice device="switch" /> : <PowerToggle on={on} onClick={toggle} />}
+      {unavailable ? <UnavailableNotice device="switch" /> : (
+        <PowerToggle on={on} onClick={toggle} label={mapping.label} requireConfirm={mapping.requireConfirm} />
+      )}
 
       <LastDayTimeline data={history} colorFor={onOffColor} loading={historyLoading} />
     </BasePanel>
