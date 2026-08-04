@@ -29,14 +29,13 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
-import { useFmData } from "@/fm/FmDataContext";
-import { unavailableDeviceIds, selectableDeviceIds } from "@/config/deviceGroups";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categoryGradient } from "@/config/EntityCategories";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
+import { useVillaAttention } from "./useVillaAttention";
 import {
-  buildAttentionItems, villaHealthFrom, buildCategoryTiles, buildRoomGroups, buildFloorGroups,
+  buildCategoryTiles, buildRoomGroups, buildFloorGroups,
   buildActivityFeed, type AttentionItem, type AttentionKind, type ActivityEntry,
 } from "./cockpitData";
 
@@ -57,7 +56,6 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
   const { entities, ws, entityFloorNumbers } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
-  const { data: fmData } = useFmData();
   const dialogRef = useModalA11y(onClose);
   const [pivot, setPivot] = useState<"room" | "floor" | "category">("room");
   // Drill-down opened by tapping a room/floor row below — reuses
@@ -67,20 +65,10 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
   const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[] } | null>(null);
   const canControl = role != null && hasCapability(role, "controlEntities");
 
-  const unavailableIds = useMemo(
-    () => unavailableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
-    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
-  );
-  const selectableIds = useMemo(
-    () => selectableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
-    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
-  );
-
-  const attentionItems = useMemo(
-    () => buildAttentionItems({ unavailableIds, entities, entityMap: config.entityMap, resolvedRooms, fmData, selectableIds }),
-    [unavailableIds, entities, config.entityMap, resolvedRooms, fmData, selectableIds],
-  );
-  const health = useMemo(() => villaHealthFrom(attentionItems), [attentionItems]);
+  // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
+  // useVillaAttention's own docstring for why that sharing is load-bearing,
+  // not just tidiness (the two used to disagree).
+  const { selectableIds, attentionItems, health } = useVillaAttention(mappedEntityIds);
   const categoryTiles = useMemo(
     () => buildCategoryTiles(selectableIds, entities, config.entityMap),
     [selectableIds, entities, config.entityMap],

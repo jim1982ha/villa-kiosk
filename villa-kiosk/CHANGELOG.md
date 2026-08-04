@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.92.0
+
+### Fixed — the Cockpit button's count disagreed with the modal it opens
+- **The top-bar alert icon's badge, and the phone overflow menu's "Cockpit (N)" row, could show a smaller number than "Needs attention" actually listed once the modal was open** — reported from a screenshot: badge said 4, modal said "5 things need attention." Root cause: that badge/menu count was still `unavailableIds.length` alone (unavailable devices only), a leftover from before Cockpit's Needs Attention section was unified in 2.86.0 to also include open faults, overdue schedules, and active alarm-state binary_sensors — CockpitModal's own list moved on to the fuller definition, but nothing told the button that opens it. Fixed at the root: extracted the shared computation into a new hook, `useVillaAttention` (`src/components/cockpit/useVillaAttention.ts`), and both `HUD.tsx` (the icon badge and the overflow-menu text) and `CockpitModal.tsx` now call the SAME hook instead of each computing their own version — the two can no longer independently drift, because there is only one computation left to drift from. The button's tooltip text also now matches the modal's own headline wording ("N things need attention.") instead of a separately-worded "N devices unavailable" string.
+
 ## 2.91.0
 
 ### Fixed — the floor pivot ignored Home Assistant's own Floors feature entirely

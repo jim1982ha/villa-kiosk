@@ -34,7 +34,6 @@ import { ROLE_LABELS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_ICONS, categoryGradient } from "@/config/EntityCategories";
 import { ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX, clampIconScale } from "@/config/AppConfig";
-import { unavailableDeviceIds } from "@/config/deviceGroups";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
 import ViewControls from "./ViewControls";
@@ -42,6 +41,7 @@ import { useHomeAnchor } from "./useHomeAnchor";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 import LegendModal from "./LegendModal";
 import CockpitModal from "@/components/cockpit/CockpitModal";
+import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import { useFmData } from "@/fm/FmDataContext";
 import { scheduleBoard } from "@/fm/fmEngine";
 import { formatCountBadge } from "@/utils/countBadge";
@@ -114,7 +114,7 @@ export default function HUD({
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
   mappedEntityIds, onOpenEntity, onOpenFacility, onOpenCategory,
 }: Props) {
-  const { connection, haConfig, entities } = useHA();
+  const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
   const { role, beginSwitch } = useProfile();
   const clock = useClock();
@@ -123,15 +123,14 @@ export default function HUD({
   const { flash: homeFlash, buttonProps: homeButtonProps } =
     useHomeAnchor(onApplyOverviewDefault, onSaveOverviewDefault);
 
-  // Every DEVICE HA currently reports as unavailable/unknown/never-reported.
-  // Shared with fm/readiness.ts's "All devices reporting" check — see
-  // unavailableDeviceIds's docstring for why that sharing is load-bearing,
-  // not just tidiness (the two used to disagree).
-  const unavailableIds = useMemo(
-    () => unavailableDeviceIds(
-      config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
-    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
-  );
+  // THE SAME "needs attention" count Cockpit's own Needs Attention section
+  // shows — unavailable devices + open faults + overdue schedules + active
+  // alarms, via the one shared computation (see useVillaAttention's own
+  // docstring). This button/menu badge used to show unavailableIds.length
+  // alone, computed separately here from before Needs Attention was
+  // unified — reported as "the button says 4, the modal says 5 things need
+  // attention" once the two definitions had quietly drifted apart.
+  const { attentionItems, health } = useVillaAttention(mappedEntityIds);
   // Opens Cockpit (the villa-wide status report), not the bare unavailable-
   // devices list directly any more — that list is now a drill-down INSIDE
   // Cockpit's Needs Attention section (see CockpitModal), reached the same
@@ -583,17 +582,15 @@ export default function HUD({
         <div className="hud-right">
           <div className="hud-right-inline hud-group">
             <button
-              className={`icon-btn${unavailableIds.length > 0 ? " has-alert" : ""}`}
+              className={`icon-btn${attentionItems.length > 0 ? " has-alert" : ""}`}
               onClick={() => setCockpitOpen(true)}
-              title={unavailableIds.length > 0
-                ? `${unavailableIds.length} device${unavailableIds.length === 1 ? "" : "s"} unavailable — open Cockpit`
-                : "Cockpit — villa status at a glance"}
+              title={attentionItems.length > 0 ? health.summary : "Cockpit — villa status at a glance"}
               aria-label="Open Cockpit — villa status at a glance"
             >
               <TriangleAlert size={18} />
-              {unavailableIds.length > 0 && (
+              {attentionItems.length > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
-                  {formatCountBadge(unavailableIds.length)}
+                  {formatCountBadge(attentionItems.length)}
                 </span>
               )}
             </button>
@@ -694,7 +691,7 @@ export default function HUD({
                   onClick={() => { setMenuOpen(false); setCockpitOpen(true); }}
                 >
                   <TriangleAlert size={18} />
-                  <span>Cockpit{unavailableIds.length > 0 ? ` (${formatCountBadge(unavailableIds.length)})` : ""}</span>
+                  <span>Cockpit{attentionItems.length > 0 ? ` (${formatCountBadge(attentionItems.length)})` : ""}</span>
                 </button>
                 {onOpenFacility && (
                   <button
