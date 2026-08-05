@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.108.0
+
+### Fixed — the villa was torn down and rebuilt every time the profile switcher opened, and again when it was cancelled
+- **Reported by the operator, who was right on both counts: "when I click on the profile selection view (while the villa is already loaded) and click on Cancel, the villa reload is happening again... there is no need to reload the villa map at all when the profile is changed."** The telemetry agrees — a record with `loadSeq: 2`, `gated: true`, **`pinned: false`**: a gate appeared, no passcode was ever typed, and the villa reloaded regardless.
+- **Root cause was React reconciliation, not anything about auth.** `ProfileGate` returned four different tree shapes: `<>{children}</>` when signed in, `null` while resolving, and `<>{early && children}<div/></>` for each gate screen. React reconciles a fragment's children **by position**, and `children` here is itself an array — the whole provider tree down to `BabylonCanvas`. Moving it between "the fragment's only child" and "index 0 of an array" changes its implicit keys, so React could not match the old subtree to the new one: it unmounted the entire authenticated tree and built a fresh one. That happened when the overlay opened **and again when it closed**, so backing out of the switcher without changing anything cost a full ~2.5s GLB re-parse and a brand-new WebGL context.
+- There is now **one return with one structure**: always two slots in the same order, slot 0 being `children` whenever a session exists — including while the switch overlay is up. A profile change re-filters the scene through the existing `sceneConfig` effect, which is the correct behaviour: the geometry is identical between roles, only what may be shown differs. A first-ever visit still renders the gate alone, so the pre-login decode stays disabled exactly as 2.79.0 left it.
+- This also explains two things previously logged as separate mysteries: the **WebGL context-loss counter climbing into the teens** (17 by this session) and the **heap growing across a session** — each redundant remount abandoned a scene and took a new GL context.
+
+### Ruled out — the freeze is not main-thread blocking
+- 2.107.0's long-task observer answers the question it was built for, and the answer is negative: **`stallPreCount: 0` and `stallPreMs: 0` on every record**, with total blocking of only 249–380ms across 3–4 tasks (worst 191ms). Whatever the pre-login screens are doing, they are not blocking the main thread — which eliminates the entire class of cause that four earlier hypotheses lived in. A decisive negative is worth as much as a positive here, and it is why the search moved to reconciliation instead.
+
+### Noted, not yet fixed
+- **`hydrate` runs twice on every connect** — `connect()` calls it directly and the reconnect effect fires again on the same transition — so 995 entity states are fetched twice per load. Visible as paired `ha-connect` records milliseconds apart. Left alone deliberately: the reconnect path guards against stale state after a dropped websocket, and a careless fix there trades a duplicate fetch for a silently stale villa.
+- One `registry` pull took **5,276ms**. It is network time, not main-thread time (its `applyMs` sibling is 1–4ms), so it cannot freeze the UI, but it does delay live room/floor data on a slow link.
+
 ## 2.107.0
 
 ### Wrong again — the Home Assistant hypothesis is dead, and the measurement killed it cleanly

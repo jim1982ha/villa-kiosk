@@ -72,53 +72,9 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
     markBoot(pending ? "pin" : "gate");
   }, [role, switching, pending, resolving]);
 
-  if (role && !switching) return <>{children}</>;
-
-  // The server is still being asked whether this browser is already signed in.
-  // Render nothing rather than the picker: on a returning device the answer is
-  // yes, and flashing a profile screen for one round trip before jumping to the
-  // villa reads as a glitch. It is bounded by that single request, which fails
-  // closed to null (→ the picker) rather than hanging.
-  if (resolving) return null;
-
-  // A profile switch keeps the CURRENT role's villa scene mounted (and thus
-  // still fully loaded) underneath this overlay — see ProfileContext's
-  // beginSwitch docstring for why: unmounting `children` here would force a
-  // full GLB re-fetch + re-parse just to show a PIN pad. `.auth-screen` is a
-  // fixed, opaque full-viewport layer (styles.css), so it fully covers the
-  // scene beneath exactly like any other modal. The SAME reasoning now also
-  // applies to a first-ever (not-yet-logged-in) visit once modelPreloadable
-  // is true — see that state's own comment for the trade-off this involves.
-  // sceneConfig (BabylonCanvas) stays unfiltered while `role` is still null
-  // and reactively re-filters the instant login sets it, so nothing
-  // role-restricted is ever exposed by loading early; the opaque overlay
-  // below means none of it is visible before login regardless.
+  // Distinct from a first-ever visit: only a SWITCH has a session to fall back
+  // to, which is what the Cancel button below returns to.
   const isSwitch = !!role && switching;
-  // Distinct from isSwitch: only isSwitch means there's a session to fall
-  // back to (drives the Cancel button below) — modelPreloadable alone (a
-  // first-ever, not-yet-logged-in visit) has nothing to cancel back to.
-  // Only when SWITCHING profile — never before a first sign-in.
-  //
-  // The villa's BYTES are still fetched as early as possible (main.tsx, and
-  // the effect above): that is a plain download and costs the screen nothing.
-  // What no longer happens before sign-in is the DECODE.
-  //
-  // 2.76.0 tried to keep the pre-login decode while protecting input, by not
-  // starting it during passcode entry and waiting for an idle moment. It
-  // isn't enough, and the reason is simple arithmetic: choosing a profile
-  // takes longer than the idle wait, so the decode has already started by the
-  // time the pad opens — and a decode that has started cannot be paused, it
-  // is synchronous main-thread work.
-  //
-  // So the trade is settled the other way, as the owner asked: a spinner
-  // AFTER sign-in beats a passcode pad that drops digits, because a stutter
-  // is indistinguishable from a mis-tap and the user just types it again.
-  // This also makes every platform behave alike — iOS has always loaded only
-  // after login (memory ceiling), and the target device is an iPad.
-  //
-  // `preloadStarted` is still computed above: it is what decides when the
-  // BYTES may be fetched, which is free. Only the DECODE waits.
-  const showChildrenEarly = isSwitch;
 
   const choose = (r: Role) => {
     setGateError(null);
@@ -147,61 +103,88 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
 
   const cancel = isSwitch ? cancelSwitch : undefined;
 
-  if (pending) {
-    return (
-      <>
-        {showChildrenEarly && children}
-        <div className="auth-screen">
-          <PinPad
-            roleLabel={ROLE_LABELS[pending]}
-            onSubmit={(pin) => verify(pending, pin)}
-            onAccepted={() => {
-              // Correct PIN just minted the session cookie — retry the
-              // prefetch (the mount-time attempt had no cookie to use yet).
-              startModelPrefetch();
-              login(pending);
-              setPending(null);
-            }}
-            onBack={() => setPending(null)}
-          />
-        </div>
-      </>
-    );
-  }
+  // ── ONE return, ONE tree shape ────────────────────────────────────────
+  // This used to return four different shapes: `<>{children}</>` when signed
+  // in, `null` while resolving, and `<>{early && children}<div/></>` for the
+  // two gate screens. React reconciles a fragment's children BY POSITION, and
+  // `children` here is itself an array (the provider tree down to
+  // BabylonCanvas) — so moving it between "the fragment's only child" and
+  // "index 0 of an array" changed its implicit keys, and React responded by
+  // unmounting the entire authenticated tree and building a new one.
+  //
+  // That is why opening the profile switcher reloaded the villa, and why
+  // CANCELLING reloaded it a second time — a full ~2.5s GLB re-parse and a
+  // fresh WebGL context for a screen the user backed out of without changing
+  // anything. It also explains the WebGL context-loss counter climbing into
+  // the teens and the heap growing across a session.
+  //
+  // Now there is exactly one structure, always two slots in the same order.
+  // Slot 0 is `children` whenever a session exists — including while the
+  // switch overlay is up — so the villa is never torn down for a profile
+  // change. Switching role re-filters the scene through `sceneConfig`
+  // (BabylonCanvas's own effect), which is what should happen: the geometry is
+  // identical, only what may be shown differs.
+  const signedIn = !!role && !switching;
+  // Keep the villa mounted whenever there IS a session behind the overlay.
+  // On a first-ever visit there is nothing to keep, so this is false and the
+  // gate renders alone — the pre-login decode stays disabled exactly as
+  // before (see the long note above about 2.76.0/2.79.0).
+  const showChildren = signedIn || isSwitch;
+  // `resolving` means the server is still being asked whether this browser is
+  // already signed in: render neither the villa nor the picker for that one
+  // round trip, rather than flashing a profile screen the answer will replace.
+  const gateVisible = !signedIn && !resolving;
 
   return (
     <>
-      {showChildrenEarly && children}
-      <div className="auth-screen">
-        <div className="profile-select">
-          <h1 className="profile-title">{resolveSiteTitle(config)}</h1>
-          <p className="profile-sub">Who's using the kiosk?</p>
-          {gateError && (
-            <p className="profile-error" role="alert">{gateError}</p>
-          )}
-          <div className="profile-cards">
-            {ROLE_ORDER.map((r) => {
-              const Icon = ROLE_ICONS[r];
-              return (
-                <button
-                  key={r}
-                  className="profile-card"
-                  onClick={() => choose(r)}
-                  disabled={!pinRequired}
-                >
-                  <Icon size={34} aria-hidden="true" />
-                  <span className="profile-card-name">{ROLE_LABELS[r]}</span>
-                  <span className="profile-card-desc">{ROLE_DESCRIPTIONS[r]}</span>
-                </button>
-              );
-            })}
-          </div>
-          {!pinRequired && !gateError && <div className="muted">Loading profiles…</div>}
-          {cancel && (
-            <button className="btn ghost mt" onClick={cancel}>Cancel</button>
+      {showChildren ? children : null}
+      {gateVisible && (
+        <div className="auth-screen">
+          {pending ? (
+            <PinPad
+              roleLabel={ROLE_LABELS[pending]}
+              onSubmit={(pin) => verify(pending, pin)}
+              onAccepted={() => {
+                // Correct PIN just minted the session cookie — retry the
+                // prefetch (the mount-time attempt had no cookie to use yet).
+                startModelPrefetch();
+                login(pending);
+                setPending(null);
+              }}
+              onBack={() => setPending(null)}
+            />
+          ) : (
+            <div className="profile-select">
+              <h1 className="profile-title">{resolveSiteTitle(config)}</h1>
+              <p className="profile-sub">Who's using the kiosk?</p>
+              {gateError && (
+                <p className="profile-error" role="alert">{gateError}</p>
+              )}
+              <div className="profile-cards">
+                {ROLE_ORDER.map((r) => {
+                  const Icon = ROLE_ICONS[r];
+                  return (
+                    <button
+                      key={r}
+                      className="profile-card"
+                      onClick={() => choose(r)}
+                      disabled={!pinRequired}
+                    >
+                      <Icon size={34} aria-hidden="true" />
+                      <span className="profile-card-name">{ROLE_LABELS[r]}</span>
+                      <span className="profile-card-desc">{ROLE_DESCRIPTIONS[r]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {!pinRequired && !gateError && <div className="muted">Loading profiles…</div>}
+              {cancel && (
+                <button className="btn ghost mt" onClick={cancel}>Cancel</button>
+              )}
+            </div>
           )}
         </div>
-      </div>
+      )}
     </>
   );
 }
