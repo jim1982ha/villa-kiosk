@@ -593,8 +593,18 @@ export default function BabylonCanvas({
               // for every visible material lands here.
               paintMs: Math.round(tPaint - tReady),
               // Navigation start → the villa genuinely visible. THE number to
-              // compare against a stopwatch.
-              visibleMs: Math.round(tPaint),
+              // compare against a stopwatch — but ONLY true for the page's
+              // FIRST load, exactly like totalMs/activeMs/bootMs above. On a
+              // reload `tPaint` is still measured from the ORIGINAL navigation,
+              // so reporting it as `visibleMs` produced a 98,239ms record for a
+              // load whose real span (`reloadMs`) was 7,864ms — the identical
+              // stale-anchor mistake bootMs/totalMs/waitMs made before 2.105.0,
+              // just not caught then because paintMs/visibleMs didn't exist yet
+              // (added 2.109.0, after that fix). `reloadMs` already carries the
+              // correct load-relative figure through paint (it's read here,
+              // inside bootTimeline(), AFTER tPaint), so `visibleMs` is simply
+              // omitted on a reload rather than given a second, wrong meaning.
+              ...(loadSeq === 1 ? { visibleMs: Math.round(tPaint) } : {}),
               paintTimedOut: painted ? 0 : 1,
             });
           };

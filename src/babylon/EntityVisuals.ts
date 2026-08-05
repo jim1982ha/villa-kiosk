@@ -555,6 +555,53 @@ export class EntityVisuals {
    *  to toggle". */
   private meshVariants = new Map<string, Map<string, AbstractMesh[]>>();
   private pulsing = new Set<AbstractMesh>();
+
+  // ── Badge-layout frame budget (2.113.0) ──────────────────────────────────
+  // cullLabels() runs from registerBeforeRender, i.e. on EVERY rendered frame,
+  // and the render loop does NOT idle whenever anything is animating: a
+  // spinning ceiling fan (animateFans) or a triggered alert (animatePulse)
+  // each call requestRender() every frame, which re-arms the loop forever. A
+  // villa with one fan left on therefore renders continuously for weeks — and
+  // recomputed the entire badge layout, allocating several hundred objects per
+  // frame, the whole time. That sustained garbage is the best candidate for
+  // the ~37MB/hour idle drift autoReload.ts was written to paper over.
+  //
+  // Two defences, both here:
+  //   1. SKIP the pass entirely when nothing that can move a badge has
+  //      changed. A fan's blades spinning does not move its badge (the anchor
+  //      deliberately sits on the fan's NON-rotating parent — see
+  //      detachFanLabelAnchor) and a pulse only changes emissive colour, so
+  //      neither has any effect on layout. The view-projection matrix is the
+  //      honest test for "did anything about the camera change", covering
+  //      pan/orbit/zoom/fov in one comparison; `layoutDirty` covers everything
+  //      else (see markLayoutDirty's callers).
+  //   2. When it DOES run, reuse the working arrays and their element objects
+  //      instead of rebuilding them, so a genuine camera move costs CPU but
+  //      not a fresh heap allocation per badge per frame.
+  // The grouping ALGORITHM is untouched — same inputs, same world-space /
+  // zoom-only decision, same outputs. Only allocation and scheduling change.
+  private layoutDirty = true;
+  private lastVpM: Float32Array | null = null;
+  private lastVpW = -1;
+  private lastVpH = -1;
+  /** Grow-only store of ShownLabel objects, reused across frames. Kept
+   *  SEPARATE from `shown` (which is truncated to the live count each pass) so
+   *  truncation cannot drop the objects and force reallocation next frame. */
+  private shownPool: ShownLabel[] = [];
+  private shown: ShownLabel[] = [];
+  private boxesPool: { halfW: number; halfH: number; cy: number }[] = [];
+  private boxes: { halfW: number; halfH: number; cy: number }[] = [];
+  /** Scratch for Vector3.ProjectToRef — avoids a Vector3 per badge per frame. */
+  private projTmp = new Vector3();
+
+  /** Something that can change WHERE or WHETHER a badge draws has happened —
+   *  recompute the layout on the next frame. Cheap and deliberately generous:
+   *  a false positive costs one recomputed frame, a false negative leaves a
+   *  badge visibly stale, so every caller that touches label content, the
+   *  label set, scale, floor or category filtering calls this. */
+  private markLayoutDirty(): void {
+    this.layoutDirty = true;
+  }
   /** entity_id → angular speed (rad/s) for a CEILING fan currently spinning. */
   private spinningFans = new Map<string, number>();
   /** entity_id → total accumulated spin angle (radians, wrapped to 2π) — the
@@ -569,6 +616,8 @@ export class EntityVisuals {
    *  linkWithMesh tracking reads) stay exactly what they always were. */
   private fanRigs = new Map<string, { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }[]>();
   private pulseT = 0;
+  /** Scratch for animatePulse — see its comment. */
+  private pulseColor = new Color3(0, 0, 0);
 
   // Real light sources for `light` entities. Keyed by MESH uniqueId (not entity
   // id) so an entity whose fixture is several distinct meshes — e.g. the two
@@ -762,6 +811,10 @@ export class EntityVisuals {
     const prevBadgeStyle = this.config.badgeStyle;
     const prevEntityMap = this.config.entityMap;
     this.config = config;
+    // hiddenCategories gates the layout pass's first cull and badgeStyle
+    // switches labelBoxes to a different geometry entirely — neither is
+    // observable through the view-projection matrix.
+    this.markLayoutDirty();
     // Both link indexes are otherwise only built by indexMeshes() — but
     // editing linkedEntityId/motionEntityId is now classed as a COSMETIC
     // change (see SceneManager's COSMETIC_MAPPING_FIELDS), which deliberately
@@ -1078,6 +1131,8 @@ export class EntityVisuals {
 
   /** Build the reverse index entity_id -> meshes from the loaded GLB. */
   indexMeshes(meshes: AbstractMesh[]): void {
+    // Every anchor, mesh binding and label is rebuilt below.
+    this.markLayoutDirty();
     // Restore the previous load's probes when they describe THIS geometry
     // (see setProbeCacheKey); otherwise this is a plain clear, as before.
     this.loadProbeCache();
@@ -1838,7 +1893,8 @@ export class EntityVisuals {
     }
     if (members.length < 2) return null;
 
-    const boxes = this.labelBoxes(members);
+    // Own buffers, not the render loop's — see labelBoxes' docstring.
+    const boxes = this.labelBoxes(members, [], []);
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
     const gapPx = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
     let required = 0;
@@ -2013,6 +2069,10 @@ export class EntityVisuals {
     // case: a plain mesh with no "__word" siblings.
     this.applyStateNamedVariant(entity.entity_id, entity);
     this.updateLabel(entity.entity_id, map.type, entity);
+    // Belt-and-braces over updateLabel's own flag: a pose variant swap changes
+    // which mesh (and so which anchor) a badge reads its enabled state from,
+    // and this runs for entities whose label may not have been touched above.
+    this.markLayoutDirty();
     this.requestRender();
   }
 
@@ -2194,6 +2254,9 @@ export class EntityVisuals {
   setActiveFloor(floor: number): void {
     if (floor === this.activeFloor) return;
     this.activeFloor = floor;
+    // Badges are culled per storey, and FloorManager's setEnabled sweep is not
+    // otherwise visible to the layout pass.
+    this.markLayoutDirty();
     this.resyncLightPoolsToFloor();
     // Mesh variants (curtain/lock poses) need NO floor resync: their
     // exclusivity rides `isVisible`, which FloorManager's per-floor
@@ -2224,6 +2287,8 @@ export class EntityVisuals {
 
   /** Scale every badge container by user-size × zoom, around its anchor point. */
   private applyIconScale(): void {
+    // Scale feeds labelBoxes' every dimension.
+    this.markLayoutDirty();
     const s = this.iconUserScale * this.iconZoomScale;
     for (const lbl of this.labels.values()) {
       lbl.container.scaleX = s;
@@ -2233,6 +2298,9 @@ export class EntityVisuals {
   }
 
   private rebuildLabels(): void {
+    // The label SET itself is about to change — every pooled slot below is
+    // re-derived from scratch on the next pass.
+    this.markLayoutDirty();
     // Bail if the engine is gone. rebuildLabels can be reached from
     // updateConfig on a React commit that lands AFTER a WebGL context loss has
     // torn the engine down, and the first `new Image(...)` below then throws
@@ -2512,6 +2580,10 @@ export class EntityVisuals {
     const value = this.groupedValue(entityId, this.compactValue(type, entity));
     lbl.valueText.text = value;
     lbl.valueWrap.isVisible = value.length > 0;
+    // The pill's TEXT LENGTH and visibility are both inputs to labelBoxes'
+    // width, and `category` above gates visibility — so a state change that
+    // alters any of them must force the next layout pass to actually run.
+    this.markLayoutDirty();
   }
 
   /** Decide which badges are visible, then group the ones whose room is too
@@ -2529,9 +2601,31 @@ export class EntityVisuals {
     const tm = this.scene.getTransformMatrix();
     const hidden = this.config.hiddenCategories;
 
+    // ── Frame budget: is this pass needed at all? (see layoutDirty) ─────────
+    // The view-projection matrix answers "did the camera change" completely —
+    // position, orbit, zoom and fov all land in it — and the viewport size
+    // catches a resize. Compared BEFORE any allocation, so the common
+    // animating-but-static-view frame (a spinning fan, a pulsing alert) costs
+    // 16 float comparisons instead of a full relayout.
+    const m = tm.m;
+    if (!this.layoutDirty && this.lastVpM && this.lastVpW === vp.width && this.lastVpH === vp.height) {
+      let same = true;
+      for (let i = 0; i < 16; i++) {
+        if (this.lastVpM[i] !== m[i]) { same = false; break; }
+      }
+      if (same) return;
+    }
+    if (!this.lastVpM) this.lastVpM = new Float32Array(16);
+    for (let i = 0; i < 16; i++) this.lastVpM[i] = m[i];
+    this.lastVpW = vp.width;
+    this.lastVpH = vp.height;
+    this.layoutDirty = false;
+
     // Every badge that passes the non-view culls (category / floor / enabled).
     // Deliberately NOT filtered by what is currently framed — see groupBadges.
-    const shown: ShownLabel[] = [];
+    // Reused across frames (see shownPool) rather than rebuilt.
+    const shown = this.shown;
+    let shownCount = 0;
 
     for (const [id, lbl] of this.labels) {
       if (hidden.includes(lbl.category)) {
@@ -2583,15 +2677,33 @@ export class EntityVisuals {
       // can't be drawn — but they still take part in grouping, exactly so
       // that turning the camera can't change how a room is presented.
       const wp = lbl.anchor.getAbsolutePosition();
-      const p = Vector3.Project(wp, Matrix.IdentityReadOnly, tm, vp);
-      shown.push({
-        id, lbl,
-        x: p.x, y: p.y,
-        wx: wp.x, wz: wp.z,
-        inFront: p.z >= 0 && p.z <= 1,
-        off: { x: 0, y: 0 },
-      });
+      const p = this.projTmp;
+      Vector3.ProjectToRef(wp, Matrix.IdentityReadOnly, tm, vp, p);
+      // Reuse this slot's object if the pool already has one — only a badge
+      // count above the high-water mark ever allocates, so the steady state
+      // allocates nothing at all.
+      let s = this.shownPool[shownCount];
+      if (!s) {
+        s = { id, lbl, x: 0, y: 0, wx: 0, wz: 0, inFront: false, off: { x: 0, y: 0 } };
+        this.shownPool[shownCount] = s;
+      }
+      s.id = id;
+      s.lbl = lbl;
+      s.x = p.x;
+      s.y = p.y;
+      s.wx = wp.x;
+      s.wz = wp.z;
+      s.inFront = p.z >= 0 && p.z <= 1;
+      // Every consumer treats `off` as "start at zero and get nudged" — it
+      // MUST be reset, or a reused slot inherits the previous frame's nudge.
+      s.off.x = 0;
+      s.off.y = 0;
+      shown[shownCount] = s;
+      shownCount++;
     }
+    // Truncate to this frame's count. The objects themselves stay alive in
+    // shownPool, so refilling next frame reuses them.
+    shown.length = shownCount;
 
     // ── Layout ───────────────────────────────────────────────────────────
     // Grouping is decided in world space against the current zoom alone, so
@@ -2823,8 +2935,16 @@ export class EntityVisuals {
    *  ONE definition, shared by updateRoomClustering and the room-cluster
    *  chips' own relaxation, so neither can disagree about how much room a
    *  badge actually needs. */
+  /** `out`/`pool` default to the render loop's own reused buffers. A caller
+   *  OUTSIDE the frame path (minPxPerWorldToDeclutterRoom, driven by the UI)
+   *  passes its own so it can never clobber a layout pass mid-flight — the two
+   *  do not currently interleave, but sharing a mutable buffer across a public
+   *  method and the render loop is precisely the coupling that stops being
+   *  true after some later edit. */
   private labelBoxes(
     shown: { lbl: LabelControls }[],
+    out: { halfW: number; halfH: number; cy: number }[] = this.boxes,
+    pool: { halfW: number; halfH: number; cy: number }[] = this.boxesPool,
   ): { halfW: number; halfH: number; cy: number }[] {
     const scale = this.iconUserScale * this.iconZoomScale;
     const card = this.config.badgeStyle === "card";
@@ -2835,16 +2955,23 @@ export class EntityVisuals {
     // Card layout: one horizontal card (CARD_HEIGHT tall inside a
     // CARD_LABEL_HEIGHT container), hanging above the anchor; width = the
     // glyph (rendered at the card height) + left pad + any inline value.
-    const boxes = shown.map((s) => {
+    // Filled in place from a grow-only pool (see boxesPool) instead of a fresh
+    // .map() array of fresh objects every frame — same values, no allocation
+    // in the steady state.
+    const boxes = out;
+    for (let i = 0; i < shown.length; i++) {
+      const s = shown[i];
+      let b = pool[i];
+      if (!b) { b = { halfW: 0, halfH: 0, cy: 0 }; pool[i] = b; }
+      boxes[i] = b;
       if (card) {
         const hasVal = s.lbl.valueWrap.isVisible;
         const valW = hasVal ? s.lbl.valueText.text.length * 7.2 + 8 : 0;
         const cardW = CARD_PAD_LEFT_PX + CARD_HEIGHT_PX + valW;
-        return {
-          halfW: (cardW / 2) * scale,
-          halfH: (CARD_HEIGHT_PX / 2 + 1) * scale,
-          cy: -(CARD_LABEL_HEIGHT_PX / 2 + CARD_HEIGHT_PX / 2 - 4) * scale,
-        };
+        b.halfW = (cardW / 2) * scale;
+        b.halfH = (CARD_HEIGHT_PX / 2 + 1) * scale;
+        b.cy = -(CARD_LABEL_HEIGHT_PX / 2 + CARD_HEIGHT_PX / 2 - 4) * scale;
+        continue;
       }
       const hasPill = s.lbl.valueWrap.isVisible;
       // Reserve the WITH-PILL footprint (halfH/cy) for any type that can EVER
@@ -2863,11 +2990,11 @@ export class EntityVisuals {
       // horizontal room than a narrow one).
       const pillCapable = PILL_CAPABLE_TYPES.has(s.lbl.type);
       const pillHalfW = hasPill ? (s.lbl.valueText.text.length * 6.2 + 24) / 2 : 0;
-      const halfW = Math.max(BADGE_DIAMETER_PX / 2, pillHalfW) * scale;
-      const halfH = (pillCapable ? 30.5 : 20) * scale;
-      const cy = (pillCapable ? -45.5 : -56) * scale; // box centre Y relative to anchor
-      return { halfW, halfH, cy };
-    });
+      b.halfW = Math.max(BADGE_DIAMETER_PX / 2, pillHalfW) * scale;
+      b.halfH = (pillCapable ? 30.5 : 20) * scale;
+      b.cy = (pillCapable ? -45.5 : -56) * scale; // box centre Y relative to anchor
+    }
+    boxes.length = shown.length;
     return boxes;
   }
 
@@ -3631,7 +3758,13 @@ export class EntityVisuals {
     const dtMs = Math.min(this.scene.getEngine().getDeltaTime(), 100);
     this.pulseT += (dtMs / 1000) * PULSE_RAD_PER_SEC;
     const intensity = (Math.sin(this.pulseT) + 1) / 2; // 0..1
-    const col = new Color3(intensity, 0, 0);
+    // Reused, not rebuilt: this runs every frame for as long as an alert stays
+    // triggered, and re-arms the render loop itself (below), so a `new Color3`
+    // here is a permanent allocation stream on a kiosk nobody is touching.
+    const col = this.pulseColor;
+    col.r = intensity;
+    col.g = 0;
+    col.b = 0;
     for (const mesh of this.pulsing) this.emissiveOf(mesh)?.(col);
     this.beams.applyPulse(intensity);
     this.requestRender();
@@ -3809,7 +3942,16 @@ export class EntityVisuals {
       const angle = ((this.fanAngles.get(id) ?? 0) + speed * dt) % (Math.PI * 2);
       this.fanAngles.set(id, angle);
       for (const { pivot, axisLocal } of rig) {
-        pivot.rotationQuaternion = Quaternion.RotationAxis(axisLocal, angle);
+        // Write THROUGH the existing quaternion rather than replacing it: a
+        // ceiling fan left on is the normal state in a villa, and this runs
+        // every frame forever for each of its blade rigs (animateFans re-arms
+        // the render loop below), so allocating one per rig per frame is a
+        // permanent garbage stream. Created once on first use.
+        if (!pivot.rotationQuaternion) {
+          pivot.rotationQuaternion = Quaternion.RotationAxis(axisLocal, angle);
+        } else {
+          Quaternion.RotationAxisToRef(axisLocal, angle, pivot.rotationQuaternion);
+        }
       }
       spun = true;
     }
