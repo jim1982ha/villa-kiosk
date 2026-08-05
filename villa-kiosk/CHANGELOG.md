@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.110.0
+
+### Measured — the whole load now accounts for itself, to within 2ms
+- With `visibleMs` in place the arithmetic finally closes. A healthy phone load is **5,048ms**: boot 414 + engine 128 + config 3 + fetch 44 + **parse 2,193** + reveal 8 + **paint 2,256**. A loaded desktop is **13,371–15,049ms** on the same GLB. Summing the parts lands within **2ms** of the measured total in all three records, so nothing is hiding any more.
+- **Two phases carry ~90% of it, near-equally: PARSE ≈ 45% and PAINT ≈ 45%.** Everything else — network, bundle, React, engine init, config, reveal — is together under 11%. Those are the only two worth attacking, and both trace back to the same property of the GLB.
+
+### Fixed — the freeze at the end of the load
+- The long-task observer found a **single 1,359ms blocking task inside `paintMs`**: all **371 materials** having their shaders compiled by the GPU driver in the first frame after the overlay lifted. It lands with no spinner on screen, because the code has already declared itself ready — which is exactly the freeze reported from the field.
+- Compilation now happens **before the reveal**, one material at a time with a yield every fourth, so the longest single block is milliseconds instead of over a second, and the work sits behind the loading overlay where there is feedback. **This removes the freeze, not the cost** — the GPU does the same work either way, and saying otherwise would be dishonest. New `compileMs` and `compiledMats` report it, so a regression that pushes shader work back into the first frame is immediately visible.
+
+### Where the remaining time actually is
+- **`glMaterials: 371` is the root of both dominant phases.** glTF emits one primitive per (mesh × material) — that is the 765 primitives behind PARSE — and every material is a shader permutation the driver must compile, which is PAINT. Reducing material count attacks ~90% of the load at once, and it is a pipeline change, not a code one (see the pipeline's own `[report]` primitive budget).
+- Two app-side observations logged rather than acted on: `maxSimultaneousLights` is set to **8** on every material, and the lightmap-mode structure materials keep their original names so the `unlit` fast path (which only matches `BAKED_` prefixes) never applies to them. Both plausibly inflate shader complexity. Neither is changed here — four hypotheses about this load have already been argued from plausibility and disproved by measurement, and `compileMs` is precisely the number that will show whether either is worth touching.
+
 ## 2.109.0
 
 ### Fixed — every "total" this app has ever reported stopped before the villa was on screen

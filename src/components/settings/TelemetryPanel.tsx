@@ -84,6 +84,10 @@ function summarise(e: TelemetryEvent): string {
       // what a stopwatch measures. Everything else stops at setStatus("ready")
       // — a React state update, before the overlay clears and before Babylon
       // compiles a single shader. Lead with it whenever it exists.
+      // Shader compilation, now behind the overlay. Shown next to paint so a
+      // regression that pushes work back into the first frame is obvious.
+      const compiled = typeof e.compileMs === "number"
+        ? ` · shaders ${ms(e.compileMs)}/${e.compiledMats}` : "";
       const painted = typeof e.paintMs === "number"
         ? ` · paint ${ms(e.paintMs)}${e.paintTimedOut ? " (NEVER PAINTED)" : ""}` : "";
       const head = typeof e.visibleMs === "number"
@@ -93,7 +97,7 @@ function summarise(e: TelemetryEvent): string {
           : `${ms(e.totalMs)} total`;
       return `${head}${waited}${active} · bundle ${ms(e.bundleMs)}`
         + ` · mount ${ms(e.mountMs)} · parse ${ms(e.parseMs)} · reveal ${ms(e.revealMs)}`
-        + `${painted}${weight}${stalled}${worst}${parked}`;
+        + `${compiled}${painted}${weight}${stalled}${worst}${parked}`;
     }
     case "error":
       return `${e.code}: ${String(e.message ?? "").slice(0, 120)}`;

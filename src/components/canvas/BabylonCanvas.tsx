@@ -540,6 +540,46 @@ export default function BabylonCanvas({
         if (cancelled) return;
 
         // Everything is applied and settled — reveal the interactive villa.
+        // ── Shader pre-compilation, chunked ──────────────────────────────
+        // `paintMs` measured 2.3s on a phone and 6-7s on a loaded desktop, and
+        // the long-task observer caught a SINGLE 1,359ms task inside it: every
+        // one of the villa's 371 materials having its shader compiled by the
+        // GPU driver, all in the first frame after the overlay lifted. That is
+        // the freeze — it lands with no spinner on screen, because the code had
+        // already declared itself "ready".
+        //
+        // Compiling here instead does two things. The work happens BEHIND the
+        // loading overlay, where the user has feedback; and it is broken into
+        // one material at a time with a yield every few, so the longest single
+        // block is milliseconds rather than over a second. The total GPU work
+        // is unchanged — this removes the FREEZE, not the cost. Cutting the
+        // cost means fewer materials, which is a pipeline change.
+        //
+        // Best-effort throughout: a material that refuses to compile must not
+        // stop the villa appearing, so every failure is swallowed and the loop
+        // moves on.
+        const tCompile0 = performance.now();
+        let compiled = 0;
+        const seenMats = new Set<unknown>();
+        const sceneMeshes = manager.scene.meshes;
+        for (let i = 0; i < sceneMeshes.length; i++) {
+          if (cancelled) return;
+          const m = sceneMeshes[i];
+          const mat = m.material;
+          if (!mat || seenMats.has(mat)) continue;
+          seenMats.add(mat);
+          try {
+            await mat.forceCompilationAsync(m);
+          } catch { /* a material that won't compile must not block the reveal */ }
+          compiled++;
+          // Yield often enough that no single block is perceptible. Compilation
+          // is driver work, so this cannot make it parallel — it only keeps the
+          // main thread answering between materials.
+          if (compiled % 4 === 0) await new Promise<void>((r) => requestAnimationFrame(() => r()));
+        }
+        const compileMs = Math.round(performance.now() - tCompile0);
+        if (cancelled) return;
+
         setStatus("ready");
         // Reported HERE, not where it is built above: only at this point do
         // revealMs/totalMs exist, and this is also the first moment sending it
@@ -577,6 +617,12 @@ export default function BabylonCanvas({
               // "ready" → the first frame actually drawn. Shader compilation
               // for every visible material lands here.
               paintMs: Math.round(tPaint - tReady),
+              // Shader compilation, now moved behind the overlay. Read
+              // alongside paintMs: what used to be one freeze inside paint is
+              // now here, chunked — and `compiledMats` says how many shaders
+              // that was, which is the number the pipeline lever reduces.
+              compileMs,
+              compiledMats: compiled,
               // Navigation start → the villa genuinely visible. THE number to
               // compare against a stopwatch.
               visibleMs: Math.round(tPaint),
