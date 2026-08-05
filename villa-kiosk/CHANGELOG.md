@@ -1,3 +1,17 @@
+## 2.120.0
+
+### Fixed — a room chip could end up outside the villa entirely
+
+A screenshot showed the **Master Bedroom** chip sitting on the lawn, well clear of the building, with no device anywhere near it. The same report noted two related symptoms: chips drifting a long way from the rooms they name whenever the icon size was turned up or the view was zoomed out, and — separately — the general complaint that badges should never be seen overlapping at all.
+
+The cause was the mechanism used to keep chips from stacking on top of each other. Since chips carry text they are far wider than a badge, so two rooms whose centroids project close together used to overlap into an unreadable pile; `relaxBoxes` pushed them apart, with a travel budget of `CLUSTER_MAX_NUDGE_HEIGHTS * CLUSTER_HEIGHT_PX * scale`. That budget was wrong in two independent ways. It multiplied by `scale`, so raising the icon size granted a chip *more* licence to travel away from the room it labels — exactly backwards from what the size control implies. And it was a budget in screen **pixels** applied against a **world-space** anchor: zoom out and the villa covers fewer pixels while the chips keep their pixel size, so they overlap more, the solver pushes harder, and a displacement that merely looked untidy at full zoom put a chip completely off the building. The solver itself was never at fault — it only ever knew "these boxes must not overlap", had no notion of where the villa was, and would happily satisfy that constraint by putting a chip anywhere on screen.
+
+The invariant that was missing, and is now written down in the code: **a chip must never leave the room it names.** That cannot be reconciled with "chips must never overlap" by capping the travel distance, because at low zoom there is genuinely no non-overlapping arrangement to find — capping the nudge just trades a chip on the lawn for chips that still touch.
+
+So overlapping chips are no longer displaced at all; they **merge**. Every chip now renders exactly on its own anchor with zero horizontal offset, and the only way an overlap gets resolved is by two chips becoming one — the same answer map engines use for marker clustering, and the same principle the badge grouping already follows one level down. The merge runs worst-overlap-first and repeats until nothing overlaps, so the result does not depend on the order rooms happen to be iterated in. The surviving chip keeps the busier room's name plus a `+N` suffix (so its count pill is never mistaken for a single room's device count), takes the device-count-weighted centroid of the rooms it absorbed as its anchor — leaving it among the devices it stands for — and owns the union of their entity ids, so tapping it still selects everything it represents. Both properties now hold literally, at every zoom level and every icon size: nothing overlaps, and nothing travels.
+
+`relaxBoxes` and its `Nudgeable` type have been deleted from `labelLayout.ts` along with the `CLUSTER_MAX_NUDGE_HEIGHTS` constant — the chip layout was their last caller, and the badge layout has not used force relaxation since the world-space grouping rewrite.
+
 # Changelog
 
 ## 2.119.0

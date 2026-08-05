@@ -94,7 +94,7 @@ import {
   pickNearestVariant, desiredVariantWord, orderVariantWords,
 } from "./meshVariants";
 // Pure label/chip overlap geometry — see labelLayout.ts.
-import { relaxBoxes, chipWidthPx, type Nudgeable } from "./labelLayout";
+import { chipWidthPx } from "./labelLayout";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 1.3;
@@ -281,8 +281,7 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  * rotating the view.
  *
  * An earlier design instead nudged colliding badges apart with a force
- * relaxation (see relaxBoxes below, still used for room-cluster chips).
- * That solver is only stable while a non-overlapping layout for the exact
+ * relaxation. That solver is only stable while a non-overlapping layout for the exact
  * current badge set actually EXISTS. Zoomed out far enough, or from certain
  * angles, it doesn't: the solver never converges, and — because "which axis
  * has least penetration" and "which way do I push" are knife-edge branches
@@ -418,14 +417,10 @@ const CLUSTER_BG_COLOR = "#475569";
 /** Clusters must stay legible at the far zoom where badges shrink hardest, so
  *  their scale is floored well above the badge floor (getIconZoomCap: 0.22). */
 const CLUSTER_MIN_SCALE = 0.8;
-/** Breathing room between two chips, and how far one may be nudged from its
- *  room's centroid — in multiples of its own height, so both track the chip
- *  design rather than a fixed pixel guess. A chip labels a whole ROOM rather
- *  than pointing at one object, so it can travel freely without becoming
- *  misleading (unlike a badge, which is never nudged at all — see the header
- *  comment above). */
+/** Breathing room required between two chips. Chips are never nudged — this is
+ *  purely the threshold at which two of them are judged too close and MERGE
+ *  into one (see updateClusters). */
 const CLUSTER_GAP_PX = 6;
-const CLUSTER_MAX_NUDGE_HEIGHTS = 4;
 /** The count pill's own diameter and font — sized down from the chip's own
  *  height/font (a badge-within-a-badge reads wrong at the same scale), same
  *  proportion .icon-btn-count keeps against its 48px parent button. */
@@ -3104,71 +3099,134 @@ export class EntityVisuals {
     }
 
     const scale = Math.max(CLUSTER_MIN_SCALE, this.iconUserScale * this.iconZoomScale);
-    const live: { c: ClusterControls; text: string }[] = [];
+
+    // ── Chips MERGE under pressure; they are never pushed (2.120.0) ────────
+    // They used to be separated by relaxBoxes with a nudge budget of
+    // CLUSTER_MAX_NUDGE_HEIGHTS * CLUSTER_HEIGHT_PX * `scale`, which was wrong
+    // twice over. It multiplied by `scale`, so RAISING the icon size granted a
+    // chip MORE licence to travel away from the room it names — backwards. And
+    // it was a screen-PIXEL budget against a WORLD-space anchor: zoom out, the
+    // villa covers fewer pixels while chips keep their pixel size, so they
+    // overlap more, the solver pushes harder, and a displacement that was "just
+    // outside the room" at full zoom put a chip on the lawn, off the building
+    // entirely (reported with a screenshot: the Master Bedroom chip outside the
+    // villa). relaxBoxes only ever knew "these must not overlap" — it had no
+    // notion of where the villa was, and would satisfy that by putting a chip
+    // anywhere.
+    //
+    // The invariant that was missing: A CHIP MUST NEVER LEAVE THE ROOM IT
+    // NAMES. Capping the nudge cannot deliver that AND "never overlap" — at low
+    // zoom there is genuinely no room to separate them. So overlapping chips
+    // are now MERGED into one (the map-engine answer) instead of displaced:
+    // every chip renders at its own anchor with ZERO offset, and the only way
+    // an overlap is resolved is by two chips becoming one. Both properties hold
+    // literally and at every zoom level.
+    //
+    // Merging is by worst overlap first and repeats until nothing overlaps, so
+    // the outcome does not depend on room iteration order. The survivor keeps
+    // the BUSIER room's name (the more informative one) plus a "+N" suffix, its
+    // anchor becomes the device-count-weighted centroid of the merged rooms —
+    // so it still sits among the devices it represents — and it owns the union
+    // of their entity ids, keeping the tap target correct.
+    const cam = this.scene.activeCamera;
+    const eng = this.scene.getEngine();
+    const vp = cam ? cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight()) : null;
+    const tm = this.scene.getTransformMatrix();
+
+    interface Chip {
+      room: string; ids: string[]; centre: Vector3; rooms: number;
+      ringRed: boolean; unavailable: boolean;
+      x: number; y: number; halfW: number; halfH: number;
+    }
+    const chipLabel = (c: Chip) => (c.rooms > 1 ? `${c.room} +${c.rooms - 1}` : c.room);
+    const measure = (c: Chip) => {
+      if (vp) {
+        const p = Vector3.Project(c.centre, Matrix.IdentityReadOnly, tm, vp);
+        c.x = p.x; c.y = p.y;
+      }
+      // Same width ESTIMATE the old path used (chipWidthPx) — it only has to be
+      // close enough to decide overlap, not match the drawn glyphs exactly.
+      c.halfW = (chipWidthPx(`${chipLabel(c)}  ${c.ids.length}`) / 2) * scale;
+      c.halfH = (CLUSTER_HEIGHT_PX / 2) * scale;
+    };
+
+    const chips: Chip[] = [];
     for (const [room, g] of groups) {
-      const c = this.ensureCluster(room, layer);
-      c.entityIds = g.ids;
-      c.node.position.copyFrom(g.sum.scaleInPlace(1 / g.ids.length));
-      // Room name and count render as separate controls (see ensureCluster)
-      // but `label` still stands in for the whole chip's rendered text for
-      // the width ESTIMATE below (chipWidthPx) — close enough to keep chips
-      // apart, doesn't need to match what's drawn character-for-character.
-      const label = `${room}  ${g.ids.length}`;
-      c.text.text = room;
-      c.countText.text = formatCountBadge(g.ids.length);
+      const c: Chip = {
+        room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1,
+        ringRed: g.ringRed, unavailable: g.unavailable,
+        x: 0, y: 0, halfW: 0, halfH: 0,
+      };
+      measure(c);
+      chips.push(c);
+    }
+
+    if (vp && chips.length > 1) {
+      const gap = CLUSTER_GAP_PX * scale;
+      for (;;) {
+        let bi = -1, bj = -1, worst = 0;
+        for (let i = 0; i < chips.length; i++) {
+          for (let j = i + 1; j < chips.length; j++) {
+            const a = chips[i], b = chips[j];
+            const ox = a.halfW + b.halfW + gap - Math.abs(b.x - a.x);
+            const oy = a.halfH + b.halfH + gap - Math.abs(b.y - a.y);
+            if (ox <= 0 || oy <= 0) continue; // clear on at least one axis
+            const severity = Math.min(ox, oy);
+            if (severity > worst) { worst = severity; bi = i; bj = j; }
+          }
+        }
+        if (bi < 0) break; // nothing overlaps — done
+        const a = chips[bi], b = chips[bj];
+        const keep = a.ids.length >= b.ids.length ? a : b;
+        const drop = keep === a ? b : a;
+        const na = a.ids.length, nb = b.ids.length;
+        keep.centre = a.centre.scale(na / (na + nb))
+          .addInPlace(b.centre.scale(nb / (na + nb)));
+        keep.ids = keep.ids.concat(drop.ids);
+        keep.rooms = a.rooms + b.rooms;
+        keep.ringRed = a.ringRed || b.ringRed;
+        keep.unavailable = a.unavailable || b.unavailable;
+        chips.splice(chips.indexOf(drop), 1);
+        measure(keep);
+      }
+    }
+
+    for (const chip of chips) {
+      const c = this.ensureCluster(chip.room, layer);
+      c.entityIds = chip.ids;
+      c.node.position.copyFrom(chip.centre);
+      // Room name and count render as separate controls (see ensureCluster).
+      // A chip that absorbed others says so with a "+N" suffix, so the count
+      // pill's total is never mistaken for one room's device count.
+      c.text.text = chipLabel(chip);
+      c.countText.text = formatCountBadge(chip.ids.length);
       // The chip's own ring mirrors the individual badge ring rule exactly
       // (BADGE_RING): red when at least one member is "on" or "alert",
       // otherwise no ring — the only attention signal available once the
       // individual badges are gone.
-      c.container.thickness = g.ringRed ? 2 : 0;
-      c.container.color = g.ringRed ? ALERT_RED_HEX : "transparent";
+      c.container.thickness = chip.ringRed ? 2 : 0;
+      c.container.color = chip.ringRed ? ALERT_RED_HEX : "transparent";
       // The count pill itself carries the room's REPORTING status — red if
       // at least one member is unavailable (HA has lost contact with it),
       // the same "available" green everywhere else otherwise. Separate
       // signal from the ring above: a room can be fully reporting AND have
       // something on (red ring, green pill) at the same time.
-      c.countBadge.background = g.unavailable ? ALERT_RED_HEX : AVAILABLE_GREEN_HEX;
+      c.countBadge.background = chip.unavailable ? ALERT_RED_HEX : AVAILABLE_GREEN_HEX;
       c.container.scaleX = scale;
       c.container.scaleY = scale;
+      // ZERO horizontal offset, always: the chip sits exactly on its anchor.
+      // The only Y offset is the fixed half-height that centres the chip on
+      // that anchor (see ensureCluster) — not a nudge.
+      c.container.linkOffsetXInPixels = 0;
+      c.container.linkOffsetYInPixels = -(CLUSTER_HEIGHT_PX / 2) * scale;
       c.container.isVisible = true;
-      live.push({ c, text: label });
     }
-    // Rooms that no longer have any visible member (floor switch, category
-    // filter) must not leave a stale chip floating over the villa.
+    // Chips with no visible member (floor switch, category filter) — and rooms
+    // that were merged INTO another chip this frame — must not leave a stale
+    // chip floating over the villa.
+    const livingRooms = new Set(chips.map((c) => c.room));
     for (const [room, c] of this.clusters) {
-      if (!groups.has(room)) c.container.isVisible = false;
-    }
-
-    // Chips carry text, so they're far wider than a badge and two rooms whose
-    // centroids project close together overlapped into an unreadable stack
-    // (reported: "Master Bathroom 3" sitting across "Outdoor 11" across
-    // "Bedroom 1 4"). Push them apart with relaxBoxes (badges themselves are
-    // never nudged — see the header comment above — but a chip labels a
-    // whole room rather than pointing at one device, so a little travel
-    // here costs nothing in meaning).
-    if (live.length > 1) {
-      const cam = this.scene.activeCamera;
-      if (!cam) return;
-      const eng = this.scene.getEngine();
-      const vp = cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight());
-      const tm = this.scene.getTransformMatrix();
-      const pts: Nudgeable[] = [];
-      const boxes: { halfW: number; halfH: number; cy: number }[] = [];
-      for (const { c, text } of live) {
-        const p = Vector3.Project(c.node.getAbsolutePosition(), Matrix.IdentityReadOnly, tm, vp);
-        pts.push({ x: p.x, y: p.y, off: { x: 0, y: 0 } });
-        boxes.push({
-          halfW: (chipWidthPx(text) / 2) * scale,
-          halfH: (CLUSTER_HEIGHT_PX / 2) * scale,
-          // The chip is centred on its anchor by linkOffsetY (see ensureCluster).
-          cy: 0,
-        });
-      }
-      relaxBoxes(pts, boxes, CLUSTER_GAP_PX * scale, CLUSTER_MAX_NUDGE_HEIGHTS * CLUSTER_HEIGHT_PX * scale);
-      for (let i = 0; i < live.length; i++) {
-        live[i].c.container.linkOffsetXInPixels = pts[i].off.x;
-        live[i].c.container.linkOffsetYInPixels = -(CLUSTER_HEIGHT_PX / 2) * scale + pts[i].off.y;
-      }
+      if (!livingRooms.has(room)) c.container.isVisible = false;
     }
   }
 
