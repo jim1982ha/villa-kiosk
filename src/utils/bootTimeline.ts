@@ -80,6 +80,13 @@ function mark(name: BootMark): number | undefined {
   return marks.get(name);
 }
 
+/** Has this milestone been reached in the current load cycle? Lets code that
+ *  knows nothing about auth ask "are we still on the pre-login screens?" —
+ *  `hasBootMark("scene")` is false until the villa actually starts loading. */
+export function hasBootMark(name: BootMark): boolean {
+  return marks.has(name);
+}
+
 /** The document's own Navigation Timing entry, if the browser exposes one. */
 function navEntry(): PerformanceNavigationTiming | undefined {
   try {

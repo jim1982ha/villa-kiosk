@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.106.0
+
+### Changed — measure what the profile/passcode screens are actually doing
+- **The freeze on the pre-login screens is NOT fixed by this release, and 2.105.0 did not fix it either** — that one corrected the *measurement* that had invented a 35-second load regression, which is a different problem that happened to be reported at the same time. Saying so plainly matters, because the two got conflated.
+- **The reason this has stayed invisible: a session that stalls at the gate emits no telemetry at all.** A `load` record is only written once the villa finishes, so every gated attempt is simply absent — the field dump behind this release contains five loads, all `gated: false`, and zero gated ones. There has never been data behind the reported freeze.
+- **The prime suspect, from the reporter's own clue ("it freezes when I don't wait long enough on the profile selection screen"):** `HAStateProvider` is mounted ABOVE `ProfileGate` (`App.tsx`), so before anyone has logged in the app already opens the Home Assistant websocket, runs `hydrate()` — `get_states` for **every entity in the instance**, then a map build and a `notify()` per entity — and pulls the **entity registry**, one row per entity, plus devices, areas and floors. That is JSON parsing and React commits on the main thread, for a screen whose only job is to answer a tap, and whose content needs nothing from Home Assistant. Waiting lets it finish; tapping early puts the tap behind it. It fits, but it is a hypothesis, and three hypotheses in this same investigation (the JS bundle, the Draco worker pool, then the texture decode) were all measured and disproved. So it is measured before it is acted on.
+- New `ha-connect` telemetry, reported from the two calls that would carry the cost: `hydrate` (state count, fetch vs apply split) and `registry` (row count, duration). Both carry **`preLogin`** — whether the villa had started loading yet — because that single flag is what turns "HA connect takes N ms" into "N ms landed on the profile screen". The Telemetry panel leads with it. If the numbers come back small, the hypothesis is wrong and the search moves on with the blind spot closed either way.
+
 ## 2.105.0
 
 ### Fixed — the load telemetry reported a 35-second regression that never happened

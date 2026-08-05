@@ -9,6 +9,8 @@ import {
 } from "react";
 import { HAWebSocket, type ConnectionState } from "./HAWebSocket";
 import { devLog } from "@/utils/devLog";
+import { report as reportTelemetry } from "@/utils/telemetry";
+import { hasBootMark } from "@/utils/bootTimeline";
 import { resolveEntityFloor } from "@/config/EntityMap";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 
@@ -157,12 +159,30 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => () => ws.disconnect(), [ws]);
 
   const hydrate = useCallback(async () => {
+    // Timed because this runs BEFORE login, while the profile picker is on
+    // screen (HAStateProvider is mounted above ProfileGate): whatever it costs
+    // is paid by the screen that most needs to stay responsive to a tap.
+    // `states` is every entity in the instance, not just the villa's mapped
+    // ones, so the cost scales with the whole HA install rather than with
+    // anything this app shows.
+    const t0 = performance.now();
     const all = await ws.getStates();
+    const tFetched = performance.now();
     const map: Record<string, HassEntity> = {};
     for (const e of all) map[e.entity_id] = e;
     setEntities(map);
     // Push initial values to imperative subscribers (scene paints correct state).
     for (const e of all) notify(e);
+    const tDone = performance.now();
+    reportTelemetry("ha-connect", {
+      phase: "hydrate",
+      states: all.length,
+      fetchMs: Math.round(tFetched - t0),
+      applyMs: Math.round(tDone - tFetched),
+      // Was the villa already up, or is the profile/passcode screen showing?
+      // The whole question is whether this lands on the pre-login screens.
+      preLogin: !hasBootMark("scene"),
+    });
   }, [ws, notify]);
 
   // Registry-only data (get_states never reports hidden_by/entity_category/
@@ -176,7 +196,18 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   // reload.
   const refreshRegistryData = useCallback(async () => {
     try {
+      // Also timed, and for the same reason as hydrate: on a cold start this
+      // runs while the profile picker is up. The entity registry is one row
+      // per entity in the whole instance — the largest single payload the app
+      // asks HA for, and none of it is needed to draw a login screen.
+      const tReg = performance.now();
       const rows = await ws.getEntityRegistry();
+      reportTelemetry("ha-connect", {
+        phase: "registry",
+        rows: rows.length,
+        ms: Math.round(performance.now() - tReg),
+        preLogin: !hasBootMark("scene"),
+      });
       setSuppressedEntityIds(new Set(
         rows
           .filter((r) => r.hidden_by != null || r.entity_category === "config" || r.entity_category === "diagnostic")

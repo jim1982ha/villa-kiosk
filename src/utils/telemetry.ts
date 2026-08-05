@@ -28,7 +28,15 @@ export type TelemetryKind =
   | "context-restored"
   | "lifecycle"       // pagehide / pageshow / visibility transitions
   | "recovered"       // we auto-reloaded after a restore onto a dead scene
-  | "sync";           // shared-config pull/push outcome (see DeviceConfigSync)
+  | "sync"            // shared-config pull/push outcome (see DeviceConfigSync)
+  // Home Assistant's initial connect + hydrate. This runs while the PROFILE
+  // SCREEN is showing — HAStateProvider sits above ProfileGate — so its cost
+  // lands on the one screen whose only job is to stay responsive to a tap.
+  // Reported separately because a load record is only emitted once the villa
+  // finishes, and a session that stalls at the gate produces no `load` at all:
+  // every gated load in the field dump that prompted this was simply missing,
+  // which is why a reported freeze there had no data behind it.
+  | "ha-connect";
 
 let disabled = false;
 

@@ -85,6 +85,16 @@ function summarise(e: TelemetryEvent): string {
     case "lifecycle":
       return `${e.event}${e.persisted !== undefined ? ` persisted=${e.persisted}` : ""}`
         + `${e.state ? ` (${e.state})` : ""}`;
+    case "ha-connect": {
+      // The headline is PRE-LOGIN or not: this work runs on the profile /
+      // passcode screens, and that is the whole question being asked of it.
+      const where = e.preLogin ? "BEFORE login (profile/PIN screen)" : "after login";
+      if (e.phase === "registry") {
+        return `entity registry: ${e.rows} rows in ${ms(e.ms)} — ${where}`;
+      }
+      return `hydrate: ${e.states} states, fetch ${ms(e.fetchMs)} + apply `
+        + `${ms(e.applyMs)} — ${where}`;
+    }
     case "recovered":
       return String(e.reason ?? "auto-reloaded");
     default:
