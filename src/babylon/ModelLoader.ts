@@ -100,6 +100,17 @@ export interface LoadResult {
    * attributed to the right half — see the (i) tooltip's "Load time" row.
    */
   importMs: number;
+  /**
+   * `importMs` broken into the glTF loader's own milestones, so a slow import
+   * points at a specific cause instead of being one number: `glJson` (the
+   * container readable), `glMesh`/`glTex`/`glMat` (when that kind of work
+   * last finished, all measured from the import's start) and the `glMeshes`/
+   * `glTextures`/`glMaterials` counts behind them. Whichever of glMesh/glTex
+   * sits closest to `importMs` owns the tail — and geometry and textures have
+   * opposite fixes, so this is the difference between a targeted change and a
+   * guess. Loose keys, forwarded straight into the load telemetry.
+   */
+  importPhases: Record<string, number>;
 }
 
 // A GLB produced by blender_pipeline.py --bake names its lit-structure material
@@ -215,7 +226,46 @@ export async function loadModelInto(
   const url = URL.createObjectURL(blob);
   try {
     const tImportStart = performance.now();
-    const result = await SceneLoader.ImportMeshAsync("", "", url, scene, undefined, ".glb");
+    // Split Babylon's own import into phases. `importMs` is ~60% of the whole
+    // load's machine time and has always been ONE number, which is exactly the
+    // state that let a 5.6s phase hide inside `revealMs` until it was broken
+    // apart. Without this the only honest answer to "why is the import slow?"
+    // is a guess, and the plausible causes point at opposite fixes: geometry
+    // (Draco decode / triangle count / 765 separate meshes) is solved by
+    // pipeline decimation or a different mesh compression, whereas textures
+    // are solved by a texture format — and one of those, KTX2, has already
+    // been considered and declined, so guessing wrong is expensive.
+    //
+    // The glTF loader publishes exactly the milestones needed. Costs one
+    // timestamp per callback (~765 mesh + a few dozen texture calls, sub-ms in
+    // total) and the observer is removed again below, so nothing accumulates
+    // across the re-loads this app does constantly.
+    const gl: Record<string, number> = { glMeshes: 0, glTextures: 0, glMaterials: 0 };
+    const since = () => Math.round(performance.now() - tImportStart);
+    const pluginObserver = SceneLoader.OnPluginActivatedObservable.addOnce((plugin) => {
+      const p = plugin as Partial<{
+        onParsedObservable: { addOnce(cb: () => void): unknown };
+        onMeshLoadedObservable: { add(cb: () => void): unknown };
+        onTextureLoadedObservable: { add(cb: () => void): unknown };
+        onMaterialLoadedObservable: { add(cb: () => void): unknown };
+      }>;
+      // When the glTF JSON + binary chunk are readable — everything after this
+      // is real decode work rather than container parsing.
+      p.onParsedObservable?.addOnce(() => { gl.glJson = since(); });
+      // Last-write-wins: each records when that KIND of work finished, so
+      // comparing glMesh against glTex says which one owns the tail.
+      p.onMeshLoadedObservable?.add(() => { gl.glMeshes++; gl.glMesh = since(); });
+      p.onTextureLoadedObservable?.add(() => { gl.glTextures++; gl.glTex = since(); });
+      p.onMaterialLoadedObservable?.add(() => { gl.glMaterials++; gl.glMat = since(); });
+    });
+    let result;
+    try {
+      result = await SceneLoader.ImportMeshAsync("", "", url, scene, undefined, ".glb");
+    } finally {
+      // Remove it even if the import throws — a stale observer would attach a
+      // second set of counters to the NEXT load and silently double-count.
+      SceneLoader.OnPluginActivatedObservable.remove(pluginObserver);
+    }
     const importMs = performance.now() - tImportStart;
     const glassMats = new Set<string>();
     // Material OBJECT refs (a Set — one material is shared by many meshes) so
@@ -505,7 +555,7 @@ export async function loadModelInto(
           }
         }
       : undefined;
-    return { meshes: result.meshes, baked, lightmapped, nightBlend, glassDim, importMs };
+    return { meshes: result.meshes, baked, lightmapped, nightBlend, glassDim, importMs, importPhases: gl };
   } finally {
     URL.revokeObjectURL(url);
   }

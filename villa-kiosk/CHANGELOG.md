@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.99.0
+
+### Confirmed in the field — 2.98.0's session fix more than halved the wait
+- Three consecutive Android loads all report `gated: false` with no `waitMs` at all: **`totalMs` 5051/5519/5642 → 2654/2558/2596**. `totalMs` now equals `activeMs`, i.e. there is no human time left inside the measurement. Against the 13,398ms this line of work started from, the villa now appears roughly **5× faster**; desktop steady state is 2,085ms. (The one 4,052ms desktop sample is not steady state — `probeRays: 42` and `rvRooms: 385` mark it as the cold re-probe after a config push. The `context-lost` events are also benign: each shares its second with a `pagehide` during rapid reloads, i.e. the browser reclaiming the GPU context on teardown.)
+
+### Changed — Babylon's own import is no longer a single unattributable number
+- **What is left of the load is now almost entirely the GLB parse** — `parseMs` ~2,100ms of ~2,600ms, of which `importMs` (~1,530ms) is Babylon's own work and `postMs` (~500ms) is ours. `importMs` has been one opaque figure since it was first measured, which is precisely the condition that let a 5,655ms phase hide inside `revealMs` until 2.94.0 broke that one apart. It matters more than usual here because the plausible causes point at **opposite** fixes: if geometry dominates, the answer is decimation or a different mesh compression; if textures dominate, the answer is a texture format — and one of those, KTX2, has already been evaluated and declined, so guessing wrong is expensive.
+- The glTF loader already publishes the milestones needed, so the load telemetry now carries them: **`glJson`** (the container readable — everything after it is real decode work), **`glMesh`/`glTex`/`glMat`** (when that kind of work last finished, all measured from the import's start), and the **`glMeshes`/`glTextures`/`glMaterials`** counts behind them. Whichever of `glMesh`/`glTex` sits closest to `importMs` owns the tail. They arrive as loose keys alongside the existing post-phase timings, so one flat set of fields explains the whole parse — Babylon's half and ours — instead of splitting the story across two places.
+- Cost is one timestamp per loader callback (~765 mesh plus a few dozen texture/material calls; sub-millisecond in total), and the plugin observer is removed in a `finally` so a failed import cannot leave a stale observer attached to double-count the next load — which matters in an app that re-loads this constantly.
+
+### Verified while investigating, so it is not re-proposed later
+- **Draco geometry decode already runs in Web Workers** — Babylon defaults `numWorkers` to `min(cores/2, 4)` and the app's `DracoCompression.Configuration` never overrode it. "Move Draco off the main thread" is therefore already done, not an available win.
+- **`EXT_meshopt_compression` is NOT exempt from the offline rule.** Babylon ships the `MeshoptCompression` wrapper but **no decoder**, and fetches one from its CDN by default — exactly the KTX2 trap. It could be made offline-safe by vendoring the decoder from the `meshoptimizer` npm package (small, ~30kB, unlike KTX2's ~500kB WASM), but that plus a pipeline re-export is the real price, and it should not be described as a free swap.
+
 ## 2.98.0
 
 ### Fixed — the passcode pad reappeared on almost every launch, and it cost more than the whole villa load

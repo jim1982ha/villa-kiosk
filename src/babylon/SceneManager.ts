@@ -1113,7 +1113,11 @@ export class SceneManager {
     // Per-step timings for the post phase. "post" was measured at ~3.4s on a
     // desktop — bigger than Babylon's own import — so attributing it to a
     // specific step is the difference between fixing it and guessing at it.
-    const phases: Record<string, number> = {};
+    // Seeded with the glTF loader's own import milestones (see LoadResult's
+    // importPhases) so ONE flat set of keys explains the whole parse — both
+    // Babylon's half and ours — rather than splitting the story across two
+    // places that have to be cross-referenced by hand.
+    const phases: Record<string, number> = { ...result.importPhases };
     let tStep = tPostStart;
     let yieldMs = 0;
     const mark = (name: string) => {
