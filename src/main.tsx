@@ -4,7 +4,7 @@ import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { installGlobalErrorCapture } from "./utils/diagnostics";
 import { installLifecycleTelemetry } from "./utils/telemetry";
-import { markBoot, installStallObserver } from "./utils/bootTimeline";
+import { markBoot, installStallObserver, installVisibilityTracker } from "./utils/bootTimeline";
 import { startModelPrefetch } from "./utils/modelPrefetch";
 import "./styles.css";
 
@@ -16,6 +16,10 @@ markBoot("js");
 // chased happens on the screens BEFORE the villa loads, so the observer has
 // to be running well before any of the app's own timing starts.
 installStallObserver();
+// Must be installed here, alongside the stall observer and before anything
+// starts loading — a load that BEGINS on a hidden tab has to be measured from
+// the first millisecond, not from the first visibilitychange.
+installVisibilityTracker();
 
 // Record uncaught errors / rejections to localStorage so one that fires just
 // before a reload still surfaces in the next load's diagnostics report.

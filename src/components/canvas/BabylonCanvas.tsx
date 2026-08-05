@@ -14,7 +14,7 @@ import { fetchModelWithRetry } from "@/utils/fetchProgress";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { report as reportTelemetry } from "@/utils/telemetry";
-import { markBoot, beginLoad, endLoad, bootTimeline } from "@/utils/bootTimeline";
+import { markBoot, beginLoad, endLoad, bootTimeline, hiddenMsTotal } from "@/utils/bootTimeline";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
 import ModelUploader from "@/components/settings/ModelUploader";
 import ErrorReport from "@/components/ErrorReport";
@@ -579,6 +579,25 @@ export default function BabylonCanvas({
         // SceneManager), so if nothing ever asks for a frame the observable
         // would never fire and the whole record would be lost — a load that
         // never paints is exactly the case worth hearing about.
+        // ── Why paintMs is split three ways (2.116.0) ──────────────────────
+        // It used to be ONE number covering three unrelated waits, so a large
+        // value could not be attributed and was repeatedly explained by guess
+        // — first as GPU shader compilation, then as background throttling —
+        // with the data unable to confirm or refute either. The three are:
+        //   rdrMs  ready → Babylon's onAfterRender. This is our render call:
+        //          shader compilation and buffer upload land here, and it is
+        //          MAIN-THREAD time, so it should also show in stallMs.
+        //   cmpMs  onAfterRender → the next rAF. The compositor actually
+        //          putting the frame on screen. GPU-queue time lands here and
+        //          is invisible to the long-task observer, which is exactly
+        //          why it could never be told apart from the above.
+        //   hidMs  of the total, how long the page was NOT BEING DRAWN. A
+        //          hidden page cannot paint and its rAF does not fire, so any
+        //          load spanning a hidden stretch reported that as if it were
+        //          work. Measured (installVisibilityTracker), not inferred.
+        // paintMs is kept, unchanged in meaning, so history stays comparable.
+        const hiddenAtReady = hiddenMsTotal();
+        let tRendered = 0;
         const sendWhenPainted = () => {
           let done = false;
           const finish = (painted: boolean) => {
@@ -592,6 +611,11 @@ export default function BabylonCanvas({
               // "ready" → the first frame actually drawn. Shader compilation
               // for every visible material lands here.
               paintMs: Math.round(tPaint - tReady),
+              // The three components above. `rdrMs` is only known if the
+              // render observable actually fired (it hasn't on a timeout).
+              ...(tRendered ? { rdrMs: Math.round(tRendered - tReady) } : {}),
+              ...(tRendered ? { cmpMs: Math.round(tPaint - tRendered) } : {}),
+              hidMs: Math.round(hiddenMsTotal() - hiddenAtReady),
               // Navigation start → the villa genuinely visible. THE number to
               // compare against a stopwatch — but ONLY true for the page's
               // FIRST load, exactly like totalMs/activeMs/bootMs above. On a
@@ -611,6 +635,9 @@ export default function BabylonCanvas({
           const timer = window.setTimeout(() => finish(false), 15000);
           manager.scene.onAfterRenderObservable.addOnce(() => {
             window.clearTimeout(timer);
+            // Stamped BEFORE the rAF below, so the render half and the
+            // compositor half can be told apart.
+            tRendered = performance.now();
             // One more frame boundary so the compositor has actually put it on
             // screen, rather than reporting the moment the draw calls were
             // issued.

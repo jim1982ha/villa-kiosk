@@ -98,6 +98,45 @@ export function installStallObserver(): void {
   }
 }
 
+// ── Hidden-time accounting ─────────────────────────────────────────────────
+// A page that is not being drawn cannot paint, and every "how long did the
+// villa take to appear" figure silently included that time. That produced
+// records like `paintMs: 52542` which were then explained — by me, wrongly,
+// more than once — as GPU or model cost, when the honest answer was that
+// nobody could tell from the data. A duration is only meaningful next to how
+// much of it the page was actually visible for, so that is now measured
+// rather than inferred.
+//
+// Cumulative rather than per-load: callers sample it at two points and
+// subtract, which gives "hidden ms between A and B" without this module
+// needing to know anything about load phases.
+let hiddenSince: number | null = null;
+let hiddenAccumMs = 0;
+let visibilityInstalled = false;
+
+/** Total ms the document has spent hidden since page load, up to now. */
+export function hiddenMsTotal(): number {
+  const live = hiddenSince !== null ? performance.now() - hiddenSince : 0;
+  return hiddenAccumMs + live;
+}
+
+/** Start accounting hidden time. Idempotent; call once at startup, BEFORE the
+ *  villa begins loading, so a load that starts on a backgrounded tab is
+ *  measured from the beginning rather than from first transition. */
+export function installVisibilityTracker(): void {
+  if (visibilityInstalled || typeof document === "undefined") return;
+  visibilityInstalled = true;
+  if (document.visibilityState === "hidden") hiddenSince = performance.now();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      if (hiddenSince === null) hiddenSince = performance.now();
+    } else if (hiddenSince !== null) {
+      hiddenAccumMs += performance.now() - hiddenSince;
+      hiddenSince = null;
+    }
+  });
+}
+
 function stallSummary(): Record<string, number> {
   if (!stalls.count) return {};
   return {

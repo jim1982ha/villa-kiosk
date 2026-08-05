@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.116.0
+
+### Fixed — `paintMs` was one number covering three unrelated waits, so it could not be diagnosed
+- **The operator's objection was correct and is the reason for this release: "I feel you keep misunderstanding the telemetry — either it's badly implemented or you are missing something."** It was badly implemented. `paintMs` measured `setStatus("ready")` → Babylon's `onAfterRenderObservable` → one `requestAnimationFrame` → timestamp, and reported the whole span as a single figure. Those are three different things with three different causes, and no combination of the other fields could separate them. Every large value was therefore explained by *guess* — first as GPU shader compilation, later as background-tab throttling — with the data unable to confirm or refute either. Two of those explanations were given confidently and at least one was wrong.
+- **Split into its actual components**, all reported alongside the unchanged `paintMs` so historical records stay comparable:
+  - **`rdrMs`** — ready → `onAfterRender`. Our own render call: shader compilation and buffer upload land here. This is MAIN-THREAD time, so it must also appear in `stallMs`; if `rdrMs` is large while `stallMs` is small, the two disagree and one of them is lying.
+  - **`cmpMs`** — `onAfterRender` → the next rAF. The compositor actually putting the frame on screen. GPU-queue time lands here and is **invisible to the long-task observer**, which is precisely why it could never be distinguished from the above.
+  - **`hidMs`** — how much of that span the page spent **not being drawn at all**. A hidden page cannot paint and its rAF does not fire, so any load spanning a hidden stretch was reporting that as though it were work.
+- **`hidMs` is measured, not inferred.** A new visibility tracker (`installVisibilityTracker`, wired in `main.tsx` beside the stall observer) accumulates hidden time from the first millisecond — deliberately installed before anything begins loading, so a load that *starts* on a backgrounded tab is accounted from the beginning rather than from its first `visibilitychange`. Callers sample the cumulative total at two points and subtract, so the module needs to know nothing about load phases.
+- **What this makes answerable.** A record showing `rdrMs` large is real work on our side. `cmpMs` large is the GPU/compositor, where the long-task observer is blind. `hidMs` large means the number was never about performance at all. And since every record already carries `standalone`, the operator's observation that **the Ingress (HA add-on) path feels more responsive than the standalone PWA** becomes a testable claim rather than a hunch — the split can now show whether the two differ, and in which half.
+- No behaviour changed: this release only measures. The unexplained 10.9s paint on the albedo GLB is deliberately left unexplained rather than given a third speculative cause; the next load record should attribute it.
+
 ## 2.115.0
 
 ### Fixed — a stalled model download had no timeout at any layer, so the load just hung
