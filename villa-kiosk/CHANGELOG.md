@@ -1,3 +1,17 @@
+## 2.121.0
+
+### Fixed — badges laid out on the lawn, far from the devices they point at
+
+After 2.120.0 stopped room *chips* from travelling, a screenshot showed the problem still present one level down, in the individual badges: a light, a fan and a water badge sitting in a row off the villa's left wall, over grass, with nothing under them.
+
+Those badges were in a *fanned huddle*. When several devices project close enough together to overlap, the badges are laid out side by side in a short row rather than clustered away — a deliberate concession ("it's ok to artificially move the icon a bit to make them not overlap"). The guard on that concession was `pileFitsItsRoom`, which checks the row's total width against the room's own width from the drawn floor plan. It had the same shape of flaw the chip nudge did.
+
+First, when a room has no drawn polygon the guard fell back to the spread of that room's own devices. For an ordinary room that is a reasonable stand-in. For a sprawling outdoor or plot-wide bucket it is not: the devices span the whole property, so the reported "room width" was the entire site, the guard waved through a row as wide as the villa, and the badges at its ends were laid out over open ground. A room with no polygon has no measurable space to lay anything out in, so that fallback is gone — such piles now cluster instead, which is the same "merge rather than travel" answer chips were given in 2.120.0.
+
+Second, and independent of the polygon: bounding the row's **total width** says nothing about how far any **one** badge moves. The row is centred on the huddle's mean projected position, so a member sitting away from that mean is displaced by the mean-offset plus its own slot offset, and a wide room licenses a wide row whose outermost members travel furthest. A badge points at exactly one device, so unlike a chip it is actively misleading the moment it stops being next to that device. Each member's displacement is now bounded to `FAN_MAX_TRAVEL_WIDTHS` (1.5) of its own width, and a pile that cannot be fanned inside that budget is not fanned at all — it clusters. The budget is expressed in badge widths and deliberately **not** multiplied by the icon-size or zoom factor, since a budget that grows with icon size is precisely the defect that put a chip on the lawn.
+
+The predicate now measures the exact offsets `fanBadges` will apply, via a shared `fanLayout()` that both call — a guard that judges a different layout than the one actually drawn is how a badge ends up somewhere the guard believed it could not reach.
+
 ## 2.120.0
 
 ### Fixed — a room chip could end up outside the villa entirely

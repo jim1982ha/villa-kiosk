@@ -386,6 +386,22 @@ const GROUP_OVERLAP_ALLOW_WIDTHS = 0.5;
  */
 const FAN_MAX_ROOM_SPAN_FRACTION = 0.9;
 /**
+ * How far a single badge may be slid from its own anchor when its huddle is
+ * fanned, in multiples of its own width. This is the badge-level form of the
+ * rule chips got in 2.120.0: a badge points at ONE device, so it must stay
+ * visibly next to that device or it is simply lying about what it labels.
+ *
+ * FAN_MAX_ROOM_SPAN_FRACTION alone did not deliver that. It bounds the row's
+ * TOTAL WIDTH against the room, which says nothing about how far any one
+ * member travels — the row is centred on the huddle's mean x, so a member
+ * sitting away from that mean is displaced by the mean-offset PLUS its slot
+ * offset, and a wide room licenses a wide row in which the outermost badges
+ * travel furthest. Deliberately expressed in badge widths, NOT scaled by an
+ * extra zoom/user-size factor: the budget must not grow just because the
+ * icons were made bigger (the exact defect that put a chip on the lawn).
+ */
+const FAN_MAX_TRAVEL_WIDTHS = 1.5;
+/**
  * Breathing room between two badges laid out side by side within a small
  * huddle (fanBadges) — explicitly requested ("it's ok to artificially move
  * the icon a bit to make them not overlap"), and the piece a pure
@@ -2926,29 +2942,28 @@ export class EntityVisuals {
 
     let available = 0;
     for (const i of members) {
-      const key = roomKey(this.roomOf(shown[i].id));
-      const span = this.roomSpans.get(key) ?? this.entitySpreadFor(key);
+      // No drawn polygon, no fan. The fallback here used to be the spread of
+      // the room's OWN devices, which was unbounded in the one case that
+      // mattered: a sprawling outdoor/plot-wide bucket reported a span of the
+      // entire property, the guard waved through a row as wide as the villa,
+      // and its outermost badges were laid out on the lawn (reported with a
+      // screenshot). A room with no polygon has no measurable space, so its
+      // piles cluster instead — the same "merge rather than travel" answer
+      // chips got in 2.120.0.
+      const span = this.roomSpans.get(roomKey(this.roomOf(shown[i].id))) ?? 0;
       if (span > available) available = span;
     }
     if (!(available > 0)) return false;
-    return rowWorld <= available * FAN_MAX_ROOM_SPAN_FRACTION;
-  }
+    if (rowWorld > available * FAN_MAX_ROOM_SPAN_FRACTION) return false;
 
-  /** Ground width spanned by a room's own devices — the stand-in for a room
-   *  width when the floor plan has no polygon for it. */
-  private entitySpreadFor(key: string): number {
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    let found = false;
-    for (const [id, lbl] of this.labels) {
-      if (roomKey(this.roomOf(id)) !== key) continue;
-      const p = lbl.anchor.getAbsolutePosition();
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.z < minZ) minZ = p.z;
-      if (p.z > maxZ) maxZ = p.z;
-      found = true;
+    // …and no single badge may be slid far from the device it points at, which
+    // the row-width test above does not imply — see FAN_MAX_TRAVEL_WIDTHS.
+    // Judged on the exact offsets fanBadges will apply, not an estimate.
+    const { members: order, offsets } = this.fanLayout(shown, boxes, members);
+    for (let k = 0; k < order.length; k++) {
+      if (Math.abs(offsets[k]) > boxes[order[k]].halfW * 2 * FAN_MAX_TRAVEL_WIDTHS) return false;
     }
-    return found ? Math.max(maxX - minX, maxZ - minZ) : 0;
+    return true;
   }
 
   private fanBadges(
@@ -2956,24 +2971,41 @@ export class EntityVisuals {
     boxes: { halfW: number; halfH: number; cy: number }[],
     piles: number[][],
   ): void {
-    const fanGap = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
     for (const pile of piles) {
       if (pile.length < 2) continue;
-      const members = [...pile].sort((a, b) => shown[a].id.localeCompare(shown[b].id));
-      const widths = members.map((i) => boxes[i].halfW * 2);
-      const total = widths.reduce((s, w) => s + w, 0) + fanGap * (members.length - 1);
-      // Centred on the huddle's own average projected position: members of a
-      // real huddle rarely project to the same point, so each offset has to
-      // subtract that member's OWN x — the gap that must equal fanGap is the
-      // one between final screen positions, not between offsets.
-      const cx = members.reduce((s, i) => s + shown[i].x, 0) / members.length;
-      let cursor = cx - total / 2;
-      for (let k = 0; k < members.length; k++) {
-        const i = members[k];
-        shown[i].off.x = cursor + boxes[i].halfW - shown[i].x;
-        cursor += widths[k] + fanGap;
-      }
+      const { members, offsets } = this.fanLayout(shown, boxes, pile);
+      for (let k = 0; k < members.length; k++) shown[members[k]].off.x = offsets[k];
     }
+  }
+
+  /**
+   * The fan row's geometry, with no side effects — shared by fanBadges (which
+   * applies it) and pileFitsItsRoom (which has to judge it BEFORE deciding
+   * whether to fan at all). Kept as one function because the predicate testing
+   * a different layout than the one drawn is exactly how a badge ends up
+   * somewhere the guard believed it could never reach.
+   */
+  private fanLayout(
+    shown: ShownLabel[],
+    boxes: { halfW: number; halfH: number; cy: number }[],
+    pile: number[],
+  ): { members: number[]; offsets: number[] } {
+    const fanGap = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
+    const members = [...pile].sort((a, b) => shown[a].id.localeCompare(shown[b].id));
+    const widths = members.map((i) => boxes[i].halfW * 2);
+    const total = widths.reduce((s, w) => s + w, 0) + fanGap * (members.length - 1);
+    // Centred on the huddle's own average projected position: members of a
+    // real huddle rarely project to the same point, so each offset has to
+    // subtract that member's OWN x — the gap that must equal fanGap is the
+    // one between final screen positions, not between offsets.
+    const cx = members.reduce((s, i) => s + shown[i].x, 0) / members.length;
+    const offsets: number[] = [];
+    let cursor = cx - total / 2;
+    for (let k = 0; k < members.length; k++) {
+      offsets.push(cursor + boxes[members[k]].halfW - shown[members[k]].x);
+      cursor += widths[k] + fanGap;
+    }
+    return { members, offsets };
   }
 
   /** Each label's collision box in screen px, relative to its anchor point —
