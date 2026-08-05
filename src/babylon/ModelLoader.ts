@@ -8,6 +8,7 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DracoCompression } from "@babylonjs/core/Meshes/Compression/dracoCompression";
+import { DracoDecoder } from "@babylonjs/core/Meshes/Compression/dracoDecoder";
 import { KhronosTextureContainer2 } from "@babylonjs/core/Misc/khronosTextureContainer2";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
@@ -44,6 +45,61 @@ DracoCompression.Configuration = {
     fallbackUrl: dracoFallbackUrl,
   },
 };
+
+// ── Draco decode instrumentation (diagnostic only, no behaviour change) ─────
+// Field measurement narrowed the load to ONE unexplained second: every texture
+// is decoded and uploaded by ~30% of the import, yet the import runs on for
+// another ~1,000ms. The obvious suspect is Draco geometry decode (2.28M
+// vertices over 766 primitives) — except that second is nearly IDENTICAL on a
+// MacBook and an Android phone (977/992 vs 1083/957ms), and CPU-bound decode
+// would be several times slower on the phone. Something that does not scale
+// with CPU speed is usually per-call overhead, not compute.
+//
+// Guessing here is expensive: "swap Draco for meshopt" costs a vendored decoder
+// AND a full pipeline re-export of the villa, and the data currently argues
+// against it. So measure the one function that settles it. The glTF Draco
+// extension calls exactly this method per primitive (see
+// KHR_draco_mesh_compression.js), so wrapping it yields:
+//   glDracoN   — how many primitives were Draco-compressed at all (0 = not Draco)
+//   glDracoEnd — when the LAST decode finished, from the import's start; if this
+//                lands at importMs, Draco owns the tail, and if it doesn't,
+//                something after geometry does
+//   glDracoMs  — elapsed span from first decode start to last decode end
+//   glDracoSum — summed per-call time; SUM ÷ SPAN is the effective parallelism,
+//                which separates "the workers aren't being used" from "each
+//                call is cheap but there are 766 of them"
+// The wrapper always delegates and only observes the returned promise, so a
+// decode failure propagates exactly as before.
+const dracoStats = { calls: 0, sumMs: 0, firstAt: 0, lastAt: 0 };
+let dracoPatched = false;
+function instrumentDraco(): void {
+  if (dracoPatched) return;
+  dracoPatched = true;
+  const proto = DracoDecoder.prototype as unknown as Record<string, unknown>;
+  const KEY = "_decodeMeshToGeometryForGltfAsync";
+  const orig = proto[KEY];
+  // Private API: if Babylon renames it, skip silently rather than break loading.
+  if (typeof orig !== "function") return;
+  proto[KEY] = function wrapped(this: unknown, ...args: unknown[]) {
+    const t0 = performance.now();
+    if (dracoStats.calls === 0) dracoStats.firstAt = t0;
+    dracoStats.calls++;
+    const out = (orig as (...a: unknown[]) => unknown).apply(this, args);
+    const settle = () => {
+      const t1 = performance.now();
+      dracoStats.sumMs += t1 - t0;
+      dracoStats.lastAt = t1;
+    };
+    const maybe = out as { then?: (a: () => void, b: () => void) => unknown };
+    // Observing with both handlers cannot introduce an unhandled rejection, and
+    // the ORIGINAL promise is what gets returned, so the caller's own error
+    // handling is untouched.
+    if (typeof maybe?.then === "function") maybe.then(settle, settle);
+    else settle();
+    return out;
+  };
+}
+instrumentDraco();
 
 // Only the ETC1S path is wired up, because that is what the pipeline produces
 // (`blender_pipeline.py --ktx2` / `gltf-transform etc1s`). The UASTC entries
@@ -245,6 +301,10 @@ export async function loadModelInto(
     // rounded megapixels instead would round every individual texture to zero
     // (a 512×512 image is 0.26MP) and report a total of 0 forever.
     let texPx = 0;
+    // Per-load, not cumulative: this app re-imports constantly (every Android
+    // PWA relaunch), and carrying counts over would report the sum of every
+    // load this session as if it were one.
+    dracoStats.calls = 0; dracoStats.sumMs = 0; dracoStats.firstAt = 0; dracoStats.lastAt = 0;
     const since = () => Math.round(performance.now() - tImportStart);
     const pluginObserver = SceneLoader.OnPluginActivatedObservable.addOnce((plugin) => {
       type GlTexture = Partial<{
@@ -312,6 +372,13 @@ export async function loadModelInto(
     for (const m of result.meshes) verts += (m as { getTotalVertices?: () => number }).getTotalVertices?.() ?? 0;
     gl.glKVerts = Math.round(verts / 1000);
     gl.glTexMp = Math.round((texPx / 1e6) * 10) / 10;
+    gl.glDracoN = dracoStats.calls;
+    if (dracoStats.calls > 0) {
+      // The decisive one: compare against importMs. Equal ⇒ Draco owns the tail.
+      gl.glDracoEnd = Math.round(dracoStats.lastAt - tImportStart);
+      gl.glDracoMs = Math.round(dracoStats.lastAt - dracoStats.firstAt);
+      gl.glDracoSum = Math.round(dracoStats.sumMs);
+    }
     const glassMats = new Set<string>();
     // Material OBJECT refs (a Set — one material is shared by many meshes) so
     // glassDim below can re-drive their colours every day/night tick.
