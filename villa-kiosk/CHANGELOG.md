@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.103.0
+
+### Reverted — doubling the Draco worker pool changed nothing, and the experiment says why
+- **2.102.0's hypothesis is refuted by its own pre-registered test.** Android went from 4 workers to 8 and `glDracoMs` moved **1431 → 1430 / 1431**. Desktop went from 2 to 4 and moved **1436 / 1296 → 1325 / 1259**, which is inside the run-to-run noise already visible across earlier samples. Twice the workers bought nothing on either machine, so the ~1,430ms Draco phase is **not worker-bound**, and the pool size is back to Babylon's own default — a bigger pool costs one WASM instance per worker on a device that is a wall-mounted iPad, and buys zero.
+- **What that leaves is the answer, by the elimination this whole sequence was built to perform.** The cost is on the **calling thread**: roughly **1.9ms per primitive, 765 times over** — slicing each buffer view, marshalling it to a worker and back, then building vertex buffers and uploading each primitive's attributes to the GPU (765 primitives at several attributes each is thousands of small driver calls). No amount of worker parallelism touches any of that, which is exactly why the phase was identical on a phone and a desktop from the very first measurement.
+- The comment at that constant now records the refutation explicitly, so nobody re-raises `numWorkers` expecting a win that has already been measured and disproved. `glDracoWorkers` stays in the telemetry — the comparison that killed the theory was only possible because the pool size was in the log.
+
+### Where the villa's load actually stands
+- **The application-side load path is essentially done.** Across this sequence the villa went from **13,398ms** to **~2,150ms desktop / ~2,550ms phone**, with the passcode prompt (2.4–3.1s of pure re-entry) removed, the JS bundle cut 56%, and every remaining phase measured rather than guessed at: `bootMs` ~260–450, `engineMs` ~60–180, `parseMs` ~1,700–2,150, `revealMs` 5–8ms. Nothing left in the app's own code is worth more than a few tens of milliseconds.
+- **The one remaining lever is the GLB itself, and it is a pipeline change rather than a code change: 765 Draco primitives.** The per-primitive main-thread cost is fixed, so the phase scales with the COUNT, not the vertex total (2.28M vertices is incidental — the same geometry in far fewer primitives would cost far less to load). Merging the static structure/decor meshes in the Blender pipeline is what converts that ~1,430ms into a fraction of it; entity meshes must stay individually named and separate, since the app resolves them by name for binding, picking and pose variants. As a rough scale: 765 → ~150 primitives would put the phone's total near 1.4s.
+
 ## 2.102.0
 
 ### Found — the villa's load tail is Draco per-call overhead, not decode work

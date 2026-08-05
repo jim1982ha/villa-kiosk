@@ -38,24 +38,26 @@ import { isStructureMesh } from "./meshRoles";
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
 // still only instantiated lazily, when a model actually uses Draco — so an
 // uncompressed GLB pays nothing for this.
-// How many Draco decode workers. Babylon's default is `min(cores/2, 4)` —
-// deliberately conservative, and on this villa it is the binding constraint.
+// Babylon's own default pool size, restated explicitly so the reported
+// `glDracoWorkers` is always the number actually in force.
 //
-// Measured: the GLB is Draco-compressed in 765 separate primitives, and the
-// last decode finishes 1-3ms before the import resolves, so Draco IS the
-// import's tail. 765 decodes drain in ~1,430ms, which at the default 4 workers
-// works out to ~7.5ms of worker time each — and that per-primitive figure is
-// IDENTICAL on a desktop Mac and an Android phone. Decoding ~3,000 vertices is
-// well under a millisecond of real work, so a cost that does not move with CPU
-// speed is per-call overhead (message passing, structured clone, per-invocation
-// WASM setup), not compute. Overhead that sits in the worker scales with the
-// pool, so widening it should cut the phase roughly in proportion.
+// 2.102.0 DOUBLED this on the theory that the import's ~1,430ms Draco phase was
+// per-call overhead sitting inside the workers. **The field data refuted it.**
+// Android went 4 → 8 workers and `glDracoMs` moved 1431 → 1430/1431; the Mac
+// went 2 → 4 and moved 1436/1296 → 1325/1259, which is noise. Doubling the pool
+// bought nothing, so the cost is NOT worker-bound: it is ~1.9ms of CALLING-
+// THREAD work per primitive, 765 times over — slicing each buffer view,
+// marshalling it to a worker and back, then building vertex buffers and
+// uploading each primitive's attributes to the GPU. Worker count cannot touch
+// any of that, and a bigger pool only costs memory (one WASM instance each) on
+// a device that is a wall-mounted iPad.
 //
-// Capped at 8: this is a burst that runs once per load, but each worker holds
-// its own WASM instance, and the target is a wall-mounted iPad rather than a
-// workstation. `hardwareConcurrency` is missing on some browsers, hence the
-// fallback, and the floor of 2 keeps a single-core device from serialising.
-const DRACO_WORKERS = Math.max(2, Math.min(navigator.hardwareConcurrency || 4, 8));
+// DO NOT raise this again expecting a win — it has been measured and it does
+// not work. The remaining lever is FEWER PRIMITIVES in the GLB itself, which is
+// a pipeline change, not a code one.
+const DRACO_WORKERS = navigator.hardwareConcurrency
+  ? Math.min(Math.floor(navigator.hardwareConcurrency * 0.5), 4)
+  : 1;
 
 DracoCompression.Configuration = {
   decoder: {
@@ -393,12 +395,9 @@ export async function loadModelInto(
     gl.glKVerts = Math.round(verts / 1000);
     gl.glTexMp = Math.round((texPx / 1e6) * 10) / 10;
     gl.glDracoN = dracoStats.calls;
-    // The pool size actually in force, so the next field report can be read as
-    // a controlled comparison rather than a hope: throughput is
-    // glDracoN ÷ glDracoMs, and if that scales with this number the phase is
-    // worker-bound overhead as diagnosed. If it does NOT move, the cost is on
-    // the calling thread (serialising 765 messages) and the answer is fewer
-    // primitives from the pipeline instead — a different fix entirely.
+    // Kept after the 2.102.0 experiment so the pool size is never again an
+    // unknown when reading a load record — the comparison that refuted the
+    // worker theory was only possible because this number was in the log.
     gl.glDracoWorkers = DRACO_WORKERS;
     if (dracoStats.calls > 0) {
       // The decisive one: compare against importMs. Equal ⇒ Draco owns the tail.
