@@ -1816,6 +1816,18 @@ export class EntityVisuals {
    *  retroactively — same as every other config-driven visual here. */
   setResolvedRooms(rooms: Record<string, string>): void {
     this.resolvedRooms = rooms;
+    // MUST mark dirty (regression from 2.113.0's frame-skip). roomOf() reads
+    // this map, and it is what every grouping/clustering decision keys on —
+    // but room resolution only lands AFTER the reveal (calibrateRooms runs in
+    // loadModel's deferred post-first-frame block, because its raycasts are
+    // too heavy for the load path). Before 2.113.0 cullLabels ran every frame
+    // and picked the new map up on the next one; afterwards it only runs when
+    // something marks the layout dirty, and this setter did not. The badges
+    // therefore kept a layout computed while EVERY entity still resolved to
+    // NO_ROOM_LABEL — i.e. ungrouped and overlapping — until some unrelated
+    // event happened to dirty the layout, which is the reported "badges sit
+    // on top of each other for a few seconds, then rearrange by themselves".
+    this.markLayoutDirty();
   }
 
   /** Which drawn room polygon (if any) contains this world-space ground
