@@ -9,7 +9,7 @@
 // /model on the directly-exposed port.
 
 import { ingressPath } from "@/ha/ingress";
-import { ROLE_ORDER, type Role } from "./roles";
+import { ROLE_ORDER, isRole, type Role } from "./roles";
 
 export interface VerifyResult {
   ok: boolean;
@@ -27,6 +27,29 @@ export async function pinRequired(): Promise<Record<Role, boolean>> {
   const out = {} as Record<Role, boolean>;
   for (const r of ROLE_ORDER) out[r] = Boolean(data.roles?.[r]?.pinRequired);
   return out;
+}
+
+/** Which profile the server's own session cookie already authorizes, if any.
+ *
+ *  The cookie — not anything this browser stores — is what actually authorizes
+ *  /core, /model and the config stores, and it outlives the document (its life
+ *  is the add-on's `session_days`). Asking the server on boot is what stops a
+ *  relaunched PWA re-prompting for a passcode it has already answered; see the
+ *  server's auth_session_handler for why it reads the cookie rather than
+ *  treating an Ingress request as owner.
+ *
+ *  Never throws: any failure (offline, older add-on with no such route, bad
+ *  payload) resolves to null, which simply means "show the profile picker" —
+ *  the pre-existing behaviour, so a stale add-on degrades instead of breaking. */
+export async function currentSession(): Promise<Role | null> {
+  try {
+    const resp = await fetch(ingressPath("auth/session"), { credentials: "same-origin" });
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as { role?: unknown };
+    return isRole(data.role) ? data.role : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Check a PIN-gated profile's passcode; sets the session cookie on success. */

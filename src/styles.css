@@ -3034,3 +3034,38 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .cockpit-activity-text strong { color: var(--text-primary); font-weight: 600; }
 
 .cockpit-updates { margin-top: 16px; }
+
+/* ── Telemetry log rows ────────────────────────────────────────────────────
+   A diagnostic row is four parts: the event kind, which device/role/build sent
+   it, the human-readable summary, and the timestamp. Three of those are
+   fixed-width by nature, and on a phone they consume the entire line — which
+   left the SUMMARY, the only flexible item, squeezed to roughly one character
+   wide. Its `word-break` then did exactly what it was told and broke every
+   single letter onto its own line, rendering the summary as a vertical column
+   of characters hundreds of pixels tall (reported from an Android screenshot).
+   These live in CSS rather than inline style props specifically so the phone
+   tier below can override them — a media query cannot touch an inline style,
+   which is a trap this codebase has hit before. */
+.telemetry-row {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 8px 0; font-size: var(--text-sm);
+}
+.telemetry-row + .telemetry-row { border-top: 1px solid var(--hairline); }
+.telemetry-row > .telemetry-kind { flex: 0 0 auto; font-weight: 600; }
+.telemetry-row > .telemetry-meta { flex: 0 0 auto; font-size: var(--text-2xs); }
+.telemetry-row > .telemetry-time { flex: 0 0 auto; font-size: var(--text-2xs); }
+/* `anywhere` rather than `break-word`: it may break mid-token to avoid an
+   overflow, but unlike `break-all` it still prefers ordinary word boundaries
+   whenever the line has room for them. */
+.telemetry-row > .telemetry-summary { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  /* Give the summary the whole of its own line instead of the sliver left
+     over after the other three. `order` moves it below them without changing
+     DOM order (which stays the natural reading order on a wide screen), and
+     the timestamp is pushed to the right end of the first line so that line
+     reads "kind · device · when". */
+  .telemetry-row { flex-wrap: wrap; row-gap: 4px; }
+  .telemetry-row > .telemetry-summary { flex: 1 1 100%; order: 1; }
+  .telemetry-row > .telemetry-time { margin-left: auto; }
+}

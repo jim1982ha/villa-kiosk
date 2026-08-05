@@ -21,7 +21,7 @@ const ROLE_ICONS: Record<Role, typeof UserRound> = {
 };
 
 export default function ProfileGate({ children }: { children: ReactNode }) {
-  const { role, login, switching, cancelSwitch } = useProfile();
+  const { role, login, switching, cancelSwitch, resolving } = useProfile();
   const { config } = useConfig();
   const [pending, setPending] = useState<Role | null>(null);
   const [pinRequired, setPinRequired] = useState<Record<Role, boolean> | null>(null);
@@ -65,13 +65,21 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
   // here until login() succeeds is a person reading/tapping/typing, not the app
   // being slow — separating the two is the whole point (see bootTimeline's
   // `waitMs`/`activeMs`). Declared above the early returns so the hook order is
-  // unconditional; first-write-wins makes the repeat runs harmless.
+  // unconditional; first-write-wins makes the repeat runs harmless. Skipped
+  // while `resolving`, since nothing is on display to wait on yet.
   useEffect(() => {
-    if (role && !switching) return;
+    if ((role && !switching) || resolving) return;
     markBoot(pending ? "pin" : "gate");
-  }, [role, switching, pending]);
+  }, [role, switching, pending, resolving]);
 
   if (role && !switching) return <>{children}</>;
+
+  // The server is still being asked whether this browser is already signed in.
+  // Render nothing rather than the picker: on a returning device the answer is
+  // yes, and flashing a profile screen for one round trip before jumping to the
+  // villa reads as a glitch. It is bounded by that single request, which fails
+  // closed to null (→ the picker) rather than hanging.
+  if (resolving) return null;
 
   // A profile switch keeps the CURRENT role's villa scene mounted (and thus
   // still fully loaded) underneath this overlay — see ProfileContext's

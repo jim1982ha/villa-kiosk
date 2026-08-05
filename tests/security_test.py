@@ -16,7 +16,10 @@ style rule moved:
 It imports the real module rather than re-implementing its logic, so it
 cannot drift from what actually runs.
 """
+import asyncio
 import importlib.util
+import inspect
+import json
 import os
 import sys
 import tempfile
@@ -75,6 +78,47 @@ proxy._bump_session_epoch()
 t("INVALID after revocation", proxy._session_role(live), None)
 t("freshly minted session works again",
   proxy._session_role(proxy._make_session_token("owner")), "owner")
+
+section("/auth/session: restore a profile ONLY from a valid signed cookie")
+
+
+class _FakeReq:
+    """Minimal stand-in — auth_session_handler touches nothing but cookies."""
+
+    def __init__(self, cookie=None):
+        self.cookies = {proxy.SESSION_COOKIE: cookie} if cookie else {}
+
+
+def _session_endpoint(cookie):
+    resp = asyncio.run(proxy.auth_session_handler(_FakeReq(cookie)))
+    return json.loads(resp.body)["role"]
+
+
+# This endpoint is what lets a returning device skip the passcode pad, so a
+# regression here silently signs someone in. Each case mirrors an attack the
+# token tests above already cover, asserted end-to-end through the handler.
+t("no cookie -> null (the picker is shown)", _session_endpoint(None), None)
+t("valid cookie -> its own role", _session_endpoint(proxy._make_session_token("ops")), "ops")
+_ok_role, _ok_exp, _ok_sig = proxy._make_session_token("guest").split(".")
+t("role swapped inside a valid cookie -> null",
+  _session_endpoint(f"owner.{_ok_exp}.{_ok_sig}"), None)
+t("forged signature -> null", _session_endpoint(f"owner.{_ok_exp}.{'0' * 64}"), None)
+_past = int(time.time()) - 10
+t("expired cookie -> null",
+  _session_endpoint(f"owner.{_past}.{proxy._sign_session('owner', _past)}"), None)
+_revoked = proxy._make_session_token("owner")
+proxy._bump_session_epoch()
+t("cookie revoked by logout-all -> null", _session_endpoint(_revoked), None)
+
+# Reading the role from _role_for() instead of the cookie would hand EVERY
+# Ingress visitor an owner session and remove the profile picker entirely —
+# a silent privilege grant, and the one mistake this handler must not make.
+# Asserted against the CODE only: the docstring deliberately names _role_for
+# to explain the trap, and matching prose would make this test unfailable.
+_sess_src = inspect.getsource(proxy.auth_session_handler)
+_sess_code = _sess_src.split('"""')[-1]
+t("reads the signed cookie", "_session_role" in _sess_code, True)
+t("never uses the Ingress owner shortcut", "_role_for" in _sess_code, False)
 
 # ---------------------------------------------------------- rate limiting
 section("brute-force limiter: must punish the guesser, not the victim")

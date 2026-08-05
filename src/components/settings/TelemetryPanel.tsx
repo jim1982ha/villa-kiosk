@@ -197,19 +197,14 @@ export default function TelemetryPanel() {
       {!!events?.length && (
         <div className="config-table">
           {events.slice(0, VISIBLE_ROWS).map((e, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex", gap: 10, alignItems: "baseline",
-                padding: "8px 0", borderTop: i ? "1px solid var(--hairline)" : "none",
-                fontSize: "var(--text-sm)",
-              }}
-              title={e.ua}
-            >
-              <span style={{ flex: "0 0 auto", fontWeight: 600, color: TONE[e.kind] ?? "var(--text-primary)" }}>
+            /* Layout lives in styles.css (.telemetry-row), NOT inline: the
+               phone tier has to re-flow this row onto two lines, and a media
+               query cannot override an inline style prop. */
+            <div key={i} className="telemetry-row" title={e.ua}>
+              <span className="telemetry-kind" style={{ color: TONE[e.kind] ?? "var(--text-primary)" }}>
                 {e.kind}
               </span>
-              <span className="muted" style={{ flex: "0 0 auto", fontSize: "var(--text-2xs)" }}>
+              <span className="muted telemetry-meta">
                 {/* The build that produced the event. Without it, an event
                     logged minutes after a release is indistinguishable from
                     one produced BY that release — the add-on's frontend ships
@@ -217,8 +212,8 @@ export default function TelemetryPanel() {
                     way. Older events predate the field and just show nothing. */}
                 {shortUA(e.ua)}{e.role ? ` · ${e.role}` : ""}{e.v ? ` · v${e.v}` : ""}
               </span>
-              <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>{summarise(e)}</span>
-              <span className="muted" style={{ flex: "0 0 auto", fontSize: "var(--text-2xs)" }}>
+              <span className="telemetry-summary">{summarise(e)}</span>
+              <span className="muted telemetry-time">
                 {e.at?.replace("T", " ").replace("+00:00", "Z") ?? ""}
               </span>
             </div>

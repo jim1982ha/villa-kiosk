@@ -7,9 +7,10 @@
 // never syncs across tabs or devices. The PIN itself is never stored.
 
 import {
-  createContext, useCallback, useContext, useMemo, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
 } from "react";
 import { isRole, type Role } from "./roles";
+import { currentSession } from "./PinVerifier";
 import { ingressPath } from "@/ha/ingress";
 import { markBoot } from "@/utils/bootTimeline";
 
@@ -33,6 +34,11 @@ interface ProfileContextType {
   beginSwitch: () => void;
   /** Cancel an in-progress switch, returning to the current role unchanged. */
   cancelSwitch: () => void;
+  /** True only while the server is being asked whether this browser's session
+   *  cookie already authorizes a profile. The gate must render NOTHING during
+   *  it, or a returning device flashes the profile picker for a round trip
+   *  before dropping straight into the villa. */
+  resolving: boolean;
 }
 
 const ProfileContext = createContext<ProfileContextType | null>(null);
@@ -53,6 +59,39 @@ function loadStoredRole(): Role | null {
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role | null>(loadStoredRole);
   const [switching, setSwitching] = useState(false);
+  // Only when this tab has no remembered profile is there anything to ask the
+  // server about — and only then must the gate hold back, so it never flashes
+  // the profile picker for the ~80ms of the round trip before resolving into
+  // the villa. With a stored role there is no wait and no flash.
+  const [resolving, setResolving] = useState(() => loadStoredRole() === null);
+
+  // Restore the profile from the SERVER's session cookie, which outlives this
+  // document. sessionStorage alone made a returning device re-enter a passcode
+  // the server had already accepted and would still honour: Android evicts a
+  // backgrounded PWA and relaunches it with empty sessionStorage, so the pad
+  // reappeared on essentially every launch. Measured at 2.4-3.1s of the user's
+  // wall clock per launch — more than the villa's whole load. The cookie's own
+  // expiry (`session_days`) stays the single source of truth for how long a
+  // sign-in lasts; this only stops the UI from contradicting it.
+  useEffect(() => {
+    if (!resolving) return;
+    let cancelled = false;
+    void currentSession().then((serverRole) => {
+      if (cancelled) return;
+      if (serverRole) {
+        // Deliberately NOT login(): that marks the boot timeline's `auth`
+        // milestone, which exists to measure how long a HUMAN took at the
+        // gate. Nobody was asked anything here, so recording it would report
+        // phantom wait time on exactly the loads this fixes.
+        try {
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify({ role: serverRole, at: Date.now() }));
+        } catch { /* storage blocked — in-memory session still works */ }
+        setRole(serverRole);
+      }
+      setResolving(false);
+    });
+    return () => { cancelled = true; };
+  }, [resolving]);
 
   const login = useCallback((next: Role) => {
     // The single choke point for "a session now exists" — every sign-in path
@@ -97,8 +136,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const cancelSwitch = useCallback(() => setSwitching(false), []);
 
   const value = useMemo(
-    () => ({ role, login, logout, switching, beginSwitch, cancelSwitch }),
-    [role, login, logout, switching, beginSwitch, cancelSwitch],
+    () => ({ role, login, logout, switching, beginSwitch, cancelSwitch, resolving }),
+    [role, login, logout, switching, beginSwitch, cancelSwitch, resolving],
   );
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }

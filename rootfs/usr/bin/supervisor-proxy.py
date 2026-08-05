@@ -950,6 +950,33 @@ async def auth_roles_handler(request: web.Request) -> web.Response:
     )
 
 
+async def auth_session_handler(request: web.Request) -> web.Response:
+    """Which profile this browser's session cookie is already signed in as, if
+    any — so a returning device stops re-asking for a passcode it has already
+    answered.
+
+    The kiosk used to keep the active profile in the browser's sessionStorage
+    only. That dies whenever the PWA's document is torn down, which on Android
+    is CONSTANT (the OS evicts a backgrounded PWA and relaunches it fresh), so
+    every relaunch showed the passcode pad again even though the signed
+    vk_session cookie was still perfectly valid and still authorizing every
+    API call the app makes. Field telemetry measured that redundant re-entry
+    at 2.4-3.1s per launch — more than the villa's entire load.
+
+    Deliberately reads the COOKIE ONLY (_session_role), never _role_for():
+    _role_for treats any Ingress request as owner-equivalent, and reusing it
+    here would mean nobody browsing through the HA sidebar could ever see the
+    profile picker or use the kiosk as a guest — the session would silently
+    resolve to owner for everyone. Null here just means "show the picker".
+
+    No authorization check on purpose: an unauthorized caller is precisely the
+    one that must receive null, and this discloses nothing the caller's own
+    cookie doesn't already state. Expiry is the cookie's own — an operator
+    shortens the leash with the existing `session_days` option rather than a
+    second, competing setting here."""
+    return web.json_response({"role": _session_role(request.cookies.get(SESSION_COOKIE))})
+
+
 async def auth_elevate_handler(request: web.Request) -> web.Response:
     """Exchange the superadmin code for ONE single-use elevation token.
 
@@ -1975,6 +2002,7 @@ def main() -> None:
     app.router.add_get("/telemetry", telemetry_get_handler)
     app.router.add_put("/device-config", device_config_put_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
+    app.router.add_get("/auth/session", auth_session_handler)
     app.router.add_post("/auth/verify", auth_verify_handler)
     app.router.add_post("/auth/elevate", auth_elevate_handler)
     app.router.add_post("/auth/logout", auth_logout_handler)
