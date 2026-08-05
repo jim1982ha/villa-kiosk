@@ -336,12 +336,21 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  * out reproduces precisely the clusters you had before. That is the
  * behaviour being asked for here, arrived at for the same reason.
  *
- * So: badges are grouped by their distance on the GROUND PLANE (world X/Z —
- * the villa is a floor plan, so ground distance is the honest proxy for
- * on-screen separation), against a radius that converts the badge's on-screen
- * size into world units using the current zoom. Camera rotation, tilt and
- * pan cannot influence it at all; only zoom can, and it does so reversibly.
- * No hysteresis anywhere, so the same view always renders the same way.
+ * So: badges are grouped by their distance in WORLD SPACE (X/Y/Z), against a
+ * radius that converts the badge's on-screen size into world units using the
+ * current zoom. Camera rotation, tilt and pan cannot influence it at all;
+ * only zoom can, and it does so reversibly. No hysteresis anywhere, so the
+ * same view always renders the same way.
+ *
+ * Until 2.114.0 this was the GROUND PLANE only (X/Z), on the reasoning that a
+ * villa is a floor plan so ground distance proxies on-screen separation. It
+ * does — for two devices at similar heights. It fails where mounting heights
+ * differ by metres: a ceiling fan and the table lamp under it are the SAME
+ * POINT on the ground plane, so they grouped, while the full 3D projection
+ * that DRAWS them put them far apart on screen. Height is now part of the
+ * distance. Note what did NOT change: the inputs are still anchor positions
+ * and zoom, both independent of where the camera is looking from, so the
+ * screen-space coupling that six earlier attempts died on is still absent.
  */
 /** Zoom is quantised to steps of 1/N of a doubling before it feeds the
  *  grouping radius — the direct equivalent of a map engine clustering per
@@ -434,10 +443,13 @@ interface ShownLabel {
   /** Projected screen position of the anchor, in render pixels. */
   x: number;
   y: number;
-  /** World-space anchor, projected onto the ground plane. THE input to
-   *  grouping — see groupBadges for why the decision is made here and not
-   *  in screen space. */
+  /** World-space anchor position. THE input to grouping — see groupBadges for
+   *  why the decision is made here and not in screen space. `wy` (mounting
+   *  HEIGHT) counts as much as the ground axes: an anchor sits just above its
+   *  own geometry (buildLabelAnchors), so a ceiling fan's is ~2.7m up while a
+   *  table lamp's is barely off the floor. */
   wx: number;
+  wy: number;
   wz: number;
   /** Anchor is in front of the camera, i.e. has a valid screen position at
    *  all. Purely a RENDER gate — deliberately not an input to grouping. */
@@ -1884,12 +1896,12 @@ export class EntityVisuals {
    */
   minPxPerWorldToDeclutterRoom(room: string): number | null {
     const key = roomKey(room);
-    const members: { lbl: LabelControls; wx: number; wz: number }[] = [];
+    const members: { lbl: LabelControls; wx: number; wy: number; wz: number }[] = [];
     for (const [id, lbl] of this.labels) {
       if (roomKey(this.roomOf(id)) !== key) continue;
       if (!lbl.anchor.isEnabled()) continue;
       const p = lbl.anchor.getAbsolutePosition();
-      members.push({ lbl, wx: p.x, wz: p.z });
+      members.push({ lbl, wx: p.x, wy: p.y, wz: p.z });
     }
     if (members.length < 2) return null;
 
@@ -1900,7 +1912,15 @@ export class EntityVisuals {
     let required = 0;
     for (let i = 0; i < members.length; i++) {
       for (let j = i + 1; j < members.length; j++) {
-        const dist = Math.hypot(members[j].wx - members[i].wx, members[j].wz - members[i].wz);
+        // 3D, matching groupBadges exactly (2.114.0) — this method's whole
+        // contract is that it reuses that same reach/gap formula, so dropping
+        // the height term here would make the "zoom to declutter" hint
+        // disagree with what the grouping actually does.
+        const dist = Math.hypot(
+          members[j].wx - members[i].wx,
+          members[j].wy - members[i].wy,
+          members[j].wz - members[i].wz,
+        );
         if (dist <= 0) continue; // co-located anchors: no zoom separates these
         const need = (boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx) / dist;
         if (need > required) required = need;
@@ -2684,7 +2704,7 @@ export class EntityVisuals {
       // allocates nothing at all.
       let s = this.shownPool[shownCount];
       if (!s) {
-        s = { id, lbl, x: 0, y: 0, wx: 0, wz: 0, inFront: false, off: { x: 0, y: 0 } };
+        s = { id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, inFront: false, off: { x: 0, y: 0 } };
         this.shownPool[shownCount] = s;
       }
       s.id = id;
@@ -2692,6 +2712,7 @@ export class EntityVisuals {
       s.x = p.x;
       s.y = p.y;
       s.wx = wp.x;
+      s.wy = wp.y;
       s.wz = wp.z;
       s.inFront = p.z >= 0 && p.z <= 1;
       // Every consumer treats `off` as "start at zero and get nudged" — it
@@ -2752,11 +2773,14 @@ export class EntityVisuals {
    * Group badges into spatial piles — THE grouping decision, and the reason
    * this app finally behaves consistently under camera movement.
    *
-   * Runs on world-space GROUND distance (X/Z) against a radius derived from
+   * Runs on world-space 3D distance (X/Y/Z) against a radius derived from
    * the current zoom alone, so camera rotation, tilt and panning cannot
    * influence the outcome at all, and returning to a view always reproduces
    * exactly what that view showed before. See the thresholds' comment above
-   * for the full reasoning and the map-engine precedent.
+   * for the full reasoning and the map-engine precedent. It was GROUND
+   * distance (X/Z) until 2.114.0 — see the height note at the test itself for
+   * why mounting height had to count, and why including it does NOT weaken
+   * the camera-independence this whole design exists to guarantee.
    *
    * Every eligible badge takes part, including ones currently off-screen or
    * behind the camera: a room's presentation must not depend on how much of
@@ -2781,17 +2805,31 @@ export class EntityVisuals {
     const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
     if (pxPerWorld > 0) {
       // Each badge's on-screen half-width expressed in world units, so the
-      // whole test lives on the ground plane. The allowance is subtracted
-      // here rather than in screen space so it scales identically.
+      // whole test lives in world space. The allowance is subtracted here
+      // rather than in screen space so it scales identically.
       const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
       const reach = boxes.map((b) => (b.halfW * allow) / pxPerWorld);
       const gapW = (FAN_GAP_PX * this.iconUserScale * this.iconZoomScale) / pxPerWorld;
       for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
           const dx = shown[j].wx - shown[i].wx;
+          // HEIGHT COUNTS (2.114.0). This was ground distance (X/Z) only,
+          // which treated a ceiling fan and the table lamp beneath it as the
+          // same point — they then fanned apart, or collapsed into a room
+          // chip together, despite being drawn far apart on screen, because
+          // DRAWING uses the full 3D projection while the decision ignored an
+          // axis. Reported as the fan badge behaving inconsistently with
+          // everything else, and it was: an anchor sits just above its own
+          // geometry, so mounting height varies by metres across a room.
+          // Including Y keeps the decision PURE WORLD SPACE — still a
+          // function of anchor positions and zoom alone, still invariant
+          // under pan/orbit/tilt, still zero hysteresis — so it does not
+          // reintroduce the screen-space coupling that six earlier attempts
+          // died on. It is the same test in 3D instead of 2D.
+          const dy = shown[j].wy - shown[i].wy;
           const dz = shown[j].wz - shown[i].wz;
           const need = reach[i] + reach[j] + gapW;
-          if (dx * dx + dz * dz < need * need) {
+          if (dx * dx + dy * dy + dz * dz < need * need) {
             const ra = find(i), rb = find(j);
             if (ra !== rb) parent[ra] = rb;
           }
