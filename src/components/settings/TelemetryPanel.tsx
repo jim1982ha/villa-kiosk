@@ -69,6 +69,13 @@ function summarise(e: TelemetryEvent): string {
       const active = typeof e.activeMs === "number" && waited
         ? ` → ${ms(e.activeMs)} active` : "";
       const weight = typeof e.jsKb === "number" ? ` · ${e.jsKb}kB js` : "";
+      // Main-thread blocking is what a "freeze" actually is. Called out
+      // separately when any of it landed BEFORE the villa started loading:
+      // that is the part the user meets with no spinner to explain it.
+      const stalled = typeof e.stallMs === "number"
+        ? ` · BLOCKED ${ms(e.stallMs)}/${e.stallCount} tasks (worst ${ms(e.stallMaxMs)}`
+          + `${e.stallPreMs ? `, ${ms(e.stallPreMs)} pre-villa` : ""})`
+        : "";
       // A RELOAD (the villa built again in the same page, after signing out
       // and back in) has no meaningful navigation-relative total — that number
       // would be "time since the page opened". It reports `reloadMs` instead,
@@ -78,7 +85,7 @@ function summarise(e: TelemetryEvent): string {
         : `${ms(e.totalMs)} total`;
       return `${head}${waited}${active} · bundle ${ms(e.bundleMs)}`
         + ` · mount ${ms(e.mountMs)} · parse ${ms(e.parseMs)} · reveal ${ms(e.revealMs)}`
-        + `${weight}${worst}${parked}`;
+        + `${weight}${stalled}${worst}${parked}`;
     }
     case "error":
       return `${e.code}: ${String(e.message ?? "").slice(0, 120)}`;

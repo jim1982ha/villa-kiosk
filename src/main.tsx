@@ -4,7 +4,7 @@ import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { installGlobalErrorCapture } from "./utils/diagnostics";
 import { installLifecycleTelemetry } from "./utils/telemetry";
-import { markBoot } from "./utils/bootTimeline";
+import { markBoot, installStallObserver } from "./utils/bootTimeline";
 import { startModelPrefetch } from "./utils/modelPrefetch";
 import "./styles.css";
 
@@ -12,6 +12,10 @@ import "./styles.css";
 // round trip plus the JS bundle's download/parse/compile, which is precisely
 // the phase the Babylon deep-import work targets and which nothing measured.
 markBoot("js");
+// Watch for main-thread stalls from the very first frame — the freeze being
+// chased happens on the screens BEFORE the villa loads, so the observer has
+// to be running well before any of the app's own timing starts.
+installStallObserver();
 
 // Record uncaught errors / rejections to localStorage so one that fires just
 // before a reload still surfaces in the next load's diagnostics report.

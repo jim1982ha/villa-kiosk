@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.107.0
+
+### Wrong again — the Home Assistant hypothesis is dead, and the measurement killed it cleanly
+- **2.106.0 guessed that the pre-login freeze was HA's connect running above `ProfileGate`. It is not.** `hydrate` reports **995 states with an `applyMs` of 1–4ms**, the entity registry **1,581 rows in 73–141ms**, and — decisively — **`preLogin: false` on every single record**, so none of it even lands on the screen in question. That is the fourth hypothesis about this freeze (the JS bundle, the Draco worker pool, texture decode, now HA connect) to be argued from plausibility and disproved by data. The pattern is the lesson: none of them should have been argued at all.
+
+### Fixed — a second stale-anchor bug in the same instrumentation
+- `mountMs` fell back to the `react` mark when no sign-in had happened, and `react` is **page-level and never cleared**. On a reload that measured from the page's React mount rather than this load, producing **`mountMs: 21001` on a load whose own span was 2,186ms** — the identical failure `bootMs` had, in a field 2.105.0 left behind. It is now emitted only when its anchor genuinely belongs to the current load. The 8,961ms sibling reading is discarded for the same reason: it exceeds the entire sign-in cycle it claims to sit inside, so it cannot be real either.
+
+### Added — ask the browser where the main thread is blocked, instead of guessing
+- A freeze **is** main-thread blocking, and the browser reports every task over 50ms as a `longtask` entry. After four wrong hypotheses, the honest move is to stop reasoning about which code might be slow and read that directly. A `PerformanceObserver` now runs from the first line of `main.tsx` — before React, before anything the app itself times, because the freeze being chased happens on screens that exist before any of it.
+- Reported as **`stallMs`/`stallCount`/`stallMaxMs`/`stallMaxAt`**, plus **`stallPreMs`/`stallPreCount`** — the subset that landed **before the villa began loading**, which is precisely the blocking a user meets with no spinner on screen to explain it. Counters reset with the per-load marks, so the window covers the whole cycle a person actually experiences: the previous scene tearing down, the gate, the passcode, and the villa rebuilding. The Telemetry panel prints it as `BLOCKED 1.2s/8 tasks (worst 340ms, 900ms pre-villa)`. If the next log shows large `stallPreMs`, the freeze is finally located rather than theorised about; if it shows none, the freeze is not main-thread blocking at all and that rules out an entire class of cause.
+
 ## 2.106.0
 
 ### Changed — measure what the profile/passcode screens are actually doing

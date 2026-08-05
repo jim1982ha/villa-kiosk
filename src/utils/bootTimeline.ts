@@ -58,6 +58,59 @@ export function beginLoad(): number {
   return ++loadSeq;
 }
 
+// ── Main-thread stalls ─────────────────────────────────────────────────────
+// A freeze is main-thread blocking, and the browser will simply TELL you where
+// it happened: any task over 50ms is reported as a `longtask` entry. Four
+// hypotheses about a reported freeze on the profile/passcode screens (the JS
+// bundle, Draco workers, texture decode, then Home Assistant's connect) were
+// each argued from plausibility and each disproved by measurement — the HA one
+// came back at 1-4ms of apply time and, worse, `preLogin: false`, so it was not
+// even on the screen in question. This asks the browser instead of reasoning
+// about it. Counters live alongside the per-load marks and reset with them, so
+// what is reported spans the whole cycle a user experiences: the previous scene
+// tearing down, the gate, the passcode, and the villa rebuilding.
+const stalls = { count: 0, totalMs: 0, maxMs: 0, maxAt: 0, preCount: 0, preMs: 0 };
+
+/** Start watching for main-thread stalls. Idempotent; call once at startup. */
+let stallObserverInstalled = false;
+export function installStallObserver(): void {
+  if (stallObserverInstalled || typeof PerformanceObserver === "undefined") return;
+  stallObserverInstalled = true;
+  try {
+    const obs = new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        // "Before the villa started loading" is the distinction that matters:
+        // a stall there is one the user meets on a screen whose only job is to
+        // answer a tap, with no spinner to explain it.
+        const preScene = !marks.has("scene");
+        stalls.count++;
+        stalls.totalMs += e.duration;
+        if (preScene) { stalls.preCount++; stalls.preMs += e.duration; }
+        if (e.duration > stalls.maxMs) {
+          stalls.maxMs = e.duration;
+          stalls.maxAt = Math.round(e.startTime);
+        }
+      }
+    });
+    obs.observe({ type: "longtask", buffered: true });
+  } catch {
+    // Not supported (Safari/Firefox) — the rest of the timeline still works.
+  }
+}
+
+function stallSummary(): Record<string, number> {
+  if (!stalls.count) return {};
+  return {
+    stallCount: stalls.count,
+    stallMs: Math.round(stalls.totalMs),
+    stallMaxMs: Math.round(stalls.maxMs),
+    stallMaxAt: stalls.maxAt,
+    // The subset the user hits with no spinner on screen to explain it.
+    stallPreCount: stalls.preCount,
+    stallPreMs: Math.round(stalls.preMs),
+  };
+}
+
 /** Clear the per-load marks. Call when the scene is TORN DOWN, not when one
  *  starts: `gate`/`pin`/`auth` are recorded BEFORE the scene effect runs (the
  *  sign-in is what causes the canvas to mount), so clearing at the start of a
@@ -68,6 +121,8 @@ export function endLoad(): void {
   for (const key of [...marks.keys()]) {
     if (!PAGE_MARKS.has(key)) marks.delete(key);
   }
+  stalls.count = 0; stalls.totalMs = 0; stalls.maxMs = 0;
+  stalls.maxAt = 0; stalls.preCount = 0; stalls.preMs = 0;
 }
 
 /** Record a milestone. First write wins WITHIN the current load — safe to call
@@ -188,12 +243,17 @@ export function bootTimeline(total: number): Record<string, number | string | bo
   // stretch a user experiences as "I typed my PIN and nothing happened yet",
   // and no measurement has ever covered it. On the restored-session path (no
   // gate at all) it is measured from React instead, the only earlier anchor.
-  const sceneFrom = tAuth ?? tReact;
+  // ANCHOR MATTERS: `tAuth` is a per-load mark, `tReact` is page-level and
+  // never cleared. Falling back to `tReact` on a RELOAD measured from the
+  // page's React mount, producing figures like mountMs: 21001 on a load whose
+  // own span was 2.2s — the same class of lie `bootMs` told before it was
+  // fixed. Only emitted when the anchor genuinely belongs to this load.
+  const sceneFrom = tAuth ?? (isReload ? undefined : tReact);
   if (tScene !== undefined && sceneFrom !== undefined) put("mountMs", tScene - sceneFrom);
 
   // Navigation-relative from here down — only true for the page's FIRST load.
   if (isReload) {
-    Object.assign(out, scriptWeight());
+    Object.assign(out, scriptWeight(), stallSummary());
     return out;
   }
 
@@ -201,6 +261,6 @@ export function bootTimeline(total: number): Record<string, number | string | bo
   // person. Equals totalMs whenever a session was already restored.
   put("activeMs", total - wait);
 
-  Object.assign(out, scriptWeight());
+  Object.assign(out, scriptWeight(), stallSummary());
   return out;
 }
