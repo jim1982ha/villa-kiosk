@@ -399,8 +399,14 @@ const FAN_MAX_ROOM_SPAN_FRACTION = 0.9;
  * travel furthest. Deliberately expressed in badge widths, NOT scaled by an
  * extra zoom/user-size factor: the budget must not grow just because the
  * icons were made bigger (the exact defect that put a chip on the lawn).
+ *
+ * Raised from 1.5 to 3 in 2.122.0. 1.5 was set purely to stop badges landing
+ * on the lawn, with no thought for the other side of the trade: too tight, and
+ * ordinary huddles fail to fan and collapse into a room chip that costs an
+ * extra tap to open. Three of its own widths is still unmistakably "next to
+ * that device" while leaving room to actually resolve a crowd.
  */
-const FAN_MAX_TRAVEL_WIDTHS = 1.5;
+const FAN_MAX_TRAVEL_WIDTHS = 3;
 /**
  * Breathing room between two badges laid out side by side within a small
  * huddle (fanBadges) — explicitly requested ("it's ok to artificially move
@@ -2758,9 +2764,10 @@ export class EntityVisuals {
     const boxes = this.labelBoxes(shown);
     const piles = this.groupBadges(shown, boxes);
 
-    // A pile is laid out side by side if the resulting row actually FITS in
-    // the room it belongs to, and only summarises into the room's chip when
-    // it genuinely doesn't — see FAN_MAX_ROOM_SPAN_FRACTION.
+    // A pile is laid out as a compact grid if that block actually FITS in the
+    // room it belongs to AND no member has to travel far from its own device
+    // to take its cell, and only summarises into the room's chip when it
+    // genuinely doesn't — see FAN_MAX_ROOM_SPAN_FRACTION / FAN_MAX_TRAVEL_WIDTHS.
     this.roomClustered.clear();
     const fannable: number[][] = [];
     for (const members of piles) {
@@ -2774,7 +2781,9 @@ export class EntityVisuals {
 
     for (const s of shown) {
       s.lbl.container.linkOffsetXInPixels = s.off.x;
-      s.lbl.container.linkOffsetYInPixels = baseY;
+      // off.y is the fanned grid's row offset (fanLayout); baseY is the fixed
+      // lift that centres every badge over its anchor.
+      s.lbl.container.linkOffsetYInPixels = baseY + s.off.y;
       s.lbl.container.isVisible = s.inFront && !this.roomClustered.get(this.roomOf(s.id));
     }
     this.updateClusters(shown);
@@ -2935,10 +2944,8 @@ export class EntityVisuals {
   ): boolean {
     const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
     if (pxPerWorld <= 0) return false;
-    const fanGap = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
-    let rowPx = fanGap * (members.length - 1);
-    for (const i of members) rowPx += boxes[i].halfW * 2;
-    const rowWorld = rowPx / pxPerWorld;
+    const { members: order, offsets, blockW } = this.fanLayout(shown, boxes, members);
+    const rowWorld = blockW / pxPerWorld;
 
     let available = 0;
     for (const i of members) {
@@ -2957,11 +2964,12 @@ export class EntityVisuals {
     if (rowWorld > available * FAN_MAX_ROOM_SPAN_FRACTION) return false;
 
     // …and no single badge may be slid far from the device it points at, which
-    // the row-width test above does not imply — see FAN_MAX_TRAVEL_WIDTHS.
-    // Judged on the exact offsets fanBadges will apply, not an estimate.
-    const { members: order, offsets } = this.fanLayout(shown, boxes, members);
+    // the block-width test above does not imply — see FAN_MAX_TRAVEL_WIDTHS.
+    // Judged on the exact offsets fanBadges will apply, not an estimate, and
+    // on the true 2-D distance now that the layout moves badges vertically too.
     for (let k = 0; k < order.length; k++) {
-      if (Math.abs(offsets[k]) > boxes[order[k]].halfW * 2 * FAN_MAX_TRAVEL_WIDTHS) return false;
+      const budget = boxes[order[k]].halfW * 2 * FAN_MAX_TRAVEL_WIDTHS;
+      if (Math.hypot(offsets[k].x, offsets[k].y) > budget) return false;
     }
     return true;
   }
@@ -2974,38 +2982,74 @@ export class EntityVisuals {
     for (const pile of piles) {
       if (pile.length < 2) continue;
       const { members, offsets } = this.fanLayout(shown, boxes, pile);
-      for (let k = 0; k < members.length; k++) shown[members[k]].off.x = offsets[k];
+      for (let k = 0; k < members.length; k++) {
+        shown[members[k]].off.x = offsets[k].x;
+        shown[members[k]].off.y = offsets[k].y;
+      }
     }
   }
 
   /**
-   * The fan row's geometry, with no side effects — shared by fanBadges (which
-   * applies it) and pileFitsItsRoom (which has to judge it BEFORE deciding
-   * whether to fan at all). Kept as one function because the predicate testing
-   * a different layout than the one drawn is exactly how a badge ends up
-   * somewhere the guard believed it could never reach.
+   * The fanned huddle's geometry, with no side effects — shared by fanBadges
+   * (which applies it) and pileFitsItsRoom (which has to judge it BEFORE
+   * deciding whether to fan at all). Kept as one function because the
+   * predicate testing a different layout than the one drawn is exactly how a
+   * badge ends up somewhere the guard believed it could never reach.
+   *
+   * A compact GRID, not the single horizontal row this used to lay out. The
+   * row's width grew LINEARLY with the number of badges, so a huddle of seven
+   * needed seven badge-widths of clear room; past a fairly small icon size
+   * that never fits, and the whole room collapsed into its chip. A grid grows
+   * as √n — the same seven badges need about three widths — which is what
+   * lets individual, directly tappable badges survive several more steps of
+   * icon size and zoom-out before anything has to be summarised. That matters
+   * because the chip is not a smaller badge, it is an extra tap between the
+   * user and the device, and this app is read from across a room where the
+   * icons need to be large.
+   *
+   * Uniform cells sized from the WIDEST member, so no two members of a pile
+   * can overlap by construction — no solver, nothing iterative, and the same
+   * input always yields the same layout (the badge subsystem's long history of
+   * regressions is entirely force-relaxation solvers that never settled).
+   * Deterministic member order (by entity id) for the same reason.
    */
   private fanLayout(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
     pile: number[],
-  ): { members: number[]; offsets: number[] } {
+  ): { members: number[]; offsets: { x: number; y: number }[]; blockW: number } {
     const fanGap = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
     const members = [...pile].sort((a, b) => shown[a].id.localeCompare(shown[b].id));
-    const widths = members.map((i) => boxes[i].halfW * 2);
-    const total = widths.reduce((s, w) => s + w, 0) + fanGap * (members.length - 1);
+    let cellW = 0, cellH = 0;
+    for (const i of members) {
+      if (boxes[i].halfW * 2 > cellW) cellW = boxes[i].halfW * 2;
+      if (boxes[i].halfH * 2 > cellH) cellH = boxes[i].halfH * 2;
+    }
+    cellW += fanGap;
+    cellH += fanGap;
+    const cols = Math.ceil(Math.sqrt(members.length));
+    const rows = Math.ceil(members.length / cols);
     // Centred on the huddle's own average projected position: members of a
     // real huddle rarely project to the same point, so each offset has to
-    // subtract that member's OWN x — the gap that must equal fanGap is the
-    // one between final screen positions, not between offsets.
-    const cx = members.reduce((s, i) => s + shown[i].x, 0) / members.length;
-    const offsets: number[] = [];
-    let cursor = cx - total / 2;
+    // subtract that member's OWN position — the spacing that must equal the
+    // cell size is the one between final screen positions, not between offsets.
+    let cx = 0, cy = 0;
+    for (const i of members) { cx += shown[i].x; cy += shown[i].y; }
+    cx /= members.length;
+    cy /= members.length;
+
+    const offsets: { x: number; y: number }[] = [];
     for (let k = 0; k < members.length; k++) {
-      offsets.push(cursor + boxes[members[k]].halfW - shown[members[k]].x);
-      cursor += widths[k] + fanGap;
+      const r = Math.floor(k / cols);
+      // Last row is centred under the others rather than left-aligned, so the
+      // block stays visually balanced over the devices it covers.
+      const inRow = Math.min(cols, members.length - r * cols);
+      const c = k - r * cols;
+      const px = cx + (c - (inRow - 1) / 2) * cellW;
+      const py = cy + (r - (rows - 1) / 2) * cellH;
+      offsets.push({ x: px - shown[members[k]].x, y: py - shown[members[k]].y });
     }
-    return { members, offsets };
+    return { members, offsets, blockW: cols * cellW };
   }
 
   /** Each label's collision box in screen px, relative to its anchor point —

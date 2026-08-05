@@ -1,3 +1,21 @@
+## 2.122.0
+
+### Changed — badges stay individually tappable at far larger icon sizes
+
+Reported with two screenshots: at the largest icon size that still showed individual badges, some of them overlapped; one step bigger and the whole room collapsed into its `Master Bedroom 7` chip. Both halves of that are a problem for the app's actual deployment — a tablet on a wall, read and operated from across the room. Icons have to be large to be legible and finger-sized at that distance, but the room chip is not a smaller badge: it is an extra tap between the user and the light they wanted to switch. So the usable icon size was being capped by the layout rather than by the screen.
+
+The cause was that a fanned huddle was laid out as a **single horizontal row**. A row's width grows *linearly* with the number of badges, so seven badges needed seven badge-widths of clear room inside their own room's floor plan; past a fairly small icon size that never fits, `pileFitsItsRoom` refuses, and the room summarises. The huddle is now laid out as a compact **grid** instead, whose width grows as the square root of the count — those same seven badges need about three widths, not seven. That is where the extra headroom in icon size and zoom-out comes from; nothing about the grouping decision itself changed, and it remains a pure function of world-space position and zoom.
+
+Cells are uniform and sized from the widest member, so no two badges in a huddle can overlap by construction — there is no solver and nothing iterative here, and the same input always produces the same layout. That is deliberate: every previous overlap fix in this subsystem was a force-relaxation solver, and each one eventually failed the same way, by never settling and leaving badges visibly dancing. Member order is by entity id for the same reason. The layout now also offsets badges vertically, which the row never did.
+
+`FAN_MAX_TRAVEL_WIDTHS` — the cap on how far one badge may sit from the device it labels — is raised from 1.5 to 3 of its own widths, and is now measured as a true 2-D distance since the grid moves badges on both axes. 1.5 was chosen in 2.121.0 purely to stop badges being laid out on the lawn and gave no thought to the other side of the trade: set too tight, ordinary huddles fail to fan and collapse into a chip. Three widths still reads unmistakably as "next to that device" while leaving enough room to actually resolve a crowd. The budget is still expressed in badge widths and still deliberately not multiplied by the icon-size factor, so it cannot grow just because the icons were made bigger.
+
+Badges belonging to *different* piles are still only kept apart by the grouping radius, not by this layout — piles are separated in world space, and the grid only guarantees no overlap within one huddle.
+
+### Fixed — the "disconnected from Home Assistant" bar covered the header
+
+It was a full-width strip pinned to the top of the screen, so it sat across the villa name, the category rail and the corner controls — hiding the UI at exactly the moment someone is trying to work out what still responds. It is now a centred pill sitting below the top bar, clear of the corners, with nothing but empty canvas behind it.
+
 ## 2.121.0
 
 ### Fixed — badges laid out on the lawn, far from the devices they point at

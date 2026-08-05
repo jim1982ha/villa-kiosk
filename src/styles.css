@@ -2942,12 +2942,22 @@ label.toggle span { user-select: none; line-height: 1.4; }
    alarm on a wall display for something that resolves on its own, and would
    collide with the red this app already reserves for a device that needs
    attention (an unlocked door, a leak). */
+/* Sits BELOW the top bar (52px, see .hud-topbar) rather than across it. As a
+   full-width strip pinned to top:0 it covered the villa name, the category
+   rail and the corner controls whenever the connection dropped — hiding the
+   UI at the exact moment someone is trying to work out what still works. A
+   centred pill clears the corners entirely, so nothing but empty canvas is
+   ever behind it. */
 .connection-banner {
-  position: absolute; top: 0; left: 0; right: 0; z-index: 75;
+  position: absolute;
+  top: calc(var(--safe-top) + 52px + 8px);
+  left: 50%; transform: translateX(-50%); z-index: 75;
+  max-width: min(560px, calc(100% - 32px));
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: calc(8px + var(--safe-top)) 16px 8px;
+  padding: 8px 16px;
   background: color-mix(in srgb, var(--status-warning) 16%, var(--bg-modal));
-  border-bottom: 1px solid color-mix(in srgb, var(--status-warning) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-warning) 45%, transparent);
+  border-radius: 999px;
   color: var(--text-primary);
   font-size: var(--text-sm);
   text-align: center;
