@@ -38,7 +38,7 @@
 // call still works.
 
 import { fetchAddonConfig, versionedModelUrl } from "./storage";
-import { readWithProgress } from "./fetchProgress";
+import { readWithProgress, MODEL_FETCH_STALL_MS } from "./fetchProgress";
 
 type ProgressListener = (frac: number) => void;
 
@@ -70,10 +70,18 @@ export function startModelPrefetch(): void {
     const e: PrefetchEntry = { url, progress: 0, listeners: new Set(), promise: null as unknown as Promise<ArrayBuffer> };
     e.promise = fetch(url).then((resp) => {
       if (!resp.ok) throw new Error(`prefetch HTTP ${resp.status}`);
+      // Same stall watchdog as the foreground fetch, and for the SAME failure:
+      // a stalled prefetch is worse than no prefetch, because BabylonCanvas
+      // awaits whatever this promise does (claimPrefetch) instead of running
+      // its own retrying fetch. The 87-second `fetchMs` seen in the field came
+      // through here — the record carried `prefetched: true` — so leaving this
+      // call unbounded would have left the real path unfixed. Rejecting drops
+      // the claimer straight onto fetchModelWithRetry, which retries AND
+      // escalates past the service worker.
       return readWithProgress(resp, (f) => {
         e.progress = f;
         e.listeners.forEach((l) => l(f));
-      });
+      }, MODEL_FETCH_STALL_MS);
     }).catch((err) => {
       // A transient failure (e.g. dropped connection while still on the PIN
       // screen) shouldn't permanently block a later retry — but only reset

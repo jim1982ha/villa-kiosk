@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.115.0
+
+### Fixed — a stalled model download had no timeout at any layer, so the load just hung
+- **Reported as "a few failed attempts" when loading a newly generated GLB.** The telemetry shows the shape of it exactly: a load carrying **`fetchMs: 87385`** — the user watched a spinner for **87 seconds** — with `visibleMs: 98008`. Nothing errored, nothing retried; the transfer simply crawled and the app waited.
+- **Root cause: `fetchModelWithRetry` bounded the wrong thing.** It has a generous 120s *retry budget*, but that budget is only ever consulted **inside the `catch`**. Retries fire when something THROWS — `fetch()` rejecting, or the body stream dropping mid-read. A connection that stays open and simply stops delivering bytes never throws, so the retry path is never entered and the budget never checked. There was no per-attempt timeout, no header timeout, and no stall detection: a transfer that stopped moving would wait forever. Every layer assumed some other layer had a timeout, and none did.
+- **Fixed with a STALL watchdog rather than a duration timeout**, which is the distinction that matters: a large model on a slow link is legitimately slow and must never be killed for it. The new bound measures only the **gap between chunks** — 20s with no bytes at all means the transfer is stuck, not slow — and rejects, which drops the caller into the retry path it already had (and which, from the second attempt, also escalates past the service worker). The request itself gets a separate, shorter 30s bound via `AbortController`, since response headers should arrive promptly even when the body then takes a while.
+- **Also fixed in `modelPrefetch`, which is where the reported failure actually happened.** The 87-second record carried **`prefetched: true`**, so the stall was in the background prefetch — and `BabylonCanvas` *awaits* whatever that promise does (`claimPrefetch`) instead of running its own retrying fetch. A stalled prefetch is therefore worse than no prefetch: it converts a recoverable situation into an unbounded wait. Bounding only the foreground path would have left the real one untouched.
+
+### Analysed — the crash loop, and why the guard behaved correctly
+- The same session shows `WEBGL_CONTEXT_LOST` followed by `SCENE_LOAD_CRASH_LOOP` ("failed to load 3 times in a row over 67s"). **This is the safety net working, not a new bug**: it stopped a fourth attempt and surfaced an explanation instead of looping. The load succeeded on the next try and has been fine since.
+- **The trigger was a genuinely heavier model arriving into an already-loaded tab.** The new GLB is up across every axis that costs GPU memory: **334 materials (was 252, +33%), 392 textures (was 285, +38%), 703 meshes (was 619), 26.6MP of texture (was 23MP)**, 18.35MB (was 16.82MB). That landed in a browser tab that had been running for hours. Worth stating plainly because it cuts against the previous release's direction: the 2.22.0 pipeline work brought materials *down* to 252, and this newly baked model gives most of that back — if load time and memory headroom matter, that regression is in the bake, not the app.
+
 ## 2.114.0
 
 ### Fixed — badge grouping ignored mounting height, so a ceiling fan grouped with the lamp beneath it
