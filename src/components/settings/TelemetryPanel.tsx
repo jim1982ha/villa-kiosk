@@ -80,12 +80,20 @@ function summarise(e: TelemetryEvent): string {
       // and back in) has no meaningful navigation-relative total — that number
       // would be "time since the page opened". It reports `reloadMs` instead,
       // and the headline has to say which of the two it is showing.
-      const head = typeof e.reloadMs === "number"
-        ? `${ms(e.reloadMs)} reload #${e.loadSeq ?? "?"}`
-        : `${ms(e.totalMs)} total`;
+      // `visibleMs` is navigation → the first frame actually DRAWN, which is
+      // what a stopwatch measures. Everything else stops at setStatus("ready")
+      // — a React state update, before the overlay clears and before Babylon
+      // compiles a single shader. Lead with it whenever it exists.
+      const painted = typeof e.paintMs === "number"
+        ? ` · paint ${ms(e.paintMs)}${e.paintTimedOut ? " (NEVER PAINTED)" : ""}` : "";
+      const head = typeof e.visibleMs === "number"
+        ? `${ms(e.visibleMs)} to visible`
+        : typeof e.reloadMs === "number"
+          ? `${ms(e.reloadMs)} reload #${e.loadSeq ?? "?"}`
+          : `${ms(e.totalMs)} total`;
       return `${head}${waited}${active} · bundle ${ms(e.bundleMs)}`
         + ` · mount ${ms(e.mountMs)} · parse ${ms(e.parseMs)} · reveal ${ms(e.revealMs)}`
-        + `${weight}${stalled}${worst}${parked}`;
+        + `${painted}${weight}${stalled}${worst}${parked}`;
     }
     case "error":
       return `${e.code}: ${String(e.message ?? "").slice(0, 120)}`;

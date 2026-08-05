@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.109.0
+
+### Fixed — every "total" this app has ever reported stopped before the villa was on screen
+- **The operator said the traces were wrong because they do not match the ~10s per load actually experienced, and that is correct.** `totalMs` — and every number derived from it — ended at `setStatus("ready")`, which is a **React state update, not a picture**. Still to happen after that line, all of it unmeasured: React committing the change, the loading overlay clearing, the browser painting, and the expensive one — **Babylon's first rendered frame**, where the GPU driver compiles shaders for all **371 materials** and binds **2.28M vertices** for the first time. First-frame shader compilation routinely costs seconds on a scene this size, and none of it was in any figure ever shown.
+- This is the same mistake `revealMs` was created to fix in 2.94.0, one stage further down the pipe: a phase boundary chosen because it was convenient in the code rather than because it matched what a person waits for. Being wrong the same way twice is the part worth recording.
+- The load record now waits for the villa to be **genuinely drawn** before it is sent, adding **`visibleMs`** (navigation start → first frame actually on screen — the number to compare against a stopwatch) and **`paintMs`** (`ready` → that frame, which is where shader compilation lands). The record was already fire-and-forget and already past the reveal, so holding it costs the user nothing. A 15s timeout still sends the record with `paintTimedOut` if no frame ever arrives, because the render loop is on-demand and "the villa never painted" is precisely the case worth hearing about. The Telemetry panel now leads with `visibleMs`.
+
 ## 2.108.0
 
 ### Fixed — the villa was torn down and rebuilt every time the profile switcher opened, and again when it was cancelled

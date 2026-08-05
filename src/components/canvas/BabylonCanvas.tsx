@@ -546,14 +546,55 @@ export default function BabylonCanvas({
         // costs the user nothing (it is a fire-and-forget POST that used to sit
         // in front of the reveal).
         const tReady = performance.now();
-        sendLoadTelemetry(tReady - tParseDone, tReady, {
-          // revealMs' own split, so the next report says WHICH of these owns
-          // it rather than only that the stretch is slow — the exact mistake
-          // that let the whole 5.6s hide behind one number until v2.94.0.
-          rvMeshNames: Math.round(tMeshNames - tParseDone),
-          rvStates: Math.round(tStatesPainted - tMeshNames),
-          rvRooms: Math.round(tReady - tStatesPainted),
-        });
+        // ── The blind spot this closes ────────────────────────────────────
+        // `setStatus("ready")` is a REACT STATE UPDATE, not a picture. Every
+        // number above stops here, and the operator was right that they do not
+        // match what a person actually waits for: still to come are React's
+        // commit, the overlay clearing, the browser's paint, and — the one
+        // that can genuinely cost seconds — Babylon's FIRST RENDERED FRAME,
+        // which is where 371 materials get their shaders compiled by the GPU
+        // driver and 2.28M vertices are bound for the first time. Reporting a
+        // "total" that ends before any of that is the same mistake `revealMs`
+        // was created to fix in 2.94.0, one stage further down the pipe.
+        //
+        // So the record is now held until the villa is genuinely ON SCREEN.
+        // It is fire-and-forget and already past the reveal, so waiting costs
+        // the user nothing, and it buys a `visibleMs` that means what its name
+        // says. The timeout matters: the render loop is ON-DEMAND (see
+        // SceneManager), so if nothing ever asks for a frame the observable
+        // would never fire and the whole record would be lost — a load that
+        // never paints is exactly the case worth hearing about.
+        const sendWhenPainted = () => {
+          let done = false;
+          const finish = (painted: boolean) => {
+            if (done) return;
+            done = true;
+            const tPaint = performance.now();
+            sendLoadTelemetry(tReady - tParseDone, tReady, {
+              rvMeshNames: Math.round(tMeshNames - tParseDone),
+              rvStates: Math.round(tStatesPainted - tMeshNames),
+              rvRooms: Math.round(tReady - tStatesPainted),
+              // "ready" → the first frame actually drawn. Shader compilation
+              // for every visible material lands here.
+              paintMs: Math.round(tPaint - tReady),
+              // Navigation start → the villa genuinely visible. THE number to
+              // compare against a stopwatch.
+              visibleMs: Math.round(tPaint),
+              paintTimedOut: painted ? 0 : 1,
+            });
+          };
+          const timer = window.setTimeout(() => finish(false), 15000);
+          manager.scene.onAfterRenderObservable.addOnce(() => {
+            window.clearTimeout(timer);
+            // One more frame boundary so the compositor has actually put it on
+            // screen, rather than reporting the moment the draw calls were
+            // issued.
+            requestAnimationFrame(() => finish(true));
+          });
+          // The loop is on-demand: make sure a frame is genuinely requested.
+          manager.requestRender();
+        };
+        sendWhenPainted();
         // The villa is on screen; the bookkeeping can have the main thread now.
         finishAfterReveal();
         // Success: clear the crash-loop counter so a later legitimate reload
