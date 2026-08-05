@@ -84,8 +84,8 @@ function summarise(e: TelemetryEvent): string {
       // what a stopwatch measures. Everything else stops at setStatus("ready")
       // — a React state update, before the overlay clears and before Babylon
       // compiles a single shader. Lead with it whenever it exists.
-      // Shader compilation, now behind the overlay. Shown next to paint so a
-      // regression that pushes work back into the first frame is obvious.
+      // Kept: 2.110.0 briefly pre-compiled shaders here and the field data
+      // showed it cost more than it saved, so older records carry these.
       const compiled = typeof e.compileMs === "number"
         ? ` · shaders ${ms(e.compileMs)}/${e.compiledMats}` : "";
       const painted = typeof e.paintMs === "number"

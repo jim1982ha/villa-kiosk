@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.111.0
+
+### Reverted — 2.110.0's shader pre-compilation was a net loss, measured
+- **It made the load four seconds slower and did not even remove the freeze it was written for.** On the same villa, same device: **Android `visibleMs` 5,048 → 9,096**, and `stallMaxMs` stayed at **2,301ms**. The freeze moved out of `paintMs` (2,256 → 21ms) exactly as designed, and then cost more elsewhere than it had ever saved.
+- **Three mistakes, all visible in the record it produced:**
+  - **`compiledMats: 898` against a GLB with `glMaterials: 371`.** Iterating every scene mesh reaches hidden pose variants, the atlas carrier planes and the floor the view culls — none of which the first frame ever compiles. It was doing roughly 2.4× the necessary work.
+  - **One `requestAnimationFrame` per 4 materials is ~224 yields at ~16ms ≈ 3.6s of pure waiting**, added straight to the wall clock. The yield strategy was chosen by count instead of by elapsed time, which is the wrong unit entirely.
+  - **`forceCompilationAsync` still blocks in large chunks**, so the freeze survived regardless.
+- **Babylon's own first frame is smarter than the replacement**: it compiles exactly the shaders the visible set needs, and nothing else. The pre-compilation is gone and the comment in its place records why, so it is not attempted again the same way.
+- `paintMs`/`visibleMs` stay — they are what made this measurable, and what caught the regression within one release rather than after weeks of it feeling vaguely worse.
+
+### Where this leaves the load
+- Honest position after the revert: a healthy phone load is back to **~5.0s**, of which **PARSE ~2.2s** and **PAINT ~2.3s** are ~90%. Both are driven by the same property of the GLB — **371 materials**, which produce both the 765 primitives Babylon must import and the shader permutations the driver must compile. **No further app-side change moves this meaningfully; the lever is material count, and it is in the pipeline.** Everything the app can reach — the redundant remounts (2.108.0), the passcode re-entry (2.98.0), the JS bundle (2.96.0) — has already been taken.
+
 ## 2.110.0
 
 ### Measured — the whole load now accounts for itself, to within 2ms
