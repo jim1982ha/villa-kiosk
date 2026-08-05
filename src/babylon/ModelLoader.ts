@@ -8,7 +8,6 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DracoCompression } from "@babylonjs/core/Meshes/Compression/dracoCompression";
-import { DracoDecoder } from "@babylonjs/core/Meshes/Compression/dracoDecoder";
 import { KhronosTextureContainer2 } from "@babylonjs/core/Misc/khronosTextureContainer2";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
@@ -38,90 +37,42 @@ import { isStructureMesh } from "./meshRoles";
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
 // still only instantiated lazily, when a model actually uses Draco — so an
 // uncompressed GLB pays nothing for this.
-// Babylon's own default pool size, restated explicitly so the reported
-// `glDracoWorkers` is always the number actually in force.
 //
-// 2.102.0 DOUBLED this on the theory that the import's ~1,430ms Draco phase was
-// per-call overhead sitting inside the workers. **The field data refuted it.**
-// Android went 4 → 8 workers and `glDracoMs` moved 1431 → 1430/1431; the Mac
-// went 2 → 4 and moved 1436/1296 → 1325/1259, which is noise. Doubling the pool
-// bought nothing, so the cost is NOT worker-bound: it is ~1.9ms of CALLING-
-// THREAD work per primitive, 765 times over — slicing each buffer view,
-// marshalling it to a worker and back, then building vertex buffers and
-// uploading each primitive's attributes to the GPU. Worker count cannot touch
-// any of that, and a bigger pool only costs memory (one WASM instance each) on
-// a device that is a wall-mounted iPad.
-//
-// DO NOT raise this again expecting a win — it has been measured and it does
-// not work. The remaining lever is FEWER PRIMITIVES in the GLB itself, which is
-// a pipeline change, not a code one.
-const DRACO_WORKERS = navigator.hardwareConcurrency
-  ? Math.min(Math.floor(navigator.hardwareConcurrency * 0.5), 4)
-  : 1;
-
+// `numWorkers` is deliberately NOT set: Babylon's own default is right here.
+// 2.102.0 doubled it on the theory that the import's ~1,430ms Draco phase was
+// per-call overhead sitting inside the workers, and the field data refuted it —
+// Android went 4 → 8 workers and the phase moved 1431 → 1430/1431ms, the Mac
+// went 2 → 4 and moved within its existing noise. The cost is ~1.9ms of
+// CALLING-THREAD work per primitive, 765 times over (slicing each buffer view,
+// marshalling to a worker and back, building vertex buffers, uploading each
+// primitive's attributes to the GPU), which no worker count can touch — while a
+// bigger pool does cost one WASM instance per worker on a wall-mounted iPad.
+// DO NOT raise it again expecting a win; it has been measured and disproved.
+// The remaining lever is FEWER PRIMITIVES in the GLB, a pipeline change.
 DracoCompression.Configuration = {
   decoder: {
     wasmUrl: dracoWrapperUrl,
     wasmBinaryUrl: dracoWasmUrl,
     fallbackUrl: dracoFallbackUrl,
-    numWorkers: DRACO_WORKERS,
   },
 };
 
-// ── Draco decode instrumentation (diagnostic only, no behaviour change) ─────
-// Field measurement narrowed the load to ONE unexplained second: every texture
-// is decoded and uploaded by ~30% of the import, yet the import runs on for
-// another ~1,000ms. The obvious suspect is Draco geometry decode (2.28M
-// vertices over 766 primitives) — except that second is nearly IDENTICAL on a
-// MacBook and an Android phone (977/992 vs 1083/957ms), and CPU-bound decode
-// would be several times slower on the phone. Something that does not scale
-// with CPU speed is usually per-call overhead, not compute.
+// The Draco decode instrumentation that lived here is GONE, on purpose.
 //
-// Guessing here is expensive: "swap Draco for meshopt" costs a vendored decoder
-// AND a full pipeline re-export of the villa, and the data currently argues
-// against it. So measure the one function that settles it. The glTF Draco
-// extension calls exactly this method per primitive (see
-// KHR_draco_mesh_compression.js), so wrapping it yields:
-//   glDracoN   — how many primitives were Draco-compressed at all (0 = not Draco)
-//   glDracoEnd — when the LAST decode finished, from the import's start; if this
-//                lands at importMs, Draco owns the tail, and if it doesn't,
-//                something after geometry does
-//   glDracoMs  — elapsed span from first decode start to last decode end
-//   glDracoSum — summed per-call time; SUM ÷ SPAN is the effective parallelism,
-//                which separates "the workers aren't being used" from "each
-//                call is cheap but there are 766 of them"
-// The wrapper always delegates and only observes the returned promise, so a
-// decode failure propagates exactly as before.
-const dracoStats = { calls: 0, sumMs: 0, firstAt: 0, lastAt: 0 };
-let dracoPatched = false;
-function instrumentDraco(): void {
-  if (dracoPatched) return;
-  dracoPatched = true;
-  const proto = DracoDecoder.prototype as unknown as Record<string, unknown>;
-  const KEY = "_decodeMeshToGeometryForGltfAsync";
-  const orig = proto[KEY];
-  // Private API: if Babylon renames it, skip silently rather than break loading.
-  if (typeof orig !== "function") return;
-  proto[KEY] = function wrapped(this: unknown, ...args: unknown[]) {
-    const t0 = performance.now();
-    if (dracoStats.calls === 0) dracoStats.firstAt = t0;
-    dracoStats.calls++;
-    const out = (orig as (...a: unknown[]) => unknown).apply(this, args);
-    const settle = () => {
-      const t1 = performance.now();
-      dracoStats.sumMs += t1 - t0;
-      dracoStats.lastAt = t1;
-    };
-    const maybe = out as { then?: (a: () => void, b: () => void) => unknown };
-    // Observing with both handlers cannot introduce an unhandled rejection, and
-    // the ORIGINAL promise is what gets returned, so the caller's own error
-    // handling is untouched.
-    if (typeof maybe?.then === "function") maybe.then(settle, settle);
-    else settle();
-    return out;
-  };
-}
-instrumentDraco();
+// It monkey-patched a PRIVATE Babylon method (`_decodeMeshToGeometryForGltf-
+// Async`) on the villa's critical load path to time every primitive's decode.
+// It did its job: it proved Draco owns the import's tail, and then that the
+// cost is calling-thread work per primitive rather than anything the worker
+// pool can help with (2.101.0-2.103.0). With that settled, keeping a patched
+// private API in production is a liability with no remaining payoff — the next
+// Babylon upgrade could change its shape, and the load path is the worst place
+// in this app to carry a surprise.
+//
+// Nothing diagnostic is actually lost: `glMeshes` counts the same primitives
+// from a PUBLIC observable, and primitive count is the one number that matters
+// for the remaining lever (merging meshes in the Blender pipeline). If that
+// pipeline change ever lands, `glMeshes` falling and `importMs` falling with it
+// is the whole confirmation needed.
 
 // Only the ETC1S path is wired up, because that is what the pipeline produces
 // (`blender_pipeline.py --ktx2` / `gltf-transform etc1s`). The UASTC entries
@@ -179,14 +130,21 @@ export interface LoadResult {
    */
   importMs: number;
   /**
-   * `importMs` broken into the glTF loader's own milestones, so a slow import
-   * points at a specific cause instead of being one number: `glJson` (the
-   * container readable), `glMesh`/`glTex`/`glMat` (when that kind of work
-   * last finished, all measured from the import's start) and the `glMeshes`/
-   * `glTextures`/`glMaterials` counts behind them. Whichever of glMesh/glTex
-   * sits closest to `importMs` owns the tail — and geometry and textures have
-   * opposite fixes, so this is the difference between a targeted change and a
-   * guess. Loose keys, forwarded straight into the load telemetry.
+   * What the GLB is made of, and when the loader's own milestones landed —
+   * loose keys forwarded straight into the load telemetry:
+   *   `glJson`     the container became readable
+   *   `glGraph`    the whole object graph was built (~7% of the import; NOT a
+   *                decode timing, see the note at the observables)
+   *   `glTexReady` the last texture finished decoding AND uploading, with
+   *                `glTexDone` reporting how many answered
+   *   `glMeshes` / `glTextures` / `glMaterials`  object counts
+   *   `glTexImgs` / `glTexMp`  DISTINCT decoded images and their megapixels
+   *                (de-duplicated: many texture objects share one image)
+   *   `glKVerts`   thousands of vertices across every primitive
+   *
+   * `glMeshes` is the number that matters most now: the import's dominant cost
+   * is fixed per-primitive work on the calling thread, so it scales with that
+   * COUNT rather than with vertices or pixels.
    */
   importPhases: Record<string, number>;
 }
@@ -323,15 +281,15 @@ export async function loadModelInto(
     // rounded megapixels instead would round every individual texture to zero
     // (a 512×512 image is 0.26MP) and report a total of 0 forever.
     let texPx = 0;
-    // Per-load, not cumulative: this app re-imports constantly (every Android
-    // PWA relaunch), and carrying counts over would report the sum of every
-    // load this session as if it were one.
-    dracoStats.calls = 0; dracoStats.sumMs = 0; dracoStats.firstAt = 0; dracoStats.lastAt = 0;
+    // Distinct InternalTextures, i.e. distinct decoded IMAGES — see the
+    // de-duplication note where this is filled.
+    const seenImages = new Set<object>();
     const since = () => Math.round(performance.now() - tImportStart);
     const pluginObserver = SceneLoader.OnPluginActivatedObservable.addOnce((plugin) => {
       type GlTexture = Partial<{
         isReady(): boolean;
         getSize(): { width: number; height: number };
+        getInternalTexture(): object | null;
         onLoadObservable: { addOnce(cb: () => void): unknown };
       }>;
       const p = plugin as Partial<{
@@ -343,33 +301,47 @@ export async function loadModelInto(
       // When the glTF JSON + binary chunk are readable — everything after this
       // is real decode work rather than container parsing.
       p.onParsedObservable?.addOnce(() => { gl.glJson = since(); });
-      // NOTE these three fire when the OBJECT IS CREATED, not when its data is
-      // ready — Babylon's own docs say so ("some data may not have been setup
-      // yet"). The first field measurement made that unmistakable: all three
-      // landed at 110ms while the import took 1,609ms, i.e. building the object
-      // graph is ~7% of the import and the other ~93% is the asynchronous data
-      // phase these callbacks do not bracket. Kept because "the graph is built
-      // by 110ms" is genuinely useful, but they must never be read as decode
-      // timings.
-      p.onMeshLoadedObservable?.add(() => { gl.glMeshes++; gl.glMesh = since(); });
-      p.onMaterialLoadedObservable?.add(() => { gl.glMaterials++; gl.glMat = since(); });
-      // The decisive one. A texture is READY only once its image has actually
-      // been decoded and uploaded, which is the work that plausibly fills that
-      // 93%: this villa carries 475 separate textures. `glTexReady` is when the
-      // LAST of them finished, so if it lands near `importMs` textures own the
-      // tail — and if it doesn't, geometry does, by elimination. `glTexDone`
-      // reports how many actually answered, so partial coverage can't be
+      // These fire when an OBJECT IS CREATED, not when its data is ready —
+      // Babylon's own docs say so ("some data may not have been setup yet").
+      // The field data made that unmistakable: mesh, texture and material
+      // milestones all landed at the same instant (110ms) while the import ran
+      // to 1,609ms, i.e. building the whole object graph is ~7% of the import.
+      // Three separate timestamps for one event was just noise, so they are now
+      // ONE — `glGraph`, "the object graph was built by here". Never read it as
+      // a decode timing; the counts are what these callbacks are really for.
+      p.onMeshLoadedObservable?.add(() => { gl.glMeshes++; gl.glGraph = since(); });
+      p.onMaterialLoadedObservable?.add(() => { gl.glMaterials++; gl.glGraph = since(); });
+      // A texture is READY only once its image has actually been decoded and
+      // uploaded. `glTexReady` is when the LAST of them finished: measured at
+      // 25-38% of the import, which is what ruled textures out as the load's
+      // bottleneck (and retroactively justified not adopting KTX2). `glTexDone`
+      // reports how many actually answered, so partial coverage can never be
       // mistaken for an early finish.
       p.onTextureLoadedObservable?.add((t: GlTexture) => {
         gl.glTextures++;
-        gl.glTex = since();
+        gl.glGraph = since();
         const done = () => {
           gl.glTexDone = (gl.glTexDone ?? 0) + 1;
           gl.glTexReady = since();
-          // The size behind the time, so "slow because there are many" and
-          // "slow because they are huge" stay distinguishable.
-          const sz = t.getSize?.();
-          if (sz?.width) texPx += sz.width * sz.height;
+          // Count each IMAGE once, not once per material that references it.
+          //
+          // Babylon builds one Texture OBJECT per material slot, but resolves
+          // the pixels through a shared InternalTexture keyed by the image's
+          // URL (glTFLoader's `data:<root>#image{index}` + texture.js's
+          // `_getFromCache`). `getSize()` therefore reports the SHARED image's
+          // dimensions, so summing it per object multiplied every baked atlas
+          // by however many materials used it — which is how this first
+          // reported 1,260MP, a reference-weighted total that reads like an
+          // impossible amount of texture memory. De-duplicating on the internal
+          // texture's identity turns it into the real figure, which is the one
+          // that matters: texture memory is what drives the GPU context losses
+          // this telemetry also records, and the iPad's memory ceiling.
+          const internal = t.getInternalTexture?.();
+          if (internal && !seenImages.has(internal)) {
+            seenImages.add(internal);
+            const sz = t.getSize?.();
+            if (sz?.width) texPx += sz.width * sz.height;
+          }
         };
         // Already decoded by the time we see it (a cache hit) — onLoadObservable
         // would never fire again, so count it now rather than under-report.
@@ -393,18 +365,11 @@ export async function loadModelInto(
     let verts = 0;
     for (const m of result.meshes) verts += (m as { getTotalVertices?: () => number }).getTotalVertices?.() ?? 0;
     gl.glKVerts = Math.round(verts / 1000);
+    // Megapixels of DISTINCT decoded image, and how many distinct images that
+    // was. Read against `glTextures` (texture OBJECTS, one per material slot):
+    // the gap between the two is how heavily the villa's atlases are reused.
     gl.glTexMp = Math.round((texPx / 1e6) * 10) / 10;
-    gl.glDracoN = dracoStats.calls;
-    // Kept after the 2.102.0 experiment so the pool size is never again an
-    // unknown when reading a load record — the comparison that refuted the
-    // worker theory was only possible because this number was in the log.
-    gl.glDracoWorkers = DRACO_WORKERS;
-    if (dracoStats.calls > 0) {
-      // The decisive one: compare against importMs. Equal ⇒ Draco owns the tail.
-      gl.glDracoEnd = Math.round(dracoStats.lastAt - tImportStart);
-      gl.glDracoMs = Math.round(dracoStats.lastAt - dracoStats.firstAt);
-      gl.glDracoSum = Math.round(dracoStats.sumMs);
-    }
+    gl.glTexImgs = seenImages.size;
     const glassMats = new Set<string>();
     // Material OBJECT refs (a Set — one material is shared by many meshes) so
     // glassDim below can re-drive their colours every day/night tick.

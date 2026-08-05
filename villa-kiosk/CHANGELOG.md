@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.104.0
+
+### Fixed — `glTexMp` was counting the same image once per material that used it
+- **Reported as 1,260 megapixels, which was dismissed as "impossible" and should not have been.** A number that large has a mechanism, and finding it took one read of the loader: `glTFLoader` builds each texture's URL from the **image** (`data:<root>#image{index}`), and `Texture` resolves its pixels through `_getFromCache(this.url, …)`. So Babylon creates one texture **object per material slot** but shares a single **InternalTexture per underlying image** — and `getSize()` reports the shared image's dimensions. Summing it per object multiplied every baked atlas by however many of the villa's 371 materials referenced it. The figure was never impossible; it was **reference-weighted**, not a memory total.
+- Now de-duplicated on the internal texture's identity, so **`glTexMp` is the real megapixel total of DISTINCT decoded images**, with **`glTexImgs`** reporting how many there actually are. Read against `glTextures` (475 objects), the gap between the two shows how heavily the atlases are reused. This matters beyond tidiness: texture memory is what drives the GPU `context-lost` events this same telemetry records, and the wall-mounted iPad's memory ceiling — a wrong number there is worse than no number.
+
+### Removed — the diagnostic scaffolding, now that it has done its job
+- **The Draco instrumentation is gone.** It monkey-patched a **private** Babylon method (`_decodeMeshToGeometryForGltfAsync`) on the villa's critical load path, and it earned its keep: it proved Draco owns the import's tail, then proved the cost is calling-thread work per primitive rather than anything the worker pool can reach. With that settled, a patched private API in production is a liability with no remaining payoff — the next Babylon upgrade could change its shape, and the load path is the worst place in this app to carry a surprise. Nothing diagnostic is lost: **`glMeshes` counts the same primitives from a public observable**, and primitive count is the one number that matters for the remaining lever. If the pipeline ever merges meshes, `glMeshes` falling and `importMs` falling with it is the whole confirmation needed.
+- **`glMesh`/`glTex`/`glMat` collapsed into a single `glGraph`.** All three always reported the *same instant* — they fire on object creation, not on data readiness — so three fields for one event was pure noise in every record.
+- `numWorkers` is no longer set at all: Babylon's default is correct, and the comment there records that raising it was measured and disproved, so it is not retried.
+
+### Where this leaves the build
+- With the scaffolding out, the load work of 2.96.0–2.103.0 is complete and production-clean: **13,398ms → ~2,150ms desktop / ~2,550ms phone**, no patched private APIs, no misleading metrics, no debug logging. What remains in the telemetry is a deliberate product feature — the Settings → Telemetry panel that made every one of these findings possible from devices nobody here can hold.
+
 ## 2.103.0
 
 ### Reverted — doubling the Draco worker pool changed nothing, and the experiment says why
