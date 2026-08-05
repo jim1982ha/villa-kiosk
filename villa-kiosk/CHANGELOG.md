@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.102.0
+
+### Found — the villa's load tail is Draco per-call overhead, not decode work
+- **`glDracoEnd` lands within 1–3ms of `importMs` on every sample** (1541 vs 1544 on the phone, 1500 vs 1502 and 1360 vs 1361 on desktop), and **`glDracoN` is 765** — every mesh in the GLB is separately Draco-compressed. Draco is the import's tail, conclusively, which is what the previous two releases were built to establish.
+- **The parallelism figure is what actually cracked it.** `glDracoSum ÷ glDracoMs` came out at **353–400×**, which is impossible as real concurrency and therefore means something else: all 765 decode calls are queued up front, so each promise sits pending for most of the import and `glDracoSum` is measuring **queue wait**, not work. The useful number is throughput: **765 decodes drain in ~1,430ms**, which against Babylon's default pool of 4 workers is **~7.5ms of worker time per primitive** — and that per-primitive figure is **identical on a desktop Mac and an Android phone** (1,431ms vs 1,436ms for the same 765 tasks). Decoding a ~3,000-vertex primitive is well under a millisecond of real work, so a cost that does not move with CPU speed is **per-call overhead** — message passing, structured clone, per-invocation WASM setup — not compute. That finally explains the device-independence first noticed two releases ago, and it means the earlier instinct to blame the codec was wrong: swapping Draco for meshopt would have re-paid the same 765 per-call costs.
+- The implied worker count of 4 matches Babylon's `min(cores/2, 4)` default exactly, which both confirms the model and points at a fix that needs no pipeline change.
+
+### Changed — doubled the Draco decode worker pool
+- **`numWorkers` is now `min(hardwareConcurrency, 8)` (floor 2) instead of Babylon's conservative `min(cores/2, 4)`** — consistently **twice** the workers on any device, so this reads as a controlled experiment rather than a tweak. Overhead that lives *in* the worker scales with the pool, so if the diagnosis holds the phase should fall roughly in proportion. Capped at 8 because each worker holds its own WASM instance and the target is a wall-mounted iPad, not a workstation; `hardwareConcurrency` is absent on some browsers, hence the fallback.
+- **`glDracoWorkers` is reported alongside**, so the next field log is self-interpreting. Throughput is `glDracoN ÷ glDracoMs`: if it scales with the pool, the phase is worker-bound overhead as diagnosed and the remedy is settled. **If it does not move, the cost is on the calling thread** — serialising 765 messages — and the answer is *fewer primitives from the pipeline*, which is a completely different fix. Either result is informative, which is the point.
+
 ## 2.101.0
 
 ### Ruled out — textures are not the load bottleneck, which settles an open question
