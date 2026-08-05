@@ -241,22 +241,59 @@ export async function loadModelInto(
     // total) and the observer is removed again below, so nothing accumulates
     // across the re-loads this app does constantly.
     const gl: Record<string, number> = { glMeshes: 0, glTextures: 0, glMaterials: 0 };
+    // Raw pixels, converted to megapixels ONCE at the end. Accumulating in
+    // rounded megapixels instead would round every individual texture to zero
+    // (a 512×512 image is 0.26MP) and report a total of 0 forever.
+    let texPx = 0;
     const since = () => Math.round(performance.now() - tImportStart);
     const pluginObserver = SceneLoader.OnPluginActivatedObservable.addOnce((plugin) => {
+      type GlTexture = Partial<{
+        isReady(): boolean;
+        getSize(): { width: number; height: number };
+        onLoadObservable: { addOnce(cb: () => void): unknown };
+      }>;
       const p = plugin as Partial<{
         onParsedObservable: { addOnce(cb: () => void): unknown };
         onMeshLoadedObservable: { add(cb: () => void): unknown };
-        onTextureLoadedObservable: { add(cb: () => void): unknown };
+        onTextureLoadedObservable: { add(cb: (tex: GlTexture) => void): unknown };
         onMaterialLoadedObservable: { add(cb: () => void): unknown };
       }>;
       // When the glTF JSON + binary chunk are readable — everything after this
       // is real decode work rather than container parsing.
       p.onParsedObservable?.addOnce(() => { gl.glJson = since(); });
-      // Last-write-wins: each records when that KIND of work finished, so
-      // comparing glMesh against glTex says which one owns the tail.
+      // NOTE these three fire when the OBJECT IS CREATED, not when its data is
+      // ready — Babylon's own docs say so ("some data may not have been setup
+      // yet"). The first field measurement made that unmistakable: all three
+      // landed at 110ms while the import took 1,609ms, i.e. building the object
+      // graph is ~7% of the import and the other ~93% is the asynchronous data
+      // phase these callbacks do not bracket. Kept because "the graph is built
+      // by 110ms" is genuinely useful, but they must never be read as decode
+      // timings.
       p.onMeshLoadedObservable?.add(() => { gl.glMeshes++; gl.glMesh = since(); });
-      p.onTextureLoadedObservable?.add(() => { gl.glTextures++; gl.glTex = since(); });
       p.onMaterialLoadedObservable?.add(() => { gl.glMaterials++; gl.glMat = since(); });
+      // The decisive one. A texture is READY only once its image has actually
+      // been decoded and uploaded, which is the work that plausibly fills that
+      // 93%: this villa carries 475 separate textures. `glTexReady` is when the
+      // LAST of them finished, so if it lands near `importMs` textures own the
+      // tail — and if it doesn't, geometry does, by elimination. `glTexDone`
+      // reports how many actually answered, so partial coverage can't be
+      // mistaken for an early finish.
+      p.onTextureLoadedObservable?.add((t: GlTexture) => {
+        gl.glTextures++;
+        gl.glTex = since();
+        const done = () => {
+          gl.glTexDone = (gl.glTexDone ?? 0) + 1;
+          gl.glTexReady = since();
+          // The size behind the time, so "slow because there are many" and
+          // "slow because they are huge" stay distinguishable.
+          const sz = t.getSize?.();
+          if (sz?.width) texPx += sz.width * sz.height;
+        };
+        // Already decoded by the time we see it (a cache hit) — onLoadObservable
+        // would never fire again, so count it now rather than under-report.
+        if (t.isReady?.()) done();
+        else t.onLoadObservable?.addOnce(done);
+      });
     });
     let result;
     try {
@@ -267,6 +304,14 @@ export async function loadModelInto(
       SceneLoader.OnPluginActivatedObservable.remove(pluginObserver);
     }
     const importMs = performance.now() - tImportStart;
+    // The geometry workload's SIZE, to sit beside the texture megapixels above:
+    // whichever phase owns the tail, the fix depends on whether the villa is
+    // heavy in triangles or heavy in images, and those have opposite remedies.
+    // Counted after the import so every primitive is present.
+    let verts = 0;
+    for (const m of result.meshes) verts += (m as { getTotalVertices?: () => number }).getTotalVertices?.() ?? 0;
+    gl.glKVerts = Math.round(verts / 1000);
+    gl.glTexMp = Math.round((texPx / 1e6) * 10) / 10;
     const glassMats = new Set<string>();
     // Material OBJECT refs (a Set — one material is shared by many meshes) so
     // glassDim below can re-drive their colours every day/night tick.

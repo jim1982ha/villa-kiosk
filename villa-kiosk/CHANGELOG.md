@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.100.0
+
+### Fixed — 2.99.0's import milestones measured the wrong thing, and said so loudly
+- **The first field reading was unambiguous and not what was expected: `glJson: 47`, then `glMesh`, `glTex` and `glMat` all landing at exactly `110` — while `importMs` was `1609`.** Three independent milestones reporting the same instant is not a coincidence, it is a signal that they all measure the same event. Babylon's own documentation confirms it: `onMeshLoaded` and friends fire "as soon as the mesh object is created, meaning some data may not have been setup yet for this mesh (vertex data, morph targets, material, ...)". So 2.99.0 measured **object-graph construction**, not decode.
+- That is still a real finding — building the entire graph (766 meshes, 475 textures, 371 materials) takes ~110ms, about **7%** of the import — but it means the other **~93% is the asynchronous data phase those callbacks never bracketed**, and the question of what fills it was still open. The milestones are kept (with a comment stating plainly what they do and do not mean, so nobody reads them as decode timings again) and a measurement that actually closes the question is added.
+- **`glTexReady` is the decisive new field: when the LAST texture finished decoding and uploading**, hooked through each texture's own readiness rather than its creation. If it lands near `importMs`, textures own the tail; if it doesn't, geometry does, by elimination — so one number settles it either way. **`glTexDone`** reports how many textures actually answered, so partial coverage can never be mistaken for an early finish, and a texture already decoded when first seen is counted immediately rather than waiting for a load event that will never fire again.
+- **`glTexMp` and `glKVerts`** give the two workloads' sizes — total megapixels of image actually decoded, and total thousands of vertices. Whichever phase owns the tail, the remedy depends on whether this villa is heavy in images or heavy in triangles, and those pull in opposite directions. The 475-texture count is already the strongest lead: that is a lot of separate images for one building, and each one costs a CPU decode plus a GPU upload.
+- A bug in the megapixel accumulator was caught before shipping: it rounded to whole megapixels on **every** texture, so a 512×512 image (0.26MP) rounded to zero and the running total stayed zero forever. It now accumulates raw pixels and converts once at the end.
+
 ## 2.99.0
 
 ### Confirmed in the field — 2.98.0's session fix more than halved the wait
