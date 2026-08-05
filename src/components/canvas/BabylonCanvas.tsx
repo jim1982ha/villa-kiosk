@@ -344,7 +344,10 @@ export default function BabylonCanvas({
         // DEVICE, so a phone that parses 5x slower than the desktop shows up
         // as itself rather than as an anecdote.
         const sendLoadTelemetry = (
-          revealMs: number, totalMs: number, revealSplit: Record<string, number>,
+          // `string` allowed since 2.118.0: the reveal split now also carries
+          // the GPU renderer name, which is the field that distinguishes a
+          // hardware draw from a software (SwiftShader) one.
+          revealMs: number, totalMs: number, revealSplit: Record<string, number | string>,
         ) => reportTelemetry("load", {
           ...revealSplit,
           // The pre-scene half of the load, split into phases that can each be
@@ -640,6 +643,27 @@ export default function BabylonCanvas({
               ...(tRendered ? { rdrMs: Math.round(tRendered - tReady) } : {}),
               ...(tRendered ? { cmpMs: Math.round(tPaint - tRendered) } : {}),
               hidMs: Math.round(hiddenMsTotal() - hiddenAtReady),
+              // ── WHICH renderer actually drew this (2.118.0) ───────────────
+              // The decisive missing field. `webglInfo()` has always collected
+              // this but only for the ERROR screen, so no successful load ever
+              // carried it — and it is the one thing that distinguishes a GPU
+              // draw from a CPU (SwiftShader) one. A software fallback renders
+              // the first frame on the MAIN THREAD, which is exactly the shape
+              // 2.117.0 exposed: a single ~11.6s blocking task. Read off the
+              // LIVE engine rather than a throwaway canvas — creating a second
+              // WebGL context purely to ask this question would add to the very
+              // context pressure under investigation.
+              ...((): Record<string, string> => {
+                try {
+                  // getGlInfo is on the concrete Engine, not the AbstractEngine
+                  // the scene is typed with — narrow rather than widen.
+                  const eng = manager.scene.getEngine() as unknown as {
+                    getGlInfo?: () => { renderer?: string };
+                  };
+                  const gi = eng.getGlInfo?.();
+                  return gi ? { gpu: String(gi.renderer ?? "").slice(0, 96) } : {};
+                } catch { return {}; }
+              })(),
               // Navigation start → the villa genuinely visible. THE number to
               // compare against a stopwatch — but ONLY true for the page's
               // FIRST load, exactly like totalMs/activeMs/bootMs above. On a

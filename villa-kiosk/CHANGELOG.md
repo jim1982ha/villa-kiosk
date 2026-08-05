@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.118.0
+
+### Corrected — 2.117.0's pin did not fix the slow paint, it EXPOSED it
+- **The 2.117.0 records overturn the conclusion 2.117.0 shipped with, and that has to be said before anything else.** Two PWA loads: `rdrMs 11628` with **`stallMs 11931, stallMaxMs 11656, stallMaxAt 2058`**, and `rdrMs 12735` with **`stallMaxMs 12760`**. `tReady` on the first was 2038ms — so the worst stall *starts at the moment of reveal* and its duration *matches `rdrMs` almost exactly*. That is **one single blocking main-thread task of ~11.6 seconds**, and it is `scene.render()` drawing the first frame.
+- **So the render loop was never the cause.** The pin worked exactly as designed — it made the first frame render immediately instead of waiting for an accidental wake-up — and in doing so it moved the cost into view. Before the pin, the loop slept, the driver had many seconds to finish work in the background, and by the time something woke it the render was cheap; that is why 2.116.0 measured `stallMs 182` and I concluded "the main thread was idle". **That reading was correct for that record and wrong as an explanation.** The work was always there; the old code was just measuring the wait for it rather than the work itself.
+- **What the data now says plainly: the first frame costs ~11.6s of MAIN-THREAD time in the PWA.** That is not a GPU queue (`cmpMs` 56–202ms), not a hidden page (`hidMs 0`), and not the model — those two PWA loads used the **light** albedo GLB (74 materials, 12MP).
+
+### Found — the PWA and Ingress paths are not performing the same work
+- **The operator has said twice that the add-on (Ingress) feels better. The 2.117.0 data supports it, and the comparison is stark because it runs the other way from the models:**
+  - **PWA** (`standalone: true`), **albedo** GLB, 74 materials, 12MP → **`rdrMs` 11,628 and 12,735**
+  - **Ingress** (`standalone: false`), **lightmap** GLB, **334** materials, 17.1MP → **`rdrMs` 4,039**
+  - The Ingress path draws a model with **4.5× the materials** in **a third of the time**. Whatever the difference is, it is not the asset.
+- **Leading hypothesis, and the field added here tests it directly: the PWA window is falling back to SOFTWARE rendering (SwiftShader).** A CPU rasteriser does its first-frame shader compilation and rasterisation on the main thread, which produces exactly one enormous blocking task — the shape observed — while a GPU draw does not. It would also explain the PWA's `context-lost` counter reaching **36**: repeated GPU-process loss for that origin is precisely what makes Chrome blocklist acceleration and fall back.
+- **`gpu` is now in every load record** — the WebGL `RENDERER` string, read off the **live** engine (`getGlInfo`) rather than a throwaway canvas, since creating a second context purely to ask this question would add to the very context pressure under investigation. `webglInfo()` has collected this since long before, but only for the **error screen**, so no successful load ever carried it. That omission is why five releases of analysis could not separate "slow GPU" from "no GPU".
+- **Next record settles it**: if PWA reports something like `SwiftShader`/`llvmpipe`/`Software` while Ingress reports the real Apple/AMD GPU, the cause is confirmed and the fix is about GPU-process stability for that origin, not about the model, the loop, or the loader. If both report the same hardware renderer, this is eliminated and the difference lies elsewhere in the two paths (service worker — registered for the PWA, absent under Ingress — being the next candidate).
+
 ## 2.117.0
 
 ### Fixed — the render loop could fall asleep before it had ever drawn the villa
