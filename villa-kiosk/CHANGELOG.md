@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.112.0
+
+### Removed — a load-time cost that bought nothing, ever
+- **The operator asked directly: is `paintMs` really mandatory every load, given the GLB is cached, or is there something to streamline?** Chasing that question through the reveal sequence turned up `ensureFirstPersonSpawn` — a pass that teleported the (inactive) first-person walker camera to its default spawn pose right after the overview reveal, via 16+ `pickWithRay` probes against the un-octree'd structure (700-790ms typical on the target iPad, up to 5.9s in the worst field sample recorded when this cost was first identified and moved off the reveal path).
+- **It was pure waste, on every single load, for every user, whether or not first-person is ever touched.** `setViewMode("first-person")` — the code path that runs on an actual switch — already computes its own spawn fresh every time (from the room the user last picked in overview, or the default staircase pose) and never read or reused whatever `ensureFirstPersonSpawn` had precomputed. The eager pass paid a real, repeated raycast cost for a result nothing downstream ever consumed.
+- **Worse: it likely inflated `paintMs` itself.** The raycasts ran from a callback registered on `scene.onAfterRenderObservable`, and the load-telemetry timestamp (`tPaint`) is captured in a *second* callback registered on the same observable, after it. Babylon fires same-event listeners synchronously in registration order, so on the very first post-load render notification the raycast pass very likely completed before the timestamp was taken — meaning some of what every prior release attributed to "GPU shader compile" in `paintMs` (2.109.0 onward) may actually have been this unrelated CPU-side work. This was not separately instrumented before, so the exact split is unknown, and no number is being claimed here beyond what the next round of field telemetry shows.
+- `ensureFirstPersonSpawn` and the now-write-only `spawnApplied` flag are deleted outright rather than gated behind a check, since there was no real use left to preserve. `firstPersonSpawn`/`staircaseSpawn`/`bestFacing` are untouched — they still run, on demand, from the two places that actually need a computed spawn: a real view-mode switch, and the bulk-entity-recalibration re-teleport. First-person as a feature (the toggle, walking, `eyeHeight`/`walkSpeed`, room→first-person navigation) is unaffected; only the eager, discarded-before-use precompute is gone.
+
 ## 2.111.0
 
 ### Reverted — 2.110.0's shader pre-compilation was a net loss, measured

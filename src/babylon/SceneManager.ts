@@ -525,9 +525,6 @@ export class SceneManager {
           : this.firstPersonSpawn();
         this.floors.switchToFloor(spawn.floor);
         this.camera.teleport(spawn, true);
-        // This branch places the walker itself, so the deferred default-spawn
-        // pass has nothing left to do — see ensureFirstPersonSpawn.
-        this.spawnApplied = true;
       }
       // Restore the real sky for the immersive walk-through view.
       this.sky.setEnabled(true);
@@ -543,27 +540,19 @@ export class SceneManager {
 
   /** The default first-person landing pose. Always on the GROUND FLOOR: the foot
    *  of the staircase if we can locate it, else a ground-floor living/entry room,
-   *  else the first ground-floor room, else the origin. Never a 2F room. */
-  /** Whether the (expensive) first-person spawn pose has been applied yet. */
-  private spawnApplied = false;
-
-  /**
-   * Place the first-person walker at its default pose — foot of the staircase
-   * on the ground floor. Costs 16+ `pickWithRay` probes against un-octree'd
-   * structure geometry (bestFacing) plus a floor estimate, which is why it is
-   * NOT on the reveal path any more: the villa reveals through the overview
-   * camera, so this pose is invisible until someone actually switches to
-   * Runs one frame after the reveal (loadModel's deferred block). A user-driven
-   * switch to first-person does NOT depend on this: setViewMode's own
-   * first-person branch computes and applies a spawn itself (and sets the flag
-   * below), so a switch can never catch an un-placed walker. Idempotent.
-   */
-  private ensureFirstPersonSpawn(): void {
-    if (this.spawnApplied || this.disposed) return;
-    this.spawnApplied = true;
-    this.camera.teleport(this.firstPersonSpawn(), true);
-  }
-
+   *  else the first ground-floor room, else the origin. Never a 2F room.
+   *
+   *  NOT precomputed at load any more (removed 2.112.0's `ensureFirstPersonSpawn`,
+   *  which teleported the inactive walker camera to this pose right after the
+   *  reveal, costing 16+ `pickWithRay` probes — 700-790ms typical, up to 5.9s
+   *  field-observed — on every single load, for every user, whether or not
+   *  first-person is ever used). `setViewMode("first-person")` below already
+   *  computes this fresh on every actual switch and never reused the
+   *  precomputed value, so the eager pass was pure waste — worse, its
+   *  raycasts ran from a callback registered on the same `onAfterRenderObservable`
+   *  notification as the load-telemetry timestamp, ahead of it in registration
+   *  order, so they very likely inflated the `paintMs` figure reported for
+   *  years of load telemetry. */
   private firstPersonSpawn(): TeleportPoint {
     const eye = this.config.eyeHeight ?? 1.7;
     const ground = (p: TeleportPoint) => p.floor === 1;
@@ -1182,12 +1171,14 @@ export class SceneManager {
     mark("applyStructure");
 
     // The villa is correct and interactive now — reveal it. The first-person
-    // spawn pose is NOT computed here any more (see ensureFirstPersonSpawn):
-    // it costs 16+ un-octree'd raycasts — 700-790ms on the target iPad, 5.9s
-    // in the worst field sample — for a camera that is not even rendering at
-    // this point (the reveal runs through the OVERVIEW camera, see the
-    // constructor's own note), so it belongs in the deferred block below with
-    // the other raycast-heavy passes.
+    // spawn pose is NOT computed here, or anywhere on the load path any more
+    // (2.112.0 removed the eager `ensureFirstPersonSpawn` precompute entirely):
+    // it cost 16+ un-octree'd raycasts — 700-790ms typical, 5.9s worst-case —
+    // for a camera that is not even rendering at this point (the reveal runs
+    // through the OVERVIEW camera), and `setViewMode("first-person")` below
+    // computes its own spawn fresh on every real switch without ever reusing
+    // the precomputed one, so the eager pass paid a real cost on every load
+    // for a result nothing ever read.
     this.markReady();
     this.requestRender(1000);
     mark("spawn");
@@ -1200,11 +1191,12 @@ export class SceneManager {
     // the villa" (and, on a wall tablet, several seconds of blocked main thread)
     // from waiting on the per-room floor raycasts + the stair-glow conform. The
     // Dashboard adopts the rooms/teleport grid via onCalibrated when it lands.
+    // (2.112.0: this used to also eagerly place the first-person walker here —
+    // removed, see firstPersonSpawn's docstring.)
     this.scene.onAfterRenderObservable.addOnce(() => {
       this.camera.indexTeleportAnchors(result.meshes);
       this.applyHighlight(result.meshes); // blue glow on bound meshes (if enabled)
       this.calibrateRooms(result.meshes); // plan→world fit + room glow (fires onCalibrated)
-      this.ensureFirstPersonSpawn();      // 16+ raycasts — never on the reveal path
       this.requestRender();
     });
 
