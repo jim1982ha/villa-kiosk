@@ -600,9 +600,33 @@ export default function BabylonCanvas({
         let tRendered = 0;
         const sendWhenPainted = () => {
           let done = false;
+          // ── Why the loop is PINNED until the first frame (2.117.0) ─────────
+          // The render loop is on-demand: runRenderLoop only calls
+          // scene.render() while `keepRenderingUntil` is still in the future.
+          // markReady() asks for 1000ms and the requestRender() below adds
+          // 350ms — and if the first frame has not landed inside that window,
+          // THE LOOP GOES TO SLEEP HAVING NEVER DRAWN ANYTHING. Nothing then
+          // renders until some unrelated event (a pointer move, an HA state
+          // change, a fan tick) happens to wake it, and the villa sits
+          // invisible in the meantime.
+          //
+          // This is what the 2.116.0 split caught: a load reporting
+          // `rdrMs: 18971` with `cmpMs: 360`, `hidMs: 0` and `stallMs: 182`.
+          // The compositor was fine, the page was never hidden, and the main
+          // thread was IDLE for those 19 seconds — so it was never expensive
+          // work, it was nothing happening at all. It also explains the wild
+          // spread of that figure (2s to 52s): it was measuring how long until
+          // something accidentally requested a frame.
+          //
+          // Pinning removes the race entirely — the loop cannot idle before it
+          // has drawn once — and the pin is released the moment the frame is
+          // confirmed (or the timeout gives up), so the on-demand behaviour
+          // this app depends on for idle power is otherwise untouched.
+          const releasePin = manager.pinContinuous();
           const finish = (painted: boolean) => {
             if (done) return;
             done = true;
+            releasePin();
             const tPaint = performance.now();
             sendLoadTelemetry(tReady - tParseDone, tReady, {
               rvMeshNames: Math.round(tMeshNames - tParseDone),
