@@ -69,7 +69,14 @@ function summarise(e: TelemetryEvent): string {
       const active = typeof e.activeMs === "number" && waited
         ? ` → ${ms(e.activeMs)} active` : "";
       const weight = typeof e.jsKb === "number" ? ` · ${e.jsKb}kB js` : "";
-      return `${ms(e.totalMs)} total${waited}${active} · bundle ${ms(e.bundleMs)}`
+      // A RELOAD (the villa built again in the same page, after signing out
+      // and back in) has no meaningful navigation-relative total — that number
+      // would be "time since the page opened". It reports `reloadMs` instead,
+      // and the headline has to say which of the two it is showing.
+      const head = typeof e.reloadMs === "number"
+        ? `${ms(e.reloadMs)} reload #${e.loadSeq ?? "?"}`
+        : `${ms(e.totalMs)} total`;
+      return `${head}${waited}${active} · bundle ${ms(e.bundleMs)}`
         + ` · mount ${ms(e.mountMs)} · parse ${ms(e.parseMs)} · reveal ${ms(e.revealMs)}`
         + `${weight}${worst}${parked}`;
     }

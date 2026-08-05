@@ -34,10 +34,44 @@ export type BootMark =
   | "auth"    // a session was established (login())
   | "scene";  // the Babylon scene effect started
 
-const marks = new Map<BootMark, number>();
+/** Marks that describe THE PAGE and can only happen once per document. */
+const PAGE_MARKS: ReadonlySet<BootMark> = new Set<BootMark>(["js", "react"]);
 
-/** Record a milestone. First write wins — safe to call from a render body, an
- *  effect that re-runs, or a StrictMode double-mount. */
+const marks = new Map<BootMark, number>();
+let loadSeq = 0;
+let loadT0 = 0;
+
+/** Open a new model load. Clears the PER-LOAD marks and returns which load
+ *  this is (1 = the first of this page).
+ *
+ *  Without this, the marks were module-level and first-write-wins for the
+ *  whole document — right for one load per page, wrong the moment the villa
+ *  is loaded again (signing out and back in remounts the canvas). From the
+ *  second load on, `markBoot("scene")` silently did nothing while the caller's
+ *  own `performance.now()` kept advancing, so `bootMs` reported TIME SINCE THE
+ *  PAGE OPENED and `waitMs` reported the FIRST sign-in — three consecutive
+ *  field records showed `waitMs: 4815` to the millisecond, which is what gave
+ *  it away. It read as a 10-35s load regression that had not happened: the
+ *  same records showed 2.1-4.3s of actual work throughout. */
+export function beginLoad(): number {
+  loadT0 = performance.now();
+  return ++loadSeq;
+}
+
+/** Clear the per-load marks. Call when the scene is TORN DOWN, not when one
+ *  starts: `gate`/`pin`/`auth` are recorded BEFORE the scene effect runs (the
+ *  sign-in is what causes the canvas to mount), so clearing at the start of a
+ *  load would wipe the marks that describe that very load and lose `waitMs`
+ *  entirely. Clearing on teardown leaves the next cycle a clean slate at the
+ *  only moment nothing is mid-flight. */
+export function endLoad(): void {
+  for (const key of [...marks.keys()]) {
+    if (!PAGE_MARKS.has(key)) marks.delete(key);
+  }
+}
+
+/** Record a milestone. First write wins WITHIN the current load — safe to call
+ *  from a render body, a re-running effect, or a StrictMode double-mount. */
 export function markBoot(name: BootMark): void {
   if (!marks.has(name)) marks.set(name, performance.now());
 }
@@ -80,12 +114,24 @@ function scriptWeight(): { jsKb?: number; jsNetKb?: number } {
 /** The whole picture, flattened into telemetry fields.
  *
  *  `total` is the caller's own navigation-start → villa-visible measurement
- *  (BabylonCanvas already owns that clock); everything else is derived here. */
+ *  (BabylonCanvas already owns that clock); everything else is derived here.
+ *
+ *  On a RELOAD (`loadSeq > 1`) the navigation-relative figures are deliberately
+ *  NOT emitted. `bootMs`, `totalMs` and `activeMs` all mean "since the page
+ *  opened", which after a sign-out/sign-in cycle is a number that grows forever
+ *  and describes nothing — it is exactly what made a healthy 2.5s load look
+ *  like a 35s regression. `reloadMs` replaces them: this load's own span, the
+ *  only figure that is true for both cases. */
 export function bootTimeline(total: number): Record<string, number | string | boolean> {
   const out: Record<string, number | string | boolean> = {};
   const put = (k: string, v: number | undefined) => {
     if (typeof v === "number" && Number.isFinite(v) && v >= 0) out[k] = Math.round(v);
   };
+  const isReload = loadSeq > 1;
+  if (isReload) {
+    out.loadSeq = loadSeq;
+    put("reloadMs", performance.now() - loadT0);
+  }
 
   const nav = navEntry();
   const tJs = mark("js");
@@ -137,6 +183,12 @@ export function bootTimeline(total: number): Record<string, number | string | bo
   // gate at all) it is measured from React instead, the only earlier anchor.
   const sceneFrom = tAuth ?? tReact;
   if (tScene !== undefined && sceneFrom !== undefined) put("mountMs", tScene - sceneFrom);
+
+  // Navigation-relative from here down — only true for the page's FIRST load.
+  if (isReload) {
+    Object.assign(out, scriptWeight());
+    return out;
+  }
 
   // THE number to judge a load by: wall clock minus the part spent waiting on a
   // person. Equals totalMs whenever a session was already restored.

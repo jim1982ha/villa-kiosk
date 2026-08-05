@@ -14,7 +14,7 @@ import { fetchModelWithRetry } from "@/utils/fetchProgress";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { report as reportTelemetry } from "@/utils/telemetry";
-import { markBoot, bootTimeline } from "@/utils/bootTimeline";
+import { markBoot, beginLoad, endLoad, bootTimeline } from "@/utils/bootTimeline";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
 import ModelUploader from "@/components/settings/ModelUploader";
 import ErrorReport from "@/components/ErrorReport";
@@ -159,6 +159,10 @@ export default function BabylonCanvas({
     // before it (HTML, bundle, React, and any time a person spent at the
     // profile/passcode screen) is now separately attributable instead of
     // collapsing into this single figure.
+    // Opens a new load: clears the per-load marks so a REMOUNT (sign out, sign
+    // back in) measures itself instead of inheriting the first load's. Must run
+    // before markBoot("scene"), which is one of the marks it clears.
+    const loadSeq = beginLoad();
     markBoot("scene");
 
     let cancelled = false;
@@ -359,11 +363,15 @@ export default function BabylonCanvas({
           //   whole GLB, mesh catalog write, auto-detect, per-entity state
           //   paint, the rooms-sync await and its double-rAF settle).
           // totalMs: navigation start → villa visible. THE number to judge.
-          bootMs: Math.round(tBoot),
+          // Navigation-relative, so ONLY meaningful for the page's first load.
+          // On a remount they would report "time since the page opened", which
+          // is what made a healthy 2.5s reload look like a 35s regression —
+          // `reloadMs` (from bootTimeline) carries the real figure instead.
+          ...(loadSeq === 1 ? { bootMs: Math.round(tBoot) } : {}),
           engineMs: Math.round(tEngineDone - tEngineStart),
           configMs: Math.round(tConfigDone - tConfigStart),
           revealMs: Math.round(revealMs),
-          totalMs: Math.round(totalMs),
+          ...(loadSeq === 1 ? { totalMs: Math.round(totalMs) } : {}),
           // Did the background download started on the profile screen actually
           // get used? Without this, "is the pre-load working?" was a question
           // nobody could answer from a device they don't hold — the phase
@@ -568,6 +576,9 @@ export default function BabylonCanvas({
       onManager(null);
       manager.dispose();
       managerRef.current = null;
+      // The scene is gone; the next sign-in starts a fresh load cycle and must
+      // not inherit this one's gate/passcode/scene marks.
+      endLoad();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
