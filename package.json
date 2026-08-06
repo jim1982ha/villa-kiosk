@@ -1,7 +1,7 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.131.0",
+  "version": "2.132.0",
   "description": "Villa Kiosk — a 3D interactive villa dashboard for Home Assistant",
   "license": "UNLICENSED",
   "type": "module",

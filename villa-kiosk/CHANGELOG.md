@@ -1,3 +1,27 @@
+## 2.132.0
+
+### Fixed — a healthy camera was painted the same colour as empty track
+
+2.131.0 treated `online` as "nothing to report" and left those slices unpainted. That was the wrong reading of the state: a camera that is up and recording IS working, which the legend calls **On / active** and paints green — not "Off / idle", which means a device at rest. The bar consequently showed a perfectly healthy camera as bare background, indistinguishable from a slice it had no data for at all.
+
+The resting state is now painted with its own colour while still being excluded from striping and from the event list — the two things that made it noise in the first place. So the bar reads green for a working camera, red where it detected something, amber where Home Assistant lost contact, and stripes only when a single slice genuinely saw more than one of those.
+
+The fix is in the camera's own state → colour mapping, deliberately not in what `idle` means. `idle` is the shared token for a device at rest and is used by every other panel; redefining it to green would have contradicted the legend everywhere else to fix one bar.
+
+### Fixed — the tooltip reported a detection over a slice that had none
+
+Hovering an empty part of the bar showed the most recent detection instead of nothing. The lookup fell back to the last cell when the pointer wasn't over one, so a slice where nothing happened borrowed the timestamp of one where something had — the tooltip asserting motion at a time there was none. There is no fallback now.
+
+### Fixed — the tooltip listed the same minute over and over
+
+A sensor tripping repeatedly within one minute produced a row per trip: "Motion · 10:44, Motion · 10:44, Motion · 10:44…", filling a full-height column with near-identical lines. Events are now deduplicated to one line per state per minute — four trips at 10:44 are still just "someone was there at 10:44", which is the entire question this bar answers.
+
+### Added — the live feed rings itself while a detection is in progress
+
+The status bar answers "was there someone" in retrospect. Someone actually watching the stream got no signal at all that the sensor was tripping right now. The feed is now ringed in the same red the bar and the legend already use for a detection, driven by the motion sensor's live state.
+
+On the viewport rather than the zoom layer: that element carries the pinch-zoom transform, so a border there would scale and slide with the zoom instead of framing the feed. Eased in and out, since a busy driveway would otherwise strobe the border on every brief trip.
+
 ## 2.131.0
 
 ### Fixed — the camera bar treated "the camera is fine" as news

@@ -96,8 +96,12 @@ interface Cell {
   width: number;
   from: number;
   to: number;
-  /** Distinct states in this cell, in order of first appearance. */
+  /** NOTABLE states in this cell, in order of first appearance. */
   states: string[];
+  /** The resting state in force here, if any. Still painted — a camera that is
+   *  online and recording is active, not nothing — but never stripes and never
+   *  appears as an event. */
+  baseline?: string;
   /** Every transition inside this cell — the tooltip lists all of them. */
   events: StateHistoryPoint[];
 }
@@ -178,10 +182,22 @@ export default function StateTimeline({
       // discard any bucket that had nothing else in it.
       const baseline = new Set(baselineKey ? baselineKey.split("\u0000") : []);
       for (const c of out) {
+        c.baseline = c.states.find((st) => baseline.has(st));
         c.states = c.states.filter((st) => !baseline.has(st));
-        c.events = c.events.filter((ev) => !baseline.has(ev.state));
+        const seen = new Set<string>();
+        c.events = c.events.filter((ev) => {
+          if (baseline.has(ev.state)) return false;
+          // ONE line per state per MINUTE. A sensor that trips four times in
+          // the same minute is still just "someone was there at 10:44", and
+          // listing each trip separately padded the tooltip to a full-height
+          // column of near-identical rows carrying no extra information.
+          const k = `${ev.state}|${Math.floor(ev.t / 60_000)}`;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
       }
-      return out.filter((c) => c.states.length > 0);
+      return out.filter((c) => c.states.length > 0 || c.baseline !== undefined);
     }
 
     const out: Cell[] = [];
@@ -218,7 +234,11 @@ export default function StateTimeline({
       ? Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
       : Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
     const pct = frac * 100;
-    const cell = cells.find((c) => pct >= c.left && pct <= c.left + c.width) ?? cells[cells.length - 1];
+    // No "?? last cell" fallback: falling back reported the most RECENT
+    // detection while the pointer was over an earlier, empty slice — the
+    // tooltip claiming motion at a time nothing had happened.
+    const cell = cells.find((c) => pct >= c.left && pct <= c.left + c.width);
+    if (!cell) { setHover(null); return; }
     setHover({ x: vertical ? e.clientY - rect.top : e.clientX - rect.left, cell });
   };
 
@@ -237,7 +257,9 @@ export default function StateTimeline({
             // bucket mode they do, and forcing one wider would reintroduce the
             // overlap this mode exists to remove.
             const size = bucketMs ? `${c.width}%` : `${Math.max(c.width, 0.3)}%`;
-            const bg = cellBackground(c.states, colorFor);
+            const bg = c.states.length
+              ? cellBackground(c.states, colorFor)
+              : colorFor(c.baseline ?? "");
             return (
               <div
                 key={i}
@@ -283,7 +305,14 @@ export default function StateTimeline({
             {bucketMs ? (
               <>
                 <strong>{fmtChartTime(hover.cell.from)} – {fmtChartTime(hover.cell.to)}</strong>
-                {hover.cell.events.length === 0 ? (
+                {hover.cell.states.length === 0 ? (
+                  // Only the resting state here — say so plainly rather than
+                  // leaving an empty tip the user has to interpret.
+                  <span className="spark-tip-event">
+                    <span style={{ color: colorFor(hover.cell.baseline ?? "") }}>●</span>
+                    {" "}{prettyState(hover.cell.baseline ?? "")} · nothing detected
+                  </span>
+                ) : hover.cell.events.length === 0 ? (
                   // No transition landed here, so nothing "happened" — the bar
                   // is coloured because a state was already in force throughout.
                   hover.cell.states.map((st) => (

@@ -127,6 +127,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // Detected here rather than in CSS alone because the timeline has to lay its
   // segments out on the matching axis (StateTimeline's `vertical`) — a CSS
   // rotation was tried first and abandoned; see that prop's docstring.
+  // Live "is something moving right now" — the same sensor the status bar
+  // summarises after the fact, read straight from the entity table so the feed
+  // can signal a detection while it is happening.
+  const motionActive = mapping.motionEntityId
+    ? entities[mapping.motionEntityId]?.state === "on"
+    : false;
   const [railVertical, setRailVertical] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(orientation: landscape) and (max-height: 560px)");
@@ -610,7 +616,20 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         )}
       </div>
 
-      <div className="camera-viewport" style={{ marginTop: bottomRowH }}>
+      {/* Ring the feed itself while the sensor is tripped, so someone WATCHING
+          the stream is told a detection is happening now — the status bar below
+          only answers the same question in retrospect. On the viewport, not on
+          .camera-zoom: that element carries the pinch-zoom transform, so a
+          border there would scale and slide with the zoom instead of framing
+          the feed. Colour from the shared vocabulary, so it is the same red the
+          bar and the legend already use for a detection. */}
+      <div
+        className="camera-viewport"
+        style={{
+          marginTop: bottomRowH,
+          ...(motionActive ? { boxShadow: `inset 0 0 0 4px ${STATUS_COLOR.alert}` } : undefined),
+        }}
+      >
         {/* Zoom/pan layer — FIRST child so the controls below paint on top of
             it and stay clickable while it captures pinch/wheel/drag gestures. */}
         <div className="camera-zoom" ref={zoom.ref} style={zoom.style}>
@@ -661,7 +680,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             colorFor={(s) => (
               s === "motion" ? STATUS_COLOR.alert
                 : s === "offline" ? STATUS_COLOR.unavailable
-                  : STATUS_COLOR.idle
+                  // A camera that is up and recording is ON, which the legend
+                  // calls "On / active" and paints green. It is emphatically
+                  // not "Off / idle" — that token means a device at rest, and
+                  // using it here painted a perfectly healthy camera the same
+                  // colour as the empty track behind it.
+                  : STATUS_COLOR.active
             )}
           />
         </div>

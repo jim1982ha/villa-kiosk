@@ -1221,7 +1221,11 @@ input[type="range"]::-moz-range-thumb {
    with its content, so the enlarged feed spilled across the whole panel and
    read as "the entire screen zooms" rather than just the video. Only an
    ancestor that is NOT itself being transformed can clip it. */
-.camera-viewport { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; min-width: 0; width: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.camera-viewport { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; min-width: 0; width: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  /* Eased so the live-detection ring (set inline from STATUS_COLOR.alert when
+     the motion sensor trips) fades in and out instead of snapping on every
+     brief trip, which on a busy driveway would strobe. */
+  transition: box-shadow 160ms ease; }
 /* Zoom/pan layer: fills its container, centres the feed, and is transformed
    by useMediaZoom. will-change keeps the transform on the compositor (cheap). */
 .camera-zoom { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; will-change: transform; }
