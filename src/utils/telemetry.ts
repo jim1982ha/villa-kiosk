@@ -26,6 +26,10 @@ export type TelemetryKind =
   | "error"           // uncaught JS error / unhandled rejection
   | "context-lost"    // WebGL context lost (the iOS memory-pressure signal)
   | "context-restored"
+  // A main-thread block long enough for the UI to be visibly unresponsive,
+  // AFTER the villa is up. The long-task observer always saw these; only the
+  // load snapshot ever reported them. See bootTimeline.reportPostLoadFreeze.
+  | "freeze"
   | "lifecycle"       // pagehide / pageshow / visibility transitions
   | "recovered"       // we auto-reloaded after a restore onto a dead scene
   | "sync"            // shared-config pull/push outcome (see DeviceConfigSync)

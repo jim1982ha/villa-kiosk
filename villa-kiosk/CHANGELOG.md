@@ -1,3 +1,21 @@
+## 2.125.0
+
+### Added — the freeze is finally being reported, by an observer that was already watching it
+
+The reported symptom is that returning to the kiosk after being away leaves the villa **on screen but unresponsive** for several seconds, sometimes long enough for the browser to offer to kill the page. Two explanations were carried for that, and this release's evidence kills both.
+
+It is not the page being discarded and reloaded: the villa is still there, so the document survived. And it is not a WebGL context being lost and rebuilt: a lost context that comes back fires `context-restored`, and across four versions of telemetry there is **not one** such event — every `context-lost` is co-timed with `pagehide`, which is the signature of a context dying because the page is being torn down (`handlePageHide` disposes deliberately), not one being recovered. So the freeze is an ordinary main-thread block on a live page, and both prior theories were wrong.
+
+That block should have been visible all along. `installStallObserver` has watched `longtask` entries continuously since startup — but its counters were only ever read into the **load** record and then reset, so every multi-second block occurring *after* the villa was up was measured and thrown away. Every single time this was reported, the number describing it had already been collected and discarded.
+
+Long tasks past a second (well beyond jank, into "not responding") are now reported as their own `freeze` event once the load record is out, carrying the one thing that makes them diagnosable: **how long after returning to the page it happened, and how long the page had been away**. A block 200ms after coming back from six minutes hidden and a block forty minutes into an untouched session have nothing to do with each other and would be fixed in completely different places, and until now the data could not tell them apart. Rate-limited to one per thirty seconds and twenty per session, since a wedged main thread emits several in a row and only the first is informative; reported from a deferred task so the measurement never adds to the stall it is measuring.
+
+No fix here — this release is only the measurement. Guessing again without it would repeat what the last two attempts did.
+
+### Note — the GPU-memory reading of the earlier data was wrong
+
+`mem` is roughly 350–380MB from the moment the villa finishes loading, not after hours of use: parsing a 17.7MB GLB into 704 meshes, 392 textures and 2.4M vertices legitimately costs that, and the figure is flat afterwards. Earlier notes describing an accumulation that eventually crosses a threshold were reading a load cost as a drift.
+
 ## 2.124.0
 
 ### Fixed — the villa rendered continuously, forever, whenever anything was animating

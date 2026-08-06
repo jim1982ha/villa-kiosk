@@ -116,6 +116,14 @@ function summarise(e: TelemetryEvent): string {
     }
     case "recovered":
       return String(e.reason ?? "auto-reloaded");
+    case "freeze": {
+      // "How long after coming back" is the whole point of the row — a freeze
+      // on the return path and one out of nowhere have unrelated causes.
+      const back = typeof e.sinceVisibleMs === "number"
+        ? ` · ${ms(e.sinceVisibleMs)} after returning from ${ms(e.hiddenForMs)} hidden`
+        : " · no recent return (not the wake path)";
+      return `UI blocked ${ms(e.ms)}${back} · ${ms(e.sinceLoadMs)} into this session`;
+    }
     case "context-lost":
       return `WebGL context lost (${e.total ?? "?"} this session)`;
     case "context-restored":
@@ -132,6 +140,7 @@ function summarise(e: TelemetryEvent): string {
 
 const TONE: Record<string, string> = {
   error: "var(--status-danger)",
+  freeze: "var(--status-danger)",
   "context-lost": "var(--status-danger)",
   "context-restored": "var(--status-warning)",
   recovered: "var(--status-warning)",

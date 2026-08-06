@@ -25,6 +25,8 @@
 // measure a build that isn't the one you just shipped — the real decoded size
 // of the JS the device actually executed.
 
+import { report } from "./telemetry";
+
 /** Milestones, in the order they happen. */
 export type BootMark =
   | "js"      // the main bundle's module body ran (bundle is downloaded+compiled)
@@ -71,6 +73,50 @@ export function beginLoad(): number {
 // tearing down, the gate, the passcode, and the villa rebuilding.
 const stalls = { count: 0, totalMs: 0, maxMs: 0, maxAt: 0, preCount: 0, preMs: 0 };
 
+// ── Post-load freeze reporting ─────────────────────────────────────────────
+// The long-task observer below has been running continuously since startup,
+// but its counters were only ever READ into the load snapshot and then reset
+// — so a multi-second block that happens once the villa is up (the "came back
+// to the kiosk and it was frozen" report) was measured and thrown away every
+// single time. This reports those directly instead.
+//
+// Only genuinely user-visible blocks: 1s is far past jank and into "the app
+// is not responding". Rate-limited because a wedged main thread can emit
+// several in a row, and the first is the informative one.
+const FREEZE_MIN_MS = 1000;
+const FREEZE_COOLDOWN_MS = 30_000;
+const FREEZE_MAX_PER_SESSION = 20;
+let lastFreezeReportAt = -Infinity;
+let freezeReports = 0;
+/** Flips when the load record is built — see stallSummary. */
+let loadReported = false;
+
+function reportPostLoadFreeze(durationMs: number): void {
+  // While the villa is still loading there is a spinner explaining the wait,
+  // and those blocks are already covered by the load record's stall stats.
+  if (!loadReported) return;
+  if (durationMs < FREEZE_MIN_MS) return;
+  const now = performance.now();
+  if (now - lastFreezeReportAt < FREEZE_COOLDOWN_MS) return;
+  if (freezeReports >= FREEZE_MAX_PER_SESSION) return;
+  lastFreezeReportAt = now;
+  freezeReports++;
+  // Deferred: reporting from inside the observer callback would add this
+  // work to the very stall being measured.
+  setTimeout(() => {
+    report("freeze", {
+      ms: Math.round(durationMs),
+      // The discriminator. A freeze within a second or two of coming back is
+      // a return-path cost; one at 40 minutes with no recent return is
+      // something else entirely, and the fixes are unrelated.
+      sinceVisibleMs: lastBecameVisibleAt ? Math.round(now - lastBecameVisibleAt) : undefined,
+      hiddenForMs: lastHiddenForMs ? Math.round(lastHiddenForMs) : undefined,
+      sinceLoadMs: Math.round(now),
+      seq: freezeReports,
+    });
+  }, 0);
+}
+
 /** Start watching for main-thread stalls. Idempotent; call once at startup. */
 let stallObserverInstalled = false;
 export function installStallObserver(): void {
@@ -90,6 +136,7 @@ export function installStallObserver(): void {
           stalls.maxMs = e.duration;
           stalls.maxAt = Math.round(e.startTime);
         }
+        reportPostLoadFreeze(e.duration);
       }
     });
     obs.observe({ type: "longtask", buffered: true });
@@ -113,6 +160,11 @@ export function installStallObserver(): void {
 let hiddenSince: number | null = null;
 let hiddenAccumMs = 0;
 let visibilityInstalled = false;
+/** How long the page was hidden on the MOST RECENT return, and when that
+ *  return happened — the context that turns a bare "the main thread blocked
+ *  for 4s" into "it blocked 200ms after coming back from 6 minutes away". */
+let lastHiddenForMs = 0;
+let lastBecameVisibleAt = 0;
 
 /** Total ms the document has spent hidden since page load, up to now. */
 export function hiddenMsTotal(): number {
@@ -131,13 +183,19 @@ export function installVisibilityTracker(): void {
     if (document.visibilityState === "hidden") {
       if (hiddenSince === null) hiddenSince = performance.now();
     } else if (hiddenSince !== null) {
-      hiddenAccumMs += performance.now() - hiddenSince;
+      lastHiddenForMs = performance.now() - hiddenSince;
+      lastBecameVisibleAt = performance.now();
+      hiddenAccumMs += lastHiddenForMs;
       hiddenSince = null;
     }
   });
 }
 
 function stallSummary(): Record<string, number> {
+  // The load record is being built, so from here on a long task is no longer
+  // load cost — it is a freeze on a villa that is already up. See
+  // reportPostLoadFreeze, which only reports once this flips.
+  loadReported = true;
   if (!stalls.count) return {};
   return {
     stallCount: stalls.count,
@@ -162,6 +220,9 @@ export function endLoad(): void {
   }
   stalls.count = 0; stalls.totalMs = 0; stalls.maxMs = 0;
   stalls.maxAt = 0; stalls.preCount = 0; stalls.preMs = 0;
+  // The scene is going away, so the next load's own stalls are load cost
+  // again, not freezes on a running villa.
+  loadReported = false;
 }
 
 /** Record a milestone. First write wins WITHIN the current load — safe to call
