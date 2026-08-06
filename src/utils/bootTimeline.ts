@@ -88,16 +88,30 @@ const FREEZE_COOLDOWN_MS = 30_000;
 const FREEZE_MAX_PER_SESSION = 20;
 let lastFreezeReportAt = -Infinity;
 let freezeReports = 0;
-/** Flips when the load record is built — see stallSummary. */
-let loadReported = false;
+/** When the load record was built, or 0 before that — see stallSummary.
+ *
+ *  A TIMESTAMP rather than a flag because a PerformanceObserver reports a long
+ *  task when it ENDS, not when it starts. The load's own final block (the GLB
+ *  parse and first paint) therefore lands in the observer just AFTER the load
+ *  record is built, and a boolean gate counted it as a post-load freeze: the
+ *  first capture from a real device reported a 5,469ms "freeze" whose duration
+ *  matched that load's own `paintMs` of 5,509 almost exactly. Comparing the
+ *  task's startTime against this instead attributes it where it belongs. */
+let loadReportedAt = 0;
 /** Whether the Long Tasks API took the observe() call; false on Safari/iOS,
  *  which is what installFreezeWatchdog exists for. */
 let longtaskAvailable = false;
 
-function reportPostLoadFreeze(durationMs: number, src: "longtask" | "watchdog"): void {
+function reportPostLoadFreeze(
+  durationMs: number,
+  src: "longtask" | "watchdog",
+  /** When the block STARTED. A task that began before the load record was
+   *  built is load cost, however long after it the observer reports it. */
+  startedAt: number,
+): void {
   // While the villa is still loading there is a spinner explaining the wait,
   // and those blocks are already covered by the load record's stall stats.
-  if (!loadReported) return;
+  if (!loadReportedAt || startedAt < loadReportedAt) return;
   if (durationMs < FREEZE_MIN_MS) return;
   const now = performance.now();
   if (now - lastFreezeReportAt < FREEZE_COOLDOWN_MS) return;
@@ -143,7 +157,7 @@ export function installStallObserver(): void {
           stalls.maxMs = e.duration;
           stalls.maxAt = Math.round(e.startTime);
         }
-        reportPostLoadFreeze(e.duration, "longtask");
+        reportPostLoadFreeze(e.duration, "longtask", e.startTime);
       }
     });
     obs.observe({ type: "longtask", buffered: true });
@@ -187,7 +201,7 @@ function installFreezeWatchdog(): void {
     // one spanning the moment of return.
     if (document.visibilityState !== "visible") return;
     if (now - lastBecameVisibleAt < TICK_MS * 2) return;
-    if (lateBy >= FREEZE_MIN_MS) reportPostLoadFreeze(lateBy, "watchdog");
+    if (lateBy >= FREEZE_MIN_MS) reportPostLoadFreeze(lateBy, "watchdog", now - lateBy);
   }, TICK_MS);
 }
 
@@ -241,7 +255,7 @@ function stallSummary(): Record<string, number> {
   // The load record is being built, so from here on a long task is no longer
   // load cost — it is a freeze on a villa that is already up. See
   // reportPostLoadFreeze, which only reports once this flips.
-  loadReported = true;
+  loadReportedAt = performance.now();
   if (!stalls.count) return {};
   return {
     stallCount: stalls.count,
@@ -268,7 +282,7 @@ export function endLoad(): void {
   stalls.maxAt = 0; stalls.preCount = 0; stalls.preMs = 0;
   // The scene is going away, so the next load's own stalls are load cost
   // again, not freezes on a running villa.
-  loadReported = false;
+  loadReportedAt = 0;
 }
 
 /** Record a milestone. First write wins WITHIN the current load — safe to call

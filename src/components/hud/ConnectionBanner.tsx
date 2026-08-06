@@ -63,10 +63,18 @@ export default function ConnectionBanner() {
     // mid-sentence, and it re-announces on every reconnect cycle.
     <div className="connection-banner" role="status" aria-live="polite">
       <WifiOff size={15} />
+      {/* Two phrasings, picked by width (same -full/-short idiom the settings
+          labels use). The long one wrapped to FIVE lines on a phone, turning a
+          status pill into a slab covering a third of the villa — see the
+          .connection-banner phone rules. The short one says the only thing
+          that has to fit: it is reconnecting, so nothing will respond yet. */}
       <span>
-        Disconnected from Home Assistant — reconnecting…
-        {" "}
-        <span className="muted">Controls won&rsquo;t respond until this clears.</span>
+        <span className="conn-banner-full">
+          Disconnected from Home Assistant — reconnecting…
+          {" "}
+          <span className="muted">Controls won&rsquo;t respond until this clears.</span>
+        </span>
+        <span className="conn-banner-short">Reconnecting to Home&nbsp;Assistant…</span>
       </span>
     </div>
   );

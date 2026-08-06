@@ -100,6 +100,15 @@ interface HAStateContextType {
   serviceError: { message: string; at: number } | null;
 }
 
+/** How long to wait for a burst of registry-change events to finish before
+ *  refetching. One device edit in HA touches the entity, device and area
+ *  registries within milliseconds of each other, and an integration reload
+ *  emits a long run of them; the registry is only read for room/hidden/device
+ *  grouping, so the last event of a burst is the only one whose answer
+ *  matters. Long enough to swallow a reload, short enough that renaming a room
+ *  in HA still reaches the map effectively immediately. */
+const REGISTRY_DEBOUNCE_MS = 750;
+
 const HAStateContext = createContext<HAStateContextType | null>(null);
 
 interface StateChangedEvent {
@@ -135,6 +144,8 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const [serviceError, setServiceError] = useState<{ message: string; at: number } | null>(null);
 
   // Imperative subscriber registries (don't trigger React renders).
+  /** Pending coalesced registry refetch — see onRegistryChanged. */
+  const registryDebounceRef = useRef<ReturnType<typeof setTimeout>>();
   const perEntity = useRef(new Map<string, Set<EntityCallback>>());
   const allSubs = useRef(new Set<(e: HassEntity) => void>());
 
@@ -286,7 +297,25 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
         // on the same underlying registry-change events HA emits; re-running
         // the one resolver covers whichever registry actually changed rather
         // than needing three separate handlers.
-        const onRegistryChanged = () => { void refreshRegistryData(); };
+        // COALESCED, not per-event. Each refresh is a full entity-registry
+        // fetch — 1,582 rows on a real villa — and Home Assistant emits these
+        // in bursts: an integration reloading, a Zigbee coordinator
+        // re-announcing, or one device edit that touches the entity, device
+        // and area registries all at once. Field telemetry showed ~25 full
+        // refetches in 33 minutes, repeatedly two within the same SECOND,
+        // which is that burst arriving unthrottled. Every one of them parses
+        // 1,582 rows and rebuilds the derived maps, so the cost is real
+        // main-thread work and garbage, for an answer that has not changed
+        // between the first event of a burst and the last.
+        // The timer lives in a ref, not this closure: `connect` runs again on
+        // every reconnect, and a per-call timer would leave the previous one
+        // pending — reintroducing the burst it exists to collapse.
+        const onRegistryChanged = () => {
+          clearTimeout(registryDebounceRef.current);
+          registryDebounceRef.current = setTimeout(
+            () => { void refreshRegistryData(); }, REGISTRY_DEBOUNCE_MS,
+          );
+        };
         for (const eventType of ["entity_registry_updated", "device_registry_updated", "area_registry_updated", "floor_registry_updated"]) {
           ws.subscribeEvents(eventType, onRegistryChanged)
             .catch((err) => devLog(`[HA] subscribe ${eventType} failed`, err));

@@ -2967,6 +2967,26 @@ label.toggle span { user-select: none; line-height: 1.4; }
   pointer-events: none;
 }
 .connection-banner svg { flex: 0 0 auto; color: var(--status-warning); }
+.conn-banner-short { display: none; }
+
+/* Phone: the full sentence wrapped to five lines inside a shrink-to-fit pill,
+   which read as a slab dropped over the villa rather than as a status note —
+   and pushed down far enough to sit alongside the floor buttons. Swap to the
+   short phrasing, tighten the box, and keep it on one line: `nowrap` is what
+   actually guarantees the height, since a pill that is merely narrower can
+   still wrap. The width cap keeps that single line clear of the floor stack
+   on the left and the overflow button on the right. */
+@media (max-width: 640px) {
+  .connection-banner {
+    max-width: calc(100% - 120px);
+    padding: 6px 12px;
+    gap: 6px;
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+  .conn-banner-full { display: none; }
+  .conn-banner-short { display: inline; }
+}
 
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
 .cockpit-health {

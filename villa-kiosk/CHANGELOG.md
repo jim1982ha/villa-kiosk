@@ -1,3 +1,27 @@
+## 2.127.0
+
+### Fixed — the entity registry was being refetched dozens of times over
+
+The first freeze capture from a real device brought an unrelated finding with it: between 04:10 and 04:43 the Mac performed roughly **25 full entity-registry fetches**, 1,582 rows each, repeatedly two within the same *second*.
+
+Home Assistant emits registry-change events in bursts — one device edit touches the entity, device and area registries within milliseconds, and an integration reloading emits a long run of them — and the handler subscribed to all four event types refetched the whole registry on every single one, with no coalescing. Each refetch parses 1,582 rows and rebuilds the derived area/floor/device maps, so this is real main-thread work and real garbage, repeated for an answer that has not changed between the first event of a burst and the last.
+
+Those events are now debounced by 750ms: long enough to swallow an integration reload, short enough that renaming a room in Home Assistant still reaches the map effectively immediately. The timer lives in a ref rather than the connect closure, since `connect` runs again on every reconnect and a per-call timer would leave the previous one pending — reintroducing the burst it exists to collapse.
+
+Not claimed as the cause of the freeze; it is a defect found while looking for it, and worth removing on its own terms.
+
+### Fixed — the first freeze report was the load, misattributed
+
+`PerformanceObserver` reports a long task when it **ends**, not when it starts, so the load's own final block — the GLB parse and first paint — arrives at the observer just *after* the load record is built. The boolean gate added in 2.125.0 counted that as a post-load freeze, and the very first capture duly reported a 5,469ms "freeze" whose duration matched that same load's `paintMs` of 5,509 almost exactly.
+
+The gate is now a timestamp compared against the task's own `startTime`, so a block that began before the load record was built is attributed to the load however long afterwards it is reported. The second capture in that session — 1,049ms, two and a half minutes in — was and remains genuine.
+
+### Fixed — the disconnection notice covered a third of the villa on a phone
+
+Reported with a screenshot. "Disconnected from Home Assistant — reconnecting… Controls won't respond until this clears." is a reasonable sentence on a desktop pill and five wrapped lines on a 402px phone, producing a slab sitting over the villa next to the floor buttons — heavier than the condition it was reporting, which is usually over in seconds.
+
+Below 640px it now reads "Reconnecting to Home Assistant…", on one line, in a tighter box: the same `-full`/`-short` swap the settings labels already use. `white-space: nowrap` is what actually holds the height, since a merely narrower pill can still wrap, and the width cap keeps that line clear of the floor stack on one side and the overflow button on the other.
+
 ## 2.126.0
 
 ### Fixed — freeze reporting was blind on exactly the device it most needs to watch
