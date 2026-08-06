@@ -90,8 +90,11 @@ let lastFreezeReportAt = -Infinity;
 let freezeReports = 0;
 /** Flips when the load record is built — see stallSummary. */
 let loadReported = false;
+/** Whether the Long Tasks API took the observe() call; false on Safari/iOS,
+ *  which is what installFreezeWatchdog exists for. */
+let longtaskAvailable = false;
 
-function reportPostLoadFreeze(durationMs: number): void {
+function reportPostLoadFreeze(durationMs: number, src: "longtask" | "watchdog"): void {
   // While the villa is still loading there is a spinner explaining the wait,
   // and those blocks are already covered by the load record's stall stats.
   if (!loadReported) return;
@@ -106,6 +109,10 @@ function reportPostLoadFreeze(durationMs: number): void {
   setTimeout(() => {
     report("freeze", {
       ms: Math.round(durationMs),
+      // Which detector saw it. `longtask` attributes the block to ONE task and
+      // is the better signal; `watchdog` is the Safari/iOS fallback and
+      // measures total event-loop lag, so it can span several tasks.
+      src,
       // The discriminator. A freeze within a second or two of coming back is
       // a return-path cost; one at 40 minutes with no recent return is
       // something else entirely, and the fixes are unrelated.
@@ -136,13 +143,52 @@ export function installStallObserver(): void {
           stalls.maxMs = e.duration;
           stalls.maxAt = Math.round(e.startTime);
         }
-        reportPostLoadFreeze(e.duration);
+        reportPostLoadFreeze(e.duration, "longtask");
       }
     });
     obs.observe({ type: "longtask", buffered: true });
+    longtaskAvailable = true;
   } catch {
-    // Not supported (Safari/Firefox) — the rest of the timeline still works.
+    // Not supported (Safari/Firefox) — the rest of the timeline still works,
+    // and installFreezeWatchdog below covers the freeze reporting instead.
   }
+  if (!longtaskAvailable) installFreezeWatchdog();
+}
+
+/**
+ * Safari/iOS fallback for freeze detection.
+ *
+ * The Long Tasks API above is Chromium-only, so on an iPad — one of the two
+ * devices this app is actually mounted on a wall to run 24/7, and the platform
+ * that historically breaks first — the freeze reporting would otherwise be
+ * silent on exactly the hardware a fix most needs verifying against.
+ *
+ * This measures the same thing from the other side: a timer that should fire
+ * every TICK_MS can only be late if the main thread was busy, so the lateness
+ * IS the block. It cannot attribute the time to a single task the way a long
+ * task entry does (hence the `src` field on the event) — for a multi-second
+ * freeze that distinction does not matter.
+ *
+ * Only installed when the real API is missing, so a Chromium device never
+ * reports the same freeze twice from two detectors.
+ */
+const TICK_MS = 500;
+
+function installFreezeWatchdog(): void {
+  if (typeof document === "undefined") return;
+  let expected = performance.now() + TICK_MS;
+  setInterval(() => {
+    const now = performance.now();
+    const lateBy = now - expected;
+    expected = now + TICK_MS;
+    // A hidden page has its timers throttled to seconds or minutes, which is
+    // not a freeze — it is the browser doing exactly what it should. Ignore
+    // any interval that touched a hidden state at either end, including the
+    // one spanning the moment of return.
+    if (document.visibilityState !== "visible") return;
+    if (now - lastBecameVisibleAt < TICK_MS * 2) return;
+    if (lateBy >= FREEZE_MIN_MS) reportPostLoadFreeze(lateBy, "watchdog");
+  }, TICK_MS);
 }
 
 // ── Hidden-time accounting ─────────────────────────────────────────────────

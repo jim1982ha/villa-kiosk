@@ -122,7 +122,10 @@ function summarise(e: TelemetryEvent): string {
       const back = typeof e.sinceVisibleMs === "number"
         ? ` · ${ms(e.sinceVisibleMs)} after returning from ${ms(e.hiddenForMs)} hidden`
         : " · no recent return (not the wake path)";
-      return `UI blocked ${ms(e.ms)}${back} · ${ms(e.sinceLoadMs)} into this session`;
+      // "watchdog" is the Safari/iOS timer fallback — it measures total
+      // event-loop lag rather than one task, so the figure is an upper bound.
+      const how = e.src === "watchdog" ? " (timer lag)" : "";
+      return `UI blocked ${ms(e.ms)}${how}${back} · ${ms(e.sinceLoadMs)} into this session`;
     }
     case "context-lost":
       return `WebGL context lost (${e.total ?? "?"} this session)`;

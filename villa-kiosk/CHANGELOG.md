@@ -1,3 +1,15 @@
+## 2.126.0
+
+### Fixed — freeze reporting was blind on exactly the device it most needs to watch
+
+2.125.0's freeze detection is built on the Long Tasks API, which is Chromium-only: Safari does not implement it, so `observe()` throws and the observer quietly does nothing. That is a fine failure mode for a nice-to-have metric and a bad one here, because an iPad is one of the two devices this app is mounted on a wall to run continuously — and historically the one that breaks first. The instrument meant to diagnose a freeze on a 24/7 tablet was silent on half the tablets.
+
+A timer watchdog now covers that case, measuring the same thing from the other end: an interval that should fire every 500ms can only be late if the main thread was busy, so the lateness *is* the block. It cannot attribute the time to one task the way a long-task entry does, so the event records which detector saw it (`src`) and the panel labels the fallback's figure as timer lag — for a multi-second freeze the distinction does not change the conclusion.
+
+It installs **only** where the real API is missing, so a Chromium device never reports one freeze twice from two detectors. Intervals that touch a hidden state are discarded rather than reported: a backgrounded page has its timers throttled to seconds or minutes, and that is the browser behaving correctly, not a freeze — including the interval spanning the moment of return, which would otherwise report every single wake as a false positive.
+
+The `--ktx2` question is unaffected by any of this and remains declined; see 2.124.0.
+
 ## 2.125.0
 
 ### Added — the freeze is finally being reported, by an observer that was already watching it
