@@ -24,6 +24,8 @@ Found while capping the above. `RoomHighlight` advanced its glow by a fixed `0.0
 
 A new `glTexCompressed` load stat counts how many of the model's distinct images reached the GPU still compressed. An uncompressed texture costs roughly four bytes per texel plus another third for mipmaps; a KTX2/ETC1S one transcodes to about half a byte. For a villa reporting 17.1 megapixels of distinct image that is the difference between roughly 90MB and roughly 11MB of GPU texture memory — in precisely the resource whose exhaustion takes the WebGL context away. The pipeline has had a `--ktx2` flag and the app has shipped its own offline decoder since 2.80.0, but nothing until now reported which of the two a given uploaded GLB actually was.
 
+**This stat is not an argument for turning `--ktx2` on.** KTX2 was evaluated and declined (see 2.94.0 and 2.75.0), for the good reason that textures are not where load time goes — and a subsequent trial bake measured the GLB growing roughly fivefold for no visible gain. That growth was not the textures: `gltf-transform etc1s` decompresses geometry and does not re-apply Draco unless explicitly told to, and at 2.4M vertices the geometry returning uncompressed accounts for essentially all of it. The one axis that evaluation never covered is GPU *memory*, which depends on decoded pixels rather than on file size — so this stat exists to answer that question if, and only if, a context restore is ever actually measured to be what freezes the kiosk. Until then the correct setting is the current one: off.
+
 ## 2.123.0
 
 ### Added — "Log out all devices", which the add-on options had been promising all along
