@@ -642,6 +642,13 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             loading={statusLoading}
             height={56}
             vertical={railVertical}
+            // 5-minute buckets: 288 across the day. This bar answers "was
+            // there presence / was the camera down in this slice", not "for
+            // exactly how long" — a motion sensor fires far too often for
+            // per-change segments, which is what made this bar overstate
+            // motion and visibly reshuffle between renders. See
+            // StateTimeline's bucketMinutes docstring.
+            bucketMinutes={5}
             colorFor={(s) => (s === "motion" ? "var(--status-danger)" : s === "offline" ? "#000" : "var(--status-on)")}
           />
         </div>

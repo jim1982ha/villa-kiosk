@@ -1,3 +1,21 @@
+## 2.130.0
+
+### Fixed — the camera status bar reshuffled itself while showing the same view, and overstated motion
+
+Reported with a screen recording, which settled it. Sampling the bar out of that clip once per second shows the red pattern visibly rearranging between samples with the view unchanged; sampling every 0.15s between those moments shows it perfectly still, with no loading skeleton. So it was neither re-fetching nor loading progressively — the same data was being drawn differently over and over.
+
+The cause was a legibility floor. Segments are absolutely positioned and given a minimum width of 0.3% so a brief state stays visible — but 0.3% of a 24-hour window is **4.3 minutes**. A driveway motion sensor fires dozens of short blips, so each was drawn roughly a hundred times too wide, and any two closer together than 4.3 minutes overlapped. What you actually saw in such a pile was whichever segment painted last, which depends on sub-pixel positions that shift as `now` advances — so every re-render (and this panel re-renders on every state change in the house) could flip the outcome. The left of the bar never moved, because older history has segments long enough not to need the floor.
+
+That same inflation meant the bar was badly overstating motion: a two-second detection and a four-minute one drew identically, and a cluster of brief ones read as one solid red mass.
+
+The bar now renders **288 fixed five-minute buckets** across the day. A bucket is painted if at least one event of a state landed in it, and shows every state it saw — striped when a slice contains more than one, so "there was motion AND the camera dropped" is one honest cell rather than a choice between two half-truths. Buckets tile exactly, so nothing overlaps and no minimum width is needed, and they are anchored to absolute wall-clock time rather than to `now`, so identical data renders bit-identically and the layout only changes when the clock genuinely crosses a boundary. The layout is recomputed once per bucket period instead of on every render.
+
+Precision is deliberately traded away here: this bar answers "was there presence, or an outage, in this slice", not "for exactly how long". The tooltip carries the precision instead, listing **every** transition inside the hovered five minutes with its timestamp, or naming the state as ongoing when nothing changed within it.
+
+Bucketing is opt-in per caller. The sensor, generic and last-day timelines keep per-change segments, where durations are meaningful and events are sparse enough that none of this applies.
+
+Both render paths now reduce to one cell list with one tooltip, rather than two parallel implementations.
+
 ## 2.129.0
 
 ### Fixed — the camera status bar could never show a camera being offline
