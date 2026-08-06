@@ -1,3 +1,29 @@
+## 2.124.0
+
+### Fixed — the villa rendered continuously, forever, whenever anything was animating
+
+Reported as: leaving the kiosk, coming back, and finding the UI frozen — sometimes with the browser offering to kill the unresponsive page. Reported during a deliberate soak test with every ceiling fan left on for hours, with the (correct) suspicion that the two were connected.
+
+The render loop is on-demand: `requestRender()` keeps it awake for a short window, and when nothing asks, the GPU idles. Three things asked *every single frame*. `animateFans` re-arms it while any fan spins, `animatePulse` while any alert is triggered or a camera beam is live, and `RoomHighlight.animate` while any room glows — each of which runs **from** a rendered frame, so re-arming per frame is the only way it can keep itself going at all. The consequence is that one fan left on, one leak sensor triggered, or one room flagged for overdue maintenance pins a villa at its display's full refresh rate for as long as that state lasts, which for a fan in a hot climate is indefinitely. `EntityVisuals`'s own header had already identified this in 2.113.0 and defended the expensive half of it — the badge layout no longer recomputes on those frames — but the frames themselves were never capped.
+
+Continuous animation now draws from a separate, rate-capped budget (`requestAnimationRender`), while interaction, transitions and real state changes keep using `requestRender` and are never throttled. The cap is 33ms, about 30fps: a ceiling fan is a rotationally symmetric blur at the distance a wall-mounted tablet is read from and is indistinguishable at 30 from 60, so the frames removed were bought and paid for and then thrown away. Nothing animates more slowly as a result — every one of these advances by real elapsed time, not by a frame count, so a fan turns at the same speed however often it is drawn.
+
+The loop also now returns immediately when `document.hidden`. `requestAnimationFrame` is *usually* throttled for a hidden document, which is what this quietly relied on, but that is a browser behaviour rather than a guarantee — and a PWA window sitting behind another window is not hidden at all, so it was previously rendering at full rate with nobody looking at it.
+
+**This is a real and large reduction in sustained GPU work, and it is not yet proven to be the cause of the freeze.** The telemetry that prompted this shows the WebGL context being lost four times, always at 350–410MB heap and always as the window went away, and losing a context means Babylon must re-upload every texture and buffer on the main thread when it comes back — which would look exactly like the reported freeze. That remains a hypothesis: the previous instrumentation recorded only that a loss had happened, never what the recovery cost. See below.
+
+### Fixed — a room glow that pulsed at whatever rate the monitor happened to run at
+
+Found while capping the above. `RoomHighlight` advanced its glow by a fixed `0.05` per **frame**, so the pulse ran at double speed on a 120Hz panel and at half speed on anything drawing at 30 — including, as of this release, every rate-capped frame. It is now expressed in radians per second like the fan spin and the alert pulse beside it, tuned to reproduce exactly what the old per-frame step looked like at 60fps.
+
+### Added — the cost of a context loss is now measured rather than inferred
+
+`context-restored` previously carried no data at all, so a lost GPU context was a bare occurrence with nothing to say whether recovering from it took 20ms or 8 seconds. It now reports how long the view was actually dead, how many meshes and textures had to be re-uploaded, and — from the first frame that genuinely reaches the screen afterwards — how long that rebuild blocked for. If the freeze is the context restore, the next occurrence will say so with a number instead of requiring the argument to be made from plausibility.
+
+### Added — whether the loaded villa is actually using GPU-compressed textures
+
+A new `glTexCompressed` load stat counts how many of the model's distinct images reached the GPU still compressed. An uncompressed texture costs roughly four bytes per texel plus another third for mipmaps; a KTX2/ETC1S one transcodes to about half a byte. For a villa reporting 17.1 megapixels of distinct image that is the difference between roughly 90MB and roughly 11MB of GPU texture memory — in precisely the resource whose exhaustion takes the WebGL context away. The pipeline has had a `--ktx2` flag and the app has shipped its own offline decoder since 2.80.0, but nothing until now reported which of the two a given uploaded GLB actually was.
+
 ## 2.123.0
 
 ### Added — "Log out all devices", which the add-on options had been promising all along

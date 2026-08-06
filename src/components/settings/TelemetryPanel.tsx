@@ -116,6 +116,15 @@ function summarise(e: TelemetryEvent): string {
     }
     case "recovered":
       return String(e.reason ?? "auto-reloaded");
+    case "context-lost":
+      return `WebGL context lost (${e.total ?? "?"} this session)`;
+    case "context-restored":
+      // Two rows per restore: the loss window, then the rebuild cost once the
+      // first frame is actually back on screen.
+      return e.phase === "repainted"
+        ? `repainted — rebuild blocked ${ms(e.blockedMs)}`
+        : `context restored after ${ms(e.deadMs)} dead`
+          + ` · ${e.meshes ?? "?"} meshes, ${e.textures ?? "?"} textures to re-upload`;
     default:
       return "";
   }
@@ -124,6 +133,7 @@ function summarise(e: TelemetryEvent): string {
 const TONE: Record<string, string> = {
   error: "var(--status-danger)",
   "context-lost": "var(--status-danger)",
+  "context-restored": "var(--status-warning)",
   recovered: "var(--status-warning)",
 };
 

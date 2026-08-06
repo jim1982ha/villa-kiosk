@@ -38,6 +38,12 @@ const GLOW_COLOR = ALERT_RED;
 // (still used further below) made the glow visibly duller than intended.
 const BASE_ALPHA = 0.5;
 const PULSE_ALPHA = 0.75;
+/** Glow pulse speed (rad/s). Was a fixed +0.05 per FRAME, which silently tied
+ *  the pulse rate to the display's refresh rate and to whatever cadence the
+ *  render loop happened to be running at — so the same highlight breathed at
+ *  half speed the moment continuous animation became rate-capped (and at
+ *  double on a 120Hz panel). 3.0 rad/s reproduces the original 60fps look. */
+const PULSE_RAD_PER_SEC = 3.0;
 // Sits just above the recentred floor (y≈0 after SceneManager.recenterModel)
 // so it doesn't z-fight with the actual floor mesh underneath it.
 const FLOOR_Y_OFFSET = 0.02;
@@ -66,6 +72,7 @@ interface RoomEntry {
 export class RoomHighlight {
   private scene: Scene;
   private requestRender: () => void;
+  private requestAnimationRender: () => void;
   /** Keyed by normalised (trimmed, lowercased) room name. Two separate maps
    *  so a full re-poly (rare: load + mirror toggle) and a point-rooms refresh
    *  (whenever config.teleportPoints changes — much more frequent) don't
@@ -75,9 +82,18 @@ export class RoomHighlight {
   private active = new Set<string>();
   private pulseT = 0;
 
-  constructor(scene: Scene, requestRender: () => void) {
+  constructor(
+    scene: Scene,
+    requestRender: () => void,
+    /** Rate-capped re-arm for the glow PULSE specifically — a highlight can
+     *  stay up indefinitely (a room flagged for overdue maintenance is the
+     *  normal case), so its pulse is a permanent animation, not a transition.
+     *  Falls back to requestRender when not supplied. */
+    requestAnimationRender?: () => void,
+  ) {
     this.scene = scene;
     this.requestRender = requestRender;
+    this.requestAnimationRender = requestAnimationRender ?? requestRender;
     scene.registerBeforeRender(() => this.animate());
   }
 
@@ -277,14 +293,17 @@ export class RoomHighlight {
 
   private animate(): void {
     if (this.active.size === 0) return;
-    this.pulseT += 0.05;
+    // Clamped like the other animations: the on-demand loop can idle for
+    // seconds, and a raw delta after such a gap would make the glow jump.
+    const dtMs = Math.min(this.scene.getEngine().getDeltaTime(), 100);
+    this.pulseT += (dtMs / 1000) * PULSE_RAD_PER_SEC;
     const t = (Math.sin(this.pulseT) + 1) / 2; // 0..1
     const alpha = BASE_ALPHA + (PULSE_ALPHA - BASE_ALPHA) * t;
     for (const key of this.active) {
       const entry = this.polyRooms.get(key) ?? this.pointRooms.get(key);
       if (entry) entry.material.alpha = alpha;
     }
-    this.requestRender();
+    this.requestAnimationRender();
   }
 
   private disposeMap(map: Map<string, RoomEntry>): void {

@@ -570,6 +570,7 @@ export class EntityVisuals {
   private scene: Scene;
   private config: AppConfig;
   private requestRender: () => void;
+  private requestAnimationRender: () => void;
 
   /** entity_id -> meshes (one entity can drive several meshes, e.g. curtains). */
   private byEntity = new Map<string, AbstractMesh[]>();
@@ -763,11 +764,17 @@ export class EntityVisuals {
     scene: Scene,
     config: AppConfig,
     requestRender: () => void,
+    /** Re-arm the loop for a CONTINUOUS animation (fan spin, alert pulse).
+     *  Rate-capped by the caller so a fan left on doesn't hold the GPU at the
+     *  display's full rate for weeks — see SceneManager.requestAnimationRender.
+     *  Falls back to requestRender when not supplied. */
+    requestAnimationRender?: () => void,
   ) {
     this.scene = scene;
     this.config = config;
     this.requestRender = requestRender;
-    this.roomHighlight = new RoomHighlight(scene, requestRender);
+    this.requestAnimationRender = requestAnimationRender ?? requestRender;
+    this.roomHighlight = new RoomHighlight(scene, requestRender, this.requestAnimationRender);
     this.beams = new CameraBeams(scene);
     scene.registerBeforeRender(() => {
       this.animatePulse();
@@ -3951,7 +3958,7 @@ export class EntityVisuals {
     col.b = 0;
     for (const mesh of this.pulsing) this.emissiveOf(mesh)?.(col);
     this.beams.applyPulse(intensity);
-    this.requestRender();
+    this.requestAnimationRender();
   }
 
   /** Start/stop a fan's spin from its on/off (+ percentage) state. Only true
@@ -4139,6 +4146,6 @@ export class EntityVisuals {
       }
       spun = true;
     }
-    if (spun) this.requestRender();
+    if (spun) this.requestAnimationRender();
   }
 }

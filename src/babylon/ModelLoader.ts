@@ -140,6 +140,10 @@ export interface LoadResult {
    *   `glMeshes` / `glTextures` / `glMaterials`  object counts
    *   `glTexImgs` / `glTexMp`  DISTINCT decoded images and their megapixels
    *                (de-duplicated: many texture objects share one image)
+   *   `glTexCompressed`  how many of those images reached the GPU still
+   *                compressed (KTX2). 0 against a non-zero `glTexImgs` means
+   *                the villa is paying ~8x the GPU texture memory it needs to
+   *                — the resource whose exhaustion causes `context-lost`.
    *   `glKVerts`   thousands of vertices across every primitive
    *
    * `glMeshes` is the number that matters most now: the import's dominant cost
@@ -284,6 +288,8 @@ export async function loadModelInto(
     // Distinct InternalTextures, i.e. distinct decoded IMAGES — see the
     // de-duplication note where this is filled.
     const seenImages = new Set<object>();
+    /** How many of those images arrived GPU-compressed (KTX2) — see below. */
+    let compressedImages = 0;
     const since = () => Math.round(performance.now() - tImportStart);
     const pluginObserver = SceneLoader.OnPluginActivatedObservable.addOnce((plugin) => {
       type GlTexture = Partial<{
@@ -341,6 +347,17 @@ export async function loadModelInto(
             seenImages.add(internal);
             const sz = t.getSize?.();
             if (sz?.width) texPx += sz.width * sz.height;
+            // Whether this image reached the GPU still COMPRESSED (KTX2/ETC1S,
+            // transcoded to ASTC/BCn) or as raw pixels. Uncompressed is ~4
+            // bytes per texel plus a third again for mipmaps; a compressed
+            // format is closer to half a byte — an ~8x difference in the one
+            // resource whose exhaustion takes the WebGL context away, which is
+            // exactly what the context-lost events record. Reported so "is this
+            // villa's GLB actually KTX2?" is answerable from telemetry instead
+            // of by remembering which flags the bake was run with.
+            if ((internal as { _compression?: string | null })._compression) {
+              compressedImages++;
+            }
           }
         };
         // Already decoded by the time we see it (a cache hit) — onLoadObservable
@@ -370,6 +387,7 @@ export async function loadModelInto(
     // the gap between the two is how heavily the villa's atlases are reused.
     gl.glTexMp = Math.round((texPx / 1e6) * 10) / 10;
     gl.glTexImgs = seenImages.size;
+    gl.glTexCompressed = compressedImages;
     const glassMats = new Set<string>();
     // Material OBJECT refs (a Set — one material is shared by many meshes) so
     // glassDim below can re-drive their colours every day/night tick.

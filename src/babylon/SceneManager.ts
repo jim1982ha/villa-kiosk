@@ -52,6 +52,15 @@ import { entityMapDelta } from "./entityMapDiff";
 // Babylon, no scene state) — see entityMapDiff.ts for the full reasoning about
 // which fields qualify and why.
 
+// ── Continuous-animation frame cap (see requestAnimationRender) ─────────────
+// Minimum gap between two frames drawn ONLY because something is animating
+// (a spinning fan, a pulsing alert) with nobody interacting. 33ms ≈ 30fps:
+// a ceiling fan is a rotationally symmetric blur at kiosk viewing distance
+// and reads identically at 30 as at 60, so the second half of those frames
+// bought nothing and cost a villa's GPU continuously for as long as a fan is
+// left on. Interaction is never subject to this — see requestRender.
+const ANIMATION_FRAME_MS = 33;
+
 // ── Zoom-to-room framing (see computeRoomOverviewPose) ──────────────────────
 // Breathing room left around a room once it fills the frame, as a FRACTION of
 // the distance needed to fit it exactly — so it scales with the room rather
@@ -136,6 +145,13 @@ export class SceneManager {
   private calibrateCallbacks = new Set<() => void>();
   private keepRenderingUntil = 0;
   private forceContinuous = 0; // ref count for animations/streams
+  /** Budget for frames driven ONLY by a continuous animation — see
+   *  requestAnimationRender / ANIMATION_FRAME_MS. */
+  private animateUntil = 0;
+  private lastAnimFrameAt = 0;
+  /** performance.now() of the last WebGL context loss, 0 when not lost — used
+   *  to report how long the view was actually dead. */
+  private contextLostAt = 0;
   private loadedMeshes: AbstractMesh[] = [];
   private calibratedPoints: TeleportPoint[] | null = null;
   // The room the user last navigated to while in overview. Cleared on entering
@@ -212,7 +228,11 @@ export class SceneManager {
     this.sky = new SkyDome(this.scene);
     this.sun = new SunController(this.scene, this.lighting, this.hemi, opts.config, this.sky);
     this.sun.setRenderHook(() => this.requestRender());
-    this.visuals = new EntityVisuals(this.scene, opts.config, () => this.requestRender());
+    this.visuals = new EntityVisuals(
+      this.scene, opts.config,
+      () => this.requestRender(),
+      () => this.requestAnimationRender(),
+    );
 
     // A tap/long-press checks state-badge hit-testing FIRST, falling through
     // to PickHandler's 3D raycast only when no badge was hit. Badges resolve
@@ -358,11 +378,34 @@ export class SceneManager {
     // shown again — so the view always thaws and input visibly responds.
     this.engine.onContextLostObservable.add(() => {
       console.warn("[SceneManager] WebGL context lost — view frozen until restored");
+      this.contextLostAt = performance.now();
     });
     this.engine.onContextRestoredObservable.add(() => {
       console.warn("[SceneManager] WebGL context restored — forcing repaint");
-      reportTelemetry("context-restored", {});
+      // How long the view was actually dead, and how long the rebuild itself
+      // blocked. Restoring a context re-uploads every texture and buffer in
+      // the scene on the MAIN thread, which is the leading candidate for the
+      // "came back to the kiosk and it froze / the browser offered to kill the
+      // page" reports — but that was inferred from a bare occurrence count,
+      // never measured. These two numbers are what makes the next report
+      // arguable from evidence instead of from plausibility.
+      const lostAt = this.contextLostAt;
+      const restoreStart = performance.now();
+      reportTelemetry("context-restored", {
+        deadMs: lostAt ? Math.round(restoreStart - lostAt) : undefined,
+        meshes: this.scene.meshes.length,
+        textures: this.scene.textures.length,
+      });
+      this.contextLostAt = 0;
       this.requestRender(2000);
+      // Measured after the frame the repaint actually happens on, so it
+      // includes Babylon's re-upload rather than just the observable call.
+      this.scene.onAfterRenderObservable.addOnce(() => {
+        reportTelemetry("context-restored", {
+          phase: "repainted",
+          blockedMs: Math.round(performance.now() - restoreStart),
+        });
+      });
     });
     document.addEventListener("visibilitychange", this.handleVisibility);
     // Safety net for the case React cleanup CANNOT cover: when Home Assistant
@@ -423,18 +466,54 @@ export class SceneManager {
 
   private startRenderLoop() {
     this.engine.runRenderLoop(() => {
+      // A hidden document has nothing to show, and requestAnimationFrame is
+      // only *usually* throttled while hidden — a backgrounded PWA window is
+      // not a guarantee. Cheap, unconditional insurance that a kiosk left on a
+      // side monitor for weeks never pays for frames nobody can see.
+      if (document.hidden) return;
       const now = performance.now();
-      const active =
+      // Interaction, transitions and real state changes always render at the
+      // display's own rate — responsiveness is never throttled.
+      if (
         this.forceContinuous > 0 ||
         now < this.keepRenderingUntil ||
-        !this.config.renderOnDemand;
-      if (active) this.scene.render();
+        !this.config.renderOnDemand
+      ) {
+        this.lastAnimFrameAt = now;
+        this.scene.render();
+        return;
+      }
+      // Everything else is a frame asked for purely by a continuous animation
+      // (see requestAnimationRender), and is rate-capped.
+      if (now < this.animateUntil && now - this.lastAnimFrameAt >= ANIMATION_FRAME_MS) {
+        this.lastAnimFrameAt = now;
+        this.scene.render();
+      }
     });
   }
 
   /** Keep rendering for a short window (covers input latency + transitions). */
   requestRender(durationMs = 350): void {
     this.keepRenderingUntil = Math.max(this.keepRenderingUntil, performance.now() + durationMs);
+  }
+
+  /**
+   * Re-arm the loop for a continuous ANIMATION rather than for interaction.
+   *
+   * A spinning fan and a pulsing alert re-arm the render loop on every frame
+   * they run (they run FROM a rendered frame, so they cannot re-arm any other
+   * way), which is why a villa with one fan left on renders continuously for
+   * as long as it is on — the single most common state a kiosk is in. 2.113.0
+   * already stopped that from recomputing the badge layout every frame; this
+   * caps what remains, the frames themselves.
+   *
+   * Kept separate from requestRender() precisely so the cap can never reach a
+   * frame the user is waiting on. Animation speed is unaffected: the rotation
+   * is computed from real elapsed time (getDeltaTime), not from a frame count,
+   * so a fan turns at the same rate whatever cadence it is drawn at.
+   */
+  requestAnimationRender(durationMs = 350): void {
+    this.animateUntil = Math.max(this.animateUntil, performance.now() + durationMs);
   }
 
   /** Pin continuous rendering (e.g. while a camera stream panel is open). */
