@@ -17,10 +17,34 @@ export function isUnavailable(entity: HassEntity | undefined): boolean {
   return entity == null || entity.state === "unavailable" || entity.state === "unknown";
 }
 
-const ON_COLOR = "var(--status-on)";
-const OFF_COLOR = "var(--bg-input)"; // matches .status-pill.off
-const WARN_COLOR = "var(--status-warning)";
-const DANGER_COLOR = "var(--status-danger)";
+/**
+ * THE status vocabulary — four meanings, one colour each, defined here and
+ * nowhere else.
+ *
+ * This is what the "Map colours" legend documents to the user, so anything
+ * that paints a status has to read it from here or the legend becomes a lie.
+ * The camera status bar was the case that proved it: it had its own literal
+ * `#000` for a camera being offline, while the legend told the user that
+ * losing contact with a device is amber. Two answers to the same question,
+ * neither aware of the other.
+ */
+export const STATUS_COLOR = {
+  /** On / active. */
+  active: "var(--status-on)",
+  /** Off / idle / nothing to report. Deliberately the same token the
+   *  timeline track and .status-pill.off already use, so "nothing happened"
+   *  and "not painted" are literally the same colour and cannot drift. */
+  idle: "var(--bg-input)",
+  /** Home Assistant has lost contact — state genuinely unknown. */
+  unavailable: "var(--status-warning)",
+  /** Needs attention. */
+  alert: "var(--status-danger)",
+} as const;
+
+const ON_COLOR = STATUS_COLOR.active;
+const OFF_COLOR = STATUS_COLOR.idle; // matches .status-pill.off
+const WARN_COLOR = STATUS_COLOR.unavailable;
+const DANGER_COLOR = STATUS_COLOR.alert;
 
 /** Plain on/off devices (light, fan, switch): on = accent, off = neutral track. */
 export function onOffColor(state: string): string {

@@ -1,3 +1,19 @@
+## 2.131.0
+
+### Fixed — the camera bar treated "the camera is fine" as news
+
+2.130.0's buckets were correct but unreadable, because a motion sensor returns to rest after every trip: essentially every five-minute slice contained both `online` and `motion`, so essentially every bucket was striped and the whole bar was uniform noise. The tooltip had the same problem in words — "Online 14:00 / Motion 14:00 / Online 14:00 / Motion 14:01 / Online 14:01…" — burying the handful of real events inside their own return-to-baseline.
+
+A timeline can now be told which states mean *nothing to report*. Those are never painted, never listed, and a bucket containing only them is left as bare track. The camera bar declares `online` as its baseline, so what remains is an empty track marked only where something actually happened. Bucket mode only: a per-change timeline is a duration chart, where a resting state is a legitimate reading rather than background.
+
+A state still in force from an earlier slice, with no transition of its own inside the hovered one, is labelled "(ongoing)" rather than being silently omitted — which is what makes a long outage spanning several consecutive buckets readable instead of looking like repeated separate events.
+
+### Fixed — the status bar contradicted the legend that documents it
+
+The bar painted a camera Home Assistant had lost contact with in its own literal `#000`, while the "Map colours" modal told the user that losing contact with a device is **amber**. Two answers to the same question, neither aware of the other, and the legend was the one the user had been told to trust.
+
+The four status meanings — active, idle, unavailable, alert — are now defined once, in `utils/stateColors`'s `STATUS_COLOR`, and both the legend modal and the camera bar read from it rather than repeating literals. `idle` is deliberately the same token the timeline track and `.status-pill.off` already use, so "nothing happened" and "not painted" are the same colour by construction and cannot drift apart. Unavailable on this bar is consequently amber now, matching what the legend has always claimed.
+
 ## 2.130.0
 
 ### Fixed — the camera status bar reshuffled itself while showing the same view, and overstated motion

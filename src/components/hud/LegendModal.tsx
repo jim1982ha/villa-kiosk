@@ -9,6 +9,7 @@
 import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
 import { ALERT_RED_HEX } from "@/babylon/colors";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import { STATUS_COLOR } from "@/utils/stateColors";
 
 /** What the MAP badge actually does per state — mirrors EntityVisuals'
  *  BADGE_RING exactly (red ring for on/alert, no ring when off/idle, the whole
@@ -26,10 +27,10 @@ const BADGE_ITEMS: { label: string; note: string; ring?: string; dim?: boolean }
 /** The coloured status pill each device PANEL shows (a different vocabulary
  *  from the map badge above — panels have room for four distinct states). */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
-  { label: "On / active", swatch: "var(--status-on)", note: "Device is on, unlocked-safe, or open" },
-  { label: "Off / idle", swatch: "var(--bg-input)", note: "Device is off or in its resting state" },
-  { label: "Unavailable", swatch: "var(--status-warning)", note: "Home Assistant has lost contact — state unknown" },
-  { label: "Alert", swatch: "var(--status-danger)", note: "Needs attention (e.g. unlocked door, leak, low battery)" },
+  { label: "On / active", swatch: STATUS_COLOR.active, note: "Device is on, unlocked-safe, or open" },
+  { label: "Off / idle", swatch: STATUS_COLOR.idle, note: "Device is off or in its resting state" },
+  { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "Home Assistant has lost contact — state unknown" },
+  { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, leak, low battery)" },
 ];
 
 export default function LegendModal({ onClose }: { onClose: () => void }) {

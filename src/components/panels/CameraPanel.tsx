@@ -27,6 +27,7 @@ import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraP
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { devLog } from "@/utils/devLog";
+import { STATUS_COLOR } from "@/utils/stateColors";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { mergeStateHistories } from "./chartUtils";
 import StateTimeline from "./StateTimeline";
@@ -649,7 +650,19 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             // motion and visibly reshuffle between renders. See
             // StateTimeline's bucketMinutes docstring.
             bucketMinutes={5}
-            colorFor={(s) => (s === "motion" ? "var(--status-danger)" : s === "offline" ? "#000" : "var(--status-on)")}
+            // `online` is the resting state — the camera being fine is not
+            // news, so it is neither painted nor listed. What remains is a
+            // bare track marked only where something actually happened.
+            baselineStates={["online"]}
+            // Straight from the shared vocabulary the "Map colours" legend
+            // documents (utils/stateColors STATUS_COLOR) — this bar used to
+            // paint a camera HA had lost contact with in its own literal
+            // black, while the legend told the user that means amber.
+            colorFor={(s) => (
+              s === "motion" ? STATUS_COLOR.alert
+                : s === "offline" ? STATUS_COLOR.unavailable
+                  : STATUS_COLOR.idle
+            )}
           />
         </div>
         <div className="camera-controls">

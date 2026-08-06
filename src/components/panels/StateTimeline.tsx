@@ -71,6 +71,22 @@ interface Props {
    * when the clock actually crosses a boundary.
    */
   bucketMinutes?: number;
+  /**
+   * States that mean "nothing to report" — never painted, never listed in the
+   * tooltip, and a bucket containing only these is left as bare track.
+   *
+   * Without this every bucket of the camera bar contained both `online` and
+   * `motion` (the sensor returns to rest after each trip), so every bucket was
+   * striped and the bar was uniform noise — while the tooltip alternated
+   * "Online 14:00 / Motion 14:00 / Online 14:00 / Motion 14:01…", burying the
+   * handful of real events in their own return-to-baseline. Treating the
+   * resting state as the absence of news leaves the bar showing only what
+   * actually happened.
+   *
+   * Bucket mode only: a per-change timeline is a duration chart, where the
+   * resting state is a legitimate reading rather than background.
+   */
+  baselineStates?: string[];
 }
 
 /** One drawn cell — a state segment, or a time bucket. Both modes reduce to
@@ -104,10 +120,14 @@ function prettyState(s: string): string {
 
 export default function StateTimeline({
   data, hours = 24, colorFor, height, legend, loading, vertical, bucketMinutes,
+  baselineStates,
 }: Props) {
   const [hover, setHover] = useState<{ x: number; cell: Cell } | null>(null);
 
   const bucketMs = (bucketMinutes ?? 0) * 60_000;
+  // Joined so the memo below has a stable primitive dep rather than a new
+  // array identity on every render.
+  const baselineKey = (baselineStates ?? []).join("\u0000");
   // Recomputed only when the wall clock crosses a bucket boundary — NOT on
   // every render. This is what makes a bucketed bar stable: `now` advancing a
   // few milliseconds no longer nudges anything, so identical data renders
@@ -154,6 +174,13 @@ export default function StateTimeline({
         const e = idxOf(segStart);
         if (e >= 0 && e < count) out[e].events.push(data[i]);
       }
+      // Drop the resting state from both the paint and the event list, then
+      // discard any bucket that had nothing else in it.
+      const baseline = new Set(baselineKey ? baselineKey.split("\u0000") : []);
+      for (const c of out) {
+        c.states = c.states.filter((st) => !baseline.has(st));
+        c.events = c.events.filter((ev) => !baseline.has(ev.state));
+      }
       return out.filter((c) => c.states.length > 0);
     }
 
@@ -173,7 +200,7 @@ export default function StateTimeline({
       });
     }
     return out;
-  }, [data, hours, bucketMs, timeKey]);
+  }, [data, hours, bucketMs, timeKey, baselineKey]);
 
   if (data.length === 0) {
     return loading
