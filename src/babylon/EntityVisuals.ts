@@ -571,6 +571,8 @@ export class EntityVisuals {
   private config: AppConfig;
   private requestRender: () => void;
   private requestAnimationRender: () => void;
+  /** performance.now() of the last animation step — see registerBeforeRender. */
+  private lastAnimTickAt = 0;
 
   /** entity_id -> meshes (one entity can drive several meshes, e.g. curtains). */
   private byEntity = new Map<string, AbstractMesh[]>();
@@ -777,8 +779,24 @@ export class EntityVisuals {
     this.roomHighlight = new RoomHighlight(scene, requestRender, this.requestAnimationRender);
     this.beams = new CameraBeams(scene);
     scene.registerBeforeRender(() => {
-      this.animatePulse();
-      this.animateFans();
+      // Elapsed time measured HERE, not from engine.getDeltaTime().
+      //
+      // Babylon sets its delta in beginFrame(), which its render loop calls on
+      // every requestAnimationFrame tick — BEFORE the loop body decides whether
+      // to actually render. So getDeltaTime() reports tick-to-tick (~16.7ms at
+      // 60Hz) rather than render-to-render, and the moment continuous animation
+      // became rate-capped (SceneManager.ANIMATION_FRAME_MS) every animation
+      // was told 16.7ms had passed when 33ms really had — running at half speed
+      // while idle and snapping back to full speed during interaction, which
+      // reads as a fan surging. This clock counts real time between the frames
+      // these animations are actually stepped on, whatever the cadence.
+      const now = performance.now();
+      // Clamped: the on-demand loop can idle for seconds, and a raw delta after
+      // such a gap would make everything jump. First tick has no predecessor.
+      const dtMs = this.lastAnimTickAt ? Math.min(now - this.lastAnimTickAt, 100) : 16;
+      this.lastAnimTickAt = now;
+      this.animatePulse(dtMs);
+      this.animateFans(dtMs);
       this.cullLabels();
     });
   }
@@ -3942,11 +3960,8 @@ export class EntityVisuals {
     }
   }
 
-  private animatePulse(): void {
+  private animatePulse(dtMs: number): void {
     if (this.pulsing.size === 0 && !this.beams.hasActive()) return;
-    // Advance by real elapsed time, clamped: the on-demand render loop can idle
-    // for seconds, and a raw delta after such a gap would make the pulse jump.
-    const dtMs = Math.min(this.scene.getEngine().getDeltaTime(), 100);
     this.pulseT += (dtMs / 1000) * PULSE_RAD_PER_SEC;
     const intensity = (Math.sin(this.pulseT) + 1) / 2; // 0..1
     // Reused, not rebuilt: this runs every frame for as long as an alert stays
@@ -4114,9 +4129,9 @@ export class EntityVisuals {
     anchor.setParent(primary.pivot.parent);
   }
 
-  private animateFans(): void {
+  private animateFans(dtMs: number): void {
     if (this.spinningFans.size === 0) return;
-    const dt = Math.min(this.scene.getEngine().getDeltaTime(), 100) / 1000;
+    const dt = dtMs / 1000;
     let spun = false;
     for (const [id, speed] of this.spinningFans) {
       const rig = this.fanRigs.get(id);

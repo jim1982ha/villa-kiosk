@@ -1,3 +1,17 @@
+## 2.128.0
+
+### Fixed — fans surged instead of turning steadily, a regression from 2.124.0
+
+Reported exactly as it behaves: the blades slow down and re-accelerate, "as if something was forcing them to lower the spin", where before they turned constantly.
+
+2.124.0 capped frames drawn purely for a continuous animation to ~30fps, and claimed in this changelog that speed was unaffected because the rotation is computed from real elapsed time rather than a frame count. That reasoning was wrong about where the elapsed time came from. Babylon sets its delta inside `beginFrame()`, and its render loop calls `beginFrame()` on **every** `requestAnimationFrame` tick — *before* the loop body decides whether to render at all. `engine.getDeltaTime()` therefore reports tick-to-tick, roughly 16.7ms at 60Hz, no matter how many of those ticks actually drew anything.
+
+So under the cap every animation was told 16.7ms had passed when 33ms really had, and ran at half speed. Not uniformly, which is what made it read as surging rather than as simply slower: interaction, transitions and state changes all render at full rate, where the delta is correct again, so the blades snapped back to their proper speed whenever the view was touched and sagged again a third of a second after it settled.
+
+Fans, the alert pulse and the room glow now each measure real elapsed time between the frames they are actually stepped on, clamped the same way as before so a long idle cannot make them jump. The frame cap itself is unchanged and still does what it was added for; only the clock it is judged against was wrong. `requestAnimationRender`'s docstring now carries the warning, since anything animating across those frames has to avoid `getDeltaTime()` for the same reason.
+
+Camera movement was never affected: it drives full-rate rendering whenever it is moving, so its delta was always read on the frames it was measuring.
+
 ## 2.127.0
 
 ### Fixed — the entity registry was being refetched dozens of times over

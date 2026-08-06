@@ -508,9 +508,18 @@ export class SceneManager {
    * caps what remains, the frames themselves.
    *
    * Kept separate from requestRender() precisely so the cap can never reach a
-   * frame the user is waiting on. Animation speed is unaffected: the rotation
-   * is computed from real elapsed time (getDeltaTime), not from a frame count,
-   * so a fan turns at the same rate whatever cadence it is drawn at.
+   * frame the user is waiting on.
+   *
+   * ⚠️ Anything animating across these frames MUST measure its own elapsed
+   * time (`performance.now()` between steps) and must NOT use
+   * `engine.getDeltaTime()`. Babylon sets that in `beginFrame()`, which its
+   * render loop calls on every requestAnimationFrame tick *before* the loop
+   * body decides whether to render — so it reports tick-to-tick, not
+   * render-to-render. 2.124.0 shipped this cap while every animation still
+   * trusted it, and each was told 16.7ms had passed when 33ms really had:
+   * fans ran at half speed while idle and snapped back to full speed during
+   * interaction, reported as the blades surging. See EntityVisuals'
+   * registerBeforeRender and RoomHighlight.animate.
    */
   requestAnimationRender(durationMs = 350): void {
     this.animateUntil = Math.max(this.animateUntil, performance.now() + durationMs);

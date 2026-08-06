@@ -81,6 +81,8 @@ export class RoomHighlight {
   private pointRooms = new Map<string, RoomEntry>();
   private active = new Set<string>();
   private pulseT = 0;
+  /** performance.now() of the last glow step — see animate(). */
+  private lastTickAt = 0;
 
   constructor(
     scene: Scene,
@@ -293,9 +295,15 @@ export class RoomHighlight {
 
   private animate(): void {
     if (this.active.size === 0) return;
-    // Clamped like the other animations: the on-demand loop can idle for
-    // seconds, and a raw delta after such a gap would make the glow jump.
-    const dtMs = Math.min(this.scene.getEngine().getDeltaTime(), 100);
+    // Real elapsed time between glow steps, NOT engine.getDeltaTime(): that
+    // is set once per requestAnimationFrame tick regardless of whether the
+    // frame rendered, so under the continuous-animation frame cap it reports
+    // half the time that actually passed and the glow breathes at half speed.
+    // Clamped because the on-demand loop can idle for seconds, and a raw delta
+    // after such a gap would make the glow jump.
+    const now = performance.now();
+    const dtMs = this.lastTickAt ? Math.min(now - this.lastTickAt, 100) : 16;
+    this.lastTickAt = now;
     this.pulseT += (dtMs / 1000) * PULSE_RAD_PER_SEC;
     const t = (Math.sin(this.pulseT) + 1) / 2; // 0..1
     const alpha = BASE_ALPHA + (PULSE_ALPHA - BASE_ALPHA) * t;
