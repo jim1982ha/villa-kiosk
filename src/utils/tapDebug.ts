@@ -12,16 +12,7 @@
 // testing from a desktop browser), where the console's native scrollback,
 // search and copy beat a custom on-screen div.
 
-const DEBUG_KEY = "villa:debug";
-
-function debugEnabled(): boolean {
-  try {
-    if (typeof location !== "undefined" && /[?&]debug\b/.test(location.search)) return true;
-    return typeof localStorage !== "undefined" && localStorage.getItem(DEBUG_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
+import { debugFlagEnabled } from "@/utils/devLog";
 
 // Full history for this page load, independent of the rolling on-screen
 // window below — this is what "Copy all" grabs. Bounded generously (not to
@@ -129,7 +120,7 @@ function ensureBox(): HTMLDivElement {
  *  ordinary JS, not stripped in production like devLog.ts's calls are, so
  *  this works in the deployed build same as the on-screen box does. */
 export function tapDebug(msg: string): void {
-  if (!debugEnabled()) return;
+  if (!debugFlagEnabled()) return;
   const stamp = new Date().toISOString().slice(11, 23);
   const line = `${stamp} ${msg}`;
   console.log(`[tapDebug] ${line}`);

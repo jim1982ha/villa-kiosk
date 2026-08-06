@@ -1,7 +1,7 @@
 // src/config/AppConfig.ts
 // Config schema + defaults + load/save (localStorage). All runtime-editable.
 
-import type { Category, EntityMapping, EntityType, ModelTransform, TeleportPoint } from "@/types/scene.types";
+import type { Category, EntityMapping, EntityType, TeleportPoint } from "@/types/scene.types";
 import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_THRESHOLDS, type Threshold } from "./ThresholdConfig";
@@ -26,15 +26,6 @@ export function clampIconScale(v: number | undefined): number {
   if (typeof v !== "number" || !Number.isFinite(v)) return 1;
   return Math.min(ENTITY_ICON_SCALE_MAX, Math.max(ENTITY_ICON_SCALE_MIN, v));
 }
-
-/** Model transform matching the coordinates baked into TeleportPoints.ts. */
-const DEFAULT_MODEL_TRANSFORM: ModelTransform = {
-  scale: 0.01,
-  centreX: 1206,
-  centreZ: 614,
-  flipX: false,
-  flipZ: false,
-};
 
 /** Tone-mapping operator applied to the whole scene (see RenderConfig). */
 export type ToneMappingMode = "none" | "standard" | "aces" | "khr_neutral";
@@ -149,7 +140,6 @@ export interface AppConfig {
   dismissedEntityIds: string[];
   teleportPoints: TeleportPoint[];
   alertThresholds: Record<string, Threshold>;
-  modelTransform: ModelTransform;
   /** Standing eye height in metres (default 1.7). Configurable in Settings. */
   eyeHeight: number;
   /** Walk-speed multiplier (1.0 = default). Configurable in Settings. */
@@ -264,8 +254,8 @@ const env = import.meta.env;
 
 export const DEFAULT_CONFIG: AppConfig = {
   siteTitle: "",
-  latitude: env.VITE_LAT ? Number(env.VITE_LAT) : -8.3405,
-  longitude: env.VITE_LNG ? Number(env.VITE_LNG) : 115.092,
+  latitude: env.VITE_LAT ? Number(env.VITE_LAT) : 0,
+  longitude: env.VITE_LNG ? Number(env.VITE_LNG) : 0,
   theme: "auto",
   currentFloor: 1,
   entityMap: ENTITY_MAP,
@@ -273,7 +263,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   dismissedEntityIds: [],
   teleportPoints: TELEPORT_POINTS,
   alertThresholds: DEFAULT_THRESHOLDS,
-  modelTransform: DEFAULT_MODEL_TRANSFORM,
   eyeHeight: 1.7,
   walkSpeed: 1,
   renderOnDemand: true,
@@ -358,7 +347,6 @@ export function loadConfig(): AppConfig {
       entityMap: { ...DEFAULT_CONFIG.entityMap, ...(stored.entityMap ?? {}) },
       meshBindings: { ...DEFAULT_CONFIG.meshBindings, ...(stored.meshBindings ?? {}) },
       alertThresholds: { ...DEFAULT_CONFIG.alertThresholds, ...(stored.alertThresholds ?? {}) },
-      modelTransform: { ...DEFAULT_CONFIG.modelTransform, ...(stored.modelTransform ?? {}) },
       render: { ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) },
       teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
     }));

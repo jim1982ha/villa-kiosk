@@ -9,8 +9,11 @@
 //        • run `localStorage.setItem("villa:debug", "1")` in the console, then reload.
 //      Turn it back off with `localStorage.removeItem("villa:debug")`.
 
-function debugEnabled(): boolean {
-  if (!import.meta.env.DEV) return false;
+/** Shared `?debug` URL-param / `villa:debug` localStorage-key check — the one
+ *  opt-in flag every debug-logging surface in the app reads. devLog() additionally
+ *  requires a dev build (see below); tapDebug.ts intentionally does not, since the
+ *  failures it exists to diagnose have only ever reproduced on a real kiosk. */
+export function debugFlagEnabled(): boolean {
   try {
     if (typeof location !== "undefined" && /[?&]debug\b/.test(location.search)) return true;
     return typeof localStorage !== "undefined" && localStorage.getItem("villa:debug") === "1";
@@ -20,5 +23,5 @@ function debugEnabled(): boolean {
 }
 
 export function devLog(...args: unknown[]): void {
-  if (debugEnabled()) console.log(...args);
+  if (import.meta.env.DEV && debugFlagEnabled()) console.log(...args);
 }

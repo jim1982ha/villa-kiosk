@@ -18,7 +18,7 @@
 /** The base path to resolve backend routes against: the Ingress prefix
  *  ("/api/hassio_ingress/<token>/") in the sidebar, or "/" on the direct
  *  hostname. */
-export function ingressBasePath(): string {
+function ingressBasePath(): string {
   const m = window.location.pathname.match(/^(.*\/api\/hassio_ingress\/[^/]+\/)/);
   return m ? m[1] : "/";
 }

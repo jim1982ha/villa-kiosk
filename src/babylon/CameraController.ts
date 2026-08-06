@@ -19,7 +19,7 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint } from "@/types/scene.types";
-import { pointInPolygon, type Pt2 } from "@/utils/geometry";
+import { clamp, pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { TapRecognizer } from "./TapRecognizer";
 
 interface CameraCallbacks {
@@ -760,5 +760,3 @@ export class CameraController {
     if (config.walkSpeed) this.walkSpeed = config.walkSpeed;
   }
 }
-
-const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v));

@@ -1389,7 +1389,7 @@ def _write_upload_sidecar(request: web.Request, dest: str) -> None:
     """Record what was ACTUALLY uploaded. The overwrite keeps the configured
     filename forever, so without this sidecar the info panel can only show
     the server-side name — which users read as "wrong file loaded" after
-    uploading e.g. villa_1F_2048.glb over TheLysHouse_1F.glb. Best-effort:
+    uploading e.g. villa_1F_2048.glb over villa_1F.glb. Best-effort:
     a failed sidecar write must never fail the (already completed) upload."""
     original_name = os.path.basename(request.query.get("name", "").strip())[:120]
     if not original_name:

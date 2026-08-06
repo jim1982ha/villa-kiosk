@@ -57,6 +57,3 @@ export function tapFeedback(): void { haptic("tap"); }
 
 /** A consequential action landed — an unlock, a scene, a confirmed delete. */
 export function successFeedback(): void { haptic("success"); }
-
-/** An action was refused or failed. */
-export function warnFeedback(): void { haptic("warn"); }

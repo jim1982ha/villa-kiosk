@@ -33,6 +33,7 @@
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
+import { clamp } from "@/utils/geometry";
 import { TapRecognizer } from "./TapRecognizer";
 
 interface OverviewCallbacks {
@@ -534,5 +535,3 @@ export class OverviewController {
     );
   }
 }
-
-const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v));

@@ -23,6 +23,14 @@ interface ProfileContextType {
   login: (role: Role) => void;
   /** Back to the profile-select screen, clearing the session entirely. */
   logout: () => void;
+  /** Owner-only: invalidate EVERY outstanding session on this install (a lost
+   *  device, a PIN someone saw) by bumping the server's signing epoch — not
+   *  just this browser's cookie. Ends this session too, so the caller is
+   *  signed out along with everyone else. Resolves false (leaving the local
+   *  session untouched) if the server call fails, since silently claiming
+   *  "every session revoked" when it might not have happened would be worse
+   *  than doing nothing. */
+  logoutAll: () => Promise<boolean>;
   /** True while the HUD's "Switch profile" flow is showing the picker/PIN
    *  overlay over an ALREADY-active session (see beginSwitch). */
   switching: boolean;
@@ -132,12 +140,31 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setSwitching(false);
   }, []);
 
+  const logoutAll = useCallback(async () => {
+    try {
+      const resp = await fetch(ingressPath("auth/logout-all"), {
+        method: "POST", credentials: "include",
+      });
+      if (!resp.ok) return false;
+    } catch {
+      return false;
+    }
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      // Ignore — clearing state below is what matters.
+    }
+    setRole(null);
+    setSwitching(false);
+    return true;
+  }, []);
+
   const beginSwitch = useCallback(() => setSwitching(true), []);
   const cancelSwitch = useCallback(() => setSwitching(false), []);
 
   const value = useMemo(
-    () => ({ role, login, logout, switching, beginSwitch, cancelSwitch, resolving }),
-    [role, login, logout, switching, beginSwitch, cancelSwitch, resolving],
+    () => ({ role, login, logout, logoutAll, switching, beginSwitch, cancelSwitch, resolving }),
+    [role, login, logout, logoutAll, switching, beginSwitch, cancelSwitch, resolving],
   );
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }

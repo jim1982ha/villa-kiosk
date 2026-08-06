@@ -1,5 +1,7 @@
 // src/utils/geometry.ts
 
+export const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v));
+
 export interface Pt2 {
   x: number;
   z: number;

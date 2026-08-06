@@ -19,7 +19,8 @@ import type { HaSceneInfo } from "@/config/haScenes";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory } from "@/config/EntityCategories";
-import { inferTypeFromEntityId, displayLabelFor } from "@/config/EntityMap";
+import { inferTypeFromEntityId } from "@/config/EntityMap";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { isUnavailable } from "@/utils/stateColors";
 import { phantomEntity } from "@/utils/phantomEntity";
 import type { HassEntity } from "@/types/ha.types";
@@ -102,6 +103,7 @@ export default function SummaryGroupPanel({
   const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
+  const entityLabel = useEntityLabel();
   // Bulk-toggling an entire group (potentially dozens of devices) from one
   // tap is easy to trigger by accident — require an explicit second tap
   // before it actually fires, same pattern as LockPanel's unlock confirm.
@@ -238,7 +240,7 @@ export default function SummaryGroupPanel({
     const type = typeOf(id);
     const cat: Category = effectiveCategory(
       id, type, config.entityMap[id]?.category, e.attributes.device_class as string | undefined);
-    const label = displayLabelFor(id, config.entityMap[id]?.label, e.attributes.friendly_name);
+    const label = entityLabel(id);
     const unit = (e.attributes.unit_of_measurement as string | undefined) ?? "";
     const curTemp = e.attributes.current_temperature as number | null | undefined;
     const targetTemp = e.attributes.temperature as number | null | undefined;

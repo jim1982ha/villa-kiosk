@@ -16,7 +16,7 @@ import { SWITCH_PURPOSE_HINTS } from "@/config/EntityCategories";
 
 /** One glyph per entity TYPE — the fallback for binary_sensor/sensor when no
  *  (or an unrecognised) device_class is reported. */
-export const TYPE_ICON_KEY: Record<EntityType, string> = {
+const TYPE_ICON_KEY: Record<EntityType, string> = {
   light: "lightbulb",
   climate: "thermometer",
   lock: "lock",
@@ -64,7 +64,7 @@ const BINARY_SENSOR_ICON_KEY: Record<string, string> = {
 };
 
 /** device_class -> glyph, for sensor entities. */
-export const SENSOR_ICON_KEY: Record<string, string> = {
+const SENSOR_ICON_KEY: Record<string, string> = {
   temperature: "thermometer",
   humidity: "droplets",
   power: "zap",
@@ -84,7 +84,7 @@ export const SENSOR_ICON_KEY: Record<string, string> = {
 };
 
 /** device_class -> glyph, for switch entities (HA defines just these two). */
-export const SWITCH_ICON_KEY: Record<string, string> = {
+const SWITCH_ICON_KEY: Record<string, string> = {
   outlet: "plug",
   switch: "power",
 };

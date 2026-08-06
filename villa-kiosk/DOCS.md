@@ -46,6 +46,28 @@ token never reaches the browser. A small bundled proxy injects it server-side fo
 both the WebSocket and REST calls. The dashboard title also auto-fills from your
 HA instance name (override it in **Settings → Dashboard title**).
 
+## Day-to-day use
+
+Three profiles are available at sign-in — **Guest** (comfort control: lights,
+AC, doors, music, a narrower climate range, no cameras or config), **Owner**
+(everything, plus config and model administration), and **Facility manager**
+(everything, plus the Facility workspace below, but not config administration)
+— each optionally protected by its own PIN, verified server-side.
+
+Tapping a light/switch/fan on the 3D map toggles it instantly; long-pressing
+any device (or a plain tap on a cover, thermostat, camera, sensor or media
+player) opens its full control panel. Long-pressing a floor button opens a
+radial dial of that floor's rooms to fly to. The alert icon in the top bar
+opens **Cockpit** — a villa-wide status report: what needs attention (offline
+devices, open faults, overdue maintenance, alarm-state sensors), a room/floor/
+category breakdown of every device, today's energy use, and recent activity
+from Home Assistant's own Logbook. Any `scene.*` you've created in Home
+Assistant's own Scene Editor appears automatically in the bottom dock's Scene
+tile — there's no separate kiosk-side scene system to keep in sync. A device
+that reports as more than one HA entity (e.g. a combo temperature/humidity
+sensor) can be folded into a single map badge from **Advanced Settings →
+Grouped devices**.
+
 ## Opening it outside the HA sidebar (optional)
 
 The add-on also publishes itself on host port **8099**, so you can reach the
@@ -101,14 +123,16 @@ that opens the kiosk sees the same record:
 | `/data/fm-data.json` | Maintenance schedule, completions, spend entries, faults |
 | `/data/fm-evidence/` | Photo evidence, downscaled in the browser before upload, pruned after ~18 months |
 
-The maintenance schedule starts empty — press **Load the schedule** on first
-open to seed a typical Bali villa management schedule (AC every 3 months, pest
-control twice monthly, hydrowash every 3/12 months, pool twice weekly). Every
-interval is editable in the **Schedule** tab afterwards, which also shows the
-target date each task's interval implies (from its last completion, or from
-when the task was created if it's never been done) — the same date shown next
-to each card on the **Today** board. A task can be removed individually, or
-all at once (with a confirm step) from the Today tab.
+The maintenance schedule starts completely empty — nothing is pre-filled for
+any villa. Add each task from the **Schedule** tab: a title, an interval
+(pick a preset like "twice a month" or enter raw days — anything that isn't a
+whole number of days rounds down, so a genuinely late task never reads as
+compliant), an optional room, and an optional contract-clause reference. Every
+task shows the target date its interval implies (from its last completion, or
+from when the task was created if it's never been done) — the same date shown
+next to each card on the **Today** board. A task can be paused, edited, or
+removed individually, or all at once (with a confirm step) from the Today tab;
+removing a task keeps whatever completions were already logged against it.
 
 **Faults** and **Spend** entries can be tied to a specific device: search
 across every configured device, or type a description freehand if it isn't in

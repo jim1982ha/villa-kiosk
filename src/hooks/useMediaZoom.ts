@@ -6,11 +6,10 @@
 // transform, so it costs nothing until the user actually interacts.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { clamp } from "@/utils/geometry";
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 6;
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 export interface MediaZoom<T extends HTMLElement> {
   ref: React.RefObject<T>;

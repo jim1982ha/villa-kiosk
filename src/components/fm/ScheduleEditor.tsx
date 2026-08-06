@@ -1,12 +1,8 @@
 // src/components/fm/ScheduleEditor.tsx
-// Add, edit and remove maintenance tasks.
-//
-// Every interval is editable, including the seeded ones: the built-in schedule
-// is a sensible starting point drawn from a typical management agreement, not
-// a fixed truth — a different villa, or a renegotiated contract, changes the
-// numbers. Presets exist because "every 3 months" is how the obligation is
-// actually written, and making someone convert that to 90 by hand is a step
-// where mistakes get made.
+// Add, edit and remove maintenance tasks. The schedule starts empty — every
+// task is entered by the operator. Presets exist because "every 3 months" is
+// how an obligation is actually written, and making someone convert that to
+// 90 by hand is a step where mistakes get made.
 //
 // A task can bind to a room, which is what lets the villa map highlight where
 // overdue work actually is.

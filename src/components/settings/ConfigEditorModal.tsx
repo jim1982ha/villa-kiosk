@@ -8,7 +8,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { ChevronDown, ChevronRight, Upload } from "lucide-react";
+import { ChevronDown, ChevronRight, LogOut, Upload } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
@@ -94,6 +94,50 @@ function VillaCoordinates() {
         />
       </div>
     </div>
+  );
+}
+
+/** Immediately signs every device out — a lost tablet, a PIN someone saw.
+ *  Two-tap confirm, same idiom as Facility's "Delete all" buttons: this
+ *  signs the person clicking it out too, so it's worth pausing on. */
+function LogoutAllSection() {
+  const { logoutAll } = useProfile();
+  const [confirming, setConfirming] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <>
+      <p className="muted body-text" style={{ marginTop: 0, marginBottom: 10 }}>
+        Signs every device out immediately — this one included — regardless of
+        how long the "Session length" add-on option says a sign-in should
+        last. Use it if a tablet went missing or a PIN was seen by someone who
+        shouldn't have it.
+      </p>
+      {failed && (
+        <div className="test-result fail" style={{ marginBottom: 10 }}>
+          Could not reach the server — no session was signed out.
+        </div>
+      )}
+      {confirming ? (
+        <div className="modal-actions" style={{ margin: 0 }}>
+          <button className="btn ghost" onClick={() => setConfirming(false)}>Cancel</button>
+          <button
+            className="btn danger"
+            onClick={async () => {
+              const ok = await logoutAll();
+              setFailed(!ok);
+              setConfirming(false);
+            }}
+          >
+            Log out every device?
+          </button>
+        </div>
+      ) : (
+        <button className="btn ghost" onClick={() => setConfirming(true)}>
+          <LogOut size={15} /> Log out all devices
+        </button>
+      )}
+    </>
   );
 }
 
@@ -192,6 +236,12 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           {role === "owner" && (
             <CollapsibleSection title="Device telemetry">
               <TelemetryPanel />
+            </CollapsibleSection>
+          )}
+
+          {role === "owner" && (
+            <CollapsibleSection title="Session">
+              <LogoutAllSection />
             </CollapsibleSection>
           )}
         </div>

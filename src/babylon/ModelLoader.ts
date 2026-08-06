@@ -156,7 +156,7 @@ export interface LoadResult {
 // on top would light the image of a lit room a second time. The prefix is the
 // whole contract between pipeline and app: no sidecar files, no custom glTF
 // extensions, and a GLB without it behaves exactly as before this existed.
-export const BAKED_MATERIAL_PREFIX = "BAKED_";
+const BAKED_MATERIAL_PREFIX = "BAKED_";
 // Pipeline ≥2.1.0 additionally ships a sun-free NIGHT bake of the same atlas
 // layout: a microscopic hidden plane ("BAKED_NightCarrier") wears a material
 // matching this test whose base-colour texture is the night atlas (glTF can't

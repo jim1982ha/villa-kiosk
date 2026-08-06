@@ -13,13 +13,12 @@ import Sparkline from "./Sparkline";
 import DualSparkline from "./DualSparkline";
 import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
-import { useConfig } from "@/config/ConfigContext";
 import { fetchHistory } from "@/ha/HAHistoryAPI";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HistoryPoint } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
-import { displayLabelFor } from "@/config/EntityMap";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 
 interface Props {
   group: DeviceGroup;
@@ -31,17 +30,16 @@ const SERIES_COLORS = ["var(--status-on)", "var(--accent)", "var(--status-warnin
 
 export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Props) {
   const { entities } = useHA();
-  const { config } = useConfig();
+  const entityLabel = useEntityLabel();
   const ids = [group.primaryEntityId, ...group.memberEntityIds];
   const [history, setHistory] = useState<Record<string, HistoryPoint[]>>({});
 
   const rows = ids.map((id) => {
     const entity = entities[id];
-    const mapping = config.entityMap[id];
     const numeric = Number(entity?.state);
     return {
       id,
-      label: displayLabelFor(id, mapping?.label, entity?.attributes.friendly_name),
+      label: entityLabel(id),
       unit: (entity?.attributes.unit_of_measurement as string | undefined) ?? "",
       value: entity?.state ?? "—",
       numeric: Number.isFinite(numeric) ? numeric : undefined,

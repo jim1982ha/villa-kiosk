@@ -13,15 +13,20 @@ Built with **React + TypeScript + Babylon.js**.
 | Area | What it does |
 |---|---|
 | **First-person navigation** | Walk with a touch virtual joystick, look around by dragging, teleport to any room from a grid. |
-| **Tap-to-control** | Tap a 3D object → the right control panel slides up (light/AC/lock/camera/sensor/curtain/fan/switch/media). |
+| **Tap-to-control** | Tap a light/switch/fan to toggle it instantly; long-press any device (or tap a cover/thermostat/camera/sensor/media player, which always opens on a plain tap) for its full control panel. |
 | **Live visual feedback** | Lights glow and illuminate the room; curtains show open/half/closed; fans spin; locks go green/red; leak sensors pulse red. |
 | **Live HA sync** | WebSocket connection with auto-reconnect; mesh visuals update within ~300 ms of a state change. |
 | **Tap-to-bind** | Wire any imported model to HA by tapping objects and picking the entity — no entity-named meshes required. |
-| **Live cameras** | Full-screen MJPEG stream popups via the HA camera proxy. |
+| **Live cameras** | Full-screen HLS stream, falling back to MJPEG then polled snapshots automatically, via the HA camera proxy. |
 | **Day / night** | Scene lighting follows the real sun position for your location (or HA's `sun.sun`). |
-| **Render quality** | Live, per-effect look controls (Settings → *Render quality*): tone mapping, exposure/contrast, light balance, ambient occlusion, sun shadows, environment lighting — tune for quality or tablet performance with no rebuild. |
+| **Render quality** | Fixed at a tuned "high" look, with exposure, night dimming and lit-fixture glow strength individually adjustable (Settings) — no rebuild needed. |
 | **On-demand rendering** | The GPU idles when nothing moves — essential for a 24/7 tablet. |
 | **Runtime config** | Map meshes → entities, calibrate teleport points, set thresholds — all in-app, no code edits. |
+| **Cockpit** | One tap → villa-wide status: what needs attention (offline devices, open faults, overdue maintenance, alarm-state sensors), a room/floor/category breakdown, today's energy use, recent activity from HA's own Logbook, and pending firmware updates. |
+| **HA Scenes** | Any `scene.*` you've created in Home Assistant's own Scene Editor appears automatically — no separate kiosk-side scene system. Run one from the bottom dock's Scene tile, or from a room-scoped shortcut when opening that room's device list. |
+| **Device groups** | Fold entities that are really one physical device (e.g. a combo sensor's separate temperature/humidity entities) into a single map badge, with a combined detail view for the rest. |
+| **Room/floor navigation** | Long-press a floor button for a radial dial of that floor's rooms; tap one to fly there. A pinned "Manage rooms" chip adds/removes rooms from wherever the camera currently stands. |
+| **Three profiles** | Guest (comfort control, narrower climate range, no cameras/energy), Owner (everything, plus config/model administration), Facility Manager (everything, plus Facility access, no config administration) — each optionally PIN-gated, verified server-side. |
 | **Facility workspace** | Maintenance schedule with photo evidence, guest-readiness check, fault queue with resolution times, maintenance spend against a monthly cap, and a one-click monthly operations report — see [Facility Manager](#facility-manager) below. |
 | **PWA** | Installable, works briefly offline; shared config (device↔room bindings, room viewpoints, device groups) auto-syncs across every client through the add-on's own store, so there's nothing to manually back up or restore. |
 
@@ -30,10 +35,10 @@ Built with **React + TypeScript + Babylon.js**.
 ## Tech stack
 
 - **React 18** + **TypeScript** (strict, functional components + hooks only)
-- **Babylon.js 7** (`@babylonjs/core`, `loaders`, `materials`, `inspector`)
-- **Vite 5** build
-- **lucide-react** icons · **jszip** backups
-- **IndexedDB** for the GLB model · **localStorage** for all config
+- **Babylon.js 7** (`@babylonjs/core`, `@babylonjs/gui`, `@babylonjs/loaders`, `@babylonjs/materials`)
+- **Vite** build
+- **lucide-react** icons · **hls.js** for camera streaming (HLS, with MJPEG/snapshot fallback)
+- **IndexedDB** for the GLB model · **localStorage** for per-device config
 - Plain CSS with custom properties — no CSS framework
 
 ---
@@ -113,7 +118,7 @@ npm run build       # type-check + Vite → dist/  (baked into the add-on image)
 | Prevent sleep / keep screen on | ON |
 | Auto-reload on error | ON (30 s) |
 | Hide navigation/status bar | ON |
-| Allow camera | ON (for MJPEG streams) |
+| Allow camera | ON (for live camera streams) |
 | Motion detection wake | ON |
 | Brightness | ~70% |
 | Launch on boot | ON |
@@ -129,8 +134,7 @@ npm run build       # type-check + Vite → dist/  (baked into the add-on image)
 | PIN pad rejects every code / no session | Set the matching `guest_pin`/`owner_pin`/`ops_pin` in the add-on options (4 digits), then reload. |
 | Camera panel black | Verify the `camera.*` entity works in HA; frames route through the add-on proxy (no token needed). |
 | Walks through walls | The GLB needs solid wall meshes or `collision_*` boxes — see MODEL_PIPELINE.md. |
-| Teleport lands wrong | Recalibrate: Rooms → walk to the correct spot → long-press the room card. |
-| Inspector won't open | It's a large lazy chunk; first open needs network. Rebuild + reinstall the add-on. |
+| Teleport lands wrong | Recalibrate: long-press a floor button → the pinned "Manage rooms" chip → walk to the correct spot → long-press the room card. |
 | No install button | Only the add-on's own HTTPS hostname is installable — the Ingress sidebar path never is (service worker disabled there by design). |
 
 ---
@@ -145,7 +149,7 @@ matters is also enforced in `rootfs/usr/bin/supervisor-proxy.py`.
 | Surface | Rule |
 |---|---|
 | Sessions | HMAC-signed cookie (`HttpOnly`, `Secure`, `SameSite=Lax`), 30-day life, key persisted 0600 in `/data` |
-| Log out | `POST /auth/logout` clears this browser's cookie; `POST /auth/logout-all` (owner) bumps a signing epoch that invalidates **every** outstanding session |
+| Log out | The profile chip's sign-out clears this browser's cookie only. **Advanced Settings → Session → Log out all devices** (Owner) instead bumps a signing epoch server-side, invalidating **every** outstanding session at once — including the device that clicked it |
 | PIN entry | 4 digits, constant-time compare, rate-limited per client IP **and** globally per role |
 | Blank PIN | The add-on ships `guest_pin`, `owner_pin` and `ops_pin` all **empty**. Empty means different things per role: `owner`/`ops` become *unavailable* (never open), while `guest` becomes *open to anyone* — no prompt at all. Since guest can unlock doors, leave `guest_pin` blank only on a villa you are happy for any visitor to control. There is no second PIN to add; this is the same field in the add-on options |
 | HA REST (`/core/api/*`) | Default **deny** for non-owners: ambiguous paths refused outright, then an allowlist of what the kiosk actually calls |
@@ -415,6 +419,8 @@ have to be *evidenced*, not just performed. The tabs map to that:
 | **Schedule** | Add, edit, pause or remove maintenance tasks — interval (with presets like "twice a month"), optional room, optional contract reference. Every task shows the target date its interval implies, from its last completion or (if never done) from when it was created — the same date the Today board shows. Removing a task keeps the completions already logged against it; "Delete all" clears the schedule the same way. |
 | **Report** | Press **Generate report** to snapshot the villa's current Readiness/Faults/Spend/Schedule status into a formatted preview for any month. **Download .md** saves the underlying Markdown unchanged. |
 
+Every device panel's footer also has a **Report a fault** shortcut, open to every profile including Guest. A Guest gets a minimal one-screen form (what's wrong, optional notes, optional photo) that files a ticket flagged as guest-reported — visually tagged in the Faults tab so triage staff know they're reading a symptom, not a diagnosis — with no visibility into the fault history, cost or status afterward. An Owner/Facility manager instead lands directly in the Faults tab with that device pre-selected.
+
 Faults and spend entries are *evidence*, so nothing in the normal interface
 deletes one — resolving a fault keeps it, and the record of what was spent is
 what an audit rests on. When an entry genuinely has to go (a duplicate, a test
@@ -469,21 +475,64 @@ src/
 ├── config/       # AppConfig, EntityMap, TeleportPoints, thresholds (persisted to localStorage)
 ├── components/   # React UI: canvas, HUD, panels, teleport, settings, auth (profile gate)
 ├── pages/        # Dashboard (the only route — Advanced Settings is a modal over it, not a separate page)
-├── hooks/        # useHAEntity, useHAEntities, useSceneReady
+├── fm/           # Facility Manager: engine, report builder, data context
+├── auth/         # Profiles, PIN verification, RBAC permissions, superadmin elevation
+├── hooks/        # useHAEntity, useEntityLabel, useLongPress, useOptimisticToggle, usePendingAck…
 ├── types/        # Shared TS types
-└── utils/        # colour, sun, storage, backup, transforms
+└── utils/        # colour, sun position, storage/backup, telemetry, geometry
 ```
 
 The 3D scene never re-renders from React — HA state changes are pushed imperatively into Babylon via `HAStateStore.subscribeAll`, keeping the canvas and the React UI fully decoupled.
 
 ---
 
-## Runtime configuration
+## Using the kiosk
 
-- **Settings** (gear icon): title, render quality, first-person/overview feel, device icon size, theme. No HA URL/token — the connection is automatic through the add-on proxy.
-- **Advanced Settings** (Settings' footer → *Advanced Settings*, a modal over the live dashboard, not a page reload): an icon-only GLB/room-data upload button in the modal's own header (Owner profile, next to a model-info (i) tooltip — same treatment as the day/night invert toggle in the Settings modal's header), plus villa location, auto-detected entity settings (map any `entity_id` to a panel type + label + room, mark entities requiring confirmation), bound 3D objects, grouped devices, device telemetry.
-- **Render quality** (Settings → *Render quality &amp; look*): independently toggle/tune tone mapping (Khronos Neutral / ACES / Standard), exposure, contrast, fill + key + ambient light balance, ambient occlusion (SSAO), sun shadows and environment lighting (IBL). All apply live and persist with your config; start with tone mapping + lower **Fill light** to cure a washed-out render. The same knobs can be baked into the GLB via the [Blender pipeline](MODEL_PIPELINE.md) flags.
-- **Teleport calibration**: open **Rooms**, then right-click / long-press any room card to save your current spot as that room's anchor.
+### The HUD
+
+The top bar has three zones. **Left**: a home/brand chip — tap it to jump to this device's own saved bird's-eye default view; while already in bird's-eye view, long-press it (right-click / hold Space on desktop) to save the current framing as that default. **Centre**: one filter icon per device category (Comfort, Light, Network, Energy, Access Control, Others — only the categories your profile can see appear at all) — tap to show/hide that category's badges on the map, long-press to open a plain list of every device in it instead; a "?" at the end opens the **colour Legend**. Next to it, a −/+ stepper resizes every badge/label on the map. **Right**: Cockpit, Facility (Owner/Facility Manager), the first-person/bird's-eye view toggle, the profile chip (with sign-out), and Settings — collapsing into a single "⋮" overflow menu on a phone.
+
+Below the brand chip, a vertical stack of floor buttons ("1F"/"2F", …) sits in the left column, with the view-mode toggle just under it. Tap a floor button to switch storeys; **long-press** one instead opens the **Rooms dial** — a radial fan of tappable room chips for that floor, with a pinned "Manage rooms" chip that opens the full Rooms grid (add a room at wherever the camera currently stands, delete one, or tap a card to teleport there). The bottom bar carries only the movement joystick, shown while walking in first-person.
+
+On the 3D map itself: tapping a light/switch/fan toggles it instantly (confirmed with a tap-point ripple, not a popup); **long-press (500ms)** any device to open its full control panel; covers/thermostats/media/cameras/sensors always open their panel on a plain tap since a quick toggle doesn't make sense for them; a device flagged "confirm before toggling" always asks first. Tapping a zoomed-out cluster of nearby badges navigates to that room, same as picking it from the Rooms dial.
+
+### Cockpit
+
+One tap on the alert icon opens a villa-wide status report, open to every profile: a health headline, a list of everything that needs attention (offline devices, open faults, overdue maintenance, alarm-state sensors — each tap-through to its own device panel), a Room/Floor/Category breakdown of every device in the house, today's energy total (if HA's Energy Dashboard is configured), the last few hours of HA's own Logbook filtered to real villa devices and phrased in plain language, and — for Owners — a count of pending firmware/add-on updates. The same "needs attention" count drives the HUD's own alert badge, so the two numbers can never disagree.
+
+### The bottom dock
+
+A horizontally-scrolling strip of tiles, derived automatically from whatever entities exist — nothing to configure: **Door Lock(s)**, **Pool** (any switch named/roomed like pool/jacuzzi/spa equipment), **Lights** ("N on"), **AC** (average current room temperature across running units), **Energy** (total instantaneous wattage, read-only), and **Scene** (present whenever any `scene.*` entities exist). Every tile opens a grouped list of its devices, individually controllable inline; a profile without control rights over that category still sees the tile, read-only. The dock can be hidden entirely from Settings.
+
+### Entity control panels
+
+Tapping into a device opens the panel for its domain: **Light** (on/off, brightness, colour temperature, 24h history), **AC/Climate** (current + target temperature, mode buttons, fan-speed buttons — Guests get a narrower adjustable range clamped from the device's real limits), **Lock** (status pill, lock/re-lock, unlock behind a confirm step, 24h history), **Camera** (full-screen HLS → MJPEG → snapshot fallback, prev/next cycling with swipe support and a long-press picker list, pinch/wheel zoom and pan, a merged online/motion/offline 24h timeline), **Cover** (open/stop/close, a position slider if supported, 24h history), **Fan** (on/off, named speed and preset buttons, 24h history), **Switch/media/sensor/binary_sensor**, a **Generic** fallback for anything with no dedicated panel, and a **Device group** combined view (dual-axis sparkline for a two-member group, stacked sparklines otherwise). Every panel's header badge is tappable (for a profile allowed to edit config) to recolour just that device on the map.
+
+### HA Scenes
+
+Scenes are read live from Home Assistant's own `scene.*` entities and Scene Editor — there is no separate kiosk-side scene system to keep in sync. The dock's **Scene** tile lists every scene by name; picking one runs it. Opening a room's device list also surfaces a "Scenes for this room" shortcut row, scoped to whichever scenes actually touch that room's entities.
+
+### Device groups
+
+Some physical devices report as two or more HA entities (a combo temperature/humidity sensor, for instance) — grouping folds them into one map badge, with every member's value and 24h history in that badge's own detail view instead of a second badge cluttering the map. Set one up in **Advanced Settings → Grouped devices**: pick the primary entity that keeps the badge, add members via the inline picker, or accept an auto-suggested pairing (from HA's own device registry first, a naming-convention fallback second) — nothing is grouped without an explicit tap.
+
+### Settings
+
+**Settings** (gear icon, all profiles) covers personal comfort and appearance: theme (Light/Dark/Auto), dashboard title (Owner-only shared branding), Clickable Glow and Natural Scroll toggles, Brightness and Night-dimming sliders, a Day/Auto/Night preview override (baked-lighting villas only), Light-effect strength, badge style (Default vs. Card), the dock show/hide toggle, and first-person eye-height/walk-speed sliders. Everything applies and persists live — there's no separate save step.
+
+**Advanced Settings** (Settings' footer, Owner-only except device telemetry) is villa administration: an icon-only GLB/room-data upload button in the modal's own header (next to a model-info tooltip showing filename, size, mesh count, load timings and SHA-256), villa latitude/longitude, the auto-detected entity table (every mesh already named after its own entity_id — toggle visibility, set type/category/label, flag "confirm before toggling", per-light intensity override, link a secondary entity or a camera's motion sensor, redirect a mesh to a different entity_id), **Bound 3D objects** (manually bind an unnamed mesh to any entity via a live searchable picker, plus audit lists of unbound objects and entities with no 3D object at all), **Grouped devices**, **Device telemetry** (per-device load/error diagnostics, exportable), and **Session** (Log out all devices — immediately invalidates every signed-in session, including the one clicking it, for a lost tablet or a PIN someone saw).
+
+### Profiles & access control
+
+Three profiles, chosen at first launch and optionally PIN-gated (verified server-side, never client-side): **Guest** (comfort control only — Comfort/Light/Network/Access-Control categories, a narrower climate range, no cameras, no config), **Owner** (everything, plus config and model administration), **Facility Manager** (everything, plus Facility access, but not config administration). A separate, session-less **superadmin** code (distinct from any profile PIN, configured in the add-on options) permanently erases a Facility record — a fault, a spend entry, a saved report, or a logged completion — reached only by press-and-holding a row inside the Facility workspace; a correct code authorises exactly one deletion and is never cached or reusable.
+
+### Teleport calibration
+
+Long-press a floor button → the pinned "Manage rooms" chip → walk to the correct spot → long-press the room card to save it as that room's anchor. A room's framing is computed live from its floor-plan polygon every time you arrive, not a hand-saved camera shot.
+
+### Render quality
+
+Render quality is fixed at the "high" look by design — no per-effect picker to fight with — but overall exposure, night dimming and the intensity of a lit fixture's glow (Settings, above) stay individually adjustable. The same three dials can be baked into the GLB itself via the [Blender pipeline](MODEL_PIPELINE.md) flags, so a villa can ship its own tuned defaults.
 
 ---
 
@@ -501,4 +550,4 @@ The 3D scene never re-renders from React — HA state changes are pushed imperat
 
 ## License
 
-A generic, self-hostable Home Assistant villa dashboard. Bring your own `.glb`.
+Proprietary. All rights reserved — see [LICENSE](LICENSE). This repository is source-available for evaluation purposes only; no license to use, copy, modify, or distribute the Software is granted. Contact the copyright holder for licensing inquiries.

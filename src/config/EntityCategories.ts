@@ -142,7 +142,7 @@ export const SWITCH_PURPOSE_HINTS: ReadonlyArray<readonly [RegExp, Category, str
  *  entity_id hint > type default > "others". `deviceClass` (from the live HA
  *  state) makes the sensor/binary_sensor splits precise; when it isn't known
  *  yet the entity_id hints cover the common cases. */
-export function categoryForEntity(entityId: string, type: EntityType, deviceClass?: string): Category {
+function categoryForEntity(entityId: string, type: EntityType, deviceClass?: string): Category {
   const exception = CATEGORY_EXCEPTIONS[entityId];
   if (exception) return exception;
 

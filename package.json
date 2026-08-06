@@ -1,8 +1,9 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.122.0",
+  "version": "2.123.0",
   "description": "Villa Kiosk — a 3D interactive villa dashboard for Home Assistant",
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "clean": "rm -rf dist node_modules/.vite tsconfig.tsbuildinfo",

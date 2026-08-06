@@ -53,9 +53,8 @@ correctly-named GLB so that:
 
 ## 💡 Lights & activatable devices — visual feedback
 
-**Yes, lights are fully handled and configurable** — they just weren't called out
-before because the *current* `villa_1F.sh3d` contains no `light.*` entity
-yet. The moment you bind a light, it works. Here's exactly what each device type
+**Lights are fully handled and configurable.** The moment you bind a `light.*`
+entity, it works — no separate setup step. Here's exactly what each device type
 does in the 3D scene, all driven by the binding's **type** (editable in the
 Config Editor, so you choose what each object does):
 
@@ -232,26 +231,26 @@ The script is in `ha_navigate/sources/blender_pipeline.py` and takes **three arg
 ```bash
 # Linux / macOS (adjust blender path if needed):
 blender --background --python blender_pipeline.py -- \
-    TheLysHouse_1F.sh3d \
-    OBJ/TheLysHouse_1F.obj \
+    YourVilla_1F.sh3d \
+    OBJ/YourVilla_1F.obj \
     output/villa_1F.glb
 
 # macOS (if Blender isn't on your PATH):
 /Applications/Blender.app/Contents/MacOS/Blender --background \
     --python blender_pipeline.py -- \
-    TheLysHouse_1F.sh3d \
-    OBJ/TheLysHouse_1F.obj \
+    YourVilla_1F.sh3d \
+    OBJ/YourVilla_1F.obj \
     output/villa_1F.glb
 
 # Windows:
 "C:\Program Files\Blender Foundation\Blender 4.x\blender.exe" --background ^
     --python blender_pipeline.py -- ^
-    TheLysHouse_1F.sh3d OBJ\TheLysHouse_1F.obj output\villa_1F.glb
+    YourVilla_1F.sh3d OBJ\YourVilla_1F.obj output\villa_1F.glb
 ```
 
 **Tip — dry-run (preview the mapping without Blender):**
 ```bash
-python3 blender_pipeline.py TheLysHouse_1F.sh3d OBJ/TheLysHouse_1F.obj
+python3 blender_pipeline.py YourVilla_1F.sh3d OBJ/YourVilla_1F.obj
 ```
 This prints exactly which OBJ groups will be assigned to each entity, so you can
 verify the mapping before running Blender.
@@ -277,7 +276,7 @@ for the full, current list rather than relying solely on this table:
 ```bash
 # Example: tame white walls + add baked contact shadows
 blender --background --python blender_pipeline.py -- \
-    TheLysHouse_1F.sh3d OBJ/TheLysHouse_1F.obj output/villa_1F.glb \
+    YourVilla_1F.sh3d OBJ/YourVilla_1F.obj output/villa_1F.glb \
     --max-base-color 0.85 --min-roughness 0.6 --bake-ao
 ```
 
@@ -332,10 +331,10 @@ They now come from **`blender_pipeline.jobs.json`**, sitting next to the script:
 ```json
 [
   {
-    "label": "TheLysHouse",
-    "sh3d": "TheLysHouse.sh3d",
-    "obj": "OBJ/TheLysHouse.obj",
-    "glb": "GLB/TheLysHouse_{size}.glb",
+    "label": "YourVilla",
+    "sh3d": "YourVilla.sh3d",
+    "obj": "OBJ/YourVilla.obj",
+    "glb": "GLB/YourVilla_{size}.glb",
     "flags": ["--bake", "--bake-lightmap", "--bake-size", "{size}", "--ktx2"]
   }
 ]
@@ -468,8 +467,9 @@ In the import options panel (right side of the file dialog):
 | **Split by Object** | OFF | OFF |
 
 With **Split by Group ON** each SweetHome 3D furniture group becomes a separate
-Blender object named with the furniture's Name field. For TheLysHouse these are
-already set to HA entity IDs (`lock.living_room_…`, `climate.living_room_…`, …).
+Blender object named with the furniture's Name field — if you set those names to
+HA entity IDs in SweetHome 3D (`lock.living_room_…`, `climate.living_room_…`, …),
+they carry straight through.
 
 If you use the **automated script** (Strategy B above) this setting is handled
 for you — you do not need to open Blender manually.
@@ -599,11 +599,10 @@ Skip straight to export.
 
 3. Name it `villa_1F.glb` and click **Export glTF 2.0**. Aim for **< 40 MB**.
 
-> **Draco note:** Draco shrinks the file a lot, but to *decode* it the kiosk needs
-> a small helper that Babylon fetches from the internet by default. If your tablet
-> is **local-only (no internet)**, either **leave Draco OFF** (simplest — fine if
-> the file is already under ~40 MB), or ask to have the Draco decoder bundled into
-> the app so it works fully offline.
+> **Draco note:** Draco shrinks the file a lot, and decoding it is fully
+> offline-safe — the kiosk bundles its own Draco decoder rather than fetching
+> one from Babylon's CDN, so a villa with no internet at all still loads a
+> Draco-compressed GLB normally. Leave Draco **ON**.
 
 ---
 

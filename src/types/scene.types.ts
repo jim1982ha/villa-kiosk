@@ -103,16 +103,3 @@ export interface TeleportPoint {
   target: Vec3;
   thumbnail?: string;
 }
-
-/**
- * Transform applied to raw SweetHome 3D coordinates (centimetres, Y-down plan)
- * to obtain Babylon world coordinates (metres). Kept in config so the model can
- * be re-aligned without touching code if the GLB export axes differ.
- */
-export interface ModelTransform {
-  scale: number; // cm -> m, default 0.01
-  centreX: number; // SweetHome plan centre X (cm)
-  centreZ: number; // SweetHome plan centre Y (cm)
-  flipX: boolean;
-  flipZ: boolean;
-}

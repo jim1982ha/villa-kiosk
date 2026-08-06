@@ -23,9 +23,8 @@ import { X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, 
 import type { PanelProps } from "@/types/panel.types";
 import { usePanelActions } from "./PanelActionsContext";
 import { useHA } from "@/ha/HAStateStore";
-import { useConfig } from "@/config/ConfigContext";
-import { displayLabelFor } from "@/config/EntityMap";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { devLog } from "@/utils/devLog";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
@@ -64,7 +63,7 @@ const HLS_WATCHDOG_MS = 15000;
 
 export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEntity }: Props) {
   const { connected, ws, entities } = useHA();
-  const { config } = useConfig();
+  const entityLabel = useEntityLabel();
   // Same linked-entity switch every OTHER panel gets from the shared BasePanel
   // chrome — this panel is the one that doesn't use BasePanel (it's a
   // fullscreen feed, not a modal card), so it reads the identical context and
@@ -152,8 +151,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   const cameraIds = Object.keys(entities)
     .filter((id) => id.startsWith("camera."))
     .sort((a, b) => {
-      const labelA = displayLabelFor(a, config.entityMap[a]?.label, entities[a]?.attributes.friendly_name);
-      const labelB = displayLabelFor(b, config.entityMap[b]?.label, entities[b]?.attributes.friendly_name);
+      const labelA = entityLabel(a);
+      const labelB = entityLabel(b);
       return labelA.localeCompare(labelB);
     });
   const camIndex = cameraIds.indexOf(mapping.entityId);
@@ -722,7 +721,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             <div className="camera-picker-list">
               {cameraIds.map((id) => {
                 const isCurrent = id === mapping.entityId;
-                const label = displayLabelFor(id, config.entityMap[id]?.label, entities[id]?.attributes.friendly_name);
+                const label = entityLabel(id);
                 return (
                   <button
                     key={id}

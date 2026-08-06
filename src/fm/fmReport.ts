@@ -37,17 +37,29 @@ export function monthLabel(month: string): string {
     .toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
+/** Shared `# title` / Period / Generated / Scope preamble both report flavours below
+ *  open with — kept in one place so the financial-reporting disclaimer can't drift
+ *  between them. */
+function reportHeader(titleSuffix: string, villaName: string, month: string, scopeDescription: string): string[] {
+  return [
+    `# ${villaName} — ${titleSuffix}`,
+    `**Period:** ${monthLabel(month)}  `,
+    `**Generated:** ${new Date().toLocaleString("en-GB")}  `,
+    `**Scope:** ${scopeDescription} `
+      + `Financial reporting — revenue, commissions and payout — is out of scope and provided separately.`,
+    "",
+  ];
+}
+
 export function buildMonthlyReport(input: ReportInput): string {
   const { fm, month, villaName, readiness } = input;
   const now = Date.now();
   const L: string[] = [];
 
-  L.push(`# ${villaName} — operational report`);
-  L.push(`**Period:** ${monthLabel(month)}  `);
-  L.push(`**Generated:** ${new Date().toLocaleString("en-GB")}  `);
-  L.push(`**Scope:** operational status only — maintenance, spend, faults and device uptime. `
-    + `Financial reporting — revenue, commissions and payout — is out of scope and provided separately.`);
-  L.push("");
+  L.push(...reportHeader(
+    "operational report", villaName, month,
+    "operational status only — maintenance, spend, faults and device uptime.",
+  ));
 
   // ── 1. Preventive maintenance ─────────────────────────────────────────────
   L.push(`## 1. Preventive maintenance`);
@@ -175,12 +187,10 @@ export function buildSpendStatement(fm: FmData, month: string, villaName: string
   const L: string[] = [];
   const b = budgetStatus(fm.costs, month);
 
-  L.push(`# ${villaName} — maintenance spend statement`);
-  L.push(`**Period:** ${monthLabel(month)}  `);
-  L.push(`**Generated:** ${new Date().toLocaleString("en-GB")}  `);
-  L.push(`**Scope:** maintenance spend against the configured Minor Maintenance cap. `
-    + `Financial reporting — revenue, commissions and payout — is out of scope and provided separately.`);
-  L.push("");
+  L.push(...reportHeader(
+    "maintenance spend statement", villaName, month,
+    "maintenance spend against the configured Minor Maintenance cap.",
+  ));
 
   L.push(`- **Minor Maintenance this month:** ${formatIdr(b.minorIdr)} of the `
     + `${formatIdr(b.capIdr)} monthly cap (${Math.round(b.fraction * 100)}%)`);

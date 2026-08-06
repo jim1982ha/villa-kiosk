@@ -1,3 +1,37 @@
+## 2.123.0
+
+### Added — "Log out all devices", which the add-on options had been promising all along
+
+The `session_days` option's own description ends with *"use 'Log out all devices' in the app to apply it to existing ones immediately"* — and there was no such button anywhere in the UI. The server side had been complete for some time (`POST /auth/logout-all`, owner-only, bumping a signing epoch that every outstanding cookie is verified against), so the capability existed and was reachable by anyone willing to issue the request by hand; what was missing was the control the documentation told you to look for. That is worse than an undocumented feature, because the person reading it concludes the app is broken, or that they are looking in the wrong place.
+
+It now lives in **Advanced Settings → Session**, Owner-only, behind the same two-tap confirm the Facility tabs use for their destructive actions. The confirm is not decoration: bumping the epoch invalidates *every* session including the one belonging to the person pressing the button, so it always signs you out too, and the copy says so. If the request fails the local session is deliberately left untouched and an error is shown, because a UI that claims every device has been signed out when the server never heard about it is the one outcome worse than the button not existing.
+
+### Fixed — one villa's real GPS coordinates were compiled into every install
+
+`AppConfig`'s `DEFAULT_CONFIG` carried a hardcoded latitude/longitude fallback, and `.env.example` shipped the same pair again under a comment naming the specific property they belong to. Sun position, day/night lighting and the whole baked-lighting preview key off those numbers, so any install that had not yet adopted its Home Assistant instance's own coordinates was being lit for somebody else's location — silently, and correctly enough to look intentional. The fallback is now `0`/`0`, which is the honest "not configured yet" value; the real coordinates arrive on connect from HA as they always did. The same audit removed the property's name from the pipeline documentation's worked examples, from a proxy docstring and from a comment in `modelInfo.ts`, replacing them with generic placeholders.
+
+This is the same class of defect the project's hardcoding rule exists to prevent, and it had been sitting in the one file whose defaults are spread underneath *every* stored config on load.
+
+### Removed — a config field nothing had read for a long time
+
+`modelTransform` (scale, plan-centre X/Z, flip flags) was declared on `AppConfig`, given a default whose centre coordinates were measured against one specific floor plan, persisted, merged on every load, and read by absolutely nothing — the runtime plan→world solve in `roomCalibration.ts` replaced it and the field was simply never deleted. Its `ModelTransform` type went with it. Removing it also removes another set of villa-specific constants from shipped code.
+
+### Changed — shared rules that had been re-implemented instead of shared
+
+A pass over the source found four cases of the same rule written more than once, each the shape that drifts silently. `clamp()` existed three times (twice byte-identical in the two camera controllers, once more with renamed parameters in `useMediaZoom`) and now comes from `utils/geometry`. The `?debug` / `villa:debug` opt-in check was implemented independently in `devLog.ts` and `tapDebug.ts`; it is now one exported `debugFlagEnabled()`, with `devLog`'s additional dev-build-only gate applied at its own call site so the deliberate difference between the two stays visible rather than duplicated. Both Facility report builders opened by pushing the same four Markdown header lines, including the verbatim financial-reporting disclaimer, which is precisely the sentence you do not want drifting between two documents handed to the same owner — they now share one `reportHeader()`. And `useEntityLabel()`, a hook that exists specifically to stop the config-label/friendly-name double lookup being rewritten per screen, was still being hand-rolled in four components and wrapped in a local helper in a fifth.
+
+Eight further symbols were exported but used only inside their own file, and one function (`warnFeedback`) had no call sites at all. Nothing user-visible changed here; the point is that the next person to touch any of these rules should not have to find every copy.
+
+### Changed — documentation rewritten against what the app actually does
+
+The README's feature table still described per-effect render-quality controls that were consolidated long ago, an MJPEG-only camera panel that now negotiates HLS first, and a tech stack listing two dependencies the project does not have. `MODEL_PIPELINE.md` still warned that Draco decoding needs an internet round trip — the exact opposite of the offline guarantee the decoder was bundled to provide, and advice that would push someone toward shipping a needlessly large GLB. `DOCS.md` described a "Load the schedule" button seeding a regional maintenance schedule; that seed was removed in 2.47.0 and the button no longer exists, but a stale comment in `ScheduleEditor.tsx` still referred to "the seeded ones" and had kept the claim alive in the docs.
+
+All four documents now describe the shipping build: the HUD and its long-press gestures, Cockpit, the bottom dock, every entity panel, HA-sourced scenes, device groups, the rooms dial, both settings tiers and the three-profile access model.
+
+### Changed — licence
+
+The repository shipped under AGPL-3.0, which grants exactly the reuse, modification and redistribution rights this project does not intend to give. It is now proprietary, all rights reserved, with `package.json` marked `UNLICENSED` and the README's licence section rewritten to match.
+
 ## 2.122.0
 
 ### Changed — badges stay individually tappable at far larger icon sizes

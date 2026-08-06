@@ -2,7 +2,7 @@
 // Fingerprint of the GLB that is ACTUALLY loaded into the scene right now, so the
 // UI can prove which file is in use — independent of entity state (you don't need
 // to toggle a light to check). Compare the SHA-256 / byte size shown in Settings
-// against the file on disk:  shasum -a 256 TheLysHouse_1F.glb  /  ls -l.
+// against the file on disk:  shasum -a 256 villa_1F.glb  /  ls -l.
 
 export interface LoadedModelInfo {
   /** Resolved fetch URL including the ?v=<etag/size> cache-busting tag (or a note). */

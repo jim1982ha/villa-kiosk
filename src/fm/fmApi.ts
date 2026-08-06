@@ -146,7 +146,7 @@ const EVIDENCE_QUALITY = 0.8;
 /** Downscale + re-encode a captured image to a modest JPEG.
  *  Done on the CLIENT deliberately: it keeps the upload small on a villa's
  *  patchy uplink, and means the add-on never has to carry an image library. */
-export async function downscaleToJpeg(file: Blob): Promise<Blob> {
+async function downscaleToJpeg(file: Blob): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, EVIDENCE_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));
