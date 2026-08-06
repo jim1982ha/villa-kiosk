@@ -41,11 +41,30 @@ export async function fetchHistory(entityId: string, hours = 24): Promise<Histor
  * entity, which is why a text-state sensor previously showed "Not enough
  * history yet" even though HA had real history for it.
  */
-export async function fetchStateHistory(entityId: string, hours = 24): Promise<StateHistoryPoint[]> {
+export async function fetchStateHistory(
+  entityId: string,
+  hours = 24,
+  opts: {
+    /**
+     * Keep `unavailable`/`unknown` points instead of dropping them.
+     *
+     * Dropping them is right for a panel asking "what values did this report",
+     * where a gap is noise — but wrong for any caller whose whole question IS
+     * whether the entity was reachable. The camera panel's status bar was the
+     * second kind and got the first behaviour: it maps `unavailable` to a black
+     * "offline" band, but those points had already been deleted here, so that
+     * branch could never fire. An outage was not drawn as an outage; the state
+     * on either side simply continued across the gap, and a camera that had
+     * dropped for an hour rendered as an hour of ordinary green.
+     */
+    keepUnavailable?: boolean;
+  } = {},
+): Promise<StateHistoryPoint[]> {
   const series = await fetchRaw(entityId, hours);
   const points = series
     .map((s) => ({ t: new Date(s.last_changed).getTime(), state: s.state }))
-    .filter((p) => Number.isFinite(p.t) && p.state !== "unavailable" && p.state !== "unknown");
+    .filter((p) => Number.isFinite(p.t)
+      && (opts.keepUnavailable || (p.state !== "unavailable" && p.state !== "unknown")));
   // Collapse consecutive duplicate states (can happen when only attributes
   // changed between two reported points) so segment rendering doesn't draw
   // redundant boundaries.

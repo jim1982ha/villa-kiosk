@@ -1,3 +1,17 @@
+## 2.129.0
+
+### Fixed — the camera status bar could never show a camera being offline
+
+Found while answering a question about what the strip under a camera feed actually means. It renders three states — green online, red motion, black offline — and the black one was unreachable.
+
+`fetchStateHistory` drops `unavailable`/`unknown` points, which is correct for a panel asking *what values did this report*, where a gap is noise. The camera bar is the opposite kind of caller: reachability is its entire subject. It maps `unavailable` to the offline band, but those points had already been deleted before it saw them, so that branch never fired. An outage was not drawn as an outage — the state on either side simply continued across the gap, and a camera that had dropped for an hour rendered as an hour of ordinary green. The one screen you would use to judge whether a camera has been reliable was systematically reporting it as more reliable than it was.
+
+The filter is now opt-out per caller rather than unconditional, and the camera bar keeps those points. The sensor panel and `useStateHistory` are untouched and still drop them.
+
+Both of the bar's series opt in, for opposite reasons. The camera's `unavailable` is what draws the offline band. The motion sensor's matters too, in the other direction: with its unavailable points dropped, its last known state stood until the next real one, so a sensor that went offline while reading `on` painted red across the entire outage — claiming motion nobody detected. Kept, it stops being `on` and the bar stops asserting it.
+
+Nothing about how the bar loads changed, since the original question was whether it fills in progressively: it does not. One REST call per entity returns the whole 24 hours, the merged result is set once, and the segments are plain positioned elements with no animation.
+
 ## 2.128.0
 
 ### Fixed — fans surged instead of turning steadily, a regression from 2.124.0

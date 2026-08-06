@@ -258,9 +258,20 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     let cancelled = false;
     setStatusLoading(true);
     const motionId = mapping.motionEntityId;
+    // keepUnavailable on BOTH series — this bar's entire subject is
+    // reachability, so a gap is the signal, not noise:
+    //   * the camera's own `unavailable` is what the "offline" band below is
+    //     for, and without this it never arrives to be drawn;
+    //   * the motion sensor's matters too, in the other direction — dropping
+    //     its unavailable points leaves the last known state standing, so a
+    //     sensor that went offline while reading `on` would paint red for the
+    //     whole outage. Kept, it stops being `on` and the bar stops claiming
+    //     motion nobody detected.
     Promise.all([
-      fetchStateHistory(mapping.entityId, 24),
-      motionId ? fetchStateHistory(motionId, 24) : Promise.resolve<StateHistoryPoint[]>([]),
+      fetchStateHistory(mapping.entityId, 24, { keepUnavailable: true }),
+      motionId
+        ? fetchStateHistory(motionId, 24, { keepUnavailable: true })
+        : Promise.resolve<StateHistoryPoint[]>([]),
     ]).then(([camHist, motionHist]) => {
       if (cancelled) return;
       setStatusHistory(mergeStateHistories(
