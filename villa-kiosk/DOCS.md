@@ -46,6 +46,40 @@ token never reaches the browser. A small bundled proxy injects it server-side fo
 both the WebSocket and REST calls. The dashboard title also auto-fills from your
 HA instance name (override it in **Settings → Dashboard title**).
 
+## Add-on configuration
+
+Everything below is a field on the add-on's own **Configuration** tab
+(**Settings → Add-ons → Vesta Kiosk → Configuration**). All nine options are
+read live — a changed value takes effect without restarting the add-on.
+
+- **`guest_pin` / `owner_pin` / `ops_pin`** (4 digits each) — gate the Guest,
+  Owner and Facility manager profiles described under *Day-to-day use* below.
+  Leave a PIN empty to remove that profile from the picker — except an empty
+  Guest PIN, which instead lets a guest in with no prompt at all, since Guest
+  access already excludes cameras and configuration.
+- **`superadmin_pin`** (6 digits, empty = off) — authorises permanently
+  deleting a Facility Manager record. See *Facility workspace* below.
+- **`public_model_access`** (off by default) — lets the villa floor plan start
+  downloading before sign-in instead of after. See *Faster first load* below.
+- **`session_days`** (default 30) — how long a signed-in profile stays signed
+  in on a device before its passcode is asked for again. A wall-mounted kiosk
+  wants this long; a villa where guests use their own phones wants it short,
+  so a departing guest's access lapses on its own. A changed value only
+  affects new sign-ins — use **Advanced Settings → Log out all devices** to
+  apply it to devices that are already signed in.
+- **`pin_lockout_minutes`** (default 5) — how long a device must wait after
+  five wrong passcodes in a row. The lockout is tracked per source address, so
+  raising it slows down someone guessing without locking the household out of
+  their own villa.
+- **`evidence_retention_days`** (default 550, ~18 months) — how long Facility
+  Manager photo evidence is kept before automatic deletion. See *Facility
+  workspace* below. Set it to 0 to keep evidence indefinitely.
+- **`telemetry_max_events`** (default 500) — how much diagnostic history (load
+  timings, JS errors, sync results) the add-on keeps, visible in the app under
+  **Advanced Settings → Device telemetry**. Raise it while chasing an
+  intermittent problem on a device you can't sit in front of — the history is
+  a fixed-size ring, so the only cost is a slightly larger file.
+
 ## Day-to-day use
 
 Three profiles are available at sign-in — **Guest** (comfort control: lights,
@@ -121,7 +155,7 @@ that opens the kiosk sees the same record:
 | File | What it holds |
 |---|---|
 | `/data/fm-data.json` | Maintenance schedule, completions, spend entries, faults |
-| `/data/fm-evidence/` | Photo evidence, downscaled in the browser before upload, pruned after ~18 months |
+| `/data/fm-evidence/` | Photo evidence, downscaled in the browser before upload, pruned after `evidence_retention_days` (default ~18 months) |
 
 The maintenance schedule starts completely empty — nothing is pre-filled for
 any villa. Add each task from the **Schedule** tab: a title, an interval
@@ -149,6 +183,15 @@ email or archiving.
 **Readiness**'s "All devices reporting" check links straight to the same
 Unavailable-devices list the HUD's own alert badge opens — one shared count,
 so the two can never disagree.
+
+Owner and Facility manager can add and amend any record here, but nothing can
+be permanently deleted unless the add-on's `superadmin_pin` option is set.
+With it set, a fault, spend entry or logged completion (and its photos) can be
+erased by pressing and holding its row — marked with a small dot — and
+entering the 6-digit code; a correct code authorises that one deletion only.
+Schedules and saved reports keep their ordinary delete buttons regardless,
+since a schedule is a plan rather than a record of something that happened,
+and a saved report can just be regenerated.
 
 The **Guest** profile has no access to any of this.
 

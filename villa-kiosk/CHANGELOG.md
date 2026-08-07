@@ -1,3 +1,11 @@
+## 2.136.0
+
+### Changed — DOCS.md now documents all nine add-on options, not just three
+
+`villa-kiosk/DOCS.md` is what Home Assistant renders as the add-on's own **Documentation** tab, and it had fallen behind `config.yaml`'s options: `superadmin_pin`, `session_days`, `pin_lockout_minutes` and `telemetry_max_events` were configurable but never mentioned anywhere a reader of that tab would see them, and the Facility workspace's evidence-retention row still said a hardcoded "~18 months" instead of pointing at the option that actually controls it.
+
+Added a new **Add-on configuration** section listing all nine options in one place, each pointing at the part of the doc it affects, so the Configuration tab's fields and the Documentation tab's narrative stay in sync. The Facility workspace section now also explains the press-and-hold `superadmin_pin` deletion flow — until now the only place that capability was documented at all was the comments inside `config.yaml`, which an operator configuring the add-on never opens. `translations/en.yaml` (the Configuration page's own field help text) was already complete and needed no changes.
+
 ## 2.135.0
 
 ### Changed — MODEL_PIPELINE.md rewritten against the pipeline as it actually is
