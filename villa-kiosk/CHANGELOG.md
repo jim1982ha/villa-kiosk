@@ -1,4 +1,12 @@
-## 2.137.0
+## 2.138.0
+
+### Changed — every icon/PWA asset now carries the Vesta mark, not the Villa one
+
+The rebrand's text-level find/replace, thorough as it was, could never touch a name baked into pixels: the favicon, home-screen icons, maskable icons, apple-touch icon, and both PWA install screenshots were all still the old gold double-triangle mark, and the two screenshots still spelled out "Villa Kiosk" in their own image data — invisible to a text grep, visible to anyone tapping "Install".
+
+Wired in a newly designed icon set (a navy/cream "V" monogram with a green accent dot) across every size the app actually serves: `favicon.svg` plus a proper `favicon.ico`/16px/32px trio and a Safari mask-icon (none of those existed before — the app only ever shipped the SVG favicon), the 192/512 and maskable 192/512 PWA icons, the apple-touch icon, and the two add-on-store images (`villa-kiosk/icon.png`, `villa-kiosk/logo.png`). `manifest.json`'s and `index.html`'s `theme-color`/`background_color` moved from the old gold-on-brown (`#1c140c`) to the new mark's navy (`#12151b`) so the browser chrome and PWA splash stop clashing with the icon — which, incidentally, is closer to the app's own dark-theme background (`--bg-base: #0b1220`) than the old value ever was.
+
+The two PWA install screenshots were regenerated from scratch with the new mark and "Vesta Kiosk" text, same generic subtitle and layout as before. `public/manifest.json`'s `name`/`short_name`/`description` were already correct from the earlier rebrand and were left alone.
 
 ### Changed — merged ADDON.md into README.md; stopped publishing internal/dev-only files
 
