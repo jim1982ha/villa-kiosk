@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#12151b" />
+    <!-- Two variants, not one static value: the app's own theme defaults to
+         "auto" (follows the OS), so a single colour would mismatch whichever
+         mode the page actually rendered in half the time. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f4ee" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#12151b" />
     <meta name="application-name" content="Vesta Kiosk" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

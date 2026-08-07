@@ -26,58 +26,62 @@
   --safe-top: env(safe-area-inset-top, 0px);
 
   /* ---- Light theme (default) ---- */
-  /* Surfaces */
-  --bg-base: #eef2f8;
-  --bg-panel: rgba(255, 255, 255, 0.82);
-  --bg-overlay: rgba(255, 255, 255, 0.94);
+  /* Surfaces — warm cream, not cool blue-white (the villa's brand identity:
+     off-white paper tone, navy-and-forest-green accents, an elegant serif
+     for headlines — see --font-display below). */
+  --bg-base: #f7f4ee;
+  --bg-panel: rgba(255, 253, 248, 0.82);
+  --bg-overlay: rgba(255, 253, 248, 0.94);
   /* Solid surface for every floating DIALOG (device panels, Settings, Config
      Editor, the badge legend…) — deliberately opaque, unlike the HUD's own
      "glass" chrome (.icon-btn/.hud-group/.hud-stack/.hud-menu etc., see
      --bg-panel above), which stays translucent. A dialog reads as content
      you're meant to read/edit, not a floating overlay you glance past. */
-  --bg-modal: #ffffff;
-  --bg-card: rgba(255, 255, 255, 0.9);
-  --bg-input: rgba(15, 23, 42, 0.06);
+  --bg-modal: #fffdf9;
+  --bg-card: rgba(255, 253, 248, 0.9);
+  --bg-input: rgba(33, 29, 23, 0.06);
 
-  /* Accents — a clean, modern sky-blue (matches the in-scene state badges). */
-  --accent: #0ea5e9;
-  --accent-strong: #0284c7;
-  --accent-warm: #f59e0b;
+  /* Accents — forest green (the brand colour), not the old sky-blue. */
+  --accent: #2f6b4f;
+  --accent-strong: #1f5039;
+  --accent-warm: #d99a2b;
   --accent-teal: #14b8a6;
   /* Legacy alias so existing rules keep working. */
   --accent-gold: var(--accent);
 
-  /* Text */
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-dim: #94a3b8;
+  /* Text — warm charcoal, not cool slate, to sit on the cream surfaces above. */
+  --text-primary: #211d17;
+  --text-secondary: #5c574c;
+  --text-dim: #a39c8d;
   --text-on-accent: #ffffff;
 
-  /* Status — a muted emerald, not a flat/flashy green, so "on" still reads
-     as unmistakably active without clashing with the sky-blue/teal accents. */
-  --status-on: #10b981;
-  --status-off: #cbd5e1;
-  --status-warning: #d97706;
-  --status-danger: #dc2626;
+  /* Status — an emerald distinct enough from the brand's forest-green accent
+     to still read as its own signal ("this device is on") rather than "this
+     is brand chrome", while staying in the same green family on purpose —
+     the source material uses green for both. */
+  --status-on: #2f8f5b;
+  --status-off: #d9d3c5;
+  --status-warning: #c17d1f;
+  --status-danger: #c23b2e;
 
-  /* Hairlines, scrims, chips, shadows — theme-aware neutrals. */
-  --hairline: rgba(15, 23, 42, 0.1);
-  --hairline-strong: rgba(15, 23, 42, 0.16);
-  --scrim: rgba(15, 23, 42, 0.25);
-  --scrim-strong: rgba(15, 23, 42, 0.45);
-  --chip-bg: rgba(255, 255, 255, 0.72);
-  --topbar-fade: rgba(255, 255, 255, 0.72);
-  --card-scrim: rgba(15, 23, 42, 0.55);
-  --shadow: rgba(15, 23, 42, 0.18);
+  /* Hairlines, scrims, chips, shadows — theme-aware neutrals, warm-toned. */
+  --hairline: rgba(33, 29, 23, 0.1);
+  --hairline-strong: rgba(33, 29, 23, 0.16);
+  --scrim: rgba(33, 29, 23, 0.25);
+  --scrim-strong: rgba(33, 29, 23, 0.45);
+  --chip-bg: rgba(255, 253, 248, 0.72);
+  --topbar-fade: rgba(255, 253, 248, 0.72);
+  --card-scrim: rgba(33, 29, 23, 0.55);
+  --shadow: rgba(33, 29, 23, 0.18);
   --ring: var(--bg-base);
 
   /* Typography */
-  /* Was its own decorative serif (Cormorant Garamond) for room titles/modal
-     headings/the villa name — explicitly asked to be the SAME system font
-     as everything else, everywhere, no exceptions. Aliased rather than
-     deleted so every existing var(--font-display) reference (headings,
-     modal titles, the brand name) still works, updated from ONE place. */
-  --font-display: var(--font-ui);
+  /* An elegant serif for headlines (room titles, modal headings, the villa
+     name, panel titles) — every listed face is either preinstalled on every
+     target platform (iOS/iPadOS, macOS, Android, Windows) or a generic
+     fallback, so this stays a zero-fetch system font like --font-ui below,
+     never a webfont. Body/UI text is untouched — this is display-only. */
+  --font-display: Georgia, "Times New Roman", "Iowan Old Style", "Noto Serif", ui-serif, serif;
   /* Native system font — San Francisco on every Apple device (iOS/iPadOS/
      macOS), Roboto on Android, Segoe UI on Windows — rather than a shipped
      webfont. Matches the platform's own UI type instead of reading as a
@@ -142,36 +146,39 @@
 
 /* ---- Dark theme (explicit) ---- */
 :root[data-theme="dark"] {
-  --bg-base: #0b1220;
-  --bg-panel: rgba(15, 23, 42, 0.82);
-  --bg-overlay: rgba(15, 23, 42, 0.94);
-  --bg-modal: #0f172a;
-  --bg-card: rgba(30, 41, 59, 0.85);
-  --bg-input: rgba(148, 163, 184, 0.14);
+  /* Same navy as the app icon/favicon (#12151b) — one dark value shared by
+     the brand mark, the manifest/theme-color meta, and the in-app dark theme
+     instead of three independently-chosen near-navies. */
+  --bg-base: #12151b;
+  --bg-panel: rgba(18, 21, 27, 0.82);
+  --bg-overlay: rgba(18, 21, 27, 0.94);
+  --bg-modal: #181c24;
+  --bg-card: rgba(28, 33, 43, 0.85);
+  --bg-input: rgba(200, 197, 188, 0.12);
 
-  --accent: #38bdf8;
-  --accent-strong: #0ea5e9;
-  --accent-warm: #fbbf24;
+  --accent: #4fae80;
+  --accent-strong: #3f9269;
+  --accent-warm: #e0ac4a;
   --accent-teal: #2dd4bf;
   --accent-gold: var(--accent);
 
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-dim: #64748b;
-  --text-on-accent: #08131f;
+  --text-primary: #f4f1ea;
+  --text-secondary: #a8a296;
+  --text-dim: #6b6659;
+  --text-on-accent: #08150f;
 
-  --status-on: #34d399;
-  --status-off: #334155;
-  --status-warning: #fbbf24;
-  --status-danger: #f87171;
+  --status-on: #3ecb84;
+  --status-off: #3a3f36;
+  --status-warning: #f0b429;
+  --status-danger: #f2685c;
 
-  --hairline: rgba(148, 163, 184, 0.16);
-  --hairline-strong: rgba(148, 163, 184, 0.28);
-  --scrim: rgba(2, 6, 15, 0.5);
-  --scrim-strong: rgba(2, 6, 15, 0.72);
-  --chip-bg: rgba(15, 23, 42, 0.6);
-  --topbar-fade: rgba(2, 6, 15, 0.7);
-  --card-scrim: rgba(2, 6, 15, 0.85);
+  --hairline: rgba(200, 197, 188, 0.14);
+  --hairline-strong: rgba(200, 197, 188, 0.26);
+  --scrim: rgba(8, 9, 12, 0.5);
+  --scrim-strong: rgba(8, 9, 12, 0.72);
+  --chip-bg: rgba(18, 21, 27, 0.6);
+  --topbar-fade: rgba(8, 9, 12, 0.7);
+  --card-scrim: rgba(8, 9, 12, 0.85);
   --shadow: rgba(0, 0, 0, 0.5);
   --ring: var(--bg-base);
 }
@@ -179,36 +186,36 @@
 /* ---- Auto theme (follows the OS) ---- */
 @media (prefers-color-scheme: dark) {
   :root[data-theme="auto"] {
-    --bg-base: #0b1220;
-    --bg-panel: rgba(15, 23, 42, 0.82);
-    --bg-overlay: rgba(15, 23, 42, 0.94);
-    --bg-modal: #0f172a;
-    --bg-card: rgba(30, 41, 59, 0.85);
-    --bg-input: rgba(148, 163, 184, 0.14);
+    --bg-base: #12151b;
+    --bg-panel: rgba(18, 21, 27, 0.82);
+    --bg-overlay: rgba(18, 21, 27, 0.94);
+    --bg-modal: #181c24;
+    --bg-card: rgba(28, 33, 43, 0.85);
+    --bg-input: rgba(200, 197, 188, 0.12);
 
-    --accent: #38bdf8;
-    --accent-strong: #0ea5e9;
-    --accent-warm: #fbbf24;
+    --accent: #4fae80;
+    --accent-strong: #3f9269;
+    --accent-warm: #e0ac4a;
     --accent-teal: #2dd4bf;
     --accent-gold: var(--accent);
 
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-dim: #64748b;
-    --text-on-accent: #08131f;
+    --text-primary: #f4f1ea;
+    --text-secondary: #a8a296;
+    --text-dim: #6b6659;
+    --text-on-accent: #08150f;
 
-    --status-on: #34d399;
-    --status-off: #334155;
-    --status-warning: #fbbf24;
-    --status-danger: #f87171;
+    --status-on: #3ecb84;
+    --status-off: #3a3f36;
+    --status-warning: #f0b429;
+    --status-danger: #f2685c;
 
-    --hairline: rgba(148, 163, 184, 0.16);
-    --hairline-strong: rgba(148, 163, 184, 0.28);
-    --scrim: rgba(2, 6, 15, 0.5);
-    --scrim-strong: rgba(2, 6, 15, 0.72);
-    --chip-bg: rgba(15, 23, 42, 0.6);
-    --topbar-fade: rgba(2, 6, 15, 0.7);
-    --card-scrim: rgba(2, 6, 15, 0.85);
+    --hairline: rgba(200, 197, 188, 0.14);
+    --hairline-strong: rgba(200, 197, 188, 0.26);
+    --scrim: rgba(8, 9, 12, 0.5);
+    --scrim-strong: rgba(8, 9, 12, 0.72);
+    --chip-bg: rgba(18, 21, 27, 0.6);
+    --topbar-fade: rgba(8, 9, 12, 0.7);
+    --card-scrim: rgba(8, 9, 12, 0.85);
     --shadow: rgba(0, 0, 0, 0.5);
     --ring: var(--bg-base);
   }

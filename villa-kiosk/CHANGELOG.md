@@ -1,4 +1,14 @@
-## 2.138.0
+## 2.139.0
+
+### Changed — the whole app's colour and headline typography now match the Vesta brand
+
+The icon rebrand (2.138.0) fixed the app's pixels; the app's actual chrome — every panel, modal, HUD chip, button — was still on the original cool sky-blue/slate palette from before the brand existed. This pass reskins the app to the brand's own visual language: a warm cream surface in light theme, the icon's exact navy (`#12151b`) in dark theme, and a forest-green accent in place of the old sky-blue, plus an elegant serif for headline text where the app was previously all-system-sans.
+
+The palette change touched exactly four places — the light `:root` block, the explicit dark theme, and the OS-`auto`-dark media block, all in `styles.css` — because the app's whole surface is already built on semantic CSS custom properties (`--bg-base`, `--accent`, `--text-primary`, …) with zero hardcoded colour literals found outside those blocks. That's the payoff of the design-token system: recolouring the entire app was four `:root` edits, not a hunt through every component file. `--status-on` is a distinct-but-related emerald rather than reusing `--accent` outright — brand chrome and "this device is on" needed to stay two different signals even though the source material uses green for both. `CATEGORY_COLORS` (the six device-category badge hues) was deliberately left untouched — it's a separately-tuned system the project's own conventions say not to repurpose for other UI, and it already reads as a coherent multi-hue palette in its own right.
+
+`--font-display` had been an alias for `--font-ui` since an earlier release, at the user's explicit request to drop a decorative webfont (Cormorant Garamond) in favour of the system stack everywhere, no exceptions. It now points at a real serif stack instead — `Georgia, "Times New Roman", "Iowan Old Style", "Noto Serif", ui-serif, serif` — every face either preinstalled on iOS/iPadOS/macOS/Android/Windows or a generic fallback, so this is still a zero-network-fetch system font, just no longer the same font as the UI body text. Nine call sites already referenced `var(--font-display)` from that earlier work (room titles, modal headings, the profile-gate villa name, the PIN pad title, panel headers, the Facility report headline, teleport-grid cards) and picked up the serif automatically — no component file needed touching for typography either.
+
+`index.html`'s `theme-color` meta was a single static value that only ever matched one of the app's two themes; it's now two `media`-qualified tags (light/dark) so the browser chrome tracks whichever theme actually rendered, matching the app's own default of "auto" (follow the OS).
 
 ### Changed — every icon/PWA asset now carries the Vesta mark, not the Villa one
 
