@@ -1512,7 +1512,14 @@ input[type="range"]::-moz-range-thumb {
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-.modal h2 { font-family: var(--font-display); font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+/* --text-xl is documented as "panel + modal headings" in the type scale above
+   — the ONE size every dialog's own title should use — but this rule never
+   actually set it, so a modal's <h2> (Settings, Config Editor, Facility,
+   Legend, Cockpit…) fell through to the browser's unstyled default h2 size
+   instead: same var(--font-display) family as the entity-panel title below,
+   but an accidental, UA-dependent size next to that title's deliberately
+   tuned one, which read as "two different fonts" even though it never was. */
+.modal h2 { font-family: var(--font-display); font-weight: 600; font-size: var(--text-xl); margin: 0; letter-spacing: -0.01em; }
 .modal .sub { color: var(--text-secondary); margin: 0 0 22px; }
 .modal label { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin: 14px 0 6px; }
 .modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: var(--text-md); }

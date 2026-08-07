@@ -375,6 +375,29 @@ export class CameraController {
    * the camera Y to floorY + eyeHeight. Robust to any model origin/scale.
    */
   /**
+   * How often followFloor() is actually allowed to raycast, in wall-clock ms
+   * (~11 Hz) rather than once per rendered frame. This exists because the
+   * raycast itself, not the smoothing math below that consumes its answer, is
+   * the expensive part: it tests against the same structural geometry
+   * EntityVisuals.surfaceBelowCache's own docstring measured as "a linear
+   * scan over a 1.4-million-triangle structure mesh with no picking octree"
+   * (SceneManager.applyStructure now builds a submesh octree for exactly this
+   * reason, but a mesh whose geometry doesn't happen to split into enough
+   * submeshes to prune gets little or no benefit from that alone — this is
+   * the second, unconditional half of the same fix). Time-based rather than
+   * frame-count-based for the same reason frameFactor() is: it caps the COST
+   * regardless of how the frame rate itself is responding, instead of both
+   * degrading together in a feedback loop. The smoothing below still runs
+   * every frame against whatever answer is cached, so motion stays exactly
+   * as continuous as before — only how often the expensive question gets
+   * re-asked changes, and a person's feet don't move far enough in ~90ms for
+   * a slightly-stale floor answer to be visible.
+   */
+  private static readonly FLOOR_PROBE_INTERVAL_MS = 90;
+  private lastFloorProbeAt = 0;
+  private lastFloorHit: { y: number; onStair: boolean } | null = null;
+
+  /**
    * Floor-following: while walking, smoothly keep the eye at floor+height by
    * raycasting just below the feet. This lets you walk UP/DOWN stairs and ramps
    * (your height follows the steps) instead of staying at one fixed level.
@@ -382,30 +405,44 @@ export class CameraController {
   private followFloor(): void {
     const p = this.camera.position;
     const currentFloorY = p.y - this.eyeHeight;
-    // Search 1.6 m above current feet (to catch a stair step ahead) and
-    // 1.0 m below (a small drop-off). Total band = 2.6 m.
-    const originY = currentFloorY + 1.6;
-    // isEnabled() matters: FloorManager HIDES upper storeys with setEnabled(false)
-    // (not isVisible), so without it the follower would snap onto a hidden floor's
-    // slab above you.
-    const predicate = (m: AbstractMesh) =>
-      m.isPickable && m.isVisible && m.isEnabled() && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name);
-    let hit = this.scene.pickWithRay(
-      new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 2.6), predicate);
-    if (!hit?.hit || !hit.pickedPoint) {
-      // The band missed: we walked over a drop taller than 1 m (terrace edge
-      // down to the garden, a stair void) or re-entered first-person above
-      // the floor. Without this fallback the early return kept the old
-      // height for good — the "person floats above the ground" bug. Catch
-      // the real floor however far below and glide down (MAX_STEP paces it).
-      hit = this.scene.pickWithRay(
-        new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 200), predicate);
-      if (!hit?.hit || !hit.pickedPoint) return;
-    }
+    const now = performance.now();
 
-    const hitFloorY = hit.pickedPoint.y;
+    if (now - this.lastFloorProbeAt >= CameraController.FLOOR_PROBE_INTERVAL_MS) {
+      this.lastFloorProbeAt = now;
+      // Search 1.6 m above current feet (to catch a stair step ahead) and
+      // 1.0 m below (a small drop-off). Total band = 2.6 m.
+      const originY = currentFloorY + 1.6;
+      // isEnabled() matters: FloorManager HIDES upper storeys with setEnabled(false)
+      // (not isVisible), so without it the follower would snap onto a hidden floor's
+      // slab above you.
+      const predicate = (m: AbstractMesh) =>
+        m.isPickable && m.isVisible && m.isEnabled() && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name);
+      let hit = this.scene.pickWithRay(
+        new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 2.6), predicate);
+      if (!hit?.hit || !hit.pickedPoint) {
+        // The band missed: we walked over a drop taller than 1 m (terrace edge
+        // down to the garden, a stair void) or re-entered first-person above
+        // the floor. Without this fallback the early return kept the old
+        // height for good — the "person floats above the ground" bug. Catch
+        // the real floor however far below and glide down (MAX_STEP paces it).
+        hit = this.scene.pickWithRay(
+          new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 200), predicate);
+      }
+      // A miss keeps the previous lastFloorHit rather than clearing it, so one
+      // unlucky probe (e.g. a momentary gap) doesn't stall the follower for a
+      // whole throttle interval — it just tries again next time.
+      if (hit?.hit && hit.pickedPoint) {
+        this.lastFloorHit = {
+          y: hit.pickedPoint.y,
+          onStair: hit.pickedMesh?.metadata?.isStair === true,
+        };
+      }
+    }
+    if (!this.lastFloorHit) return;
+
+    const hitFloorY = this.lastFloorHit.y;
     const stepUp = hitFloorY - currentFloorY;
-    const onStair = hit.pickedMesh?.metadata?.isStair === true;
+    const onStair = this.lastFloorHit.onStair;
 
     // On stairs we always follow the surface (that's how you climb). Off stairs,
     // ignore surfaces that read like furniture tops: a hit higher than the
