@@ -11,6 +11,15 @@ import { Animation } from "@babylonjs/core/Animations/animation";
 // @babylonjs/core's barrel used to pull this in for free; a deep import to just
 // "Animations/animation" does NOT — the extension lives in this sibling file.
 import "@babylonjs/core/Animations/animatable";
+// Side-effect only: registers Scene.CollisionCoordinatorFactory, which
+// moveWithCollisions (triggered below by any non-zero camera.cameraDirection —
+// i.e. every frame this controller is actually walking, never while only
+// rotating) needs to exist at all. Without it Babylon throws "DefaultCollision-
+// Coordinator needs to be imported before..." on every such frame — this is
+// the actual cause of first-person movement freezing the UI while look-around
+// stayed smooth; see SceneManager.ts's own copy of this import for the fuller
+// trace (confirmed via production WINDOW_ERROR telemetry).
+import "@babylonjs/core/Collisions/collisionCoordinator";
 import { CubicEase, EasingFunction } from "@babylonjs/core/Animations/easing";
 import { Axis } from "@babylonjs/core/Maths/math.axis";
 import { Ray } from "@babylonjs/core/Culling/ray";

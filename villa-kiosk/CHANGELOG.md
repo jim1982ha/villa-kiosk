@@ -1,4 +1,14 @@
-## 2.141.0
+## 2.142.0
+
+### Fixed — the ACTUAL cause of the first-person movement freeze
+
+The user's telemetry export had the answer the last two releases were reasoning around without: a `WINDOW_ERROR` — "DefaultCollisionCoordinator needs to be imported before as it contains a side-effect required by your code" — present on every single app version going back to at least 2.132.0, always at a moment that lines up with movement.
+
+`scene.collisionsEnabled = true` (`SceneManager.ts`) only sets a flag. The object that actually resolves a collision — `Scene.CollisionCoordinatorFactory`, consulted the moment Babylon's own built-in `moveWithCollisions` runs — only exists once `@babylonjs/core/Collisions/collisionCoordinator` has been imported somewhere; otherwise the factory's default implementation throws exactly that error. `moveWithCollisions` only runs when `camera.cameraDirection` is non-zero, which is true on every frame of active first-person movement and never true during pure look-around (rotation only touches `camera.rotation`) — which is exactly why rotation stayed smooth while movement alone froze, and why two releases of raycast/octree work aimed at *performance* never touched the real problem: it wasn't slow, it was throwing an uncaught exception on every single movement frame.
+
+This is the same prototype-patch-via-side-effect-import gap this project has now hit four times (`Scene.pickWithRay`, `beginDirectAnimation`, `Mesh.renderOutline`/`renderOverlay`, and now this) — always invisible to `tsc` because the patched property/method still type-checks against its declared interface; it just isn't wired to anything at runtime until the module that patches it is loaded. Fixed by adding the import to both `SceneManager.ts` (which sets `scene.collisionsEnabled`) and `CameraController.ts` (which sets `camera.checkCollisions` and drives the movement that triggers it), matching the per-file-imports-what-it-uses convention already established for the other three.
+
+The submesh-octree acceleration and the raycast throttle added in the previous two releases are left in place — they're real, independently-justified improvements to `followFloor()`'s cost per call — but this is the fix that should actually stop the freeze.
 
 ### Fixed — entity-panel modal title used a different size than every other modal, and the rebranded icons could be stuck behind a stale service-worker cache
 

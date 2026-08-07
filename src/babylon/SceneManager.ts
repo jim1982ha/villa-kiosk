@@ -34,6 +34,17 @@ import "@babylonjs/core/Rendering/outlineRenderer";
 // (used by applyStructure below) — same prototype-patch pattern as the import
 // just above.
 import "@babylonjs/core/Culling/Octrees/octreeSceneComponent";
+// Side-effect only, and this is the actual first-person-movement-freeze fix:
+// registers Scene.CollisionCoordinatorFactory. Without it, `scene.
+// collisionCoordinator` (accessed internally by Babylon's own moveWithCollisions
+// — triggered the instant camera.cameraDirection is non-zero, i.e. only while
+// actually walking, never while just looking around) throws "DefaultCollision-
+// Coordinator needs to be imported before as it contains a side-effect required
+// by your code" on EVERY SINGLE FRAME of movement — confirmed via production
+// telemetry (WINDOW_ERROR, same message, every app version back to 2.132.0).
+// `scene.collisionsEnabled = true` below only sets a flag; it never pulls this
+// module in on its own. Same prototype-patch pattern as the two imports above.
+import "@babylonjs/core/Collisions/collisionCoordinator";
 import { roomKey } from "@/config/roomKey";
 
 import { CameraController } from "./CameraController";
