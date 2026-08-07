@@ -1,3 +1,13 @@
+## 2.134.1
+
+### Fixed — the detection ring still framed the whole region, not the picture
+
+2.133.0 tried to size an overlay with `width: 100%`, `height: 100%` and an `aspect-ratio` taken from the feed. Both dimensions being definite makes `aspect-ratio` inert, so the overlay simply filled the region and ringed the black letterbox bars — the exact thing it was meant to fix.
+
+The overlay was unnecessary in the first place. The feed is sized with `max-width`/`max-height` only, so its element box is *already* exactly the contained picture, with the letterbox being empty space around it rather than part of the element. The ring is now an outline on that element and needs no aspect-ratio maths at all.
+
+An outline rather than a border: it takes no layout space (a border would shrink the picture inside it), it paints above the element's own content, and a negative offset keeps it within the box so the zoom layer's `overflow: hidden` cannot clip it. The stand-in snapshot shown while HLS starts is excluded, since that one genuinely does fill the region and ringing it would reproduce the same bug.
+
 ## 2.134.0
 
 ### Changed — the product presents as Vesta Kiosk throughout

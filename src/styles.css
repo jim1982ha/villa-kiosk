@@ -1423,24 +1423,22 @@ input[type="range"]::-moz-range-thumb {
 /* pointer-events: none — this spans the WHOLE panel (inset: 0), including
    over the label/close/fullscreen buttons rendered before it; without this
    it silently eats their clicks even though nothing is painted there. */
-/* Detection ring — sized by aspect-ratio to match what object-fit:contain does
-   to the media, so it hugs the picture's real edges rather than the element box
-   (which fills the region and includes the black letterbox bars). width/height
-   100% + max-* 100% + aspect-ratio is the standard "fit inside, keep ratio"
-   box, i.e. the same geometry `contain` resolves to. Thick enough to read as a
-   deliberate alert from across a room, and identical on a phone: it derives
-   from the feed, not from a breakpoint. */
-.camera-detect-ring {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 100%; height: 100%; max-width: 100%; max-height: 100%;
-  border: 6px solid; border-radius: 4px;
-  pointer-events: none;
-  /* Above the feed, not behind it. The previous attempt was an inset
-     box-shadow on the viewport, which paints with that element's background —
-     i.e. UNDER every descendant, so the video covered it. This is a positioned
-     overlay declared after the media, and the z-index clears a <video> that the
-     browser has promoted to its own compositing layer. */
-  z-index: 5;
+/* Detection ring. Drawn on the media element itself, which `.camera-fullscreen
+   img, .camera-fullscreen video` sizes with max-width/max-height ONLY — so the
+   element box is already exactly the contained picture and the letterbox is
+   empty space around it, not part of the element. An earlier attempt overlaid a
+   div with width/height:100% plus aspect-ratio; both dimensions being definite
+   makes aspect-ratio inert, so it simply filled the region and ringed the black
+   bars. An outline rather than a border because it takes no layout space (a
+   border would shrink the picture inside it), it paints above the element's own
+   content, and the negative offset keeps it inside the box so .camera-zoom's
+   overflow:hidden cannot clip it. Excludes .camera-preview — the stand-in
+   snapshot shown while HLS starts DOES fill the region, and ringing it would
+   reproduce the very bug this replaces. Identical on a phone: the geometry
+   comes from the feed, not from a breakpoint. */
+.camera-detecting :is(video, img):not(.camera-preview) {
+  outline: 6px solid var(--detect-color);
+  outline-offset: -6px;
 }
 
 .camera-hls-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
