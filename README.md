@@ -150,7 +150,7 @@ that ever lives in the client bundle.
 | Signed in but the villa/HA controls don't load | The session cookie isn't reaching the origin — direct access must be **HTTPS** (the cookie is `Secure`); confirm you're on `https://` and not plain LAN `http://`. |
 | PIN pad rejects every code / no session | Set the matching `guest_pin`/`owner_pin`/`ops_pin` in the add-on options (4 digits), then reload. |
 | Camera panel black | Verify the `camera.*` entity works in HA; frames route through the add-on proxy (no token needed). |
-| Walks through walls | The GLB needs solid wall meshes or `collision_*` boxes — see MODEL_PIPELINE.md. |
+| Walks through walls | Collisions are derived from the walls' own geometry (tall, and either thin or large in both axes), so the GLB needs real wall meshes rather than a decorative shell. Nothing to author — see MODEL_PIPELINE.md. |
 | Teleport lands wrong | Recalibrate: long-press a floor button → the pinned "Manage rooms" chip → walk to the correct spot → long-press the room card. |
 | No install button | Only the add-on's own HTTPS hostname is installable — the Ingress sidebar path never is (service worker disabled there by design). |
 
@@ -237,11 +237,17 @@ Entity names change? Re-point the binding in Advanced Settings. No rebuild neede
 Start from your villa's SweetHome 3D plan (`.sh3d`). Export to an optimised `.glb`. Full step-by-step: **[MODEL_PIPELINE.md](./MODEL_PIPELINE.md)**. Summary:
 
 ```
-SweetHome 3D → Export to OBJ
-   → Blender → Decimate (≈0.3) → Recalculate normals → remove ceiling
-   → name interactive meshes with their HA entity_id
-   → Export glTF 2.0 (Binary .glb, Draco ON)  →  target < 40 MB
+SweetHome 3D  →  3D View → Export to OBJ
+      ↓
+python3 blender_pipeline.py 2048      # drives Blender itself, once per job
+      ↓
+villa_2048.glb   (+ room/entity plan data embedded in it)   →  target < 40 MB
 ```
+
+The script does the decimation, normals, ceiling handling, UV unwrap, light
+bake and Draco compression on its own — there is no manual Blender step in the
+normal path. Naming furniture with entity IDs is optional and buys automatic
+mesh↔entity mapping.
 
 ---
 

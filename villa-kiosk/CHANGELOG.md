@@ -1,3 +1,23 @@
+## 2.135.0
+
+### Changed — MODEL_PIPELINE.md rewritten against the pipeline as it actually is
+
+The document had drifted badly enough to be actively misleading, and it is now checked line by line against the script (2.22.0) rather than remembered.
+
+The worst of it: it documented a **`blender_pipeline.jobs.json` sidecar as the way to configure jobs.** That sidecar was removed from the pipeline, precisely because it *shadowed* the in-script job list whenever it existed — edits made in the obvious place silently did nothing, which is how a second job and an output destination were found never to have taken effect. Following the old instructions would have recreated exactly that trap. Jobs are configured in the script's own `_BAKE_JOBS` list, which is the single source of truth.
+
+Also removed or corrected:
+
+- **The entire manual-Blender workflow** — a nine-step walkthrough with a Blender navigation primer, decimate/normals/ceiling instructions and export dialog settings. The script does all of it; the document told you to do it by hand.
+- **`--ktx2`** was written up as a recommended optimisation with an install guide for two extra toolchains. It is deliberately not used: textures are not where load time goes for this model, and the encode path decompresses the geometry without re-applying Draco, measuring roughly five times larger for no visible gain. The section now says so, and why the capability still exists.
+- **Flags** are no longer a stale partial table presented as if complete. The script generates its own full reference through `--help`, so the document covers only the ones that change the result most and points at `--help` for the rest.
+- **Pose authoring, geometry budgets and camera cones** were spread across duplicated sections; they are now stated once. Every pose goes through `--max-entity-faces`, and vegetation is decimated before the bake rather than excluded from it.
+- Version-gated notes ("pipeline ≥2.15.0", "≥2.17.0"…) and comparisons to an unrelated project are gone.
+
+Two README passages that contradicted the result were fixed with it: the troubleshooting entry telling you to author `collision_*` boxes (collisions are derived from the walls' own geometry — there is nothing to author), and the pipeline summary block, which described the removed manual Blender workflow.
+
+The file is 303 lines, down from 617, with more of the pipeline actually covered.
+
 ## 2.134.1
 
 ### Fixed — the detection ring still framed the whole region, not the picture

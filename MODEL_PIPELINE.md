@@ -1,617 +1,303 @@
 # 3D Model Pipeline — SweetHome 3D → GLB
 
-How to turn your SweetHome 3D plan into the optimised `.glb` the kiosk loads.
+How the villa's `.glb` is produced. One Python script drives Blender and does
+the whole conversion; there is no manual Blender work in the normal path.
 
 ---
 
-## ⛳ What is actually required vs optional
+## What is actually required
 
-The **only hard prerequisite is a `.glb` file.** Everything else below improves
-quality but is not a gate — the app's runtime **tap-to-bind** system means you do
-**not** have to name meshes or hand-prepare the model the way you might assume.
+**The only hard prerequisite is a `.glb` file.** Everything below improves the
+result but is not a gate — the app's runtime **tap-to-bind** means you do not
+have to name meshes or hand-prepare the model to get a working kiosk.
 
 | Step | Status | Why |
 |---|---|---|
-| Export a **`.glb`** | **Required** | The app loads GLB only (never `.sh3d`). |
-| Decimate (reduce polys) | **Recommended** | Smooth FPS on a tablet; skip it on a powerful device. |
-| Recalculate normals | **Recommended** | Avoids black/invisible walls in first-person. |
-| Remove ceiling | **Recommended** | Cleaner first-person view; harmless to keep. |
-| Solid walls **or** `collision_*` boxes | **Recommended** | Needed only because we *walk* (3Dash orbits, so it skips this). Without it you can walk through walls. |
-| Separate meshes per device | **Optional** | Only needed to control the *real* object. If devices aren't separate objects, use **marker mode** (drop a floating control at a tapped point) — works on a single fused mesh. |
-| Name meshes with entity IDs | **Optional** | Nice auto-mapping, but **tap-to-bind** does the same at runtime with zero naming. |
-| `teleport_*` anchors | **Optional** | We ship computed coordinates + live calibration. |
-| `trigger_stair_*` | **Optional** | Only for walk-up floor switching; the floor button works without it. |
+| Export a **`.glb`** | **Required** | The app loads GLB only, never `.sh3d`. |
+| Name furniture with entity IDs | **Optional** | Gives automatic mesh↔entity mapping. Tap-to-bind does the same at runtime with zero naming. |
+| Pose copies (`__open`/`__closed`/…) | **Optional** | Per-device live state on the mesh itself. |
+| Solid walls | **Handled for you** | SweetHome walls are real geometry, and the kiosk collides against them directly. No `collision_*` boxes to author. |
+| Decimation, normals, ceiling removal | **Handled for you** | The script does all of it. |
+| Teleport anchors | **Not authored** | Rooms come from the plan's own polygons, solved at runtime. |
 
-> **Why 3Dash needs none of this:** it uses an *orbital* camera (no walking → no
-> collisions/teleports) and spawns its **own** marker meshes for lights/sensors
-> (`LightMeshFactory` etc.) instead of using your model's meshes (no naming). We
-> go further — first-person walking + controlling the *real* objects — which is
-> what introduces the recommended prep. With tap-to-bind, our true minimum is the
-> same as 3Dash's: **just import a GLB.**
-
-**Minimum turnkey path:** export GLB → import → wire up by tapping:
-- **Bind 3D objects** for things that are separate meshes, and/or
-- **Drop control markers** for things that aren't (fused model) or for entities
-  you'll add to HA later.
-
-That's it — no naming, no collision boxes, no teleport baking required.
+**Minimum path:** run the script → upload the GLB → wire anything unnamed by
+tapping it in Advanced Settings.
 
 ---
 
-## Why this step exists
+## The script
 
-SweetHome 3D produces high-quality but heavy geometry. Babylon needs a compact,
-correctly-named GLB so that:
+`blender_pipeline.py` (kept outside this repository — it holds site-specific
+paths and per-property bake tuning, which must never ship in the app). It needs
+**Blender 3.6+ or 4.x** installed; everything else it does itself.
 
-- the tablet GPU can render it smoothly (< 200k polys, Draco-compressed),
-- the first-person camera doesn't fall through floors or walk through walls,
-- tapping an object resolves to the right Home Assistant entity.
+### Normal use
 
-**Target: a single `.glb` under 40 MB.**
+Run it directly with Python. It acts as a driver: for each texture size you
+give it, it launches Blender once per configured job.
 
----
+```bash
+python3 blender_pipeline.py                 # default bake size
+python3 blender_pipeline.py 2048            # one size
+python3 blender_pipeline.py 512 1024 2048   # sequentially, three sizes
+python3 blender_pipeline.py 2048 MyVilla    # only the job labelled "MyVilla"
+python3 blender_pipeline.py --help          # jobs, options, full flag reference
+```
 
-## 💡 Lights & activatable devices — visual feedback
+`--help` prints the configured job list, so it is the fastest way to see what
+the script will actually do before committing to a long bake.
 
-**Lights are fully handled and configurable.** The moment you bind a `light.*`
-entity, it works — no separate setup step. Here's exactly what each device type
-does in the 3D scene, all driven by the binding's **type** (editable in the
-Config Editor, so you choose what each object does):
+Two wrapper options apply to every run:
 
-| Entity type | What happens in the visualisation |
+| Option | Effect |
 |---|---|
-| **light** | The bound object **glows**, *and* a real light source **illuminates the room**. Colour follows the bulb's `hs_color` / `color_temp`, brightness follows the dimmer, OFF = dark. |
-| **cover** (curtain/blind) | **Optional, opt-in position feedback** — see [Optional: pre-name meshes for position feedback](#optional-pre-name-meshes-for-position-feedback-curtains-locks-doorwindow-contacts) below. With no extra naming, the curtain mesh is simply always visible, same as any other bound object. |
-| **fan** | Blades **spin** while on, stop when off. |
-| **switch** | Object lights up with an "active" tint when on (good for pumps, etc.). |
-| **media_player** | "Active" tint when playing/on. |
-| **lock** | **Green** when locked, **red** when unlocked — but *only* on a plain, single-mesh lock (no pose authored). A lock authored with `__locked`/`__unlocked` pose copies (see below) skips the tint entirely: the pose itself already shows the state, so tinting the visible door leaf on top would be redundant. |
-| **binary_sensor** | **Pulsing red** when triggered (e.g. water leak) — same "skip it on a pose mesh" rule as lock applies if you've authored `__open`/`__closed` poses for a door/window contact (see below); every other binary_sensor is untouched. |
-| **climate / camera / sensor** | No state-driven mesh change; tapping opens the control/stream/reading panel. |
+| `--no-room-sidecar` | Skip the `.rooms.json` file. Room data is embedded in the GLB itself and the app reads that first; the sidecar only matters for app builds older than pipeline 2.14.0. |
+| `--no-atlas-png` | Don't leave `villa_bake_atlas[_night].png` in the output folder. They are inspection copies — the atlas that matters ships inside the GLB. |
 
-### How you choose what's activatable
+### Configuring jobs
 
-1. **Bind it** — in the villa, open **Settings → Bind 3D objects (tap mode)**,
-   tap the lamp / curtain / fan, and pick the HA entity. Or use the
-   **Config Editor → 3D object → entity bindings** table.
-2. **Pick the behaviour** — the visual reaction is decided by the entity **type**.
-   It's auto-detected from the entity's domain (`light.*`, `cover.*`, …) and you
-   can override it per entity in the **Config Editor → Entity metadata** table.
-3. That's it — the scene updates **live**, no model reload, no rebuild.
+Jobs live in the **`_BAKE_JOBS` list near the bottom of the script**, which is
+the single source of truth. Each entry is a label, the `.sh3d`, the `.obj`, the
+output `.glb` path, and the flags for that property. `{size}` in the output path
+is substituted with each requested bake size, so one job can produce several
+resolutions.
 
-> A light doesn't need a special "lamp" mesh: bind a `light.*` entity to **any**
-> object (a ceiling, a pendant, a wall plate) and a light source is placed at
-> that object's position. For the most realistic result, bind to the actual
-> light-fixture mesh.
+There are commented-out examples in the list to copy from. Because those values
+are per-property configuration living inside a script that also gets updated,
+**edit that list in place and never overwrite it wholesale when taking a script
+update.**
 
-### Optional: pre-name light meshes in the model
+### One-off custom bake
 
-If you'd rather not bind by tapping, name the fixture meshes after the light's
-`entity_id` (or the `light_<room>_<id>` alias) and they auto-map on import — same
-as the other devices already named in your plan:
+To bake a file that isn't in the job list, or to override any flag, call
+Blender directly instead of using the wrapper:
 
-```
-light.living_room_ceiling          (or alias: light_living_room_ceiling)
-light.kitchen_ceiling
-light.master_bedroom_ceiling
-light.pool_area
-…
+```bash
+blender --background --python blender_pipeline.py -- INPUT.sh3d INPUT.obj OUTPUT.glb [options]
 ```
 
-### Optional: pre-name meshes for position feedback (curtains, locks, door/window contacts)
+`python3 blender_pipeline.py --help` ends with the complete generated parameter
+reference for this form — that is authoritative, and this document deliberately
+does not duplicate it.
 
-By default a `cover`/`lock`/`binary_sensor` entity's mesh is just always
-visible, exactly like any other bound object — nothing moves or scales to
-fake motion (that doesn't look convincing for fabric, and there's no
-reliable pivot to infer for an arbitrary bolt/door mechanism either). **You
-can opt into real position feedback instead**, with no code changes, purely
-by how you name the objects in SweetHome 3D — the identical convention
-works across all three device types:
+### Getting the OBJ out of SweetHome 3D
 
-1. Place the **same object** two or three times in the exact same spot, each
-   copy posed differently.
-2. Name each copy with the entity_id plus a suffix for its pose:
+`3D View → Export to OBJ format`. Keep the `.obj`, its `.mtl` and the texture
+folder together. Only those three things are needed; a macOS export onto a
+non-native filesystem also produces `._*` and `.DS_Store` files, which are
+noise and can be deleted.
 
-   ```
-   cover.curtain_living_room_big__closed
-   cover.curtain_living_room_big__half        (optional — you can skip this one)
-   cover.curtain_living_room_big__open
-
-   lock.front_door__locked
-   lock.front_door__unlocked
-
-   binary_sensor.front_door_contact__closed
-   binary_sensor.front_door_contact__open
-   ```
-
-   | Domain | Pose words | Rest/default pose |
-   |---|---|---|
-   | `cover` | `closed`, `half` (optional), `open` | `open` |
-   | `lock` | `locked`, `unlocked` | `locked` |
-   | `binary_sensor` (door/window/garage-door contact only) | `closed`, `open` | `closed` |
-
-   **Every pose you want shown needs an explicit `__word` suffix —
-   including the rest/default one.** An unsuffixed piece (no `__…` at all)
-   is *never* treated as a pose, no matter what — it's always-visible
-   base/detail geometry that sits alongside whichever pose is currently
-   showing. This is deliberate: it's what lets a lock be modelled as a fixed
-   device body (e.g. a keypad housing, named plain `lock.front_door`) *plus*
-   a swinging door leaf that has its own two poses (`lock.front_door__locked`
-   / `__unlocked`) — the housing stays visible either way, and only the leaf
-   swaps. If you only ever want ONE always-there mesh for a device and no
-   pose-swap at all, just leave its name unsuffixed and skip pose authoring
-   entirely — nothing about it changes.
-3. Upload the model as usual. All the differently-suffixed copies are treated
-   as the SAME entity (the suffix doesn't affect binding/tapping/RBAC at all),
-   and the kiosk shows whichever pose matches the device's live state:
-   - **cover** — `current_position` (0–100%) when it's reported, or falling
-     back to plain open/closed state when it isn't (opening/closing shows the
-     half pose if you made one, or the nearest pose you did author otherwise).
-   - **lock** — its locked/unlocked state directly (anything uncertain —
-     jammed, mid-transition, offline — shows the LOCKED pose, on the side of
-     never implying a door is open when its real state genuinely isn't known).
-   - **binary_sensor** — ONLY for a door/window/garage-door contact, gated on
-     the entity's HA `device_class` (`door`, `window`, `garage_door`, or
-     `opening`); its raw `on`/`off` state maps to open/closed. Every other
-     binary_sensor class (leak, motion, smoke, …) is completely unaffected by
-     this mechanism, even if you happened to name its mesh with a `__word`
-     suffix — the live-state routing only fires for a recognised opening
-     device_class. Anything uncertain (unavailable/unknown) shows CLOSED, the
-     same fail-safe direction as lock.
-
-This is entirely **per-device and optional** — a villa can mix
-covers/locks/contacts that use this (2 or 3 poses) with ones that don't (a
-single plain mesh), and a model that never uses this convention at all
-behaves exactly as before.
-
-**You can pose each copy with a different catalog model and different width**
-(e.g. a slim gathered curtain for `__open`, a full-width one for `__closed`) —
-the pipeline maps each by position and handles multi-material catalog assets
-correctly, so high-poly/detailed curtains are fine.
-
-#### What the bake does for you automatically (no authoring needed)
-
-- **Windows stay windows.** A curtain (or a door's own frame/glass) hangs
-  directly over its window/opening, so the window's glass + frame sit inside
-  the curtain/door's match box. The pipeline keeps that glass/frame in the
-  structural shell (baked transparent, correctly lit) and never lets the
-  curtain/door "absorb" it — otherwise the window would render as an opaque,
-  state-toggling white panel. Just place it over the window; nothing special
-  to do.
-- **No ghost shadows from hidden poses.** During the light bake, only the
-  pose that's shown **at rest** (`open` for a cover, `locked`/`closed` for a
-  lock/contact, or the nearest authored pose if the exact default wasn't
-  made) casts shadows — every other pose is excluded, so its shadow isn't
-  frozen onto the floor in the default view. A non-default pose, when later
-  selected, simply has no baked shadow (a minor omission, never a wrong
-  ghost).
-
-> **Bake resolution:** detailed curtain/fabric geometry re-packs the lightmap
-> atlas. Bake at **`--bake-size 2048`** (not 1024) to avoid atlas bleed — stray
-> light smearing onto nearby benches/frames — which only shows up at low
-> resolution once the denser geometry is added.
+The `.obj` for a detailed villa is plain ASCII and will be **hundreds of MB to
+~1 GB**. That is normal and affects only pipeline runtime, not the app.
 
 ---
 
-## Two pipeline strategies — choose one
+## Flags worth knowing
 
-| | **Strategy A — Fused mesh** | **Strategy B — Entity-preserving** ✅ recommended |
+The script has around thirty flags; `--help` lists them all with current
+defaults. These are the ones that change the result most.
+
+### Lighting and baking
+
+| Flag | What it does |
+|---|---|
+| `--bake` | Bake lighting into textures at all. Without it the GLB ships with plain albedo and relies entirely on the app's runtime lights. |
+| `--bake-lightmap` | The shipping mode: a lightmap atlas, with a second sun-free **night** bake of the same atlas layout so the app can cross-fade day↔night with no second model. |
+| `--bake-size N` | Atlas resolution. **Use 2048** for a plan with detailed curtain/fabric geometry — 1024 leaves too little texel budget once dense geometry re-packs the atlas, and light bleeds between islands (stray brightness smeared onto nearby benches and frames). |
+| `--bake-samples N` | Cycles samples per texel. Higher is cleaner and slower. |
+| `--sun-angle`, `--sun-strength`, `--sky-strength` | The daytime key light and sky contribution. |
+| `--bake-day-ambient`, `--night-fill`, `--night-ambient` | Ambient floors for the day and night atlases — what stops unlit interiors going pure black. |
+| `--bake-margin`, `--bake-island-margin`, `--bake-micro-island-px` | UV island padding. These exist to control bleed; raise them before dropping bake quality if you see it. |
+
+### Geometry budget
+
+A villa GLB is **~92 % geometry, ~6 % textures**, so shrinking images barely
+moves the file size — the geometry caps are what matter.
+
+| Flag | Default | Applies to |
 |---|---|---|
-| **Meshes in GLB** | 1 single mesh | 1 structure mesh + individual entity meshes |
-| **Click to control** | ❌ must bind/place markers | ✅ automatic, no binding needed |
-| **Visual state on mesh** | ❌ (no separate mesh per entity) | ✅ lock goes green/red, fan spins, etc. |
-| **Textures** | ✅ works | ✅ works (structural geo is still joined) |
-| **How** | Blender: Split by Group OFF (old) | Run the Python script below (new) |
+| `--max-object-faces` | 5 000 | Structural geometry: walls, floors, plot, vegetation |
+| `--max-entity-faces` | 20 000 | Bound devices: curtains, lamps, cameras… |
 
-If you just want a navigable 3D model and will bind/place markers, Strategy A is fine. For full
-auto-wiring where clicking on the lock panel opens the lock control, use Strategy B.
+Anything under its budget passes through byte-identical; only runaway objects
+are collapse-decimated. Both run **before** the join/UV/bake phases, so they
+also make those phases dramatically cheaper.
+
+The two worst offenders in practice, both from the SweetHome catalog:
+
+- **Cloth-sim curtains** — ~248 000 faces *per pose*. Eight multi-pose curtains
+  were 37 % of one villa's entire 29 MB GLB. Every pose is its own mesh and
+  every pose goes through `--max-entity-faces`; a gathered `__open` pose is
+  only a few hundred faces so it passes untouched, while its `__closed` sibling
+  is collapsed.
+- **Plants and vegetation** — 20 k–70 k faces per *placed copy*, and the OBJ
+  export writes full geometry for every copy, so a garden multiplies fast (one
+  reached 5.2 M triangles). They are **not** excluded from the light bake; they
+  are decimated first by `--max-object-faces`, which is also what makes the bake
+  affordable. A bush keeps its silhouette at 5–10 % of its faces at kiosk
+  viewing distance. Prefer low-poly plants in SweetHome anyway — the cap is a
+  backstop, not a substitute.
+
+Vegetation and ground materials are separately pinned to an always-visible
+exterior group, so palm crowns and the plot survive a floor toggle instead of
+vanishing with the storey they were nearest.
+
+### Material tuning
+
+| Flag | What it does |
+|---|---|
+| `--max-base-color F` | Clamp the peak of **flat, untextured** albedo, so SweetHome's pure-white default walls and cabinets don't blow out. Textured surfaces are unaffected. |
+| `--min-roughness F` | Raise low roughness so nothing renders mirror-flat. |
+| `--metallic F` | Force metallic on every material — SweetHome sometimes exports stray metallic values. |
+| `--glass-alpha-max F` | Ceiling on glass transparency. |
+
+> **Human figures and mannequins:** delete them in SweetHome 3D before
+> exporting. The pipeline does not strip furniture — what is in the plan is what
+> ends up in the GLB.
+
+### KTX2 textures
+
+`--ktx2` exists and re-encodes the GLB's textures to KTX2/ETC1S. **It is
+deliberately not used.** Textures are not where load time goes for this model —
+measured, not assumed — and running it through `gltf-transform` decompresses the
+geometry, which does not get Draco re-applied unless a separate step runs
+afterwards. The result measured roughly **five times larger** for no visible
+gain. The app ships its own offline KTX2 decoder, so the capability is there if
+a future model is genuinely texture-bound; today it is not.
 
 ---
 
-## Strategy B — Automated script (entity-preserving pipeline)
+## Uploading the result
 
-A single Python script handles the entire conversion. **No Blender GUI needed.**
+**Advanced Settings → 3D model source → Upload** (Owner profile). Since pipeline
+2.14.0 the room and entity plan data — names, shapes, device positions — is
+embedded directly in the `.glb`, so selecting that one file is enough.
 
-### Prerequisites
-- Blender 3.6+ or 4.x installed ([blender.org](https://www.blender.org/download/))
-- Your SweetHome 3D OBJ export (step below)
+If a GLB carries no embedded room data (an older or hand-built file), the app
+clears any room data left over from a *previous* upload rather than keep showing
+it against a model it may no longer match. Select the matching `.rooms.json`
+alongside the GLB in the same picker, or upload it separately afterwards to
+refresh only the room data.
 
-### Step B-1 — Export from SweetHome 3D
+That sidecar is named after the **`.sh3d`**, not the GLB: its contents come from
+the floor plan and are identical whatever bake size produced the model, so a
+multi-size run writes one file rather than one per size.
+
+Every kiosk then loads that same central file automatically — there is no
+per-device upload.
+
+---
+
+## Configuring interactive assets in SweetHome 3D
+
+All optional. Authoring to these conventions gets automatic mapping and richer
+live feedback with no code or config; skipping them leaves you binding by tap,
+which works just as well.
+
+### Name a piece with its HA `entity_id`
+
+Set a furniture piece's **Name** to the exact entity ID (`light.kitchen_ceiling`,
+`climate.living_room_ac`, `camera.patio_cam`, …) and the mesh binds to that
+entity on import. The pipeline matches by **3D position**, not by the internal
+OBJ part names, so this works even though SweetHome renames parts to things like
+`Sphere_1_1017`.
+
+If the dry run shows no entities, the names are wrong: click the piece,
+Properties → **Name**, type the exact entity ID, re-export and re-run.
+
+### Live state via pose copies
+
+**Any** entity can show its live state by giving it one mesh per state: place
+the same object 2+ times in the same spot, posed differently, and suffix each
+Name with the state it represents.
 
 ```
-3D View → Export to OBJ format
+cover.living_room_curtain__open      cover.living_room_curtain__closed
+cover.living_room_curtain__half      (optional — see below)
+lock.front_door__locked              lock.front_door__unlocked
+switch.gate_relay__on                switch.gate_relay__off
+binary_sensor.front_door_contact__on binary_sensor.front_door_contact__off
 ```
 
-Keep the `.obj`, `.mtl` and `textures/` folder together in the same directory.
+**One rule, no per-domain table: the suffix is the entity's own Home Assistant
+state**, lowercased with anything that isn't a letter or digit removed. A
+`switch` uses `__on`/`__off`, a `cover` `__open`/`__closed`, a `lock`
+`__locked`/`__unlocked`, a sensor reporting `not_home` uses `__nothome`. If
+unsure what to name a pose, read the entity's current state in Home Assistant —
+that is the word.
 
-### Step B-2 — Run the script
+**`half` is the one special word.** No entity reports "half", so it is offered
+as a virtual pose for every type. A device counts as part-way when a numeric
+level attribute sits between its extremes — `current_position`, `brightness`,
+`percentage`, `volume_level`, band 15 %–85 % — or when its state is transitional
+(`opening`, `closing`, `locking`…). So `cover.x__half` and `light.y__half` work
+identically. Always optional: with only two poses authored, a part-way device
+falls back to the nearer one.
 
-The script is in `ha_navigate/sources/blender_pipeline.py` and takes **three arguments**: the `.sh3d` file, the `.obj` file, and the output `.glb`.
+**Unknown and offline states fall back to the rest pose.** A state you didn't
+author — including `unavailable`, `unknown`, or a lock's `jammed` — shows the
+lowest-ranked authored pose (`off`/`closed`/`locked`/`idle`), so a lock never
+implies a door is open when its real state isn't known.
 
-```bash
-# Linux / macOS (adjust blender path if needed):
-blender --background --python blender_pipeline.py -- \
-    YourVilla_1F.sh3d \
-    OBJ/YourVilla_1F.obj \
-    output/villa_1F.glb
+Further rules:
 
-# macOS (if Blender isn't on your PATH):
-/Applications/Blender.app/Contents/MacOS/Blender --background \
-    --python blender_pipeline.py -- \
-    YourVilla_1F.sh3d \
-    OBJ/YourVilla_1F.obj \
-    output/villa_1F.glb
+- All suffixed copies are **one entity**; the suffix never affects binding,
+  tapping or RBAC.
+- **Every pose needs an explicit `__word` suffix, including the rest one.** An
+  unsuffixed piece is never a pose — it is always-visible base geometry that
+  coexists with the poses. That is what lets you model a fixed device body (a
+  keypad housing named plain `lock.front_door`) plus a swinging leaf with its
+  own two poses. If you want one always-there mesh and no swapping, leave the
+  name unsuffixed and skip pose authoring.
+- Fully **per-device**: mix multi-pose and single-mesh devices freely.
+- Poses may use **different catalog models and widths** — a slim gathered
+  curtain for `__open`, a full-width one for `__closed`. Detailed catalog assets
+  are fine; the face caps handle them.
 
-# Windows:
-"C:\Program Files\Blender Foundation\Blender 4.x\blender.exe" --background ^
-    --python blender_pipeline.py -- ^
-    YourVilla_1F.sh3d OBJ\YourVilla_1F.obj output\villa_1F.glb
-```
+Place curtains and door frames/glass **directly over their window**. The
+pipeline keeps the window's own glass and frame in the structural shell so it
+stays transparent and correctly lit, rather than letting the curtain absorb it.
+Only one pose per device casts shadows into the bake, so no hidden pose's shadow
+is frozen onto the floor: the unsuffixed base mesh if you modelled one,
+otherwise `__open` for a `cover` and `__off` for everything else.
 
-**Tip — dry-run (preview the mapping without Blender):**
-```bash
-python3 blender_pipeline.py YourVilla_1F.sh3d OBJ/YourVilla_1F.obj
-```
-This prints exactly which OBJ groups will be assigned to each entity, so you can
-verify the mapping before running Blender.
+### Camera view cones
 
-#### Optional render-quality flags
+A camera shows its red beam only when all of these hold:
 
-The render look can be tuned **either here (baked into the GLB) or live in the app**
-(Settings → *Render quality* — see [README](README.md)). The same dials exist in
-both places so you can iterate at runtime, then bake the winners into the GLB.
-All flags are optional and default to the original behaviour. **This table is not
-exhaustive** — the script (`sources/blender_pipeline.py`, outside this repo, never
-committed) has grown many more flags over time (baked lighting modes, day/night
-atlases, vegetation decimation, glass detection, and more); run it with `--help`
-for the full, current list rather than relying solely on this table:
+1. The entity maps to at least one mesh in the model.
+2. That piece carries a **rotation** in SweetHome 3D. Set the furniture's
+   **angle** to aim it — a camera left at angle 0 gets no beam rather than a
+   guessed direction. The beam always tilts **30° down** from horizontal, which
+   is what a ceiling- or high-wall-mounted camera actually watches, and it clips
+   against walls.
+3. The camera has a **motion sensor** wired to it (the linked-entity field on
+   its device card) and that sensor is `on`.
 
-| Flag | Effect | Example |
-|---|---|---|
-| `--max-base-color F` | Clamp the peak of **flat (untextured)** albedo so SweetHome's pure-white default walls/cabinets don't blow out. Textured surfaces are unaffected. | `--max-base-color 0.85` |
-| `--min-roughness F` | Raise low roughness to at least `F`, so nothing renders mirror-flat. | `--min-roughness 0.6` |
-| `--metallic F` | Force metallic on every material (SweetHome sometimes exports stray metallic). | `--metallic 0.0` |
-| `--bake-ao` | Bake **ambient occlusion into vertex colours** (Cycles) so corners/contacts stay dark even with the app's runtime SSAO off. Experimental, slow, best-effort — skipped with a warning if your Blender build can't bake. | `--bake-ao --ao-samples 64` |
+The beam's compass heading comes from `angle` plus a fixed correction for which
+way the catalog CCTV model faces at `angle=0`
+(`CAMERA_MODEL_FRONT_OFFSET_RAD` in `SceneManager.ts`). The affine transform
+placing every camera is independently proven correct — camera *positions* always
+render right — so if a heading is still off after aiming `angle` at the intended
+target, that constant is the one place to adjust, not the transform.
 
-```bash
-# Example: tame white walls + add baked contact shadows
-blender --background --python blender_pipeline.py -- \
-    YourVilla_1F.sh3d OBJ/YourVilla_1F.obj output/villa_1F.glb \
-    --max-base-color 0.85 --min-roughness 0.6 --bake-ao
-```
+Load the app with `?debug` to print which cameras qualified and, for the rest,
+exactly why they were skipped (`no mesh`, `no sh3d angle data`, `angle is 0`).
 
-> Human figures / mannequins: remove these **in SweetHome 3D** before exporting
-> (delete the figures from the plan). The pipeline intentionally does not strip
-> furniture — what's in the plan is what ends up in the GLB.
+### What the script reports
 
-The script prints a summary when done, e.g.:
+On completion it prints the mesh inventory, so you can confirm the entity
+meshes survived as separate objects:
 
 ```
 Done!  14 mesh(es) in the GLB:
-  • Structure                                                      212,847 tris
-  • camera.livingroom_cam                                            1,204 tris  ← entity (clickable)
-  • climate.living_room_air_conditioner                                892 tris  ← entity (clickable)
-  • lock.living_room_aqara_smart_door_lock_0aa9_lock_mechanism         340 tris  ← entity (clickable)
-  • cover.curtain_living_room_big                                      180 tris  ← entity (clickable)
+  • Structure                                         212,847 tris
+  • camera.livingroom_cam                               1,204 tris  ← entity (clickable)
+  • climate.living_room_air_conditioner                   892 tris  ← entity (clickable)
+  • cover.curtain_living_room_big                         180 tris  ← entity (clickable)
   ...
 ```
 
-### Step B-3 — Upload to the kiosk
-
-**Add-on**: Advanced Settings → *3D model source* → **Upload GLB / room
-data** (one button now handles both). Since pipeline 2.14.0 the room/entity
-plan data (names, shapes, device positions) is embedded directly in the
-`.glb` itself — select just that one file and the kiosk reads it
-automatically, no second upload. If it isn't found (an older or hand-built
-GLB), the kiosk clears out any room data left over from a *previous* upload
-rather than keep showing it against a model it may no longer match — pick the
-matching `.rooms.json` the script also writes next to the GLB alongside it
-(ctrl/cmd-click both in the same picker) to send them in one go, or upload
-that file on its own afterwards to update just the room data without
-re-uploading the model. Every kiosk then loads that same central file
-automatically, no per-device upload.
-
-That sidecar is named after the **`.sh3d`**, not the GLB (pipeline ≥2.15.0):
-its contents come from the floor plan and are identical whatever bake size
-produced the GLB, so a multi-size run writes one file instead of one per size.
-Pass `--no-room-sidecar` to skip it altogether (redundant for any current app,
-which reads the copy embedded in the GLB), and `--no-atlas-png` to keep the
-`villa_bake_atlas[_night].png` inspection copies out of the output folder.
-Both work with the sizes wrapper: `blender_pipeline.py 1024 2048 4096
---no-atlas-png`.
-
-### Your job list lives outside the script (pipeline ≥2.17.0)
-
-The sh3d/obj/glb paths and the bake flags tuned for a given property are
-*configuration*, not code — but they used to live inside `blender_pipeline.py`,
-so every script update overwrote them and they had to be re-entered by hand.
-
-They now come from **`blender_pipeline.jobs.json`**, sitting next to the script:
-
-```json
-[
-  {
-    "label": "YourVilla",
-    "sh3d": "YourVilla.sh3d",
-    "obj": "OBJ/YourVilla.obj",
-    "glb": "GLB/YourVilla_{size}.glb",
-    "flags": ["--bake", "--bake-lightmap", "--bake-size", "{size}", "--ktx2"]
-  }
-]
-```
-
-`{size}` is substituted with each requested bake size. With that file present,
-**updating the pipeline is just copying the `.py`** — your configuration is
-untouched. Without it, the built-in list in the script is used, so a fresh
-checkout still works. A malformed sidecar warns and falls back rather than
-aborting a bake.
-
-### Faster loads: `--ktx2` (pipeline ≥2.16.0, kiosk ≥2.80.0)
-
-`--ktx2` re-encodes the exported GLB's textures to KTX2/ETC1S in place, so the
-file you upload is already the optimised one. Ordinary PNG/JPEG textures are
-decoded by the CPU and uploaded as raw pixels; KTX2 transcodes straight into a
-GPU-native format (ASTC on an iPad) and stays compressed in GPU memory. With
-the kiosk's floor-probe cache in place, Babylon's glTF import is the largest
-remaining part of a load, and most of that is texture decode.
-
-    python3 blender_pipeline.py 2048 --ktx2
-
-**Two prerequisites on the machine running the pipeline** (not on the kiosk —
-it ships its own KTX2 decoder, so the villa display stays fully offline):
-
-1. **Node.js** — `brew install node`, or the LTS installer from nodejs.org.
-   `npx` fetches `@gltf-transform/cli` the first time, so that machine needs
-   internet once.
-2. **KTX-Software 4.4.x** — install the `.pkg` from
-   [KTX-Software releases](https://github.com/KhronosGroup/KTX-Software/releases).
-   There is no Homebrew formula. Pick the build matching your Mac — run
-   `uname -m`: `arm64` → `…-Darwin-arm64.pkg`, `x86_64` → `…-Darwin-x86_64.pkg`.
-   Verify with `toktx --version` afterwards.
-
-   `gltf-transform etc1s` only *wraps* the encoder; the actual work is done by
-   `toktx` from this package, and without it the command fails with a bare
-   non-zero exit.
-
-   **Do not jump to 4.5 when it lands.** Khronos have deprecated the legacy
-   tools and state that "the legacy tools will be removed in Release 4.5" —
-   `toktx` is one of them. Until `@gltf-transform/cli` moves to the newer
-   `ktx create`, 4.4.x is the version that works.
-
-If the script runs under a Blender launched from the macOS Finder, its PATH may
-omit Homebrew and `/usr/local` even though your shell's does not. The script
-checks those locations directly; for anything unusual (nvm, asdf, a custom
-prefix) set `VK_NPX` and/or `VK_TOKTX` to the full binary paths.
-
-Upgrade the kiosk to **2.80.0 or later before uploading a KTX2 GLB**; an older
-build would try to fetch the decoder from Babylon's CDN and show an untextured
-villa on a display with no internet.
-
-**Check the result before shipping it.** ETC1S is aggressive and baked lighting
-atlases are gradient-heavy, so look for banding on large flat walls and floors.
-Re-running without `--ktx2` produces the plain GLB again, and the previous file
-can simply be re-uploaded.
-**Standalone**: if a central model isn't already detected automatically (see
-the add-on note above), Advanced Settings → *3D model source* has a
-per-browser uploader instead.
-
-That's it. The kiosk resolves entity IDs directly from mesh names:
-- Tapping the door lock panel → lock control panel (unlock/lock)
-- Tapping the AC unit → temperature control
-- Tapping a camera → live stream
-- Visual state updates live (lock = green/red, fan spins, light glows)
-
-### How does the script find the right meshes?
-
-SweetHome 3D OBJ exports use internal model-part names (like `Sphere_1_1017`),
-**not** the furniture Name you set in the UI. The script reads position data from
-the `.sh3d`'s `Home.xml` and matches each entity-named furniture piece to OBJ
-groups by their 3D bounding box — no name-based guessing required.
-
-### What if my furniture isn't named with entity IDs?
-
-The dry-run will show no entities. Fix it in SweetHome 3D:
-1. Click the furniture piece (AC, lock, camera…)
-2. Properties panel → **Name** field → type the exact HA entity_id
-   (e.g. `climate.living_room_air_conditioner`)
-3. Re-export OBJ and re-run the script
-
----
-
-## Strategy A — Manual Blender (fused mesh, legacy)
-
-Use this only if you're not interested in direct entity clicking and prefer a
-single-mesh result. Also useful if the script has issues with a particular model.
-
-## Step 1 — Export from SweetHome 3D
-
-```
-3D View → Export to OBJ format
-```
-
-Output: `your_villa.obj` + `.mtl` + a `textures/` folder. Keep them together.
-
----
-
-## 🧭 Blender navigation primer (read first if you're new)
-
-You only need a few moves. Do them with the mouse **over the big 3D area**:
-
-| Action | How |
-|---|---|
-| Rotate the view | Hold **middle mouse button** and drag (trackpad: two-finger drag, or drag the coloured axis-ball, top-right of the viewport). |
-| Pan | **Shift + middle mouse** and drag. |
-| Zoom | Mouse **scroll wheel**. |
-| **See everything** | Press **Home**. |
-| Frame the selected object | Press **`.`** on the numpad (or View → Frame Selected). |
-| Select an object | **Left-click** it (in the viewport or in the Outliner list, top-right). |
-| Select all / none | **A** / **Alt+A**. |
-| Delete selected | **X** then confirm (or the Delete key). |
-
-The **Properties panel** is the column of icons on the right. The blue **wrench**
-icon = *Modifiers*. The orange **square** icon = *Object*.
-
----
-
-## Step 2 — Import into Blender
-
-```
-File → Import → Wavefront (.obj)   →  pick your_villa.obj
-```
-
-In the import options panel (right side of the file dialog):
-
-| Setting | Strategy A (fused) | Strategy B (entity-preserving) |
-|---|---|---|
-| **Split by Group** | OFF | **ON** ← key setting |
-| **Split by Object** | OFF | OFF |
-
-With **Split by Group ON** each SweetHome 3D furniture group becomes a separate
-Blender object named with the furniture's Name field — if you set those names to
-HA entity IDs in SweetHome 3D (`lock.living_room_…`, `climate.living_room_…`, …),
-they carry straight through.
-
-If you use the **automated script** (Strategy B above) this setting is handled
-for you — you do not need to open Blender manually.
-
-After importing, press **Home** to frame everything. **You should see the rooms
-and walls.** If you only see a small grey cube, the import brought in nothing —
-your source file is empty; redo Step 1.
-
----
-
-## Step 2b — Clean the scene (do this every time)
-
-A fresh Blender file ships with a **Cube, Camera and Light** you don't want.
-
-1. In the **Outliner** (top-right list), left-click **Cube** → press **X** → confirm.
-2. Do the same for **Camera** and **Light** (we don't need them).
-3. Press **Home** again. Now only your villa remains.
-
----
-
-## Step 3 — Joining (do it selectively, not everything)
-
-**Do NOT join all objects together.** Joining merges all meshes and deletes
-their names, including entity-named meshes. Lose those names and:
-- the kiosk can't auto-detect scale or place rooms,
-- clicking on the AC or lock mesh does nothing.
-
-**What to do instead** (manual version of what the script does automatically):
-
-1. In the Outliner (top-right), select all **structural** objects — walls,
-   floors, ceilings, generic furniture that isn't a HA entity — by clicking the
-   first one, then Shift-clicking the last.
-2. Leave the entity-named objects (anything like `climate.*`, `lock.*`,
-   `camera.*`, `cover.*`, `fan.*`) **unselected**.
-3. Press **A** in the viewport to deselect all, then manually re-select only
-   the structural objects, make one the active object, and press **Ctrl+J** to join.
-4. Rename the joined object `Structure`.
-
-The result: one `Structure` mesh + individual named entity meshes. The
-**automated script** (Strategy B) does exactly this, but in seconds without
-any manual clicking.
-
----
-
-## ✅ Do Steps 4–7 matter? Usually **no** — export first
-
-The **only mandatory cleanup is deleting the default Cube** (Step 2b). Steps 4–7
-are optional or not relevant to Floor 1. The recommended workflow is:
-
-> **Export now (Step 8), upload to the kiosk (Step 9), and test.** Only come back
-> to Blender if you actually see one of these symptoms:
-
-| Symptom in the kiosk | Then do | Otherwise |
-|---|---|---|
-| Movement is **choppy / slow** on the tablet | **Step 4** (Decimate) | skip it |
-| Walls look **see-through or black** from inside | **Step 5** (Recalculate Normals) | skip it |
-| — | **Steps 6 & 7** | always skip for Floor 1 |
-
-If you'd like to do the one quick, safe step before exporting anyway, do **Step 5**
-(30 seconds, never hurts). Everything below is reference for *if/when* you need it.
-
----
-
-## Step 4 — Decimate (reduce polygons) — *only if it runs slow*
-
-Makes the file lighter so it runs smoothly on a tablet.
-
-1. Click the object to select it.
-2. In the Properties column, click the blue **wrench** (Modifier Properties).
-3. **Add Modifier → Generate → Decimate**.
-4. In the **Ratio** field, type **0.3** and press Enter. (Lower = lighter/rougher.)
-5. Click the **dropdown (˅)** on the modifier's header → **Apply**.
-
-To watch the triangle count: top-right of the viewport open the **Overlays**
-dropdown (two overlapping circles) → tick **Statistics**. Aim under ~200k triangles.
-
-> On a powerful PC you can skip this entirely.
-
----
-
-## Step 5 — Fix normals — *only if walls look see-through*
-
-Stops walls turning black or see-through when you're inside a room.
-
-1. Select the object, hover the 3D area, press **Tab** to enter **Edit Mode**.
-2. Press **A** to select all.
-3. Top menu: **Mesh → Normals → Recalculate Outside** (shortcut **Shift + N**).
-4. Press **Tab** again to return to Object Mode.
-
----
-
-## Step 6 — Ceiling & collisions (you can skip)
-
-- **Ceiling:** the kiosk camera stands at 1.7 m, so the ceiling rarely gets in the
-  way. If your model has an annoying separate roof object, click it → **X**.
-  Otherwise skip.
-- **Collisions:** the kiosk treats your **solid walls** as collision automatically —
-  no special boxes needed. Just make sure walls are real geometry (they will be
-  from SweetHome). Skip unless you want perfectly tuned movement.
-
----
-
-## Step 7 — Staircase triggers & teleport anchors (skip for now)
-
-Both are **optional**:
-- Staircase triggers only matter once you add **Floor 2**.
-- Teleport anchors are already computed by the app, and you can re-anchor any room
-  live (**Rooms → long-press a card**). Floor 1 needs neither.
-
-Skip straight to export.
-
----
-
-## Step 8 — Export GLB
-
-1. **File → Export → glTF 2.0 (.glb/.gltf)**.
-2. In the panel on the right of the save dialog, set:
-
-| Option | Value |
-|---|---|
-| **Format** | **glTF Binary (.glb)** |
-| **Include → Selected Objects** | off (export everything) |
-| **Data → Mesh** | keep **Apply Modifiers**, **UVs**, **Normals** ticked |
-| **Data → Material → Images** | keep on (textures) |
-| **Data → Compression (Draco)** | see note below |
-| **Transform → +Y Up** | on (default) |
-
-3. Name it `villa_1F.glb` and click **Export glTF 2.0**. Aim for **< 40 MB**.
-
-> **Draco note:** Draco shrinks the file a lot, and decoding it is fully
-> offline-safe — the kiosk bundles its own Draco decoder rather than fetching
-> one from Babylon's CDN, so a villa with no internet at all still loads a
-> Draco-compressed GLB normally. Leave Draco **ON**.
-
----
-
-## Step 9 — Load it into the kiosk
-
-**Advanced Settings → 3D model source** — add-on mode: **Upload central GLB**,
-served to every kiosk automatically. Standalone: same screen falls back to a
-per-browser uploader (IndexedDB) if no central model is already configured.
-Then wire it up by tapping: **Advanced Settings → Bound 3D objects** and/or
-**Drop control markers**.
-
-> If the teleport anchors land in the wrong spot after import, walk to the correct position in each room and **long-press the room card** (Rooms panel) to recalibrate live. No rebuild needed.
+Once uploaded: tapping the lock mesh opens the lock control, tapping the AC
+opens temperature, tapping a camera opens its stream, and visual state updates
+live.
