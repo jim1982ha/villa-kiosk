@@ -1,4 +1,6 @@
 .claude
+CLAUDE.md
+tests/
 node_modules
 dist
 dist-ssr

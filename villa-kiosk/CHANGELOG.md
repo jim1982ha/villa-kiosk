@@ -1,3 +1,11 @@
+## 2.137.0
+
+### Changed — merged ADDON.md into README.md; stopped publishing internal/dev-only files
+
+`ADDON.md` had drifted into near-total duplication of README.md's own "Run as a Home Assistant add-on" section (both had an install walkthrough, both explained port 8099 and PWA install) while also being the only place a few things lived at all: the one-time GHCR "make packages public" step, the repository-layout table, the architecture diagram, and the local-build-without-GHCR fallback. Rather than keep two files that partially say the same thing, everything genuinely useful from `ADDON.md` moved into README.md as new subsections (*Installing*, *Updating*, *How it works*, *Publishing new images*, *Local build fallback*), the duplicated parts were dropped, and the file itself was deleted.
+
+Also stopped tracking two files that never belonged on a public repo: `CLAUDE.md` (Claude Code's own project instructions — internal working notes, not documentation for anyone using the add-on) and `tests/security_test.py` (the RBAC/auth regression suite for `supervisor-proxy.py` — a map of exactly what the security boundary checks for, which is more useful to an attacker than to an installer). Both are untracked via `git rm --cached` and now `.gitignore`d, so they stay on disk for local development but stop appearing in future commits; README's mention of running the suite was removed since the file it pointed at is no longer there to run. This does not remove either file from the repository's existing git history — only from the current tree going forward.
+
 ## 2.136.0
 
 ### Changed — DOCS.md now documents all nine add-on options, not just three
