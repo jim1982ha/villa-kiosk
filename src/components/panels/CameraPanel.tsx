@@ -130,6 +130,13 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // Live "is something moving right now" — the same sensor the status bar
   // summarises after the fact, read straight from the entity table so the feed
   // can signal a detection while it is happening.
+  // Intrinsic aspect ratio of whatever is currently painting (video or img).
+  // The media is object-fit:contain, so its ELEMENT box fills the viewport
+  // while the PICTURE is letterboxed inside it — a border on the element
+  // therefore traced the black bars, not the feed. The detection ring is a
+  // separate overlay sized from this ratio, which reproduces exactly what
+  // `contain` does and so lands on the picture's real edges.
+  const [mediaAspect, setMediaAspect] = useState<number | null>(null);
   const motionActive = mapping.motionEntityId
     ? entities[mapping.motionEntityId]?.state === "on"
     : false;
@@ -525,6 +532,10 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             autoPlay
             muted
             playsInline
+            onLoadedMetadata={(e) => {
+              const v = e.currentTarget;
+              if (v.videoWidth && v.videoHeight) setMediaAspect(v.videoWidth / v.videoHeight);
+            }}
             onError={() => {
               // hls.js reports its OWN errors via Hls.Events.ERROR (see the
               // setup effect) — that's the authoritative signal while it's in
@@ -561,7 +572,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         <img
           src={streamUrl}
           alt={mapping.label}
-          onLoad={() => { streamLoaded.current = true; setFrameReady(true); }}
+          onLoad={(e) => {
+            streamLoaded.current = true;
+            setFrameReady(true);
+            const i = e.currentTarget;
+            if (i.naturalWidth && i.naturalHeight) setMediaAspect(i.naturalWidth / i.naturalHeight);
+          }}
           onError={() => fallBackToSnapshot("MJPEG image error")}
         />
       );
@@ -574,9 +590,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         src={snapshotUrl}
         alt={mapping.label}
         onError={onSnapshotError}
-        onLoad={() => {
+        onLoad={(e) => {
           snapErrors.current = 0;
           setFrameReady(true);
+          const i = e.currentTarget;
+          if (i.naturalWidth && i.naturalHeight) setMediaAspect(i.naturalWidth / i.naturalHeight);
         }}
       />
     );
@@ -623,17 +641,26 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           border there would scale and slide with the zoom instead of framing
           the feed. Colour from the shared vocabulary, so it is the same red the
           bar and the legend already use for a detection. */}
-      <div
-        className="camera-viewport"
-        style={{
-          marginTop: bottomRowH,
-          ...(motionActive ? { boxShadow: `inset 0 0 0 4px ${STATUS_COLOR.alert}` } : undefined),
-        }}
-      >
+      <div className="camera-viewport" style={{ marginTop: bottomRowH }}>
         {/* Zoom/pan layer — FIRST child so the controls below paint on top of
             it and stay clickable while it captures pinch/wheel/drag gestures. */}
         <div className="camera-zoom" ref={zoom.ref} style={zoom.style}>
           {renderView()}
+          {/* Detection ring. Inside .camera-zoom so it pans and scales WITH the
+              feed rather than staying stuck to the viewport, and sized by the
+              media's own aspect ratio so it frames the picture instead of the
+              letterbox around it. Falls back to filling the region until the
+              first frame reports its dimensions. */}
+          {motionActive && (
+            <div
+              className="camera-detect-ring"
+              style={{
+                borderColor: STATUS_COLOR.alert,
+                ...(mediaAspect ? { aspectRatio: String(mediaAspect) } : undefined),
+              }}
+              aria-hidden="true"
+            />
+          )}
         </div>
 
         {/* An empty <video>/<img> mid-setup reads as "broken" rather than

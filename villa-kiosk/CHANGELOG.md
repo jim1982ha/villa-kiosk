@@ -1,3 +1,25 @@
+## 2.133.0
+
+### Changed — the detection ring now frames the picture, not the black bars
+
+The ring introduced in 2.132.0 was an inset shadow on the whole video region, which has two problems the screenshot made obvious. The feed is `object-fit: contain`, so its element box fills the region while the picture is letterboxed inside it — the ring therefore traced the black bars rather than the image. And an inset shadow paints with its element's background, meaning *under* every descendant, so the video sat on top of it.
+
+It is now a positioned overlay declared after the media and sized from the media's own intrinsic aspect ratio (read off the video's `videoWidth`/`videoHeight` or an image's `naturalWidth`/`naturalHeight` as the first frame arrives). `width/height: 100%` plus `max-*: 100%` plus that ratio resolves to exactly the geometry `contain` produces, so the ring lands on the picture's real edges. Thicker at 6px, to read as a deliberate alert from across a room.
+
+It lives inside the zoom layer, so it pans and scales with the feed instead of staying pinned to the region while the picture moves under it. Identical on a phone: the size derives from the feed's aspect ratio, not from a breakpoint. Until the first frame reports its dimensions it falls back to filling the region.
+
+### Changed — README corrected against the shipping build
+
+Several claims had drifted or were never true:
+
+- **Camera view cones** told you to set a `pitch` on the furniture to tilt the beam. That is not something the plan authoring actually exposes; the app reads a pitch if one is present but nothing asks the user for it. The section now documents only `angle`, which is what you really set, and states plainly that the beam always tilts 30° down.
+- **The geometry budget** implied `__open` poses were exempt from `--max-entity-faces`. Every pose is its own mesh and every pose goes through the same cap — a gathered `__open` pose simply happens to be under it already, so it passes through unchanged while its 248 k-face `__closed` sibling is collapsed.
+- **Vegetation** is not exempted from the light bake, which the old wording left open. It is decimated *before* the bake by the structural budget — which is also what makes the UV-unwrap and bake passes affordable — and its materials are separately pinned to the always-visible exterior group so palm crowns survive a floor toggle.
+- **Project structure** was missing `src/assets/` (the vendored KTX2 transcoder that has to ship offline) and described several directories loosely.
+- **`.env`** was referenced twice in passing but never explained. It now has its own section: what it is, that it is optional and development-only, that no published image contains one, and what each variable does.
+- **Licence** now states the file is a plain `LICENSE`, that reading the source grants no rights, and why `package.json` says `UNLICENSED`.
+- Removed the redundant "Curtains & doors over windows" section, the two Facility subsections that documented absent behaviour, and every passage describing how earlier versions used to work.
+
 ## 2.132.1
 
 ### Changed — dropped "nothing detected" from the camera bar's tooltip

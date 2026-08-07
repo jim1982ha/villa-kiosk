@@ -12,7 +12,7 @@ Built with **React + TypeScript + Babylon.js**.
 
 | Area | What it does |
 |---|---|
-| **First-person navigation** | Walk with a touch virtual joystick, look around by dragging, teleport to any room from a grid. |
+| **First-person navigation** | Walk with a touch virtual joystick, look around by dragging, teleport to any room from the dial on a floor button. |
 | **Tap-to-control** | Tap a light/switch/fan to toggle it instantly; long-press any device (or tap a cover/thermostat/camera/sensor/media player, which always opens on a plain tap) for its full control panel. |
 | **Live visual feedback** | Lights glow and illuminate the room; curtains show open/half/closed; fans spin; locks go green/red; leak sensors pulse red. |
 | **Live HA sync** | WebSocket connection with auto-reconnect; mesh visuals update within ~300 ms of a state change. |
@@ -100,6 +100,23 @@ npm run build       # type-check + Vite → dist/  (baked into the add-on image)
 > starts from a clean slate. For `npm run dev` against a real Home Assistant, set
 > `VITE_DEV_PROXY` (see `.env.example`) to a running add-on's hostname so Vite
 > forwards the backend routes (`/core`, `/auth`, `/model`, …) to it.
+
+#### `.env` — optional, and only for local development
+
+`.env.example` is a template you copy to `.env` when running `npm run dev` on
+your own machine. **Nothing in it is needed to run the add-on**, and no `.env`
+is baked into the published image — a normal install never has one. Every value
+is optional.
+
+| Variable | What it does |
+|---|---|
+| `VITE_DEV_PROXY` | The only one you are likely to want. Points `npm run dev` at a running add-on's hostname (e.g. `http://homeassistant.local:8099`) so Vite forwards `/core`, `/auth`, `/addon-config`, `/model` and `/model-upload` to it. Leave it unset to work on the UI shell alone — backend calls then 404, which is fine for pure visual work. |
+| `VITE_LAT` / `VITE_LNG` | A fallback villa location for sun position, used only in the moments before the app adopts the connected Home Assistant instance's own coordinates. Ships as `0`/`0`; there is no reason to change it for a real install, since HA supplies the real value on connect. |
+
+There is deliberately **no** Home Assistant URL or token here. The kiosk is
+always served by the add-on and reaches Core token-lessly through its Supervisor
+proxy, and profile passcodes are add-on options verified server-side — none of
+that ever lives in the client bundle.
 
 ### Tablet kiosk mode
 
@@ -226,8 +243,6 @@ SweetHome 3D → Export to OBJ
    → Export glTF 2.0 (Binary .glb, Draco ON)  →  target < 40 MB
 ```
 
-> If your interactive objects are named with their full HA entity IDs (e.g. `camera.livingroom_cam`, `climate.living_room_air_conditioner`), the app matches meshes to entities automatically.
-
 ---
 
 ## Configuring interactive assets in SweetHome 3D
@@ -273,11 +288,6 @@ state**, lowercased with anything that isn't a letter or digit removed. So a
 reporting `not_home` uses `__nothome`. If you're unsure what to name a pose,
 look at the entity's current state in Home Assistant — that's the word.
 
-> Earlier versions had per-domain vocabularies (notably `__open`/`__closed` for
-> door/window `binary_sensor` contacts). That translation is gone: a
-> `binary_sensor` now uses `__on`/`__off` like everything else. If you authored
-> contact poses under the old names, rename them.
-
 **`half` — the one special word.** No entity ever reports "half" as a state, so
 it's provided as a **virtual** pose available to **every** type. A device counts
 as part-way when either:
@@ -312,33 +322,18 @@ A lock never implies a door is open when its real state isn't known.
   for `__open`, a full-width one for `__closed`) and different widths — the
   pipeline handles it. Detailed/high-poly catalog assets are fine.
 
-### 3. Curtains & doors over windows — nothing special needed
-
-Place curtains (or a door's frame/glass) **directly over their window**; the
-pipeline keeps the window's glass/frame in the structural shell (so it stays
-transparent and correctly lit) and never lets the curtain/door "absorb" it.
-Only **one pose per device casts a shadow** into the light bake, so you won't
-see a hidden pose's shadow ghosted onto the floor. The rule:
-- if you also modelled an **unsuffixed** base mesh for that device, that's the
-  one that bakes (every `__word` pose is excluded);
-- otherwise the baked pose is **`__open` for a `cover`**, and **`__off` for
-  everything else** — falling back to the lowest-ranked authored pose if
-  neither exists.
-
-### 4. Camera view cones (the red beam)
+### 3. Camera view cones (the red beam)
 
 A camera shows a red beam only when **all** of these hold:
 
 1. The entity maps to at least one mesh in the model.
 2. That piece carries a **rotation** in SweetHome 3D — the beam points where
    the camera points, so a camera left at angle 0 gets no beam rather than a
-   guessed direction. Set the `angle` to aim it; **`pitch` is optional** — if
-   you leave it unset the beam tilts **30° down by default**, since a
-   ceiling/high-wall-mounted camera aiming level (the old behaviour) put the
-   beam on the same horizontal plane as the mesh instead of toward the floor
-   it's actually watching. Set an explicit `pitch` (0°–90°) to override that
-   default per camera; the beam clips against walls, so tilting past vertical
-   shortens it to a stub.
+   guessed direction. Set the furniture's **angle** to aim it; that is the only
+   thing you need to author. The beam always tilts **30° down** from horizontal,
+   which is what a ceiling- or high-wall-mounted camera is actually looking at
+   — a level beam would run along the same plane as the mesh instead of toward
+   the floor below it. The beam clips against walls.
 3. The camera has a **motion sensor** wired to it (the optional linked-entity
    field on the device card), and that sensor is `on`.
 
@@ -354,14 +349,14 @@ Load the app with `?debug` and it prints which cameras qualified and, for the
 rest, exactly why they were skipped (`no mesh`, `no sh3d angle data`,
 `angle is 0`).
 
-### 5. Bake resolution
+### 4. Bake resolution
 
 If your plan uses **detailed curtain/fabric geometry**, bake the lightmap at
 **`--bake-size 2048`** (not 1024). The extra texel budget prevents lightmap-atlas
 bleed (stray light smearing onto benches/frames) once the denser geometry re-packs
 the atlas. See [MODEL_PIPELINE.md](./MODEL_PIPELINE.md) for all bake flags.
 
-### 6. Geometry budget — why the GLB is big, and what actually helps
+### 5. Geometry budget — why the GLB is big, and what actually helps
 
 A villa GLB is **~92 % geometry, ~6 % textures** — so shrinking images barely
 moves the needle, and a heavy source model is what makes both the pipeline and
@@ -377,11 +372,21 @@ cases are collapse-decimated. The two worst offenders in practice, both from
 the SweetHome catalog:
 
 - **Cloth-sim curtains** — ~248 000 faces *per pose*. Eight multi-pose curtains
-  were 37 % of one villa's entire 29 MB GLB. Now capped by
-  `--max-entity-faces`; the gathered `__open` poses (a few hundred faces) are
-  left untouched.
-- **Plants/vegetation** — 20 k–70 k faces per *placed copy*, so a bushy garden
-  multiplies fast. Prefer low-poly plants in SweetHome where you can.
+  were 37 % of one villa's entire 29 MB GLB. **Every pose is its own mesh and
+  every pose goes through the same `--max-entity-faces` cap** — `__open`,
+  `__half` and `__closed` alike. Nothing is exempt; a gathered `__open` pose is
+  simply a few hundred faces already, so it passes the cap byte-identical while
+  its 248 k-face `__closed` sibling gets collapsed.
+- **Plants/vegetation** — 20 k–70 k faces per *placed copy*, and the OBJ export
+  writes the full geometry for every copy, so a bushy garden multiplies fast
+  (one garden reached 5.2 M triangles). These are **not** exempted from the
+  light bake — they are decimated *before* it, by the structural
+  `--max-object-faces` budget, which is also what makes the UV-unwrap and bake
+  passes affordable. A bush keeps its silhouette at 5–10 % of its faces at
+  kiosk viewing distance. Vegetation materials are separately pinned to the
+  always-visible exterior group, so palm crowns and the plot survive a floor
+  toggle instead of vanishing with the storey they were nearest. Prefer
+  low-poly plants in SweetHome anyway — the cap is a backstop, not a substitute.
 
 The `.obj` handed to the pipeline is plain ASCII and will be **~1 GB** for a
 detailed villa — that's normal and only affects pipeline runtime, not the app.
@@ -389,15 +394,6 @@ Only three things are actually needed from the export: the `.obj`, its `.mtl`,
 and the texture images the `.mtl` references. If you export from macOS onto a
 non-native filesystem you'll also get `._*` AppleDouble files and `.DS_Store` —
 pure noise, safe to delete.
-
-> **Always check the export completed.** A truncated `.obj` silently loses
-> whatever was still being written, and those devices then show up in the kiosk
-> as tiny placeholder spheres instead of real geometry:
-> ```bash
-> tail -3 YourHouse.obj   # must end with "f ..." lines,
-> ```
-> If it ends on a bare `g …` / `usemtl …` with no faces after it, the export was
-> cut short — re-export before running the pipeline.
 
 ---
 
@@ -431,24 +427,6 @@ a row marks one that can be erased this way. Schedules and saved reports are
 not covered: a schedule is a plan and a report can be regenerated, so both keep
 their ordinary delete buttons.
 
-### Where the defaults come from
-
-There are none. The maintenance schedule and the monthly spend cap both start
-empty — every task (title, interval, optional room/device/contract-clause
-reference) and the cap value are entered by the operator from the Schedule and
-Spend tabs. An earlier version shipped a schedule and cap modelled on one
-specific property-management agreement as a "starting point"; that meant a
-different villa, under a different contract, silently inherited maintenance
-intervals and a cap that were never theirs. Nothing Facility-Manager-related
-ships pre-filled any more, for the same reason nothing else in the kiosk does
-(see "Works with any villa" below).
-
-Intervals that aren't whole days round **down** (twice a week → every 3 days),
-so a genuinely late task can never read as compliant.
-
-Overdue tasks and unresolved faults show as a red count on the Facility icon in
-the top bar, so being late is visible without opening anything.
-
 ### Evidence storage
 
 Photos are downscaled in the browser to ~1600 px JPEG before upload, then
@@ -458,28 +436,23 @@ tens of megabytes, which is why this is local rather than pushed to a cloud
 album: it keeps the evidence with the data it belongs to, and works when the
 villa's uplink doesn't.
 
-### What it deliberately does not do
-
-No bookings, pricing or guest messaging, and no financial reporting — those
-belong to whoever manages the property. This produces the *operational* record
-that sits alongside their financial one.
-
 ---
 
 ## Project structure
 
 ```
 src/
-├── babylon/      # ALL Babylon code (no React): scene, camera, lighting, picking, floors…
-├── ha/           # Home Assistant: WebSocket, state store, service calls, history, cameras
-├── config/       # AppConfig, EntityMap, TeleportPoints, thresholds (persisted to localStorage)
-├── components/   # React UI: canvas, HUD, panels, teleport, settings, auth (profile gate)
-├── pages/        # Dashboard (the only route — Advanced Settings is a modal over it, not a separate page)
-├── fm/           # Facility Manager: engine, report builder, data context
+├── assets/       # Vendored binaries that must ship offline (the KTX2 transcoder)
 ├── auth/         # Profiles, PIN verification, RBAC permissions, superadmin elevation
-├── hooks/        # useHAEntity, useEntityLabel, useLongPress, useOptimisticToggle, usePendingAck…
+├── babylon/      # ALL Babylon code (no React): scene, camera, lighting, picking, floors…
+├── components/   # React UI: canvas, HUD, panels, teleport, settings, auth, cockpit, fm
+├── config/       # AppConfig, EntityMap, TeleportPoints, thresholds, device-config sync
+├── fm/           # Facility Manager: engine, report builder, data context
+├── ha/           # Home Assistant: WebSocket, state store, service calls, history, cameras
+├── hooks/        # useHAEntity, useEntityLabel, useLongPress, useOptimisticToggle…
+├── pages/        # Dashboard (the only route — every settings screen is a modal over it)
 ├── types/        # Shared TS types
-└── utils/        # colour, sun position, storage/backup, telemetry, geometry
+└── utils/        # colour, sun position, storage, telemetry, geometry, boot timeline
 ```
 
 The 3D scene never re-renders from React — HA state changes are pushed imperatively into Babylon via `HAStateStore.subscribeAll`, keeping the canvas and the React UI fully decoupled.
@@ -532,7 +505,14 @@ Long-press a floor button → the pinned "Manage rooms" chip → walk to the cor
 
 ### Render quality
 
-Render quality is fixed at the "high" look by design — no per-effect picker to fight with — but overall exposure, night dimming and the intensity of a lit fixture's glow (Settings, above) stay individually adjustable. The same three dials can be baked into the GLB itself via the [Blender pipeline](MODEL_PIPELINE.md) flags, so a villa can ship its own tuned defaults.
+Render quality is fixed at the "high" look by design — there is no per-effect
+picker to fight with — but three dials stay adjustable in Settings: overall
+exposure, night dimming, and how strongly a lit fixture glows.
+
+Those act on the *live* scene. The lighting actually baked into the GLB is set
+separately, by the [Blender pipeline](MODEL_PIPELINE.md)'s own flags (sun angle
+and strength, sky strength, day ambient, night fill and ambient), so a villa can
+ship a tuned look and the runtime dials then trim it per device.
 
 ---
 
@@ -550,4 +530,10 @@ Render quality is fixed at the "high" look by design — no per-effect picker to
 
 ## License
 
-Proprietary. All rights reserved — see [LICENSE](LICENSE). This repository is source-available for evaluation purposes only; no license to use, copy, modify, or distribute the Software is granted. Contact the copyright holder for licensing inquiries.
+Proprietary — all rights reserved. The full terms are in [`LICENSE`](LICENSE) at
+the repository root (a plain `LICENSE` file, not Markdown).
+
+Being able to read this source grants no rights over it: there is no permission
+to use, copy, modify, or distribute the software, and viewing the repository
+does not create a licence. `package.json` is marked `UNLICENSED` to keep tooling
+consistent with that. Contact the copyright holder for licensing enquiries.
