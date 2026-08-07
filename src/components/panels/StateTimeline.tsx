@@ -306,11 +306,12 @@ export default function StateTimeline({
               <>
                 <strong>{fmtChartTime(hover.cell.from)} – {fmtChartTime(hover.cell.to)}</strong>
                 {hover.cell.states.length === 0 ? (
-                  // Only the resting state here — say so plainly rather than
-                  // leaving an empty tip the user has to interpret.
+                  // Only the resting state here. The state alone IS the answer —
+                  // an added "nothing detected" only restates that no events are
+                  // listed beneath it.
                   <span className="spark-tip-event">
                     <span style={{ color: colorFor(hover.cell.baseline ?? "") }}>●</span>
-                    {" "}{prettyState(hover.cell.baseline ?? "")} · nothing detected
+                    {" "}{prettyState(hover.cell.baseline ?? "")}
                   </span>
                 ) : hover.cell.events.length === 0 ? (
                   // No transition landed here, so nothing "happened" — the bar

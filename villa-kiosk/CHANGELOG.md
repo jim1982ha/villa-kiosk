@@ -1,3 +1,9 @@
+## 2.132.1
+
+### Changed — dropped "nothing detected" from the camera bar's tooltip
+
+Hovering a quiet slice read "Online · nothing detected". The state alone already answers it: no events are listed underneath, and the slice is green rather than red. The suffix only restated both.
+
 ## 2.132.0
 
 ### Fixed — a healthy camera was painted the same colour as empty track
