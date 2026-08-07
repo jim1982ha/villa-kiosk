@@ -28,6 +28,32 @@ const POOL_TEXTURE_SIZE = 128;
  *  pool (each pool recolours it via its own material's emissive/alpha, not
  *  the texture itself, so one canvas draw serves the whole villa). */
 let sharedTexture: DynamicTexture | null = null;
+/** Alpha stops for the radial falloff, as (normalised radius, alpha) pairs —
+ *  the same three points a `ctx.createRadialGradient` gradient would have
+ *  used. Written out as data rather than a canvas gradient call: WebKit
+ *  (Safari, and therefore every iOS browser — Apple mandates WebKit there)
+ *  dithers canvas gradients to avoid 8-bit banding, which reads as visible
+ *  coloured speckle/confetti once this 128px texture is stretched across a
+ *  room-sized disc and additively blended — reported "especially on iOS"
+ *  because that dithering is WebKit-specific, Chromium's canvas gradients
+ *  don't do it. Computing alpha per-pixel ourselves is deterministic and
+ *  identical on every engine, so there's nothing left for any browser to add
+ *  noise to.
+ */
+const POOL_ALPHA_STOPS: ReadonlyArray<readonly [number, number]> = [
+  [0, 0.9], [0.45, 0.35], [1, 0],
+];
+function poolAlphaAt(normalisedDist: number): number {
+  for (let i = 0; i < POOL_ALPHA_STOPS.length - 1; i++) {
+    const [t0, a0] = POOL_ALPHA_STOPS[i];
+    const [t1, a1] = POOL_ALPHA_STOPS[i + 1];
+    if (normalisedDist <= t1) {
+      const t = t1 === t0 ? 0 : (normalisedDist - t0) / (t1 - t0);
+      return a0 + (a1 - a0) * t;
+    }
+  }
+  return 0;
+}
 function poolTexture(scene: Scene): DynamicTexture {
   // A model reload creates a fresh Scene — a texture cached from the OLD one
   // is invalid there, so only reuse the cache when it still belongs to the
@@ -35,13 +61,21 @@ function poolTexture(scene: Scene): DynamicTexture {
   if (sharedTexture && sharedTexture.getScene() === scene) return sharedTexture;
   const tex = new DynamicTexture("lightPoolGradient", POOL_TEXTURE_SIZE, scene, false);
   const ctx = tex.getContext() as unknown as CanvasRenderingContext2D;
-  const c = POOL_TEXTURE_SIZE / 2;
-  const grad = ctx.createRadialGradient(c, c, 0, c, c, c);
-  grad.addColorStop(0, "rgba(255,255,255,0.9)");
-  grad.addColorStop(0.45, "rgba(255,255,255,0.35)");
-  grad.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, POOL_TEXTURE_SIZE, POOL_TEXTURE_SIZE);
+  const size = POOL_TEXTURE_SIZE;
+  const c = size / 2;
+  const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dist = Math.min(1, Math.hypot(x - c, y - c) / c);
+      const alpha = poolAlphaAt(dist);
+      const idx = (y * size + x) * 4;
+      img.data[idx] = 255;
+      img.data[idx + 1] = 255;
+      img.data[idx + 2] = 255;
+      img.data[idx + 3] = Math.round(alpha * 255);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
   tex.update(false);
   tex.hasAlpha = true;
   sharedTexture = tex;

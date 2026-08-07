@@ -1,4 +1,13 @@
-## 2.142.0
+## 2.143.0
+
+### Fixed — coloured "confetti" speckle in a light's floor glow, especially on iOS
+
+Reported as: a warm circular glow under a lit fixture (the fake "light pool" a baked-lighting villa gets, since its structure ignores real dynamic lights by design — see `LightPools.ts`) showing visible multi-coloured speckle inside it, worse on iOS than elsewhere.
+
+`LightPools.ts` generated that glow's alpha falloff with a plain `ctx.createRadialGradient` on a 128px canvas. WebKit — Safari, and therefore every browser on iOS, since Apple requires all of them to use WebKit underneath — dithers canvas gradients to avoid 8-bit banding in the rasterised output. Stretched across a room-sized disc and additively blended onto the scene, that dithering reads as exactly the reported coloured noise; Chromium's canvas gradients don't do this, which is why it was worse on iOS specifically. KTX2 texture compression, Babylon's own (never-enabled) dithering pass, and a particle system were all checked and ruled out first — none are in use.
+
+Fixed by computing the gradient's alpha per pixel directly (`ctx.putImageData` from a manually-stepped 3-point falloff) instead of asking the browser to rasterise a gradient — deterministic, dither-free, and identical on every engine, so there's nothing left for any browser to add noise to.
+
 
 ### Fixed — the ACTUAL cause of the first-person movement freeze
 
