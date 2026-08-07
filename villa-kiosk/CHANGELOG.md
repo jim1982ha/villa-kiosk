@@ -1,3 +1,11 @@
+## 2.133.1
+
+### Changed — the copyright holder is no longer named in the repository
+
+The licence identified the holder by name, and `security.txt` published a personal address. Both are now anonymous: the licence attributes copyright to "the Villa Kiosk authors" and points enquiries at the repository's owner, and the security contact reuses the same forwarding alias `repository.yaml` already used.
+
+Removing the name does not weaken the licence. Copyright subsists on creation and is not conditional on a notice naming its owner, so every right the file reserves is reserved exactly as before — the licence now says so explicitly, to foreclose any reading of the omission as abandonment or a public-domain dedication.
+
 ## 2.133.0
 
 ### Changed — the detection ring now frames the picture, not the black bars

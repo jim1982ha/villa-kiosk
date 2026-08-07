@@ -1,8 +1,8 @@
-Copyright (c) 2026 Jim Goupil. All rights reserved.
+Copyright (c) 2026 the Villa Kiosk authors. All rights reserved.
 
 This software and associated documentation files (the "Software"), including
 its source code, assets, and accompanying documentation, are the proprietary
-and confidential property of Jim Goupil.
+and confidential property of its copyright holder.
 
 No license, right, or interest in the Software is granted to any person or
 entity by virtue of access to this repository. Specifically, and without
@@ -29,4 +29,10 @@ AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
 ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-For licensing inquiries, contact the copyright holder.
+The copyright holder is not identified in this file by choice; that omission
+neither dedicates the Software to the public domain nor waives, limits, or
+otherwise affects any right reserved above. Copyright subsists on creation and
+is not conditional on a notice naming its owner.
+
+For licensing enquiries, or to establish the identity of the copyright holder,
+contact the owner of the repository this file was obtained from.

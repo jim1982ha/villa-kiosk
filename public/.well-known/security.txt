@@ -2,6 +2,6 @@
 # Not a public product; this file exists purely for RFC 9116 compliance
 # (flagged by Cloudflare Security Insights) so a researcher who stumbles on
 # this host has a clear, correct way to report anything found.
-Contact: mailto:jim.goupil@gmail.com
+Contact: mailto:gi6zq1p6@anonaddy.com
 Expires: 2027-07-29T00:00:00.000Z
 Preferred-Languages: en
