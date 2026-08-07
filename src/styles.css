@@ -1,4 +1,4 @@
-/* Villa Kiosk — modern, bright theme. Plain CSS + custom properties only.
+/* Vesta Kiosk — modern, bright theme. Plain CSS + custom properties only.
  *
  * Theming is fully variable-driven. The default `:root` is the LIGHT palette;
  * `:root[data-theme="dark"]` overrides for dark; and `data-theme="auto"` follows

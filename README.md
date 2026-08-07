@@ -1,4 +1,4 @@
-# Villa Kiosk
+# Vesta Kiosk
 
 > Browser-based first-person 3D walkthrough of your villa, wired live to Home Assistant.
 

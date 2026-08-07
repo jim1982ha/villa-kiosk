@@ -188,7 +188,7 @@ export function buildReport(primary: CapturedError): string {
   const L: string[] = [];
   const push = (k: string, v: unknown) => L.push(`${k}: ${v}`);
 
-  L.push("Villa Kiosk — error report");
+  L.push("Vesta Kiosk — error report");
   L.push("==========================");
   push("When", new Date().toISOString());
   push("App version", typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "?");

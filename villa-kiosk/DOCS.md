@@ -1,4 +1,4 @@
-# Villa Kiosk
+# Vesta Kiosk
 
 A first-person 3D walkthrough of your villa, wired live to Home Assistant. Open
 it right in the HA sidebar through Ingress, **or** on the add-on's own hostname
@@ -9,10 +9,10 @@ Home Assistant UI around it — same single app either way.
 
 1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories** and add
    `https://github.com/jim1982ha/villa-kiosk`.
-2. The **Villa Kiosk** add-on appears in the store. Open it → **Install**
+2. The **Vesta Kiosk** add-on appears in the store. Open it → **Install**
    (it pulls a prebuilt image — no on-device build).
 3. Enable **Start on boot** + **Watchdog**, then **Start**.
-4. Click **Villa Kiosk** in the sidebar (or *Open Web UI*).
+4. Click **Vesta Kiosk** in the sidebar (or *Open Web UI*).
 
 ## First run
 

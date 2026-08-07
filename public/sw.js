@@ -1,4 +1,4 @@
-/* Villa Kiosk service worker.
+/* Vesta Kiosk service worker.
  *
  * Strategy:
  *  - HTML navigation (the unhashed app shell): NETWORK-FIRST with a cache

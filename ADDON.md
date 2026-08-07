@@ -1,4 +1,4 @@
-# 🧩 Run Villa Kiosk as a Home Assistant Add-on
+# 🧩 Run Vesta Kiosk as a Home Assistant Add-on
 
 This turns the kiosk into a **one-click add-on**. Open it in the HA sidebar
 (Ingress — HA handles auth and TLS), **or** publish its own port and open it on
@@ -37,10 +37,10 @@ That's it — every later push to `main` republishes the current `version`.
 
 1. **Settings → Add-ons → Add-on Store → ⋮ (top-right) → Repositories.**
 2. Paste `https://github.com/jim1982ha/villa-kiosk` and **Add**.
-3. The **Villa Kiosk** add-on now appears in the store. Open it → **Install**
+3. The **Vesta Kiosk** add-on now appears in the store. Open it → **Install**
    (a quick image pull — no compiling).
 4. Enable **Start on boot** + **Watchdog**, then **Start**.
-5. Click **Villa Kiosk** in the sidebar (or *Open Web UI*) — it connects
+5. Click **Vesta Kiosk** in the sidebar (or *Open Web UI*) — it connects
    automatically through the Supervisor proxy with **no URL or token to enter**,
    and no onboarding screens at all. Upload your villa's `.glb` (and its
    `.rooms.json` room-data sidecar) once from **Advanced Settings → 3D model

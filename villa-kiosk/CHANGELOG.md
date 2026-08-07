@@ -1,8 +1,23 @@
+## 2.134.0
+
+### Changed — the product presents as Vesta Kiosk throughout
+
+Every user-facing surface now carries the name consistently: the add-on and its sidebar entry, the installed PWA's name and window title, the browser tab, the default dashboard title, the Facility Manager's generated reports and spend statements, the error-report header, and the add-on store listing.
+
+**Internal identifiers are deliberately left alone, and must stay that way.** They are not branding — changing any of them silently breaks or discards something:
+
+- `slug: villa_kiosk` — Home Assistant keys the add-on's entire identity off this. A different slug is a *different add-on*: a fresh `/data` volume (losing the uploaded GLB, all Facility records and evidence photos, the telemetry ring and the session signing key), a new Ingress path, and no upgrade path from an existing install.
+- `ghcr.io/…/villa-kiosk-{arch}` — must match what CI publishes and what the registry actually serves.
+- `localStorage` keys (`villa-kiosk:config:v2`, `villa-kiosk:profile:v1`, and the rest) — renaming them orphans every device's stored configuration, resetting theme, per-device preferences, the shared-config baseline and the first-run state without telling anyone.
+- Service-worker cache names — renaming is survivable, but it forces every device to re-download the ~17 MB model for no benefit.
+
+The display name and these identifiers are independent by design, so the visible name can change again without touching any of them.
+
 ## 2.133.1
 
 ### Changed — the copyright holder is no longer named in the repository
 
-The licence identified the holder by name, and `security.txt` published a personal address. Both are now anonymous: the licence attributes copyright to "the Villa Kiosk authors" and points enquiries at the repository's owner, and the security contact reuses the same forwarding alias `repository.yaml` already used.
+The licence identified the holder by name, and `security.txt` published a personal address. Both are now anonymous: the licence attributes copyright to "the Vesta Kiosk authors" and points enquiries at the repository's owner, and the security contact reuses the same forwarding alias `repository.yaml` already used.
 
 Removing the name does not weaken the licence. Copyright subsists on creation and is not conditional on a notice naming its owner, so every right the file reserves is reserved exactly as before — the licence now says so explicitly, to foreclose any reading of the omission as abandonment or a public-domain dedication.
 

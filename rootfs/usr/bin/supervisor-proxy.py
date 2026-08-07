@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Token-injecting Supervisor proxy for the Villa Kiosk add-on.
+"""Token-injecting Supervisor proxy for the Vesta Kiosk add-on.
 
 The browser makes same-origin, *token-less* requests to this service — whether
 the kiosk is opened through the HA sidebar (Ingress) OR directly on the add-on's

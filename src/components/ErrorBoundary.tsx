@@ -23,7 +23,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error("[Villa Kiosk] render error:", error, info);
+    console.error("[Vesta Kiosk] render error:", error, info);
   }
 
   override render(): ReactNode {
