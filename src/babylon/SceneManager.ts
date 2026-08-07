@@ -18,6 +18,22 @@ import { Ray } from "@babylonjs/core/Culling/ray";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import "@babylonjs/loaders/glTF";
+// Side-effect only: patches Mesh.prototype's renderOutline/renderOverlay
+// setters (used by applyHighlight below, the blue "clickable" glow) so they
+// actually lazy-load Babylon's OutlineRenderer instead of silently doing
+// nothing. @babylonjs/core's full barrel used to pull this in for free; this
+// codebase's deep, tree-shaking-friendly imports do not — the same class of
+// gap as Scene.pickWithRay (Culling/ray) and beginDirectAnimation
+// (Animations/animatable) below and in CameraController.ts, both patched
+// onto a prototype by a sibling file TypeScript's types can't distinguish
+// from the one holding the class itself. Without this import,
+// `mesh.renderOutline = true` is a plain, inert property assignment: no
+// error, no outline, which is exactly why this bug passed every type check.
+import "@babylonjs/core/Rendering/outlineRenderer";
+// Side-effect only: patches AbstractMesh.prototype.createOrUpdateSubmeshesOctree
+// (used by applyStructure below) — same prototype-patch pattern as the import
+// just above.
+import "@babylonjs/core/Culling/Octrees/octreeSceneComponent";
 import { roomKey } from "@/config/roomKey";
 
 import { CameraController } from "./CameraController";
@@ -1633,6 +1649,32 @@ export class SceneManager {
       // Wall collisions are always on (the toggle was removed — you should
       // never walk through a wall); only shape/exclusion decides.
       m.checkCollisions = !isExcluded && (isExplicit || isWallShaped);
+
+      // --- Raycast/collision acceleration ---
+      // CameraController.followFloor() raycasts straight down against this
+      // same structural geometry on EVERY frame while walking (plus a second
+      // fallback raycast when the first misses), and Babylon's own built-in
+      // moveWithCollisions does an equivalent ray/triangle test for every
+      // collidable mesh — both against exactly the geometry
+      // EntityVisuals.surfaceBelowCache's own docstring measured as "a linear
+      // scan over a 1.4-million-triangle structure mesh with no picking
+      // octree", ~950ms worth at load time. That path gets away with it by
+      // caching each answer (a light fixture's position never moves); a
+      // walking camera can't cache a raycast whose answer changes every
+      // step, so the fix has to be the mesh's own acceleration structure
+      // instead — this is what was actually freezing the UI the instant
+      // first-person movement started (pure look-around never raycasts at
+      // all, which is why only walking hung). A submesh octree only helps a
+      // mesh with enough submeshes to spatially partition; on one with too
+      // few it is a no-op octree build at load and changes nothing at
+      // runtime, so it's safe to request unconditionally on every
+      // structural/collidable mesh above a trivial size rather than trying
+      // to guess which ones actually benefit.
+      if ((isPipelineStructure || m.checkCollisions) && m.getTotalVertices() > 1500) {
+        m.useOctreeForPicking = true;
+        m.useOctreeForCollisions = true;
+        m.createOrUpdateSubmeshesOctree();
+      }
 
       // --- Opacity ---
       // alpha > 0.5 → wall/furniture that bled alpha → force opaque.

@@ -1,4 +1,14 @@
-## 2.139.0
+## 2.140.0
+
+### Fixed — first-person movement freezing the UI, and "Clickable Glow" doing nothing
+
+Two bugs, both the same class of mistake, both invisible to `tsc`.
+
+**The freeze.** Reported as: camera look-around is smooth, but the instant first-person movement starts, the UI hangs. `CameraController.followFloor()` raycasts straight down every single rendered frame while walking, to keep the eye following the floor/stairs — against exactly the geometry `EntityVisuals`'s own probe-cache docstring had already measured as "a linear scan over a 1.4-million-triangle structure mesh with no picking octree" (~950ms of load-time cost, mitigated there by caching each fixture's answer once). A walking camera can't cache that raycast — the answer changes every step — so the cost lands on every frame instead of once. Pure look-around never raycasts at all, which is exactly why only movement hung. Fixed in `SceneManager.applyStructure()`: every structural/collidable mesh above a trivial size now gets `useOctreeForPicking`/`useOctreeForCollisions` enabled and a submesh octree built once at load, so both `followFloor()`'s raycasts and Babylon's own built-in `moveWithCollisions` get to prune geometry spatially instead of testing it linearly. Safe to apply broadly: a mesh without enough submeshes to benefit just costs one cheap unused octree build, not a runtime regression.
+
+**"Clickable Glow" doing nothing.** `applyHighlight()`'s blue outline+overlay (and the climate red outline it deliberately never fights over the same mesh property) both set `mesh.renderOutline`/`renderOverlay` — properties that only exist as functioning getters/setters because importing `@babylonjs/core/Rendering/outlineRenderer` patches them onto `Mesh.prototype` at module-load time. This codebase's tree-shaking-friendly deep imports don't pull that file in for free the way the old full `@babylonjs/core` barrel import used to, and nothing had ever imported it directly — the exact same class of gap this project already found and fixed once for `Scene.pickWithRay` (`Culling/ray`) and `beginDirectAnimation` (`Animations/animatable`), missed here because outline rendering wasn't part of that earlier audit. Without the import, `mesh.renderOutline = true` was a plain, inert property assignment — no error, no outline, and no way for a type-checker to notice. Fixed by adding the import to both files that touch the property (`SceneManager.ts`, `EntityVisuals.ts`), matching this project's existing per-file-imports-what-it-uses convention for prototype-patched Babylon APIs.
+
+
 
 ### Changed — the whole app's colour and headline typography now match the Vesta brand
 

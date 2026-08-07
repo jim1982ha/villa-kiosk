@@ -58,6 +58,12 @@ import { Material } from "@babylonjs/core/Materials/material";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
+// Side-effect only: patches the renderOutline/renderOverlay setters onto
+// Mesh.prototype (used below for the climate red outline). @babylonjs/core's
+// barrel used to pull this in for free; a deep import doesn't — see
+// SceneManager.ts's own copy of this import for the fuller explanation and
+// the sibling-file convention (Ray/beginDirectAnimation) this follows.
+import "@babylonjs/core/Rendering/outlineRenderer";
 import { AdvancedDynamicTexture } from "@babylonjs/gui/2D/advancedDynamicTexture";
 import { Rectangle } from "@babylonjs/gui/2D/controls/rectangle";
 import { TextBlock } from "@babylonjs/gui/2D/controls/textBlock";
