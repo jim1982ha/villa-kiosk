@@ -1,3 +1,15 @@
+## 2.177.0
+
+### Fixed — badges could still overlap in two cases the ring layout did not cover
+
+A badge is a rectangle, and the ring's clearance used its width alone — correct for a card badge (wider than tall) and wrong for the classic one (taller than wide), where two seats stacked vertically got 44px of room and needed 61. Clearance now uses the larger half-extent, which is safe at any seat angle.
+
+Two piles were also laid out independently, each checking its seats against the other's *anchors* — positions those badges no longer occupy once they are seated too. Piles are now laid out in a fixed order and checked against the seats already taken, so every pair of piles meets exactly once.
+
+### Changed — `/ship` now writes short changelog entries
+
+One or two lines per feature. Root-cause analysis belongs in code comments next to the code, not in a changelog someone is skimming.
+
 ## 2.176.0
 
 ### Fixed — two holes in the ring layout, found by re-checking it against the earlier reports

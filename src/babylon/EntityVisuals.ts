@@ -2893,13 +2893,27 @@ export class EntityVisuals {
     // both be read, and drawing one on top of the other hides a device
     // without saying so.
     this.roomClustered.clear();
+    // Piles are laid out one at a time, and a badge that has been seated is no
+    // longer where its anchor is — so a later pile has to be checked against
+    // the SEATS already taken, not against those badges' anchors. Doing it in a
+    // fixed order means every pair of piles is checked exactly once, when the
+    // later of the two is placed, and the outcome never depends on the order
+    // union-find happened to emit them in.
+    const mobile = new Array<boolean>(shown.length).fill(false);
     for (const members of piles) {
       if (members.length < 2) continue;
+      for (const i of members) mobile[i] = true;
+    }
+    const ordered = piles
+      .filter((m) => m.length >= 2)
+      .sort((a, b) => this.pileKey(shown, a).localeCompare(this.pileKey(shown, b)));
+    this.seatCount = 0;
+    for (const members of ordered) {
       // Open the pile out onto a ring, or — if no ring fits inside the travel
       // budget — hand the whole room over to its chip. spreadPile decides and
       // arranges in one calculation, so the two cannot disagree about whether
       // a pile fits, which is the hole every earlier version had.
-      if (this.spreadPile(shown, boxes, members, tm, vp)) continue;
+      if (this.spreadPile(shown, boxes, members, tm, vp, mobile)) continue;
       for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
     }
 
@@ -2952,6 +2966,24 @@ export class EntityVisuals {
    */
   private seatTmp = new Vector3();
   private seatOut = new Vector3();
+  /** Seats taken by piles already laid out THIS pass (world space), so a later
+   *  pile can be checked against where badges will actually be drawn rather
+   *  than where their anchors are. Grow-only, reset by seatCount each pass. */
+  private seatX: number[] = [];
+  private seatY: number[] = [];
+  private seatZ: number[] = [];
+  private seatHalfW: number[] = [];
+  private seatCount = 0;
+
+  /** Lowest entity_id in a pile — a stable name for it, so piles can be laid
+   *  out in a fixed order regardless of how union-find emitted them. */
+  private pileKey(shown: ShownLabel[], members: number[]): string {
+    let key = shown[members[0]].id;
+    for (let k = 1; k < members.length; k++) {
+      if (shown[members[k]].id < key) key = shown[members[k]].id;
+    }
+    return key;
+  }
 
   private spreadPile(
     shown: ShownLabel[],
@@ -2959,6 +2991,7 @@ export class EntityVisuals {
     members: number[],
     tm: Matrix,
     vp: Viewport,
+    mobile: boolean[],
   ): boolean {
     const n = members.length;
     const scale = this.iconUserScale * this.iconZoomScale;
@@ -2967,10 +3000,18 @@ export class EntityVisuals {
 
     // The widest clearance any pair in this pile needs. Neighbours on the ring
     // are the closest pairs, so satisfying the widest need satisfies all of it.
+    //
+    // max(halfW, halfH), not halfW: a badge is a rectangle and seats sit at
+    // arbitrary angles round the ring, so the only half-extent that is safe in
+    // EVERY direction is the larger one. Using the width alone was fine for a
+    // card badge, which is wider than it is tall, and wrong for the classic
+    // one, which is taller than it is wide — two of those seated one above the
+    // other were given 44px of room where they needed 61.
+    const halfOf = (i: number) => Math.max(boxes[i].halfW, boxes[i].halfH);
     let need = 0;
     for (let a = 0; a < n; a++) {
       for (let b = a + 1; b < n; b++) {
-        const w = boxes[members[a]].halfW * allow + boxes[members[b]].halfW * allow + gapPx;
+        const w = halfOf(members[a]) * allow + halfOf(members[b]) * allow + gapPx;
         if (w > need) need = w;
       }
     }
@@ -3024,10 +3065,19 @@ export class EntityVisuals {
       const sx = wcx + Math.cos(angle) * ringWorld;
       const sz = wcz + Math.sin(angle) * ringWorld;
       const self = shown[seated[k].i];
+      const mine = halfOf(seated[k].i) * allow;
       for (let j = 0; j < shown.length; j++) {
-        if (members.includes(j)) continue;
+        // A badge in ANOTHER pile is not at its anchor — it is at a seat, or it
+        // will be. Testing its anchor would compare against a position it never
+        // occupies, so it is skipped here and the two piles meet exactly once,
+        // below, when the later of them is laid out.
+        if (mobile[j] || members.includes(j)) continue;
         const d = Math.hypot(sx - shown[j].wx, self.wy - shown[j].wy, sz - shown[j].wz) * pxPerWorld;
-        if (d < boxes[seated[k].i].halfW * allow + boxes[j].halfW * allow + gapPx) return false;
+        if (d < mine + halfOf(j) * allow + gapPx) return false;
+      }
+      for (let q = 0; q < this.seatCount; q++) {
+        const d = Math.hypot(sx - this.seatX[q], self.wy - this.seatY[q], sz - this.seatZ[q]) * pxPerWorld;
+        if (d < mine + this.seatHalfW[q] + gapPx) return false;
       }
     }
 
@@ -3038,10 +3088,17 @@ export class EntityVisuals {
     for (let k = 0; k < n; k++) {
       const angle = turn + (k * 2 * Math.PI) / n;
       const s = shown[seated[k].i];
-      this.seatTmp.set(wcx + Math.cos(angle) * ringWorld, s.wy, wcz + Math.sin(angle) * ringWorld);
+      const sx = wcx + Math.cos(angle) * ringWorld;
+      const sz = wcz + Math.sin(angle) * ringWorld;
+      this.seatTmp.set(sx, s.wy, sz);
       Vector3.ProjectToRef(this.seatTmp, Matrix.IdentityReadOnly, tm, vp, this.seatOut);
       s.offX = this.seatOut.x - s.x;
       s.offY = this.seatOut.y - s.y;
+      this.seatX[this.seatCount] = sx;
+      this.seatY[this.seatCount] = s.wy;
+      this.seatZ[this.seatCount] = sz;
+      this.seatHalfW[this.seatCount] = halfOf(seated[k].i) * allow;
+      this.seatCount++;
     }
     return true;
   }
