@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
+  Sliders, Sun, Sunrise, Moon, MoonStar, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -116,6 +116,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
                 { key: "light", label: "Light theme", icon: Sun },
                 { key: "dark", label: "Dark theme", icon: Moon },
                 { key: "auto", label: "Auto (system) theme", icon: Monitor },
+                { key: "night", label: "Night theme — dimmer, warmer, for a bedroom-mounted tablet", icon: MoonStar },
               ] as const).map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}

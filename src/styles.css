@@ -1,11 +1,65 @@
-/* Vesta Kiosk — modern, bright theme. Plain CSS + custom properties only.
+/* Vesta Kiosk — VESTA brand theme. Plain CSS + custom properties only.
  *
- * Theming is fully variable-driven. The default `:root` is the LIGHT palette;
- * `:root[data-theme="dark"]` overrides for dark; and `data-theme="auto"` follows
- * the OS preference via a prefers-color-scheme media query. Every colour below is
- * expressed as a semantic variable so a whole theme swaps by redefining the block. */
+ * Theming is fully variable-driven: the default `:root` is the LIGHT palette,
+ * `:root[data-theme="dark"]` overrides for dark, `:root[data-theme="night"]`
+ * is a further-dimmed, warmer dark for a bedroom-mounted tablet after hours.
+ * "auto" is NOT a fourth CSS block — it can't be, because choosing night over
+ * plain dark needs the real sun position (ConfigContext.tsx resolves it in JS
+ * via utils/themeTime.ts and stamps the concrete data-theme value here reads).
+ * Every colour below is a semantic variable so a whole theme swaps by
+ * redefining one block; component CSS never hardcodes a colour.
+ *
+ * Self-hosted (never a Google Fonts link — see CLAUDE.md's offline rule):
+ * Jost for display/headlines/eyebrows, Public Sans for everything else. */
+
+@font-face { font-family: "Jost"; font-style: normal; font-weight: 400 600; font-display: swap; src: url("/fonts/jost-var.woff2") format("woff2"); }
+@font-face { font-family: "Public Sans"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/public-sans-var.woff2") format("woff2"); }
 
 :root {
+  /* Brand constants — identical in every theme. */
+  --ink: #17191A;
+  --green900: #14432A;
+  --green700: #1F5C33;
+  --green600: #2F6B4F;
+  --green500: #4C9A5E;
+  --green300: #8FC79B;
+  --green100: #DCEDE1;
+  --cream: #FBFAF5;
+  --base: #F7F4EE;
+  --paper: #FFFDF9;
+
+  --tracking-brand: 0.38em;
+  --tracking-eyebrow: 0.18em;
+  --tracking-label: 0.08em;
+  --tracking-tight: -0.01em;
+
+  --radius-badge: 12px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --elev-1: 0 1px 2px var(--shadow);
+  --elev-2: 0 4px 16px var(--shadow);
+  --elev-3: 0 18px 48px var(--shadow);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --stroke-icon: 1.5px;
+
+  /* Category hues — used ONLY when a device is active or alerting, never as
+     an always-on gradient (see EntityCategories.ts's categorySurface()). */
+  --cat-comfort: #B4643C;
+  --cat-light: #C08A2E;
+  --cat-network: #2F6B4F;
+  --cat-energy: #2E6E8F;
+  --cat-access-control: #6B5AA6;
+  --cat-others: #6E7B72;
+
   /* Not a light/dark concern — one shape constant for every standalone HUD
      "section" chip (icon buttons, the floor/rooms stack, the category
      group, the brand/title pill…), so they all read as the same family of
@@ -25,69 +79,16 @@
      top-level document and genuinely owns the inset). */
   --safe-top: env(safe-area-inset-top, 0px);
 
-  /* ---- Light theme (default) ---- */
-  /* Surfaces — warm cream, not cool blue-white (the villa's brand identity:
-     off-white paper tone, navy-and-forest-green accents, an elegant serif
-     for headlines — see --font-display below). */
-  --bg-base: #f7f4ee;
-  --bg-panel: rgba(255, 253, 248, 0.82);
-  --bg-overlay: rgba(255, 253, 248, 0.94);
-  /* Solid surface for every floating DIALOG (device panels, Settings, Config
-     Editor, the badge legend…) — deliberately opaque, unlike the HUD's own
-     "glass" chrome (.icon-btn/.hud-group/.hud-stack/.hud-menu etc., see
-     --bg-panel above), which stays translucent. A dialog reads as content
-     you're meant to read/edit, not a floating overlay you glance past. */
-  --bg-modal: #fffdf9;
-  --bg-card: rgba(255, 253, 248, 0.9);
-  --bg-input: rgba(33, 29, 23, 0.06);
-
-  /* Accents — forest green (the brand colour), not the old sky-blue. */
-  --accent: #2f6b4f;
-  --accent-strong: #1f5039;
-  --accent-warm: #d99a2b;
-  --accent-teal: #14b8a6;
-  /* Legacy alias so existing rules keep working. */
-  --accent-gold: var(--accent);
-
-  /* Text — warm charcoal, not cool slate, to sit on the cream surfaces above. */
-  --text-primary: #211d17;
-  --text-secondary: #5c574c;
-  --text-dim: #a39c8d;
-  --text-on-accent: #ffffff;
-
-  /* Status — an emerald distinct enough from the brand's forest-green accent
-     to still read as its own signal ("this device is on") rather than "this
-     is brand chrome", while staying in the same green family on purpose —
-     the source material uses green for both. */
-  --status-on: #2f8f5b;
-  --status-off: #d9d3c5;
-  --status-warning: #c17d1f;
-  --status-danger: #c23b2e;
-
-  /* Hairlines, scrims, chips, shadows — theme-aware neutrals, warm-toned. */
-  --hairline: rgba(33, 29, 23, 0.1);
-  --hairline-strong: rgba(33, 29, 23, 0.16);
-  --scrim: rgba(33, 29, 23, 0.25);
-  --scrim-strong: rgba(33, 29, 23, 0.45);
-  --chip-bg: rgba(255, 253, 248, 0.72);
-  --topbar-fade: rgba(255, 253, 248, 0.72);
-  --card-scrim: rgba(33, 29, 23, 0.55);
-  --shadow: rgba(33, 29, 23, 0.18);
-  --ring: var(--bg-base);
-
-  /* Typography */
-  /* An elegant serif for headlines (room titles, modal headings, the villa
-     name, panel titles) — every listed face is either preinstalled on every
-     target platform (iOS/iPadOS, macOS, Android, Windows) or a generic
-     fallback, so this stays a zero-fetch system font like --font-ui below,
-     never a webfont. Body/UI text is untouched — this is display-only. */
-  --font-display: Georgia, "Times New Roman", "Iowan Old Style", "Noto Serif", ui-serif, serif;
-  /* Native system font — San Francisco on every Apple device (iOS/iPadOS/
-     macOS), Roboto on Android, Segoe UI on Windows — rather than a shipped
-     webfont. Matches the platform's own UI type instead of reading as a
-     generic, imported look, and renders with zero webfont-fetch delay. */
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-    system-ui, "Segoe UI", Roboto, sans-serif;
+  /* Type */
+  /* Jost (self-hosted, @font-face above) for the wordmark, numerals, screen
+     headlines and eyebrows — never below 15px, always with tracking. Falls
+     back to Futura/Century Gothic (close geometric-sans cousins preinstalled
+     on macOS/iOS) rather than a serif if the woff2 hasn't painted yet. */
+  --font-display: "Jost", "Futura", "Century Gothic", ui-sans-serif, sans-serif;
+  /* Public Sans (self-hosted) for everything else — body text, table cells,
+     form labels, tracking 0. Falls back to the platform system font. */
+  --font-ui: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, ui-sans-serif, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* ---- Type scale ----
      One ladder, eight steps. This replaced 22 distinct hand-written px values
@@ -118,7 +119,7 @@
   --text-display-lg: 64px;
 
   /* Sizing */
-  --panel-radius: 16px;
+  --panel-radius: 18px;
   --panel-padding: 24px;
   --touch-min: 44px;
   /* Every top-bar chip/pill (.hud-brand, .hud-group) shares this height so the
@@ -137,94 +138,157 @@
      it, and a fourth surface should too rather than picking a fourth number. */
   --field-label-gap: 7px;
   --field-label-size: 13px;
+
+  /* ---- Light theme (default) ---- */
+  /* Surfaces — warm cream, not cool blue-white (the VESTA brand identity:
+     off-white paper tone, forest-green accent, Jost display type). */
+  --bg-base: #F7F4EE;
+  --bg-panel: rgba(255, 253, 248, 0.86);
+  --bg-overlay: rgba(255, 253, 248, 0.96);
+  /* Solid surface for every floating DIALOG (device panels, Settings, Config
+     Editor, the badge legend…) — deliberately opaque, unlike the HUD's own
+     "glass" chrome (.icon-btn/.hud-group/.hud-stack/.hud-menu etc., see
+     --bg-panel above), which stays translucent. A dialog reads as content
+     you're meant to read/edit, not a floating overlay you glance past. */
+  --bg-modal: #FFFDF9;
+  --bg-card: rgba(255, 253, 248, 0.92);
+  --bg-input: rgba(23, 25, 26, 0.05);
+
+  --accent: #2F6B4F;
+  --accent-strong: #1F5C33;
+  --accent-soft: #DCEDE1;
+  --accent-warm: #C08A2E;
+  --accent-teal: #14b8a6;
+
+  --text-primary: #17191A;
+  --text-secondary: #5A5F5B;
+  --text-dim: #9AA09B;
+  --text-on-accent: #FFFDF9;
+
+  --status-on: #34845A;
+  --status-off: #D8D3C7;
+  --status-warning: #B8801F;
+  --status-danger: #B24232;
+
+  --hairline: rgba(23, 25, 26, 0.10);
+  --hairline-strong: rgba(23, 25, 26, 0.18);
+  --scrim: rgba(23, 25, 26, 0.28);
+  --scrim-strong: rgba(23, 25, 26, 0.48);
+  --chip-bg: rgba(255, 253, 248, 0.76);
+  --topbar-fade: rgba(255, 253, 249, 0.76);
+  --card-scrim: rgba(23, 25, 26, 0.55);
+  --shadow: rgba(23, 25, 26, 0.16);
+  --ring: var(--bg-base);
 }
 
 /* Under HA Ingress, HA's own chrome already clears the Dynamic Island/notch
    — see --safe-top's own comment above. Not a light/dark concern, so this is
-   its own rule rather than folded into the dark-theme block below. */
+   its own rule rather than folded into the theme blocks below. */
 :root.vk-ingress { --safe-top: 0px; }
 
 /* ---- Dark theme (explicit) ---- */
 :root[data-theme="dark"] {
-  /* Same navy as the app icon/favicon (#12151b) — one dark value shared by
-     the brand mark, the manifest/theme-color meta, and the in-app dark theme
-     instead of three independently-chosen near-navies. */
-  --bg-base: #12151b;
-  --bg-panel: rgba(18, 21, 27, 0.82);
-  --bg-overlay: rgba(18, 21, 27, 0.94);
-  --bg-modal: #181c24;
-  --bg-card: rgba(28, 33, 43, 0.85);
-  --bg-input: rgba(200, 197, 188, 0.12);
+  --bg-base: #101311;
+  --bg-panel: rgba(16, 19, 17, 0.86);
+  --bg-overlay: rgba(16, 19, 17, 0.96);
+  --bg-modal: #171B18;
+  --bg-card: rgba(26, 31, 27, 0.88);
+  --bg-input: rgba(240, 238, 230, 0.10);
 
-  --accent: #4fae80;
-  --accent-strong: #3f9269;
-  --accent-warm: #e0ac4a;
+  --accent: #62B584;
+  --accent-strong: #4C9A5E;
+  --accent-soft: rgba(98, 181, 132, 0.16);
+  --accent-warm: #DFAB4D;
   --accent-teal: #2dd4bf;
-  --accent-gold: var(--accent);
 
-  --text-primary: #f4f1ea;
-  --text-secondary: #a8a296;
-  --text-dim: #6b6659;
-  --text-on-accent: #08150f;
+  --text-primary: #F1EFE8;
+  --text-secondary: #A5AAA3;
+  --text-dim: #6C726B;
+  --text-on-accent: #0B1710;
 
-  --status-on: #3ecb84;
-  --status-off: #3a3f36;
-  --status-warning: #f0b429;
-  --status-danger: #f2685c;
+  --status-on: #4FC07E;
+  --status-off: #333833;
+  --status-warning: #E0A93A;
+  --status-danger: #E2685A;
 
-  --hairline: rgba(200, 197, 188, 0.14);
-  --hairline-strong: rgba(200, 197, 188, 0.26);
-  --scrim: rgba(8, 9, 12, 0.5);
-  --scrim-strong: rgba(8, 9, 12, 0.72);
-  --chip-bg: rgba(18, 21, 27, 0.6);
-  --topbar-fade: rgba(8, 9, 12, 0.7);
-  --card-scrim: rgba(8, 9, 12, 0.85);
-  --shadow: rgba(0, 0, 0, 0.5);
+  --hairline: rgba(241, 239, 232, 0.12);
+  --hairline-strong: rgba(241, 239, 232, 0.24);
+  --scrim: rgba(4, 6, 5, 0.55);
+  --scrim-strong: rgba(4, 6, 5, 0.78);
+  --chip-bg: rgba(16, 19, 17, 0.64);
+  --topbar-fade: rgba(16, 19, 17, 0.72);
+  --card-scrim: rgba(4, 6, 5, 0.85);
+  --shadow: rgba(0, 0, 0, 0.55);
+
+  --cat-comfort: #D98A5C;
+  --cat-light: #DFAB4D;
+  --cat-network: #62B584;
+  --cat-energy: #5AA3C9;
+  --cat-access-control: #9B8AD4;
+  --cat-others: #93A199;
   --ring: var(--bg-base);
 }
 
-/* ---- Auto theme (follows the OS) ---- */
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="auto"] {
-    --bg-base: #12151b;
-    --bg-panel: rgba(18, 21, 27, 0.82);
-    --bg-overlay: rgba(18, 21, 27, 0.94);
-    --bg-modal: #181c24;
-    --bg-card: rgba(28, 33, 43, 0.85);
-    --bg-input: rgba(200, 197, 188, 0.12);
+/* ---- Night theme (explicit; also what "auto" resolves to overnight — see
+   utils/themeTime.ts) ---- Lower luminance than dark, warmer, no pure white
+   anywhere: a wall tablet mounted in a bedroom must not act as a lamp. */
+:root[data-theme="night"] {
+  --bg-base: #0A0C0A;
+  --bg-panel: rgba(10, 12, 10, 0.90);
+  --bg-overlay: rgba(10, 12, 10, 0.97);
+  --bg-modal: #0F120F;
+  --bg-card: rgba(18, 21, 18, 0.90);
+  --bg-input: rgba(201, 196, 182, 0.07);
 
-    --accent: #4fae80;
-    --accent-strong: #3f9269;
-    --accent-warm: #e0ac4a;
-    --accent-teal: #2dd4bf;
-    --accent-gold: var(--accent);
+  --accent: #3E7F5C;
+  --accent-strong: #2F6B4F;
+  --accent-soft: rgba(62, 127, 92, 0.14);
+  --accent-warm: #A87C2A;
+  --accent-teal: #24997e;
 
-    --text-primary: #f4f1ea;
-    --text-secondary: #a8a296;
-    --text-dim: #6b6659;
-    --text-on-accent: #08150f;
+  --text-primary: #C9C4B6;
+  --text-secondary: #7E837B;
+  --text-dim: #565B55;
+  --text-on-accent: #0A0C0A;
 
-    --status-on: #3ecb84;
-    --status-off: #3a3f36;
-    --status-warning: #f0b429;
-    --status-danger: #f2685c;
+  --status-on: #3E8F62;
+  --status-off: #23261F;
+  --status-warning: #A87C2A;
+  --status-danger: #A4483C;
 
-    --hairline: rgba(200, 197, 188, 0.14);
-    --hairline-strong: rgba(200, 197, 188, 0.26);
-    --scrim: rgba(8, 9, 12, 0.5);
-    --scrim-strong: rgba(8, 9, 12, 0.72);
-    --chip-bg: rgba(18, 21, 27, 0.6);
-    --topbar-fade: rgba(8, 9, 12, 0.7);
-    --card-scrim: rgba(8, 9, 12, 0.85);
-    --shadow: rgba(0, 0, 0, 0.5);
-    --ring: var(--bg-base);
-  }
+  --hairline: rgba(201, 196, 182, 0.10);
+  --hairline-strong: rgba(201, 196, 182, 0.18);
+  --scrim: rgba(0, 0, 0, 0.62);
+  --scrim-strong: rgba(0, 0, 0, 0.85);
+  --chip-bg: rgba(10, 12, 10, 0.70);
+  --topbar-fade: rgba(10, 12, 10, 0.78);
+  --card-scrim: rgba(0, 0, 0, 0.85);
+  --shadow: rgba(0, 0, 0, 0.7);
+
+  --cat-comfort: #D98A5C;
+  --cat-light: #DFAB4D;
+  --cat-network: #62B584;
+  --cat-energy: #5AA3C9;
+  --cat-access-control: #9B8AD4;
+  --cat-others: #93A199;
+  --ring: var(--bg-base);
 }
 
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Every lucide-react icon in the app, standardised on ONE stroke weight
+   (VESTA-DESIGN.md §1.3) — a CSS override of the `stroke-width` PRESENTATION
+   ATTRIBUTE lucide renders (stroke-width="2" by default), not a change to
+   every call site's own `size` (which stays per-instance: 20 default, 24 in
+   the top bar, 18 inside chips). CSS always wins over a presentation
+   attribute, so this one rule is the single source of truth instead of a
+   strokeWidth={1.5} prop repeated at every one of the app's icon usages.
+   strokeLinecap/strokeLinejoin round and fill:none are already lucide's own
+   defaults — nothing here overrides those. */
+svg.lucide { stroke-width: var(--stroke-icon); }
 
 /* `hidden` means hidden, whatever else claims otherwise.
 
@@ -339,7 +403,8 @@ button {
 .icon-btn, .hud-group, .hud-stack, .hud-brand, .hud-menu,
 .room-label, .service-toast, .joystick-base {
   background: var(--bg-panel);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(20px) saturate(1.1);
+  box-shadow: var(--elev-2);
 }
 
 /* Every HUD *section* (a container grouping controls) shares ONE glass level —
@@ -376,6 +441,16 @@ button {
 }
 /* Lit state for toggle / open icon buttons (view mode, display toggles, menus). */
 .icon-btn.active { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
+/* Category filter row (HUD.tsx's .hud-center): a soft accent tint, not a
+   solid fill or a per-category gradient — VESTA-DESIGN.md §1.6. These are
+   FILTERS (is this category shown at all), not category-coloured badges, so
+   they use the app's one accent regardless of which category they toggle;
+   the map badges are what carry each category's own hue (see
+   config/EntityCategories.categorySurface), only once a device in it is
+   actually active or alerting. */
+.hud-center .icon-btn.active {
+  background: var(--accent-soft); color: var(--accent); border-color: transparent;
+}
 /* Unavailable-devices button (HUD category row): quiet at zero, red the
    instant something's offline — same colour language as the map badge ring
    and the status pill's "Unavailable" state, so it reads as the same signal. */
@@ -484,7 +559,7 @@ button {
      before it can get that tight. */
   white-space: nowrap; min-width: 0; overflow: hidden;
 }
-.hud-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hud-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; letter-spacing: var(--tracking-tight); }
 .hud-brand svg { color: var(--accent); flex: 0 0 auto; }
 .hud-center { justify-self: center; display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%; }
 .hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
@@ -578,7 +653,7 @@ button {
 /* Time sits inside the brand chip, right of the villa name — a hairline
    divider separates it instead of a nested pill-in-pill. */
 .hud-clock {
-  font-variant-numeric: tabular-nums; font-size: var(--text-md); font-weight: 600;
+  font-variant-numeric: tabular-nums; font-size: var(--text-md); font-weight: 400;
   color: var(--text-secondary);
   padding-left: 10px; margin-left: 2px; border-left: 1px solid var(--hairline);
 }
@@ -815,9 +890,9 @@ button {
      of only fixing which layer wins it. Bar stays scrollable (overflow-x)
      for whatever tiles don't fit in what's left. */
   max-width: min(calc(99vw - 160px), 1900px);
-  padding: 6px; border-radius: 22px;
-  backdrop-filter: blur(8px); /* background: shared HUD-section glass, above */
-  border: 1px solid var(--hairline); box-shadow: 0 8px 28px var(--shadow);
+  padding: 6px; border-radius: var(--panel-radius);
+  backdrop-filter: blur(20px) saturate(1.1); /* background: shared HUD-section glass, above */
+  border: 1px solid var(--hairline); box-shadow: var(--elev-2);
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
 }
 /* Tablet-class touch device (iPad, not a phone — the phone-width rule further
@@ -836,45 +911,50 @@ button {
 .summary-bar::-webkit-scrollbar { display: none; }
 .summary-scene { display: flex; }
 
+/* Tiles are flush against each other, separated by a hairline divider
+   (VESTA-DESIGN.md §1.6) rather than each being its own floating card —
+   the BAR is the one floating surface (see .summary-bar above); a tile is
+   just a section of it. */
 .summary-tile {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: 13px;
   min-width: 116px; max-width: 260px;
-  padding: 6px 16px 6px 10px; border-radius: 16px;
-  border: 1px solid var(--hairline); background: var(--bg-card);
+  padding: 6px 16px 6px 10px; border-radius: 10px;
+  background: transparent; border: none;
   color: var(--text-primary); text-align: left; cursor: pointer;
-  transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease;
 }
-.summary-tile:hover:not(:disabled) { transform: translateY(-1px); background: var(--bg-overlay); }
-.summary-tile:active:not(:disabled) { transform: translateY(0); }
+.summary-tile:not(:last-child) { border-right: 1px solid var(--hairline); }
+.summary-tile:hover:not(:disabled) { background: var(--bg-input); }
 .summary-tile.is-info, .summary-tile:disabled { cursor: default; }
 .summary-tile:disabled { opacity: 0.9; }
 
 .summary-tile-icon {
   display: flex; align-items: center; justify-content: center;
   width: 46px; height: 46px; flex: 0 0 auto; border-radius: 13px;
-  /* Gradient icon square — same categoryGradient() as the top-bar chips and
-     the 3D badges (fallback keeps a solid fill if the var is ever unset). */
-  color: #fff; background: var(--tile-grad, var(--tile-accent, var(--accent)));
+  /* State-driven fill/glyph — same categorySurface() as the 3D badges
+     (fallback keeps a neutral look if the var is ever unset). */
+  color: var(--tile-glyph, var(--text-secondary));
+  background: var(--tile-fill, var(--bg-input));
 }
 .summary-tile-icon svg { width: 24px; height: 24px; }
 .summary-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.18; gap: 1px; }
 .summary-tile-label {
-  font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary);
-  text-transform: uppercase; letter-spacing: 0.02em;
+  font-size: var(--text-2xs); font-weight: 500; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: var(--tracking-label);
 }
 .summary-tile-value {
-  font-size: var(--text-lg); font-weight: 600; color: var(--text-primary);
+  font-family: var(--font-display); font-size: var(--text-lg); font-weight: 500; color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* The icon chip ALWAYS carries its device category's colour (var(--tile-accent),
-   set per tile from CATEGORY_COLORS) so the bar reads as a category legend —
-   AC is comfort-coral whether on or off, Pool is energy-blue, etc. On/off state
-   is conveyed by the value text + a subtle border, NOT by recolouring the icon
-   grey (which made an "off" tile look like an unrelated category). */
-.summary-tile.tone-on { border-color: color-mix(in srgb, var(--tile-accent) 50%, transparent); }
-.summary-tile.tone-warn { border-color: var(--status-warning); } /* alert cue (unlocked, high energy) */
+/* Neutral by default (VESTA-DESIGN.md §0): the icon chip only takes its
+   category's hue once the tile itself reports "on" — see the Tile
+   component's categorySurface() call, which also sets --tile-ring for this
+   accent. An inset underline rather than a full border, so it reads as a
+   status cue on the flush tile rather than reintroducing a per-tile card. */
+.summary-tile.tone-on { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--accent)); }
+.summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--status-warning); } /* alert cue (unlocked, high energy) */
 .summary-tile.tone-off .summary-tile-value { color: var(--text-secondary); }
 
 /* Scene pop-up picker (portaled to <body>, anchored above the Scene tile). */
@@ -1095,11 +1175,6 @@ button {
 .panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
 /* Real map badge shown in the panel header. As a button it's a colour editor. */
 .panel-icon .panel-badge-img, .panel-badge-btn .panel-badge-img { width: 44px; height: 44px; display: block; border-radius: 12px; }
-/* Same red alert ring the map badge shows for an active/alerting device (a
-   camera whose linked motion sensor is on) — see PanelActionsContext's
-   badge.alertRing. Outline, not a recolour, so the badge's own category
-   colour/glyph stay exactly as on the map. */
-.panel-badge-img.is-alert { box-shadow: 0 0 0 3px var(--status-danger); }
 .panel-badge-btn { position: relative; padding: 0; border: none; background: none; cursor: pointer; flex-shrink: 0; border-radius: 12px; line-height: 0; }
 .panel-badge-btn:hover { filter: brightness(1.05); }
 .panel-badge-btn::after {
@@ -1160,16 +1235,17 @@ button {
 /* --- Sliders --- */
 input[type="range"] {
   -webkit-appearance: none; appearance: none;
-  width: 100%; height: 8px; border-radius: 999px;
+  width: 100%; height: 4px; border-radius: var(--radius-pill);
   background: var(--bg-input); outline: none;
 }
 input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
-  background: var(--accent); cursor: pointer; border: 3px solid var(--ring);
+  -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--bg-modal); cursor: pointer; border: 1px solid var(--hairline-strong);
+  box-shadow: var(--elev-1);
 }
 input[type="range"]::-moz-range-thumb {
-  width: 28px; height: 28px; border-radius: 50%; background: var(--accent);
-  cursor: pointer; border: 3px solid var(--ring);
+  width: 20px; height: 20px; border-radius: 50%; background: var(--bg-modal);
+  cursor: pointer; border: 1px solid var(--hairline-strong); box-shadow: var(--elev-1);
 }
 
 /* --- Big toggle (lights/fans) --- */
@@ -1489,11 +1565,11 @@ input[type="range"]::-moz-range-thumb {
 .modal {
   width: 100%; max-width: 520px; max-height: 90vh;
   background: var(--bg-modal);
-  border-radius: 24px;
+  border-radius: var(--panel-radius);
   border: 1px solid var(--hairline);
   display: flex; flex-direction: column; overflow: hidden;
   box-shadow:
-    0 32px 80px -12px var(--shadow),
+    var(--elev-3),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
   /* Every dialog in the app used to appear INSTANTLY — no transition at all,
      while smaller things around it (the radial room menu, the room label, tap
@@ -1519,7 +1595,7 @@ input[type="range"]::-moz-range-thumb {
    instead: same var(--font-display) family as the entity-panel title below,
    but an accidental, UA-dependent size next to that title's deliberately
    tuned one, which read as "two different fonts" even though it never was. */
-.modal h2 { font-family: var(--font-display); font-weight: 600; font-size: var(--text-xl); margin: 0; letter-spacing: -0.01em; }
+.modal h2 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-xl); margin: 0; letter-spacing: var(--tracking-tight); }
 .modal .sub { color: var(--text-secondary); margin: 0 0 22px; }
 .modal label { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin: 14px 0 6px; }
 .modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: var(--text-md); }
@@ -1593,7 +1669,7 @@ input[type="range"]::-moz-range-thumb {
 .settings-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; background: var(--bg-overlay); }
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
-.settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin: 22px 0 8px; font-weight: 600; }
+.settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-dim); margin: 24px 0 12px; font-weight: 600; }
 /* The collapsible variant (ConfigEditorModal's auto-detected-entities /
    device-telemetry sections) — same label typography, made clickable. Reset
    to a plain full-width row (buttons carry their own background/border/
@@ -1639,15 +1715,19 @@ input[type="range"]::-moz-range-thumb {
   .legend-grid { grid-template-columns: 1fr; }
 }
 
-/* Segmented control (used for the Light / Dark / Auto theme selector). */
-.segmented { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg-input); }
+/* Segmented control (used for the Light / Dark / Auto / Night theme selector
+   and others). One --bg-input track, pill-shaped; the selected segment lifts
+   off it as a plain --bg-modal chip, NOT a solid accent block — three green
+   blocks per screen used to compete with each other and with the app's real
+   accent moments (VESTA-DESIGN.md §1.7). */
+.segmented { display: flex; gap: 4px; padding: 4px; border-radius: var(--radius-pill); background: var(--bg-input); }
 .segmented button {
   flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 7px;
-  min-height: 40px; border-radius: 9px; font-size: var(--text-base); font-weight: 500;
-  color: var(--text-secondary); transition: background 0.15s, color 0.15s;
+  min-height: 40px; border-radius: var(--radius-pill); font-size: var(--text-base); font-weight: 500;
+  color: var(--text-secondary); transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
 .segmented button svg { flex: 0 0 auto; }
-.segmented button.active { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+.segmented button.active { background: var(--bg-modal); color: var(--text-primary); font-weight: 600; box-shadow: var(--elev-1); }
 
 /* Icon-only variant (theme selector in the Settings header): compact, not
    full-width, square buttons — the Sun/Moon/Monitor glyphs are self-explanatory. */

@@ -77,7 +77,8 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
-import { effectiveCategory, CATEGORY_COLORS } from "@/config/EntityCategories";
+import { effectiveCategory, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
+import { classifyDeviceActivity } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable } from "@/utils/stateColors";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -261,10 +262,10 @@ const CARD_HEIGHT_PX = 34;         // the card's own height (also the gradient
 const CARD_LABEL_HEIGHT_PX = 40;   // container height (card + a little clearance)
 const CARD_PAD_LEFT_PX = 4;        // extra LEFT breathing room (the baked inset
                                    // alone would leave it as tight as the top)
-// The card is filled with the entity's CATEGORY colour (or per-entity
-// override) — a solid coloured card carrying the GRADIENT squircle icon
-// (badgeImageDataUrl, whose lighter top + white glyph + drop shadow keep it
-// legible on the same-family colour) and white text.
+// The card is filled from categorySurface's state-driven colour (neutral by
+// default, category- or danger-tinted only when active/alerting — see
+// VESTA-DESIGN.md §0), carrying the baked squircle icon (badgeImageDataUrl,
+// whose glyph stroke matches that same state) and white text.
 const CARD_TEXT = "#f8fafc";
 
 // Entity types compactValue() can EVER return non-empty text for — must stay
@@ -435,8 +436,8 @@ const FAN_GAP_PX = 6;
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
 /** Neutral slate — NOT the app's own sky-blue accent (tried first: read as
- *  belonging to the Energy category, whose badge colour is that same blue —
- *  see CATEGORY_COLORS.energy — a room summary shouldn't look like a device
+ *  belonging to the Energy category, whose active-state hue is that same
+ *  blue — see categoryColor("energy") — a room summary shouldn't look like a device
  *  category), and lighter than the translucent near-black tried before that
  *  (read as "just black" at a glance). Deliberately outside every category
  *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
@@ -482,17 +483,14 @@ interface ShownLabel {
 
 // Status/enum SENSOR states (a text sensor like an AP's connectivity state).
 // NOMINAL = "all good, nothing to report" — its value is hidden (the badge is
-// already category-coloured, so "Connected" is just clutter). ALERT = a known
-// bad state — its value stays SHOWN and the badge rings red (see badgeKind),
-// so a real change is never silently swallowed. An unrecognised enum value
-// (e.g. a weather "sunny") is neither: it's shown, un-ringed, as before.
+// neutral by default, so "Connected" is just clutter). ALERT states (which
+// drive the badge ring — see utils/deviceActivity's SENSOR_ALERT_STATES,
+// shared with badgeKind below) are the mirror image: their value stays
+// SHOWN, so a real change is never silently swallowed. An unrecognised enum
+// value (e.g. a weather "sunny") is neither: it's shown, un-ringed, as before.
 const SENSOR_NOMINAL_STATES = new Set([
   "connected", "online", "ok", "okay", "normal", "nominal", "available",
   "ready", "clear", "operational", "up", "good", "healthy", "active",
-]);
-const SENSOR_ALERT_STATES = new Set([
-  "disconnected", "offline", "error", "fault", "faulted", "failed", "fail",
-  "unreachable", "down", "disabled", "problem", "alarm", "tripped",
 ]);
 
 // Pulse animation speed in radians per second (was 0.06 per frame at ~60 fps).
@@ -549,27 +547,24 @@ interface ClusterControls {
   entityIds: string[];
 }
 
-/** A live state distilled to one of the visual kinds the badge outline colour-codes. */
+/** A live state distilled to one of the visual kinds the badge colour-codes. */
 type BadgeKind = "on" | "off" | "alert" | "info" | "unavailable";
 
-// Badge outline palette. The squircle's own fill is now FIXED per category
-// (see config/EntityCategories.CATEGORY_COLORS + badgeIcons.ts) — it never
-// recolours with live state. State instead shows as a ring around the
-// squircle in ONE colour: the shared ALERT_RED (colors.ts) — the same red
-// as a running climate unit's mesh outline (applyClimateOutline) and the
-// room-presence floor glow (RoomHighlight). ANY active device ("on") and
-// any alerting one ("alert") get that ring, whatever its category — "on"
-// used to be a separate amber that read as a different signal (and was
-// near-invisible on the orange comfort badges). Off and purely-
-// informational sensors get no ring at all; unavailable dims the whole
-// badge instead (no ring makes sense for a device that isn't reporting).
-const BADGE_RING: Record<BadgeKind, { color: string | null; alpha: number }> = {
-  on: { color: ALERT_RED_HEX, alpha: 1 },
-  alert: { color: ALERT_RED_HEX, alpha: 1 },
-  info: { color: null, alpha: 1 },
-  off: { color: null, alpha: 1 },
-  unavailable: { color: null, alpha: 0.5 },
+// Maps the 5-way live-state classification above onto the 4-row surface
+// table VESTA-DESIGN.md §0 defines (config/EntityCategories.categorySurface,
+// consumed by badgeIcons.ts's baked squircle): "on" is that table's
+// "active"; "info" (a plain reading with no on/off concept — e.g. a
+// temperature sensor) reads as "off" — neutral, since nothing is actively
+// happening. The squircle's fill/glyph/ring all now come from this one
+// state, replacing the old "fixed category fill + separate red ring" split.
+const SURFACE_STATE: Record<BadgeKind, DeviceSurfaceState> = {
+  on: "active", alert: "alert", info: "off", off: "off", unavailable: "unavailable",
 };
+// The "card" badge style's own Rectangle is a solid fill (not baked pixels —
+// see updateLabel), so IT still needs an explicit border for its ring;
+// Babylon GUI has no dashed-border support, so its unavailable ring falls
+// back to the same solid thickness as active/alert — a small, deliberate
+// degradation from the classic badge's baked (genuinely dashed) ring.
 const BADGE_RING_THICKNESS = 3;
 
 export class EntityVisuals {
@@ -2469,8 +2464,9 @@ export class EntityVisuals {
       // `badge` is the single tappable region either way (badgeContaining
       // hit-tests it) — classic: a transparent squircle whose fill is the
       // composited category+glyph image, showing state as an outline ring.
-      // card: a SOLID category-coloured rounded card holding an icon chip +
-      // value inline (its fill/ring are driven in updateLabel).
+      // card: a SOLID state-coloured rounded card (neutral by default, see
+      // categorySurface) holding an icon chip + value inline (its fill/ring
+      // are driven in updateLabel).
       const badge = new Rectangle(`lbl_badge_${entityId}`);
       badge.height = `${card ? CARD_HEIGHT_PX : BADGE_DIAMETER_PX}px`;
       badge.cornerRadius = (card ? CARD_HEIGHT_PX : BADGE_DIAMETER_PX) * BADGE_CORNER_FRACTION;
@@ -2481,7 +2477,7 @@ export class EntityVisuals {
       // with NO card at all — reading as "this badge ignores the card style".
       // updateLabel re-applies the same value whenever a state does arrive.
       badge.background = card
-        ? (this.config.entityMap[entityId]?.badgeColor ?? CATEGORY_COLORS[category].bottom)
+        ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).fill
         : "transparent";
       badge.shadowColor = "rgba(0,0,0,0.55)";
       badge.shadowBlur = 6;
@@ -2511,13 +2507,13 @@ export class EntityVisuals {
         badge.addControl(row);
       }
 
-      // BOTH styles use the SAME gradient squircle image (badgeImageDataUrl) —
-      // the app's one gradient icon square. The card just bakes an inset so the
-      // squircle sits padded on its neutral card; the classic badge fills its
-      // own control (inset 0). Its baked-in margin also supplies the card's
-      // icon↔value gap and top/bottom/left padding.
+      // BOTH styles use the SAME baked squircle image (badgeImageDataUrl) —
+      // the app's one state-coloured icon square. The card just bakes an
+      // inset so the squircle sits padded on its neutral card; the classic
+      // badge fills its own control (inset 0). Its baked-in margin also
+      // supplies the card's icon↔value gap and top/bottom/left padding.
       const glyph = new Image(`lbl_glyph_${entityId}`,
-        badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)),
+        badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)), "off",
           this.config.entityMap[entityId]?.badgeColor, card ? BADGE_INSET_CARD : 0));
       const glyphPx = card ? CARD_HEIGHT_PX : BADGE_DIAMETER_PX;
       glyph.width = `${glyphPx}px`;
@@ -2618,41 +2614,38 @@ export class EntityVisuals {
       entityId, type, this.config.entityMap[entityId]?.category,
       entity.attributes.device_class as string | undefined);
     const kind = this.badgeKind(type, entity);
-    const ring = BADGE_RING[kind];
+    const state = SURFACE_STATE[kind];
     const iconKey = iconKeyFor(type, entity);
     const override = this.config.entityMap[entityId]?.badgeColor;
 
-    // UNAVAILABLE fades the glyph itself — baked into its PIXELS (see
-    // badgeIcons' DIM_ALPHA), not applied via the Babylon GUI Control's own
-    // `.alpha`. That property only cascades from a Rectangle to its child
-    // Image when BOTH explicitly set their own alpha (an internal Babylon
-    // behaviour this file can't unit-test), so relying on it here was
-    // fragile and — for at least one confirmed case — rendered a fully
-    // opaque, undimmed badge instead of a faded one. A baked-in-pixels fade
-    // can't fail to render regardless of any Control-alpha subtlety.
-    const dim = kind === "unavailable";
+    // Neutral-by-default state (fill/glyph/ring) now IS the unavailable
+    // signal (a muted glyph + dashed amber ring, see categorySurface) — no
+    // extra whole-badge alpha wash needed, unlike the old always-on-gradient
+    // design which had to dim the fixed category colour to show "not
+    // reporting" some other way.
     lbl.glyph.alpha = 1; // never set elsewhere now — no cascading ambiguity
 
     if (this.config.badgeStyle === "card") {
-      // CATEGORY-COLOURED card (or per-entity override) + the GRADIENT squircle
-      // glyph (the app's one gradient icon square). The card's own solid fill
-      // is a plain colour (not baked pixels), so IT still uses badge.alpha
-      // below — a Rectangle dimming its own direct fill has no children to
-      // cascade through, so that specific case is safe.
-      lbl.badge.background = override ?? CATEGORY_COLORS[lbl.category].bottom;
-      lbl.badge.thickness = ring.color ? BADGE_RING_THICKNESS : 0;
-      lbl.badge.color = ring.color ?? "transparent";
-      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, override, BADGE_INSET_CARD, dim);
+      // The card's own solid fill and ring both come straight from
+      // categorySurface — neutral by default, coloured only when active or
+      // alerting (VESTA-DESIGN.md §0). The card's fill is a plain colour
+      // (not baked pixels), so it's set directly here; the glyph image below
+      // bakes the SAME state so its stroke colour agrees with the card.
+      const surface = categorySurface(lbl.category, state, override);
+      lbl.badge.background = surface.fill;
+      lbl.badge.thickness = surface.ring ? BADGE_RING_THICKNESS : 0;
+      lbl.badge.color = surface.ring ?? "transparent";
+      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, state, override, BADGE_INSET_CARD);
     } else {
-      // The squircle's own fill never changes — only this outline ring (state)
-      // and the glyph (device type / device_class, honouring live device_class
-      // for the two catch-all domains) do.
+      // Classic style bakes fill + ring straight into the glyph image itself
+      // (see badgeIcons.ts) — the wrapping Rectangle stays a plain
+      // transparent hit-target, not a second ring drawn on top of the baked one.
       lbl.badge.background = "transparent";
-      lbl.badge.thickness = ring.color ? BADGE_RING_THICKNESS : 0;
-      lbl.badge.color = ring.color ?? "transparent";
-      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, override, 0, dim);
+      lbl.badge.thickness = 0;
+      lbl.badge.color = "transparent";
+      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, state, override, 0);
     }
-    lbl.badge.alpha = ring.alpha;
+    lbl.badge.alpha = 1;
     // The value pill is never shown for an unavailable entity anyway
     // (compactValue short-circuits to "" for every type when state is
     // unavailable/unknown — see below), so it needs no alpha of its own.
@@ -3531,9 +3524,11 @@ export class EntityVisuals {
   }
 
   /** Distil any entity's live state into one of the colour-coded badge kinds.
-   *  Exhaustive over EntityDomain: every domain must resolve "active" from its
-   *  OWN state vocabulary — camera and assist_satellite are never literally
-   *  "on", so the default case silently left them ringless forever. */
+   *  The per-type "on" vocabulary lives in utils/deviceActivity's
+   *  classifyDeviceActivity — shared with Dashboard.tsx's panel-header badge
+   *  and SummaryGroupPanel's device list, so all three read a device's
+   *  activity identically. Only the linkActiveIds overlay below is specific
+   *  to the map (a Babylon-side, confirmed-state-only signal). */
   private badgeKind(type: EntityType, s: HassEntity): BadgeKind {
     if (s.state === "unavailable" || s.state === "unknown") return "unavailable";
     // EntityMapping.linkedEntityId is generic over every entity type, so its
@@ -3542,27 +3537,7 @@ export class EntityVisuals {
     // deliberately absent from this function: it drives the beam/room glow
     // (applyMotionRouting), never the ring, so the two read independently.
     if (this.linkActiveIds.has(s.entity_id)) return "alert";
-    switch (type) {
-      // Locked is the normal, secure state — quiet, no ring. Only an
-      // unlocked door demands attention. (Locked used to ring amber; with
-      // the one-red signal a permanent ring would drown the real alerts.)
-      case "lock":          return s.state === "locked" ? "off" : "alert";
-      case "binary_sensor": return s.state === "on" ? "alert" : "off";
-      case "climate":       return s.state === "off" ? "off" : "on";
-      case "cover": {
-        const pos = s.attributes.current_position as number | undefined;
-        if (pos != null) return pos > 0 ? "on" : "off";
-        return s.state === "closed" ? "off" : "on";
-      }
-      case "media_player":  return s.state === "playing" || s.state === "buffering" ? "on" : "off";
-      case "camera":       return s.state === "recording" || s.state === "streaming" ? "on" : "off";
-      case "assist_satellite": return s.state === "idle" ? "off" : "on"; // listening/processing/responding
-      case "sensor":
-        // A status/enum sensor reading a known-bad state (disconnected, error…)
-        // rings red so it stands out; everything else is neutral info.
-        return SENSOR_ALERT_STATES.has(s.state.trim().toLowerCase()) ? "alert" : "info";
-      default:              return s.state === "on" ? "on" : "off"; // light/fan/switch/input_boolean
-    }
+    return classifyDeviceActivity(type, s);
   }
 
   /** For a device-group PRIMARY, combine its own reading with its members'

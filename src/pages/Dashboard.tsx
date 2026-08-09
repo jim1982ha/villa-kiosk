@@ -27,7 +27,8 @@ import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
-import { effectiveCategory, CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
+import { effectiveCategory, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
+import { classifyDeviceActivity } from "@/utils/deviceActivity";
 import { dismissedEntitySet } from "@/config/dismissedEntities";
 import { isUnavailable } from "@/utils/stateColors";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
@@ -772,19 +773,25 @@ export default function Dashboard() {
               // only (it's Babylon-side, and predicting scene appearance is
               // the thing that was rightly reverted before).
               const linkedAlert = !!liveMapping.linkedEntityId && linkedToggle.isOn;
-              const sensorOwnAlert = liveMapping.type === "binary_sensor" && ent?.state === "on";
+              // Same classifier the map badge uses (utils/deviceActivity) —
+              // covers binary_sensor's own "alert" case too, so there's no
+              // separate hand-written check for it here any more.
+              const activity = ent ? classifyDeviceActivity(mapping.type, ent) : "off";
               return {
                 category,
                 iconKey: iconKeyFor(mapping.type, ent),
                 color: liveMapping.badgeColor,
-                categoryColor: CATEGORY_COLORS[category].bottom,
+                categoryColor: categoryColor(category),
                 // Same isUnavailable() every status pill (UnavailableNotice,
                 // LockPanel, CoverPanel, SensorPanel…) already uses — so the
                 // header badge fades in step with the pill right below it,
                 // instead of always rendering full-strength regardless of
                 // live state (the map badge already fades; this icon didn't).
-                unavailable: isUnavailable(ent),
-                alertRing: linkedAlert || sensorOwnAlert,
+                state: isUnavailable(ent)
+                  ? "unavailable"
+                  : (linkedAlert || activity === "alert")
+                    ? "alert"
+                    : activity === "on" ? "active" : "off",
               };
             })(),
             onSetBadgeColor: canEditConfig

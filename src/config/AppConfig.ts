@@ -104,12 +104,12 @@ export interface AppConfig {
   /**
    * Dashboard title shown in the HUD and document title. Left empty by default
    * so it auto-resolves to the Home Assistant instance name (`location_name`
-   * from HA's config); falls back to "Vesta Kiosk".
+   * from HA's config); falls back to "VESTA".
    */
   siteTitle: string;
   latitude: number;
   longitude: number;
-  theme: "dark" | "light" | "auto";
+  theme: "dark" | "light" | "auto" | "night";
   currentFloor: 1 | 2;
   /** entity_id -> metadata (panel type, label, room). Editable at runtime. */
   entityMap: Record<string, EntityMapping>;
@@ -369,7 +369,7 @@ export function resetConfig(): void {
 }
 
 /** Fallback title when neither a configured title nor the HA instance name exist. */
-export const DEFAULT_SITE_TITLE = "Vesta Kiosk";
+export const DEFAULT_SITE_TITLE = "VESTA";
 
 /**
  * Resolve the title to display: an explicit override wins, otherwise the Home

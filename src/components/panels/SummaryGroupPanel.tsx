@@ -18,7 +18,8 @@ import { useProfile } from "@/auth/ProfileContext";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
-import { effectiveCategory } from "@/config/EntityCategories";
+import { effectiveCategory, type DeviceSurfaceState } from "@/config/EntityCategories";
+import { classifyDeviceActivity } from "@/utils/deviceActivity";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { isUnavailable } from "@/utils/stateColors";
@@ -261,6 +262,13 @@ export default function SummaryGroupPanel({
     const isLock = domain === "lock";
     const canToggle = canControl && (TOGGLEABLE.has(domain) || isLock);
     const toggleOn = isLock ? e.state !== "locked" : !OFF.has(e.state);
+    // Same classifier the map badge and the panel header icon use (see
+    // utils/deviceActivity) — "on" maps to the coloured "active" surface,
+    // "alert" (e.g. an unlocked door) to the danger one.
+    const activity = classifyDeviceActivity(type, e);
+    const badgeState: DeviceSurfaceState = isUnavailable(e)
+      ? "unavailable"
+      : activity === "alert" ? "alert" : activity === "on" ? "active" : "off";
     const offMapRow = !mappedEntityIds.has(id);
     // A user explicitly hid this in HA (registry hidden_by) — distinct from
     // being merely diagnostic-category, and worth surfacing explicitly: a
@@ -283,7 +291,7 @@ export default function SummaryGroupPanel({
         >
           <img
             className="summary-entity-badge"
-            src={badgeImageDataUrl(cat, iconKeyFor(type, e), config.entityMap[id]?.badgeColor, 0, isUnavailable(e))}
+            src={badgeImageDataUrl(cat, iconKeyFor(type, e), badgeState, config.entityMap[id]?.badgeColor, 0)}
             alt=""
             draggable={false}
           />

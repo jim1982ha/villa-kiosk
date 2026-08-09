@@ -6,6 +6,7 @@
 
 import { createContext, useContext } from "react";
 import type { Category } from "@/types/scene.types";
+import type { DeviceSurfaceState } from "@/config/EntityCategories";
 
 export interface PanelActions {
   /** The HA entity_id the open panel controls (shown under the title). */
@@ -33,20 +34,15 @@ export interface PanelActions {
     color?: string;
     /** Representative category colour, for the picker's "default" chip. */
     categoryColor: string;
-    /** Fades the header icon exactly like its map badge — the SAME
-     *  isUnavailable() every status pill already reads. Without this the
-     *  header badge rendered full-strength regardless of live state, out of
-     *  step with both the map (which fades) and the pill right below it
-     *  (which turns amber). */
-    unavailable?: boolean;
-    /** Draws the same red alert ring the map badge shows for an active/
-     *  alerting device (see EntityVisuals' BADGE_RING) — set whenever this
-     *  device's linked entity (EntityMapping.linkedEntityId, set in Advanced
-     *  Settings) is presently "on", plus a binary_sensor's own "on" state.
-     *  The map already does this via a Babylon GUI outline; this is the
-     *  DOM/CSS equivalent for the panel header icon, computed the same way
-     *  (live entity state, no separate lookup). */
-    alertRing?: boolean;
+    /** Drives the header icon's fill/glyph/ring exactly like its map badge
+     *  (see config/EntityCategories.categorySurface + babylon/badgeIcons.ts,
+     *  which bakes this into the same image both places use) — "unavailable"
+     *  is the SAME isUnavailable() every status pill already reads, "alert"
+     *  is set whenever this device's linked entity (EntityMapping.
+     *  linkedEntityId, set in Advanced Settings) is presently "on", plus a
+     *  binary_sensor's own "on" state — computed the same way the map badge
+     *  is (live entity state, no separate lookup), just DOM-side. */
+    state: DeviceSurfaceState;
   };
   /** Persist a new badge colour for the open entity (null = category default).
    *  Undefined when the profile may not edit config — the badge is then a plain,

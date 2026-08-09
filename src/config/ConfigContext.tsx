@@ -5,6 +5,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
 } from "react";
 import { type AppConfig, loadConfig, saveConfig, resetConfig } from "./AppConfig";
+import { resolveEffectiveTheme } from "@/utils/themeTime";
 
 interface ConfigContextType {
   config: AppConfig;
@@ -57,12 +58,32 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     saveConfig(config);
   }, [config]);
 
-  // Reflect the chosen theme onto the document root so the CSS variable blocks
-  // (`:root[data-theme="dark"]` / `"auto"`) take effect. "auto" defers to the OS
-  // via the prefers-color-scheme media query in styles.css.
+  // Reflect the chosen theme onto the document root so the CSS variable
+  // blocks (:root[data-theme="dark"/"night"]) take effect. "auto" resolves
+  // HERE, not via a CSS media query alone — picking "night" over "dark" needs
+  // the real sun position (utils/themeTime.ts), which CSS has no way to
+  // express. Re-resolves every few minutes so a kiosk left running overnight
+  // crosses into night without anyone touching Settings, and reacts to the
+  // OS light/dark switch live — mirrors Dashboard.tsx's own hourly sun.sun
+  // fallback for the same "state changes with the clock, not with a render"
+  // reason.
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", config.theme);
-  }, [config.theme]);
+    const apply = () => {
+      document.documentElement.setAttribute(
+        "data-theme",
+        resolveEffectiveTheme(config.theme, config.latitude, config.longitude),
+      );
+    };
+    apply();
+    if (config.theme !== "auto") return;
+    const id = window.setInterval(apply, 5 * 60 * 1000);
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    media?.addEventListener("change", apply);
+    return () => {
+      window.clearInterval(id);
+      media?.removeEventListener("change", apply);
+    };
+  }, [config.theme, config.latitude, config.longitude]);
 
   const value = useMemo(
     () => ({ config, update, replace, reset, resolvedRooms, setResolvedRooms }),

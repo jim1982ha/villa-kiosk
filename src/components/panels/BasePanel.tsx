@@ -56,12 +56,8 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
   const canRecolor = badge && onSetBadgeColor;
   const badgeImg = badge && (
     <img
-      // .is-alert draws the same red ring the map badge gets for an
-      // active/alerting device (see badge.alertRing's docstring in
-      // PanelActionsContext) — a camera whose linked motion sensor is
-      // currently on, so far the only producer of this flag.
-      className={`panel-badge-img${badge.alertRing ? " is-alert" : ""}`}
-      src={badgeImageDataUrl(badge.category, badge.iconKey, badge.color, 0, badge.unavailable)}
+      className="panel-badge-img"
+      src={badgeImageDataUrl(badge.category, badge.iconKey, badge.state, badge.color, 0)}
       alt=""
       draggable={false}
     />

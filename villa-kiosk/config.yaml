@@ -1,11 +1,11 @@
-# Vesta Kiosk — Home Assistant add-on manifest (image-pull variant).
+# VESTA — Home Assistant add-on manifest (image-pull variant).
 #
 # `image` makes the Supervisor PULL a prebuilt image from GHCR instead of
 # building on the device, so installing from the repository URL is a one-click,
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
-name: Vesta Kiosk
-version: "2.143.0"
+name: VESTA
+version: "2.144.0"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -36,7 +36,7 @@ ports_description:
 # rootfs/usr/bin/supervisor-proxy.py.
 homeassistant_api: true
 panel_icon: mdi:home-city
-panel_title: Vesta Kiosk
+panel_title: VESTA
 boot: auto
 startup: application
 # Profile passcodes: a 4-digit PIN per kiosk profile (Guest / Owner / Facility

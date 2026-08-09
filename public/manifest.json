@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Vesta Kiosk",
-  "short_name": "Vesta Kiosk",
-  "description": "3D interactive villa dashboard for Home Assistant",
+  "name": "VESTA — AI Estate Manager",
+  "short_name": "VESTA",
+  "description": "AI estate manager for the villa — one living map of every system.",
   "lang": "en",
   "dir": "ltr",
   "categories": ["utilities", "lifestyle"],
@@ -11,22 +11,22 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#12151b",
-  "theme_color": "#12151b",
+  "background_color": "#F7F4EE",
+  "theme_color": "#F7F4EE",
   "screenshots": [
     {
       "src": "./screenshots/wide.png",
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "Vesta Kiosk — 3D Home Assistant dashboard"
+      "label": "VESTA — one living map"
     },
     {
       "src": "./screenshots/narrow.png",
       "sizes": "720x1280",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Vesta Kiosk — 3D Home Assistant dashboard"
+      "label": "VESTA — one living map"
     }
   ],
   "icons": [
@@ -53,6 +53,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "./icons/icon-monochrome.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "monochrome"
     }
   ]
 }

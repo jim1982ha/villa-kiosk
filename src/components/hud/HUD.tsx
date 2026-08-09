@@ -32,7 +32,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
 import { ROLE_LABELS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
-import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_ICONS, categoryGradient } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
 import { ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX, clampIconScale } from "@/config/AppConfig";
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
@@ -486,13 +486,6 @@ export default function HUD({
                   // "you can hold this" hint read as visual clutter rather
                   // than a useful affordance, at the user's request.
                   className={`icon-btn${hidden ? "" : " active"}`}
-                  // Lit in the SAME gradient as this category's badges on the
-                  // map (see config/EntityCategories.categoryGradient), so the
-                  // filter row doubles as a colour legend.
-                  style={hidden ? undefined : {
-                    background: categoryGradient(cat),
-                    color: "#ffffff",
-                  }}
                   onPointerDown={onCatPointerDown(cat)}
                   onPointerUp={onCatPointerUp}
                   onPointerLeave={onCatPointerUp}

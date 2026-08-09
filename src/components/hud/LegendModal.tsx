@@ -6,22 +6,25 @@
 // place. A first-time user has to tap around and learn it by trial. This is
 // that reference, one tap away, not shown by default.
 
-import { CATEGORY_ORDER, CATEGORY_LABELS, categoryGradient } from "@/config/EntityCategories";
-import { ALERT_RED_HEX } from "@/babylon/colors";
+import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { STATUS_COLOR } from "@/utils/stateColors";
 
-/** What the MAP badge actually does per state — mirrors EntityVisuals'
- *  BADGE_RING exactly (red ring for on/alert, no ring when off/idle, the whole
- *  badge dimmed when unavailable). Kept faithful to the code rather than
- *  describing the panel pill's palette, which is a different thing (below). */
-const BADGE_ITEMS: { label: string; note: string; ring?: string; dim?: boolean }[] = [
-  { label: "Active / alerting", ring: ALERT_RED_HEX,
-    note: "Red outline — the device is on, or needs attention (unlocked door, leak…)" },
-  { label: "Off / idle", note: "No outline — the device is off or resting" },
-  { label: "Unavailable", dim: true,
-    note: "The badge keeps its own category colour but fades — there's no separate "
-      + "\"unavailable colour\" on the map the way the panel pill below has amber" },
+/** What the MAP badge actually does per state — mirrors config/
+ *  EntityCategories.categorySurface exactly (VESTA-DESIGN.md §0): neutral by
+ *  default, coloured only when active or alerting, a dashed amber ring for
+ *  unavailable. A representative category ("light") stands in for "whichever
+ *  category this device belongs to" — the row is illustrating the STATE
+ *  vocabulary, not any one category. */
+const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; note: string }[] = [
+  { label: "Active / alerting", state: "active",
+    note: "Filled with the device's own category colour — the device is on, or doing something" },
+  { label: "Off / idle", state: "off",
+    note: "Plain neutral square — the device is off or resting (the default look for most of the map)" },
+  { label: "Needs attention", state: "alert",
+    note: "Filled red — the device needs attention (an unlocked door, a leak, low battery…)" },
+  { label: "Unavailable", state: "unavailable",
+    note: "Neutral square, dashed amber ring — Home Assistant has lost contact with this device" },
 ];
 
 /** The coloured status pill each device PANEL shows (a different vocabulary
@@ -55,46 +58,49 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
           <h2>Map colours</h2>
         </div>
         <div className="settings-body">
-          <div className="settings-section-title">Device category (badge colour)</div>
+          <div className="settings-section-title">Device category (badge colour when active)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
-            Matches the category filter buttons in the top bar.
+            A device's badge is plain and neutral at rest — its category
+            colour only appears once it's active or alerting (see below).
           </p>
           <div className="legend-grid">
             {CATEGORY_ORDER.map((c) => (
               <div className="legend-row" key={c}>
                 <span
                   className="legend-swatch"
-                  style={{ background: categoryGradient(c) }}
+                  style={{ background: categorySurface(c, "active").fill, border: `1.5px solid ${categorySurface(c, "active").ring}` }}
                 />
                 <span>{CATEGORY_LABELS[c]}</span>
               </div>
             ))}
           </div>
 
-          <div className="settings-section-title">On the map (badge outline)</div>
+          <div className="settings-section-title">On the map (badge state)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
-            How a device's own badge shows its state in the 3D view — a
-            different, simpler vocabulary than the panel pill below: the map
-            only ever changes the RING colour and the badge's OPACITY, never
-            its category colour.
+            How a device's own badge shows its state in the 3D view — neutral
+            by default, colour only when something's actually happening.
           </p>
           <div className="legend-grid">
-            {BADGE_ITEMS.map((b) => (
-              <div className="legend-row" key={b.label}>
-                <span
-                  className="legend-swatch"
-                  style={{
-                    background: categoryGradient("light"),
-                    boxShadow: b.ring ? `0 0 0 3px ${b.ring}` : undefined,
-                    opacity: b.dim ? 0.5 : 1,
-                  }}
-                />
-                <span>
-                  <strong>{b.label}</strong>
-                  <span className="muted" style={{ display: "block", fontSize: "var(--text-xs)" }}>{b.note}</span>
-                </span>
-              </div>
-            ))}
+            {BADGE_ITEMS.map((b) => {
+              const surface = categorySurface("light", b.state);
+              return (
+                <div className="legend-row" key={b.label}>
+                  <span
+                    className="legend-swatch"
+                    style={{
+                      background: surface.fill,
+                      border: surface.ring
+                        ? `1.5px ${surface.ringDashed ? "dashed" : "solid"} ${surface.ring}`
+                        : undefined,
+                    }}
+                  />
+                  <span>
+                    <strong>{b.label}</strong>
+                    <span className="muted" style={{ display: "block", fontSize: "var(--text-xs)" }}>{b.note}</span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           <div className="settings-section-title">On a device panel (status pill)</div>

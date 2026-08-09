@@ -25,7 +25,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
-import { CATEGORY_COLORS, CATEGORY_ORDER, categoryGradient } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import { successFeedback } from "@/utils/haptics";
@@ -206,16 +206,23 @@ interface Props {
 
 function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void }) {
   const Icon = t.icon;
+  // Neutral by default (VESTA-DESIGN.md §0): the icon chip only takes its
+  // category's hue once the tile's own tone says something in it is
+  // actually on ("warn" — e.g. an unlocked lock or high energy draw — reads
+  // as alerting, same red as everywhere else that signal shows up).
+  const state: DeviceSurfaceState = t.tone === "warn" ? "alert" : t.tone === "on" ? "active" : "off";
+  const surface = categorySurface(t.category, state);
   return (
     <button
       type="button"
       className={`summary-tile tone-${t.tone}`}
-      // --tile-grad: the gradient icon square (categoryGradient, shared with the
-      // top bar). --tile-accent: the solid bottom colour, used only for the lit
-      // border (color-mix needs a solid colour, not a gradient).
+      // --tile-fill/--tile-glyph: the icon chip's state-driven colours.
+      // --tile-ring: the solid ring colour, used only for the lit border
+      // (color-mix needs a solid colour, not the translucent fill).
       style={{
-        ["--tile-grad" as string]: categoryGradient(t.category),
-        ["--tile-accent" as string]: CATEGORY_COLORS[t.category].bottom,
+        ["--tile-fill" as string]: surface.fill,
+        ["--tile-glyph" as string]: surface.glyph,
+        ...(surface.ring ? { ["--tile-ring" as string]: surface.ring } : {}),
       }}
       onClick={() => onOpen(t)}
       title={`${t.label}: ${t.value} — tap to see & control everything it includes`}
@@ -282,8 +289,8 @@ function SceneMenu({ scenes, canRun, apply }: {
         type="button"
         className="summary-tile tone-neutral"
         style={{
-          ["--tile-grad" as string]: categoryGradient("others"),
-          ["--tile-accent" as string]: CATEGORY_COLORS.others.bottom,
+          ["--tile-fill" as string]: categorySurface("others", "off").fill,
+          ["--tile-glyph" as string]: categorySurface("others", "off").glyph,
         }}
         disabled={!canRun}
         aria-haspopup="menu"

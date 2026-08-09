@@ -29,7 +29,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
-import { CATEGORY_LABELS, CATEGORY_ICONS, categoryGradient } from "@/config/EntityCategories";
+import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -202,9 +202,13 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
             <div className="cockpit-category-grid">
               {categoryTiles.map((tile) => {
                 const Icon = CATEGORY_ICONS[tile.category];
+                // Neutral unless at least one device in the category is on
+                // (VESTA-DESIGN.md §0) — a house at rest shouldn't report
+                // every category as if it were doing something.
+                const surface = categorySurface(tile.category, tile.onCount > 0 ? "active" : "off");
                 return (
                   <div key={tile.category} className="cockpit-category-tile">
-                    <div className="cockpit-category-icon" style={{ background: categoryGradient(tile.category) }}>
+                    <div className="cockpit-category-icon" style={{ background: surface.fill, color: surface.glyph }}>
                       <Icon size={18} />
                     </div>
                     <div>

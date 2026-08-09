@@ -44,31 +44,97 @@ export const CATEGORY_ICONS: Record<Category, ComponentType<{ size?: number | st
   others: Puzzle,
 };
 
-/**
- * Fixed background gradient per category for the in-scene state badges (see
- * babylon/badgeIcons.ts) — every device in a category shares this squircle
- * background regardless of its live state; only an outline ring (state) and
- * the glyph (device type / device_class) vary. One colour per category, well
- * distinct from its neighbours.
- */
-export const CATEGORY_COLORS: Record<Category, { top: string; bottom: string }> = {
-  network:        { top: "#7FE0B4", bottom: "#2E9C6E" }, // mint -> emerald
-  others:         { top: "#EDF1F5", bottom: "#AEBBC9" }, // pale silver -> blue-grey
-  comfort:        { top: "#F5966A", bottom: "#DD5C34" }, // peach -> coral
-  access_control: { top: "#CB93EE", bottom: "#9450C9" }, // lilac -> violet
-  light:          { top: "#FFDA82", bottom: "#F0A93A" }, // gold -> amber
-  energy:         { top: "#7FCBF7", bottom: "#2E8FD6" }, // sky -> electric blue
+// VESTA design rule (see VESTA-DESIGN.md §0): "Neutral by default. Colour
+// only when a device is active or alerting." A villa at rest used to look
+// like a villa in alarm — every badge and bottom-bar tile carried a
+// saturated gradient at ALL times. Category hue now only appears once a
+// device is actually doing something; off/idle and unavailable both render
+// neutral. This replaces the old always-on CATEGORY_COLORS gradient, not the
+// category concept — the six categories stay, each keeps a hue.
+
+const CATEGORY_VAR: Record<Category, string> = {
+  comfort: "--cat-comfort",
+  light: "--cat-light",
+  network: "--cat-network",
+  energy: "--cat-energy",
+  access_control: "--cat-access-control",
+  others: "--cat-others",
 };
 
-/** The category's gradient as a CSS value — the ONE source of the app's
- *  gradient icon squares in the DOM (top-bar category chips, the legend, the
- *  bottom-bar tile icons). The 3D badges bake the same top→bottom gradient via
- *  badgeImageDataUrl, so every gradient icon in the app comes from this same
- *  CATEGORY_COLORS pair. An optional #rrggbb override (a per-entity badge
- *  colour) derives a matching gradient from that single colour. */
-export function categoryGradient(category: Category, override?: string): string {
-  const c = override ? { top: override, bottom: override } : CATEGORY_COLORS[category];
-  return `linear-gradient(135deg, ${c.top}, ${c.bottom})`;
+// Matches the LIGHT theme's --cat-* values (styles.css) — used only until the
+// stylesheet has actually painted (categoryColor reads the live custom
+// property first) or in a non-DOM context, same "static fallback, live where
+// possible" pattern as babylon/colors.ts.
+const FALLBACK_CATEGORY_COLOR: Record<Category, string> = {
+  comfort: "#B4643C", light: "#C08A2E", network: "#2F6B4F",
+  energy: "#2E6E8F", access_control: "#6B5AA6", others: "#6E7B72",
+};
+const FALLBACK_DANGER = "#B24232";
+const FALLBACK_WARNING = "#B8801F";
+const FALLBACK_NEUTRAL_FILL = "rgba(23, 25, 26, 0.05)";
+const FALLBACK_NEUTRAL_GLYPH = "#5A5F5B";
+
+function cssVar(name: string): string {
+  if (typeof window === "undefined" || typeof getComputedStyle !== "function") return "";
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function withAlpha(hex: string, alpha: number): string {
+  const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/** One flat hue per category, read live from the CSS token (--cat-*) so the
+ *  DOM chips/legend/bottom bar and the canvas-baked 3D badges (which can't
+ *  consume a CSS var directly — see babylon/badgeIcons.ts) share exactly one
+ *  source of truth instead of a hand-duplicated hex table. */
+export function categoryColor(category: Category): string {
+  return cssVar(CATEGORY_VAR[category]) || FALLBACK_CATEGORY_COLOR[category];
+}
+
+export type DeviceSurfaceState = "off" | "active" | "alert" | "unavailable";
+export interface CategorySurface {
+  fill: string;
+  glyph: string;
+  ring: string | null;
+  ringDashed?: boolean;
+}
+
+/** The ONE place that turns a category + live device state into a fill/glyph/
+ *  ring triple — the 2D chips, the legend, the bottom bar and the baked 3D
+ *  badges (badgeIcons.ts) all call this rather than each encoding the §0
+ *  table themselves. Values are resolved to literal colours (not `var(...)`
+ *  strings) via a live getComputedStyle read so the SAME function works both
+ *  as an inline DOM style and as a canvas fillStyle/strokeStyle, which can't
+ *  consume a CSS custom property. `override` is a per-entity #rrggbb badge
+ *  colour (EntityMapping.badgeColor) substituting for the category's hue. */
+export function categorySurface(category: Category, state: DeviceSurfaceState, override?: string): CategorySurface {
+  switch (state) {
+    case "active": {
+      const hue = override ?? categoryColor(category);
+      return { fill: withAlpha(hue, 0.14), glyph: hue, ring: hue };
+    }
+    case "alert": {
+      const danger = cssVar("--status-danger") || FALLBACK_DANGER;
+      return { fill: withAlpha(danger, 0.14), glyph: danger, ring: danger };
+    }
+    case "unavailable": {
+      const warning = cssVar("--status-warning") || FALLBACK_WARNING;
+      return {
+        fill: cssVar("--bg-input") || FALLBACK_NEUTRAL_FILL,
+        glyph: warning, ring: warning, ringDashed: true,
+      };
+    }
+    case "off":
+    default:
+      return {
+        fill: cssVar("--bg-input") || FALLBACK_NEUTRAL_FILL,
+        glyph: cssVar("--text-secondary") || FALLBACK_NEUTRAL_GLYPH,
+        ring: null,
+      };
+  }
 }
 
 /** Default category by device TYPE. Anything not listed here (and not caught by

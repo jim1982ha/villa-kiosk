@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200" width="640" height="200" role="img" aria-label="VESTA — AI Estate Manager">
+  <g transform="translate(0 8) scale(0.86)">
+  <path d="M18 15 H33.5 L52 78 H44 Z" fill="#1F5C33"></path>
+  <path d="M84 15 H62.5 L44 78 H52 Z" fill="#4C9A5E"></path>
+  </g>
+  <text x="130" y="82" font-family="Jost, Futura, &#39;Century Gothic&#39;, sans-serif" font-size="62" font-weight="500" letter-spacing="23.5" fill="#17191A">VESTA</text>
+  <text x="134" y="126" font-family="Jost, Futura, &#39;Century Gothic&#39;, sans-serif" font-size="21" font-weight="400" letter-spacing="7.4" fill="#2F6B4F">AI ESTATE MANAGER</text>
+</svg>
