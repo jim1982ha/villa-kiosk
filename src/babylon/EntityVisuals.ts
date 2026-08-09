@@ -446,7 +446,28 @@ const BADGE_MIN_GAP_PX = 6;
  * and the room summarises instead. That is the ONLY thing deciding pile size,
  * which is why there is no separate member cap to keep in step with it.
  */
-const SPREAD_MAX_RADIUS_WIDTHS = 0.85;
+const SPREAD_MAX_RADIUS_WIDTHS = 1.1;
+/**
+ * Short edge of the viewport the budget above is written for, and how far the
+ * budget may be scaled away from it on a smaller or larger screen.
+ *
+ * A badge is a fixed number of pixels whatever the screen, so the same villa
+ * is drawn across ~1800px on a desktop and ~400px on a phone while its badges
+ * stay the same size. The phone therefore has the SAME devices packed into a
+ * fifth of the space: piles form constantly, and a travel budget that is a
+ * comfortable 3% of a desktop's width is 13% of a phone's — a badge crossing
+ * an eighth of the screen to get away from its neighbour.
+ *
+ * So the budget is a fraction of the screen rather than a fixed distance. The
+ * desktop gets more room to open piles out (individual badges survive longer,
+ * which is what that screen has space for); the phone gets less (badges stay
+ * on their devices, and its crowded rooms summarise into pills sooner, which
+ * is the right answer on a small screen). Clamped at both ends so no viewport
+ * can produce something absurd.
+ */
+const SPREAD_REFERENCE_EDGE_PX = 900;
+const SPREAD_SCREEN_MIN = 0.55;
+const SPREAD_SCREEN_MAX = 1.45;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -2994,6 +3015,18 @@ export class EntityVisuals {
 
   /** Lowest entity_id in a pile — a stable name for it, so piles can be laid
    *  out in a fixed order regardless of how union-find emitted them. */
+  /** The travel budget in the same pixels the projection uses, scaled to the
+   *  viewport — see SPREAD_REFERENCE_EDGE_PX. One definition, so the
+   *  feasibility test and the layout can never disagree about it. */
+  private spreadBudgetPx(): number {
+    const eng = this.scene.getEngine();
+    const edge = Math.min(eng.getRenderWidth(), eng.getRenderHeight());
+    const factor = Math.min(SPREAD_SCREEN_MAX,
+      Math.max(SPREAD_SCREEN_MIN, edge / SPREAD_REFERENCE_EDGE_PX));
+    return SPREAD_MAX_RADIUS_WIDTHS * BADGE_DIAMETER_PX
+      * this.iconUserScale * this.iconZoomScale * factor;
+  }
+
   private pileKey(shown: ShownLabel[], members: number[]): string {
     let key = shown[members[0]].id;
     for (let k = 1; k < members.length; k++) {
@@ -3016,7 +3049,7 @@ export class EntityVisuals {
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
     const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
     if (pxPerWorld <= 0) return false;
-    const budgetPx = SPREAD_MAX_RADIUS_WIDTHS * BADGE_DIAMETER_PX * scale;
+    const budgetPx = this.spreadBudgetPx();
 
     // max(halfW, halfH), not halfW: a badge is a rectangle and seats sit at
     // arbitrary angles, so the only half-extent safe in EVERY direction is the

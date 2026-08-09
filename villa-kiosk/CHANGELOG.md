@@ -1,3 +1,9 @@
+## 2.187.0
+
+### Changed — the badge travel budget now scales with the screen
+
+Back to 1.1 badge widths, and no longer a fixed distance. A badge is the same size on every screen, so a phone draws the same villa in a fifth of the width with the same devices packed into it — a budget that is 3% of a desktop's width is 13% of a phone's. It is now a fraction of the viewport's short edge, clamped at both ends: a desktop opens piles of five, a laptop four, a phone two and summarises the rest into room pills.
+
 ## 2.186.0
 
 ### Changed — badges open onto a tighter ring
