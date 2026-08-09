@@ -1,3 +1,17 @@
+## 2.163.0
+
+### Fixed — the loading spinner did not turn on iPad
+
+Two independent causes, either of which alone produces a motionless spinner. Both are fixed, because there is no way to tell them apart from the outside and each is a real defect.
+
+**The reduced-motion reset was destroying it.** The `prefers-reduced-motion` block applies the standard blanket reset — `animation-duration: 0.01ms; animation-iteration-count: 1` on every element — which for a spinner means one rotation completed instantly and then perfect stillness. Anyone with Reduce Motion enabled, a common and unremarkable iPad setting, got a frozen ring.
+
+That is a genuine loss of information rather than a cosmetic one. A progress indicator is not decoration: it is the only evidence that the app is still working rather than hung, and a villa model legitimately takes several seconds to parse on a tablet. The blanket reset is right for the app's transitions and its tap ripple — the note beside that exemption already draws exactly this line, that motion may only be removed where it costs no information — and wrong for the three elements whose entire job is to say "still working". Reduced motion asks for no vestibular motion, not for no feedback, so the spinner, the connecting dot and the history skeleton now keep animating with the movement taken out: a slow opacity breath, in which nothing travels, rotates or scales. The skeleton additionally drops its moving gradient there, since a frozen highlight band parked mid-element reads as a rendering fault rather than as a placeholder.
+
+**The rotation ran on the main thread.** A transform animation is only handed to the compositor if the element has its own layer, and this one had no reason to be promoted. That matters more here than anywhere else in the app: the spinner is on screen precisely while the model is being parsed, and that parse is a long main-thread block on a tablet — the same one recorded elsewhere in this codebase as a single ~11.6s task, with `parseMs` dominating every load in the telemetry. A main-thread animation is frozen for the whole of it, so the one element whose job is to prove the app has not hung was the one that stopped moving exactly when it was working hardest. `will-change: transform` promotes it so the rotation keeps running off-thread.
+
+`will-change` is normally a smell because it tends to be left on permanently, holding a layer for nothing. Here the element exists only during loading and is unmounted the moment the villa appears, which is the case the property was designed for.
+
 ## 2.162.0
 
 ### Fixed — the 3D view could stop short of the bottom of the screen

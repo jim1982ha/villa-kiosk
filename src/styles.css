@@ -2336,7 +2336,25 @@ label.toggle span { user-select: none; line-height: 1.4; }
   padding: calc(52px + var(--safe-top) + 24px) 24px 24px;
   background: var(--bg-base);
 }
-.spinner { width: 44px; height: 44px; border: 4px solid var(--bg-input); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; }
+/* will-change promotes this to its own compositing layer so WebKit runs the
+   rotation on the COMPOSITOR rather than the main thread. That matters here
+   more than almost anywhere else in the app: this spinner is on screen
+   precisely while the model is being parsed, and that parse is a long
+   main-thread block on a tablet (see BabylonCanvas's note on the ~11.6s
+   blocking task, and parseMs dominating every recorded load). A main-thread
+   rotation freezes for the duration — so the one element whose whole job is
+   to prove the app has not hung is the one that stops moving when it is
+   working hardest.
+   `will-change` is usually a smell because it is left on permanently; here
+   the element only exists during loading and is unmounted the moment the
+   villa appears, which is the case it was designed for. */
+.spinner {
+  width: 44px; height: 44px;
+  border: 4px solid var(--bg-input); border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  will-change: transform;
+}
 
 /* Shared "last 24 hours" graph height for Sparkline/DualSparkline/
    StateTimeline — bumped from 60px now that panels no longer spend that
@@ -3351,7 +3369,29 @@ label.toggle span { user-select: none; line-height: 1.4; }
      otherwise confirm) — the status pill and the service toast already
      report the same outcome in text, so removing it costs no information. */
   .tap-ripple { display: none; }
+
+  /* PROGRESS INDICATORS ARE NOT DECORATION, and the blanket reset above was
+     silently destroying them: one iteration at 0.01ms means the loading
+     spinner snapped through a single rotation and then sat perfectly still.
+     A frozen spinner does not read as "motion was reduced", it reads as
+     "this app has hung" — reported as the spinner not turning on an iPad,
+     during a model parse that legitimately takes several seconds.
+     Removing the only evidence that work is still happening is a real loss
+     of information, which is exactly the line the tap-ripple note above
+     draws.
+     Reduced-motion asks for no VESTIBULAR motion, not for no feedback, so
+     these keep animating with the movement taken out: a slow opacity breath
+     conveys "still working" while nothing travels, rotates or scales. */
+  .spinner, .conn-dot.connecting .dot, .state-timeline-skeleton {
+    animation: reduced-motion-breathe 1.6s ease-in-out infinite !important;
+  }
+  /* The skeleton's own look is a moving GRADIENT, so the breath above has to
+     replace the sweep rather than sit on top of it — otherwise it keeps a
+     frozen highlight band parked mid-element, which reads as a rendering
+     fault rather than as a placeholder. */
+  .state-timeline-skeleton { background: var(--bg-input); }
 }
+@keyframes reduced-motion-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 
 /* ---- Connection banner (ConnectionBanner.tsx) -------------------------
    Sits at the TOP EDGE, full width, rather than borrowing the centred pill
