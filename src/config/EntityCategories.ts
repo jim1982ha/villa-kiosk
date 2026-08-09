@@ -72,6 +72,7 @@ const FALLBACK_CATEGORY_COLOR: Record<Category, string> = {
 const FALLBACK_DANGER = "#B24232";
 const FALLBACK_WARNING = "#B8801F";
 const FALLBACK_NEUTRAL_GLYPH = "#5A5F5B";
+const FALLBACK_HAIRLINE = "rgba(23, 25, 26, 0.10)";
 // --bg-modal's light-theme value: the app's one OPAQUE floating surface (see
 // its own comment in styles.css). Every fill below composites onto this
 // rather than being a translucent tint in its own right — see surfaceBase().
@@ -122,12 +123,21 @@ export function categoryColor(category: Category): string {
   return cssVar(CATEGORY_VAR[category]) || FALLBACK_CATEGORY_COLOR[category];
 }
 
+// The brand guidelines' badge table states the active/alerting fill as the
+// hue "@ 14%". Applied here as a composite onto the opaque panel colour
+// rather than as a literal rgba(), which is the same result on that backdrop
+// but survives being painted onto a transparent canvas — see surfaceBase().
+const TINT_ALPHA = 0.14;
+
 export type DeviceSurfaceState = "off" | "active" | "alert" | "unavailable";
 export interface CategorySurface {
   fill: string;
   glyph: string;
   ring: string | null;
+  /** Unavailable only — the guidelines call for a DASHED ring there. */
   ringDashed?: boolean;
+  /** Idle only — a 1px hairline rather than the 1.5px state ring. */
+  ringHairline?: boolean;
 }
 
 /** The ONE place that turns a category + live device state into a fill/glyph/
@@ -146,11 +156,11 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
   switch (state) {
     case "active": {
       const hue = override ?? categoryColor(category);
-      return { fill: tintOver(hue, 0.18, base), glyph: hue, ring: hue };
+      return { fill: tintOver(hue, TINT_ALPHA, base), glyph: hue, ring: hue };
     }
     case "alert": {
       const danger = cssVar("--status-danger") || FALLBACK_DANGER;
-      return { fill: tintOver(danger, 0.18, base), glyph: danger, ring: danger };
+      return { fill: tintOver(danger, TINT_ALPHA, base), glyph: danger, ring: danger };
     }
     case "unavailable": {
       const warning = cssVar("--status-warning") || FALLBACK_WARNING;
@@ -161,7 +171,13 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
       return {
         fill: base,
         glyph: cssVar("--text-secondary") || FALLBACK_NEUTRAL_GLYPH,
-        ring: null,
+        // The brand guidelines' badge table gives even the IDLE state a ring:
+        // a 1px hairline. It is what keeps a resting badge reading as a
+        // deliberate object rather than a shape that happens to sit on the
+        // render — the whole point of "neutral by default" is that the quiet
+        // state still looks designed.
+        ring: cssVar("--hairline") || FALLBACK_HAIRLINE,
+        ringHairline: true,
       };
   }
 }

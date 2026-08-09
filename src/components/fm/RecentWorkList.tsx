@@ -62,8 +62,8 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
             <div className="fm-row-main">
               <div className="fm-row-title">
                 {source.kind === "fault"
-                  ? <Wrench size={14} className="muted" />
-                  : <CalendarCheck size={14} className="muted" />}
+                  ? <Wrench size={16} className="muted" />
+                  : <CalendarCheck size={16} className="muted" />}
                 <strong>{source.title}</strong>
                 {source.kind === "fault" && <span className="fm-clause">fault</span>}
               </div>

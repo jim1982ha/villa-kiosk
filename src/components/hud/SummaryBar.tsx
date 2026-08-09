@@ -227,7 +227,7 @@ function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void 
       onClick={() => onOpen(t)}
       title={`${t.label}: ${t.value} — tap to see & control everything it includes`}
     >
-      <span className="summary-tile-icon"><Icon size={24} /></span>
+      <span className="summary-tile-icon"><Icon size={20} /></span>
       <span className="summary-tile-text">
         <span className="summary-tile-label">{t.label}</span>
         <span className="summary-tile-value">{t.value}</span>
@@ -298,7 +298,7 @@ function SceneMenu({ scenes, canRun, apply }: {
         title={`${scenes.length} scene${scenes.length === 1 ? "" : "s"} from Home Assistant — tap to run one`}
         onClick={toggle}
       >
-        <span className="summary-tile-icon"><Sparkles size={24} /></span>
+        <span className="summary-tile-icon"><Sparkles size={20} /></span>
         <span className="summary-tile-text">
           <span className="summary-tile-label">Scene</span>
           <span className="summary-tile-value">{scenes.length} scene{scenes.length === 1 ? "" : "s"}</span>

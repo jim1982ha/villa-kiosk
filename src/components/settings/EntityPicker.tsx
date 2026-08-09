@@ -108,7 +108,7 @@ export default function EntityPicker({
             title={`Clear (was ${value})`}
             aria-label={`Clear selection (was ${value})`}
           >
-            <X size={14} />
+            <X size={16} />
           </button>
         )}
       </div>

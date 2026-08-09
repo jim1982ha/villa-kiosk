@@ -860,7 +860,7 @@ export default function BabylonCanvas({
           <AlertTriangle size={16} />
           <span>{sh3dSyncMsg}</span>
           <button onClick={() => setSh3dSyncMsg(null)} aria-label="Dismiss">
-            <X size={14} />
+            <X size={16} />
           </button>
         </div>
       )}

@@ -167,7 +167,7 @@ export default function FaultsTab(
                 onClick={() => setShowBroken((v) => !v)}
                 aria-expanded={showBroken}
               >
-                {showBroken ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                {showBroken ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 Devices Home Assistant reports as offline ({broken.length})
               </button>
               {/* Rendered conditionally rather than hidden: `.fm-chiprow`

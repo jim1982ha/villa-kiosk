@@ -71,7 +71,7 @@ export default function EvidenceRow({
                 className="fm-thumb-x"
                 onClick={() => onChange?.(photoIds.filter((p) => p !== id))}
                 aria-label="Remove photo"
-              ><X size={12} /></button>
+              ><X size={16} /></button>
             )}
           </span>
         ))}

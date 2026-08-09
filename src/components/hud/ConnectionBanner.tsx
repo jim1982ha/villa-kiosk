@@ -62,7 +62,7 @@ export default function ConnectionBanner() {
     // important context, not an emergency that should cut someone off
     // mid-sentence, and it re-announces on every reconnect cycle.
     <div className="connection-banner" role="status" aria-live="polite">
-      <WifiOff size={15} />
+      <WifiOff size={16} />
       {/* Two phrasings, picked by width (same -full/-short idiom the settings
           labels use). The long one wrapped to FIVE lines on a phone, turning a
           status pill into a slab covering a third of the villa — see the

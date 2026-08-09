@@ -438,7 +438,7 @@ export default function HUD({
             aria-label="Go to this device's default overview view"
             aria-describedby="home-btn-hint"
           >
-            <Home size={22} />
+            <Home size={24} />
           </button>
           <span id="home-btn-hint" className="sr-only">Hold Space (or right-click) to save the current view as the default</span>
           <span className="hud-title">{title}</span>
@@ -502,7 +502,7 @@ export default function HUD({
                   aria-label={`${CATEGORY_LABELS[cat]} devices on the map`}
                   aria-pressed={!hidden}
                 >
-                  <Icon size={18} />
+                  <Icon size={24} />
                 </button>
               );
             })}
@@ -518,7 +518,7 @@ export default function HUD({
               title="What do these colours mean?"
               aria-label="Map colour legend"
             >
-              <CircleHelp size={18} />
+              <CircleHelp size={24} />
             </button>
           </div>
 
@@ -543,7 +543,7 @@ export default function HUD({
               title="Decrease label size"
               aria-label="Decrease label size"
             >
-              <Minus size={18} />
+              <Minus size={24} />
             </button>
             <button
               className="icon-btn hud-labelsize-btn"
@@ -552,7 +552,7 @@ export default function HUD({
               title="Increase label size"
               aria-label="Increase label size"
             >
-              <Plus size={18} />
+              <Plus size={24} />
             </button>
           </div>
         </div>
@@ -580,7 +580,7 @@ export default function HUD({
               title={attentionItems.length > 0 ? health.summary : "Cockpit — villa status at a glance"}
               aria-label="Open Cockpit — villa status at a glance"
             >
-              <TriangleAlert size={18} />
+              <TriangleAlert size={24} />
               {attentionItems.length > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
                   {formatCountBadge(attentionItems.length)}
@@ -596,7 +596,7 @@ export default function HUD({
                   : "Facility — maintenance, readiness, faults"}
                 aria-label="Open the facility workspace"
               >
-                <ClipboardList size={18} />
+                <ClipboardList size={24} />
                 {facilityAttention > 0 && (
                   <span className="icon-btn-count" aria-hidden="true">
                     {formatCountBadge(facilityAttention)}
@@ -623,13 +623,13 @@ export default function HUD({
                   title="Switch profile"
                   aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
                 >
-                  <LogOut size={16} />
+                  <LogOut size={18} />
                 </button>
               </span>
             )}
             {canOpenSettings && (
               <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
-                <Settings size={20} />
+                <Settings size={24} />
               </button>
             )}
           </div>
@@ -651,7 +651,7 @@ export default function HUD({
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
-              <EllipsisVertical size={19} />
+              <EllipsisVertical size={24} />
             </button>
             {menuOpen && (
               <div className="hud-menu" role="menu" aria-label="Settings and profile">

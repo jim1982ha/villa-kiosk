@@ -161,8 +161,14 @@
      on the right, not a visibly shorter section — see both selectors below.
      Re-declared (not just relied on via auto-sizing) inside the ≤640px
      compact-bar query, where the category row's own icon-btn shrinks to 32px
-     and this must shrink to match. */
-  --hud-pill-h: 48px;
+     and this must shrink to match.
+
+     It is NOT a free number: .hud-group sets this as an explicit height, so it
+     has to equal its own content + chrome exactly — 40px chip + 2×4px padding
+     + 2×1px border = 50. It was 48 against a 38px chip; raising the chip to the
+     brand guidelines' 40px without this would have overflowed the pill by 2px.
+     The compact query's 42 is the same arithmetic at a 32px chip. */
+  --hud-pill-h: 50px;
   /* One labelled form field, one rhythm. Three surfaces had grown their own
      numbers for the same idea — the Settings body (6px under a 13px label),
      the slider fields (8px) and the Facility forms (5px under a 12px one) —
@@ -498,10 +504,10 @@ button {
    corner within bounds instead — it overlaps the glyph slightly, which is the
    normal look for a count badge and costs nothing legibility-wise. */
 .icon-btn-count {
-  position: absolute; top: 1px; right: 1px; min-width: 14px; height: 14px;
-  padding: 0 3px; border-radius: 999px;
+  position: absolute; top: 1px; right: 1px; min-width: 16px; height: 16px;
+  padding: 0 3px; border-radius: var(--radius-pill);
   background: var(--status-danger); color: #fff;
-  font-size: var(--text-2xs); font-weight: 700; line-height: 14px; text-align: center;
+  font-size: var(--text-2xs); font-weight: 700; line-height: 16px; text-align: center;
   box-shadow: 0 0 0 1.5px var(--bg-overlay);
 }
 
@@ -509,7 +515,12 @@ button {
    its own pill, so the categories read clearly without any text labels. */
 .hud-group {
   display: flex; align-items: center; gap: 4px;
-  border-radius: var(--radius-squircle); padding: 4px;
+  /* --panel-radius (18px), not the 14px squircle its BUTTONS use: the brand
+     guidelines define one panel material — background, blur, hairline and an
+     18px radius — shared by the top bar, the floor switch and the bottom bar,
+     with the squircle reserved for the controls sitting on it. Container and
+     control are deliberately two different shapes now. */
+  border-radius: var(--panel-radius); padding: 4px;
   border: 1px solid var(--hairline);
   /* Explicit (not just a side effect of 4px padding + a 38px icon-btn) so
      .hud-brand can target the exact same number below rather than the two
@@ -520,7 +531,7 @@ button {
    switch, on the left). Full-width rows inside a single rounded pill. */
 .hud-stack {
   display: flex; flex-direction: column; gap: 4px;
-  border-radius: var(--radius-squircle); padding: 4px;
+  border-radius: var(--panel-radius); padding: 4px;
   border: 1px solid var(--hairline);
 }
 /* Both groups reset the shared .icon-btn glass chrome to a flat, borderless
@@ -530,7 +541,7 @@ button {
   background: transparent; backdrop-filter: none; border: none;
   color: var(--text-primary);
 }
-.hud-group .icon-btn { width: 38px; height: 38px; }
+.hud-group .icon-btn { width: 40px; height: 40px; }
 .hud-stack .icon-btn { width: 40px; height: 38px; }
 .hud-group .icon-btn:hover, .hud-stack .icon-btn:hover { background: var(--bg-input); }
 .hud-group .icon-btn.active, .hud-stack .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
@@ -565,10 +576,10 @@ button {
      most of the app's life, before the --text-* scale rollout (2.83.0)
      mapped it to the wrong step. */
   font-family: var(--font-display); font-size: var(--text-xl); font-weight: 500;
-  /* Same squircle every other HUD section chip uses (icon buttons, the floor
-     stack, the category group) — this used to be a full capsule (999px),
-     the one section shape that didn't match the rest of the HUD. */
-  border: 1px solid var(--hairline); border-radius: var(--radius-squircle);
+  /* The shared panel radius (see .hud-group) — this chip is a section of
+     the top bar, so it takes the panel shape, not the button squircle. It
+     used to be a full capsule (999px), the one section that matched nothing. */
+  border: 1px solid var(--hairline); border-radius: var(--panel-radius);
   /* Height, not vertical padding: a content-driven height (the old rule was
      `padding: 6px 16px 6px 10px`) came out shorter than .hud-group's own
      48px (its 38px icon-btn + 4px top/bottom padding + border) because this
@@ -983,6 +994,10 @@ button {
 .summary-tile-icon svg { width: 24px; height: 24px; }
 .summary-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.18; gap: 1px; }
 .summary-tile-label {
+  /* 11px Jost caps, per the brand guidelines' bottom-bar spec — the label is
+     an eyebrow, which is display type, not body copy. The VALUE below it is
+     Jost too (18px/500); everything a guest actually READS stays Public Sans. */
+  font-family: var(--font-display);
   font-size: var(--text-2xs); font-weight: 500; color: var(--text-dim);
   text-transform: uppercase; letter-spacing: var(--tracking-label);
 }

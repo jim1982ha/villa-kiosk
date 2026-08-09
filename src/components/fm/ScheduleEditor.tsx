@@ -164,7 +164,7 @@ export default function ScheduleEditor() {
                 onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}
               >{s.enabled ? "Pause" : "Resume"}</button>
               <button className="icon-btn" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
-                <Pencil size={15} />
+                <Pencil size={16} />
               </button>
               <button
                 className="icon-btn"
@@ -172,7 +172,7 @@ export default function ScheduleEditor() {
                 aria-label={`Remove ${s.title}`}
                 title="Remove this task. Completions already logged against it are kept."
               >
-                <Trash2 size={15} />
+                <Trash2 size={16} />
               </button>
             </div>
           );

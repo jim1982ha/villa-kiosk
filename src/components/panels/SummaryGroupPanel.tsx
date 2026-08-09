@@ -226,7 +226,7 @@ export default function SummaryGroupPanel({
                 disabled={!canControl}
                 onClick={() => callService("scene", "turn_on", {}, { entity_id: s.entityId })}
               >
-                <Sparkles size={15} /> {s.name}
+                <Sparkles size={16} /> {s.name}
               </button>
             ))}
           </div>
@@ -299,7 +299,7 @@ export default function SummaryGroupPanel({
             <span className="summary-entity-name-row">
               <span className="summary-entity-name" title={label}>{label}</span>
               {hiddenInHa && (
-                <EyeOff size={13} className="summary-entity-hidden-icon" aria-label="Hidden in HA" />
+                <EyeOff size={16} className="summary-entity-hidden-icon" aria-label="Hidden in HA" />
               )}
             </span>
             <span className="summary-entity-state">{stateText}</span>

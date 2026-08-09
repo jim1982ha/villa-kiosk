@@ -123,7 +123,7 @@ export default function GroupedDevices() {
               </div>
             </div>
             <button className="icon-btn icon-btn-danger" style={{ flexShrink: 0 }} title="Delete group" onClick={() => deleteGroup(group.id)}>
-              <Trash2 size={15} />
+              <Trash2 size={16} />
             </button>
           </div>
 
@@ -147,7 +147,7 @@ export default function GroupedDevices() {
                   className="icon-btn" style={{ width: 20, height: 20, borderRadius: 999, flexShrink: 0 }}
                   title="Remove from group" onClick={() => removeMember(group, id)}
                 >
-                  <X size={12} />
+                  <X size={16} />
                 </button>
               </span>
             ))}
@@ -171,7 +171,7 @@ export default function GroupedDevices() {
           onClick={() => setShowSuggestions((s) => !s)}
         >
           {showSuggestions ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          <Sparkles size={13} /> {suggestions.length} suggested group{suggestions.length === 1 ? "" : "s"}
+          <Sparkles size={16} /> {suggestions.length} suggested group{suggestions.length === 1 ? "" : "s"}
         </button>
       )}
 

@@ -122,14 +122,14 @@ function EntityMapRow({
                 disabled={!remapNewId || remapNewId === entryKey}
                 onClick={() => remapNewId && onRemapApply(entryKey, remapNewId)}
               >
-                <Check size={13} /> Apply
+                <Check size={16} /> Apply
               </button>
               <button
                 className="btn ghost"
                 style={{ padding: "5px 8px", fontSize: "var(--text-xs)" }}
                 onClick={onRemapCancel}
               >
-                <X size={13} /> Cancel
+                <X size={16} /> Cancel
               </button>
             </div>
           </div>
@@ -152,14 +152,14 @@ function EntityMapRow({
                 title="Redirect this 3D mesh to a different entity ID"
                 onClick={(e) => { e.stopPropagation(); onStartRemap(entryKey); }}
               >
-                <Pencil size={14} />
+                <Pencil size={16} />
               </button>
               <button
                 className="icon-btn icon-btn-danger"
                 title="Remove this entity"
                 onClick={(e) => { e.stopPropagation(); onRemove(entryKey); }}
               >
-                <Trash2 size={15} />
+                <Trash2 size={16} />
               </button>
             </span>
             {expanded ? <ChevronDown size={16} className="muted" /> : <ChevronRight size={16} className="muted" />}

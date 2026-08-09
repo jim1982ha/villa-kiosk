@@ -636,7 +636,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             close) while they're mid-gesture on the feed. */}
         {zoom.zoomed && (
           <button className="camera-zoom-pill" onClick={zoom.reset} title="Reset zoom" aria-label="Reset zoom">
-            <ZoomOut size={15} /> Zoomed in — tap to reset
+            <ZoomOut size={16} /> Zoomed in — tap to reset
           </button>
         )}
       </div>

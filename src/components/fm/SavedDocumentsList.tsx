@@ -39,7 +39,7 @@ export default function SavedDocumentsList({
               <div className="fm-row-sub muted">Saved {localStamp(doc.generatedAt)}</div>
             </div>
             <button className="btn ghost" onClick={() => onOpen(doc)}>
-              <Eye size={15} /> Reopen
+              <Eye size={16} /> Reopen
             </button>
             <button
               className="icon-btn"
@@ -47,7 +47,7 @@ export default function SavedDocumentsList({
               aria-label={`Delete saved ${kind === "report" ? "report" : "statement"} for ${monthLabel(doc.month)}`}
               title="Delete this saved document"
             >
-              <Trash2 size={15} />
+              <Trash2 size={16} />
             </button>
           </div>
         ))}

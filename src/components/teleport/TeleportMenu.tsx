@@ -108,7 +108,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
               title="Remove room"
               aria-label={`Remove room ${p.name}`}
             >
-              <Trash2 size={14} />
+              <Trash2 size={16} />
             </span>
             <span>{p.name}</span>
           </button>
@@ -120,7 +120,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
         </button>
       </div>
       <p className="muted center mt body-text">
-        <MapPin size={14} /> Tap a room to fly there — the view is framed to that room automatically.
+        <MapPin size={16} /> Tap a room to fly there — the view is framed to that room automatically.
       </p>
     </div>
   );

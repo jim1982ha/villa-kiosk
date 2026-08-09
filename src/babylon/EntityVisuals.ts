@@ -240,14 +240,21 @@ const LABEL_HEIGHT_PX = 76;
 // Height of the value pill (e.g. "42%", "21°") shown under the badge.
 const VALUE_CHIP_HEIGHT_PX = 18;
 // The badge circle's rendered diameter (unscaled) — also its tap radius
-// basis for pickBadgeAt()'s nearest-centre hit-testing.
-const BADGE_DIAMETER_PX = 40;
+// basis for pickBadgeAt()'s nearest-centre hit-testing. 44px is the brand
+// guidelines' stated minimum for the map badge, and is the app-wide
+// --touch-min: this is a wall tablet operated standing up, often by someone
+// who has never seen it before, so the badge must be a real touch target
+// rather than the 40px it shipped at.
+const BADGE_DIAMETER_PX = 44;
 
 // Babylon GUI's canvas text defaults to Arial regardless of the app's own
 // --font-ui — every TextBlock in this file must set this explicitly, or its
-// text silently reverts to that default instead of matching the rest of the
-// Kiosk (San Francisco on Apple devices).
-const GUI_FONT_FAMILY = "-apple-system, BlinkMacSystemFont, system-ui, sans-serif";
+// text silently reverts to that default. Public Sans first (self-hosted, see
+// styles.css's @font-face): canvas text can use a webfont once it has
+// loaded, so the in-scene chips read as the same family as the DOM rather
+// than as the platform's own UI font sitting next to it. The system stack
+// remains behind it as the pre-load / failure fallback.
+const GUI_FONT_FAMILY = "\"Public Sans\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif";
 
 // ── "card" badge style (config.badgeStyle==="card") — a horizontal category-
 // coloured card with an icon chip + value, instead of the classic vertical

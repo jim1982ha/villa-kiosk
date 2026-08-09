@@ -97,7 +97,7 @@ export default function ReadinessTab({
             window.setTimeout(() => setSaved(false), 2500);
           }}
         >
-          <Camera size={15} /> {saved ? "Saved" : "Save snapshot"}
+          <Camera size={16} /> {saved ? "Saved" : "Save snapshot"}
         </button>
       </div>
 
@@ -118,12 +118,12 @@ export default function ReadinessTab({
                       cards, and an outlier height there reads as a bug). */}
                   {isDeviceList && !!c.entityIds?.length && (
                     <button className="btn ghost fm-row-title-action" onClick={onOpenUnavailableDevices}>
-                      View unavailable devices <ChevronRight size={15} />
+                      View unavailable devices <ChevronRight size={16} />
                     </button>
                   )}
                   {!isDeviceList && shortcutLabel && !!c.entityIds?.length && (
                     <button className="btn ghost fm-row-title-action" onClick={() => onOpenCheckDevices(c)}>
-                      {shortcutLabel} <ChevronRight size={15} />
+                      {shortcutLabel} <ChevronRight size={16} />
                     </button>
                   )}
                 </div>

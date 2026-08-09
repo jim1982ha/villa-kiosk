@@ -139,7 +139,7 @@ export default function DeviceSearchPicker({
         {value && (
           <button type="button" className="icon-btn" style={{ width: 28, height: 28 }}
             onClick={() => { onClear(); setOpen(false); }} aria-label="Clear device">
-            <X size={14} />
+            <X size={16} />
           </button>
         )}
       </div>

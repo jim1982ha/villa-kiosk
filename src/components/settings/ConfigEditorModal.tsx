@@ -46,7 +46,7 @@ function CollapsibleSection({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
       >
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         {title}
       </button>
       {open && children}
@@ -134,7 +134,7 @@ function LogoutAllSection() {
         </div>
       ) : (
         <button className="btn ghost" onClick={() => setConfirming(true)}>
-          <LogOut size={15} /> Log out all devices
+          <LogOut size={16} /> Log out all devices
         </button>
       )}
     </>

@@ -103,7 +103,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           </div>
         ) : (
           <button className="btn ghost" onClick={() => setConfirmingDeleteAll(true)}>
-            <Trash2 size={15} /> Delete all
+            <Trash2 size={16} /> Delete all
           </button>
         )}
       </div>
@@ -135,7 +135,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
               aria-label={`Remove ${s.schedule.title}`}
               title="Remove this task. Completions already logged against it are kept."
             >
-              <Trash2 size={15} />
+              <Trash2 size={16} />
             </button>
           </div>
         ))}

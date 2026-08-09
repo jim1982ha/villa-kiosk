@@ -51,7 +51,7 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
             wordBreak: "break-all", display: "flex", alignItems: "center", gap: 6,
           }}
         >
-          <Link2 size={13} style={{ flexShrink: 0, opacity: 0.5 }} />
+          <Link2 size={16} style={{ flexShrink: 0, opacity: 0.5 }} />
           {mesh}
         </div>
         <div style={{ flex: 1 }}>
@@ -63,7 +63,7 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
           onClick={() => onUnbind(mesh)}
           title="Remove binding"
         >
-          <Unlink size={15} />
+          <Unlink size={16} />
         </button>
       </div>
 

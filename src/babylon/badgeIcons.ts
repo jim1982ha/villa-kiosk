@@ -26,9 +26,13 @@ const ICON_STROKE_VIEWBOX = 1.5;
  *  on-screen size; a fraction (not a fixed px) so it still looks right when
  *  the label-size stepper scales the badge up or down. */
 export const BADGE_CORNER_FRACTION = 0.28;
-// Ring stroke as a fraction of the badge, landing close to --stroke-icon
-// (1.5px) at typical on-screen badge size.
+// Ring stroke as a fraction of the badge. RING_FRACTION lands on the
+// guidelines' 1.5px state ring at the 44px on-screen badge size
+// (44 × 0.035 ≈ 1.5); HAIRLINE_FRACTION lands on its 1px idle hairline.
+// Fractions, not fixed px, so both stay proportional when the label-size
+// stepper or the bird's-eye zoom scales the badge.
 const RING_FRACTION = 0.035;
+const HAIRLINE_FRACTION = 0.023;
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
@@ -120,18 +124,15 @@ export function badgeImageDataUrl(
     ctx.fillStyle = surface.fill;
     ctx.fill();
 
-    // A thin universal edge so a mostly-neutral badge (the default now — see
-    // VESTA-DESIGN.md §0) stays legible against both a bright white ceiling
-    // and dark night grass behind it in the 3D scene, regardless of theme.
-    ctx.save();
-    roundRectPath(ctx, m + 0.5, m + 0.5, size - 1, size - 1, corner);
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(0,0,0,0.28)";
-    ctx.stroke();
-    ctx.restore();
-
+    // The ring, straight from the guidelines' badge table: 1px --hairline when
+    // idle, 1.5px in the state colour when active/alerting, 1.5px DASHED amber
+    // when unavailable. Every state has one — which is also what keeps a
+    // resting badge legible against both a bright white ceiling and dark night
+    // grass, so there is no separate hardcoded edge any more.
     if (surface.ring) {
-      const ringPx = Math.max(2, size * RING_FRACTION);
+      const ringPx = surface.ringHairline
+        ? Math.max(1, size * HAIRLINE_FRACTION)
+        : Math.max(2, size * RING_FRACTION);
       ctx.save();
       roundRectPath(ctx, m + ringPx / 2, m + ringPx / 2, size - ringPx, size - ringPx, Math.max(0, corner - ringPx / 2));
       ctx.lineWidth = ringPx;

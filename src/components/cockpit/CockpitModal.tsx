@@ -188,13 +188,13 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
             <span>By {pivot}</span>
             <div className="segmented" role="group" aria-label="Group by" style={{ flex: "0 0 auto" }}>
               <button className={pivot === "room" ? "active" : ""} onClick={() => setPivot("room")} aria-pressed={pivot === "room"}>
-                <MapPin size={14} /> Room
+                <MapPin size={16} /> Room
               </button>
               <button className={pivot === "floor" ? "active" : ""} onClick={() => setPivot("floor")} aria-pressed={pivot === "floor"}>
-                <Building2 size={14} /> Floor
+                <Building2 size={16} /> Floor
               </button>
               <button className={pivot === "category" ? "active" : ""} onClick={() => setPivot("category")} aria-pressed={pivot === "category"}>
-                <LayoutGrid size={14} /> Category
+                <LayoutGrid size={16} /> Category
               </button>
             </div>
           </div>
@@ -237,7 +237,7 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
                     <span className="cockpit-pivot-label">{row.label}</span>
                     <div className="cockpit-pivot-bar"><div className="cockpit-pivot-bar-fill" style={{ width: `${pct}%` }} /></div>
                     <span className="cockpit-pivot-count muted">{row.count}</span>
-                    <ChevronRight size={14} className="cockpit-pivot-chevron muted" />
+                    <ChevronRight size={16} className="cockpit-pivot-chevron muted" />
                   </button>
                 );
               })}
@@ -247,13 +247,13 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
           {/* ── Energy today (only when it resolves) ───────────────── */}
           {energy && (
             <>
-              <div className="settings-section-title"><Zap size={15} style={{ verticalAlign: -2 }} /> Energy today</div>
+              <div className="settings-section-title"><Zap size={16} style={{ verticalAlign: -2 }} /> Energy today</div>
               <p className="cockpit-energy-value">{energy.kwh.toFixed(1)} <span className="muted body-text">kWh</span></p>
             </>
           )}
 
           {/* ── Recent activity ─────────────────────────────────────── */}
-          <div className="settings-section-title"><Activity size={15} style={{ verticalAlign: -2 }} /> Recent activity</div>
+          <div className="settings-section-title"><Activity size={16} style={{ verticalAlign: -2 }} /> Recent activity</div>
           {villaActivity === "loading" && <p className="muted body-text">Loading…</p>}
           {villaActivity === "error" && <p className="muted body-text">Couldn't reach Home Assistant's activity log.</p>}
           {Array.isArray(villaActivity) && villaActivity.length === 0 && (
@@ -273,7 +273,7 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
           {/* ── Updates available (Owner only, small) ──────────────── */}
           {updatesAvailable !== null && updatesAvailable > 0 && (
             <p className="cockpit-updates muted body-text">
-              <RefreshCw size={13} style={{ verticalAlign: -2 }} /> {updatesAvailable} update{updatesAvailable === 1 ? "" : "s"} available
+              <RefreshCw size={16} style={{ verticalAlign: -2 }} /> {updatesAvailable} update{updatesAvailable === 1 ? "" : "s"} available
             </p>
           )}
         </div>
@@ -320,7 +320,7 @@ function CockpitAttentionRow({ item, onOpenEntity }: { item: AttentionItem; onOp
           {item.detail}{item.room ? ` · ${item.room}` : ""}
         </span>
       </span>
-      {tappable && <ChevronRight size={14} className="muted" />}
+      {tappable && <ChevronRight size={16} className="muted" />}
     </Row>
   );
 }
