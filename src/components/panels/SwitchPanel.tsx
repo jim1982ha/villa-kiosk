@@ -9,7 +9,7 @@ import UnavailableNotice from "./UnavailableNotice";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { onOffColor, isUnavailable } from "@/utils/stateColors";
+import { isUnavailable } from "@/utils/stateColors";
 
 export default function SwitchPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
@@ -24,7 +24,7 @@ export default function SwitchPanel({ entity, mapping, onClose }: PanelProps) {
         <PowerToggle on={on} onClick={toggle} label={mapping.label} requireConfirm={mapping.requireConfirm} />
       )}
 
-      <LastDayTimeline entityId={mapping.entityId} colorFor={onOffColor} />
+      <LastDayTimeline entityId={mapping.entityId} />
     </BasePanel>
   );
 }

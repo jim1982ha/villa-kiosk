@@ -27,13 +27,17 @@ const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; note: string }[] 
     note: "Neutral square, dashed amber ring — Home Assistant has lost contact with this device" },
 ];
 
-/** The coloured status pill each device PANEL shows (a different vocabulary
- *  from the map badge above — panels have room for four distinct states). */
+/** The coloured status pill each device PANEL shows, and the colours of the
+ *  history bar underneath it (both read utils/stateColors' STATUS_COLOR — a
+ *  finer vocabulary than the map badge above, because a panel has room for
+ *  the distinction and a history bar genuinely needs it). */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
-  { label: "On / active", swatch: STATUS_COLOR.active, note: "Device is on, unlocked-safe, or open" },
+  { label: "On / active", swatch: STATUS_COLOR.active, note: "Device is on, locked-secure, or open" },
   { label: "Off / idle", swatch: STATUS_COLOR.idle, note: "Device is off or in its resting state" },
+  { label: "In progress", swatch: STATUS_COLOR.transitional,
+    note: "Moving between the two — opening, closing, locking, arming" },
   { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "Home Assistant has lost contact — state unknown" },
-  { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, leak, low battery)" },
+  { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak)" },
 ];
 
 export default function LegendModal({ onClose }: { onClose: () => void }) {

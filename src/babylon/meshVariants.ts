@@ -11,6 +11,7 @@
 // which record why the per-type vocabularies were removed in the first place).
 
 import type { HassEntity } from "@/types/ha.types";
+import { TRANSITIONAL_STATES } from "@/utils/stateColors";
 
 // ── Multi-mesh visual variants (e.g. a curtain's closed/half/open poses) ────
 // See EntityMap.extractVariantSuffix's docstring for the "__<variant>" mesh-
@@ -69,11 +70,11 @@ const LEVEL_ATTRS: ReadonlyArray<readonly [string, number]> = [
  *  Matches the old cover-specific 15/85 split, now applied to every type. */
 const HALF_LOW = 0.15;
 const HALF_HIGH = 0.85;
-/** States that mean "mid-transition" — part-way by definition, whatever the
- *  device is. Not a vocabulary: purely extra ways to reach the "half" pose. */
-const TRANSITIONAL_STATES = new Set([
-  "opening", "closing", "locking", "unlocking", "arming", "pending", "buffering",
-]);
+// TRANSITIONAL_STATES ("opening"/"locking"/… — part-way by definition,
+// whatever the device is) is imported at the top from the status palette,
+// which paints those same states in their own colour: a device the map shows
+// mid-pose and the history bar shows as a distinct segment have to agree on
+// which states those are, so there is one list rather than two.
 
 /** The available variant word nearest `desired` in `order` (by index
  *  distance) — e.g. a cover authored with only "closed"/"open" meshes (no

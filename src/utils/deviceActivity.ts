@@ -12,6 +12,7 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityType } from "@/types/scene.types";
+import { TRANSITIONAL_STATES } from "@/utils/stateColors";
 
 export type DeviceActivity = "on" | "off" | "alert" | "info";
 
@@ -28,7 +29,17 @@ export function classifyDeviceActivity(type: EntityType, s: HassEntity): DeviceA
   switch (type) {
     // Locked is the normal, secure state — quiet, no signal. Only an
     // unlocked door demands attention (alert, not a plain "on").
-    case "lock":          return s.state === "locked" ? "off" : "alert";
+    //
+    // "Not locked" is NOT the same question as "unlocked", though, and
+    // conflating them made the badge flash a red alert for the second or two
+    // a motorised lock spends reporting "locking" — an alarm raised by the
+    // door securing itself. A lock in motion is quiet: it is on its way to a
+    // rest state and the map already shows the movement through its pose
+    // variant (see meshVariants, which shares TRANSITIONAL_STATES with the
+    // status palette). "jammed" still alerts — it is a real fault.
+    case "lock":
+      if (s.state === "locked") return "off";
+      return TRANSITIONAL_STATES.has(s.state) ? "off" : "alert";
     case "binary_sensor": return s.state === "on" ? "alert" : "off";
     case "climate":       return s.state === "off" ? "off" : "on";
     case "cover": {

@@ -1,3 +1,23 @@
+## 2.157.0
+
+### Fixed — a lock securing itself was reported as an alarm
+
+Every transitional Home Assistant state was being painted as "Home Assistant has lost contact". The per-domain colour helpers each enumerated the states they knew and fell through to amber, so `locking`, `unlocking`, `opening`, `closing`, `arming` and `buffering` — states HA reports clearly and deliberately — were announced as the one thing the palette exists to keep separate from everything else: a device whose state is genuinely unknown. A motorised lock spends a second or two in `locking` on the way to `locked`, so its history bar carried an amber "no contact" stripe every single time the door was secured, and the panel's status pill went red and read UNLOCKED for the same second, because `locked ? "on" : "danger"` had only two answers for a domain with five real states. The map badge did the same thing through `classifyDeviceActivity` — an alert raised by a door locking itself.
+
+The four meanings had no slot for "moving between two rest states", which is a distinction Home Assistant's own history and logbook views do draw. So there is now a fifth, `transitional`, on a new `--status-pending` token defined in all three themes. Cyan is the one hue the rest of the system leaves free: it is none of the six category colours, which must never be reused for non-category UI, and it reads as neither the green of settled-on, the amber of lost-contact nor the red of a fault — which is the point, since a device in motion is doing what it was told rather than failing.
+
+### Changed — one state→meaning map, replacing the per-domain helpers
+
+`onOffColor`, `lockColor` and `coverColor` are gone, replaced by a single `statusKeyFor(state, domain)` covering the states Home Assistant actually reports across the domains this kiosk shows: lock, cover, valve, alarm_control_panel, climate, water_heater, humidifier, media_player, vacuum, device_tracker and update, plus the states that mean the same thing everywhere. HA's own palette is deliberately NOT imported — dropping a second, unrelated set of hues into a narrow brand system would undo the rebrand — but its distinctions are mapped onto the VESTA vocabulary, which is what the fifth meaning came from.
+
+The fallback changed with it, and that is the substance of the fix rather than a detail. An unrecognised state now falls back to idle instead of amber, so a state the map does not model reads as "nothing to report" rather than as a claim about the connection that the data never made. This matches what HA itself does, where anything not on its active list paints as inactive. Entities whose states cannot be known ahead of time — a weather condition, a vendor status string — should not reach the map at all; `paletteColorFor` is still the tool for those.
+
+Two consequences worth stating. `LastDayTimeline` now derives the colouring from the entity_id it was already being given, so the five panels that show a timeline no longer pass a hand-picked helper: choosing the wrong one was both easy and silent, since a lock coloured by cover rules paints `locked` in the green a cover uses for OPEN. And the transitional set is now shared with `babylon/meshVariants.ts`, which was maintaining its own copy of the same list to reach the part-way pose — a device the map shows mid-pose and the history bar shows as a distinct segment have to agree on which states those are.
+
+The lock panel's pill also stopped guessing. It reports the state HA actually sent — LOCKED, UNLOCKING, JAMMED — rather than deriving two words from one comparison, which is both truer and shorter. The open padlock icon is now reserved for a lock that is genuinely not secured: mid-motion, jammed and unavailable all keep the closed icon, for the same reason `meshVariants` falls an unauthored state back to the closed pose. Never imply a door is open on anything short of the device saying so.
+
+The "Map colours" legend documents the fifth meaning, and its claim that green means "unlocked-safe" — which had been backwards since the lock helper was written — now reads "locked-secure".
+
 ## 2.156.0
 
 ### Changed — the history range picker now covers every chart, not just the state timeline

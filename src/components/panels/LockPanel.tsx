@@ -7,13 +7,20 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { usePendingAck } from "@/hooks/usePendingAck";
-import { lockColor, isUnavailable } from "@/utils/stateColors";
+import { isUnavailable, statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
 
 export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
   const unavailable = isUnavailable(entity);
   const locked = entity?.state === "locked";
+  // The pill reads the lock's ACTUAL state rather than `locked ? … : …`.
+  // The old ternary had only two answers for a domain with five real ones, so
+  // every state that wasn't literally "locked" — the "locking"/"unlocking" the
+  // motor reports for a second or two, and "jammed" — was announced as a red
+  // "UNLOCKED": an alarming claim about a door that was in fact busy securing
+  // itself. Reporting the state HA actually sent is both truer and shorter.
+  const lockStatus = statusKeyFor(entity?.state ?? "", mapping.entityId);
   const [confirming, setConfirming] = useState(false);
   // A deadbolt is the SLOWEST device class in the villa — a Z-Wave/Zigbee
   // lock routinely takes seconds to report back, and unlike a light there is
@@ -49,9 +56,15 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
       onClose={onClose}
     >
       <div className="center" style={{ margin: "8px 0 20px" }}>
-        <span className={`status-pill ${unavailable ? "unavailable" : locked ? "on" : "danger"}`}>
-          {unavailable ? <Lock size={16} /> : locked ? <Lock size={16} /> : <Unlock size={16} />}
-          {unavailable ? "UNAVAILABLE" : locked ? "LOCKED" : "UNLOCKED"}
+        <span className={`status-pill ${STATUS_PILL_CLASS[lockStatus]}`}>
+          {/* The open padlock is reserved for a lock that is genuinely NOT
+              secured. Mid-motion, jammed and unavailable all keep the closed
+              icon, for the same reason meshVariants falls an unauthored state
+              back to the closed pose: never imply a door is open on anything
+              short of the device saying so. */}
+          {entity?.state === "unlocked" || entity?.state === "open"
+            ? <Unlock size={16} /> : <Lock size={16} />}
+          {(entity?.state ?? "unknown").replace(/_/g, " ").toUpperCase()}
         </span>
       </div>
 
@@ -92,7 +105,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline entityId={mapping.entityId} colorFor={lockColor} />
+      <LastDayTimeline entityId={mapping.entityId} />
 
       {!unavailable && !locked && (
         <p className="muted body-text mt">

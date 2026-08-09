@@ -9,7 +9,7 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { brightnessToPct } from "@/utils/colorUtils";
-import { onOffColor, isUnavailable } from "@/utils/stateColors";
+import { isUnavailable } from "@/utils/stateColors";
 
 export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
@@ -56,7 +56,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline entityId={mapping.entityId} colorFor={onOffColor} />
+      <LastDayTimeline entityId={mapping.entityId} />
     </BasePanel>
   );
 }

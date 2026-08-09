@@ -7,7 +7,7 @@ import UnavailableNotice from "./UnavailableNotice";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { onOffColor, isUnavailable } from "@/utils/stateColors";
+import { isUnavailable } from "@/utils/stateColors";
 
 // Named labels for the common discrete-speed-count cases (matches how HA's
 // own more-info dialog reads a fan with a small, fixed number of steps —
@@ -94,7 +94,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline entityId={mapping.entityId} colorFor={onOffColor} />
+      <LastDayTimeline entityId={mapping.entityId} />
     </BasePanel>
   );
 }

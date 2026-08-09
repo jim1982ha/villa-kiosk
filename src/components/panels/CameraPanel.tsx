@@ -791,6 +791,15 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             // documents (utils/stateColors STATUS_COLOR) — this bar used to
             // paint a camera HA had lost contact with in its own literal
             // black, while the legend told the user that means amber.
+            //
+            // Written out rather than routed through statusKeyFor, because
+            // these three words are SYNTHESIZED here (see the status
+            // derivation above) and don't all mean what HA means by them:
+            // "offline" here is us failing to reach the camera — genuinely
+            // unavailable — whereas an entity whose STATE STRING is "offline"
+            // is a device successfully reporting a fault, which that map
+            // paints red alongside "error"/"unreachable". Same word, two
+            // vocabularies; don't collapse them.
             colorFor={(s) => (
               s === "motion" ? STATUS_COLOR.alert
                 : s === "offline" ? STATUS_COLOR.unavailable

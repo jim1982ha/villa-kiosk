@@ -9,21 +9,29 @@
 import StateTimeline from "./StateTimeline";
 import { useStateHistory } from "@/hooks/useStateHistory";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
+import { historyStateColor } from "@/utils/stateColors";
 
 export default function LastDayTimeline({
   entityId, colorFor,
 }: {
   entityId: string;
-  colorFor: (state: string) => string;
+  /** Optional — the entity's own domain rules are used by default, which is
+   *  what every simple panel wants. Each of them used to pass a hand-picked
+   *  per-domain helper instead, and passing the wrong one was both easy and
+   *  silent (a lock coloured by cover rules paints "locked" in the green a
+   *  cover uses for OPEN). Only override for a genuinely non-standard read —
+   *  binary_sensor's configurable alert state is the one real case. */
+  colorFor?: (state: string) => string;
 }) {
   const { range, picker } = useHistoryRange();
+  const paint = colorFor ?? historyStateColor(entityId);
   const { data, loading } = useStateHistory(entityId, range.hours);
   return (
     <div className="field">
       <HistoryHeader title={range.title} picker={picker} />
       <StateTimeline
         data={data}
-        colorFor={colorFor}
+        colorFor={paint}
         loading={loading}
         bucketMinutes={range.bucketMinutes}
       />

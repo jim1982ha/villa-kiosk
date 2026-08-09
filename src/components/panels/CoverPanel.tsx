@@ -6,7 +6,7 @@ import LastDayTimeline from "./LastDayTimeline";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { coverColor, isUnavailable } from "@/utils/stateColors";
+import { isUnavailable, statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
 
 export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
@@ -36,7 +36,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Blinds size={22} />} onClose={onClose}>
       <div className="center" style={{ marginBottom: 16 }}>
-        <span className={`status-pill ${unavailable ? "unavailable" : "off"}`}>{stateLabel}</span>
+        <span className={`status-pill ${STATUS_PILL_CLASS[statusKeyFor(entity?.state ?? "", mapping.entityId)]}`}>{stateLabel}</span>
       </div>
 
       {/* The pill above already reads UNAVAILABLE — the shared component's
@@ -70,7 +70,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline entityId={mapping.entityId} colorFor={coverColor} />
+      <LastDayTimeline entityId={mapping.entityId} />
     </BasePanel>
   );
 }

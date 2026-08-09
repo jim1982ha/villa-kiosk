@@ -207,6 +207,15 @@
 
   --status-on: #34845A;
   --status-off: #D8D3C7;
+  /* "Moving between two rest states" — see utils/stateColors STATUS_COLOR.
+     Cyan is the one hue left free by the rest of the system: it is not any of
+     the six --cat-* category hues (which must never be reused for non-category
+     UI), and it reads as neither the green of settled-on, the amber of
+     lost-contact, nor the red of a fault, which is exactly the point — a lock
+     motoring is doing what it was told, not failing. Kept clear of
+     --cat-energy's softer blue by staying saturated and cyan rather than
+     drifting toward it. */
+  --status-pending: #1F7F8C;
   --status-warning: #B8801F;
   --status-danger: #B24232;
 
@@ -249,6 +258,7 @@
 
   --status-on: #4FC07E;
   --status-off: #333833;
+  --status-pending: #48C2CE;
   --status-warning: #E0A93A;
   --status-danger: #E2685A;
 
@@ -294,6 +304,7 @@
 
   --status-on: #3E8F62;
   --status-off: #23261F;
+  --status-pending: #2E7681;
   --status-warning: #A87C2A;
   --status-danger: #A4483C;
 
@@ -1352,6 +1363,11 @@ input[type="range"]::-moz-range-thumb {
 .status-pill.on { background: color-mix(in srgb, var(--status-on) 20%, transparent); color: var(--status-on); }
 .status-pill.off { background: var(--bg-input); color: var(--text-secondary); }
 .status-pill.danger { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }
+/* Mid-transition (locking, opening, arming…). Named for the status meaning it
+   paints rather than "pending", which on .big-toggle above means something
+   else entirely — a tap acknowledged but not yet confirmed by HA. This one is
+   a state HA has positively reported. */
+.status-pill.transitional { background: color-mix(in srgb, var(--status-pending) 20%, transparent); color: var(--status-pending); }
 /* Entity is unavailable/unknown to HA — a DISTINCT tone from both on/off and
    danger. Danger ("UNLOCKED"/"OPEN") asserts a known, confirmed state; showing
    that same tone when HA has actually LOST CONTACT with the device is a real
