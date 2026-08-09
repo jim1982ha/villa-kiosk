@@ -381,6 +381,32 @@ const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
  *  throws away detail the view had room for — the "grouping is far too
  *  eager" report. */
 const GROUP_OVERLAP_ALLOW_WIDTHS = 0.5;
+
+/** ── "Naturally touching" (co-located) badges ──────────────────────────────
+ *  Two devices modelled on top of each other — a ceiling fan and the
+ *  temperature sensor beside it, two downlights 30cm apart — overlap at EVERY
+ *  zoom level. They must not be what triggers a room collapse, or a room
+ *  containing one such pair would be permanently collapsed and its individual
+ *  badges unreachable.
+ *
+ *  So they are merged into ONE unit first, and the collapse test runs between
+ *  UNITS. The definition is deliberately "still overlapping at the closest
+ *  view the camera can reach", not an arbitrary distance: it is exactly the
+ *  condition "no amount of zooming will ever separate these two", which is
+ *  what makes the invariant hold — any two DISTINCT units can always be
+ *  pulled apart by zooming in, so an individual badge is always reachable.
+ *
+ *  The reference distance is read from the camera's OWN lowerRadiusLimit
+ *  rather than being a constant here, because that limit is literally "the
+ *  closest this camera can get" — and it is derived from the villa's size
+ *  (max(2, span * 0.08), see OverviewController), so the threshold scales
+ *  with the property instead of being a number tuned against one house. A
+ *  bigger villa is viewed from further out, so its badges cover more world
+ *  space and more of them legitimately read as co-located.
+ *
+ *  This constant is only the fallback for a camera that has no orbit radius
+ *  at all (first person), where you cannot stand inside a fixture anyway. */
+const CO_LOCATION_FALLBACK_DISTANCE = 2;
 /**
  * How much of the ROOM's own width a fanned-out pile may occupy before the
  * room summarises into its chip instead.
@@ -1974,6 +2000,15 @@ export class EntityVisuals {
     const boxes = this.labelBoxes(members, [], []);
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
     const gapPx = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
+    // Pairs that groupBadges merges into one CO-LOCATED UNIT are excluded
+    // below: they overlap at every reachable zoom, so they never trigger the
+    // room collapse and no zoom level "resolves" them. Including them would
+    // make this return a target the camera cannot reach — a hint promising a
+    // declutter that can never happen. `dist <= 0` alone used to be the only
+    // exclusion, which was the same bug for anchors that are a few
+    // centimetres apart rather than exactly coincident.
+    const refPx = this.pixelsPerWorldUnitAt(this.closestViewDistance());
+    const refGapW = refPx > 0 ? gapPx / refPx : 0;
     let required = 0;
     for (let i = 0; i < members.length; i++) {
       for (let j = i + 1; j < members.length; j++) {
@@ -1986,7 +2021,11 @@ export class EntityVisuals {
           members[j].wy - members[i].wy,
           members[j].wz - members[i].wz,
         );
-        if (dist <= 0) continue; // co-located anchors: no zoom separates these
+        if (dist <= 0) continue; // exactly coincident: no zoom separates these
+        if (refPx > 0) {
+          const coLocated = (boxes[i].halfW * allow + boxes[j].halfW * allow) / refPx + refGapW;
+          if (dist < coLocated) continue; // one unit — see the note above
+        }
         const need = (boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx) / dist;
         if (need > required) required = need;
       }
@@ -2812,15 +2851,36 @@ export class EntityVisuals {
     // summarised into their room's chip; smaller huddles are fanned apart.
     const baseY = this.labelBaseOffsetY();
     const boxes = this.labelBoxes(shown);
-    const piles = this.groupBadges(shown, boxes);
+    const { units, collided } = this.groupBadges(shown, boxes);
 
-    // A pile is laid out as a compact grid if that block actually FITS in the
-    // room it belongs to AND no member has to travel far from its own device
-    // to take its cell, and only summarises into the room's chip when it
-    // genuinely doesn't — see FAN_MAX_ROOM_SPAN_FRACTION / FAN_MAX_TRAVEL_WIDTHS.
+    // ── Two outcomes, not three (2.150.0) ────────────────────────────────
+    // A badge either sits on its own device, or its ROOM is summarised into
+    // one chip. The middle tier — fanning a pile across the room into a grid
+    // when the block happened to fit — is gone: it slid badges away from the
+    // devices they point at, so the badge you were reading was no longer over
+    // the thing it described. An honest room chip says less but never lies
+    // about position.
+    //
+    // The trigger is now simply "this unit touches a different unit". Units
+    // are the co-located huddles groupBadges merged first (a ceiling fan and
+    // the sensor beside it), which is what stops that trigger from being
+    // self-defeating: such a pair overlaps at every zoom, so testing raw
+    // badges would collapse their room permanently and no zoom could ever
+    // reveal them.
+    //
+    // Fanning survives INSIDE a unit only. Those members are stacked on the
+    // same spot, so spreading them is the only way to read them at all, and
+    // the travel is centimetres rather than across the room. It still has to
+    // clear pileFitsItsRoom — a huddle in a room with no measurable polygon
+    // has nowhere to fan into and collapses instead, exactly as before.
     this.roomClustered.clear();
     const fannable: number[][] = [];
-    for (const members of piles) {
+    for (let u = 0; u < units.length; u++) {
+      const members = units[u];
+      if (collided[u]) {
+        for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
+        continue;
+      }
       if (members.length < 2) continue;
       if (this.pileFitsItsRoom(shown, boxes, members)) fannable.push(members);
       else for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
@@ -2873,45 +2933,58 @@ export class EntityVisuals {
    *
    * Returns each pile as a list of indices into `shown`.
    */
+  /** Partition the visible badges into CO-LOCATED UNITS, and report which of
+   *  those units collide with a different unit at the current zoom.
+   *
+   *  Two passes over the same world-space test, differing only in the reach
+   *  they measure against:
+   *   • units      — reach at CO_LOCATION_REFERENCE_DISTANCE (the closest the
+   *                  camera ever gets). Overlapping there means overlapping
+   *                  always, i.e. genuinely stacked in the model.
+   *   • collisions — reach at the CURRENT quantised zoom, evaluated only
+   *                  between badges in DIFFERENT units.
+   *
+   *  Both are pure functions of world anchor positions and zoom, exactly as
+   *  before — no screen-space term, no hysteresis — so the grouping still
+   *  cannot change under pan, orbit or tilt. That property is the one this
+   *  whole subsystem exists to protect; see the file header.
+   */
   private groupBadges(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-  ): number[][] {
+  ): { units: number[][]; collided: boolean[] } {
     const n = shown.length;
     const parent = Array.from({ length: n }, (_, i) => i);
     const find = (x: number): number => {
       while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
       return x;
     };
+    const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
+    const scale = this.iconUserScale * this.iconZoomScale;
 
-    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
-    if (pxPerWorld > 0) {
-      // Each badge's on-screen half-width expressed in world units, so the
-      // whole test lives in world space. The allowance is subtracted here
-      // rather than in screen space so it scales identically.
-      const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
-      const reach = boxes.map((b) => (b.halfW * allow) / pxPerWorld);
-      const gapW = (FAN_GAP_PX * this.iconUserScale * this.iconZoomScale) / pxPerWorld;
+    // Squared world-space distance between two anchors. HEIGHT COUNTS
+    // (2.114.0): a ceiling fan and the lamp beneath it are metres apart on the
+    // Y axis and are drawn far apart, so a ground-distance-only test treated
+    // them as the same point. Including Y keeps this the same test in 3D.
+    const dist2 = (i: number, j: number): number => {
+      const dx = shown[j].wx - shown[i].wx;
+      const dy = shown[j].wy - shown[i].wy;
+      const dz = shown[j].wz - shown[i].wz;
+      return dx * dx + dy * dy + dz * dz;
+    };
+    /** How much world space each badge's on-screen half-width covers. */
+    const reachAt = (pxPerWorld: number) =>
+      boxes.map((b) => (b.halfW * allow) / pxPerWorld);
+
+    // ── Pass 1: merge the naturally-touching into units ──────────────────
+    const refPx = this.pixelsPerWorldUnitAt(this.closestViewDistance());
+    if (refPx > 0) {
+      const reach = reachAt(refPx);
+      const gapW = (FAN_GAP_PX * scale) / refPx;
       for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
-          const dx = shown[j].wx - shown[i].wx;
-          // HEIGHT COUNTS (2.114.0). This was ground distance (X/Z) only,
-          // which treated a ceiling fan and the table lamp beneath it as the
-          // same point — they then fanned apart, or collapsed into a room
-          // chip together, despite being drawn far apart on screen, because
-          // DRAWING uses the full 3D projection while the decision ignored an
-          // axis. Reported as the fan badge behaving inconsistently with
-          // everything else, and it was: an anchor sits just above its own
-          // geometry, so mounting height varies by metres across a room.
-          // Including Y keeps the decision PURE WORLD SPACE — still a
-          // function of anchor positions and zoom alone, still invariant
-          // under pan/orbit/tilt, still zero hysteresis — so it does not
-          // reintroduce the screen-space coupling that six earlier attempts
-          // died on. It is the same test in 3D instead of 2D.
-          const dy = shown[j].wy - shown[i].wy;
-          const dz = shown[j].wz - shown[i].wz;
           const need = reach[i] + reach[j] + gapW;
-          if (dx * dx + dy * dy + dz * dz < need * need) {
+          if (dist2(i, j) < need * need) {
             const ra = find(i), rb = find(j);
             if (ra !== rb) parent[ra] = rb;
           }
@@ -2926,7 +2999,58 @@ export class EntityVisuals {
       if (!members) { members = []; byRoot.set(r, members); }
       members.push(i);
     }
-    return [...byRoot.values()];
+    const units = [...byRoot.values()];
+
+    // ── Pass 2: does any unit touch a DIFFERENT unit at this zoom? ────────
+    // A hit marks BOTH units, since a collapse has to remove both sides of
+    // the collision — leaving one of them drawn over the other's room chip
+    // would be the very overlap this is resolving.
+    const collided = new Array<boolean>(units.length).fill(false);
+    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
+    if (pxPerWorld > 0 && units.length > 1) {
+      const reach = reachAt(pxPerWorld);
+      const gapW = (FAN_GAP_PX * scale) / pxPerWorld;
+      for (let a = 0; a < units.length; a++) {
+        for (let b = a + 1; b < units.length; b++) {
+          if (collided[a] && collided[b]) continue;
+          let hit = false;
+          for (const i of units[a]) {
+            for (const j of units[b]) {
+              const need = reach[i] + reach[j] + gapW;
+              if (dist2(i, j) < need * need) { hit = true; break; }
+            }
+            if (hit) break;
+          }
+          if (hit) { collided[a] = true; collided[b] = true; }
+        }
+      }
+    }
+    return { units, collided };
+  }
+
+  /** The nearest the active camera can be to a badge — the orbit camera's own
+   *  lowerRadiusLimit, which OverviewController scales from the villa's span.
+   *  Used as the reference view for deciding co-location; see
+   *  CO_LOCATION_FALLBACK_DISTANCE. */
+  private closestViewDistance(): number {
+    const cam = this.scene.activeCamera as unknown as { lowerRadiusLimit?: number } | null;
+    const limit = cam?.lowerRadiusLimit;
+    return typeof limit === "number" && limit > 0 ? limit : CO_LOCATION_FALLBACK_DISTANCE;
+  }
+
+  /** Pixels per world unit at an arbitrary viewing distance — the same
+   *  projection maths quantisedPixelsPerWorldUnit uses for the live camera,
+   *  factored out so the co-location pass can ask about a FIXED reference
+   *  distance instead. Not quantised: this is a constant, so there is no
+   *  zoom step for it to snap to. */
+  private pixelsPerWorldUnitAt(distance: number): number {
+    const cam = this.scene.activeCamera;
+    if (!cam || !(distance > 0)) return 0;
+    const vpH = this.scene.getEngine().getRenderHeight();
+    if (vpH <= 0) return 0;
+    const fov = cam.fov || 0.8;
+    const raw = vpH / (2 * distance * Math.tan(fov / 2));
+    return raw > 0 ? raw : 0;
   }
 
   /**

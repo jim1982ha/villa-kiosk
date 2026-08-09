@@ -1,3 +1,21 @@
+## 2.150.0
+
+### Changed — a badge is now either on its device or replaced by its room's chip; nothing in between
+
+Requested rule: collapse to the room chip as soon as two entity badges touch, but treat devices that are *naturally* stacked in the model — a ceiling fan and the temperature sensor beside it, two downlights a hand's width apart — as a single unit, so they cannot be what triggers it.
+
+The old behaviour had three tiers. Badges apart drew individually; badges touching were **fanned across the room into a grid** whenever that grid happened to fit; only when it didn't fit did the room collapse. The middle tier is gone. It slid badges away from the devices they point at, so the badge being read was no longer over the thing it described — an honest room chip says less but never lies about position.
+
+The second half of the rule is what makes the first half viable rather than self-defeating. A fan and its sensor overlap at *every* zoom level, so testing raw badges would collapse that room permanently, with no zoom able to reveal its contents. `groupBadges` therefore runs the same world-space test twice: once at the closest view the camera can reach, merging whatever still overlaps there into one **unit**, and once at the current zoom, but only *between different units*. A hit marks both sides, since collapsing one and leaving the other drawn over its chip would be the very overlap being resolved.
+
+"Closest the camera can reach" is read from the orbit camera's own `lowerRadiusLimit` rather than being a constant, because that limit is already derived from the villa's own span (`max(2, span * 0.08)`). The threshold therefore scales with the property — roughly 9cm of co-location tolerance on a 40m villa, 23cm on a 100m one — instead of being a number tuned against one house, which this project's rules forbid. It also yields the invariant the whole design rests on: **two distinct units can always be separated by zooming in**, so an individual badge is never permanently unreachable.
+
+Fanning survives, but only *inside* a unit, where the members are stacked on one spot and spreading them is the only way to read them at all — travel measured in centimetres rather than across a room. It still has to clear `pileFitsItsRoom`, so a huddle in a room with no measurable polygon collapses instead, exactly as before.
+
+**This does not reintroduce the failure mode six earlier rewrites died on.** The file's header records that they each ended up testing overlap in screen space, making grouping a function of camera pose — badges visibly dancing while panning. Both passes here remain pure functions of world anchor positions and zoom, quantised, with zero hysteresis, so pan, orbit and tilt still cannot change the outcome. Merging co-located badges first should if anything make it steadier, by removing the pairs that sat closest to the threshold and flickered across it.
+
+`minPxPerWorldToDeclutterRoom` — the "zoom in this far to separate these" hint, which shares the reach/gap formula by contract — was updated in step. It previously skipped only *exactly* coincident anchors; it now skips any pair inside one unit. Otherwise it would return a zoom target the camera cannot reach, promising a declutter that can never happen.
+
 ## 2.149.0
 
 ### Fixed — a selected segmented-control option was unreadable in the dark themes
