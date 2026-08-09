@@ -1,3 +1,9 @@
+## 2.182.0
+
+### Fixed — an unavailable badge's dashed ring sat inside the badge, not on its edge
+
+The baked badge image is normally inset inside the card, because the card's own border draws the edge — but a dashed border is not something Babylon GUI can draw, so that one state has no card border and its dash was left floating within the badge. The image now spans the full control whenever the ring is dashed, putting the dash on the outer edge where every other state's ring is.
+
 ## 2.181.0
 
 ### Changed — badges are never moved; a crowded room becomes its pill

@@ -2655,7 +2655,16 @@ export class EntityVisuals {
       // is what an unavailable device was showing.
       lbl.badge.thickness = surface.ring && !surface.ringDashed ? BADGE_RING_THICKNESS : 0;
       lbl.badge.color = surface.ring ?? "transparent";
-      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, state, override, BADGE_INSET_CARD);
+      // The baked image normally sits INSET inside the card, because the
+      // card's own Rectangle draws the edge. A DASHED ring cannot come from
+      // the Rectangle — Babylon GUI has no dashed border — so for that one
+      // state the image spans the full control instead, putting its dash on
+      // the badge's outer edge where every other state's ring is. Inset, it
+      // drew a dotted rectangle floating inside the badge, which is not the
+      // same object at all.
+      lbl.glyph.source = badgeImageDataUrl(
+        lbl.category, iconKey, state, override,
+        surface.ringDashed ? 0 : BADGE_INSET_CARD);
       // The inline value shares the card's surface, so it must track the same
       // glyph colour — otherwise it stays at its build-time "off" colour and
       // goes unreadable the moment the card tints for active/alert.
