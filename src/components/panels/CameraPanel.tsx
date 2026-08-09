@@ -267,12 +267,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // while the next camera is still loading — the point of the gesture is to
   // move on quickly.
   useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
+    const inPanel = (e: PointerEvent) =>
+      !!rootRef.current && e.target instanceof Node && rootRef.current.contains(e.target);
     let downX = 0, downY = 0, downT = 0, tracking = false;
     const SWIPE_MAX_MS = 600;
     const onDown = (e: PointerEvent) => {
-      if (zoomedRef.current || !canCycleRef.current) return;
+      if (zoomedRef.current || !canCycleRef.current || !inPanel(e)) return;
       tracking = true;
       downX = e.clientX; downY = e.clientY; downT = Date.now();
     };
@@ -288,13 +288,21 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
       }
     };
     const onCancel = () => { tracking = false; };
-    el.addEventListener("pointerdown", onDown);
-    el.addEventListener("pointerup", onUp);
-    el.addEventListener("pointercancel", onCancel);
+    // CAPTURE phase, on the window. Bubbling was still being lost: while a
+    // feed is starting up the panel puts overlays over it, hls.js takes pointer
+    // capture on the <video>, and any of those can stop an event before it
+    // reaches the root — which is why a quick swipe straight after a camera
+    // appeared did nothing. A capture-phase listener runs BEFORE any of them
+    // and cannot be cancelled by them, so the gesture is read whatever the feed
+    // is doing. It only ever observes; nothing here consumes the event.
+    const opts = true;
+    window.addEventListener("pointerdown", onDown, opts);
+    window.addEventListener("pointerup", onUp, opts);
+    window.addEventListener("pointercancel", onCancel, opts);
     return () => {
-      el.removeEventListener("pointerdown", onDown);
-      el.removeEventListener("pointerup", onUp);
-      el.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("pointerdown", onDown, opts);
+      window.removeEventListener("pointerup", onUp, opts);
+      window.removeEventListener("pointercancel", onCancel, opts);
     };
   }, []);
 

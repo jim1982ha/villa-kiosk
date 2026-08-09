@@ -48,7 +48,14 @@ export function classifyDeviceActivity(type: EntityType, s: HassEntity): DeviceA
       return s.state === "closed" ? "off" : "on";
     }
     case "media_player":  return s.state === "playing" || s.state === "buffering" ? "on" : "off";
-    case "camera":        return s.state === "recording" || s.state === "streaming" ? "on" : "off";
+    // A camera reporting "idle" is CONNECTED and capturing — idle is Home
+    // Assistant's word for "streaming on demand rather than continuously", not
+    // for "off". Treating it as off left every working camera drawn in the
+    // resting grey, so the map never showed its cameras as live. A camera that
+    // is genuinely down is `unavailable`, which callers resolve before this.
+    case "camera":
+      return s.state === "idle" || s.state === "recording" || s.state === "streaming"
+        ? "on" : "off";
     case "assist_satellite": return s.state === "idle" ? "off" : "on"; // listening/processing/responding
     case "sensor":
       return SENSOR_ALERT_STATES.has(s.state.trim().toLowerCase()) ? "alert" : "info";

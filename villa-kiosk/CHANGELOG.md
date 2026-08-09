@@ -1,3 +1,13 @@
+## 2.192.0
+
+### Fixed — a working camera was drawn as if it were off
+
+"idle" is Home Assistant's word for a camera that streams on demand rather than continuously, not for one that is off. It counted as off, so every live camera sat in the resting grey and never showed its Access Control colour. A camera that is genuinely down reports `unavailable`, which is handled separately.
+
+### Fixed — a quick swipe right after a camera appeared still did nothing
+
+The listener was on the panel root, and while a feed starts up the panel puts overlays over it and hls.js takes pointer capture on the video — any of which can stop the event before it gets there. It now reads on the window's capture phase, which runs before all of them and cannot be cancelled by them.
+
 ## 2.191.0
 
 ### Changed — left/right now turn the camera instead of sidestepping
