@@ -484,15 +484,20 @@ button {
    panel's one primary-ACTION colour, which is supposed to belong to Close
    alone, and painting a blue-badged device's state green. Falls back to a
    soft accent tint where no single device is open (a group panel). */
-/* A device panel's own controls (a cover's Open/Stop/Close, a fan's presets)
-   speak the DEVICE's colour, exactly as its On button does — one vocabulary
-   for "this belongs to this device" wherever it appears. Ghost keeps its
+/* A device panel's own controls (a cover's Open/Stop/Close, a fan's presets,
+   a climate mode) speak the DEVICE's colour, exactly as its On button does —
+   one vocabulary for "this belongs to this device" wherever it appears.
+   Scoped to .row-buttons, which is what those rows are, and NOT to every
+   ghost button in the panel: Edit and Report fault are the app's own chrome,
+   they act on the app rather than on the device, and tinting them made the
+   footer change colour with whatever happened to be open. Ghost keeps its
    transparent fill, so the panel still has only one solid accent (Close). */
-.panel-modal .btn.ghost {
+.panel-modal .row-buttons .btn.ghost {
   color: var(--device-ink, var(--text-primary));
   border-color: var(--device-ring, var(--hairline-strong));
 }
-.panel-modal .btn.ghost:hover { background: var(--device-fill, var(--bg-input)); }
+.panel-modal .row-buttons .btn.ghost:hover { background: var(--device-fill, var(--bg-input)); }
+.panel-modal .row-buttons .btn.active,
 .panel-modal .btn.active {
   background: var(--device-fill, var(--accent-soft));
   color: var(--device-ink, var(--accent));
@@ -1374,23 +1379,24 @@ input[type="range"] {
   width: 100%; height: 4px; border-radius: var(--radius-pill);
   background: var(--bg-input); outline: none;
 }
-/* The thumb is the only part of a slider you aim at, so it takes the device's
-   own colour (--device-ink, published on .panel-modal by BasePanel — the same
-   value the On button and the selected chips use) and falls back to the accent
-   outside a device panel. It was --bg-modal: a dark disc on a dark track,
+/* The thumb is the only part of a slider you aim at, so it is filled rather
+   than hollow — with the THEME accent, not the device's colour: a slider is a
+   generic control, and tinting it per device made the same widget change
+   colour from panel to panel for no reason the user could act on. It was
+   --bg-modal: a dark disc on a dark track,
    effectively invisible in the dark themes and the one control that has to be
    findable at a glance. The two vendor pseudo-elements cannot be combined in
    one rule — a selector list is dropped whole if any part of it is unknown to
    the engine — so they are written out separately and kept identical. */
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
-  background: var(--device-ink, var(--accent)); cursor: pointer;
+  background: var(--accent); cursor: pointer;
   border: 2px solid var(--bg-modal);
   box-shadow: var(--elev-1);
 }
 input[type="range"]::-moz-range-thumb {
   width: 20px; height: 20px; border-radius: 50%;
-  background: var(--device-ink, var(--accent)); cursor: pointer;
+  background: var(--accent); cursor: pointer;
   border: 2px solid var(--bg-modal); box-shadow: var(--elev-1);
 }
 

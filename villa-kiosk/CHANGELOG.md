@@ -1,3 +1,9 @@
+## 2.201.0
+
+### Fixed — the device colour leaked onto the slider and the panel footer
+
+2.200.0 tinted every ghost button in a panel and the slider thumb with the open device's colour. Edit and Report fault are the app's own chrome — they act on the app, not the device — and a slider is a generic control, so both changed colour with whatever happened to be open. They take the theme accent again. The device colour is now scoped to `.row-buttons`, which is what a panel's own controls are.
+
 ## 2.200.0
 
 ### Fixed — the slider thumb was a dark disc on a dark track
