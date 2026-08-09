@@ -140,7 +140,7 @@ export interface SceneManagerOptions {
    *  onRadialPick), so pressing whatever currently represents "this room" —
    *  a dial chip or a crowded map badge cluster — always does the same
    *  thing and builds the same muscle memory. */
-  onClusterTapped?: (room: string, entityIds: string[]) => void;
+  onClusterTapped?: (room: string, entityIds: string[], roomNames: string[]) => void;
   /** Called when the active floor changes (staircase or button). */
   onFloorChange: (floor: number) => void;
   /** Called when the camera enters a new named room. */
@@ -278,7 +278,7 @@ export class SceneManager {
       // handled separately below.
       const cluster = this.visuals.pickClusterAt(x, y);
       if (cluster && opts.onClusterTapped) {
-        opts.onClusterTapped(cluster.room, cluster.entityIds);
+        opts.onClusterTapped(cluster.room, cluster.entityIds, cluster.roomNames);
         return;
       }
       const badgeEntity = this.visuals.pickBadgeAt(x, y);

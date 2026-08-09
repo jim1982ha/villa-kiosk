@@ -20,6 +20,8 @@ import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
 import { useConfig } from "@/config/ConfigContext";
+import { roomKey } from "@/config/roomKey";
+import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import FacilityModal from "@/components/fm/FacilityModal";
@@ -631,13 +633,35 @@ export default function Dashboard() {
   // nothing villa-specific to compute here. A room with no saved point
   // (e.g. the catch-all "Other" bucket) falls back to the long-press
   // behaviour — the entity list — rather than silently doing nothing.
-  const handleClusterTapped = useCallback(
+  /** Rooms offered by a merged chip's tap, until one is chosen. */
+  const [roomChoices, setRoomChoices] = useState<RoomChoice[] | null>(null);
+
+  const goToRoom = useCallback(
     (room: string, entityIds: string[]) => {
       const point = config.teleportPoints.find((p) => p.name === room);
       if (point) handleTeleport(point);
       else setClusterGroup({ room, entityIds });
     },
     [config.teleportPoints, handleTeleport],
+  );
+
+  const handleClusterTapped = useCallback(
+    (room: string, entityIds: string[], roomNames: string[]) => {
+      // A chip that swallowed other chips stands for several rooms and its
+      // label can only name one of them ("Master Bedroom +1"). Flying to the
+      // one that happened to win the label picks for the user and hides that a
+      // choice was made, so the chip asks instead.
+      const merged = [...new Set(roomNames)].filter(Boolean);
+      if (merged.length > 1) {
+        setRoomChoices(merged.map((r) => ({
+          room: r,
+          count: entityIds.filter((id) => roomKey(resolvedRooms[id] ?? "") === roomKey(r)).length,
+        })));
+        return;
+      }
+      goToRoom(room, entityIds);
+    },
+    [goToRoom, resolvedRooms],
   );
 
   const pinContinuous = useCallback(() => manager?.pinContinuous() ?? (() => {}), [manager]);
@@ -844,6 +868,20 @@ export default function Dashboard() {
         </PanelActionsProvider>
       )}
 
+      {roomChoices && (
+        <RoomChoiceSheet
+          choices={roomChoices}
+          onClose={() => setRoomChoices(null)}
+          onPick={(room) => {
+            setRoomChoices(null);
+            // Re-derive the chosen room's own devices; the chip's id list
+            // covered every room it had merged.
+            const ids = [...mappedEntityIds].filter(
+              (id) => roomKey(resolvedRooms[id] ?? "") === roomKey(room));
+            goToRoom(room, ids);
+          }}
+        />
+      )}
       {clusterGroup && (
         <SummaryGroupPanel
           group={{ title: clusterGroup.room, icon: Layers, entityIds: clusterGroup.entityIds }}

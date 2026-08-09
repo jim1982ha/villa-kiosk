@@ -1,3 +1,13 @@
+## 2.179.0
+
+### Added — a merged room chip now asks which room you meant
+
+Chips merge when they would overlap, so "Master Bedroom +1" stands for two rooms — and tapping it flew to whichever one won the label, silently discarding the other. It now offers each room with its device count and goes where you choose.
+
+### Fixed — an unavailable device showed an empty chart instead of when it died
+
+A device down for longer than the chosen window has nothing in it, so the strip read as "no data" when the useful fact was when it stopped. The window now moves back to the device's last sighting and the heading says so.
+
 ## 2.178.0
 
 ### Changed — a pile of devices in a line now opens out as a line

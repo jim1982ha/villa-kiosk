@@ -59,7 +59,7 @@ interface Props {
    *  opens the full entity list, same as before this was tap's job. */
   onClusterPicked: (room: string, entityIds: string[]) => void;
   /** A room-cluster chip was tapped — navigates to that room. */
-  onClusterTapped: (room: string, entityIds: string[]) => void;
+  onClusterTapped: (room: string, entityIds: string[], roomNames: string[]) => void;
   onFloorChange: (floor: number) => void;
   onRoomChange: (room: string | null) => void;
   onNeedModel: () => void;
@@ -177,7 +177,7 @@ export default function BabylonCanvas({
         onEntityPicked: (id, x, y) => onPickedRef.current(id, x, y),
         onEntityLongPressed: (id, x, y) => onLongPressedRef.current(id, x, y),
         onClusterPicked: (room, ids) => onClusterRef.current(room, ids),
-        onClusterTapped: (room, ids) => onClusterTappedRef.current(room, ids),
+        onClusterTapped: (room, ids, roomNames) => onClusterTappedRef.current(room, ids, roomNames),
         onFloorChange,
         onRoomChange,
       });

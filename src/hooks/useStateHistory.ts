@@ -21,18 +21,53 @@ import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 export interface StateHistoryResult {
   data: StateHistoryPoint[];
   loading: boolean;
+  /** Set when the window had to be moved back to find any real data — the
+   *  moment the device was last seen reporting. The UI says so rather than
+   *  silently showing a window that is not the one that was asked for. */
+  lastSeen?: number;
 }
+
+/** How far back to look for a device's last sighting when the requested window
+ *  is entirely dead. Long enough to cover a device that failed weeks ago, short
+ *  enough that the query stays cheap; beyond it, "not enough history" is the
+ *  honest answer. */
+const LAST_SEEN_LOOKBACK_HOURS = 24 * 60;
 
 export function useStateHistory(entityId: string, hours = 24): StateHistoryResult {
   const [history, setHistory] = useState<StateHistoryPoint[]>([]);
+  const [lastSeen, setLastSeen] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLastSeen(undefined);
+    // A device that has been down for longer than the chosen window has NOTHING
+    // in it — every point is "unavailable", or there are no points at all — and
+    // the panel then showed an empty strip, which reads as "no data" when the
+    // useful fact is "it went down at 14:20 last Tuesday". When that happens,
+    // look further back for the last moment it reported and show the SAME
+    // window ending there, so the chart always answers "when did this stop".
+    const alive = (h: StateHistoryPoint[]) =>
+      h.some((pt) => pt.state !== "unavailable" && pt.state !== "unknown");
     fetchStateHistory(entityId, hours)
-      .then((h) => { if (!cancelled) { setHistory(h); setLoading(false); } })
+      .then(async (h) => {
+        if (cancelled) return;
+        if (alive(h)) { setHistory(h); setLoading(false); return; }
+        const deep = await fetchStateHistory(entityId, LAST_SEEN_LOOKBACK_HOURS);
+        if (cancelled) return;
+        let seen = 0;
+        for (const pt of deep) {
+          if (pt.state !== "unavailable" && pt.state !== "unknown" && pt.t > seen) seen = pt.t;
+        }
+        if (seen === 0) { setHistory(h); setLoading(false); return; }
+        // Keep the window's own length; only move where it ends.
+        const from = seen - hours * 3600 * 1000;
+        setHistory(deep.filter((pt) => pt.t >= from && pt.t <= seen + hours * 3600 * 1000));
+        setLastSeen(seen);
+        setLoading(false);
+      })
       .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [entityId, hours]);
-  return { data: history, loading };
+  return { data: history, loading, lastSeen };
 }

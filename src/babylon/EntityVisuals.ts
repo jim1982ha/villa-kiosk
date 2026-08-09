@@ -569,6 +569,8 @@ interface ClusterControls {
   countText: TextBlock;
   node: TransformNode;
   entityIds: string[];
+  /** Every room this chip stands for — one unless chips merged. */
+  roomNames: string[];
 }
 
 /** A live state distilled to one of the visual kinds the badge colour-codes. */
@@ -3479,7 +3481,7 @@ export class EntityVisuals {
     const tm = this.scene.getTransformMatrix();
 
     interface Chip {
-      room: string; ids: string[]; centre: Vector3; rooms: number;
+      room: string; ids: string[]; centre: Vector3; rooms: number; roomNames: string[];
       ringRed: boolean; unavailable: boolean;
       x: number; y: number; halfW: number; halfH: number;
     }
@@ -3498,7 +3500,7 @@ export class EntityVisuals {
     const chips: Chip[] = [];
     for (const [room, g] of groups) {
       const c: Chip = {
-        room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1,
+        room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
         ringRed: g.ringRed, unavailable: g.unavailable,
         x: 0, y: 0, halfW: 0, halfH: 0,
       };
@@ -3529,6 +3531,9 @@ export class EntityVisuals {
           .addInPlace(b.centre.scale(nb / (na + nb)));
         keep.ids = keep.ids.concat(drop.ids);
         keep.rooms = a.rooms + b.rooms;
+      // Keep the NAMES, not just the count: a merged chip has to be able to
+      // offer the rooms it swallowed when it is tapped, and "+2" cannot.
+      keep.roomNames = [...a.roomNames, ...b.roomNames];
         keep.ringRed = a.ringRed || b.ringRed;
         keep.unavailable = a.unavailable || b.unavailable;
         chips.splice(chips.indexOf(drop), 1);
@@ -3539,6 +3544,7 @@ export class EntityVisuals {
     for (const chip of chips) {
       const c = this.ensureCluster(chip.room, layer);
       c.entityIds = chip.ids;
+      c.roomNames = chip.roomNames;
       c.node.position.copyFrom(chip.centre);
       // Room name and count render as separate controls (see ensureCluster).
       // A chip that absorbed others says so with a "+N" suffix, so the count
@@ -3657,7 +3663,7 @@ export class EntityVisuals {
     container.linkWithMesh(node);
     container.linkOffsetYInPixels = -CLUSTER_HEIGHT_PX / 2;
 
-    const c: ClusterControls = { container, text, countBadge, countText, node, entityIds: [] };
+    const c: ClusterControls = { container, text, countBadge, countText, node, entityIds: [], roomNames: [] };
     this.clusters.set(room, c);
     return c;
   }
@@ -3669,7 +3675,7 @@ export class EntityVisuals {
    *  are hidden exactly while that room's chip is visible (updateRoomClustering
    *  /cullLabels), so a chip can never steal a tap from a badge the user can
    *  actually see. */
-  pickClusterAt(clientX: number, clientY: number): { room: string; entityIds: string[] } | null {
+  pickClusterAt(clientX: number, clientY: number): { room: string; entityIds: string[]; roomNames: string[] } | null {
     if (this.clusters.size === 0) return null;
     const eng = this.scene.getEngine();
     const canvas = eng.getRenderingCanvas();
@@ -3680,7 +3686,7 @@ export class EntityVisuals {
     const py = (clientY - rect.top) * (eng.getRenderHeight() / rect.height);
     for (const [room, c] of this.clusters) {
       if (!c.container.isVisible) continue;
-      if (c.container.contains(px, py)) return { room, entityIds: [...c.entityIds] };
+      if (c.container.contains(px, py)) return { room, entityIds: [...c.entityIds], roomNames: [...c.roomNames] };
     }
     return null;
   }

@@ -25,10 +25,17 @@ export default function LastDayTimeline({
 }) {
   const { range, picker } = useHistoryRange();
   const paint = colorFor ?? historyStateColor(entityId);
-  const { data, loading } = useStateHistory(entityId, range.hours);
+  const { data, loading, lastSeen } = useStateHistory(entityId, range.hours);
   return (
     <div className="field">
-      <HistoryHeader title={range.title} picker={picker} />
+      {/* When the window had to be moved to find data, say so — an unlabelled
+          chart of a different period is worse than no chart. */}
+      <HistoryHeader
+        title={lastSeen
+          ? `${range.title} before ${new Date(lastSeen).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
+          : range.title}
+        picker={picker}
+      />
       <StateTimeline
         data={data}
         colorFor={paint}
