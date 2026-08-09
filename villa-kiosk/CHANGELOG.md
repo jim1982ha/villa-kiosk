@@ -1,3 +1,9 @@
+## 2.185.0
+
+### Fixed — one trackpad swipe could skip several cameras
+
+The wheel handler reset its travel accumulator after stepping, so a long flick kept feeding it and crossed the threshold again and again. A gesture now steps at most once and is re-armed only when the scrolling actually stops. The touch/drag path already stepped once per gesture and is unchanged.
+
 ## 2.184.0
 
 ### Reverted — badges open onto a ring again, with a tighter travel budget

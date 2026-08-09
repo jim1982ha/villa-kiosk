@@ -183,18 +183,28 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // about the zoom behaviour changes.
   const wheelTravel = useRef(0);
   const wheelIdle = useRef(0);
+  // One gesture may step ONE camera. Without this, a long trackpad swipe keeps
+  // feeding deltaX after the first step, crosses the threshold again and walks
+  // through several cameras from a single flick — the accumulator resets, but
+  // the gesture has not ended. The lock is released only by the idle timeout,
+  // i.e. by the user actually stopping.
+  const wheelSpent = useRef(false);
   const onFeedWheel = useCallback((e: React.WheelEvent) => {
     if (zoom.zoomed || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
     window.clearTimeout(wheelIdle.current);
-    // A gesture ends after a quiet moment, so one long swipe steps once rather
-    // than walking through every camera.
-    wheelIdle.current = window.setTimeout(() => { wheelTravel.current = 0; }, WHEEL_SWIPE_IDLE_MS);
+    // A gesture ends after a quiet moment; that is what re-arms it.
+    wheelIdle.current = window.setTimeout(() => {
+      wheelTravel.current = 0;
+      wheelSpent.current = false;
+    }, WHEEL_SWIPE_IDLE_MS);
+    if (wheelSpent.current) return; // already stepped for this flick
     wheelTravel.current += e.deltaX;
     if (Math.abs(wheelTravel.current) < WHEEL_SWIPE_PX) return;
     // Content follows the gesture, matching the touch swipe: scrolling right
     // (positive deltaX) brings the NEXT camera in from the right.
     stepCameraRef.current(wheelTravel.current > 0 ? 1 : -1);
     wheelTravel.current = 0;
+    wheelSpent.current = true;
   }, [zoom.zoomed]);
   useEffect(() => () => window.clearTimeout(wheelIdle.current), []);
 
