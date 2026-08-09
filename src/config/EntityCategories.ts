@@ -78,7 +78,7 @@ const FALLBACK_HAIRLINE = "rgba(23, 25, 26, 0.10)";
 // rather than being a translucent tint in its own right — see surfaceBase().
 const FALLBACK_SURFACE = "#FFFDF9";
 
-function cssVar(name: string): string {
+export function cssVar(name: string): string {
   if (typeof window === "undefined" || typeof getComputedStyle !== "function") return "";
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }

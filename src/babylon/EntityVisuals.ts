@@ -84,7 +84,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
-import { effectiveCategory, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
+import { effectiveCategory, categorySurface, cssVar, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { classifyDeviceActivity } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable } from "@/utils/stateColors";
@@ -457,7 +457,7 @@ const CLUSTER_FONT_PX = 15;
  *  (read as "just black" at a glance). Deliberately outside every category
  *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
  *  navigation affordance, not a device — rather than any category's badge. */
-const CLUSTER_BG_COLOR = "#475569";
+const CLUSTER_BG_COLOR = "#475569"; // fallback only — see --chip-surface
 /** Clusters must stay legible at the far zoom where badges shrink hardest, so
  *  their scale is floored well above the badge floor (getIconZoomCap: 0.22). */
 const CLUSTER_MIN_SCALE = 0.8;
@@ -3529,6 +3529,12 @@ export class EntityVisuals {
       // signal from the ring above: a room can be fully reporting AND have
       // something on (red ring, green pill) at the same time.
       c.countBadge.background = chip.unavailable ? ALERT_RED_HEX : AVAILABLE_GREEN_HEX;
+      // Themed here rather than at creation: a chip outlives a theme change,
+      // and Babylon GUI cannot consume a CSS variable, so the value has to be
+      // read and re-applied. Doing it on the pass that already runs keeps it in
+      // step with the badges without a second notification path.
+      c.container.background = cssVar("--chip-surface") || CLUSTER_BG_COLOR;
+      c.text.color = cssVar("--chip-ink") || "#ffffff";
       c.container.scaleX = scale;
       c.container.scaleY = scale;
       // ZERO horizontal offset, always: the chip sits exactly on its anchor.

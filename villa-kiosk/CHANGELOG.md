@@ -1,3 +1,9 @@
+## 2.198.0
+
+### Fixed — the room pill kept one colour in every theme
+
+It was a hardcoded slate, which reads as chrome on the light map and as a pale sticker on the dark one. It now takes `--chip-surface` / `--chip-ink`, defined per theme alongside the rest of the palette: slate on light, matched to the panel surfaces on dark, darker still and free of pure white on night. Re-read on the pass that already runs, so a theme change is picked up like every other themed surface.
+
 ## 2.197.0
 
 ### Changed — chart tooltips show the date when the window spans more than a day

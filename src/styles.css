@@ -205,6 +205,11 @@
   --text-dim: #9AA09B;
   --text-on-accent: #FFFDF9;
 
+  /* Room-cluster chip. UI chrome, not a device — so it sits outside every
+     --cat-* hue on purpose and reads as a navigation affordance. */
+  --chip-surface: #475569;
+  --chip-ink: #FFFFFF;
+
   --status-on: #34845A;
   --status-off: #D8D3C7;
   /* "Moving between two rest states" — see utils/stateColors STATUS_COLOR.
@@ -256,6 +261,11 @@
   --text-dim: #6C726B;
   --text-on-accent: #0B1710;
 
+  /* Dark: the slate above is far too light against this map — it read as a
+     pale sticker rather than chrome. Matched to the panel surfaces instead. */
+  --chip-surface: #2B322D;
+  --chip-ink: #F1EFE8;
+
   --status-on: #4FC07E;
   --status-off: #333833;
   --status-pending: #48C2CE;
@@ -301,6 +311,11 @@
   --text-secondary: #7E837B;
   --text-dim: #565B55;
   --text-on-accent: #0A0C0A;
+
+  /* Night: darker again, and no pure white — a bedroom wall tablet must not
+     act as a lamp (see this block's own note above). */
+  --chip-surface: #1C221D;
+  --chip-ink: #C9C4B6;
 
   --status-on: #3E8F62;
   --status-off: #23261F;
