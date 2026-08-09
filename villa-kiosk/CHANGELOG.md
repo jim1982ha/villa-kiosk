@@ -1,3 +1,13 @@
+## 2.200.0
+
+### Fixed — the slider thumb was a dark disc on a dark track
+
+It used `--bg-modal`, so the one part of a slider you actually aim at was near-invisible in the dark themes. It now takes the device's own colour (`--device-ink`, the same value the On button and selected chips use) and falls back to the accent outside a device panel — so Settings' sliders gain it too.
+
+### Changed — a panel's controls speak the device's colour
+
+A cover's Open/Stop/Close and a fan's presets were plain neutral buttons while the same panel's On button carried the device's category colour. They now share it, from the same custom properties, so "this belongs to this device" looks the same wherever it appears. They stay ghost, so Close is still the panel's only solid accent.
+
 ## 2.199.0
 
 ### Fixed — the 7-day chart stopped six days ago
