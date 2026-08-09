@@ -1,3 +1,17 @@
+## 2.174.0
+
+### Fixed — zoomed out, room chips vanished entirely and badges scattered across the screen
+
+Reported with a screenshot of the whole villa from far out: no room chips anywhere, and dozens of badges strewn over the grass and off the building. Room aggregation was not removed; it had become unreachable.
+
+`pileCanOpen` decides whether a collided pile can be opened out or must summarise, and it was testing **pairs**. Each pair asked "can these two be separated inside the travel budget", and the budget alone is wider than any single pair needs, so every pair said yes — every time. Piles are transitive, so at a far zoom the entire villa is ONE pile of thirty-odd badges; thirty pairs each said "fine", the pile was judged openable, and thirty badges then set off toward clearances that could not all hold at once. No pile ever failed, so no room ever summarised.
+
+Pairwise feasibility is simply not the same question as whole-pile feasibility, and that was the flaw.
+
+The whole pile is now tested as one. n badges each needing a clear disc occupy an area proportional to n, so they need a radius of roughly (need / 2) × √n; what is available is the pile's own spread plus the travel budget. A three-badge huddle round a ceiling fixture clears that easily and still opens out. A zoomed-out villa does not come close, so it summarises into room chips — which is the answer that view should give, and the one it used to give.
+
+The travel budget also comes down from 2.5 badge widths to 1.5. It was sized when it was the only thing standing between a pile and a chip; with the area test doing that job properly, the budget can go back to meaning what it says — how far a badge may sit from the device it labels.
+
 ## 2.173.0
 
 ### Fixed — badges still sat on top of one another

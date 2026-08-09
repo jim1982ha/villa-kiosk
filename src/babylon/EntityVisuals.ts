@@ -470,7 +470,7 @@ const BADGE_MIN_GAP_PX = 6;
  * so that raising the icon size cannot buy extra travel, which is the exact
  * defect that once put a room chip out on the lawn.
  */
-const SPREAD_MAX_TRAVEL_WIDTHS = 2.5;
+const SPREAD_MAX_TRAVEL_WIDTHS = 1.5;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -2975,16 +2975,43 @@ export class EntityVisuals {
     const scale = this.iconUserScale * this.iconZoomScale;
     const gapPx = BADGE_MIN_GAP_PX * scale;
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
-    const reach = 2 * SPREAD_MAX_TRAVEL_WIDTHS * BADGE_DIAMETER_PX * scale;
+    const budget = SPREAD_MAX_TRAVEL_WIDTHS * BADGE_DIAMETER_PX * scale;
+
+    let widestNeed = 0;
     for (let a = 0; a < members.length; a++) {
       for (let b = a + 1; b < members.length; b++) {
         const i = members[a], j = members[b];
-        const d = Math.hypot(shown[j].wx - shown[i].wx, shown[j].wy - shown[i].wy, shown[j].wz - shown[i].wz);
         const need = boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx;
-        if (d * pxPerWorld + reach < need) return false;
+        if (need > widestNeed) widestNeed = need;
+        const d = Math.hypot(shown[j].wx - shown[i].wx, shown[j].wy - shown[i].wy, shown[j].wz - shown[i].wz);
+        if (d * pxPerWorld + 2 * budget < need) return false;
       }
     }
-    return true;
+
+    // ── The WHOLE pile has to fit, not just each pair ─────────────────────
+    // Testing pairs alone is what broke this: every pair individually looked
+    // satisfiable inside the budget, so a pile of thirty badges — which is
+    // what the entire villa becomes when zoomed out far enough, since piles
+    // are transitive — was judged openable, room chips stopped appearing
+    // anywhere, and thirty badges scattered across the screen trying to reach
+    // clearances that could never all hold at once. Pairwise feasibility is
+    // simply not the same question as whole-pile feasibility.
+    //
+    // n badges needing a clear disc each occupy an area proportional to n, so
+    // they need a radius of about (need / 2) * sqrt(n). What is available is
+    // the pile's own spread plus the travel budget. If that falls short, no
+    // arrangement exists and the room summarises — which is the answer a
+    // zoomed-out villa should give.
+    let wcx = 0, wcy = 0, wcz = 0;
+    for (const i of members) { wcx += shown[i].wx; wcy += shown[i].wy; wcz += shown[i].wz; }
+    wcx /= members.length; wcy /= members.length; wcz /= members.length;
+    let spread = 0;
+    for (const i of members) {
+      const r = Math.hypot(shown[i].wx - wcx, shown[i].wy - wcy, shown[i].wz - wcz);
+      if (r > spread) spread = r;
+    }
+    const required = (widestNeed / 2) * Math.sqrt(members.length);
+    return required <= spread * pxPerWorld + budget;
   }
 
   /**
