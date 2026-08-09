@@ -19,6 +19,7 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import { useConfig } from "@/config/ConfigContext";
 import { categorySurface } from "@/config/EntityCategories";
 import BadgeColorModal from "./BadgeColorModal";
+import LastDayTimeline from "./LastDayTimeline";
 
 interface Props {
   title: string;
@@ -36,11 +37,18 @@ interface Props {
    *  header instead of buried in the body: a panel's one or two most-used
    *  actions belong where they're always visible, not scrolled past. */
   headerActions?: ReactNode;
+  /** Opt OUT of the automatic history section at the end of the body. Pass
+   *  false only when the panel renders a history view of its own that this
+   *  one cannot express — a numeric sparkline (SensorPanel), two series on
+   *  shared axes (DeviceGroupPanel), a palette legend for unknown states
+   *  (GenericPanel). Anything else should take the shared one: the default is
+   *  what guarantees a new panel type can't quietly ship without history. */
+  history?: false;
   onClose: () => void;
   children: ReactNode;
 }
 
-export default function BasePanel({ title, entityId, icon, className, headerActions, onClose, children }: Props) {
+export default function BasePanel({ title, entityId, icon, className, headerActions, history, onClose, children }: Props) {
   const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion } = usePanelActions();
   const { resolvedRooms } = useConfig();
   const room = entityId ? resolvedRooms[entityId] : undefined;
@@ -164,6 +172,19 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             </div>
           )}
           {children}
+          {/* The "last N hours" history section — rendered HERE, in the shared
+              chrome, for the same reason the linked-entity switch above is:
+              so every panel about a device gets it identically and a NEW panel
+              type cannot ship without it.
+
+              It used to be opt-in, added per panel, and that is exactly how
+              climate and media ended up as the only two device panels with no
+              history at all — reported from a screenshot of an AC panel. The
+              range-picker work that touched this area twice could not have
+              caught it either, because it audited the panels that already HAD
+              a timeline; a panel with none is invisible to that check. Made
+              structural rather than fixed twice. */}
+          {history !== false && entityId && <LastDayTimeline entityId={entityId} />}
         </div>
         <div className="panel-footer"
           style={{ justifyContent: onEdit || onReportFault ? "space-between" : "flex-end" }}>

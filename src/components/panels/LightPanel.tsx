@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Lightbulb } from "lucide-react";
 import BasePanel from "./BasePanel";
 import PowerToggle from "./PowerToggle";
-import LastDayTimeline from "./LastDayTimeline";
 import UnavailableNotice from "./UnavailableNotice";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
@@ -56,7 +55,6 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline entityId={mapping.entityId} />
     </BasePanel>
   );
 }

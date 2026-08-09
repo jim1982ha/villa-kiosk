@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Blinds, ChevronUp, ChevronDown, Square } from "lucide-react";
 import BasePanel from "./BasePanel";
-import LastDayTimeline from "./LastDayTimeline";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
@@ -70,7 +69,6 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline entityId={mapping.entityId} />
     </BasePanel>
   );
 }

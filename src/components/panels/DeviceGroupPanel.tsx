@@ -72,6 +72,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       title={group.label ?? primaryMapping.label}
       entityId={primaryMapping.entityId}
       icon={<Layers size={22} />}
+      history={false}
       onClose={onClose}
     >
       {/* EVERY member offline → the same shared notice every other panel shows

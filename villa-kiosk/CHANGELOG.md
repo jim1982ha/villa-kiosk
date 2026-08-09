@@ -1,3 +1,19 @@
+## 2.160.0
+
+### Fixed — climate and media panels had no history section at all
+
+Reported from a screenshot of an AC panel: every other device panel ends with a "last N hours" chart and this one simply stopped after the mode buttons. Climate and media were the only two device panels with no history, and the cause is worth writing down because the shape of the mistake matters more than the two missing sections.
+
+The history section was **opt-in**. Each panel imported `LastDayTimeline` and placed it itself. That is fine right up until someone adds a panel type and doesn't — and nothing anywhere notices, because there is no declaration that a device panel is supposed to have one. Climate and media were written without it and stayed that way.
+
+Worse, the two releases that reworked this exact area could not have caught it. 2.154.0 added the range picker to the timeline; 2.156.0 extended it to the numeric charts, and that work ended with a check that no hardcoded 24-hour window remained in any panel. Both audits enumerated the panels that already HAD a history view and confirmed each was wired correctly. A panel with no history view at all is invisible to that question. Auditing a shared component's existing call sites answers "is this used correctly where it is used" — never "is it used everywhere it applies", which is the question that was actually needed.
+
+So the fix is structural rather than two more imports. `BasePanel` now renders the history section itself, at the end of the body, for any panel given an `entityId` — the same place and the same reasoning as the linked-entity switch that already lives there. A device panel gets its history by existing, and a new panel type cannot ship without one. The three panels whose history genuinely differs — SensorPanel's numeric sparkline, DeviceGroupPanel's two series on shared axes, GenericPanel's palette legend for unknowable states — opt out explicitly with `history={false}`, which is greppable and documented at the prop. SummaryGroupPanel passes no `entityId` (it is a list of devices, not a device) and so is excluded by construction rather than by omission.
+
+Climate and media both read well through the shared timeline because 2.157.0's state map already covers them properly: a climate entity's `heat`/`cool`/`auto`/`dry`/`fan_only` are active and `off` is idle, and a media player's `playing` is active with `buffering` as a transitional segment.
+
+Note on scope: this restores the state-history timeline everywhere it belongs. A climate entity's *temperature* trend is a different thing — `current_temperature` is an attribute, and the history endpoint is deliberately called with `no_attributes` for payload size, so charting it needs an attribute-history path that does not exist yet.
+
 ## 2.159.0
 
 ### Changed — a badge is never moved; if badges would collide, the room summarises
