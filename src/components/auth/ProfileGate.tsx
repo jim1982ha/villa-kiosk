@@ -12,6 +12,14 @@ import { ROLE_ORDER, ROLE_LABELS, ROLE_DESCRIPTIONS, type Role } from "@/auth/ro
 import { pinRequired as fetchPinRequired, verify, openSession } from "@/auth/PinVerifier";
 import { startModelPrefetch } from "@/utils/modelPrefetch";
 import { markBoot } from "@/utils/bootTimeline";
+// The MONO mark (its arms are `currentColor`), not the canonical two-tone one.
+// The two-tone mark's dark arm is #1F5C33, which all but disappears against
+// the dark and night themes' near-black gate background; mono inherits the
+// themed accent instead and stays legible in all three. The brand guidelines
+// list mono as one of the mark's sanctioned presentations for exactly this
+// kind of single-colour context — the two-tone version is reserved for the
+// app/PWA icons, where it always sits on its own controlled cream plate.
+import vestaMark from "@/assets/brand/vesta-mark-mono.svg?url";
 import PinPad from "./PinPad";
 
 const ROLE_ICONS: Record<Role, typeof UserRound> = {
@@ -155,6 +163,19 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
             />
           ) : (
             <div className="profile-select">
+              {/* A MASKED span, not an <img>: the mark's arms are
+                  `currentColor`, and an <img> renders its SVG in a separate
+                  document context where that resolves to the SVG's own default
+                  (black) rather than inheriting anything from this page — so
+                  the themed colour would silently never arrive. Masking paints
+                  a themed background THROUGH the shape instead, which keeps
+                  one source file and re-themes for free. aria-hidden: the
+                  villa name in the <h1> below already names this screen. */}
+              <span
+                className="profile-mark"
+                style={{ ["--mark" as string]: `url(${vestaMark})` }}
+                aria-hidden="true"
+              />
               <h1 className="profile-title">{resolveSiteTitle(config)}</h1>
               <p className="profile-sub">Who's using the kiosk?</p>
               {gateError && (

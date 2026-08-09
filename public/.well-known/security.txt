@@ -1,4 +1,4 @@
-# Vesta Kiosk — private single-tenant Home Assistant dashboard.
+# VESTA — private single-tenant Home Assistant dashboard.
 # Not a public product; this file exists purely for RFC 9116 compliance
 # (flagged by Cloudflare Security Insights) so a researcher who stumbles on
 # this host has a clear, correct way to report anything found.

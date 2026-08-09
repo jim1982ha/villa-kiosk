@@ -1,3 +1,25 @@
+## 2.147.0
+
+### Fixed — the Home Assistant add-on still carried the PREVIOUS rebrand's icon
+
+The 2.144.0 asset swap replaced everything under `public/` and left `villa-kiosk/icon.png` and `villa-kiosk/logo.png` untouched. Those two are not decoration: the Supervisor renders `icon.png` on the add-on's store card and in the sidebar, and `logo.png` on the add-on's own page — so the one place a Home Assistant user actually meets this add-on was still showing the navy-plate "V" with a green dot from the 2.138.0 rebrand, while every other surface in the app had moved to the VESTA two-tone green mark. Both were byte-identical 512×512 files and both are now the current mark, hash-matching `public/icons/icon-512.png`.
+
+An audit of every tracked image found no other stale artwork: each one dates either from the 2.144.0 swap (current) or is the two PWA store screenshots, which still show the old UI and are separately outstanding because they need a real device capture rather than a file copy.
+
+### Added — the mark now actually appears in the app
+
+The handoff placed `vesta-mark.svg` and `vesta-lockup.svg` under `src/assets/brand/` for "in-app use" and 2.144.0 copied them in without ever importing them, so they sat on disk as dead files while the app's only brand expression was a text title. The mark now heads the profile/sign-in gate — the app's one genuine brand surface, and until now text-only.
+
+Two implementation notes, because both are easy to get wrong. It uses the **mono** mark rather than the canonical two-tone one: the two-tone mark's dark arm is `#1F5C33`, which all but vanishes against the dark and night themes' near-black gate background, whereas mono takes the themed accent and stays legible in all three. The guidelines list mono as a sanctioned presentation for exactly this kind of single-colour context, with the two-tone version reserved for the app/PWA icons where it always sits on its own controlled cream plate. And it is painted as a CSS **mask** rather than an `<img>`: the mark's arms are `currentColor`, and an `<img>` renders its SVG in a separate document context where that resolves to the SVG's own default black instead of inheriting the page's colour — the themed colour would have silently never arrived. Masking paints a themed background through the shape, which keeps one file on disk instead of duplicating the path data inline. Vite inlines the 254-byte asset as a data URI, so this costs no extra request.
+
+### Changed — finished the "Vesta Kiosk" → "VESTA" rename outside `src/`
+
+2.144.0 renamed every user-facing string it could find in `src/`, `index.html` and the manifest, but the sweep never covered the repository root or the container plumbing. Thirteen more occurrences: `repository.yaml`'s add-on-repository name and maintainer line (what Home Assistant shows when the repo URL is added), the `io.hass.name` OCI label in the `Dockerfile` (which the Supervisor reads for the add-on's display name), `package.json`'s description, `public/.well-known/security.txt`, the `supervisor-proxy.py` module docstring, the nginx config header, the service-worker header, `.env.example`, and the `LICENSE` copyright line. The licence **terms** are untouched — only the product name in it — and the maintainer address stays the existing anonymised one, since the real contact is deliberately absent from every tracked file. README.md and DOCS.md still use the old name in prose and are left for an editorial pass rather than a find-and-replace.
+
+### Fixed — the service worker still whitelisted Google Fonts
+
+Left behind by 2.144.0's move to self-hosted Jost + Public Sans: `sw.js`'s `isStatic` test still admitted `fonts.googleapis.com` and `fonts.gstatic.com` for caching. Inert in practice — nothing has requested either host since the fonts moved under `/fonts/` — but it left the service worker asserting that this app may reach a third-party CDN, which is exactly the thing it must never do. Narrowed to same-origin only.
+
 ## 2.146.0
 
 ### Changed — the VESTA rebrand is now complete against the full guidelines, not just the instruction file

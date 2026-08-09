@@ -1,4 +1,4 @@
-/* Vesta Kiosk — VESTA brand theme. Plain CSS + custom properties only.
+/* VESTA — brand theme. Plain CSS + custom properties only.
  *
  * Theming is fully variable-driven: the default `:root` is the LIGHT palette,
  * `:root[data-theme="dark"]` overrides for dark, `:root[data-theme="night"]`
@@ -2597,6 +2597,22 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 
 .profile-select { width: min(920px, 100%); text-align: center; }
+/* The VESTA mark above the villa name. 52px tall — comfortably over the brand
+   guidelines' 16px minimum, and clear of the 24px floor below which the two
+   tones merge (moot here: this is the mono mark, see ProfileGate's import).
+   56px wide holds the mark's own 100:93 aspect at that height.
+
+   Painted as a MASK, not an <img> — see the JSX comment for why currentColor
+   cannot cross an <img> boundary. --mark is set inline from the imported
+   asset URL, so the SVG stays a single file on disk rather than being
+   duplicated as inline path data. The -webkit- prefix is load-bearing on
+   iOS, which is the app's primary target. */
+.profile-mark {
+  display: block; height: 52px; width: 56px; margin: 0 auto 18px;
+  background: var(--accent);
+  -webkit-mask: var(--mark) center / contain no-repeat;
+  mask: var(--mark) center / contain no-repeat;
+}
 .profile-title { font-family: var(--font-display); font-size: var(--text-display); margin: 0 0 6px; }
 .profile-sub { color: var(--text-secondary); margin: 0 0 26px; font-size: var(--text-md); }
 .profile-error { color: var(--status-danger); margin: 0 0 18px; font-size: var(--text-base); }

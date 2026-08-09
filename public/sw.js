@@ -1,4 +1,4 @@
-/* Vesta Kiosk service worker.
+/* VESTA service worker.
  *
  * Strategy:
  *  - HTML navigation (the unhashed app shell): NETWORK-FIRST with a cache
@@ -142,10 +142,12 @@ self.addEventListener("fetch", (event) => {
   }
 
   // App-shell / static assets: cache-first with background refresh.
-  const isStatic =
-    url.origin === self.location.origin ||
-    url.hostname.includes("fonts.googleapis.com") ||
-    url.hostname.includes("fonts.gstatic.com");
+  // Same-origin ONLY. The two Google Fonts hosts that used to be allowed here
+  // are gone: 2.144.0 moved the app to self-hosted Jost + Public Sans under
+  // /fonts/, so nothing requests them any more, and leaving them listed
+  // implied this app may reach a third-party host — which it must never do
+  // (the target is an iPad in a villa with no internet at all).
+  const isStatic = url.origin === self.location.origin;
 
   if (!isStatic) return;
 
