@@ -53,6 +53,12 @@ const CHROME_IDLE_MS = 3200;
 // on glass always drifts a little.
 const TAP_SLOP_PX = 12;
 const TAP_MAX_MS = 400;
+// A horizontal drag across an UNZOOMED feed steps to the neighbouring camera.
+// Needs real travel and a clearly horizontal direction, so it can't be
+// confused with a tap or with a vertical drag. useMediaZoom only begins a pan
+// once already zoomed in, so at 1x this gesture is otherwise unused.
+const SWIPE_MIN_PX = 48;
+const SWIPE_DIR_RATIO = 1.6;
 // How often to refresh the fallback snapshot, and how many consecutive snapshot
 // failures to tolerate before declaring the camera unavailable.
 const SNAPSHOT_INTERVAL_MS = 800;
@@ -333,7 +339,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // that never hid at all. The timer restarts on every activity event; the
   // effect re-runs only when a HELD state changes, not on every mouse move,
   // so this costs one timeout per burst of activity rather than per event.
-  const [chromeVisible, setChromeVisible] = useState(true);
+  // Starts HIDDEN. The feed is the content, so opening the panel shows the
+  // feed and nothing else; the chrome is summoned by hovering (mouse) or
+  // tapping (touch). A first tap anywhere on the video reveals it, which is
+  // also how the close button is reached.
+  const [chromeVisible, setChromeVisible] = useState(false);
   const [hoveringControls, setHoveringControls] = useState(false);
   // Read through a ref, not a dependency: bumpChrome must keep a STABLE
   // identity or every hover/picker change would re-run the effect below and
@@ -357,9 +367,16 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // Holding (mouse over the controls, or the camera picker menu open) freezes
   // the countdown; releasing restarts it. Also supplies the initial "visible"
   // state on mount, since it runs once with nothing held.
+  // Freeze the countdown while something holds the chrome open, and re-arm it
+  // when that hold RELEASES. Deliberately not on mount: the previous version
+  // called bumpChrome() unconditionally here, which is what made the chrome
+  // appear for its first few seconds on every open.
+  const wasHeld = useRef(false);
   useEffect(() => {
-    if (hoveringControls || pickerOpen) window.clearTimeout(idleTimer.current);
-    else bumpChrome();
+    const held = hoveringControls || pickerOpen;
+    if (held) window.clearTimeout(idleTimer.current);
+    else if (wasHeld.current) bumpChrome();
+    wasHeld.current = held;
   }, [hoveringControls, pickerOpen, bumpChrome]);
   useEffect(() => () => window.clearTimeout(idleTimer.current), []);
 
@@ -390,7 +407,21 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     const start = tapStart.current;
     tapStart.current = null;
     if (!start) return;
-    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_SLOP_PX) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+
+    // Swipe first: it is the only reading of a long horizontal drag, and
+    // checking it before the tap test means a swipe can never also toggle the
+    // chrome. Skipped while zoomed, where the same drag is a pan (and
+    // useMediaZoom has already consumed it).
+    if (!zoom.zoomed && Math.abs(dx) > SWIPE_MIN_PX && Math.abs(dx) > Math.abs(dy) * SWIPE_DIR_RATIO) {
+      // Content follows the finger: dragging LEFT pulls the next camera in
+      // from the right, which is the direction every carousel uses.
+      if (cameraIds.length > 1) stepCamera(dx < 0 ? 1 : -1);
+      return;
+    }
+
+    if (Math.hypot(dx, dy) > TAP_SLOP_PX) return;
     if (performance.now() - start.t > TAP_MAX_MS) return;
     if (chromeVisible) hideChrome(); else bumpChrome();
   };

@@ -1,3 +1,19 @@
+## 2.155.0
+
+### Added — swipe left/right across the feed to change camera
+
+The prev/next buttons were the only way to move between cameras, and a horizontal drag on the video did nothing visible — which read as the zoom misbehaving rather than as a gesture that was never wired up.
+
+`useMediaZoom` only begins a pan once the feed is already zoomed in, so at 1× that drag was genuinely unclaimed. It now steps to the neighbouring camera: content follows the finger, so dragging left pulls the next camera in from the right, the direction every carousel uses. It is checked BEFORE the tap test, so a swipe can never also toggle the chrome, and it is skipped entirely while zoomed, where the same drag is a pan the zoom hook has already consumed. It requires real travel (48px) and a clearly horizontal direction (1.6× the vertical component), so neither a tap nor a vertical drag can trigger it.
+
+### Changed — the camera chrome no longer shows itself on open
+
+Opening the panel put the title and the status/controls row on screen for their first few seconds before fading. The feed is the content, so it now opens to the feed and nothing else; hovering (mouse) or tapping (touch) summons the chrome, exactly as it already did after the first fade.
+
+The cause was that the effect which freezes the idle countdown while something holds the chrome open also ran on mount, where it took the "nothing is held" branch and started the timer — which shows the chrome as a side effect. It now only re-arms when a hold actually RELEASES, so mount leaves the initial hidden state alone.
+
+Worth noting for anyone reviewing the trade: with the chrome hidden at rest, the close button is behind one tap on the video. That is the same contract as a full-screen photo or video viewer on either mobile platform, and the tap-to-reveal path was fixed in 2.149.0, so the control is always one deliberate touch away.
+
 ## 2.154.0
 
 ### Fixed — a card-style badge's value was white text on a white badge
