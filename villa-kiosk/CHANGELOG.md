@@ -1,3 +1,19 @@
+## 2.170.0
+
+### Fixed — badges flew to the far corners of a room on one zoom step
+
+Reported with two screenshots one step apart: the central bedroom's badges sat together near the fan, then suddenly scattered across the whole room.
+
+2.169.0 opens a collided pile out by scaling it about its centre, and used ONE factor for the whole pile. That factor is set by the tightest pair and then applied to every member — including members that were never crowded. Piles are transitive by design (A touches B, B touches C, so all three are one pile), so a ceiling fan and its own light a few pixels apart need a factor of five or more, and that same five then multiplied the distance of a third badge sitting 100px away, hurling it 500px across the room.
+
+That is also why it was so abrupt. Crossing a quantised zoom step changes which badges are in the pile; one extra tight member makes the factor jump, and with the factor multiplying every radius, the visible consequence was proportional to the pile's WIDEST member rather than to the change itself.
+
+Travel is now capped per badge instead of being tested for the pile as a whole. The crowded members still get the full factor they need — their radius is tiny, so even a large factor moves them only a little — while an outlying member stops at the budget instead of being flung. The budget itself is down from six badge widths to 2.5, because its real job turned out to be bounding how much the arrangement can visibly change when a pile gains a member: with the cap applied per badge, the worst a factor jump can do is move each badge by that much, so crossing a zoom step now reads as a nudge rather than a rearrangement.
+
+Clamping cannot reorder anything, which is the property this whole design rests on. Two badges scaled by the same factor keep their order; where the outer one is clamped it travels the full budget while the inner one travels at most that, so the inner can never overtake it.
+
+One guarantee is kept explicitly rather than assumed: after clamping, every pair is re-checked, and if the clamp left two badges still touching, the pile is refused and the room summarises. The cap buys a better arrangement, never a quietly overlapping one.
+
 ## 2.169.0
 
 ### Changed — a collided pile is opened out instead of pinned, so badges can get far bigger

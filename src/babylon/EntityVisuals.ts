@@ -456,7 +456,12 @@ const BADGE_MIN_GAP_PX = 6;
  * How far a badge may be pushed from its own device when its pile is opened
  * out (spreadPile), in multiples of its own width.
  *
- * Generous on purpose. The rule this replaces was "a badge is never moved",
+ * It is also what bounds how far the arrangement can VISIBLY change when a
+ * zoom step pulls one more badge into a pile: the cap applies per badge, so
+ * the worst a factor jump can do is move each badge by this much. Keep it
+ * small enough that crossing a step reads as a nudge rather than a rearrange.
+ *
+ * The rule this replaces was "a badge is never moved",
  * which sounded principled and produced a hard ceiling nobody could raise:
  * badges anchor to DEVICES, so a fan and its own light are ~24px apart at a
  * normal framing and NO badge wider than that could ever be drawn there,
@@ -469,7 +474,7 @@ const BADGE_MIN_GAP_PX = 6;
  * so that raising the icon size cannot buy extra travel, which is the exact
  * defect that once put a room chip out on the lawn.
  */
-const SPREAD_MAX_TRAVEL_WIDTHS = 6;
+const SPREAD_MAX_TRAVEL_WIDTHS = 2.5;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -3012,13 +3017,50 @@ export class EntityVisuals {
     // A badge must stay recognisably ON its device. Expressed in badge widths
     // and scaled with the badge, so raising the icon size does not silently
     // license a badge to travel further across the room than before.
+    // ── Travel is capped PER BADGE, not tested for the pile as a whole ─────
+    // A single factor multiplies every member's distance from the centre, so
+    // it is set by the TIGHTEST pair and then applied to badges that were
+    // never crowded. Piles are transitive — A touches B, B touches C — so a
+    // fan and its own light (a few px apart, needing a factor of 5 or more)
+    // would drag in a third badge 100px away and hurl it 500px across the
+    // room. Reported from two screenshots one zoom step apart: the central
+    // bedroom's badges suddenly flew to the far corners, because crossing a
+    // zoom step pulled one more badge into the pile and the factor jumped.
+    //
+    // Clamping each badge's own travel fixes both halves. The crowded members
+    // still get the full factor they need (their radius is tiny, so even a
+    // large factor moves them only a little); the outlying member stops at the
+    // budget instead of being flung. And the visible effect of a factor jump
+    // is now bounded by the budget rather than by the pile's widest radius, so
+    // crossing a zoom step nudges badges instead of rearranging the room.
+    //
+    // Clamping cannot reorder them. Two badges scaled by the same factor keep
+    // their order; where the outer one is clamped it travels the full budget
+    // while the inner one travels at most that, so the inner can never
+    // overtake it.
     const maxTravel = SPREAD_MAX_TRAVEL_WIDTHS * BADGE_DIAMETER_PX * scale;
+    const px: number[] = [], py: number[] = [];
     for (let a = 0; a < members.length; a++) {
-      if ((factor - 1) * Math.hypot(vx[a], vy[a]) > maxTravel) return false;
+      const r = Math.hypot(vx[a], vy[a]);
+      const travel = Math.min((factor - 1) * r, maxTravel);
+      const grow = r > 0 ? travel / r : 0;
+      px.push(vx[a] * (1 + grow));
+      py.push(vy[a] * (1 + grow));
+    }
+
+    // Honesty check: the clamp may have left a pair still touching. If so the
+    // pile genuinely cannot be opened out here and the room summarises, which
+    // is the same contract as before — the clamp buys a better ARRANGEMENT,
+    // never a quietly overlapping one.
+    for (let a = 0; a < members.length; a++) {
+      for (let b = a + 1; b < members.length; b++) {
+        const need = boxes[members[a]].halfW * allow + boxes[members[b]].halfW * allow + gapPx;
+        if (Math.hypot(px[a] - px[b], py[a] - py[b]) < need) return false;
+      }
     }
     for (let a = 0; a < members.length; a++) {
-      shown[members[a]].offX = vx[a] * (factor - 1);
-      shown[members[a]].offY = vy[a] * (factor - 1);
+      shown[members[a]].offX = px[a] - vx[a];
+      shown[members[a]].offY = py[a] - vy[a];
     }
     return true;
   }
