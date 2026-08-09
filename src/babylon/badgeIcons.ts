@@ -78,7 +78,34 @@ function drawIcon(
   ctx.restore();
 }
 
+// Baked badge images, keyed by everything that changes their pixels. Each
+// value is a base64 PNG data URL of a 128px canvas, so this is real memory,
+// and it is MODULE-level — it outlives the scene, so a model reload or a
+// sign-out/sign-in remount inherits it rather than starting clean.
+//
+// Two things make it grow rather than plateau, and both arrived with the
+// neutral-by-default redesign: `state` went from a 2-value flag to 4, and
+// `theme` entered the key. The theme one is the leak that matters — an
+// "auto" kiosk crosses into the night theme at dusk and re-bakes the entire
+// set, while every light-theme entry it can never hit again stays resident
+// for the life of the tab. On a wall tablet that is never reloaded, that
+// repeats every single day.
+//
+// evictOldest() keeps it to a working set. The cap is generous — a villa's
+// live badges are a few hundred entries at most, so ordinary operation never
+// evicts; it only trims the dead generations a theme flip leaves behind.
+// Map preserves insertion order, so the first key is the least recently
+// ADDED, which for a bake-once-per-appearance cache is the right victim.
+const CACHE_MAX = 600;
 const cache = new Map<string, string>();
+
+function evictOldest(): void {
+  while (cache.size > CACHE_MAX) {
+    const oldest = cache.keys().next();
+    if (oldest.done) return;
+    cache.delete(oldest.value);
+  }
+}
 
 // Baking an INSET (a transparent margin on every side) into the image is a
 // deterministic way to pad the glyph — used by the "card" badge style, whose
@@ -150,5 +177,6 @@ export function badgeImageDataUrl(
     url = canvas.toDataURL("image/png");
   }
   cache.set(cacheKey, url);
+  evictOldest();
   return url;
 }

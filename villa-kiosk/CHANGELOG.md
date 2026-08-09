@@ -1,3 +1,29 @@
+## 2.148.0
+
+### Fixed — every lit fixture was re-rendering the whole villa's geometry six times per frame, forever
+
+Reported as: the device heats up slowly for as long as the kiosk is left open. A memory/power audit of the whole codebase found one dominant cause, and it is not what the symptom suggests.
+
+`syncEntityShadow` gives each switched-on light a `ShadowGenerator`. Babylon's `ObjectRenderer` defaults `refreshRate` to `1` — `REFRESHRATE_RENDER_ONEVERYFRAME` — and nothing here ever set it, so each generator's shadow map re-rendered on every drawn frame. A `PointLight` needs a **cube** map, so that is six render passes per light, and each pass draws the entire `shadowCasters` list: the whole villa shell plus all its furniture, every mesh in the model not bound to an entity. With the handful of lights a house normally leaves on, that is tens of full-geometry depth passes per frame, at up to 30fps, indefinitely — comfortably more work than the actual camera view it surrounds.
+
+It fits the reported symptom precisely, which is what identified it: lights-on is a villa's resting state, so this ran essentially always, and it produced no visible artefact — just heat — because the map it recomputed was bit-for-bit identical every time.
+
+Fixed by rendering each shadow map ONCE (`REFRESHRATE_RENDER_ONCE`) and re-rendering it only when its content can actually have changed. That is a correctness argument, not a quality trade-off: a shadow map is rendered from the **light's** point of view, so it is wholly independent of the camera — panning, walking, zooming and turning cannot alter a single texel of it. The lights are fixed at their fixture positions and the casters are static shell and furniture, so the only thing that changes the image is the set of *visible* occluders. Exactly two events do that, and both now call the new `invalidateShadowMaps()`: a floor switch (FloorManager's `setEnabled` sweep hides or reveals a whole storey) and a pose-variant swap (an opened door or drawn curtain occludes differently). The pose hook is gated on an *actual* visibility change rather than firing per state event, since re-arming on a no-op would restore the per-frame cost it exists to remove.
+
+Baked villas were never affected — they deliberately create no shadow generators at all, because wall shadows are already painted into their atlas.
+
+### Fixed — the baked-badge cache grew for the life of the tab
+
+`badgeIcons.ts` caches each composited badge as a base64 PNG data URL, keyed by everything that changes its pixels. It is module-level, so it also outlives the scene: a model reload or a sign-out/sign-in remount inherits it rather than starting clean, and nothing ever removed an entry.
+
+That was survivable while the key held a two-value "dim" flag. The neutral-by-default redesign (2.144.0) widened it twice — `state` went from 2 values to 4, and `theme` entered the key — and the theme term is the one that actually leaks. An "auto" kiosk crosses into the night theme at dusk and re-bakes the entire set, while every light-theme entry it can never hit again stays resident. On a wall tablet that is never reloaded, that repeats daily. Capped at a generous working set (600 entries) with oldest-first eviction, so ordinary operation never evicts and only the dead generations a theme flip leaves behind get trimmed.
+
+### Audited and found clean — recorded so the next investigation can skip them
+
+The same pass checked, and found no defect in: the on-demand render loop (it correctly draws nothing when idle, skips hidden documents entirely, and rate-caps animation-only frames at ~30fps); scene teardown (window listeners, every subsystem, the scene, the engine, and an explicit `WEBGL_lose_context`); per-frame allocation in the animation paths (zero — the 2.113.0 and 2.124.0 work holds); the entity hot path (an unmapped entity's state event returns before requesting any frame, so HA traffic for the ~880 entities with no geometry costs no GPU at all); the continuous-render pin (released on a guaranteed 15s timeout, so a camera panel cannot strand the loop at full rate); render resolution (already capped at 2× CSS rather than a phone's native 3×); and recurring timers (the only ones are a 20s clock, a 25s websocket keepalive, and two multi-minute refreshes).
+
+One measured fact remains outside this release's reach and is now the largest single contributor: the villa GLB ships **93 texture images totalling 64.3 megapixels with `glTexCompressed: 0`** — no GPU compression at all. That is roughly 245 MB of VRAM, or ~326 MB once mipmapped, against ~41 MB for the same content as KTX2/ETC1S. It is the resource whose exhaustion produces the `context-lost` events already in the telemetry, and holding that much texture resident is itself a continuous power cost. Fixing it is a pipeline change (re-encode with KTX2, which the app has shipped an offline decoder for since 2.106.0), not an app change.
+
 ## 2.147.0
 
 ### Fixed — the Home Assistant add-on still carried the PREVIOUS rebrand's icon

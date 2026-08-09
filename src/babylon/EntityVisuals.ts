@@ -50,6 +50,9 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
+// Imported for its REFRESHRATE_* constants only (see syncEntityShadow). Adds
+// nothing to the bundle — ShadowGenerator already pulls this module in.
+import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture";
 import { Vector3, Matrix, Quaternion } from "@babylonjs/core/Maths/math.vector";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Ray } from "@babylonjs/core/Culling/ray";
@@ -2221,10 +2224,21 @@ export class EntityVisuals {
     // app sets isVisible on an entity mesh (only trigger/teleport/ceiling
     // meshes), so a hidden pose stays hidden through every floor switch and
     // recalibration with no resync needed.
+    let poseChanged = false;
     for (const [word, meshes] of byWord) {
       const show = word === chosen;
-      for (const mesh of meshes) mesh.isVisible = show;
+      for (const mesh of meshes) {
+        if (mesh.isVisible !== show) poseChanged = true;
+        mesh.isVisible = show;
+      }
     }
+    // A pose swap is one of the two things that genuinely changes which
+    // geometry occludes a lamp — an opened door or drawn curtain casts a
+    // different shadow — so the (otherwise render-once) shadow maps have to
+    // be redrawn. Gated on an ACTUAL change: this function runs for every
+    // state event on every pose-capable entity, and re-arming on a no-op
+    // would put the per-frame cost straight back.
+    if (poseChanged) this.invalidateShadowMaps();
     // Read the flags straight back off the mesh objects (not just "what we
     // just set") so this answers "is __open ACTUALLY hidden right now" with
     // zero ambiguity — a mesh only renders if BOTH isVisible AND isEnabled()
@@ -2343,6 +2357,11 @@ export class EntityVisuals {
     // Mesh variants (curtain/lock poses) need NO floor resync: their
     // exclusivity rides `isVisible`, which FloorManager's per-floor
     // `setEnabled` never touches — see applyMeshVariant's docstring.
+    //
+    // The shadow maps DO need it: FloorManager's setEnabled sweep just changed
+    // which storey's geometry exists to occlude a lamp, and those maps render
+    // once and then hold (see syncEntityShadow).
+    this.invalidateShadowMaps();
     this.requestRender();
   }
 
@@ -3745,8 +3764,44 @@ export class EntityVisuals {
     if (shadowMap) {
       shadowMap.renderList = this.shadowCasters.slice();
       for (const caster of this.shadowCasters) caster.receiveShadows = true;
+      // ── Render ONCE, not every frame (the app's biggest idle GPU cost) ────
+      // Babylon's ObjectRenderer defaults refreshRate to 1 =
+      // REFRESHRATE_RENDER_ONEVERYFRAME, and a PointLight needs a CUBE map, so
+      // every lit fixture was re-rendering the entire shadowCasters list — the
+      // whole villa shell plus furniture — SIX times per frame, on every frame
+      // the scene drew. With the handful of lights a villa normally leaves on
+      // that is tens of full-geometry depth passes per frame, forever, and it
+      // dominated the main camera pass. Reported as the device heating slowly
+      // for as long as the app stayed open, which fits exactly: lights-on is
+      // the resting state of a house, so this ran essentially always.
+      //
+      // Rendering once is CORRECT here, not a quality trade: a shadow map is
+      // rendered from the LIGHT's point of view, so it is independent of the
+      // camera — panning, walking and zooming cannot change it. The lights are
+      // fixed at their fixture positions and the casters are static villa
+      // shell/furniture, so the map's content only changes when the set of
+      // VISIBLE occluders does. invalidateShadowMaps() re-renders it for
+      // exactly those events (floor switch, pose swap); nothing else needs to.
+      shadowMap.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
     }
     this.lightShadows.set(entityId, gen);
+  }
+
+  /** Re-render every live shadow map ONCE on the next frame.
+   *
+   *  Call whenever the set of VISIBLE shadow-casting geometry changes — a
+   *  floor switch hiding/showing a storey, or a pose variant swapping a door
+   *  or cover mesh. Deliberately NOT called for camera movement or for a
+   *  light's own brightness/colour: neither can alter a depth map rendered
+   *  from the light's position, so re-rendering for those would reintroduce
+   *  the per-frame cost this exists to avoid.
+   *
+   *  resetRefreshCounter() puts the map back into its "never rendered" state,
+   *  which makes the next frame draw it once and then stop again. */
+  private invalidateShadowMaps(): void {
+    if (this.lightShadows.size === 0) return;
+    for (const gen of this.lightShadows.values()) gen.getShadowMap()?.resetRefreshCounter();
+    this.requestRender();
   }
 
   private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity, lightShare = 1): void {
