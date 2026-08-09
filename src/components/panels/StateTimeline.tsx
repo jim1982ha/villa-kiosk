@@ -316,9 +316,13 @@ export default function StateTimeline({
                 ) : hover.cell.events.length === 0 ? (
                   // No transition landed here, so nothing "happened" — the bar
                   // is coloured because a state was already in force throughout.
+                  // That used to be spelled out as "(ongoing)", which the time
+                  // range above already says: a state shown against a span, with
+                  // no event listed under it, held for the whole span. The word
+                  // restated the layout rather than adding to it.
                   hover.cell.states.map((st) => (
                     <span className="spark-tip-event" key={st}>
-                      <span style={{ color: colorFor(st) }}>●</span> {prettyState(st)} (ongoing)
+                      <span style={{ color: colorFor(st) }}>●</span> {prettyState(st)}
                     </span>
                   ))
                 ) : (

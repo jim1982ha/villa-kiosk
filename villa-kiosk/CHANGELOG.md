@@ -1,3 +1,9 @@
+## 2.189.0
+
+### Changed — dropped "(ongoing)" from the history tooltip
+
+The tooltip already shows the time span and lists any events under it, so a state with no events listed held for the whole span. The word restated the layout rather than adding to it.
+
 ## 2.188.0
 
 ### Fixed — swiping between cameras did nothing for the first few seconds
