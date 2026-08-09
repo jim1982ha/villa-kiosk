@@ -54,6 +54,10 @@ import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator"
 // nothing to the bundle — ShadowGenerator already pulls this module in.
 import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture";
 import { Vector3, Matrix, Quaternion } from "@babylonjs/core/Maths/math.vector";
+// Type-only: annotates the viewport cullLabels already computes and hands to
+// spreadPile. A `import type` adds no runtime import, so it cannot disturb the
+// side-effect import discipline this file depends on elsewhere.
+import type { Viewport } from "@babylonjs/core/Maths/math.viewport";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Ray } from "@babylonjs/core/Culling/ray";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
@@ -2895,7 +2899,7 @@ export class EntityVisuals {
       // budget — hand the whole room over to its chip. spreadPile decides and
       // arranges in one calculation, so the two cannot disagree about whether
       // a pile fits, which is the hole every earlier version had.
-      if (this.spreadPile(shown, boxes, members)) continue;
+      if (this.spreadPile(shown, boxes, members, tm, vp)) continue;
       for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
     }
 
@@ -2946,10 +2950,15 @@ export class EntityVisuals {
    * another is drawn clockwise of it, and the arrangement is identical every
    * time the same devices pile up.
    */
+  private seatTmp = new Vector3();
+  private seatOut = new Vector3();
+
   private spreadPile(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
     members: number[],
+    tm: Matrix,
+    vp: Viewport,
   ): boolean {
     const n = members.length;
     const scale = this.iconUserScale * this.iconZoomScale;
@@ -2969,6 +2978,10 @@ export class EntityVisuals {
     const radius = need / (2 * Math.sin(Math.PI / n));
     if (radius > SPREAD_MAX_RADIUS_WIDTHS * BADGE_DIAMETER_PX * scale) return false;
 
+    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
+    if (pxPerWorld <= 0) return false;
+    const ringWorld = radius / pxPerWorld;
+
     // Seat order: world bearing about the pile's world centre, on the ground
     // plane. Independent of the camera, and fixed for a given set of devices.
     let wcx = 0, wcz = 0;
@@ -2980,11 +2993,55 @@ export class EntityVisuals {
       // so the order is still total and still identical on every device.
       .sort((p, q) => p.bearing - q.bearing || shown[p.i].id.localeCompare(shown[q.i].id));
 
+    // ── Turn the ring to face reality ─────────────────────────────────────
+    // Seats were pinned with the first at the top, which meant two devices
+    // side by side in the villa could be drawn one above the other — a badge
+    // sitting in a direction its device is not in, which reads as the badge
+    // having wandered off. The ring is now turned by the circular mean of each
+    // member's own bearing against its seat, so the arrangement points the way
+    // the devices actually lie.
+    //
+    // Free to do: a rigid rotation preserves every pairwise distance, so it
+    // cannot touch the clearance the radius guarantees. It changes which way
+    // round the ring sits and nothing else.
+    let rx = 0, ry = 0;
     for (let k = 0; k < n; k++) {
-      const angle = -Math.PI / 2 + (k * 2 * Math.PI) / n; // first seat at the top
+      const residual = seated[k].bearing - (k * 2 * Math.PI) / n;
+      rx += Math.cos(residual); ry += Math.sin(residual);
+    }
+    const turn = Math.atan2(ry, rx);
+
+    // ── A seat must clear badges OUTSIDE the pile too ─────────────────────
+    // The ring guarantees its own members clear each other; it says nothing
+    // about anyone else, and a seat can land on a badge that never collided
+    // with anything. That is a real overlap and it is what survived the fix in
+    // 2.173.0, which only ever separated a pile from itself. Checked in world
+    // space against the same quantised zoom everything else uses, so the
+    // answer cannot change when the camera merely moves. No clear ring means
+    // the room summarises — the pile is not opened out half way.
+    for (let k = 0; k < n; k++) {
+      const angle = turn + (k * 2 * Math.PI) / n;
+      const sx = wcx + Math.cos(angle) * ringWorld;
+      const sz = wcz + Math.sin(angle) * ringWorld;
+      const self = shown[seated[k].i];
+      for (let j = 0; j < shown.length; j++) {
+        if (members.includes(j)) continue;
+        const d = Math.hypot(sx - shown[j].wx, self.wy - shown[j].wy, sz - shown[j].wz) * pxPerWorld;
+        if (d < boxes[seated[k].i].halfW * allow + boxes[j].halfW * allow + gapPx) return false;
+      }
+    }
+
+    // Seats are world POINTS, so the screen offset is the projected seat minus
+    // the projected anchor. The layout is decided in world space and only
+    // converted to pixels here, which is what keeps it steady under a camera
+    // that is only moving.
+    for (let k = 0; k < n; k++) {
+      const angle = turn + (k * 2 * Math.PI) / n;
       const s = shown[seated[k].i];
-      s.offX = Math.cos(angle) * radius;
-      s.offY = Math.sin(angle) * radius;
+      this.seatTmp.set(wcx + Math.cos(angle) * ringWorld, s.wy, wcz + Math.sin(angle) * ringWorld);
+      Vector3.ProjectToRef(this.seatTmp, Matrix.IdentityReadOnly, tm, vp, this.seatOut);
+      s.offX = this.seatOut.x - s.x;
+      s.offY = this.seatOut.y - s.y;
     }
     return true;
   }

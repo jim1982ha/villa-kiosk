@@ -1,3 +1,17 @@
+## 2.176.0
+
+### Fixed — two holes in the ring layout, found by re-checking it against the earlier reports
+
+Asked to double-check the rewrite against everything reported before, rather than assume it was sound. Two of those reports were not actually fixed.
+
+**A seat could land on a badge outside its own pile.** The ring guarantees its members clear each other and says nothing about anybody else, so a badge that never collided with anything could be sat on. Worked through with the shipped numbers: a two-badge pile needing 60px of clearance gets a 30px ring, while a badge just outside the pile can sit 60px from its centre — leaving 30px between them where 60 is needed. This is the overlap reported twice, and 2.173.0 did not fix it; that release only ever separated a pile from itself.
+
+A seat is now checked against every badge outside the pile as well, in world space against the same quantised zoom everything else uses, so the answer cannot change when the camera merely moves. If no clear ring exists the room summarises — a pile is never opened out half way.
+
+**The ring was pinned with its first seat at the top,** so two devices side by side in the villa could be drawn one above the other: a badge sitting in a direction its device is not in, which is what "the icons are very far from their proper location" was describing. The ring is now turned by the circular mean of each member's own bearing against its seat, so the arrangement points the way the devices actually lie. This is free to do — a rigid rotation preserves every pairwise distance, so it cannot touch the clearance the radius guarantees; it decides which way round the ring sits and nothing else.
+
+Seats are also world POINTS now rather than pixel offsets: the screen offset is the projected seat minus the projected anchor. The layout is decided in world space and only converted to pixels at the very end, which is what keeps it steady under a camera that is only moving.
+
 ## 2.175.0
 
 ### Changed — badge de-cluttering rewritten around a layout that is exact instead of estimated
