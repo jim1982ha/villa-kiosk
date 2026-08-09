@@ -2380,7 +2380,14 @@ label.toggle span { user-select: none; line-height: 1.4; }
      identify the chip, and the name is also the document title. This is the
      last step before the phone layout hides the brand outright. */
   .hud-title { display: none; }
-  .hud-brand { padding: 0 10px 0 4px; gap: 8px; }
+  /* Title hidden → the chip holds only the mark, so its padding goes
+     SYMMETRIC and tight: a wide pill sized for absent text reads as a stray
+     white box with a small glyph rattling around in it (reported from a
+     screenshot). Square, it matches the .icon-btn family — the overflow
+     button opposite it and the floor stack below — which is what the
+     background is for in the first place: the mark has to stay legible over
+     a bright sky or a dark night, exactly like every other HUD control. */
+  .hud-brand { padding: 0 4px; gap: 8px; }
 }
 
 @media (max-width: 640px), (max-height: 560px) {
@@ -2469,6 +2476,28 @@ label.toggle span { user-select: none; line-height: 1.4; }
      specificity so this can't be re-broken by another equal-weight rule
      later. */
   .hud-center .hud-cat-help, .hud-center .hud-labelsize-btn { display: none; }
+
+/* ── Short but NOT narrow: a phone in landscape ───────────────────────────
+   The compact query above fires on `(max-width: 640px), (max-height: 560px)`,
+   and it does two unrelated kinds of thing. Shrinking the pill height and the
+   icons is genuinely driven by EITHER dimension being tight. Hiding the
+   inline right-hand controls, the label-size stepper and the (?) legend is
+   about horizontal room only — there is nothing about a short viewport that
+   makes a row of icons not fit side by side.
+
+   A phone in landscape is short (~270-400px) and comfortably wide, so it was
+   matching on height and losing half the top bar for no reason — reported as
+   the category section not being fully displayed in landscape. This restores
+   exactly the horizontal-room rules for viewports that have the width, while
+   leaving every height-driven size reduction in place. */
+@media (min-width: 641px) and (max-height: 560px) {
+  .hud-right-inline { display: flex; }
+  .hud-labelsize-group { display: flex; }
+  .hud-center .hud-labelsize-btn { display: flex; }
+  .hud-center .hud-cat-help { display: block; }
+  /* …and with the inline controls back, the overflow duplicate goes away. */
+  .hud-overflow { display: none; }
+}
   /* Left control stack (1F/2F/rooms): sized to match the bottom bar's own
      icon chips (.summary-tile-icon's mobile size, see its media query) so
      the two floating icon groups read as the same family of control instead

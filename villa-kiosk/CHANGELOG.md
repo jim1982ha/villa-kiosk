@@ -1,3 +1,25 @@
+## 2.151.0
+
+### Fixed — the brand mark rendered as a solid black square
+
+Reported with a screenshot: the top-left button showed a filled dark rectangle instead of the "V". A regression from 2.149.0, and a genuinely sharp edge.
+
+`VestaMark` paints the mark as a CSS mask over `currentColor`, with the mask URL passed in as an inline custom property built from the imported asset. Vite inlines that 254-byte SVG as a data URI — and its inlined form uses **single quotes** around the SVG's own attributes (`%3csvg xmlns='…' viewBox='…'`). An UNQUOTED CSS `url()` token may not contain a quote character, so the whole declaration was invalid and dropped. With no mask applied, `background: currentColor` simply painted the element's entire box: a solid rectangle in the button's own text colour.
+
+Nothing warned about it. The CSS was well-formed as authored, the asset was correct, the component type-checked, and the failure only appears once the bundler's encoding meets the CSS parser. Fixed by quoting the URL — `url("…")` — which is valid because the inlined URI contains only single quotes.
+
+### Fixed — a phone in landscape lost half its top bar
+
+The compact-bar rules fire on `(max-width: 640px), (max-height: 560px)`, and that one query does two unrelated things. Shrinking the pill height and the icon buttons is genuinely driven by either dimension being tight. Hiding the inline right-hand controls, the label-size stepper and the (?) legend — and swapping in the overflow menu to carry them — is about horizontal room only: nothing about a short viewport stops a row of icons fitting side by side.
+
+A phone in landscape is short (~270–400px) and comfortably wide, so it matched on height and gave up controls it had ample room for. The horizontal-room rules are now restored for any viewport that has the width, while every height-driven size reduction stays exactly as it was.
+
+### Changed — the brand chip is a square when it holds only the mark
+
+Below 860px the villa name is hidden, leaving the chip with a single glyph inside padding that had been sized for text — asymmetric, 16px on one side and 4px on the other. That read as a stray white box with something small rattling around in it, which is most of why the broken mark above looked so odd.
+
+On the question of whether that background is needed at all: it is, and keeping it is the consistent choice rather than the conservative one. Every other floating HUD control — the overflow button opposite it, the floor stack below it — sits on the same glass, and the chip's own reason for existing is that the mark has to stay legible over whatever the render puts behind it, which is a bright sky, a dark lawn or an empty void depending on the hour. Dropping it would single out the one element that most needs to survive that. What was wrong was the shape, not the presence: the padding is now symmetric, so the chip reads as a square icon chip in the same family as its neighbours instead of a pill stretched for absent text.
+
 ## 2.150.0
 
 ### Changed — a badge is now either on its device or replaced by its room's chip; nothing in between

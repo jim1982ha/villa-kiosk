@@ -28,7 +28,7 @@ export default function VestaMark({ size = 24, className }: Props) {
     <span
       className={`vesta-mark${className ? ` ${className}` : ""}`}
       style={{
-        ["--mark" as string]: `url(${markUrl})`,
+        ["--mark" as string]: `url("${markUrl}")`,
         height: size,
         width: Math.round(size * (100 / 93)),
       }}
