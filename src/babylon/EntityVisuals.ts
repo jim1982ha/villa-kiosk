@@ -2795,14 +2795,50 @@ export class EntityVisuals {
     // same way (see the thresholds' comment). Piles too big to read are
     // summarised into their room's chip; smaller huddles are fanned apart.
     const baseY = this.labelBaseOffsetY();
+    // ── Tier 1 → 2: drop the READOUT before summarising the room ──────────
+    // The full box includes the value text, whose width is a function of how
+    // many characters the reading happens to have: a card showing
+    // "26.4°C · 66%" measures ~155px wide while its tappable icon is ~54px.
+    // Grouping on that meant two sensors whose ICONS were comfortably apart —
+    // obvious empty space between them — summarised their whole rooms because
+    // their TEXT boxes touched. Reported as the room badge appearing far too
+    // early, with plenty of room left for individual badges.
+    //
+    // What must never overlap is the TAP TARGET. The readout is secondary and
+    // is always one tap away in the device panel, so it is what gets dropped
+    // first — the same order every map engine degrades in, where the marker
+    // survives and its label is the thing that goes. The badge does not move
+    // or shrink; it just stops carrying its number.
+    for (const s of shown) {
+      s.lbl.valueWrap.isVisible = s.lbl.valueText.text.length > 0;
+    }
+    for (const members of this.groupBadges(shown, this.labelBoxes(shown))) {
+      if (members.length < 2) continue;
+      for (const i of members) shown[i].lbl.valueWrap.isVisible = false;
+    }
+    // ── Tier 2 → 3: only now, if the ICONS THEMSELVES still collide ───────
+    // Re-measured AFTER the readouts above are hidden, so this pass sees the
+    // boxes that will actually be drawn rather than the ones that would have
+    // been — the 2.152.0 rule that a layout decision may never use different
+    // geometry from the renderer. labelBoxes reads valueWrap.isVisible for its
+    // width, so hiding the value IS the icon-only measurement; there is no
+    // second, parallel definition of a badge's size to drift out of step.
     const boxes = this.labelBoxes(shown);
     const piles = this.groupBadges(shown, boxes);
 
-    // ── Two outcomes: a badge on its own device, or the room's chip ───────
+    // ── The last tier: the room's chip ────────────────────────────────────
     // A BADGE IS NEVER MOVED. Its screen position is its anchor's projection
     // and nothing else, so the same device is always in the same place and
     // zooming only ever changes how far apart badges are — never which of
-    // them is where.
+    // them is where. It is never SHRUNK either: a badge below the ~44px touch
+    // target would be a control nobody can hit, which is a worse answer than
+    // the chip (a chip is at least honestly tappable, and says how many
+    // devices it stands for).
+    //
+    // Three tiers, and the badge holds its size and place through all of
+    // them: full badge → badge without its readout → room chip. The readout
+    // tier is what buys the headroom; see its comment above for why grouping
+    // on the text was making rooms collapse with obvious space to spare.
     //
     // There used to be a middle tier: a collided pile was laid out side by
     // side ("fanned") near its devices, and only summarised when that layout

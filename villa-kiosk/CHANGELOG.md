@@ -1,3 +1,19 @@
+## 2.165.0
+
+### Fixed — rooms collapsed into their chip with obvious space to spare
+
+Reported as the room badge appearing far too early, while there was still plenty of room for individual badges at a usable size.
+
+The collision test was measuring the wrong thing. A badge's box is its whole label, and that includes the value text, whose width is a function of how many characters the reading happens to have. A card showing "26.4°C · 66%" measures about 155px wide while its tappable icon is about 54px; a classic badge with the same reading measures about 104px against a 44px icon. So two sensors whose ICONS were comfortably apart — with visible empty space between them — summarised both their rooms because their TEXT boxes touched. The width driving the decision had almost nothing to do with the thing the user is trying to hit.
+
+What must never overlap is the TAP TARGET. The readout is secondary: it is always one tap away in the device panel, and it is what map engines drop first — the marker survives, its label goes. So there is now a middle tier between "full badge" and "room chip": a crowded badge keeps its size, its position and its full tap target, and simply stops carrying its number. Only if the ICONS THEMSELVES still collide does the room summarise.
+
+The effect is roughly 2–3× more zoom-out headroom before anything collapses, and it comes from measuring the right box rather than from loosening a threshold. The overlap tolerance is still zero, so badges still never overlap.
+
+Two properties are preserved deliberately. The second pass re-measures AFTER the readouts are hidden, so it sees the boxes that will actually be drawn — the 2.152.0 rule that a layout decision may never use different geometry from the renderer, which was broken once before by dividing the user's size preference out of the test. And `labelBoxes` derives its width from `valueWrap.isVisible`, so hiding the value IS the icon-only measurement; there is no second, parallel definition of a badge's size that could drift out of step with the first.
+
+A badge is still never moved, and it is now explicitly never shrunk either: a badge below the ~44px touch target is a control nobody can hit, which is a worse answer than the chip — a chip is at least honestly tappable and says how many devices it stands for.
+
 ## 2.164.0
 
 ### Fixed — the 3D map vanished on Android and desktop (regression in 2.162.0)
