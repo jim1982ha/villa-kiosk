@@ -26,6 +26,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
 import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
+import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import { successFeedback } from "@/utils/haptics";
@@ -211,6 +212,12 @@ function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void 
   // actually on ("warn" — e.g. an unlocked lock or high energy draw — reads
   // as alerting, same red as everywhere else that signal shows up).
   const state: DeviceSurfaceState = t.tone === "warn" ? "alert" : t.tone === "on" ? "active" : "off";
+  // categorySurface composites an OPAQUE fill in JS from the theme's tokens,
+  // so unlike a plain var() it is frozen at render time. This bar is on screen
+  // permanently, which makes it the worst place for that to go stale — an
+  // "auto" kiosk crossing into night would keep light-theme chips until some
+  // unrelated HA update happened to re-render it.
+  useResolvedTheme();
   const surface = categorySurface(t.category, state);
   return (
     <button
@@ -248,6 +255,7 @@ function SceneMenu({ scenes, canRun, apply }: {
   apply: (s: HaSceneInfo) => void;
 }) {
   const [open, setOpen] = useState(false);
+  useResolvedTheme(); // its tile chip is composited in JS too — see Tile
   // The pop-up is PORTALED to <body>: the summary-bar has a transform +
   // overflow, so a menu nested inside it would be clipped and mis-positioned.
   // We anchor it to the tile via the tile's viewport rect (position: fixed).
@@ -289,6 +297,8 @@ function SceneMenu({ scenes, canRun, apply }: {
         type="button"
         className="summary-tile tone-neutral"
         style={{
+          // Same reason as Tile above: composited in JS, so re-theming needs
+          // a re-render rather than the cascade.
           ["--tile-fill" as string]: categorySurface("others", "off").fill,
           ["--tile-glyph" as string]: categorySurface("others", "off").glyph,
         }}

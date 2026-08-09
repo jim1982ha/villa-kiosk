@@ -30,6 +30,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
+import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -57,6 +58,8 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
   const dialogRef = useModalA11y(onClose);
+  // Category tiles below composite their colours in JS — see the hook.
+  const theme = useResolvedTheme();
   const [pivot, setPivot] = useState<"room" | "floor" | "category">("room");
   // Drill-down opened by tapping a room/floor row below — reuses
   // SummaryGroupPanel, the same device-list modal every other "all the
@@ -207,7 +210,10 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
                 // every category as if it were doing something.
                 const surface = categorySurface(tile.category, tile.onCount > 0 ? "active" : "off");
                 return (
-                  <div key={tile.category} className="cockpit-category-tile">
+                  // Keyed by theme as well as category: the surface above is
+                  // composited in JS from the theme's tokens, so it is frozen
+                  // at render time rather than re-evaluated by the cascade.
+                  <div key={`${tile.category}:${theme}`} className="cockpit-category-tile">
                     <div className="cockpit-category-icon" style={{ background: surface.fill, color: surface.glyph }}>
                       <Icon size={18} />
                     </div>

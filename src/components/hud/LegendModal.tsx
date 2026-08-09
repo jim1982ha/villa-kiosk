@@ -8,6 +8,7 @@
 
 import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { STATUS_COLOR } from "@/utils/stateColors";
 
 /** What the MAP badge actually does per state — mirrors config/
@@ -43,6 +44,10 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
 export default function LegendModal({ onClose }: { onClose: () => void }) {
   // Focus trap + Escape + focus restore (see useModalA11y).
   const dialogRef = useModalA11y(onClose);
+  // Every swatch below is a colour composited in JS from the theme's tokens,
+  // not a CSS variable the cascade would re-evaluate — so this legend has to
+  // re-render when the theme changes or it documents the wrong colours.
+  const theme = useResolvedTheme();
   return (
     // Same shell as every other full modal (Settings, Config Editor, group
     // panels) — .settings-modal's 780px width, not the narrow device-panel
@@ -53,6 +58,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
       <div
         ref={dialogRef}
         className="modal settings-modal legend-modal"
+        key={theme}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

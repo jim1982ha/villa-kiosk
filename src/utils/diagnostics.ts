@@ -174,6 +174,35 @@ export function isIOS(): boolean {
     || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
+/**
+ * The four `env(safe-area-inset-*)` values, in px, MEASURED rather than read.
+ *
+ * Reading them off a custom property (`--safe-top` and friends) is the obvious
+ * approach and is not reliable: whether `getPropertyValue` hands back the
+ * substituted pixel length or the literal `env(...)` token is not something to
+ * depend on across engines, and this report exists precisely to be trusted
+ * when a layout is in doubt. A throwaway element whose padding IS the env()
+ * is measured by the layout engine itself, so whatever comes back is what the
+ * page's own rules are actually seeing.
+ */
+function probeSafeAreaInsets(): { top: number; right: number; bottom: number; left: number } | null {
+  if (typeof document === "undefined") return null;
+  const el = document.createElement("div");
+  el.style.cssText =
+    "position:fixed;top:0;left:0;visibility:hidden;pointer-events:none;" +
+    "padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);" +
+    "padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);";
+  document.body.appendChild(el);
+  const cs = getComputedStyle(el);
+  const px = (v: string) => Math.round(parseFloat(v) || 0);
+  const out = {
+    top: px(cs.paddingTop), right: px(cs.paddingRight),
+    bottom: px(cs.paddingBottom), left: px(cs.paddingLeft),
+  };
+  el.remove();
+  return out;
+}
+
 /** Assemble the full, copyable report. `primary` is the headline error for this
  *  screen (crash-loop bail, model-load failure, render crash, …). */
 export function buildReport(primary: CapturedError): string {
@@ -225,6 +254,26 @@ export function buildReport(primary: CapturedError): string {
   push("Device memory (GB)", nav.deviceMemory ?? "n/a (not exposed on this browser)");
   push("Screen", `${screen.width}x${screen.height} @ DPR ${window.devicePixelRatio}`);
   push("Window", `${window.innerWidth}x${window.innerHeight}`);
+  // Everything needed to answer "why is there dead space at an edge?" in ONE
+  // report instead of a round of guesses. That question came in as a white
+  // band along the bottom of an iPad PWA, and it has three possible answers
+  // that need three different fixes: the page is laying out short (window <
+  // shell), the app is reserving an inset it shouldn't (safe-area), or iOS
+  // gave the web view less than the screen and nothing in the page can reach
+  // it (window < screen). The numbers below separate those; the symptom alone
+  // does not, and a screenshot cannot.
+  const vv = window.visualViewport;
+  if (vv) push("Visual viewport", `${Math.round(vv.width)}x${Math.round(vv.height)} @ scale ${vv.scale}`);
+  const inset = probeSafeAreaInsets();
+  if (inset) push("Safe-area insets", `top ${inset.top} right ${inset.right} bottom ${inset.bottom} left ${inset.left}`);
+  const shell = document.querySelector(".app-root")?.getBoundingClientRect();
+  if (shell) push("App shell box", `${Math.round(shell.width)}x${Math.round(shell.height)} at ${Math.round(shell.left)},${Math.round(shell.top)}`);
+  // screen.* is the physical display; window.* is what the browser handed the
+  // page. A gap here is the "iOS gave the web view less than the screen" case,
+  // which no CSS can fix — it is the meta/manifest presentation or the host.
+  const shortBy = Math.round(screen.height - window.innerHeight);
+  const shortByW = Math.round(screen.width - window.innerWidth);
+  push("Screen not used by page", `${shortByW}px wide, ${shortBy}px tall${shortBy > 2 || shortByW > 2 ? "  <-- dead space OUTSIDE the page" : ""}`);
   push("Online", navigator.onLine);
 
   L.push("");

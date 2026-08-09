@@ -122,7 +122,7 @@ export default function BindingsTable() {
               <div className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
                 Selected: <strong style={{ color: "var(--accent)" }}>{newId}</strong>
                 {config.entityMap[newId] && (
-                  <span style={{ marginLeft: 8, color: "var(--status-danger, #c0504d)" }}>
+                  <span style={{ marginLeft: 8, color: "var(--status-danger)" }}>
                     already configured
                   </span>
                 )}

@@ -167,6 +167,9 @@ export class SceneManager {
    *  low WebGL memory ceiling and crash-loop the loader (see the constructor). */
   private isIOS = false;
   private resizeObserver: ResizeObserver | null = null;
+  /** Watches <html data-theme> — see handleThemeChange for why the attribute
+   *  is the signal rather than config.theme. */
+  private themeObserver: MutationObserver | null = null;
   private ready = false;
   private readyCallbacks = new Set<() => void>();
   private calibrateCallbacks = new Set<() => void>();
@@ -395,6 +398,24 @@ export class SceneManager {
       this.resizeObserver = new ResizeObserver(() => this.handleResize());
       this.resizeObserver.observe(canvas);
     }
+    // The one place the resolved theme is published (see handleThemeChange).
+    // Guarded on the value actually differing: ConfigContext re-applies the
+    // attribute on a timer for an "auto" kiosk, and rebuilding every badge
+    // every five minutes for a no-op write would be a real cost on a wall
+    // tablet this app is otherwise careful to let idle.
+    if (typeof MutationObserver !== "undefined") {
+      let lastTheme = document.documentElement.getAttribute("data-theme");
+      this.themeObserver = new MutationObserver(() => {
+        const next = document.documentElement.getAttribute("data-theme");
+        if (next === lastTheme) return;
+        lastTheme = next;
+        this.handleThemeChange();
+      });
+      this.themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-theme"],
+      });
+    }
 
     // Long-running-kiosk robustness. A wall tablet / WebView can LOSE the WebGL
     // context (GPU reset, memory pressure, the app being backgrounded). Babylon
@@ -580,16 +601,43 @@ export class SceneManager {
   /**
    * Bird's-eye backdrop colour, matched to the active UI theme so the void
    * around the floor plan never clashes with the surrounding chrome ("light
-   * theme selected but the canvas stays pitch black" report). "auto" resolves
-   * against the OS colour-scheme preference, same as the CSS media query.
+   * theme selected but the canvas stays pitch black" report).
+   *
+   * Read from the RESOLVED theme on <html>, not from `config.theme`. Those are
+   * different questions: config.theme can be "auto", and ConfigContext resolves
+   * that against the real sun position (utils/themeTime) into light/dark/NIGHT.
+   * Re-deriving it here from `prefers-color-scheme` gave a second, disagreeing
+   * answer that has no idea night exists — so an auto kiosk at dusk could sit
+   * on the night palette everywhere except this backdrop.
    */
   private overviewBackdropColor(): Color4 {
-    const theme = this.config.theme;
-    const isLight = theme === "light" || (theme === "auto" && !window.matchMedia("(prefers-color-scheme: dark)").matches);
+    const isLight = document.documentElement.getAttribute("data-theme") === "light";
     return isLight
       ? new Color4(0.90, 0.93, 0.97, 1) // matches --bg-base light
       : new Color4(0.055, 0.062, 0.078, 1); // matches --bg-base dark
   }
+
+  /**
+   * The theme actually changed on screen. ONE signal for all three ways that
+   * can happen — Settings, an "auto" kiosk crossing into night at dusk, and
+   * the OS light/dark switch — because all three end at the same place:
+   * ConfigContext writing `data-theme` on <html>. Watching the attribute
+   * therefore catches every path by construction, where watching
+   * `config.theme` catches only the first (it never changes for the other two,
+   * which is exactly why they were broken).
+   *
+   * Badges have to be REBUILT, not just re-tinted: a classic badge's fill,
+   * ring and glyph are baked into a PNG (badgeIcons), and while that cache is
+   * keyed by theme — so a fresh bake is correct — nothing was asking for one.
+   * Each badge kept its old-theme image until its entity's state happened to
+   * change, which is why a camera (state changes constantly) re-themed itself
+   * and a fan sitting at "off" did not: reported as light-theme badges
+   * scattered across a dark-theme map.
+   */
+  private handleThemeChange = () => {
+    if (this.viewMode === "overview") this.sun.setBackgroundOverride(this.overviewBackdropColor());
+    this.visuals.repaintBadges();
+  };
 
   /**
    * Swap between first-person walking and the bird's-eye overview camera. Only
@@ -1932,10 +1980,10 @@ export class SceneManager {
       this.renderFx.apply(this.deviceRenderConfig(config.render));
       this.sun.updateConfig(config);
     }
-    // Theme flip while already in overview: re-pin the backdrop to match.
-    if (prev.theme !== config.theme && this.viewMode === "overview") {
-      this.sun.setBackgroundOverride(this.overviewBackdropColor());
-    }
+    // A theme flip is NOT handled here any more — see handleThemeChange. This
+    // watched `config.theme`, which only moves when someone picks a theme in
+    // Settings; an "auto" kiosk crossing into night, or the OS switching to
+    // dark, leave it untouched while the whole UI re-themes around it.
     this.camera.updateConfig(config);
     this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
     this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes, config.hiddenCategories);
@@ -2033,6 +2081,9 @@ export class SceneManager {
 
     window.removeEventListener("resize", this.handleResize);
     this.resizeObserver?.disconnect();
+    // Observes <html>, which outlives this scene — an undisconnected observer
+    // would keep a disposed SceneManager (and its whole scene graph) alive.
+    this.themeObserver?.disconnect();
     document.removeEventListener("visibilitychange", this.handleVisibility);
     window.removeEventListener("pagehide", this.handlePageHide);
     window.removeEventListener("pageshow", this.handlePageShow);

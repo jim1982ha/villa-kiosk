@@ -17,6 +17,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
+import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { classifyDeviceActivity } from "@/utils/deviceActivity";
@@ -103,6 +104,8 @@ export default function SummaryGroupPanel({
 }: Props) {
   const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
   const { config, resolvedRooms } = useConfig();
+  // Each row's badge is a PNG baked from the theme's tokens — see the hook.
+  const theme = useResolvedTheme();
   const { role } = useProfile();
   const entityLabel = useEntityLabel();
   // Bulk-toggling an entire group (potentially dozens of devices) from one
@@ -292,6 +295,7 @@ export default function SummaryGroupPanel({
           <img
             className="summary-entity-badge"
             src={badgeImageDataUrl(cat, iconKeyFor(type, e), badgeState, config.entityMap[id]?.badgeColor, 0)}
+            key={theme}
             alt=""
             draggable={false}
           />

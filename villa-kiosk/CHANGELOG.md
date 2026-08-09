@@ -1,3 +1,37 @@
+## 2.161.0
+
+### Fixed — badges kept their old theme's colours after a theme change
+
+Reported with a dark-theme screenshot showing light-theme badges scattered across the map, while others — a camera, the room chips, the bottom bar — were correctly dark. That split is the clue: the badges that re-themed were the ones whose entity had reported a state change since the theme flipped.
+
+A classic badge's fill, ring and glyph are baked into a PNG (`badgeIcons`). The bake cache is keyed by theme, so asking for a badge after a theme change correctly produces a new image — but nothing was asking. `applyToMesh` sets the image when an entity's state changes, and only then, so a device sitting quietly at "off" kept its old-theme picture indefinitely while a camera flicking between online and motion re-baked itself within seconds.
+
+The narrow fix would be to re-bake on a theme change. The real problem is that "the theme changed" had no single signal. Three separate things cause it — picking a theme in Settings, an "auto" kiosk crossing into night at dusk, and the OS light/dark switch — and only the first moves `config.theme`, which is what the one existing piece of theme reaction (re-pinning the overview backdrop) was watching. The other two re-themed the entire CSS layer while every JS-computed colour stayed where it was.
+
+All three do end at the same place: `ConfigContext` writing `data-theme` on `<html>`. So that attribute is now the signal. `SceneManager` observes it and rebuilds the badges plus re-pins the backdrop; the `config.theme` check it replaces is gone rather than left as a second, narrower answer to the same question. The observer is guarded on the value actually differing, because an "auto" kiosk re-applies the attribute on a timer and rebuilding every badge every five minutes for a no-op write is exactly the kind of idle cost this app spends effort avoiding elsewhere.
+
+The DOM half had the same bug for the same reason. `categorySurface()` composites an OPAQUE fill in JS (it has to — the badge fill has to work over the 3D view, where a translucent tint is invisible) and `badgeImageDataUrl` bakes a PNG, so unlike a plain `var()` neither is re-evaluated by the cascade; only a re-render refreshes them. Five components did this and none subscribed to the theme: the summary bar (the worst case — permanently on screen, and only correct today because HA traffic re-renders it constantly), the panel header badge, the group panel's rows, the Cockpit category tiles and the Map colours legend, which would have documented the wrong colours. They now share a `useResolvedTheme()` hook rather than five observers.
+
+### Fixed — colour-vocabulary inconsistencies found in a sweep of the codebase
+
+Prompted by the Energy tile in the summary bar: a red icon chip with an amber underline, on the same tile. The chip took `categorySurface`'s "alert" surface while the underline was a literal `--status-warning`, so one signal was painted in two colours. Amber was the wrong one either way — a tile turns "warn" for an unlocked lock or a high energy draw, which is a confirmed condition needing attention, not Home Assistant losing contact. The underline now reads the same `--tile-ring` the lit-tile rule already used, so the two cannot diverge again.
+
+A sweep for the same class of mistake turned up three more.
+
+**Cockpit had two attention kinds swapped**, which inverted the one distinction the status vocabulary exists to protect: an `unavailable` device was painted in the confirmed-alarm red and a confirmed `fault` in the amber that means "state unknown". The same device could show red in Cockpit and amber on the map badge beside it. `schedule` stays amber deliberately — it is a maintenance item, and amber is Facility Manager's established "due soon" tier, not a claim about connectivity.
+
+**The connection dot's "connecting" state was amber**, which announces lost contact for the state a handshake is actively trying to leave. It is a textbook transitional state and now uses `--status-pending`, the token 2.157.0 added for exactly that.
+
+**A device group's chart series were coloured with status tokens.** The second series was drawn in the "needs attention" red and the third in the "lost contact" amber, purely because of the order members happened to be listed in — a humidity line is not alarming for being second. Series colours now come from the brand accents, which carry no status meaning. Same reasoning as the standing rule against reusing the `--cat-*` category hues for non-category UI.
+
+Two things were deliberately left alone. Facility Manager's good/due-soon/overdue tiers are a coherent vocabulary of their own about task scheduling, not device state. And a threshold sensor's normal/warning/danger band colouring is a third reading of amber that would need its own token to resolve properly; it is noted rather than churned.
+
+### Added — display geometry in the diagnostics report
+
+A report of dead white space along the bottom of an iPad PWA has three possible causes needing three different fixes: the page laying out short, an inset being reserved that shouldn't be, or iOS handing the web view less than the screen — which no CSS in the page can reach. A screenshot cannot tell them apart and neither can the symptom.
+
+The report now carries the visual viewport, the measured `env(safe-area-inset-*)` values, the app shell's real box, and the difference between `screen` and the page's own viewport, flagged when it is non-zero. The insets are measured off a throwaway probe element rather than read from the `--safe-*` custom properties, because whether `getPropertyValue` returns a substituted pixel length or the literal `env()` token is not something worth depending on in the one report that exists to be trusted when a layout is in doubt.
+
 ## 2.160.0
 
 ### Fixed — climate and media panels had no history section at all

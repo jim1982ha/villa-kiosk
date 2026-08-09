@@ -733,7 +733,10 @@ button {
 .conn-dot { display: inline-flex; align-items: center; }
 .conn-dot .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--status-off); }
 .conn-dot.online .dot { background: var(--status-on); box-shadow: 0 0 8px var(--status-on); }
-.conn-dot.connecting .dot { background: var(--status-warning); animation: pulse 1s infinite; }
+/* Connecting is a TRANSITIONAL state — mid-handshake, on its way to a rest
+   state — which is what --status-pending means (2.157.0). Amber here said
+   "contact lost", which is the state it is actively trying to leave. */
+.conn-dot.connecting .dot { background: var(--status-pending); animation: pulse 1s infinite; }
 .conn-dot.offline .dot { background: var(--status-danger); box-shadow: 0 0 8px var(--status-danger); }
 
 /* Rooms dial button — vertically centred on the left edge so its long-press
@@ -1037,7 +1040,15 @@ button {
    accent. An inset underline rather than a full border, so it reads as a
    status cue on the flush tile rather than reintroducing a per-tile card. */
 .summary-tile.tone-on { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--accent)); }
-.summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--status-warning); } /* alert cue (unlocked, high energy) */
+/* Reads --tile-ring, exactly like tone-on above, so the underline and the icon
+   chip it sits under are ONE value rather than two answers to one question.
+   It was a literal --status-warning while the chip took categorySurface's
+   "alert" surface, i.e. --status-danger: the Energy tile drew a red chip with
+   an amber underline on the same tile (reported from a screenshot). Amber was
+   also simply the wrong meaning — a tile turns "warn" for an unlocked lock or
+   a high energy draw, which is a confirmed condition needing attention, not
+   Home Assistant losing contact. */
+.summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--status-danger)); }
 .summary-tile.tone-off .summary-tile-value { color: var(--text-secondary); }
 
 /* Scene pop-up picker (portaled to <body>, anchored above the Scene tile). */
@@ -3408,8 +3419,17 @@ label.toggle span { user-select: none; line-height: 1.4; }
 button.cockpit-attention-row.tappable { cursor: pointer; }
 button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg-input)); }
 .cockpit-attention-icon { flex: 0 0 auto; }
-.cockpit-attention-unavailable, .cockpit-attention-alarm { color: var(--status-danger); }
-.cockpit-attention-fault, .cockpit-attention-schedule { color: var(--status-warning); }
+/* These two were SWAPPED, which inverted the one distinction the status
+   vocabulary exists to protect (utils/stateColors, babylon/colors): amber is
+   "Home Assistant has lost contact, the state is unknown", red is "a confirmed
+   problem". Cockpit painted an unavailable device as a confirmed alarm and a
+   confirmed fault as merely unreachable — the same device shown red here and
+   amber on the map badge beside it. `schedule` stays amber deliberately: it is
+   a maintenance item, and amber is Facility Manager's established "due soon"
+   tier (.fm-badge.due-soon), not a claim about connectivity. */
+.cockpit-attention-unavailable { color: var(--status-warning); }
+.cockpit-attention-fault, .cockpit-attention-alarm { color: var(--status-danger); }
+.cockpit-attention-schedule { color: var(--status-warning); }
 .cockpit-attention-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .cockpit-attention-title {
   font-size: var(--text-sm); color: var(--text-primary);

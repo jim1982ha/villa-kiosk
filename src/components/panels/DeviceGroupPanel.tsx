@@ -27,7 +27,23 @@ interface Props {
   onClose: () => void;
 }
 
-const SERIES_COLORS = ["var(--status-on)", "var(--accent)", "var(--status-warning)", "var(--status-danger)"];
+/**
+ * Colours for telling one plotted SERIES from another — nothing more.
+ *
+ * These were the status tokens (--status-on / --status-warning /
+ * --status-danger), which quietly asserted something they had no basis for: a
+ * group's second series was drawn in the app's "needs attention" red and its
+ * third in the amber that means "Home Assistant has lost contact", purely
+ * because of the order the members happened to be listed in. A humidity line
+ * is not alarming for being second.
+ *
+ * The brand accents carry no status meaning, so they can be assigned by index
+ * without claiming anything. Same reasoning as the rule against reusing the
+ * --cat-* category hues for non-category UI (see CLAUDE.md): a colour that
+ * means something specific elsewhere must not be spent on "these are
+ * different lines".
+ */
+const SERIES_COLORS = ["var(--accent-teal)", "var(--accent)", "var(--accent-warm)", "var(--accent-strong)"];
 
 export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Props) {
   const { entities } = useHA();

@@ -18,6 +18,7 @@ import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useConfig } from "@/config/ConfigContext";
 import { categorySurface } from "@/config/EntityCategories";
+import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import BadgeColorModal from "./BadgeColorModal";
 import LastDayTimeline from "./LastDayTimeline";
 
@@ -59,6 +60,10 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
   // used to walk straight into controls the user couldn't see behind the
   // scrim.
   const dialogRef = useModalA11y(onClose);
+  // The header badge is a PNG baked from the theme's tokens and the tint below
+  // is composited in JS, so neither re-themes through the cascade — a panel
+  // left open across a dusk theme flip would keep its old-theme colours.
+  const theme = useResolvedTheme();
 
   // The exact map badge for this device (glyph + colour), shown in the header.
   // Clickable — when the profile may edit config — to recolour just this badge.
@@ -67,6 +72,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
     <img
       className="panel-badge-img"
       src={badgeImageDataUrl(badge.category, badge.iconKey, badge.state, badge.color, 0)}
+      key={theme}
       alt=""
       draggable={false}
     />
