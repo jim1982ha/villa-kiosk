@@ -2992,9 +2992,9 @@ export class EntityVisuals {
   }
 
   /**
-   * Open a collided pile out until its badges clear each other, by SCALING the
-   * pile about its own centre. Returns false if that cannot be done inside the
-   * travel budget, which is the caller's cue to summarise the room instead.
+   * Arrange a pile that pileCanOpen has already cleared to stay: push every
+   * member out from the pile's centre, along its own bearing, by ONE distance
+   * shared by the whole pile. Decides nothing — see pileCanOpen for that.
    *
    * ── Why a uniform scale, and why this is not the 2.159.0 fan ────────────
    * The fan was removed because it re-slotted a pile into a sqrt(n) grid in
@@ -3003,16 +3003,11 @@ export class EntityVisuals {
    * in a diagonal line became a 2x2 block in another order. That is what was
    * unacceptable, and it was a property of the LAYOUT, not of moving badges.
    *
-   * A uniform scale about the centroid cannot do that. It is a similarity
-   * transform: every badge keeps its bearing and its ordering relative to
-   * every other, the configuration is preserved exactly, and only the spacing
-   * changes. A badge up-and-left of the group is up-and-left at every zoom and
-   * every size. There is nothing to reshuffle, no slots, no sort — and one
-   * closed-form factor, so no iteration and no solver.
-   *
-   * Because pairwise distance scales linearly with the factor, the smallest
-   * factor that clears the whole pile is just the largest per-pair
-   * requirement — computed, not searched.
+   * A uniform outward push cannot do that. Every badge keeps its bearing, so
+   * a badge up-and-left of the group is up-and-left at every zoom and every
+   * size; the arrangement is preserved and only the spacing changes. There is
+   * nothing to reshuffle, no slots, no sort, and the distance is computed in
+   * one pass rather than searched — so no relaxation solver returns either.
    *
    * Two badges at the SAME point have no bearing to preserve, so they are
    * seeded with a fixed direction derived from the entity_id. That is stable
@@ -3050,55 +3045,50 @@ export class EntityVisuals {
       vx.push(dx); vy.push(dy);
     }
 
-    let factor = 1;
+    // ── ONE push distance for the whole pile, from QUANTISED zoom ─────────
+    // Every member moves out along its own bearing by the same number of
+    // pixels. That is the piece that was missing: the previous version scaled
+    // the pile by a factor derived from LIVE projected spacing, so the amount
+    // of movement was a continuous function of zoom and every fractional
+    // change slid the badges around, while a distant member of a transitive
+    // pile moved furthest of all. Reported as badges moving a lot, and without
+    // a logic anyone could follow, between two zoom levels.
+    //
+    // The magnitude now comes only from world distance and the QUANTISED
+    // pixels-per-world-unit — the same quantisation grouping itself uses, and
+    // for the same reason. Inside a zoom step the push is bit-identical, so
+    // badges do not move at all; crossing a step changes it once, cleanly, and
+    // crossing back undoes it exactly.
+    //
+    // A single distance rather than a factor also means a badge that was never
+    // crowded moves as little as everyone else — being swept into a pile by
+    // transitivity no longer costs it a journey.
+    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
+    if (pxPerWorld <= 0) return;
+    let push = 0;
     for (let a = 0; a < members.length; a++) {
       for (let b = a + 1; b < members.length; b++) {
-        const need = boxes[members[a]].halfW * allow + boxes[members[b]].halfW * allow + gapPx;
-        const d = Math.hypot(vx[a] - vx[b], vy[a] - vy[b]);
-        if (d < 0.001) continue; // identical seeds: nothing this pass can scale
-        const f = need / d;
-        if (f > factor) factor = f;
+        const i = members[a], j = members[b];
+        const need = boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx;
+        const d = Math.hypot(shown[j].wx - shown[i].wx, shown[j].wy - shown[i].wy, shown[j].wz - shown[i].wz);
+        // Both badges move, so each only has to cover half the shortfall —
+        // the same arithmetic pileCanOpen used to decide this pile could stay.
+        const deficit = (need - d * pxPerWorld) / 2;
+        if (deficit > push) push = deficit;
       }
     }
-    if (factor <= 1) return; // already clear
+    if (push <= 0) return; // already clear
+    push = Math.min(push, SPREAD_MAX_TRAVEL_WIDTHS * BADGE_DIAMETER_PX * scale);
 
-    // A badge must stay recognisably ON its device. Expressed in badge widths
-    // and scaled with the badge, so raising the icon size does not silently
-    // license a badge to travel further across the room than before.
-    // ── Travel is capped PER BADGE, not tested for the pile as a whole ─────
-    // A single factor multiplies every member's distance from the centre, so
-    // it is set by the TIGHTEST pair and then applied to badges that were
-    // never crowded. Piles are transitive — A touches B, B touches C — so a
-    // fan and its own light (a few px apart, needing a factor of 5 or more)
-    // would drag in a third badge 100px away and hurl it 500px across the
-    // room. Reported from two screenshots one zoom step apart: the central
-    // bedroom's badges suddenly flew to the far corners, because crossing a
-    // zoom step pulled one more badge into the pile and the factor jumped.
-    //
-    // Clamping each badge's own travel fixes both halves. The crowded members
-    // still get the full factor they need (their radius is tiny, so even a
-    // large factor moves them only a little); the outlying member stops at the
-    // budget instead of being flung. And the visible effect of a factor jump
-    // is now bounded by the budget rather than by the pile's widest radius, so
-    // crossing a zoom step nudges badges instead of rearranging the room.
-    //
-    // Clamping cannot reorder them. Two badges scaled by the same factor keep
-    // their order; where the outer one is clamped it travels the full budget
-    // while the inner one travels at most that, so the inner can never
-    // overtake it.
-    const maxTravel = SPREAD_MAX_TRAVEL_WIDTHS * BADGE_DIAMETER_PX * scale;
-    const px: number[] = [], py: number[] = [];
+    // The bearing stays live: it is the direction the device actually lies in
+    // from the pile's centre, so the arrangement turns with the villa as the
+    // camera orbits, exactly as the furniture does. Only the DISTANCE had to
+    // be camera-independent, and now is.
     for (let a = 0; a < members.length; a++) {
       const r = Math.hypot(vx[a], vy[a]);
-      const travel = Math.min((factor - 1) * r, maxTravel);
-      const grow = r > 0 ? travel / r : 0;
-      px.push(vx[a] * (1 + grow));
-      py.push(vy[a] * (1 + grow));
-    }
-
-    for (let a = 0; a < members.length; a++) {
-      shown[members[a]].offX = px[a] - vx[a];
-      shown[members[a]].offY = py[a] - vy[a];
+      if (r <= 0) continue;
+      shown[members[a]].offX = (vx[a] / r) * push;
+      shown[members[a]].offY = (vy[a] / r) * push;
     }
   }
 

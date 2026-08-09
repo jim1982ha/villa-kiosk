@@ -1,3 +1,19 @@
+## 2.172.0
+
+### Fixed — badges slid around, a lot and unpredictably, when the zoom changed
+
+Two screenshots a small zoom apart: four badges gathered neatly round the fan hub in one, flung to the far corners of the bed in the other, with no arrangement anyone could connect to the first.
+
+The pile was being opened out by SCALING it — one factor, applied to each member's distance from the pile's centre. Two things followed from that, and both are visible in those screenshots.
+
+The factor came from the LIVE projected spacing, so the amount of movement was a continuous function of zoom: every fractional change slid every badge, and the further out a badge already sat, the further it slid. And because piles are transitive, a badge that was never crowded — swept in because it touched something that touched something — got the factor set by the tightest pair in the group applied to its own much larger radius, which is what threw it across the room.
+
+The pile now moves by ONE push distance shared by every member, out along each badge's own bearing, and that distance comes only from world distance and the QUANTISED pixels-per-world-unit — the same quantisation grouping itself uses, for the same reason. Inside a zoom step the push is bit-identical, so badges do not move at all; crossing a step changes it once, cleanly, and crossing back undoes it exactly. A single distance rather than a factor also means an uncrowded member moves as little as everyone else, so being swept into a pile by transitivity no longer costs it a journey.
+
+The arithmetic is deliberately the same one `pileCanOpen` uses to decide the pile may stay: both badges move, so each covers half the shortfall. The decision and the arrangement can no longer disagree about what a pile needs.
+
+Bearings stay live, and should: a bearing is the direction the device actually lies in from the pile's centre, so the arrangement turns with the villa as the camera orbits, exactly as the furniture does. Only the DISTANCE ever needed to be camera-independent, and now is.
+
 ## 2.171.0
 
 ### Fixed — badges vanished when the camera panned, and flickered while it moved
