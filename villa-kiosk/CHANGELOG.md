@@ -1,3 +1,9 @@
+## 2.188.0
+
+### Fixed — swiping between cameras did nothing for the first few seconds
+
+The swipe listener hung off the feed element and bailed if that element was not ready — and a feed still negotiating HLS has no element yet. Its dependency was a ref object, which never changes identity, so the effect had nothing to re-run on and the listener was simply never attached. It now attaches once to the panel root, which is mounted for the panel's whole life, and reads readiness when the gesture finishes rather than when it is attached. Swiping therefore works immediately, including while the next camera is still loading.
+
 ## 2.187.0
 
 ### Changed — the badge travel budget now scales with the screen

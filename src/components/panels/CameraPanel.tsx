@@ -173,6 +173,9 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   zoomedRef.current = zoom.zoomed;
   const stepCameraRef = useRef(stepCamera);
   stepCameraRef.current = stepCamera;
+  // Read at GESTURE time, not at listener-attach time — see the swipe effect.
+  const canCycleRef = useRef(false);
+  canCycleRef.current = canCycle;
 
   // ── Sideways scroll steps between cameras (trackpad / tilt wheel) ────────
   // The drag gesture below covers touch. A trackpad swipe is not a drag: it
@@ -249,13 +252,27 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // in (panning only starts once scale > 1 there), so this coexists with pinch
   // /pan without fighting over the same pointer events — swipes only resolve
   // to a camera change while the feed is at its default 1x framing.
+  //
+  // Attached to the PANEL ROOT, once, and never torn down. It used to hang off
+  // the feed element and bail when that element or `canCycle` was not ready —
+  // with `zoom.ref` as a dep, and a ref object never changing identity, the
+  // effect then had nothing to re-run on. A feed still negotiating HLS has no
+  // element yet, so the listener was simply never attached and swiping did
+  // nothing until something unrelated re-rendered. That is the "wait a few
+  // seconds before it lets me swipe".
+  //
+  // The root is mounted for the panel's whole life and the feed sits inside
+  // it, so pointer events reach it either way. Both conditions are read from
+  // refs when the gesture finishes instead, which also means a swipe works
+  // while the next camera is still loading — the point of the gesture is to
+  // move on quickly.
   useEffect(() => {
-    const el = zoom.ref.current;
-    if (!el || !canCycle) return;
+    const el = rootRef.current;
+    if (!el) return;
     let downX = 0, downY = 0, downT = 0, tracking = false;
     const SWIPE_MAX_MS = 600;
     const onDown = (e: PointerEvent) => {
-      if (zoomedRef.current) return;
+      if (zoomedRef.current || !canCycleRef.current) return;
       tracking = true;
       downX = e.clientX; downY = e.clientY; downT = Date.now();
     };
@@ -279,7 +296,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
       el.removeEventListener("pointerup", onUp);
       el.removeEventListener("pointercancel", onCancel);
     };
-  }, [canCycle, zoom.ref]);
+  }, []);
 
   // Bottom status bar: this camera's own online/offline history, layered with
   // its MOTION sensor's (mapping.motionEntityId, set in Advanced Settings)
