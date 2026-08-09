@@ -697,6 +697,14 @@ export class SceneManager {
     this.requestRender(600);
   }
 
+  /** The entity whose badge is under this screen point, or null — for the
+   *  hover tooltip. Reuses the SAME hit-test taps go through
+   *  (EntityVisuals.pickBadgeAt), so what a pointer highlights and what a tap
+   *  opens can never be two different badges. */
+  hoverBadgeAt(clientX: number, clientY: number): string | null {
+    return this.visuals.pickBadgeAt(clientX, clientY);
+  }
+
   getViewMode(): "first-person" | "overview" {
     return this.viewMode;
   }

@@ -21,6 +21,7 @@ import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
 import { useConfig } from "@/config/ConfigContext";
 import { roomKey } from "@/config/roomKey";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed } from "@/auth/permissions";
@@ -664,6 +665,35 @@ export default function Dashboard() {
     [goToRoom, resolvedRooms],
   );
 
+  // ── Hover tooltip: what is this badge? ────────────────────────────────
+  // Mouse only. A touch device has no hover state, and the same gesture there
+  // is already a tap that opens the panel, so a tooltip would either never
+  // show or fight the tap. Throttled to one hit-test per animation frame:
+  // pointermove fires far more often than the answer can change.
+  // The one place the app decides what a device is called (useEntityLabel).
+  const entityLabel = useEntityLabel();
+  const [hoverBadge, setHoverBadge] = useState<{ id: string; x: number; y: number } | null>(null);
+  const hoverRaf = useRef(0);
+  useEffect(() => {
+    if (!manager) return;
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      const { clientX, clientY } = e;
+      if (hoverRaf.current) return;
+      hoverRaf.current = requestAnimationFrame(() => {
+        hoverRaf.current = 0;
+        const id = manager.hoverBadgeAt(clientX, clientY);
+        setHoverBadge(id ? { id, x: clientX, y: clientY } : null);
+      });
+    };
+    window.addEventListener("pointermove", onMove);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      cancelAnimationFrame(hoverRaf.current);
+      hoverRaf.current = 0;
+    };
+  }, [manager]);
+
   const pinContinuous = useCallback(() => manager?.pinContinuous() ?? (() => {}), [manager]);
 
   // Swap between first-person walking and the bird's-eye overview camera.
@@ -868,6 +898,17 @@ export default function Dashboard() {
         </PanelActionsProvider>
       )}
 
+      {/* Hover tooltip: the badge's name, follows the pointer. pointer-events
+          are off so it can never become the hover target itself and flicker. */}
+      {hoverBadge && (
+        <div
+          className="badge-tooltip"
+          style={{ left: hoverBadge.x, top: hoverBadge.y }}
+          role="tooltip"
+        >
+          {entityLabel(hoverBadge.id)}
+        </div>
+      )}
       {roomChoices && (
         <RoomChoiceSheet
           choices={roomChoices}

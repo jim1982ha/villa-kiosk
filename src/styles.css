@@ -3656,3 +3656,26 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   font-size: var(--text-xs); font-variant-numeric: tabular-nums;
   color: var(--text-secondary); text-align: center;
 }
+
+/* --- Badge hover tooltip (Dashboard) -------------------------------------
+   Follows the pointer, offset clear of the cursor so it never sits under the
+   badge it is naming. pointer-events: none is essential, not cosmetic: a
+   tooltip that can be hovered becomes the hover target, which drops the badge
+   and flickers the tooltip out from under the cursor. */
+.badge-tooltip {
+  position: fixed; z-index: 80; pointer-events: none;
+  transform: translate(14px, -50%);
+  max-width: 260px; padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--hairline);
+  box-shadow: 0 8px 22px var(--shadow);
+  color: var(--text-primary);
+  font-family: var(--font-ui); font-size: var(--text-xs); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  animation: fadeIn 0.12s ease-out;
+}
+/* No hover on a touchscreen, and the same gesture there already opens the
+   panel — so the tooltip would either never appear or fight the tap. */
+@media (hover: none) { .badge-tooltip { display: none; } }

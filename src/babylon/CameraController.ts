@@ -302,8 +302,12 @@ export class CameraController {
     this.shift = e.shiftKey;
     const map: Record<string, string> = {
       ArrowUp: "fwd", KeyW: "fwd", ArrowDown: "back", KeyS: "back",
-      ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right",
-      KeyQ: "turnLeft", KeyE: "turnRight",
+      // Left/right TURN rather than strafe. Sidestepping is what a game pad
+      // does; walking a villa, "left" means "look left", and strafing read as
+      // the view drifting sideways with no way to change heading. Q/E keep the
+      // sidestep for anyone who wants it, which is the swap of what they were.
+      ArrowLeft: "turnLeft", KeyA: "turnLeft", ArrowRight: "turnRight", KeyD: "turnRight",
+      KeyQ: "left", KeyE: "right",
     };
     const action = map[e.code];
     if (!action) return;
@@ -562,11 +566,10 @@ export class CameraController {
     // Keep frames coming during a teleport animation too.
     if (this.animating) this.cb.onActivity();
 
-    // --- Look via keys: Q/E always turn; Shift+arrows turn + tilt ---
+    // --- Look via keys: A/D and left/right turn; Shift+up/down also tilts ---
     let yaw = (this.keys.has("turnRight") ? 1 : 0) - (this.keys.has("turnLeft") ? 1 : 0);
     let pitch = 0;
     if (this.shift) {
-      yaw += (this.keys.has("right") ? 1 : 0) - (this.keys.has("left") ? 1 : 0);
       pitch += (this.keys.has("back") ? 1 : 0) - (this.keys.has("fwd") ? 1 : 0);
     }
     if (yaw !== 0 || pitch !== 0) {
@@ -575,7 +578,7 @@ export class CameraController {
       this.cb.onActivity();
     }
 
-    // --- Move: joystick + arrows/WASD (suppressed while Shift = look) ---
+    // --- Move: joystick + W/S (forward/back) and Q/E (sidestep) ---
     const kbX = this.shift ? 0 : (this.keys.has("right") ? 1 : 0) - (this.keys.has("left") ? 1 : 0);
     const kbY = this.shift ? 0 : (this.keys.has("fwd") ? 1 : 0) - (this.keys.has("back") ? 1 : 0);
     const mx = Math.max(-1, Math.min(1, this.moveX + kbX));

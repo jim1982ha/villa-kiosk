@@ -1,3 +1,13 @@
+## 2.191.0
+
+### Changed — left/right now turn the camera instead of sidestepping
+
+A/D and the arrow keys strafed, which read as the view drifting sideways with no way to change heading. They turn now; Q/E keep the sidestep. WASD was already wired.
+
+### Added — hovering a badge names the device
+
+A tooltip follows the pointer with the entity's label, using the same hit-test a tap goes through so highlight and tap can never disagree. Mouse only: a touchscreen has no hover, and the same gesture there already opens the panel.
+
 ## 2.190.0
 
 ### Fixed — badges summarised far too early on a phone
