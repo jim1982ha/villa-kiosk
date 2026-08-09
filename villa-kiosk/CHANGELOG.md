@@ -1,3 +1,9 @@
+## 2.193.0
+
+### Fixed — the villa reloaded every time you came back to the app
+
+`pagehide` disposed the 3D engine whenever the browser said the page was not being kept, with an exemption already carved out for iOS. Android Chrome reports the same thing when a PWA is merely backgrounded and then restores the very same document, so switching apps threw the villa away and it had to be rebuilt on return. Nothing is disposed on pagehide now, on any platform: a real navigation unmounts React and tears down through the normal path, and GPU pressure while backgrounded is what the context-lost handling is for.
+
 ## 2.192.0
 
 ### Fixed — a working camera was drawn as if it were off

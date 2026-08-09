@@ -470,23 +470,27 @@ export class SceneManager {
     window.addEventListener("pageshow", this.handlePageShow);
   }
 
-  private handlePageHide = (e: PageTransitionEvent) => {
-    // `persisted` = the document is going into the bfcache and may be RESTORED
-    // intact — disposing then would leave a dead canvas on return. Only tear
-    // down on a true discard (persisted === false), which is the iframe-
-    // navigation / tab-close case we actually need to release the GPU for.
+  private handlePageHide = () => {
+    // Deliberately does NOT dispose, on any platform.
     //
-    // EXCEPT on iOS, where this heuristic is simply wrong and caused the
-    // "switch to WhatsApp, come back, white unresponsive screen" bug: iOS
-    // Safari/WKWebView fires pagehide with persisted=FALSE when the app is
-    // merely backgrounded, then restores the SAME document on return without
-    // reloading. React never remounts, so nothing ever rebuilt the scene we
-    // had just disposed — the canvas stayed dead until the user force-quit
-    // the app. iOS reclaims GPU memory from a backgrounded tab by itself
-    // (that's what the context-lost path above is for), so the eager dispose
-    // buys nothing there while costing everything. The Chrome/HA-Ingress
-    // iframe case this exists for is unaffected.
-    if (!e.persisted && !this.isIOS) this.dispose();
+    // It used to tear the engine down whenever `persisted` was false, with an
+    // iOS exemption added after that produced a dead canvas there. The
+    // exemption was right and the rule around it was wrong: Android Chrome
+    // fires pagehide with persisted=FALSE when a PWA is merely backgrounded
+    // too, and then restores the SAME document on return. Disposing meant the
+    // villa had to be rebuilt every time the user switched apps — reported as
+    // the map reloading on every return, which is exactly what iOS had been
+    // exempted from.
+    //
+    // Nothing is leaked by leaving it alone. A genuine navigation or tab close
+    // unmounts React, which calls dispose() through the normal path, and the
+    // browser reclaims the context regardless; GPU pressure while backgrounded
+    // is handled by the context-lost/restored observers above, which is the
+    // mechanism actually designed for it.
+    //
+    // The argument is kept in the signature for the listener's type, but the
+    // `persisted` flag is not consulted: it cannot be trusted to mean "will be
+    // restored" on either mobile platform.
   };
 
   /**
