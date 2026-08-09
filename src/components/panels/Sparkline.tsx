@@ -7,7 +7,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { HistoryPoint } from "@/types/ha.types";
 import { useElementWidth } from "@/hooks/useElementWidth";
-import { fmtChartValue, fmtChartTime, nearestIndexByX } from "./chartUtils";
+import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
 
 interface Props {
   data: HistoryPoint[];
@@ -22,6 +22,9 @@ interface Props {
 const M = { top: 8, right: 10, bottom: 18, left: 38 };
 
 export default function Sparkline({ data, color = "var(--accent-teal)", height = 110, unit = "", loading }: Props) {
+  // Span of the data itself: this chart scales its x-axis to what it was given.
+  const spanHours = data.length > 1
+    ? (data[data.length - 1].t - data[0].t) / 3_600_000 : 0;
   const [ref, W] = useElementWidth<HTMLDivElement>(320);
   const [hover, setHover] = useState<number | null>(null);
 
@@ -99,7 +102,9 @@ export default function Sparkline({ data, color = "var(--accent-teal)", height =
           style={{ left: hp.x, top: M.top, transform: `translateX(${hp.x > W / 2 ? "-100%" : "0"})` }}
         >
           <strong>{fmtChartValue(hp.v)}{unit ? ` ${unit}` : ""}</strong>
-          <span>{fmtChartTime(hp.t)}</span>
+          {/* The tooltip earns the day when the window spans more than one;
+              the axis ticks below stay bare, where the day would not fit. */}
+          <span>{fmtChartStamp(hp.t, spanHours)}</span>
         </div>
       )}
     </div>

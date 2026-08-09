@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from "react";
 import type { StateHistoryPoint } from "@/types/ha.types";
-import { fmtChartTime } from "./chartUtils";
+import { fmtChartTime, fmtChartStamp } from "./chartUtils";
 
 export interface TimelineLegendEntry {
   state: string;
@@ -309,7 +309,7 @@ export default function StateTimeline({
           >
             {bucketMs ? (
               <>
-                <strong>{fmtChartTime(hover.cell.from)} – {fmtChartTime(hover.cell.to)}</strong>
+                <strong>{fmtChartStamp(hover.cell.from, hours)} – {fmtChartTime(hover.cell.to)}</strong>
                 {hover.cell.states.length === 0 ? (
                   // Only the resting state here. The state alone IS the answer —
                   // an added "nothing detected" only restates that no events are
@@ -334,7 +334,7 @@ export default function StateTimeline({
                   hover.cell.events.map((ev, k) => (
                     <span className="spark-tip-event" key={k}>
                       <span style={{ color: colorFor(ev.state) }}>●</span> {prettyState(ev.state)}
-                      {" · "}{fmtChartTime(ev.t)}
+                      {" · "}{fmtChartStamp(ev.t, hours)}
                     </span>
                   ))
                 )}
@@ -344,7 +344,7 @@ export default function StateTimeline({
                 <strong>
                   <span style={{ color: colorFor(hover.cell.states[0]) }}>●</span> {prettyState(hover.cell.states[0])}
                 </strong>
-                <span>{fmtChartTime(hover.cell.from)}</span>
+                <span>{fmtChartStamp(hover.cell.from, hours)}</span>
               </>
             )}
           </div>

@@ -1,3 +1,9 @@
+## 2.197.0
+
+### Changed — chart tooltips show the date when the window spans more than a day
+
+A bare "14:20" is unambiguous over today and meaningless on a 7-day chart. Tooltips now include the day whenever the window covers more than 24 hours, or when the point is not from today — which also covers an unavailable device, whose chart is anchored to when it was last seen. Driven off the window rather than each point's age, so every point in one chart reads the same way. Axis ticks stay bare, where a date would not fit.
+
 ## 2.196.0
 
 ### Fixed — the state timeline always drew a 24-hour axis whatever range you picked

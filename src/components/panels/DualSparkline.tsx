@@ -9,7 +9,14 @@
 import { useCallback, useMemo, useState } from "react";
 import type { HistoryPoint } from "@/types/ha.types";
 import { useElementWidth } from "@/hooks/useElementWidth";
-import { fmtChartValue, fmtChartTime, nearestIndexByX } from "./chartUtils";
+import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
+
+/** Hours the plotted data actually covers — this chart scales its x-axis to
+ *  what it was given, so the span is the data's own, not a fixed window. */
+function spanHoursOf(...series: HistoryPoint[][]): number {
+  const ts = series.flat().map((d) => d.t);
+  return ts.length > 1 ? (Math.max(...ts) - Math.min(...ts)) / 3_600_000 : 0;
+}
 
 interface Series {
   data: HistoryPoint[];
@@ -116,7 +123,7 @@ export default function DualSparkline({ a, b, height = 120 }: Props) {
         <div className="spark-tip" style={{ left: railX, top: M.top, transform: `translateX(${railX > W / 2 ? "-100%" : "0"})` }}>
           {hpA && <span><span style={{ color: a.color }}>●</span> {fmtChartValue(hpA.v)}{a.unit ? ` ${a.unit}` : ""}</span>}
           {hpB && <span><span style={{ color: b.color }}>┄</span> {fmtChartValue(hpB.v)}{b.unit ? ` ${b.unit}` : ""}</span>}
-          <span className="spark-tip-time">{fmtChartTime((hpA ?? hpB)!.t)}</span>
+          <span className="spark-tip-time">{fmtChartStamp((hpA ?? hpB)!.t, spanHoursOf(a.data, b.data))}</span>
         </div>
       )}
     </div>

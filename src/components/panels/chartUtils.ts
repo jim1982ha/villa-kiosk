@@ -15,6 +15,31 @@ export function fmtChartTime(t: number): string {
   return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+/**
+ * A timestamp for a chart TOOLTIP, with the day included only when it adds
+ * something: a bare "14:20" is unambiguous while the chart covers today, and
+ * meaningless on a 7-day window where the reader cannot tell which 14:20 it is.
+ *
+ * Driven off the window the chart is showing rather than off the timestamp's
+ * own age, so every point in one chart is formatted the same way — a tooltip
+ * that gained and lost a date as the pointer moved would be worse than either
+ * form. The one exception is a point that is not from today, which earns the
+ * date even inside a short window (an unavailable device's history is anchored
+ * to when it was last seen, so a "24h" chart there can sit entirely in the
+ * past).
+ */
+export function fmtChartStamp(t: number, spanHours: number): string {
+  const d = new Date(t);
+  const today = new Date();
+  const sameDay = d.getFullYear() === today.getFullYear()
+    && d.getMonth() === today.getMonth()
+    && d.getDate() === today.getDate();
+  if (spanHours <= 24 && sameDay) return fmtChartTime(t);
+  return d.toLocaleString([], {
+    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+  });
+}
+
 /** Index of the point whose x is closest to the given plot-space x. */
 export function nearestIndexByX(pts: { x: number }[], x: number): number {
   let best = 0, bestD = Infinity;
