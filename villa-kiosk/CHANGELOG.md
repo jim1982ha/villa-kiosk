@@ -1,3 +1,9 @@
+## 2.199.0
+
+### Fixed — the 7-day chart stopped six days ago
+
+Home Assistant's history endpoint defaults `end_time` to start + 24 hours when it is not given, so a 7-day request came back with the first day of that week and nothing since. Every history request now sends an explicit end. One shared fetch, so this fixes every mini-chart at once — and also the "last seen" lookback for an unavailable device, which searches 60 days back and was being answered with one.
+
 ## 2.198.0
 
 ### Fixed — the room pill kept one colour in every theme

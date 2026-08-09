@@ -14,10 +14,18 @@ async function fetchRaw(entityId: string, hours: number): Promise<RawHistoryStat
   // The add-on's Supervisor proxy injects the token server-side, so we hit it
   // token-less (session cookie carries the browser's authorization).
   const apiBase = ingressApiBase();
-  const start = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+  const now = Date.now();
+  const start = new Date(now - hours * 3600 * 1000).toISOString();
+  // end_time is REQUIRED for any window longer than a day. Home Assistant's
+  // history endpoint defaults it to start + 24h when it is omitted, so a 7-day
+  // request silently came back with the FIRST day of that week and nothing
+  // since — a chart whose newest point was six days old while the 24h view of
+  // the same sensor was full of data.
+  const end = new Date(now).toISOString();
   const url =
     `${apiBase}/history/period/${encodeURIComponent(start)}` +
-    `?filter_entity_id=${encodeURIComponent(entityId)}&minimal_response&no_attributes`;
+    `?filter_entity_id=${encodeURIComponent(entityId)}` +
+    `&end_time=${encodeURIComponent(end)}&minimal_response&no_attributes`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`History request failed: ${res.status}`);
