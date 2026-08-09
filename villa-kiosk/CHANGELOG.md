@@ -1,3 +1,21 @@
+## 2.175.0
+
+### Changed — badge de-cluttering rewritten around a layout that is exact instead of estimated
+
+Reported with four screenshots a hair's breadth apart in zoom: at one level, clean room chips; a fraction closer, forty badges scattered around the villa, many nowhere near the device they label. The request was to stop patching and revise the feature properly, and that is what this is.
+
+Every version since 2.153.0 shared one hole: **the thing that decided a pile could be opened out was not the thing that opened it.** A grid dealt by entity_id reshuffled badges between zoom steps. A uniform scale was driven by the tightest pair and flung distant members across the room. A uniform push could not separate two badges that shared a bearing. An area *estimate* of whether a pile would fit waved through forty-badge piles that then drew as a mess, because the estimate said yes and the mechanism could not deliver it. Each fix addressed the previous symptom and left the hole intact, which is why the behaviour kept moving without settling.
+
+A collided pile is now opened onto a **ring** around its own centre, and the same arithmetic both decides and arranges. n badges evenly spaced on a circle of radius R sit 2·R·sin(π/n) apart, so the radius that clears the widest pair is solved directly — every pair clears **by construction**, not by a check afterwards. If that radius exceeds the travel budget, no ring exists and the room summarises. There is nothing left for a decision and an arrangement to disagree about.
+
+This also caps pile size for free. The ring a pile needs grows with the number of badges on it, so a pile of forty has no radius that fits and becomes a chip, with no separate member limit to keep in step.
+
+Nothing in the layout reads a projected position. The radius comes from the badge size alone, and the seat order from each device's WORLD bearing about the pile's world centre, so panning, orbiting and tilting change none of it — the invariant six earlier rewrites died on. Seats are filled in bearing order from the top, so a device clockwise of another is drawn clockwise of it, and the same devices always produce the same arrangement.
+
+The four tiers are now stated once, in the code, in order: badge on its device → badge without its readout → pile opened onto a ring → the room's chip. A badge holds its size through all of them, and the room chip always takes the whole room.
+
+Removed with the rewrite: the separate feasibility test, the travel-clamp, the scale factor, the push distance, the co-located bearing hash and the per-pass overlap tolerance — all machinery that existed only to prop up an inexact layout.
+
 ## 2.174.0
 
 ### Fixed — zoomed out, room chips vanished entirely and badges scattered across the screen

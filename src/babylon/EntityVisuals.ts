@@ -374,32 +374,20 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  * and zoom, both independent of where the camera is looking from, so the
  * screen-space coupling that six earlier attempts died on is still absent.
  *
- * ── And a badge is never MOVED (2.159.0) ─────────────────────────────────
- * The rule above governs which badges are shown together. A second rule now
- * governs where a shown badge goes: on its anchor, always. There are exactly
- * two outcomes — a badge over its own device, or its room's chip.
+ * ── What may move a badge, and what may not (2.175.0) ────────────────────
+ * A badge sits on its anchor's projection unless its pile is opened out onto
+ * a ring (spreadPile), which is the only thing in this file allowed to move
+ * one, by at most the ring budget. Everything else about a badge's position
+ * is its device's position.
  *
- * The middle tier that used to sit between them ("fanning": laying a collided
- * pile out side by side near its devices) was removed. It re-slotted a pile
- * into a sqrt(n) grid ordered by entity_id, so a badge's position depended on
- * how many neighbours it collided with and where its id sorted — not on where
- * its device is. One zoom step changed the pile's membership, resized the grid
- * and moved every member, which is what a user finally reported with two
- * screenshots: four badges in a diagonal line becoming a 2x2 block in a
- * different order.
- *
- * That is the same failure as the six screen-space attempts, one level up.
- * Those made GROUPING depend on the camera; the fan made POSITION depend on
- * grouping, which depends on zoom. Pinning badges to their anchors closes the
- * loop: the only thing zoom can now change is whether a room is expanded.
- *
- * The price is paid honestly. A pile summarises where it used to fan, so
- * rooms group at a wider zoom than before — and zooming in reopens them,
- * because every badge's world-space reach shrinks as the view closes in. The
- * one permanent case is two devices at the SAME point: no zoom separates
- * them, so that room always shows its chip. That is not a regression to work
- * around — there is no view in which both badges could be read, and the fan's
- * answer (nudge one aside) was drawing a badge somewhere its device is not.
+ * The rule was briefly "a badge is never moved" (2.159.0). It sounded
+ * principled and made the outcome impossible: badges anchor to DEVICES, so a
+ * ceiling fan and its own light are a couple of dozen pixels apart at a normal
+ * framing, and pinned, no badge wider than that could be drawn there however
+ * much empty floor the room had. Movement is not the thing that was ever
+ * wrong. RESHUFFLING was — a layout that deals badges fresh seats can deal
+ * them differently one zoom step later — and a ring seated by world bearing
+ * cannot do that.
  */
 /** Zoom is quantised to steps of 1/N of a doubling before it feeds the
  *  grouping radius — the direct equivalent of a map engine clustering per
@@ -427,13 +415,6 @@ const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
  * of each other.
  */
 const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
-/**
- * The same tolerance for the READOUT pass — zero, and it stays zero.
- * Overlapping icons read as depth; overlapping TEXT reads as corruption, and
- * the readout is the thing this design drops first precisely so the icons can
- * afford the tolerance above.
- */
-const TEXT_OVERLAP_ALLOW_WIDTHS = 0;
 
 /**
  * Minimum clear gap between two badges' drawn footprints, in px. Below this
@@ -449,28 +430,15 @@ const TEXT_OVERLAP_ALLOW_WIDTHS = 0;
  */
 const BADGE_MIN_GAP_PX = 6;
 /**
- * How far a badge may be pushed from its own device when its pile is opened
- * out (spreadPile), in multiples of its own width.
+ * The largest ring a collided pile may be opened out onto, in badge widths.
  *
- * It is also what bounds how far the arrangement can VISIBLY change when a
- * zoom step pulls one more badge into a pile: the cap applies per badge, so
- * the worst a factor jump can do is move each badge by this much. Keep it
- * small enough that crossing a step reads as a nudge rather than a rearrange.
- *
- * The rule this replaces was "a badge is never moved",
- * which sounded principled and produced a hard ceiling nobody could raise:
- * badges anchor to DEVICES, so a fan and its own light are ~24px apart at a
- * normal framing and NO badge wider than that could ever be drawn there,
- * however much empty floor the room had. Four badges at ~20px, and the next
- * size step summarised the room.
- *
- * A badge still has to point at its device to mean anything, so this is a
- * budget rather than a licence — and when the budget is not enough, the room
- * still summarises. It is expressed in badge widths and scales with the badge
- * so that raising the icon size cannot buy extra travel, which is the exact
- * defect that once put a room chip out on the lawn.
+ * This is the whole budget for moving a badge away from the device it labels,
+ * and it doubles as the limit on how big a pile may be: the ring a pile needs
+ * grows with the number of badges on it, so past a certain count no ring fits
+ * and the room summarises instead. That is the ONLY thing deciding pile size,
+ * which is why there is no separate member cap to keep in step with it.
  */
-const SPREAD_MAX_TRAVEL_WIDTHS = 1.5;
+const SPREAD_MAX_RADIUS_WIDTHS = 2;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -2868,7 +2836,7 @@ export class EntityVisuals {
     for (const s of shown) {
       s.lbl.valueWrap.isVisible = s.lbl.valueText.text.length > 0;
     }
-    for (const members of this.groupBadges(shown, this.labelBoxes(shown), TEXT_OVERLAP_ALLOW_WIDTHS)) {
+    for (const members of this.groupBadges(shown, this.labelBoxes(shown))) {
       if (members.length < 2) continue;
       for (const i of members) shown[i].lbl.valueWrap.isVisible = false;
     }
@@ -2883,18 +2851,19 @@ export class EntityVisuals {
     const piles = this.groupBadges(shown, boxes);
 
     // ── The last tier: the room's chip ────────────────────────────────────
-    // A BADGE IS NEVER MOVED. Its screen position is its anchor's projection
-    // and nothing else, so the same device is always in the same place and
-    // zooming only ever changes how far apart badges are — never which of
-    // them is where. It is never SHRUNK either: a badge below the ~44px touch
-    // target would be a control nobody can hit, which is a worse answer than
-    // the chip (a chip is at least honestly tappable, and says how many
-    // devices it stands for).
+    // Four tiers, in order, and a badge holds its SIZE through all of them —
+    // it is never shrunk, because a badge below the ~44px touch target is a
+    // control nobody can hit, which is a worse answer than a chip that is at
+    // least honestly tappable and says how many devices it covers:
     //
-    // Three tiers, and the badge holds its size and place through all of
-    // them: full badge → badge without its readout → room chip. The readout
-    // tier is what buys the headroom; see its comment above for why grouping
-    // on the text was making rooms collapse with obvious space to spare.
+    //   1. badge on its device
+    //   2. badge without its readout        (the text is dropped first)
+    //   3. pile opened onto a ring          (spreadPile, bounded travel)
+    //   4. the room's chip
+    //
+    // Tier 4 takes the WHOLE room with it, never a subset: a room that is half
+    // chip and half loose badges asks the viewer to work out which devices the
+    // chip covers, and a count over part of a room is not actionable.
     //
     // There used to be a middle tier: a collided pile was laid out side by
     // side ("fanned") near its devices, and only summarised when that layout
@@ -2922,19 +2891,12 @@ export class EntityVisuals {
     this.roomClustered.clear();
     for (const members of piles) {
       if (members.length < 2) continue;
-      // THE DECISION IS WORLD-SPACE; the arrangement is screen-space. Keeping
-      // those apart is the invariant this whole subsystem is built on (see the
-      // file header) and 2.169.0 broke it: spreadPile works from PROJECTED
-      // positions, and its pass/fail was gating the collapse — so panning the
-      // camera changed the projected spacing, changed whether the pile fit, and
-      // flipped whole rooms between badges and a chip. Reported as icons
-      // vanishing when the view scrolled sideways, and as flicker while moving,
-      // which is that same flip oscillating around its threshold.
-      if (!this.pileCanOpen(shown, boxes, members)) {
-        for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
-        continue;
-      }
-      this.spreadPile(shown, boxes, members);
+      // Open the pile out onto a ring, or — if no ring fits inside the travel
+      // budget — hand the whole room over to its chip. spreadPile decides and
+      // arranges in one calculation, so the two cannot disagree about whether
+      // a pile fits, which is the hole every earlier version had.
+      if (this.spreadPile(shown, boxes, members)) continue;
+      for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
     }
 
     for (const s of shown) {
@@ -2949,200 +2911,82 @@ export class EntityVisuals {
   }
 
   /**
-   * Can this pile be opened out enough for its badges to clear each other?
+   * Open a collided pile out onto a RING around its own centre, or report that
+   * it cannot be done — in which case the caller summarises the room.
    *
-   * WORLD SPACE ONLY, and that is the whole point. This answers the one
-   * question that decides whether a room keeps its badges or becomes a chip,
-   * so it must be a pure function of anchor positions, the quantised zoom and
-   * the badge size — never of where the camera happens to be looking from.
-   * Pan, orbit and tilt change the PROJECTED spacing of two fixed anchors;
-   * letting that decide grouping is the exact coupling six earlier rewrites
-   * died on, and 2.169.0 quietly reintroduced it by gating the collapse on
-   * spreadPile's screen-space result.
+   * ── Why a ring, after several worse attempts ──────────────────────────────
+   * Every previous version computed a displacement and HOPED the result
+   * cleared: a grid dealt by entity_id (2.153-2.159) reshuffled badges between
+   * zoom steps; a uniform scale (2.169-2.170) was driven by the tightest pair
+   * and flung distant members across the room; a uniform push (2.172) could
+   * not separate two badges sharing a bearing at all; and an area ESTIMATE of
+   * whether a pile would fit (2.174) waved through forty-badge piles that then
+   * drew as a scattered mess. Each fixed the last symptom and left the same
+   * hole: the thing that decided a pile could be opened was not the thing that
+   * opened it.
    *
-   * Two badges d world-units apart are drawn d * pxPerWorld apart, and each
-   * may be pushed up to the travel budget, so the widest gap obtainable is
-   * that plus twice the budget. If even that is short of what the pair needs,
-   * no arrangement can save the pile and the room summarises.
-   */
-  private pileCanOpen(
-    shown: ShownLabel[],
-    boxes: { halfW: number; halfH: number; cy: number }[],
-    members: number[],
-  ): boolean {
-    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
-    if (pxPerWorld <= 0) return false;
-    const scale = this.iconUserScale * this.iconZoomScale;
-    const gapPx = BADGE_MIN_GAP_PX * scale;
-    const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
-    const budget = SPREAD_MAX_TRAVEL_WIDTHS * BADGE_DIAMETER_PX * scale;
-
-    let widestNeed = 0;
-    for (let a = 0; a < members.length; a++) {
-      for (let b = a + 1; b < members.length; b++) {
-        const i = members[a], j = members[b];
-        const need = boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx;
-        if (need > widestNeed) widestNeed = need;
-        const d = Math.hypot(shown[j].wx - shown[i].wx, shown[j].wy - shown[i].wy, shown[j].wz - shown[i].wz);
-        if (d * pxPerWorld + 2 * budget < need) return false;
-      }
-    }
-
-    // ── The WHOLE pile has to fit, not just each pair ─────────────────────
-    // Testing pairs alone is what broke this: every pair individually looked
-    // satisfiable inside the budget, so a pile of thirty badges — which is
-    // what the entire villa becomes when zoomed out far enough, since piles
-    // are transitive — was judged openable, room chips stopped appearing
-    // anywhere, and thirty badges scattered across the screen trying to reach
-    // clearances that could never all hold at once. Pairwise feasibility is
-    // simply not the same question as whole-pile feasibility.
-    //
-    // n badges needing a clear disc each occupy an area proportional to n, so
-    // they need a radius of about (need / 2) * sqrt(n). What is available is
-    // the pile's own spread plus the travel budget. If that falls short, no
-    // arrangement exists and the room summarises — which is the answer a
-    // zoomed-out villa should give.
-    let wcx = 0, wcy = 0, wcz = 0;
-    for (const i of members) { wcx += shown[i].wx; wcy += shown[i].wy; wcz += shown[i].wz; }
-    wcx /= members.length; wcy /= members.length; wcz /= members.length;
-    let spread = 0;
-    for (const i of members) {
-      const r = Math.hypot(shown[i].wx - wcx, shown[i].wy - wcy, shown[i].wz - wcz);
-      if (r > spread) spread = r;
-    }
-    const required = (widestNeed / 2) * Math.sqrt(members.length);
-    return required <= spread * pxPerWorld + budget;
-  }
-
-  /**
-   * Arrange a pile that pileCanOpen has already cleared to stay: push every
-   * member out from the pile's centre, along its own bearing, by ONE distance
-   * shared by the whole pile. Decides nothing — see pileCanOpen for that.
+   * A regular ring closes that hole because its geometry is exact rather than
+   * estimated. n badges evenly spaced on a circle of radius R sit
+   * 2·R·sin(π/n) apart, so the radius that clears the widest pair is arithmetic
+   * with no search in it — and every pair clears by construction, not by
+   * checking afterwards. If that radius exceeds the budget, no ring exists and
+   * the answer is a room chip. Deciding and arranging are the same calculation,
+   * so they cannot disagree.
    *
-   * ── Why a uniform scale, and why this is not the 2.159.0 fan ────────────
-   * The fan was removed because it re-slotted a pile into a sqrt(n) grid in
-   * entity_id order: it threw the badges' real positions away and dealt them
-   * fresh seats, so one zoom step could deal them differently and four badges
-   * in a diagonal line became a 2x2 block in another order. That is what was
-   * unacceptable, and it was a property of the LAYOUT, not of moving badges.
+   * It also caps pile size for free: the ring a pile needs grows with n, so a
+   * pile of forty simply has no radius that fits, without a member limit to
+   * maintain separately.
    *
-   * A uniform outward push cannot do that. Every badge keeps its bearing, so
-   * a badge up-and-left of the group is up-and-left at every zoom and every
-   * size; the arrangement is preserved and only the spacing changes. There is
-   * nothing to reshuffle, no slots, no sort, and the distance is computed in
-   * one pass rather than searched — so no relaxation solver returns either.
-   *
-   * Two badges at the SAME point have no bearing to preserve, so they are
-   * seeded with a fixed direction derived from the entity_id. That is stable
-   * forever (an id does not change) and only ever applies where there was no
-   * real arrangement to keep.
+   * ── Why it is stable ──────────────────────────────────────────────────────
+   * Nothing here reads a projected position. The radius comes from the badge
+   * size alone, and the seat order from each device's WORLD bearing about the
+   * pile's world centre — so panning, orbiting and tilting change none of it,
+   * which is the invariant six earlier rewrites died on. Seats are assigned in
+   * bearing order starting from the top, so a device that sits clockwise of
+   * another is drawn clockwise of it, and the arrangement is identical every
+   * time the same devices pile up.
    */
   private spreadPile(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
     members: number[],
-  ): void {
+  ): boolean {
+    const n = members.length;
     const scale = this.iconUserScale * this.iconZoomScale;
     const gapPx = BADGE_MIN_GAP_PX * scale;
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
 
-    let cx = 0, cy = 0;
-    for (const i of members) { cx += shown[i].x; cy += shown[i].y; }
-    cx /= members.length;
-    cy /= members.length;
-
-    const vx: number[] = [], vy: number[] = [];
-    for (const i of members) {
-      let dx = shown[i].x - cx, dy = shown[i].y - cy;
-      if (Math.hypot(dx, dy) < 0.5) {
-        // Deterministic direction for a badge sitting exactly on the centre —
-        // a hash of the entity_id, so it is the same on every device and at
-        // every zoom, and it only decides something that was never decided.
-        let h = 0;
-        const id = shown[i].id;
-        for (let k = 0; k < id.length; k++) h = (h * 31 + id.charCodeAt(k)) | 0;
-        const a = (h % 360) * (Math.PI / 180);
-        dx = Math.cos(a) * 0.5;
-        dy = Math.sin(a) * 0.5;
-      }
-      vx.push(dx); vy.push(dy);
-    }
-
-    // ── ONE push distance for the whole pile, from QUANTISED zoom ─────────
-    // Every member moves out along its own bearing by the same number of
-    // pixels. That is the piece that was missing: the previous version scaled
-    // the pile by a factor derived from LIVE projected spacing, so the amount
-    // of movement was a continuous function of zoom and every fractional
-    // change slid the badges around, while a distant member of a transitive
-    // pile moved furthest of all. Reported as badges moving a lot, and without
-    // a logic anyone could follow, between two zoom levels.
-    //
-    // The magnitude now comes only from world distance and the QUANTISED
-    // pixels-per-world-unit — the same quantisation grouping itself uses, and
-    // for the same reason. Inside a zoom step the push is bit-identical, so
-    // badges do not move at all; crossing a step changes it once, cleanly, and
-    // crossing back undoes it exactly.
-    //
-    // A single distance rather than a factor also means a badge that was never
-    // crowded moves as little as everyone else — being swept into a pile by
-    // transitivity no longer costs it a journey.
-    // ── Scale the pile's own geometry; do not push everyone out equally ────
-    // One shared push distance was the 2.172.0 arrangement, and it has a hole:
-    // pushing two badges outward by the same amount along the SAME bearing
-    // does not separate them at all. Members sitting on the same side of the
-    // pile's centre stayed exactly as close as they started, which is what was
-    // reported as badges still overlapping.
-    //
-    // Scaling the pile does separate every pair, because pairwise distance
-    // scales with it — that is the property a uniform push lacks. Each badge
-    // moves outward by however much the scale implies FOR ITS OWN radius, so a
-    // member near the centre barely moves and one further out moves more,
-    // which is exactly what opening a cluster looks like.
-    //
-    // The magnitude is still fully quantised: the scale comes from WORLD
-    // distances and the quantised pixels-per-world-unit, never from live
-    // projected spacing. Inside a zoom step nothing moves; crossing one
-    // changes it once and crossing back undoes it exactly. That was the fix in
-    // 2.172.0 and it is kept — only the shape of the transform changed.
-    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
-    if (pxPerWorld <= 0) return;
-
-    let wcx = 0, wcy = 0, wcz = 0;
-    for (const i of members) { wcx += shown[i].wx; wcy += shown[i].wy; wcz += shown[i].wz; }
-    wcx /= members.length; wcy /= members.length; wcz /= members.length;
-
-    let k = 1;
-    let widestNeed = 0;
-    for (let a = 0; a < members.length; a++) {
-      for (let b = a + 1; b < members.length; b++) {
-        const i = members[a], j = members[b];
-        const need = boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx;
-        if (need > widestNeed) widestNeed = need;
-        const d = Math.hypot(shown[j].wx - shown[i].wx, shown[j].wy - shown[i].wy, shown[j].wz - shown[i].wz);
-        if (d <= 1e-6) continue; // co-located: no geometry to scale, seeded below
-        const f = need / (d * pxPerWorld);
-        if (f > k) k = f;
+    // The widest clearance any pair in this pile needs. Neighbours on the ring
+    // are the closest pairs, so satisfying the widest need satisfies all of it.
+    let need = 0;
+    for (let a = 0; a < n; a++) {
+      for (let b = a + 1; b < n; b++) {
+        const w = boxes[members[a]].halfW * allow + boxes[members[b]].halfW * allow + gapPx;
+        if (w > need) need = w;
       }
     }
-    if (k <= 1 && widestNeed === 0) return;
+    // Chord between adjacent seats is 2·R·sin(π/n); solve it for R.
+    const radius = need / (2 * Math.sin(Math.PI / n));
+    if (radius > SPREAD_MAX_RADIUS_WIDTHS * BADGE_DIAMETER_PX * scale) return false;
 
-    const maxTravel = SPREAD_MAX_TRAVEL_WIDTHS * BADGE_DIAMETER_PX * scale;
-    for (let a = 0; a < members.length; a++) {
-      const i = members[a];
-      const rw = Math.hypot(shown[i].wx - wcx, shown[i].wy - wcy, shown[i].wz - wcz);
-      // Two devices on one fixture have a radius of zero, so scaling can never
-      // move them. They get half the clearance they need instead, along the
-      // bearing hashed from their entity_id — the only case where a badge's
-      // direction is invented rather than observed, and the only case where
-      // there was no direction to observe.
-      let mag = rw <= 1e-6 ? widestNeed / 2 : rw * (k - 1) * pxPerWorld;
-      if (mag <= 0) continue;
-      mag = Math.min(mag, maxTravel);
-      const r = Math.hypot(vx[a], vy[a]);
-      if (r <= 0) continue;
-      shown[i].offX = (vx[a] / r) * mag;
-      shown[i].offY = (vy[a] / r) * mag;
+    // Seat order: world bearing about the pile's world centre, on the ground
+    // plane. Independent of the camera, and fixed for a given set of devices.
+    let wcx = 0, wcz = 0;
+    for (const i of members) { wcx += shown[i].wx; wcz += shown[i].wz; }
+    wcx /= n; wcz /= n;
+    const seated = members
+      .map((i) => ({ i, bearing: Math.atan2(shown[i].wz - wcz, shown[i].wx - wcx) }))
+      // Two devices on ONE fixture have the same bearing; the id breaks the tie
+      // so the order is still total and still identical on every device.
+      .sort((p, q) => p.bearing - q.bearing || shown[p.i].id.localeCompare(shown[q.i].id));
+
+    for (let k = 0; k < n; k++) {
+      const angle = -Math.PI / 2 + (k * 2 * Math.PI) / n; // first seat at the top
+      const s = shown[seated[k].i];
+      s.offX = Math.cos(angle) * radius;
+      s.offY = Math.sin(angle) * radius;
     }
+    return true;
   }
 
   /** A badge's room, normalised — the single definition every grouping,
@@ -3190,7 +3034,6 @@ export class EntityVisuals {
   private groupBadges(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-    allowWidths = GROUP_OVERLAP_ALLOW_WIDTHS,
   ): number[][] {
     const n = shown.length;
     const parent = Array.from({ length: n }, (_, i) => i);
@@ -3198,7 +3041,7 @@ export class EntityVisuals {
       while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
       return x;
     };
-    const allow = 1 - allowWidths;
+    const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
     // ── This MUST be the footprint the renderer actually paints ──────────
     // Both scales, exactly as labelBoxes drew them. 2.152.0 divided the user's
     // size preference back out here, trying to stop the size stepper from
