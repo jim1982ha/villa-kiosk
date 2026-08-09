@@ -452,6 +452,24 @@ const TEXT_OVERLAP_ALLOW_WIDTHS = 0;
  * never use different geometry from the renderer.
  */
 const BADGE_MIN_GAP_PX = 6;
+/**
+ * How far a badge may be pushed from its own device when its pile is opened
+ * out (spreadPile), in multiples of its own width.
+ *
+ * Generous on purpose. The rule this replaces was "a badge is never moved",
+ * which sounded principled and produced a hard ceiling nobody could raise:
+ * badges anchor to DEVICES, so a fan and its own light are ~24px apart at a
+ * normal framing and NO badge wider than that could ever be drawn there,
+ * however much empty floor the room had. Four badges at ~20px, and the next
+ * size step summarised the room.
+ *
+ * A badge still has to point at its device to mean anything, so this is a
+ * budget rather than a licence — and when the budget is not enough, the room
+ * still summarises. It is expressed in badge widths and scales with the badge
+ * so that raising the icon size cannot buy extra travel, which is the exact
+ * defect that once put a room chip out on the lawn.
+ */
+const SPREAD_MAX_TRAVEL_WIDTHS = 6;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -498,6 +516,9 @@ interface ShownLabel {
   /** Anchor is in front of the camera, i.e. has a valid screen position at
    *  all. Purely a RENDER gate — deliberately not an input to grouping. */
   inFront: boolean;
+  /** Screen-px displacement applied by spreadPile(). */
+  offX: number;
+  offY: number;
 }
 
 // Status/enum SENSOR states (a text sensor like an AP's connectivity state).
@@ -2801,7 +2822,7 @@ export class EntityVisuals {
       // allocates nothing at all.
       let s = this.shownPool[shownCount];
       if (!s) {
-        s = { id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, inFront: false };
+        s = { id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, inFront: false, offX: 0, offY: 0 };
         this.shownPool[shownCount] = s;
       }
       s.id = id;
@@ -2812,6 +2833,10 @@ export class EntityVisuals {
       s.wy = wp.y;
       s.wz = wp.z;
       s.inFront = p.z >= 0 && p.z <= 1;
+      // Reset every frame — a reused pool slot must not inherit the previous
+      // frame's spread.
+      s.offX = 0;
+      s.offY = 0;
       shown[shownCount] = s;
       shownCount++;
     }
@@ -2896,6 +2921,9 @@ export class EntityVisuals {
     this.roomClustered.clear();
     for (const members of piles) {
       if (members.length < 2) continue;
+      // Spread first; summarise only if the pile genuinely cannot be opened
+      // out within its travel budget.
+      if (this.spreadPile(shown, boxes, members)) continue;
       for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
     }
 
@@ -2903,11 +2931,96 @@ export class EntityVisuals {
       // No X offset exists any more, and baseY is a FIXED lift that centres
       // every badge over its anchor — the same value for all of them, so it
       // moves nothing relative to anything else.
-      s.lbl.container.linkOffsetXInPixels = 0;
-      s.lbl.container.linkOffsetYInPixels = baseY;
+      s.lbl.container.linkOffsetXInPixels = s.offX;
+      s.lbl.container.linkOffsetYInPixels = baseY + s.offY;
       s.lbl.container.isVisible = s.inFront && !this.roomClustered.get(this.roomOf(s.id));
     }
     this.updateClusters(shown);
+  }
+
+  /**
+   * Open a collided pile out until its badges clear each other, by SCALING the
+   * pile about its own centre. Returns false if that cannot be done inside the
+   * travel budget, which is the caller's cue to summarise the room instead.
+   *
+   * ── Why a uniform scale, and why this is not the 2.159.0 fan ────────────
+   * The fan was removed because it re-slotted a pile into a sqrt(n) grid in
+   * entity_id order: it threw the badges' real positions away and dealt them
+   * fresh seats, so one zoom step could deal them differently and four badges
+   * in a diagonal line became a 2x2 block in another order. That is what was
+   * unacceptable, and it was a property of the LAYOUT, not of moving badges.
+   *
+   * A uniform scale about the centroid cannot do that. It is a similarity
+   * transform: every badge keeps its bearing and its ordering relative to
+   * every other, the configuration is preserved exactly, and only the spacing
+   * changes. A badge up-and-left of the group is up-and-left at every zoom and
+   * every size. There is nothing to reshuffle, no slots, no sort — and one
+   * closed-form factor, so no iteration and no solver.
+   *
+   * Because pairwise distance scales linearly with the factor, the smallest
+   * factor that clears the whole pile is just the largest per-pair
+   * requirement — computed, not searched.
+   *
+   * Two badges at the SAME point have no bearing to preserve, so they are
+   * seeded with a fixed direction derived from the entity_id. That is stable
+   * forever (an id does not change) and only ever applies where there was no
+   * real arrangement to keep.
+   */
+  private spreadPile(
+    shown: ShownLabel[],
+    boxes: { halfW: number; halfH: number; cy: number }[],
+    members: number[],
+  ): boolean {
+    const scale = this.iconUserScale * this.iconZoomScale;
+    const gapPx = BADGE_MIN_GAP_PX * scale;
+    const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
+
+    let cx = 0, cy = 0;
+    for (const i of members) { cx += shown[i].x; cy += shown[i].y; }
+    cx /= members.length;
+    cy /= members.length;
+
+    const vx: number[] = [], vy: number[] = [];
+    for (const i of members) {
+      let dx = shown[i].x - cx, dy = shown[i].y - cy;
+      if (Math.hypot(dx, dy) < 0.5) {
+        // Deterministic direction for a badge sitting exactly on the centre —
+        // a hash of the entity_id, so it is the same on every device and at
+        // every zoom, and it only decides something that was never decided.
+        let h = 0;
+        const id = shown[i].id;
+        for (let k = 0; k < id.length; k++) h = (h * 31 + id.charCodeAt(k)) | 0;
+        const a = (h % 360) * (Math.PI / 180);
+        dx = Math.cos(a) * 0.5;
+        dy = Math.sin(a) * 0.5;
+      }
+      vx.push(dx); vy.push(dy);
+    }
+
+    let factor = 1;
+    for (let a = 0; a < members.length; a++) {
+      for (let b = a + 1; b < members.length; b++) {
+        const need = boxes[members[a]].halfW * allow + boxes[members[b]].halfW * allow + gapPx;
+        const d = Math.hypot(vx[a] - vx[b], vy[a] - vy[b]);
+        if (d < 0.001) return false; // identical seeds: nothing to scale
+        const f = need / d;
+        if (f > factor) factor = f;
+      }
+    }
+    if (factor <= 1) return true; // already clear
+
+    // A badge must stay recognisably ON its device. Expressed in badge widths
+    // and scaled with the badge, so raising the icon size does not silently
+    // license a badge to travel further across the room than before.
+    const maxTravel = SPREAD_MAX_TRAVEL_WIDTHS * BADGE_DIAMETER_PX * scale;
+    for (let a = 0; a < members.length; a++) {
+      if ((factor - 1) * Math.hypot(vx[a], vy[a]) > maxTravel) return false;
+    }
+    for (let a = 0; a < members.length; a++) {
+      shown[members[a]].offX = vx[a] * (factor - 1);
+      shown[members[a]].offY = vy[a] * (factor - 1);
+    }
+    return true;
   }
 
   /** A badge's room, normalised — the single definition every grouping,

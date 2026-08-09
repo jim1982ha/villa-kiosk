@@ -1,3 +1,19 @@
+## 2.169.0
+
+### Changed — a collided pile is opened out instead of pinned, so badges can get far bigger
+
+"A badge is never moved" was the rule, and it sounded principled while making the outcome impossible. Badges anchor to DEVICES, so a ceiling fan and its own light sit about 24 screen pixels apart at a normal framing — and with badges pinned, no badge wider than that could ever be drawn there, however much empty floor the room had. Four badges at roughly 20px, and one size step later the whole room became a chip. Every release since 2.159.0 was tuning inside a constraint that capped the answer at "tiny", including the two before this one.
+
+A collided pile is now opened out by SCALING it about its own centre until its badges clear each other. If that cannot be done inside a travel budget, the room summarises as before.
+
+**Why this is not the fan that was removed in 2.159.0.** That layout re-slotted a pile into a sqrt(n) grid in entity_id order — it threw the badges' real positions away and dealt them fresh seats, so a single zoom step could deal them differently, and four badges in a diagonal line became a 2×2 block in another order. That reshuffling was the thing that was unacceptable, and it was a property of that particular layout, not of moving badges at all.
+
+A uniform scale cannot reshuffle. It is a similarity transform: every badge keeps its bearing and its ordering relative to every other, the configuration is preserved exactly, and only the spacing changes. A badge up-and-left of the group is up-and-left at every zoom and at every size. There are no slots, no sort and nothing to deal differently. And because pairwise distance scales linearly with the factor, the smallest factor that clears the whole pile is simply the largest per-pair requirement — computed in one pass, not searched, so this is not a return of the relaxation solvers that once made badges dance.
+
+The travel budget is six badge widths, expressed in widths and scaled with the badge so that raising the icon size cannot buy extra travel — the exact defect that once put a room chip out on the lawn. Two devices at the same point have no bearing to preserve, so they are seeded with a direction hashed from the entity_id: stable forever, and it only decides something that was never decided.
+
+Everything else stands: grouping is still a pure function of world position and quantised zoom, the readout is still dropped before anything else, a summarised room still hands over all of its badges, and badges still never overlap by more than half a width.
+
 ## 2.168.0
 
 ### Changed — badge icons may overlap by half a width, which doubles how big they can get
