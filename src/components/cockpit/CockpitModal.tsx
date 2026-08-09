@@ -31,6 +31,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
+import { isUnavailable } from "@/utils/stateColors";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -144,7 +145,6 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
     ),
     [pivot, roomGroups, floorGroups],
   );
-  const pivotTotal = pivotRows.reduce((sum, g) => sum + g.count, 0);
 
   return (
     <>
@@ -230,18 +230,37 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
           ) : (
             <div className="cockpit-pivot-list">
               {pivotRows.map((row) => {
-                const pct = pivotTotal > 0 ? Math.round((row.count / pivotTotal) * 100) : 0;
+                // The bar reports HEALTH, not size. It used to be the row's
+                // share of the villa's device count, which says nothing
+                // actionable — a room having more devices than another is not
+                // a fact anyone opens Cockpit to learn. Each bar now fills its
+                // whole track and splits into "reporting" and "unavailable",
+                // so a room with a problem is visible at a glance down the
+                // column. The count beside it still gives the size.
+                const down = row.entityIds.reduce(
+                  (n, id) => n + (isUnavailable(entities[id]) ? 1 : 0), 0);
+                const okPct = row.count > 0 ? ((row.count - down) / row.count) * 100 : 0;
                 return (
                   <button
                     key={row.key}
                     type="button"
                     className="cockpit-pivot-row"
                     onClick={() => setPivotDrill({ label: row.label, entityIds: row.entityIds })}
-                    title={`Show ${row.label}'s devices`}
-                    aria-label={`Show ${row.label}'s devices — ${row.count} device${row.count === 1 ? "" : "s"}`}
+                    title={down > 0
+                      ? `${row.label}: ${down} of ${row.count} unavailable`
+                      : `${row.label}: all ${row.count} reporting`}
+                    aria-label={`Show ${row.label}'s devices — ${row.count} device${row.count === 1 ? "" : "s"}, ${down} unavailable`}
                   >
                     <span className="cockpit-pivot-label">{row.label}</span>
-                    <div className="cockpit-pivot-bar"><div className="cockpit-pivot-bar-fill" style={{ width: `${pct}%` }} /></div>
+                    {/* --tick is one device's width, which draws the faint
+                        per-device notches: it gives the bar a scale, so a
+                        sliver reads as "one device" rather than "a little". */}
+                    <div
+                      className="cockpit-pivot-bar"
+                      style={{ ["--tick" as string]: `${100 / Math.max(1, row.count)}%` }}
+                    >
+                      <div className="cockpit-pivot-bar-ok" style={{ width: `${okPct}%` }} />
+                    </div>
                     <span className="cockpit-pivot-count muted">{row.count}</span>
                     <ChevronRight size={16} className="cockpit-pivot-chevron muted" />
                   </button>

@@ -3526,14 +3526,49 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   flex: 0 0 130px; font-size: var(--text-sm); color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.cockpit-pivot-bar { flex: 1 1 auto; height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
-.cockpit-pivot-bar-fill { height: 100%; background: var(--accent); border-radius: inherit; }
+/* The track IS the unavailable state — amber — and the green fill covers the
+   part that is reporting. One element instead of two, so the two segments can
+   never disagree about where the boundary is. */
+.cockpit-pivot-bar {
+  position: relative;
+  flex: 1 1 auto; height: 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--status-warning) 55%, var(--bg-input));
+  overflow: hidden;
+}
+.cockpit-pivot-bar-ok { height: 100%; background: var(--status-on); border-radius: inherit; }
+/* Per-device notches, one every --tick of the width. Faint on purpose: it is a
+   scale for reading the bar, not data of its own, so it should be legible when
+   looked for and invisible when not. Hidden once devices are thinner than a
+   notch, where it would read as texture rather than as divisions. */
+.cockpit-pivot-bar::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0, transparent calc(var(--tick) - 1px),
+    color-mix(in srgb, var(--bg-base) 55%, transparent) calc(var(--tick) - 1px), color-mix(in srgb, var(--bg-base) 55%, transparent) var(--tick));
+}
+@supports not (width: calc(var(--tick) - 1px)) { .cockpit-pivot-bar::after { display: none; } }
 .cockpit-pivot-count { flex: 0 0 26px; text-align: right; font-size: var(--text-xs); }
 .cockpit-pivot-chevron { flex: 0 0 auto; }
 
 .cockpit-energy-value { font-size: var(--text-display-sm); font-weight: 600; color: var(--text-primary); margin: 4px 0 0; }
 
 .cockpit-activity-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+/* Two columns where there is width for them, so the same 20 entries are read
+   without scrolling. CSS columns rather than a grid: the feed is chronological,
+   and columns flow top-to-bottom then across, which keeps 1-10 on the left and
+   11-20 on the right. A grid would interleave them across rows and scramble the
+   order. */
+@media (min-width: 641px) {
+  .cockpit-activity-list { display: block; columns: 2; column-gap: 28px; }
+  .cockpit-activity-row { break-inside: avoid; margin-bottom: 8px; }
+}
+/* A phone gets the 10 most recent only. The feed still carries 20 — the rest
+   are hidden rather than dropped, so widening the window fills the second
+   column immediately instead of waiting on a refetch. */
+@media (max-width: 640px) {
+  .cockpit-activity-row:nth-child(n + 11) { display: none; }
+}
 .cockpit-activity-row { display: flex; align-items: baseline; gap: 10px; font-size: var(--text-xs); }
 .cockpit-activity-time { flex: 0 0 50px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
 .cockpit-activity-text { color: var(--text-secondary); }

@@ -1,3 +1,21 @@
+## 2.178.0
+
+### Changed — a pile of devices in a line now opens out as a line
+
+Four sockets in a row were being re-seated onto a ring, which kept their order but threw away their shape, so opening the pile read as a rearrangement. A pile's covariance now decides: collinear devices spread along their own axis, clusters still get the ring. Measured from world positions, so the shape is a property of the devices and cannot flip with zoom, tilt or orbit.
+
+### Changed — an unavailable badge is now a bold red dashed ring
+
+No second solid edge, and red rather than the category colour, so a device Home Assistant has lost is unmistakable at map scale. The glyph stays amber.
+
+### Changed — Cockpit's By Room / By Floor bars show health, not size
+
+Each bar fills its track and splits into reporting (green) versus unavailable (amber), with faint per-device notches so a sliver reads as "one device". A room's share of the villa's device count was not something anyone opens Cockpit to learn.
+
+### Changed — recent activity is two columns of 10 on desktop and tablet
+
+Phones keep the 10 most recent. The camera view's controls also now fade after 2s instead of 3.2s.
+
 ## 2.177.0
 
 ### Fixed — badges could still overlap in two cases the ring layout did not cover

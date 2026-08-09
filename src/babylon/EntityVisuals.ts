@@ -443,6 +443,17 @@ const BADGE_MIN_GAP_PX = 6;
  * which is why there is no separate member cap to keep in step with it.
  */
 const SPREAD_MAX_RADIUS_WIDTHS = 2;
+/**
+ * How flat a pile has to be before it is opened out along its own axis instead
+ * of onto a ring — the ratio of its two principal spreads, 0 for perfectly
+ * collinear devices and 1 for a circular cluster.
+ *
+ * Derived from WORLD positions alone, so a pile's shape is a property of the
+ * DEVICES: it cannot flip with zoom, tilt or orbit, and changes only when the
+ * pile's membership does. Below this, four sockets in a line stay a line
+ * rather than being re-seated as a square.
+ */
+const SPREAD_LINE_ANISOTROPY = 0.35;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -2997,16 +3008,15 @@ export class EntityVisuals {
     const scale = this.iconUserScale * this.iconZoomScale;
     const gapPx = BADGE_MIN_GAP_PX * scale;
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
+    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
+    if (pxPerWorld <= 0) return false;
+    const budgetPx = SPREAD_MAX_RADIUS_WIDTHS * BADGE_DIAMETER_PX * scale;
 
-    // The widest clearance any pair in this pile needs. Neighbours on the ring
-    // are the closest pairs, so satisfying the widest need satisfies all of it.
-    //
     // max(halfW, halfH), not halfW: a badge is a rectangle and seats sit at
-    // arbitrary angles round the ring, so the only half-extent that is safe in
-    // EVERY direction is the larger one. Using the width alone was fine for a
-    // card badge, which is wider than it is tall, and wrong for the classic
-    // one, which is taller than it is wide — two of those seated one above the
-    // other were given 44px of room where they needed 61.
+    // arbitrary angles, so the only half-extent safe in EVERY direction is the
+    // larger one. Width alone was fine for a card badge (wider than tall) and
+    // wrong for the classic one, where two seats stacked vertically got 44px
+    // where they needed 61.
     const halfOf = (i: number) => Math.max(boxes[i].halfW, boxes[i].halfH);
     let need = 0;
     for (let a = 0; a < n; a++) {
@@ -3015,89 +3025,133 @@ export class EntityVisuals {
         if (w > need) need = w;
       }
     }
-    // Chord between adjacent seats is 2·R·sin(π/n); solve it for R.
-    const radius = need / (2 * Math.sin(Math.PI / n));
-    if (radius > SPREAD_MAX_RADIUS_WIDTHS * BADGE_DIAMETER_PX * scale) return false;
+    const needWorld = need / pxPerWorld;
 
-    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
-    if (pxPerWorld <= 0) return false;
-    const ringWorld = radius / pxPerWorld;
-
-    // Seat order: world bearing about the pile's world centre, on the ground
-    // plane. Independent of the camera, and fixed for a given set of devices.
     let wcx = 0, wcz = 0;
     for (const i of members) { wcx += shown[i].wx; wcz += shown[i].wz; }
     wcx /= n; wcz /= n;
-    const seated = members
-      .map((i) => ({ i, bearing: Math.atan2(shown[i].wz - wcz, shown[i].wx - wcx) }))
-      // Two devices on ONE fixture have the same bearing; the id breaks the tie
-      // so the order is still total and still identical on every device.
-      .sort((p, q) => p.bearing - q.bearing || shown[p.i].id.localeCompare(shown[q.i].id));
 
-    // ── Turn the ring to face reality ─────────────────────────────────────
-    // Seats were pinned with the first at the top, which meant two devices
-    // side by side in the villa could be drawn one above the other — a badge
-    // sitting in a direction its device is not in, which reads as the badge
-    // having wandered off. The ring is now turned by the circular mean of each
-    // member's own bearing against its seat, so the arrangement points the way
-    // the devices actually lie.
+    // ── Which SHAPE is this pile? ─────────────────────────────────────────
+    // Four sockets in a line and four devices round a ceiling rose are not the
+    // same problem, and a ring answers only the second. Seating a line onto a
+    // ring keeps the members' cyclic order but throws away the fact that they
+    // were a LINE, so opening the pile reads as a rearrangement rather than as
+    // the badges breathing apart — reported from three screenshots where four
+    // badges in a column became a 2x2 block.
     //
-    // Free to do: a rigid rotation preserves every pairwise distance, so it
-    // cannot touch the clearance the radius guarantees. It changes which way
-    // round the ring sits and nothing else.
-    let rx = 0, ry = 0;
-    for (let k = 0; k < n; k++) {
-      const residual = seated[k].bearing - (k * 2 * Math.PI) / n;
-      rx += Math.cos(residual); ry += Math.sin(residual);
+    // The pile's own covariance says which it is: the ratio of the two
+    // principal spreads is 0 for perfectly collinear devices and 1 for a
+    // circular cluster. Computed from WORLD positions only, so the choice is a
+    // property of the DEVICES and cannot flip with zoom, tilt or orbit — it
+    // changes only when the pile's membership does.
+    let sxx = 0, szz = 0, sxz = 0;
+    for (const i of members) {
+      const dx = shown[i].wx - wcx, dz = shown[i].wz - wcz;
+      sxx += dx * dx; szz += dz * dz; sxz += dx * dz;
     }
-    const turn = Math.atan2(ry, rx);
+    sxx /= n; szz /= n; sxz /= n;
+    const mid = (sxx + szz) / 2;
+    const halfDiff = Math.hypot((sxx - szz) / 2, sxz);
+    const major = mid + halfDiff;
+    const minor = mid - halfDiff;
+    const elongation = major > 1e-9 ? Math.sqrt(Math.max(0, minor) / major) : 1;
 
-    // ── A seat must clear badges OUTSIDE the pile too ─────────────────────
-    // The ring guarantees its own members clear each other; it says nothing
-    // about anyone else, and a seat can land on a badge that never collided
-    // with anything. That is a real overlap and it is what survived the fix in
-    // 2.173.0, which only ever separated a pile from itself. Checked in world
-    // space against the same quantised zoom everything else uses, so the
-    // answer cannot change when the camera merely moves. No clear ring means
-    // the room summarises — the pile is not opened out half way.
+    const order: number[] = [];
+    const seatWx: number[] = [];
+    const seatWz: number[] = [];
+
+    let laid = false;
+    if (elongation < SPREAD_LINE_ANISOTROPY) {
+      // ── A line stays a line ─────────────────────────────────────────────
+      // Members are spaced evenly along their own principal axis, in the order
+      // they already lie along it, so nothing crosses anything and a column
+      // stays a column. Spacing is exactly the clearance needed, so every pair
+      // clears by construction — the same guarantee the ring gives, on a
+      // different shape.
+      const axis = 0.5 * Math.atan2(2 * sxz, sxx - szz);
+      const ux = Math.cos(axis), uz = Math.sin(axis);
+      const along = members
+        .map((i) => ({ i, t: (shown[i].wx - wcx) * ux + (shown[i].wz - wcz) * uz }))
+        .sort((a, b) => a.t - b.t || shown[a.i].id.localeCompare(shown[b.i].id));
+      laid = true;
+      for (let k = 0; k < n; k++) {
+        const t = (k - (n - 1) / 2) * needWorld;
+        const sx = wcx + ux * t, sz = wcz + uz * t;
+        // Collapsing the pile's slight sideways scatter onto the axis costs
+        // travel; if that exceeds the budget the line is refused and the ring
+        // is tried instead.
+        const moved = Math.hypot(sx - shown[along[k].i].wx, sz - shown[along[k].i].wz) * pxPerWorld;
+        if (moved > budgetPx) { laid = false; break; }
+        order.push(along[k].i); seatWx.push(sx); seatWz.push(sz);
+      }
+      if (!laid) { order.length = 0; seatWx.length = 0; seatWz.length = 0; }
+    }
+
+    if (!laid) {
+      // ── Anything else opens onto a ring ─────────────────────────────────
+      // n badges evenly spaced on a circle of radius R sit 2·R·sin(π/n) apart,
+      // so the radius that clears the widest pair is arithmetic with no search
+      // in it, and every pair clears by construction. No radius inside the
+      // budget means no layout exists, and the room summarises.
+      const radius = need / (2 * Math.sin(Math.PI / n));
+      if (radius > budgetPx) return false;
+      const ringWorld = radius / pxPerWorld;
+      const seated = members
+        .map((i) => ({ i, bearing: Math.atan2(shown[i].wz - wcz, shown[i].wx - wcx) }))
+        // Two devices on ONE fixture share a bearing; the id breaks the tie so
+        // the order is total and identical on every device.
+        .sort((a, b) => a.bearing - b.bearing || shown[a.i].id.localeCompare(shown[b.i].id));
+      // Turn the ring so seats point the way the devices actually lie. Free to
+      // do: a rigid rotation preserves every pairwise distance, so it cannot
+      // touch the clearance the radius guarantees.
+      let rx = 0, ry = 0;
+      for (let k = 0; k < n; k++) {
+        const residual = seated[k].bearing - (k * 2 * Math.PI) / n;
+        rx += Math.cos(residual); ry += Math.sin(residual);
+      }
+      const turn = Math.atan2(ry, rx);
+      for (let k = 0; k < n; k++) {
+        const angle = turn + (k * 2 * Math.PI) / n;
+        order.push(seated[k].i);
+        seatWx.push(wcx + Math.cos(angle) * ringWorld);
+        seatWz.push(wcz + Math.sin(angle) * ringWorld);
+      }
+    }
+
+    // ── A seat must clear badges OUTSIDE this pile too ────────────────────
+    // The layout guarantees its own members clear each other and says nothing
+    // about anyone else. A badge in ANOTHER pile is skipped: it is not at its
+    // anchor once seated, so testing that anchor compares against a position
+    // it never occupies — the two piles meet exactly once, in the seat list
+    // below, when the later of them is laid out.
     for (let k = 0; k < n; k++) {
-      const angle = turn + (k * 2 * Math.PI) / n;
-      const sx = wcx + Math.cos(angle) * ringWorld;
-      const sz = wcz + Math.sin(angle) * ringWorld;
-      const self = shown[seated[k].i];
-      const mine = halfOf(seated[k].i) * allow;
+      const mine = halfOf(order[k]) * allow;
+      const self = shown[order[k]];
       for (let j = 0; j < shown.length; j++) {
-        // A badge in ANOTHER pile is not at its anchor — it is at a seat, or it
-        // will be. Testing its anchor would compare against a position it never
-        // occupies, so it is skipped here and the two piles meet exactly once,
-        // below, when the later of them is laid out.
         if (mobile[j] || members.includes(j)) continue;
-        const d = Math.hypot(sx - shown[j].wx, self.wy - shown[j].wy, sz - shown[j].wz) * pxPerWorld;
+        const d = Math.hypot(seatWx[k] - shown[j].wx, self.wy - shown[j].wy, seatWz[k] - shown[j].wz) * pxPerWorld;
         if (d < mine + halfOf(j) * allow + gapPx) return false;
       }
       for (let q = 0; q < this.seatCount; q++) {
-        const d = Math.hypot(sx - this.seatX[q], self.wy - this.seatY[q], sz - this.seatZ[q]) * pxPerWorld;
+        const d = Math.hypot(seatWx[k] - this.seatX[q], self.wy - this.seatY[q], seatWz[k] - this.seatZ[q]) * pxPerWorld;
         if (d < mine + this.seatHalfW[q] + gapPx) return false;
       }
     }
 
     // Seats are world POINTS, so the screen offset is the projected seat minus
-    // the projected anchor. The layout is decided in world space and only
-    // converted to pixels here, which is what keeps it steady under a camera
-    // that is only moving.
+    // the projected anchor: the layout is decided in world space and converted
+    // to pixels only here, which is what keeps it steady under a camera that is
+    // only moving.
     for (let k = 0; k < n; k++) {
-      const angle = turn + (k * 2 * Math.PI) / n;
-      const s = shown[seated[k].i];
-      const sx = wcx + Math.cos(angle) * ringWorld;
-      const sz = wcz + Math.sin(angle) * ringWorld;
-      this.seatTmp.set(sx, s.wy, sz);
+      const s = shown[order[k]];
+      this.seatTmp.set(seatWx[k], s.wy, seatWz[k]);
       Vector3.ProjectToRef(this.seatTmp, Matrix.IdentityReadOnly, tm, vp, this.seatOut);
       s.offX = this.seatOut.x - s.x;
       s.offY = this.seatOut.y - s.y;
-      this.seatX[this.seatCount] = sx;
+      this.seatX[this.seatCount] = seatWx[k];
       this.seatY[this.seatCount] = s.wy;
-      this.seatZ[this.seatCount] = sz;
-      this.seatHalfW[this.seatCount] = halfOf(seated[k].i) * allow;
+      this.seatZ[this.seatCount] = seatWz[k];
+      this.seatHalfW[this.seatCount] = halfOf(order[k]) * allow;
       this.seatCount++;
     }
     return true;

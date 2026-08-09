@@ -136,6 +136,9 @@ export interface CategorySurface {
   ring: string | null;
   /** Unavailable only — the guidelines call for a DASHED ring there. */
   ringDashed?: boolean;
+  /** Draw the ring heavier than usual — the unavailable state, which has to
+   *  read as "something is wrong here" at a glance across a room. */
+  ringBold?: boolean;
   /** Idle only — a 1px hairline rather than the 1.5px state ring. */
   ringHairline?: boolean;
 }
@@ -164,7 +167,13 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
     }
     case "unavailable": {
       const warning = cssVar("--status-warning") || FALLBACK_WARNING;
-      return { fill: base, glyph: warning, ring: warning, ringDashed: true };
+      const danger = cssVar("--status-danger") || FALLBACK_DANGER;
+      // A dashed ring and nothing else — no second solid edge — drawn HEAVY
+      // and in the danger red rather than the category's own colour, so a
+      // device Home Assistant has lost is unmistakable at map scale instead of
+      // reading as just another tinted badge. The glyph stays amber: the ring
+      // is the alarm, the glyph is still the reading that is missing.
+      return { fill: base, glyph: warning, ring: danger, ringDashed: true, ringBold: true };
     }
     case "off":
     default:

@@ -33,6 +33,8 @@ export const BADGE_CORNER_FRACTION = 0.28;
 // stepper or the bird's-eye zoom scales the badge.
 const RING_FRACTION = 0.035;
 const HAIRLINE_FRACTION = 0.023;
+// The unavailable state's heavier dash (≈ 2.6px at 44).
+const BOLD_RING_FRACTION = 0.06;
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
@@ -159,7 +161,7 @@ export function badgeImageDataUrl(
     if (surface.ring) {
       const ringPx = surface.ringHairline
         ? Math.max(1, size * HAIRLINE_FRACTION)
-        : Math.max(2, size * RING_FRACTION);
+        : Math.max(2, size * (surface.ringBold ? BOLD_RING_FRACTION : RING_FRACTION));
       ctx.save();
       roundRectPath(ctx, m + ringPx / 2, m + ringPx / 2, size - ringPx, size - ringPx, Math.max(0, corner - ringPx / 2));
       ctx.lineWidth = ringPx;

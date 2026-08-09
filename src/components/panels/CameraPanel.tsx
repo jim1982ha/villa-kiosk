@@ -46,7 +46,7 @@ type Mode = "hls" | "stream" | "snapshot" | "failed";
 // pointer/touch/key activity before fading back out. Long enough to read the
 // status bar and reach a control without racing it; short enough that the
 // feed is unobstructed whenever nobody is actually interacting.
-const CHROME_IDLE_MS = 3200;
+const CHROME_IDLE_MS = 2000;
 // A touch counts as a TAP (and so toggles the chrome) only if the finger
 // neither travelled nor lingered — otherwise a pan/pinch of a zoomed feed
 // would flip the chrome on every gesture. Slop is generous because a finger
