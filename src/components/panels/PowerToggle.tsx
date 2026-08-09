@@ -41,6 +41,13 @@ export default function PowerToggle({ on, onClick, label, requireConfirm }: Prop
   const { pending, markPending } = usePendingAck(on);
   const [confirming, setConfirming] = useState(false);
 
+  // The "on" look is the device's OWN category colour, not the app accent —
+  // but the colour is not read here. BasePanel puts --device-fill/-ink/-ring
+  // on the panel, so this button, the speed/preset chips beside it and the
+  // header icon above it are three renderings of one value, and a panel type
+  // that grows another stateful control gets it without wiring. See
+  // .big-toggle.on in styles.css.
+
   const act = () => {
     tapFeedback();
     markPending();

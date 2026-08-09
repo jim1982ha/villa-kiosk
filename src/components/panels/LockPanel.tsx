@@ -81,7 +81,12 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
         </button>
       ) : (
         <button
-          className={`big-toggle on${pending ? " pending" : ""}`}
+          // `cta`, not `on`: this button appears precisely when the lock is
+          // NOT locked, and it borrowed `on` purely for emphasis. Now that
+          // `on` carries the device's category colour and means "this device
+          // is active", that borrowing would have read as a state report of
+          // the opposite of the truth.
+          className={`big-toggle cta${pending ? " pending" : ""}`}
           onClick={doLock}
           aria-busy={pending}
         >

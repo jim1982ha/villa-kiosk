@@ -1,3 +1,23 @@
+## 2.158.0
+
+### Fixed — the range picker rendered at full height and collided with the chart
+
+Reported from a screenshot: the 1h / 12h / 24h / 7d control sat directly on top of the timeline below it. Two separate causes, both invisible in the source.
+
+The picker was authored with compact overrides — a 26px button, 2px of track padding — but those rules were written next to the timeline's other styling, several hundred lines ABOVE the `.segmented` block they were meant to override. `.timeline-ranges button` and `.segmented button` have identical specificity, so the later one simply wins and every compact value was silently discarded; the picker had been rendering at the full 40px option height all along. The overrides now sit immediately after `.segmented`, beside the icon-only variant that already lives there for the same reason.
+
+The gap underneath was a second, unrelated casualty. The section's label used to be a direct child of `.field` and drew its spacing from `.field > label`; wrapping it in a header row to seat the picker beside it broke that descendant relationship, so the gap silently went to zero. The header row owns its own bottom margin now, from the same `--field-label-gap` token every other labelled field uses.
+
+### Fixed — a blue device had a green On button
+
+Also from that screenshot: a fan whose badge — on the map and in the panel's own header, an inch above — is blue, with an On button in the app's green. 2.154.0 said the button "reuses exactly what `categorySurface()` hands the map badges", and the reasoning was right, but the CSS reached for a literal `--accent` instead. So the button spoke the app's primary-ACTION colour, which is a third meaning again: the one solid accent a modal is allowed, and the one that belongs to Close.
+
+`BasePanel` now publishes the open device's `categorySurface()` — the same call, the same per-entity colour override — as `--device-fill` / `--device-ink` / `--device-ring` on the panel itself, and the controls read those. Published once at the panel rather than looked up per component, because the panel is the thing that knows which device is open: a panel type that grows another stateful control inherits the colour without wiring, and the header badge, the On button and the badge out on the map become three renderings of one value. It has to be a custom property rather than a class per category, since the override is an arbitrary colour the user picked in the badge editor that no fixed stylesheet could enumerate.
+
+This extends to every in-panel chip that reports the device's state, not just the On button — the fan's selected speed, a preset, a climate mode. Those were solid `--accent`, which put a second primary-action colour on screen next to Close and painted a blue device's state green; they now take the same badge treatment. Where no single device is open (a group panel) everything falls back to the accent as before.
+
+One knock-on worth recording. LockPanel's "Lock door" borrowed the `on` class purely for emphasis, and it is shown precisely when the lock is NOT locked. Now that `on` carries the device's own colour and means "this device is active", that borrowing would have read as a state report of the opposite of the truth, so the action has its own `cta` class and keeps the accent.
+
 ## 2.157.0
 
 ### Fixed — a lock securing itself was reported as an alarm

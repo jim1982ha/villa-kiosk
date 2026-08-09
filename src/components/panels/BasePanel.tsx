@@ -17,6 +17,7 @@ import { usePanelActions } from "./PanelActionsContext";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useConfig } from "@/config/ConfigContext";
+import { categorySurface } from "@/config/EntityCategories";
 import BadgeColorModal from "./BadgeColorModal";
 
 interface Props {
@@ -62,6 +63,20 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
       draggable={false}
     />
   );
+  // Every control in this panel that expresses THIS DEVICE'S current state —
+  // the big On button, the fan's selected speed, a climate mode chip — is
+  // painted in the device's own category colour, from the same
+  // categorySurface() call that paints the header badge above and its badge
+  // out on the 3D map. Published once here rather than read per component:
+  // the panel is the thing that knows which device is open, so a panel type
+  // that grows another stateful control inherits the colour for free.
+  //
+  // It has to be a custom property rather than a class per category, because
+  // `badge.color` is an arbitrary #rrggbb the user picked in the badge colour
+  // editor — no fixed stylesheet could enumerate it. Absent (a group panel,
+  // or a profile that can't see the badge) the CSS falls back to the accent.
+  const deviceTint = badge && categorySurface(badge.category, "active", badge.color);
+
   const headerIcon = badge
     ? canRecolor
       ? (
@@ -82,6 +97,11 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
       <div
         ref={dialogRef}
         className={`modal panel-modal${className ? ` ${className}` : ""}`}
+        style={deviceTint ? {
+          ["--device-fill" as string]: deviceTint.fill,
+          ["--device-ink" as string]: deviceTint.glyph,
+          ["--device-ring" as string]: deviceTint.ring,
+        } : undefined}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
