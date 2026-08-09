@@ -23,7 +23,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
-  Home, Settings, LogOut, Map as MapIcon, PersonStanding,
+  Settings, LogOut, Map as MapIcon, PersonStanding,
   EllipsisVertical, Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
@@ -32,6 +32,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
 import { ROLE_LABELS } from "@/auth/roles";
 import { resolveSiteTitle } from "@/config/AppConfig";
+import VestaMark from "@/components/VestaMark";
 import { CATEGORY_ORDER, CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
 import { ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX, clampIconScale } from "@/config/AppConfig";
 import type { Category, TeleportPoint } from "@/types/scene.types";
@@ -438,7 +439,7 @@ export default function HUD({
             aria-label="Go to this device's default overview view"
             aria-describedby="home-btn-hint"
           >
-            <Home size={24} />
+            <VestaMark size={24} />
           </button>
           <span id="home-btn-hint" className="sr-only">Hold Space (or right-click) to save the current view as the default</span>
           <span className="hud-title">{title}</span>

@@ -1849,7 +1849,21 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text-secondary); transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
 .segmented button svg { flex: 0 0 auto; }
-.segmented button.active { background: var(--bg-modal); color: var(--text-primary); font-weight: 600; box-shadow: var(--elev-1); }
+/* Selected segment: a soft ACCENT tint with an accent-coloured glyph — the
+   exact treatment the HUD's category filter chips already use, so "this one
+   is on" looks the same everywhere in the app.
+   It was --bg-modal + --elev-1 (the guidelines' "raised light chip on a
+   neutral track"), which works on the cream light theme and fails completely
+   on the other two: --bg-modal is #171B18 in dark and #0F120F in night, sitting
+   on a --bg-input track of nearly identical luminance, so the shadow was the
+   only cue and the selection was reported as unreadable. Accent-soft still
+   honours the rule that mattered — the segment is NOT a solid green block
+   competing with the modal's one primary action — while actually being
+   visible in all three themes. */
+.segmented button.active {
+  background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  box-shadow: var(--elev-1);
+}
 
 /* Icon-only variant (theme selector in the Settings header): compact, not
    full-width, square buttons — the Sun/Moon/Monitor glyphs are self-explanatory. */
@@ -2607,12 +2621,17 @@ label.toggle span { user-select: none; line-height: 1.4; }
    asset URL, so the SVG stays a single file on disk rather than being
    duplicated as inline path data. The -webkit- prefix is load-bearing on
    iOS, which is the app's primary target. */
-.profile-mark {
-  display: block; height: 52px; width: 56px; margin: 0 auto 18px;
-  background: var(--accent);
+/* The masked VESTA mark (components/VestaMark.tsx). `currentColor` is what
+   paints it, so it takes whatever colour its context sets — the accent on the
+   gate, the button's own text colour in the HUD. Size comes from the
+   component's inline style. The -webkit- prefix is load-bearing on iOS. */
+.vesta-mark {
+  display: block; flex: 0 0 auto;
+  background: currentColor;
   -webkit-mask: var(--mark) center / contain no-repeat;
   mask: var(--mark) center / contain no-repeat;
 }
+.profile-mark { margin: 0 auto 18px; color: var(--accent); }
 .profile-title { font-family: var(--font-display); font-size: var(--text-display); margin: 0 0 6px; }
 .profile-sub { color: var(--text-secondary); margin: 0 0 26px; font-size: var(--text-md); }
 .profile-error { color: var(--status-danger); margin: 0 0 18px; font-size: var(--text-base); }

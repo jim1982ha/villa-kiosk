@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  Sliders, Sun, Sunrise, Moon, MoonStar, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
+  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -109,14 +109,23 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               instantly). The day/night preview override used to sit here too
               (a single invert toggle) — it's now a 3-way Day/Auto/Night
               control down by the Brightness/Night dimming sliders it's most
-              related to, see the "Render quality & look" section below. */}
+              related to, see the "Render quality & look" section below.
+
+              THREE options, not four. 2.144.0 added an explicit "night" button
+              beside Auto, which read as clutter for no gain: Auto ALREADY
+              resolves to the night theme after dusk on its own (see
+              utils/themeTime.ts), so the fourth glyph offered a state the
+              kiosk reaches by itself, sitting next to the control that
+              reaches it. The night theme itself is untouched — only the
+              redundant way of asking for it is gone. A device that already
+              has "night" stored keeps rendering in it; picking any of these
+              three moves it off, so nothing can get stuck. */}
           {can("customizeAppearance") && (
             <div className="segmented segmented-icons" role="group" aria-label="Theme">
               {([
                 { key: "light", label: "Light theme", icon: Sun },
                 { key: "dark", label: "Dark theme", icon: Moon },
-                { key: "auto", label: "Auto (system) theme", icon: Monitor },
-                { key: "night", label: "Night theme — dimmer, warmer, for a bedroom-mounted tablet", icon: MoonStar },
+                { key: "auto", label: "Auto — follows the system, and dims to the night theme after dark", icon: Monitor },
               ] as const).map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}

@@ -1,3 +1,29 @@
+## 2.149.0
+
+### Fixed — a selected segmented-control option was unreadable in the dark themes
+
+Reported from a screenshot of Settings: you cannot tell which theme button is active. A regression from 2.146.0, which adopted the brand guidelines' "selected segments become a raised light chip on a neutral track, not a filled green block" by setting the active segment to `--bg-modal` plus a small shadow. That works on the cream light theme, where `--bg-modal` genuinely is a light chip. It fails completely on the other two: `--bg-modal` is `#171B18` in dark and `#0F120F` in night, sitting on a `--bg-input` track of almost identical luminance, so a 1px shadow was the entire selection cue.
+
+The active segment now uses `--accent-soft` with an `--accent`-coloured glyph — the exact treatment the HUD's category filter chips already use, so "this one is on" looks the same everywhere in the app. That still honours the part of the guideline that mattered (the segment is not a solid green block competing with the modal's one primary action) while being legible in all three themes.
+
+### Changed — the top-left button now shows the app's own mark
+
+It was a generic lucide house glyph, which appeared nowhere else in the product and matched nothing — while the actual VESTA mark, wired into the app in 2.147.0, appeared only on the sign-in gate. The brand position in the interface now shows the brand. Its behaviour is unchanged (tap for this device's default view, long-press to set it).
+
+The masking technique that made that possible on the gate is now a shared `VestaMark` component rather than being written twice, since both places need the same trick: the mark's arms are `currentColor`, and an `<img>` renders its SVG in a separate document context where that resolves to the SVG's own default black instead of inheriting the page's colour. Masking paints the inherited colour through the shape, which also means the HUD copy takes the button's own text colour and the gate copy takes the accent, from one file.
+
+### Changed — the theme selector is back to three options
+
+2.144.0 added an explicit "night" button beside Auto. It was clutter for no gain: Auto already resolves to the night theme after dusk on its own, so the fourth glyph offered a state the kiosk reaches by itself, sitting directly next to the control that reaches it. The night theme is untouched — only the redundant way of asking for it is gone. A device with "night" already stored keeps rendering in it, and picking any of the three moves it off, so nothing can get stuck.
+
+### Fixed — camera controls could be summoned by a tap but never dismissed by one
+
+Reported as: the controls appear when you touch the live view, but touching again doesn't put them away. Correct, and it was a design error in 2.145.0 rather than a subtle bug — `onPointerDown` was wired straight to the "show and restart the idle timer" path for *every* input type, so a second tap re-showed what was already showing. The only way to dismiss the chrome was to stop touching the screen and wait out the countdown.
+
+The standard video-viewer contract is input-type-specific, and that is the part that was missing. A **mouse** has hover: movement reveals the chrome, idling hides it, and holding the pointer over the controls keeps them up. **Touch has no hover at all**, so a tap has to carry both meanings — tap to reveal, tap again to dismiss — with the idle timeout as a backstop rather than the only exit. Both behaviours now exist separately, keyed off `pointerType`.
+
+Tap detection is deliberately not a plain `onClick`. The feed is pinch-zoomable and pannable, and a drag that starts and ends on the video still fires a click, so panning a zoomed camera would have flipped the chrome on every gesture. A tap is defined as a press that neither travelled (>12px) nor lingered (>400ms). The handler also sits on the feed region rather than the panel root, so pressing a control is that control's business and cannot toggle the chrome out from under the finger pressing it.
+
 ## 2.148.0
 
 ### Fixed — every lit fixture was re-rendering the whole villa's geometry six times per frame, forever

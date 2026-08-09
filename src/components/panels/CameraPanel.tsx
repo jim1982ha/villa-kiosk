@@ -47,6 +47,12 @@ type Mode = "hls" | "stream" | "snapshot" | "failed";
 // status bar and reach a control without racing it; short enough that the
 // feed is unobstructed whenever nobody is actually interacting.
 const CHROME_IDLE_MS = 3200;
+// A touch counts as a TAP (and so toggles the chrome) only if the finger
+// neither travelled nor lingered — otherwise a pan/pinch of a zoomed feed
+// would flip the chrome on every gesture. Slop is generous because a finger
+// on glass always drifts a little.
+const TAP_SLOP_PX = 12;
+const TAP_MAX_MS = 400;
 // How often to refresh the fallback snapshot, and how many consecutive snapshot
 // failures to tolerate before declaring the camera unavailable.
 const SNAPSHOT_INTERVAL_MS = 800;
@@ -329,29 +335,64 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // so this costs one timeout per burst of activity rather than per event.
   const [chromeVisible, setChromeVisible] = useState(true);
   const [hoveringControls, setHoveringControls] = useState(false);
-  // The camera picker is a menu anchored to a button in this chrome — hiding
-  // the chrome out from under an open menu would strand it.
-  const chromeHeld = hoveringControls || pickerOpen;
+  // Read through a ref, not a dependency: bumpChrome must keep a STABLE
+  // identity or every hover/picker change would re-run the effect below and
+  // re-show chrome the user had just dismissed.
+  const heldRef = useRef(false);
+  heldRef.current = hoveringControls || pickerOpen;
   const idleTimer = useRef<number | undefined>(undefined);
+
+  /** Show, and (re)start the idle countdown unless something is holding it. */
   const bumpChrome = useCallback(() => {
     setChromeVisible(true);
     window.clearTimeout(idleTimer.current);
-    // Never start a countdown while something is holding the chrome open —
-    // otherwise the timer fires anyway and the class flips underneath it.
-    if (chromeHeld) return;
+    if (heldRef.current) return;
     idleTimer.current = window.setTimeout(() => setChromeVisible(false), CHROME_IDLE_MS);
-  }, [chromeHeld]);
+  }, []);
+  const hideChrome = useCallback(() => {
+    window.clearTimeout(idleTimer.current);
+    setChromeVisible(false);
+  }, []);
+
+  // Holding (mouse over the controls, or the camera picker menu open) freezes
+  // the countdown; releasing restarts it. Also supplies the initial "visible"
+  // state on mount, since it runs once with nothing held.
   useEffect(() => {
-    bumpChrome();
-    return () => window.clearTimeout(idleTimer.current);
-  }, [bumpChrome]);
-  // Touch is deliberately wired to pointerdown, not pointermove: a finger
-  // dragging to pan a zoomed feed would otherwise re-arm the timer on every
-  // frame of the gesture and pin the chrome open for as long as the pan runs.
+    if (hoveringControls || pickerOpen) window.clearTimeout(idleTimer.current);
+    else bumpChrome();
+  }, [hoveringControls, pickerOpen, bumpChrome]);
+  useEffect(() => () => window.clearTimeout(idleTimer.current), []);
+
+  // ── Input-type-specific chrome behaviour (the standard video contract) ──
+  // MOUSE: movement reveals, idling hides, hovering the controls holds.
+  // TOUCH: a tap TOGGLES. That distinction is the whole point — a touch user
+  // has no hover, so "any activity re-shows" leaves them with chrome they can
+  // only dismiss by waiting, which is what this originally did (pointerdown
+  // was wired straight to the show path for every input type, so a second tap
+  // just re-showed what was already up). Keyboard is treated as mouse-like.
   const chromeActivity = {
-    onPointerMove: bumpChrome,
-    onPointerDown: bumpChrome,
+    onPointerMove: (e: React.PointerEvent) => { if (e.pointerType === "mouse") bumpChrome(); },
     onKeyDown: bumpChrome,
+  };
+
+  // Tap detection for the touch toggle above. Deliberately not a plain
+  // onClick: the feed is pinch-zoomable and pannable (useMediaZoom), and a
+  // drag that happens to start and end on the video still fires a click — so
+  // panning a zoomed camera would flip the chrome on every gesture. A tap is
+  // a press that neither travelled nor lingered.
+  const tapStart = useRef<{ x: number; y: number; t: number } | null>(null);
+  const onFeedPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse") return;
+    tapStart.current = { x: e.clientX, y: e.clientY, t: performance.now() };
+  };
+  const onFeedPointerUp = (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse") return;
+    const start = tapStart.current;
+    tapStart.current = null;
+    if (!start) return;
+    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_SLOP_PX) return;
+    if (performance.now() - start.t > TAP_MAX_MS) return;
+    if (chromeVisible) hideChrome(); else bumpChrome();
   };
 
   // The feed is an <img> (MJPEG/snapshot), so there's no native video control
@@ -605,7 +646,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
 
   return (
     <div
-      className={`camera-fullscreen${chromeVisible || chromeHeld ? "" : " chrome-hidden"}`}
+      className={`camera-fullscreen${chromeVisible || hoveringControls || pickerOpen ? "" : " chrome-hidden"}`}
       ref={rootRef}
       {...chromeActivity}
     >
@@ -658,6 +699,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
       <div
         className={`camera-viewport${motionActive ? " camera-detecting" : ""}`}
         style={{ ["--detect-color" as string]: STATUS_COLOR.alert }}
+        // On the FEED region, not the panel root: a tap on a control is that
+        // control's business, and must not also toggle the chrome away from
+        // under the finger that is pressing it.
+        onPointerDown={onFeedPointerDown}
+        onPointerUp={onFeedPointerUp}
+        onPointerCancel={() => { tapStart.current = null; }}
       >
         {/* Zoom/pan layer — FIRST child so the controls below paint on top of
             it and stay clickable while it captures pinch/wheel/drag gestures. */}
