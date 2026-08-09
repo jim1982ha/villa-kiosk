@@ -1,3 +1,15 @@
+## 2.167.0
+
+### Fixed — the Energy tile's "high draw" threshold was a hardcoded per-site constant
+
+Asked whether the missing accent underline under the Energy tile was expected. It was — a tile is only underlined when it is ON (its category colour) or needs attention (red), and Energy only counted as needing attention above a literal `totalW > 3000`. At the ~2 kW the villa was drawing, the tile was correctly at rest.
+
+But the reason it is at rest was not defensible. 3 kW is exactly the kind of per-site tuning constant CLAUDE.md's first hard rule exists to keep out: it is an idle afternoon in a villa with a pool pump and an alarming spike in a small apartment. It was right for the machine it was written against and wrong everywhere else — permanently red on one install, never lit on another — and it quietly bypassed `config.alertThresholds`, the mechanism built for exactly this and deliberately shipped empty.
+
+The tile now inherits the alert state of its own members, the way the Locks tile already does: it warns if any contributing power sensor is over the threshold configured **for that sensor**. With none configured it stays informational, which is the honest default — the app has no basis for calling any wattage high in a villa it has never seen. Anyone who wants the tile to flag a draw sets a `max` on the sensor that matters, and it then means something real rather than a number picked once against someone else's house.
+
+Nothing changed about when a tile is underlined: ON takes its category colour, needs-attention takes red, and a tile at rest has no underline by design.
+
 ## 2.166.0
 
 ### Fixed — one tight pair hid every badge in the room

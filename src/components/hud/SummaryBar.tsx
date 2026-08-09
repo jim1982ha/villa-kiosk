@@ -23,6 +23,7 @@ import { createPortal } from "react-dom";
 import { Snowflake, Zap, Waves, Sparkles } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
+import { levelForValue, type Threshold } from "@/config/ThresholdConfig";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
 import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
@@ -60,6 +61,7 @@ function deriveTiles(
   entityMap: Record<string, EntityMapping>,
   resolvedRooms: Record<string, string>,
   can: (c: Category) => boolean,
+  thresholds: Record<string, Threshold>,
 ): SummaryTile[] {
   const all = Object.values(entities);
   const byDomain = (d: string) => all.filter((e) => e.entity_id.startsWith(`${d}.`));
@@ -186,7 +188,24 @@ function deriveTiles(
     tiles.push({
       id: "__energy", icon: Zap, label: "Energy",
       value: totalW >= 1000 ? `${(totalW / 1000).toFixed(1)} kW` : `${Math.round(totalW)} W`,
-      tone: totalW > 3000 ? "warn" : "neutral", category: "energy",
+      // A HARDCODED `totalW > 3000` used to live here, and it was exactly the
+      // per-site tuning constant CLAUDE.md's first hard rule forbids: 3 kW is
+      // an idle afternoon in a villa with a pool pump and an alarming spike in
+      // a small apartment. It was right for the machine it was written on and
+      // wrong everywhere else — a tile permanently red on one install and
+      // never lit on another.
+      //
+      // The tile now inherits the alert state of its own members, the way the
+      // Locks tile already does: it warns if any contributing power sensor is
+      // over the threshold configured FOR THAT SENSOR (config.alertThresholds,
+      // which ships empty — see ThresholdConfig). With none configured it stays
+      // informational, which is the honest default: the app has no basis for
+      // calling any wattage high in a villa it has never seen.
+      tone: powerSensors.some((e) => {
+        const v = Number(e.state);
+        return Number.isFinite(v) && levelForValue(v, thresholds[e.entity_id]) !== "normal";
+      }) ? "warn" : "neutral",
+      category: "energy",
       entityIds: powerSensors.map((e) => e.entity_id), title: "Energy", canControl: false,
     });
   }
@@ -360,7 +379,7 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
   }, [entities, suppressedEntityIds]);
 
   const deviceTiles = useMemo(
-    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false)),
+    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds),
     [visibleEntities, config.entityMap, resolvedRooms, role],
   );
 
