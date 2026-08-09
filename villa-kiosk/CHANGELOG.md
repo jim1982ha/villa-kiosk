@@ -1,3 +1,9 @@
+## 2.184.0
+
+### Reverted — badges open onto a ring again, with a tighter travel budget
+
+2.181.0 removed the ring entirely, so any crowding summarised the room and the map showed pills where the badges should be. The ring is back exactly as it was in 2.180.0, with the budget cut from 2 badge widths to 1.1 so a badge stays visibly on the device it labels. Piles summarise a little sooner as a result, which is the intended trade.
+
 ## 2.183.0
 
 ### Changed — the V now fills the app icon properly

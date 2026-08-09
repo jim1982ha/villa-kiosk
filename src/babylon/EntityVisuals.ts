@@ -54,6 +54,10 @@ import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator"
 // nothing to the bundle — ShadowGenerator already pulls this module in.
 import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture";
 import { Vector3, Matrix, Quaternion } from "@babylonjs/core/Maths/math.vector";
+// Type-only: annotates the viewport cullLabels already computes and hands to
+// spreadPile. A `import type` adds no runtime import, so it cannot disturb the
+// side-effect import discipline this file depends on elsewhere.
+import type { Viewport } from "@babylonjs/core/Maths/math.viewport";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Ray } from "@babylonjs/core/Culling/ray";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
@@ -374,17 +378,20 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  * and zoom, both independent of where the camera is looking from, so the
  * screen-space coupling that six earlier attempts died on is still absent.
  *
- * ── A badge is never moved (2.181.0) ─────────────────────────────────────
- * A badge is drawn on its device's anchor, or its whole room is drawn as one
- * pill. There is no third outcome and nothing is ever displaced.
+ * ── What may move a badge, and what may not (2.175.0) ────────────────────
+ * A badge sits on its anchor's projection unless its pile is opened out onto
+ * a ring (spreadPile), which is the only thing in this file allowed to move
+ * one, by at most the ring budget. Everything else about a badge's position
+ * is its device's position.
  *
- * Displacement was tried three ways — a grid dealt by entity_id, a uniform
- * scale, a ring — and all three failed for one reason: a pile's membership
- * changes with the zoom, so crossing a step rearranged badges belonging to
- * devices that had not moved. The layout was stable given a pile; the PILE was
- * not stable, so the layout could not be either. Summarising the room is a
- * single predictable event with a visible cause, and it reuses the merging
- * that already existed instead of standing a second mechanism beside it.
+ * The rule was briefly "a badge is never moved" (2.159.0). It sounded
+ * principled and made the outcome impossible: badges anchor to DEVICES, so a
+ * ceiling fan and its own light are a couple of dozen pixels apart at a normal
+ * framing, and pinned, no badge wider than that could be drawn there however
+ * much empty floor the room had. Movement is not the thing that was ever
+ * wrong. RESHUFFLING was — a layout that deals badges fresh seats can deal
+ * them differently one zoom step later — and a ring seated by world bearing
+ * cannot do that.
  */
 /** Zoom is quantised to steps of 1/N of a doubling before it feeds the
  *  grouping radius — the direct equivalent of a map engine clustering per
@@ -426,6 +433,20 @@ const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
  * never use different geometry from the renderer.
  */
 const BADGE_MIN_GAP_PX = 6;
+/**
+ * The largest ring a collided pile may be opened out onto, in badge widths.
+ *
+ * This is the whole budget for moving a badge away from the device it labels,
+ * and it doubles as the limit on how big a pile may be. Kept deliberately
+ * tight (2.184.0): a badge that travels far stops reading as belonging to the
+ * thing underneath it, and the room's pill is a better answer than a badge
+ * pointing at nothing. A smaller budget means piles summarise sooner, which is
+ * the trade being made on purpose — the ring a pile needs
+ * grows with the number of badges on it, so past a certain count no ring fits
+ * and the room summarises instead. That is the ONLY thing deciding pile size,
+ * which is why there is no separate member cap to keep in step with it.
+ */
+const SPREAD_MAX_RADIUS_WIDTHS = 1.1;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -472,6 +493,9 @@ interface ShownLabel {
   /** Anchor is in front of the camera, i.e. has a valid screen position at
    *  all. Purely a RENDER gate — deliberately not an input to grouping. */
   inFront: boolean;
+  /** Screen-px displacement applied by spreadPile(). */
+  offX: number;
+  offY: number;
 }
 
 // Status/enum SENSOR states (a text sensor like an AP's connectivity state).
@@ -2659,9 +2683,7 @@ export class EntityVisuals {
       // card's own Rectangle draws the edge. A DASHED ring cannot come from
       // the Rectangle — Babylon GUI has no dashed border — so for that one
       // state the image spans the full control instead, putting its dash on
-      // the badge's outer edge where every other state's ring is. Inset, it
-      // drew a dotted rectangle floating inside the badge, which is not the
-      // same object at all.
+      // the badge's outer edge where every other state's ring is.
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
         surface.ringDashed ? 0 : BADGE_INSET_CARD);
@@ -2790,7 +2812,7 @@ export class EntityVisuals {
       // allocates nothing at all.
       let s = this.shownPool[shownCount];
       if (!s) {
-        s = { id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, inFront: false };
+        s = { id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, inFront: false, offX: 0, offY: 0 };
         this.shownPool[shownCount] = s;
       }
       s.id = id;
@@ -2801,6 +2823,10 @@ export class EntityVisuals {
       s.wy = wp.y;
       s.wz = wp.z;
       s.inFront = p.z >= 0 && p.z <= 1;
+      // Reset every frame — a reused pool slot must not inherit the previous
+      // frame's spread.
+      s.offX = 0;
+      s.offY = 0;
       shown[shownCount] = s;
       shownCount++;
     }
@@ -2846,17 +2872,17 @@ export class EntityVisuals {
     const piles = this.groupBadges(shown, boxes);
 
     // ── The last tier: the room's chip ────────────────────────────────────
-    // Three tiers, in order, and a badge holds its SIZE and its PLACE through
-    // all of them —
+    // Four tiers, in order, and a badge holds its SIZE through all of them —
     // it is never shrunk, because a badge below the ~44px touch target is a
     // control nobody can hit, which is a worse answer than a chip that is at
     // least honestly tappable and says how many devices it covers:
     //
     //   1. badge on its device
     //   2. badge without its readout        (the text is dropped first)
-    //   3. the room's pill
+    //   3. pile opened onto a ring          (spreadPile, bounded travel)
+    //   4. the room's chip
     //
-    // Tier 3 takes the WHOLE room with it, never a subset: a room that is half
+    // Tier 4 takes the WHOLE room with it, never a subset: a room that is half
     // chip and half loose badges asks the viewer to work out which devices the
     // chip covers, and a count over part of a room is not actionable.
     //
@@ -2884,26 +2910,27 @@ export class EntityVisuals {
     // both be read, and drawing one on top of the other hides a device
     // without saying so.
     this.roomClustered.clear();
-    // ── Two outcomes, and no third ────────────────────────────────────────
-    // A badge is drawn on its device or its whole room is drawn as one pill.
-    // Nothing in between, and nothing ever moves.
-    //
-    // Between 2.169.0 and 2.180.0 a collided pile was opened out — first by
-    // scaling it, then onto a ring — so that badges could be bigger before a
-    // room summarised. Every version of it shared the same defect, which no
-    // amount of tuning removed: a pile's membership changes as the zoom does,
-    // so crossing a step rearranged badges that had not moved in the villa.
-    // Whether the rearrangement was a grid, a scale or a ring, the user was
-    // being shown a new layout for the same devices, and that is worse than
-    // the thing it was avoiding.
-    //
-    // So the trade is made explicitly and in the other direction: when the
-    // view can no longer hold a room's badges apart, the room becomes its
-    // pill. That is a single, predictable event with an obvious cause, and it
-    // uses the merging that was already there rather than a second mechanism
-    // beside it.
+    // Piles are laid out one at a time, and a badge that has been seated is no
+    // longer where its anchor is — so a later pile has to be checked against
+    // the SEATS already taken, not against those badges' anchors. Doing it in a
+    // fixed order means every pair of piles is checked exactly once, when the
+    // later of the two is placed, and the outcome never depends on the order
+    // union-find happened to emit them in.
+    const mobile = new Array<boolean>(shown.length).fill(false);
     for (const members of piles) {
       if (members.length < 2) continue;
+      for (const i of members) mobile[i] = true;
+    }
+    const ordered = piles
+      .filter((m) => m.length >= 2)
+      .sort((a, b) => this.pileKey(shown, a).localeCompare(this.pileKey(shown, b)));
+    this.seatCount = 0;
+    for (const members of ordered) {
+      // Open the pile out onto a ring, or — if no ring fits inside the travel
+      // budget — hand the whole room over to its chip. spreadPile decides and
+      // arranges in one calculation, so the two cannot disagree about whether
+      // a pile fits, which is the hole every earlier version had.
+      if (this.spreadPile(shown, boxes, members, tm, vp, mobile)) continue;
       for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
     }
 
@@ -2911,8 +2938,8 @@ export class EntityVisuals {
       // No X offset exists any more, and baseY is a FIXED lift that centres
       // every badge over its anchor — the same value for all of them, so it
       // moves nothing relative to anything else.
-      s.lbl.container.linkOffsetXInPixels = 0;
-      s.lbl.container.linkOffsetYInPixels = baseY;
+      s.lbl.container.linkOffsetXInPixels = s.offX;
+      s.lbl.container.linkOffsetYInPixels = baseY + s.offY;
       s.lbl.container.isVisible = s.inFront && !this.roomClustered.get(this.roomOf(s.id));
     }
     this.updateClusters(shown);
@@ -2954,6 +2981,142 @@ export class EntityVisuals {
    * another is drawn clockwise of it, and the arrangement is identical every
    * time the same devices pile up.
    */
+  private seatTmp = new Vector3();
+  private seatOut = new Vector3();
+  /** Seats taken by piles already laid out THIS pass (world space), so a later
+   *  pile can be checked against where badges will actually be drawn rather
+   *  than where their anchors are. Grow-only, reset by seatCount each pass. */
+  private seatX: number[] = [];
+  private seatY: number[] = [];
+  private seatZ: number[] = [];
+  private seatHalfW: number[] = [];
+  private seatCount = 0;
+
+  /** Lowest entity_id in a pile — a stable name for it, so piles can be laid
+   *  out in a fixed order regardless of how union-find emitted them. */
+  private pileKey(shown: ShownLabel[], members: number[]): string {
+    let key = shown[members[0]].id;
+    for (let k = 1; k < members.length; k++) {
+      if (shown[members[k]].id < key) key = shown[members[k]].id;
+    }
+    return key;
+  }
+
+  private spreadPile(
+    shown: ShownLabel[],
+    boxes: { halfW: number; halfH: number; cy: number }[],
+    members: number[],
+    tm: Matrix,
+    vp: Viewport,
+    mobile: boolean[],
+  ): boolean {
+    const n = members.length;
+    const scale = this.iconUserScale * this.iconZoomScale;
+    const gapPx = BADGE_MIN_GAP_PX * scale;
+    const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
+    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
+    if (pxPerWorld <= 0) return false;
+    const budgetPx = SPREAD_MAX_RADIUS_WIDTHS * BADGE_DIAMETER_PX * scale;
+
+    // max(halfW, halfH), not halfW: a badge is a rectangle and seats sit at
+    // arbitrary angles, so the only half-extent safe in EVERY direction is the
+    // larger one. Width alone was fine for a card badge (wider than tall) and
+    // wrong for the classic one, where two seats stacked vertically got 44px
+    // where they needed 61.
+    const halfOf = (i: number) => Math.max(boxes[i].halfW, boxes[i].halfH);
+    let need = 0;
+    for (let a = 0; a < n; a++) {
+      for (let b = a + 1; b < n; b++) {
+        const w = halfOf(members[a]) * allow + halfOf(members[b]) * allow + gapPx;
+        if (w > need) need = w;
+      }
+    }
+
+    let wcx = 0, wcz = 0;
+    for (const i of members) { wcx += shown[i].wx; wcz += shown[i].wz; }
+    wcx /= n; wcz /= n;
+
+    const order: number[] = [];
+    const seatWx: number[] = [];
+    const seatWz: number[] = [];
+
+    {
+      // ── The pile opens onto a ring ──────────────────────────────────────
+      // 2.178.0 tried picking the SHAPE too — collinear piles spread along
+      // their own axis, clusters onto a ring — so a column would stay a
+      // column. Reverted: a pile's membership changes with zoom, so a pile
+      // that was a line gains one off-axis member and switches layout
+      // wholesale, and every badge in it jumps. The shape test itself was
+      // camera-independent; what was not stable was WHICH LAYOUT applied, and
+      // one layout for every pile is worth more than a better fit for some.
+      // n badges evenly spaced on a circle of radius R sit 2·R·sin(π/n) apart,
+      // so the radius that clears the widest pair is arithmetic with no search
+      // in it, and every pair clears by construction. No radius inside the
+      // budget means no layout exists, and the room summarises.
+      const radius = need / (2 * Math.sin(Math.PI / n));
+      if (radius > budgetPx) return false;
+      const ringWorld = radius / pxPerWorld;
+      const seated = members
+        .map((i) => ({ i, bearing: Math.atan2(shown[i].wz - wcz, shown[i].wx - wcx) }))
+        // Two devices on ONE fixture share a bearing; the id breaks the tie so
+        // the order is total and identical on every device.
+        .sort((a, b) => a.bearing - b.bearing || shown[a.i].id.localeCompare(shown[b.i].id));
+      // Turn the ring so seats point the way the devices actually lie. Free to
+      // do: a rigid rotation preserves every pairwise distance, so it cannot
+      // touch the clearance the radius guarantees.
+      let rx = 0, ry = 0;
+      for (let k = 0; k < n; k++) {
+        const residual = seated[k].bearing - (k * 2 * Math.PI) / n;
+        rx += Math.cos(residual); ry += Math.sin(residual);
+      }
+      const turn = Math.atan2(ry, rx);
+      for (let k = 0; k < n; k++) {
+        const angle = turn + (k * 2 * Math.PI) / n;
+        order.push(seated[k].i);
+        seatWx.push(wcx + Math.cos(angle) * ringWorld);
+        seatWz.push(wcz + Math.sin(angle) * ringWorld);
+      }
+    }
+
+    // ── A seat must clear badges OUTSIDE this pile too ────────────────────
+    // The layout guarantees its own members clear each other and says nothing
+    // about anyone else. A badge in ANOTHER pile is skipped: it is not at its
+    // anchor once seated, so testing that anchor compares against a position
+    // it never occupies — the two piles meet exactly once, in the seat list
+    // below, when the later of them is laid out.
+    for (let k = 0; k < n; k++) {
+      const mine = halfOf(order[k]) * allow;
+      const self = shown[order[k]];
+      for (let j = 0; j < shown.length; j++) {
+        if (mobile[j] || members.includes(j)) continue;
+        const d = Math.hypot(seatWx[k] - shown[j].wx, self.wy - shown[j].wy, seatWz[k] - shown[j].wz) * pxPerWorld;
+        if (d < mine + halfOf(j) * allow + gapPx) return false;
+      }
+      for (let q = 0; q < this.seatCount; q++) {
+        const d = Math.hypot(seatWx[k] - this.seatX[q], self.wy - this.seatY[q], seatWz[k] - this.seatZ[q]) * pxPerWorld;
+        if (d < mine + this.seatHalfW[q] + gapPx) return false;
+      }
+    }
+
+    // Seats are world POINTS, so the screen offset is the projected seat minus
+    // the projected anchor: the layout is decided in world space and converted
+    // to pixels only here, which is what keeps it steady under a camera that is
+    // only moving.
+    for (let k = 0; k < n; k++) {
+      const s = shown[order[k]];
+      this.seatTmp.set(seatWx[k], s.wy, seatWz[k]);
+      Vector3.ProjectToRef(this.seatTmp, Matrix.IdentityReadOnly, tm, vp, this.seatOut);
+      s.offX = this.seatOut.x - s.x;
+      s.offY = this.seatOut.y - s.y;
+      this.seatX[this.seatCount] = seatWx[k];
+      this.seatY[this.seatCount] = s.wy;
+      this.seatZ[this.seatCount] = seatWz[k];
+      this.seatHalfW[this.seatCount] = halfOf(order[k]) * allow;
+      this.seatCount++;
+    }
+    return true;
+  }
+
   /** A badge's room, normalised — the single definition every grouping,
    *  chip and hit-test path reads, so none of them can disagree. */
   private roomOf(entityId: string): string {
