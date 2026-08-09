@@ -192,8 +192,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // the gesture has not ended. The lock is released only by the idle timeout,
   // i.e. by the user actually stopping.
   const wheelSpent = useRef(false);
-  const onFeedWheel = useCallback((e: React.WheelEvent) => {
-    if (zoom.zoomed || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+  const onFeedWheel = useCallback((e: { deltaX: number; deltaY: number }) => {
+    if (zoomedRef.current || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
     window.clearTimeout(wheelIdle.current);
     // A gesture ends after a quiet moment; that is what re-arms it.
     wheelIdle.current = window.setTimeout(() => {
@@ -208,7 +208,10 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     stepCameraRef.current(wheelTravel.current > 0 ? 1 : -1);
     wheelTravel.current = 0;
     wheelSpent.current = true;
-  }, [zoom.zoomed]);
+  }, []);
+  // Read by the capture-phase listener below, which is registered once.
+  const onFeedWheelRef = useRef(onFeedWheel);
+  onFeedWheelRef.current = onFeedWheel;
   useEffect(() => () => window.clearTimeout(wheelIdle.current), []);
 
   // Long-press (or hold, on mouse) either prev/next arrow opens a picker
@@ -267,7 +270,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // while the next camera is still loading — the point of the gesture is to
   // move on quickly.
   useEffect(() => {
-    const inPanel = (e: PointerEvent) =>
+    const inPanel = (e: Event) =>
       !!rootRef.current && e.target instanceof Node && rootRef.current.contains(e.target);
     let downX = 0, downY = 0, downT = 0, tracking = false;
     const SWIPE_MAX_MS = 600;
@@ -295,11 +298,21 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     // appeared did nothing. A capture-phase listener runs BEFORE any of them
     // and cannot be cancelled by them, so the gesture is read whatever the feed
     // is doing. It only ever observes; nothing here consumes the event.
+    // The trackpad swipe listens the same way, and for the same reason it had
+    // to move off the feed element: as a React onWheel it only fired while the
+    // cursor happened to be over the video, so the gesture did nothing until
+    // the mouse had been moved there first. Anywhere in the panel is enough now.
+    const onWheelCapture = (e: WheelEvent) => {
+      if (!canCycleRef.current || !inPanel(e)) return;
+      onFeedWheelRef.current(e);
+    };
     const opts = true;
+    window.addEventListener("wheel", onWheelCapture, opts);
     window.addEventListener("pointerdown", onDown, opts);
     window.addEventListener("pointerup", onUp, opts);
     window.addEventListener("pointercancel", onCancel, opts);
     return () => {
+      window.removeEventListener("wheel", onWheelCapture, opts);
       window.removeEventListener("pointerdown", onDown, opts);
       window.removeEventListener("pointerup", onUp, opts);
       window.removeEventListener("pointercancel", onCancel, opts);
@@ -797,7 +810,6 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         // under the finger that is pressing it.
         onPointerDown={onFeedPointerDown}
         onPointerUp={onFeedPointerUp}
-        onWheel={onFeedWheel}
         onPointerCancel={() => { tapStart.current = null; }}
       >
         {/* Zoom/pan layer — FIRST child so the controls below paint on top of

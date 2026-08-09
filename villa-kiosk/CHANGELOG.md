@@ -1,3 +1,13 @@
+## 2.195.0
+
+### Fixed — the badge tooltip appeared over the camera feed
+
+Its listener is on the window, because a badge is a canvas control with no DOM node to hover, so it also heard about panels and modals and named badges sitting behind whatever the user was actually looking at. It now only reads while the pointer is over the 3D view itself.
+
+### Fixed — the trackpad swipe needed the mouse moved onto the video first
+
+It was a React `onWheel` on the feed element, so it only fired while the cursor happened to be over the video. It now listens across the whole panel, alongside the drag gesture.
+
 ## 2.194.0
 
 ### Changed — the badge hover tooltip is smaller

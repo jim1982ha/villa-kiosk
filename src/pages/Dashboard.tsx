@@ -678,6 +678,17 @@ export default function Dashboard() {
     if (!manager) return;
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== "mouse") return;
+      // Only while the pointer is genuinely over the 3D view. The listener is
+      // on the window (a badge is a GUI control on the canvas, not a DOM node,
+      // so there is no element to hover), which means it also hears about the
+      // camera feed, every panel and every modal — and it was naming badges
+      // that happen to sit behind whatever the user is actually looking at.
+      // Anything drawn OVER the villa is a different surface with its own
+      // labelling, so the tooltip stops at the canvas.
+      if (!(e.target instanceof Element) || !e.target.classList.contains("babylon-canvas")) {
+        setHoverBadge(null);
+        return;
+      }
       const { clientX, clientY } = e;
       if (hoverRaf.current) return;
       hoverRaf.current = requestAnimationFrame(() => {
