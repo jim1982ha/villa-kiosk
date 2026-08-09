@@ -1,3 +1,9 @@
+## 2.183.0
+
+### Changed — the V now fills the app icon properly
+
+The glyph measured 66% of the tile but hung high in it, so it read smaller than it was and left the plate looking empty beside other app icons. It is now centred and at ~72%, the weight a platform icon normally gives its glyph. Every raster asset (PWA, maskable, apple-touch, favicons, the add-on's store icon) is regenerated from the same SVG, so there is one source rather than artwork that can drift from it.
+
 ## 2.182.0
 
 ### Fixed — an unavailable badge's dashed ring sat inside the badge, not on its edge
