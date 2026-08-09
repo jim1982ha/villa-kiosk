@@ -79,6 +79,40 @@
      top-level document and genuinely owns the inset). */
   --safe-top: env(safe-area-inset-top, 0px);
 
+  /* The bottom-edge mirror of --safe-top, and it exists for the same reason:
+     under Ingress this page is embedded INSIDE HA's own chrome, which is what
+     actually meets the home-indicator area — so reserving our own inset there
+     too stacked a second redundant gap and pushed the summary bar visibly
+     higher on an iPhone than the identical build sits on Android or a laptop
+     (reported alongside "there's a bar at the bottom on iPhone only"). The
+     top half of this bug was found and fixed first; the bottom half was
+     simply never done, and every bottom-anchored rule kept reading
+     env(safe-area-inset-bottom) directly.
+
+     Bottom-anchored elements must read THIS, and must combine it with max(),
+     not by adding: `14px + inset` stacks the design's breathing room on top
+     of a 34px gesture zone that already provides plenty, which is what put
+     the bar ~48px off the bottom edge. max() gives whichever is larger — so
+     the home indicator is still cleared on iOS, and Android/desktop keep the
+     designed offset exactly. */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Reduced clearance for a FLOATING bottom element (the summary bar, the
+     radial-menu manage button) as opposed to one flush with the screen edge
+     (a modal footer, the camera control scrim).
+
+     iOS's ~34px inset is sized so that content sitting AT the edge isn't
+     obscured by, or fighting for touches with, the home indicator. A pill
+     that already floats with its own margin, rounded corners and a shadow
+     is not that: it reads as clearly above the indicator well before 34px,
+     so spending the full inset on it just parks it in mid-screen — which is
+     what made the bar sit visibly higher on an iPhone PWA than the identical
+     build does on Android or a laptop. Just over half the inset clears the
+     indicator pill itself (~5px tall, ~8px up from the edge) with room to
+     spare. Zero wherever the inset is (Android, desktop, Ingress), so those
+     keep the designed offset untouched. */
+  --safe-bottom-float: calc(var(--safe-bottom) * 0.55);
+
   /* Type */
   /* Jost (self-hosted, @font-face above) for the wordmark, numerals, screen
      headlines and eyebrows — never below 15px, always with tracking. Falls
@@ -182,9 +216,10 @@
 }
 
 /* Under HA Ingress, HA's own chrome already clears the Dynamic Island/notch
-   — see --safe-top's own comment above. Not a light/dark concern, so this is
-   its own rule rather than folded into the theme blocks below. */
-:root.vk-ingress { --safe-top: 0px; }
+   AND the home indicator — see --safe-top/--safe-bottom's own comments above.
+   Not a light/dark concern, so this is its own rule rather than folded into
+   the theme blocks below. */
+:root.vk-ingress { --safe-top: 0px; --safe-bottom: 0px; }
 
 /* ---- Dark theme (explicit) ---- */
 :root[data-theme="dark"] {
@@ -618,7 +653,7 @@ button {
 .camera-picker-menu {
   position: absolute; z-index: 11; top: auto;
   right: calc(20px + env(safe-area-inset-right, 0px));
-  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  bottom: max(96px, var(--safe-bottom));
   width: min(280px, calc(100vw - 40px));
   max-height: min(60vh, 420px);
 }
@@ -702,7 +737,7 @@ button {
    the room count, so anything sharing that coordinate system could collide
    with a long room list. A fixed, independent spot can't. */
 .radial-manage-btn {
-  position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  position: fixed; left: 50%; bottom: max(28px, var(--safe-bottom-float));
   transform: translateX(-50%);
   display: flex; align-items: center; gap: 8px;
   padding: 10px 18px; border-radius: 999px; white-space: nowrap; cursor: pointer;
@@ -827,7 +862,7 @@ button {
      controls could sit under the home indicator or, in landscape, under
      the island itself. */
   padding: 16px calc(20px + env(safe-area-inset-right, 0px))
-           calc(16px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
+           max(16px, var(--safe-bottom)) calc(20px + env(safe-area-inset-left, 0px));
   z-index: 23; pointer-events: none;
   /* ABOVE .summary-bar (21): the bottom-right joystick (the only thing left
      in this bar — the view-mode toggle moved to .hud-left-col) can still sit
@@ -867,7 +902,7 @@ button {
      pointer:coarse override below this rule. Desktop has no such gesture
      zone at all, so its own 20px stays as the plain breathing room it always
      was. */
-  position: absolute; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: max(20px, var(--safe-bottom-float)); left: 50%; transform: translateX(-50%);
   z-index: 21; pointer-events: auto;
   display: flex; gap: 8px; align-items: stretch;
   /* width:max-content is ESSENTIAL: a centred (left:50%) absolutely-positioned
@@ -896,17 +931,19 @@ button {
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
 }
 /* Tablet-class touch device (iPad, not a phone — the phone-width rule further
-   down already has its own tuned 14px and is untouched here): the base
-   rule's flat 20px plus a real safe-area-inset-bottom (Apple gives a tablet
-   without a physical Home button the same ~20pt gesture-zone inset an iPhone
-   gets) reads as an oversized dead gap under the tile row that desktop never
-   shows, since desktop has no such gesture zone to clear at all — reported as
-   "the bar doesn't sit at the bottom", reproducing in both orientations
-   (confirms it's this flat value, not anything landscape-specific). Scoped to
+   down has its own tuned 14px): a touch tablet reads as sitting too far off
+   the bottom edge at the base rule's 20px, since it also carries a real
+   gesture-zone inset (Apple gives a tablet without a physical Home button
+   roughly the same ~20pt an iPhone gets) that desktop has nothing equivalent
+   to — reported as "the bar doesn't sit at the bottom", reproducing in both
+   orientations (confirms it's this flat value, not anything
+   landscape-specific). With the max() form both terms are now alternatives
+   rather than cumulative, so this is the floor for a tablet with no inset at
+   all and the inset itself wins wherever there is one. Scoped to
    pointer:coarse plus a width floor so a genuine desktop window narrowed to
    tablet width doesn't pick this up by accident. */
 @media (pointer: coarse) and (min-width: 721px) {
-  .summary-bar { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .summary-bar { bottom: max(8px, var(--safe-bottom-float)); }
 }
 .summary-bar::-webkit-scrollbar { display: none; }
 .summary-scene { display: flex; }
@@ -932,10 +969,16 @@ button {
 .summary-tile-icon {
   display: flex; align-items: center; justify-content: center;
   width: 46px; height: 46px; flex: 0 0 auto; border-radius: 13px;
-  /* State-driven fill/glyph — same categorySurface() as the 3D badges
-     (fallback keeps a neutral look if the var is ever unset). */
+  /* State-driven fill/glyph — the same categorySurface() the 3D badges bake,
+     so a tile's icon chip and that device's badge on the map are literally
+     the same colour. OPAQUE (see surfaceBase() in EntityCategories.ts): the
+     fallback matches, since this chip sits on the translucent summary bar
+     and a translucent-on-translucent chip disappears the same way the map
+     badges did. A hairline keeps the resting (unfilled) chip a legible
+     object rather than a same-colour hole in the bar. */
   color: var(--tile-glyph, var(--text-secondary));
-  background: var(--tile-fill, var(--bg-input));
+  background: var(--tile-fill, var(--bg-modal));
+  border: 1px solid var(--hairline);
 }
 .summary-tile-icon svg { width: 24px; height: 24px; }
 .summary-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.18; gap: 1px; }
@@ -1090,12 +1133,14 @@ button {
      short list (e.g. just "Door Lock" + "Pool") doesn't look anchored to
      one edge inside the now much wider bar. */
   .summary-bar {
-    /* calc(...), not a flat 14px — the base rule's bottom already includes
-       env(safe-area-inset-bottom) for the home-indicator gesture area; a
-       bare literal here silently dropped that on every phone (this query
-       matches virtually all of them), same bug class as .hud-topbar's
-       shorthand-padding one just above. */
-    bottom: calc(14px + env(safe-area-inset-bottom, 0px)); gap: 8px; padding: 7px;
+    /* max(), not a flat 14px and not `14px + inset` — the home-indicator
+       gesture area still has to be cleared on a phone that has one (a bare
+       literal silently dropped that on every phone, since this query matches
+       virtually all of them), but ADDING the two stacked the design's
+       breathing room on top of a 34px zone that already supplies plenty and
+       left the bar sitting visibly higher on an iPhone than the same build
+       does on Android — see --safe-bottom. */
+    bottom: max(14px, var(--safe-bottom-float)); gap: 8px; padding: 7px;
     left: calc(14px + env(safe-area-inset-left, 0px));
     right: calc(14px + env(safe-area-inset-right, 0px));
     transform: none;
@@ -1313,9 +1358,13 @@ input[type="range"]::-moz-range-thumb {
    can't live inside .camera-viewport. z-index keeps it over the letterboxed
    feed on a screen where the video does reach the top edge. */
 .camera-header {
-  position: absolute; top: 0; left: 0; right: 0; z-index: 1;
-  padding: calc(20px + var(--safe-top)) calc(24px + env(safe-area-inset-right, 0px)) 0 calc(24px + env(safe-area-inset-left, 0px));
+  position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+  padding: calc(20px + var(--safe-top)) calc(24px + env(safe-area-inset-right, 0px))
+           24px calc(24px + env(safe-area-inset-left, 0px));
   pointer-events: none; /* the label itself re-enables it, nothing else lives here now */
+  /* Matches the bottom row's scrim so the two read as one chrome layer that
+     comes and goes together (see .chrome-hidden below). */
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, transparent 100%);
 }
 .camera-header .label {
   pointer-events: auto;
@@ -1335,23 +1384,46 @@ input[type="range"]::-moz-range-thumb {
 .camera-zoom-pill:active { background: rgba(0,0,0,0.65); }
 /* Bottom row: status strip + control cluster (prev/next/zoom-reset/
    fullscreen/close) share one flex row so they're always the same height.
-   Sits in normal flow BELOW the video (not floated over it) on every screen
-   size/orientation, on its own solid backing so it never reads as "part of
-   the video" or covers the last row of the feed on a phone in portrait. */
+   OVERLAYS the feed (and auto-hides — see .chrome-hidden below) rather than
+   reserving flow space beneath it: the picture is the content and gets the
+   whole screen, which is the standard every native/serious video viewer
+   follows. It previously sat in normal flow on a solid black backing, which
+   permanently spent a fixed slice of an already-small phone screen on chrome
+   the user needs for a moment at a time.
+   A gradient scrim, not a solid fill: it has to keep white icons legible over
+   an arbitrary (possibly bright) frame WITHOUT reading as a hard-edged bar
+   glued across the picture. */
 .camera-bottom-row {
-  position: relative; inset: auto;
-  flex: 0 0 auto; width: 100%; box-sizing: border-box;
-  background: #000;
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  width: 100%; box-sizing: border-box;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.55) 55%, transparent 100%);
   display: flex; align-items: center; gap: 10px;
-  padding: 16px calc(20px + env(safe-area-inset-right, 0px))
-            calc(16px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
+  padding: 28px calc(20px + env(safe-area-inset-right, 0px))
+            max(16px, var(--safe-bottom)) calc(20px + env(safe-area-inset-left, 0px));
 }
+/* Idle: the chrome fades out and stops taking pointer events, so a tap on a
+   hidden control can't fire — the first tap's only job is to bring the chrome
+   back (the root's own pointerdown handler, which still receives it). Opacity
+   + visibility rather than display:none so the fade is animatable, and so the
+   layout underneath never reflows when it comes and goes. */
+.camera-fullscreen .camera-header,
+.camera-fullscreen .camera-bottom-row {
+  transition: opacity var(--dur) var(--ease), visibility var(--dur) var(--ease);
+}
+.camera-fullscreen.chrome-hidden .camera-header,
+.camera-fullscreen.chrome-hidden .camera-bottom-row {
+  opacity: 0; visibility: hidden; pointer-events: none;
+}
+/* Hide the cursor along with the chrome on a mouse-driven screen — the same
+   convention a desktop video player uses; any movement brings both back. */
+.camera-fullscreen.chrome-hidden { cursor: none; }
 .camera-controls {
   display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;
   margin-left: auto;
 }
-/* This bar is permanently solid black (.camera-bottom-row) — a fixed video-
-   viewer convention, not the app's own light/dark theme. The base .icon-btn's
+/* These buttons sit on the dark scrim of the auto-hiding chrome layer
+   (.camera-bottom-row) — a fixed video-viewer convention, not the app's own
+   light/dark theme. The base .icon-btn's
    THEME-driven glass (--bg-panel, near-opaque WHITE in light theme) read as a
    pale, washed-out blob floating on black for a light-theme user while a
    dark-theme user saw a normal-looking dark glass button — the identical
@@ -1432,8 +1504,14 @@ input[type="range"]::-moz-range-thumb {
    `display: contents` dissolves .camera-bottom-row's own box so its two
    children become direct flex items of the panel row and can be ordered to
    opposite edges — no DOM change, and no wrapper left in the middle of the
-   flex line. It also makes the row measure 0 height, which correctly zeroes
-   the portrait centring margin (see CameraPanel's bottomRowRef). */
+   flex line.
+
+   That dissolved box is also why the auto-hide fade has to be RE-TARGETED at
+   the two children inside this query (see the .chrome-hidden rule at the end
+   of it): an element with `display: contents` generates no box at all, so
+   neither the portrait rule's `opacity` nor its `position: absolute` can
+   apply to it, and the rails would have stayed permanently visible here
+   while every other layout faded correctly. */
 /* Gated on touch capability (pointer: coarse), NOT viewport height — the
    original max-height:560px cap was written against a landscape PHONE (short
    once rotated) and correctly rearranged its camera controls to the side
@@ -1448,7 +1526,7 @@ input[type="range"]::-moz-range-thumb {
   .camera-fullscreen { flex-direction: row; align-items: stretch; }
   .camera-bottom-row { display: contents; }
 
-  .camera-viewport { order: 0; flex: 1 1 auto; min-width: 0; margin-top: 0 !important; }
+  .camera-viewport { order: 0; flex: 1 1 auto; min-width: 0; }
 
   /* Buttons in a column down the right edge. Sized from the VIEWPORT HEIGHT
      so the whole column always fits without scrolling however short the
@@ -1500,6 +1578,35 @@ input[type="range"]::-moz-range-thumb {
   .camera-status-bar .state-timeline-skeleton {
     width: var(--cam-rail); height: auto; flex: 1 1 auto; min-height: 0;
   }
+
+  /* Both rails OVERLAY the feed rather than flanking it, for the same reason
+     the portrait bottom row does: the picture gets the whole screen and the
+     chrome is transient. Absolute here (not the portrait rule's, which the
+     dissolved .camera-bottom-row box can't pass down) and anchored to the two
+     side edges, matching the order:-1 / order:1 placement they had as flex
+     items. Scrims run sideways so they fade INTO the picture on the inner
+     edge, exactly like the top/bottom ones. */
+  .camera-status-bar, .camera-controls { position: absolute; top: 0; bottom: 0; z-index: 2; }
+  .camera-status-bar {
+    left: 0;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+  }
+  .camera-controls {
+    right: 0;
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+  }
+  .camera-viewport { width: 100%; }
+  /* Re-target the fade: .camera-bottom-row generates no box here (display:
+     contents, see this query's opening comment), so the portrait rule that
+     fades it has nothing to act on. */
+  .camera-fullscreen .camera-status-bar,
+  .camera-fullscreen .camera-controls {
+    transition: opacity var(--dur) var(--ease), visibility var(--dur) var(--ease);
+  }
+  .camera-fullscreen.chrome-hidden .camera-status-bar,
+  .camera-fullscreen.chrome-hidden .camera-controls {
+    opacity: 0; visibility: hidden; pointer-events: none;
+  }
 }
 /* Wraps the HLS <video> together with its instant snapshot preview so the two
    overlap regardless of the video's own (pre-metadata) intrinsic size. */
@@ -1534,7 +1641,7 @@ input[type="range"]::-moz-range-thumb {
   padding:
     calc(60px + var(--safe-top))
     calc(32px + env(safe-area-inset-right, 0px))
-    calc(32px + env(safe-area-inset-bottom, 0px))
+    max(32px, var(--safe-bottom))
     calc(32px + env(safe-area-inset-left, 0px));
   overflow-y: auto;
   animation: fadeIn 0.2s ease-out;
@@ -2387,7 +2494,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   /* Keep the footer on one line — Config Editor left, Cancel/Save right — like
      desktop, instead of wrapping. */
   .settings-footer {
-    padding: 12px calc(18px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(18px + env(safe-area-inset-left, 0px));
+    padding: 12px calc(18px + env(safe-area-inset-right, 0px)) max(12px, var(--safe-bottom)) calc(18px + env(safe-area-inset-left, 0px));
     flex-wrap: nowrap;
   }
   .settings-footer .btn { padding-left: 12px; padding-right: 12px; }
@@ -2403,7 +2510,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .modal:not(.settings-modal) {
     overflow-y: auto;
     padding: calc(20px + var(--safe-top)) calc(18px + env(safe-area-inset-right, 0px))
-             calc(20px + env(safe-area-inset-bottom, 0px)) calc(18px + env(safe-area-inset-left, 0px));
+             max(20px, var(--safe-bottom)) calc(18px + env(safe-area-inset-left, 0px));
   }
   /* The device panel is short (a few rows + a small graph) and reads far
      better as a small centered card than the full-screen top-anchored sheet
@@ -2470,7 +2577,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
      profile-card list or a short viewport still pushes content right up
      against the edge. */
   padding: calc(24px + var(--safe-top)) calc(24px + env(safe-area-inset-right, 0px))
-           calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px));
+           max(24px, var(--safe-bottom)) calc(24px + env(safe-area-inset-left, 0px));
   overflow-y: auto;
 }
 
@@ -2670,7 +2777,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   display: flex; align-items: center; justify-content: center;
   background: rgba(0, 0, 0, 0.88);
   padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px
-           calc(env(safe-area-inset-bottom, 0px) + 16px);
+           max(16px, var(--safe-bottom));
 }
 .fm-lightbox img {
   max-width: 100%; max-height: 100%;
@@ -2687,7 +2794,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-lightbox-nav.next { right: 12px; }
 .fm-lightbox-close:hover, .fm-lightbox-nav:hover { background: rgba(0, 0, 0, 0.7); }
 .fm-lightbox-count {
-  position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  position: absolute; bottom: max(14px, var(--safe-bottom));
   left: 50%; transform: translateX(-50%);
   color: rgba(255, 255, 255, 0.8); font-size: var(--text-xs);
 }

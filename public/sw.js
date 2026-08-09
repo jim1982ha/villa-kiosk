@@ -12,7 +12,7 @@
  *  - Everything else (HA WebSocket is not HTTP; camera proxy, REST history):
  *    network-only — we never want to serve a stale camera frame or sensor value.
  */
-const CACHE = "villa-kiosk-v9";  // v9: evict pre-VESTA-rebrand icons/favicons/fonts (cache-first held the old ones)
+const CACHE = "villa-kiosk-v10";  // v10: evict the removed public/splash/* PNGs + the shell that referenced them
 // The big central 3D model (GLB/SH3D, tens of MB) lives in its OWN cache that
 // survives app updates — it rarely changes and re-downloading it on every open
 // is the main load-time cost. Version-stamped URLs (?v=<etag>) invalidate it.

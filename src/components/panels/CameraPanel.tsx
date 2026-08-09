@@ -14,7 +14,7 @@
 //  3. Still-image polling (camera_proxy) — works for essentially any camera,
 //     the least smooth but the most universally compatible fallback.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 // Type-only import: hls.js (~165 KB gzipped) is loaded on demand — see the HLS
 // setup effect's dynamic import() — so a kiosk that never opens a camera panel
 // never pays for it in the main bundle. This line compiles away entirely.
@@ -42,6 +42,11 @@ interface Props extends PanelProps {
 
 type Mode = "hls" | "stream" | "snapshot" | "failed";
 
+// How long the title + status/controls chrome stays up after the last bit of
+// pointer/touch/key activity before fading back out. Long enough to read the
+// status bar and reach a control without racing it; short enough that the
+// feed is unobstructed whenever nobody is actually interacting.
+const CHROME_IDLE_MS = 3200;
 // How often to refresh the fallback snapshot, and how many consecutive snapshot
 // failures to tolerate before declaring the camera unavailable.
 const SNAPSHOT_INTERVAL_MS = 800;
@@ -91,38 +96,13 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   const rootRef = useRef<HTMLDivElement>(null);
   const zoom = useMediaZoom<HTMLDivElement>();
   const [isFs, setIsFs] = useState(false);
-  // The status/controls row sits in normal flow BELOW the video (never over
-  // it — see .camera-bottom-row), which reserves real screen height for it
-  // and would otherwise leave the video's own visual centre sitting ABOVE
-  // true screen-centre (only the space above the row is available to centre
-  // it in). Mirroring that same amount of space back in as margin-TOP on the
-  // video region (NOT padding — .camera-zoom fills it via inset:0, and an
-  // absolutely-positioned child's offsets resolve against the padding edge
-  // regardless of the parent's own padding, so padding here would be a
-  // no-op; margin instead shrinks/shifts the flex item's own box) makes its
-  // centre line up with the row's, and a bar that reserves height on both
-  // sides in EQUAL amounts is centred on the whole screen — restoring "the
-  // video looks centred on the phone", the one thing the non-overlapping
-  // layout gave up. Measured live (rather than assumed) since the row's
-  // real height varies by screen width (it stacks onto two lines on a
-  // narrow phone — see the max-width:720px rule) and safe-area inset.
-  const bottomRowRef = useRef<HTMLDivElement>(null);
-  const [bottomRowH, setBottomRowH] = useState(0);
-  useEffect(() => {
-    const el = bottomRowRef.current;
-    if (!el) return;
-    // offsetHeight (BORDER box), NOT contentRect (CONTENT box): the row has
-    // ~16px of padding top and bottom plus the bottom safe-area inset, none of
-    // which contentRect counts — so mirroring contentRect reserved visibly
-    // LESS space above the video than the row actually occupies below it, and
-    // the feed sat noticeably high rather than centred. That was the reported
-    // "it's centred on the gap above the controls, not on the screen".
-    const measure = () => setBottomRowH(el.offsetHeight);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  // The status/controls row now OVERLAYS the feed and auto-hides (see
+  // chromeVisible below), so the feed gets the entire screen and is centred
+  // on it by construction. This removed a measured `margin-top: <row height>`
+  // (and the ResizeObserver + ref that fed it) which mirrored the row's
+  // reserved height back above the video to re-centre it — the correct fix
+  // while the row genuinely occupied flow space, and dead weight once it
+  // stopped reserving any.
   // Phone-landscape rail: the status bar runs vertically down the left edge.
   // Detected here rather than in CSS alone because the timeline has to lay its
   // segments out on the matching axis (StateTimeline's `vertical`) — a CSS
@@ -332,6 +312,47 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     document.addEventListener("fullscreenchange", onFsChange);
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
+
+  // ── Auto-hiding chrome (title + status/controls row) ──────────────────────
+  // The standard video-viewer contract, which this panel didn't follow: the
+  // picture is the content, so it gets the WHOLE screen and the chrome is
+  // transient — it appears on any pointer/touch/key activity and fades back
+  // out after a few idle seconds. Previously the status+controls row sat in
+  // normal flow permanently, so a phone in portrait spent a fixed slice of an
+  // already-small screen on a bar the user only needs for a moment at a time.
+  //
+  // `chromeHeld` is a separate, non-expiring reason to stay visible (hovering
+  // the controls with a mouse, or having the camera picker open) — a cluster
+  // that vanished from under the cursor mid-reach would be worse than one
+  // that never hid at all. The timer restarts on every activity event; the
+  // effect re-runs only when a HELD state changes, not on every mouse move,
+  // so this costs one timeout per burst of activity rather than per event.
+  const [chromeVisible, setChromeVisible] = useState(true);
+  const [hoveringControls, setHoveringControls] = useState(false);
+  // The camera picker is a menu anchored to a button in this chrome — hiding
+  // the chrome out from under an open menu would strand it.
+  const chromeHeld = hoveringControls || pickerOpen;
+  const idleTimer = useRef<number | undefined>(undefined);
+  const bumpChrome = useCallback(() => {
+    setChromeVisible(true);
+    window.clearTimeout(idleTimer.current);
+    // Never start a countdown while something is holding the chrome open —
+    // otherwise the timer fires anyway and the class flips underneath it.
+    if (chromeHeld) return;
+    idleTimer.current = window.setTimeout(() => setChromeVisible(false), CHROME_IDLE_MS);
+  }, [chromeHeld]);
+  useEffect(() => {
+    bumpChrome();
+    return () => window.clearTimeout(idleTimer.current);
+  }, [bumpChrome]);
+  // Touch is deliberately wired to pointerdown, not pointermove: a finger
+  // dragging to pan a zoomed feed would otherwise re-arm the timer on every
+  // frame of the gesture and pin the chrome open for as long as the pan runs.
+  const chromeActivity = {
+    onPointerMove: bumpChrome,
+    onPointerDown: bumpChrome,
+    onKeyDown: bumpChrome,
+  };
 
   // The feed is an <img> (MJPEG/snapshot), so there's no native video control
   // bar; a live camera has no timeline to scrub or pause. Fullscreen is the one
@@ -583,7 +604,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   };
 
   return (
-    <div className="camera-fullscreen" ref={rootRef}>
+    <div
+      className={`camera-fullscreen${chromeVisible || chromeHeld ? "" : " chrome-hidden"}`}
+      ref={rootRef}
+      {...chromeActivity}
+    >
       {/* Everything that visually belongs to "the live feed" (video, title
           watermark, loading spinner) is grouped under ONE wrapper so it can be
           sized as a distinct region — flex:1 above the status/controls row
@@ -632,7 +657,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           it still comes from the shared vocabulary. */}
       <div
         className={`camera-viewport${motionActive ? " camera-detecting" : ""}`}
-        style={{ marginTop: bottomRowH, ["--detect-color" as string]: STATUS_COLOR.alert }}
+        style={{ ["--detect-color" as string]: STATUS_COLOR.alert }}
       >
         {/* Zoom/pan layer — FIRST child so the controls below paint on top of
             it and stay clickable while it captures pinch/wheel/drag gestures. */}
@@ -659,7 +684,14 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           fill the space left of it (see .camera-bottom-row flex rule) so it
           stays aligned with prev/next/zoom/fullscreen/close regardless of
           how many of those are currently rendered. */}
-      <div className="camera-bottom-row" ref={bottomRowRef}>
+      <div
+        className="camera-bottom-row"
+        // Mouse only (pointer:fine): a hover that pins the chrome open is
+        // meaningless on touch, where the finger IS the tap and a lingering
+        // "hover" state would just never clear.
+        onPointerEnter={(e) => { if (e.pointerType === "mouse") setHoveringControls(true); }}
+        onPointerLeave={(e) => { if (e.pointerType === "mouse") setHoveringControls(false); }}
+      >
         <div className="camera-status-bar">
           <StateTimeline
             data={statusHistory}

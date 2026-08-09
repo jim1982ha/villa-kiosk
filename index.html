@@ -26,17 +26,32 @@
          use-credentials sends the session cookie/credentials so it loads. -->
     <link rel="manifest" href="./manifest.json" crossorigin="use-credentials" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon-180.png" />
-    <!-- Apple ignores the manifest/theme-color for the launch splash it shows
-         while the app is loading — it's tied to these link tags, matched by
-         exact device metrics. Only the two real iPad postures + iPhone
-         portrait are wired (the kiosk's actual targets, per CLAUDE.md); no
-         generic Android/tablet splash mechanism exists for Apple to wire. -->
-    <link rel="apple-touch-startup-image" href="./splash/splash-ipad-1536x2048.png"
-      media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
-    <link rel="apple-touch-startup-image" href="./splash/splash-ipad-landscape-2048x1536.png"
-      media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" />
-    <link rel="apple-touch-startup-image" href="./splash/splash-iphone-1170x2532.png"
-      media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+    <!-- NO apple-touch-startup-image links, deliberately — do not "complete"
+         this list, remove it.
+
+         2.144.0 added three of them (two iPad postures + one iPhone size).
+         Apple matches these by EXACT device metrics, and the iPhone entry was
+         `390x844@3x` — the base 12/13/14/15/16 only. Every Pro, Pro Max,
+         Plus, mini and SE, and every iPad that isn't the 9.7" class, matched
+         nothing. When a standalone PWA declares startup images and none
+         matches, iOS does not simply skip the splash: it falls back to a
+         black launch surface and sizes the standalone presentation from the
+         declared set rather than the true screen, which letterboxed the app
+         between solid black bands top and bottom (reported on an iPhone home
+         -screen PWA, with Android and desktop unaffected — neither has this
+         mechanism at all).
+
+         An exhaustive matrix is not the fix: Apple adds device metrics every
+         year, so the list is wrong again on the next handset, and each splash
+         is a ~1.4 MB PNG in a bundle whose whole point is precaching for an
+         offline villa. With no links at all, iOS uses its own default
+         standalone behaviour — genuinely full-bleed, which is what shipped
+         for the app's whole life before 2.144.0. The source artwork is kept
+         in sources/files/rebrand/assets/splash/ if this is ever revisited.
+
+         NOTE: iOS caches this whole apple-mobile-web-app-* block when the
+         icon is created, so an already-installed PWA must be removed from the
+         home screen and re-added before any change here takes effect. -->
     <!-- Self-hosted, not a Google Fonts link — the kiosk's target is an iPad
          with no internet at all, only a LAN path to Home Assistant (see
          CLAUDE.md's offline rule). Both files live in public/fonts/ and are

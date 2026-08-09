@@ -388,8 +388,19 @@ export class OverviewController {
       // Tilt from the centroid's incremental vertical move (its net travel over
       // the whole drag equals the shared finger movement). Zoom is intentionally
       // skipped this frame so a clean vertical drag reads as pure tilt.
+      //
+      // NEGATED (reported as inverted): beta is measured DOWN FROM straight-up,
+      // so a bigger beta lowers the camera toward the horizon. Dragging two
+      // fingers UP (dCentY < 0) must therefore INCREASE beta — pushing the far
+      // edge of the villa away from you tips the model over to reveal its
+      // elevation, the direct-manipulation reading every map app uses for this
+      // gesture. Feeding dCentY straight through did the opposite: fingers up
+      // flattened the view to top-down. This sign is deliberately NOT shared
+      // with the Shift+drag tilt above — a mouse drag with a modifier held is
+      // an indirect control with no "grab the ground" metaphor to preserve,
+      // and that one was never reported as wrong.
       const dCentY = (a.y + b.y) / 2 - (base.ay + base.by) / 2;
-      this.applyTilt(dCentY * TILT_SENS_TOUCH * s);
+      this.applyTilt(-dCentY * TILT_SENS_TOUCH * s);
     } else if (baseDist > 1 && dist > 1) {
       // Zoom: ratio of finger distances (spread = zoom in = smaller radius).
       this.camera.radius = clamp(

@@ -1,3 +1,43 @@
+## 2.145.0
+
+### Fixed — the iPhone PWA rendered letterboxed between two solid black bands
+
+Reported with a screenshot: on an iPhone home-screen PWA the app sat in a letterbox, a black band above and below it, where the identical build runs genuinely edge-to-edge on Android and on a laptop.
+
+Self-inflicted, in the previous release. 2.144.0 wired three `apple-touch-startup-image` links from the design handoff, and Apple matches those by EXACT device metrics — the only iPhone entry was `390x844@3x`, i.e. the base 12/13/14/15/16 and nothing else. Every Pro, Pro Max, Plus, mini and SE, plus every iPad that isn't the 9.7" class, matched none of the three. When a standalone PWA declares startup images and none matches the device, iOS does not simply skip the splash: it falls back to a black launch surface and sizes the standalone presentation from the declared set rather than from the true screen, which is exactly the observed letterbox. Android and desktop were never affected because neither platform has this mechanism at all.
+
+The links are removed rather than extended, and the comment left in `index.html` says so explicitly so the list doesn't get "completed" back into existence later. An exhaustive device matrix is not a fix: Apple adds metrics every year, so the list is wrong again on the next handset, and each splash is a ~1.4 MB PNG (4.2 MB total, now dropped from `public/`) inside a bundle whose entire purpose is precaching for a villa with no internet. With no links declared, iOS falls back to its own default standalone behaviour, which is full-bleed — what the app did for its whole life up to 2.144.0. The artwork stays in the design-handoff folder if it is ever revisited properly.
+
+One caveat that matters for verifying this: iOS caches the whole `apple-mobile-web-app-*` block at the moment the home-screen icon is created, so an already-installed PWA has to be removed and re-added before any change here takes effect. The service-worker cache is bumped `v9` → `v10` alongside, so no client keeps serving the old shell or the now-orphaned splash PNGs.
+
+### Fixed — the bottom bar sat far higher on an iPhone than on Android or desktop
+
+Separate from the letterbox above, and initially mistaken for the same report. Every bottom-anchored rule in `styles.css` read `env(safe-area-inset-bottom)` directly and ADDED it to its own designed offset — `14px + 34px` on an iPhone against a flat `14px` on Android, which parked the summary bar in mid-screen.
+
+The codebase already had the top half of this exact fix: `--safe-top` exists precisely because HA's own chrome clears the notch under Ingress, so reserving a second inset on top of it stacked a redundant gap (a real field report at the time). The bottom half was simply never done. Added `--safe-bottom` mirroring it — zeroed under `.vk-ingress` for the same reason — and converted all thirteen bottom-anchored rules from `X + inset` to `max(X, inset)`, so the two are alternatives rather than cumulative and Android/desktop keep their designed offsets untouched.
+
+That alone still leaves an iPhone PWA (where the inset is real, not zeroed) at the full 34px. Apple sizes that inset so content sitting AT the screen edge isn't obscured by, or fighting for touches with, the home indicator — but a pill that already floats with its own margin, rounded corners and a shadow is not that, and reads as clearly above the indicator well before 34px. Hence `--safe-bottom-float` at 55% of the inset for genuinely floating elements (the summary bar, the radial-menu manage button), with edge-flush surfaces — modal footers, the camera control scrim — keeping the full value. Net effect on the reported device: the summary bar moves from 48px off the bottom edge to roughly 19px.
+
+### Changed — the camera view's controls now auto-hide, and the feed fills the screen
+
+The status/controls row sat in normal flow permanently, below the video, on a solid black backing. That is a defensible layout — it was chosen deliberately, and an earlier release added a measured `margin-top` mirroring the row's height back above the feed so the picture still looked centred on the screen rather than on the gap above the controls — but it means a phone in portrait spends a fixed slice of an already small screen on chrome the user needs for a moment at a time.
+
+Both the title and the status/controls row now overlay the feed on gradient scrims and fade out after ~3.2s of no pointer, touch or key activity, returning on any of it — the contract every native and serious web video viewer follows, and the one the user asked for. The cursor hides with them on a mouse-driven screen. Hovering the control cluster with a mouse, or having the camera picker menu open, holds the chrome up regardless of the timer: a cluster that vanished from under a reaching cursor would be worse than one that never hid. Touch re-arms on `pointerdown` rather than `pointermove`, so dragging to pan a zoomed feed doesn't pin the chrome open for the length of the gesture.
+
+The phone-landscape layout needed its own handling and is the part most likely to be broken by a later edit: it sets `display: contents` on the bottom row to dissolve that box and float its two children out to opposite side rails, and an element with `display: contents` generates no box at all — so neither the portrait rule's `opacity` nor its `position: absolute` can apply to it, and the rails would have stayed permanently visible while every other layout faded correctly. The fade and the overlay positioning are both re-targeted at the two children inside that media query. The measured centring margin and the `ResizeObserver` feeding it are gone, correct while the row genuinely reserved flow space and dead weight once it stopped.
+
+### Fixed — two-finger tilt in the overview camera was inverted
+
+`OverviewController`'s two-finger gesture fed the fingers' shared vertical travel straight into the ArcRotateCamera's `beta`. Beta is measured DOWN FROM straight-up, so a larger value lowers the camera toward the horizon — meaning dragging two fingers up flattened the view to top-down, the opposite of the direct-manipulation reading (push the far edge away, the model tips over to reveal its elevation) that every map application uses for this gesture. Negated.
+
+Deliberately not shared with the Shift+drag tilt on the same controller, which keeps its existing sign: a modifier-held mouse drag is an indirect control with no "grab the ground" metaphor to preserve, and it was never reported as wrong. Both still respect the Natural Scrolling toggle.
+
+### Fixed — device badges were nearly invisible on the 3D map
+
+Reported from a screenshot of the map, and a regression from 2.144.0's neutral-by-default badge work. That release made a resting badge's fill `var(--bg-input)` — which is 5% black in light theme. On a panel, as a DOM chip, that reads exactly as intended. Baked into a canvas texture floating over the live 3D villa, which is the other place the very same function feeds, it is effectively nothing: a device at rest had no badge at all, just a faint glyph sitting on whatever happened to be behind it.
+
+`categorySurface()` now composites every fill onto the app's opaque panel colour (`--bg-modal`) through a `tintOver()` helper instead of returning a translucent tint, so each state resolves to a literal opaque colour that survives being painted onto a transparent canvas. The design intent is unchanged — a resting badge is still neutral, and category hue still only appears once a device is active or alerting, carried mostly by the 1.5px ring and the glyph — but it is now a real, readable object on any backdrop. `surfaceBase()` carries the explanation so the translucent token doesn't get reinstated. The bottom bar's icon chips read the same function and were fixed by the same change; their CSS fallback was updated to match and given a hairline, since a translucent chip on the translucent summary bar disappeared the same way.
+
 ## 2.144.0
 
 ### Changed — full VESTA brand redesign: tokens, neutral-by-default badges, HUD/modal chrome, and a PWA identity rename

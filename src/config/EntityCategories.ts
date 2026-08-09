@@ -71,19 +71,47 @@ const FALLBACK_CATEGORY_COLOR: Record<Category, string> = {
 };
 const FALLBACK_DANGER = "#B24232";
 const FALLBACK_WARNING = "#B8801F";
-const FALLBACK_NEUTRAL_FILL = "rgba(23, 25, 26, 0.05)";
 const FALLBACK_NEUTRAL_GLYPH = "#5A5F5B";
+// --bg-modal's light-theme value: the app's one OPAQUE floating surface (see
+// its own comment in styles.css). Every fill below composites onto this
+// rather than being a translucent tint in its own right — see surfaceBase().
+const FALLBACK_SURFACE = "#FFFDF9";
 
 function cssVar(name: string): string {
   if (typeof window === "undefined" || typeof getComputedStyle !== "function") return "";
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function withAlpha(hex: string, alpha: number): string {
+function parseHex(hex: string): [number, number, number] | null {
   const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(hex.trim());
-  if (!m) return hex;
-  const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null;
+}
+
+/** The OPAQUE surface every badge fill is composited onto.
+ *
+ *  This must never be a translucent token. A badge is drawn in two places
+ *  with very different backdrops: as a DOM chip on a panel, and — via
+ *  babylon/badgeIcons.ts — baked into a canvas texture that floats over the
+ *  live 3D villa. The first release of this design used --bg-input (5% black
+ *  in light theme) as the resting fill, which reads fine on a panel and is
+ *  effectively INVISIBLE over the 3D scene: a device at rest had no badge at
+ *  all, just a faint glyph on whatever was behind it. Compositing onto an
+ *  opaque base keeps the "neutral by default" intent while guaranteeing the
+ *  badge is a real, readable object on any backdrop. */
+function surfaceBase(): string {
+  return cssVar("--bg-modal") || FALLBACK_SURFACE;
+}
+
+/** Composite `hex` at `alpha` over `base`, returning an OPAQUE colour — the
+ *  same result an rgba() tint would produce on that backdrop, but resolved
+ *  here so it survives being painted onto a transparent canvas. */
+function tintOver(hex: string, alpha: number, base: string): string {
+  const fg = parseHex(hex);
+  const bg = parseHex(base);
+  if (!fg || !bg) return hex;
+  const mix = (f: number, b: number) => Math.round(f * alpha + b * (1 - alpha));
+  const [r, g, b] = [mix(fg[0], bg[0]), mix(fg[1], bg[1]), mix(fg[2], bg[2])];
+  return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 }
 
 /** One flat hue per category, read live from the CSS token (--cat-*) so the
@@ -111,26 +139,27 @@ export interface CategorySurface {
  *  consume a CSS custom property. `override` is a per-entity #rrggbb badge
  *  colour (EntityMapping.badgeColor) substituting for the category's hue. */
 export function categorySurface(category: Category, state: DeviceSurfaceState, override?: string): CategorySurface {
+  // Every `fill` below is OPAQUE — a state tint composited onto the app's
+  // solid panel colour, never a bare rgba(). See surfaceBase() for the bug
+  // that made this non-negotiable.
+  const base = surfaceBase();
   switch (state) {
     case "active": {
       const hue = override ?? categoryColor(category);
-      return { fill: withAlpha(hue, 0.14), glyph: hue, ring: hue };
+      return { fill: tintOver(hue, 0.18, base), glyph: hue, ring: hue };
     }
     case "alert": {
       const danger = cssVar("--status-danger") || FALLBACK_DANGER;
-      return { fill: withAlpha(danger, 0.14), glyph: danger, ring: danger };
+      return { fill: tintOver(danger, 0.18, base), glyph: danger, ring: danger };
     }
     case "unavailable": {
       const warning = cssVar("--status-warning") || FALLBACK_WARNING;
-      return {
-        fill: cssVar("--bg-input") || FALLBACK_NEUTRAL_FILL,
-        glyph: warning, ring: warning, ringDashed: true,
-      };
+      return { fill: base, glyph: warning, ring: warning, ringDashed: true };
     }
     case "off":
     default:
       return {
-        fill: cssVar("--bg-input") || FALLBACK_NEUTRAL_FILL,
+        fill: base,
         glyph: cssVar("--text-secondary") || FALLBACK_NEUTRAL_GLYPH,
         ring: null,
       };
