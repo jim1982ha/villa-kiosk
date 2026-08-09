@@ -167,13 +167,12 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
     }
     case "unavailable": {
       const warning = cssVar("--status-warning") || FALLBACK_WARNING;
-      const danger = cssVar("--status-danger") || FALLBACK_DANGER;
-      // A dashed ring and nothing else — no second solid edge — drawn HEAVY
-      // and in the danger red rather than the category's own colour, so a
-      // device Home Assistant has lost is unmistakable at map scale instead of
-      // reading as just another tinted badge. The glyph stays amber: the ring
-      // is the alarm, the glyph is still the reading that is missing.
-      return { fill: base, glyph: warning, ring: danger, ringDashed: true, ringBold: true };
+      // ONE dashed ring, drawn heavy, in the unavailable amber — the colour
+      // the Map colours legend documents for "Home Assistant has lost contact"
+      // (utils/stateColors STATUS_COLOR). It was briefly the danger red, which
+      // made a device that is merely unreachable look like a confirmed alarm
+      // and put a second answer next to the legend's.
+      return { fill: base, glyph: warning, ring: warning, ringDashed: true, ringBold: true };
     }
     case "off":
     default:

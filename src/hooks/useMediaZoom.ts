@@ -116,6 +116,14 @@ export function useMediaZoom<T extends HTMLElement>(): MediaZoom<T> {
     };
 
     const onWheel = (e: WheelEvent) => {
+      // A trackpad's two-finger SIDEWAYS swipe is a wheel event with deltaX and
+      // almost no deltaY. Treating every wheel as zoom meant that gesture read
+      // `deltaY < 0 === false` and zoomed OUT — so swiping across a feed to
+      // reach the next camera did the one thing it must not. While the feed is
+      // unzoomed a horizontal wheel is left alone for CameraPanel to use; once
+      // zoomed it belongs here again, as the pan of a magnified image.
+      // A pinch arrives as ctrl+wheel, which is vertical, so it is unaffected.
+      if (live.current.scale <= MIN_SCALE && Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       e.preventDefault();
       const next = clamp(live.current.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), MIN_SCALE, MAX_SCALE);
       if (next <= MIN_SCALE) { setScale(1); setTx(0); setTy(0); }

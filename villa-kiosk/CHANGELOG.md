@@ -1,3 +1,17 @@
+## 2.180.0
+
+### Reverted — piles are laid out on a ring again, always
+
+2.178.0 also picked the pile's SHAPE, so a line stayed a line. The shape test was camera-independent, but which layout applied was not stable: a pile gains one off-axis member as the zoom changes, the layout switches wholesale, and every badge in it jumps. One layout for every pile is worth more than a better fit for some.
+
+### Fixed — an unavailable badge carried two rings
+
+The dashed ring is baked into the badge image, and the card's own border was drawn on top of it, so the badge showed a solid outer ring with a dotted one inside. The card border now stands down whenever the ring is dashed. The colour is back to the unavailable amber the Map colours legend documents — red said "confirmed alarm" for a device that is merely unreachable.
+
+### Fixed — swiping sideways on a camera feed zoomed instead of changing camera
+
+A trackpad swipe is a wheel event with `deltaX`, and the zoom hook treated every wheel as zoom. It now leaves a horizontal wheel alone while the feed is unzoomed, and the panel steps camera with it. Zoomed, the wheel still belongs to the zoom, so panning is unchanged.
+
 ## 2.179.0
 
 ### Added — a merged room chip now asks which room you meant

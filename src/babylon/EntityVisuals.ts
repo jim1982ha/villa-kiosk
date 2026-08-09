@@ -443,17 +443,6 @@ const BADGE_MIN_GAP_PX = 6;
  * which is why there is no separate member cap to keep in step with it.
  */
 const SPREAD_MAX_RADIUS_WIDTHS = 2;
-/**
- * How flat a pile has to be before it is opened out along its own axis instead
- * of onto a ring — the ratio of its two principal spreads, 0 for perfectly
- * collinear devices and 1 for a circular cluster.
- *
- * Derived from WORLD positions alone, so a pile's shape is a property of the
- * DEVICES: it cannot flip with zoom, tilt or orbit, and changes only when the
- * pile's membership does. Below this, four sockets in a line stay a line
- * rather than being re-seated as a square.
- */
-const SPREAD_LINE_ANISOTROPY = 0.35;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -2680,7 +2669,11 @@ export class EntityVisuals {
       // bakes the SAME state so its stroke colour agrees with the card.
       const surface = categorySurface(lbl.category, state, override);
       lbl.badge.background = surface.fill;
-      lbl.badge.thickness = surface.ring ? BADGE_RING_THICKNESS : 0;
+      // A DASHED ring is baked into the glyph image, so the card's own
+      // Rectangle border must stand down — otherwise the badge carries two
+      // rings at once, a solid one outside and the dashed one within it, which
+      // is what an unavailable device was showing.
+      lbl.badge.thickness = surface.ring && !surface.ringDashed ? BADGE_RING_THICKNESS : 0;
       lbl.badge.color = surface.ring ?? "transparent";
       lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, state, override, BADGE_INSET_CARD);
       // The inline value shares the card's surface, so it must track the same
@@ -3027,70 +3020,24 @@ export class EntityVisuals {
         if (w > need) need = w;
       }
     }
-    const needWorld = need / pxPerWorld;
 
     let wcx = 0, wcz = 0;
     for (const i of members) { wcx += shown[i].wx; wcz += shown[i].wz; }
     wcx /= n; wcz /= n;
 
-    // ── Which SHAPE is this pile? ─────────────────────────────────────────
-    // Four sockets in a line and four devices round a ceiling rose are not the
-    // same problem, and a ring answers only the second. Seating a line onto a
-    // ring keeps the members' cyclic order but throws away the fact that they
-    // were a LINE, so opening the pile reads as a rearrangement rather than as
-    // the badges breathing apart — reported from three screenshots where four
-    // badges in a column became a 2x2 block.
-    //
-    // The pile's own covariance says which it is: the ratio of the two
-    // principal spreads is 0 for perfectly collinear devices and 1 for a
-    // circular cluster. Computed from WORLD positions only, so the choice is a
-    // property of the DEVICES and cannot flip with zoom, tilt or orbit — it
-    // changes only when the pile's membership does.
-    let sxx = 0, szz = 0, sxz = 0;
-    for (const i of members) {
-      const dx = shown[i].wx - wcx, dz = shown[i].wz - wcz;
-      sxx += dx * dx; szz += dz * dz; sxz += dx * dz;
-    }
-    sxx /= n; szz /= n; sxz /= n;
-    const mid = (sxx + szz) / 2;
-    const halfDiff = Math.hypot((sxx - szz) / 2, sxz);
-    const major = mid + halfDiff;
-    const minor = mid - halfDiff;
-    const elongation = major > 1e-9 ? Math.sqrt(Math.max(0, minor) / major) : 1;
-
     const order: number[] = [];
     const seatWx: number[] = [];
     const seatWz: number[] = [];
 
-    let laid = false;
-    if (elongation < SPREAD_LINE_ANISOTROPY) {
-      // ── A line stays a line ─────────────────────────────────────────────
-      // Members are spaced evenly along their own principal axis, in the order
-      // they already lie along it, so nothing crosses anything and a column
-      // stays a column. Spacing is exactly the clearance needed, so every pair
-      // clears by construction — the same guarantee the ring gives, on a
-      // different shape.
-      const axis = 0.5 * Math.atan2(2 * sxz, sxx - szz);
-      const ux = Math.cos(axis), uz = Math.sin(axis);
-      const along = members
-        .map((i) => ({ i, t: (shown[i].wx - wcx) * ux + (shown[i].wz - wcz) * uz }))
-        .sort((a, b) => a.t - b.t || shown[a.i].id.localeCompare(shown[b.i].id));
-      laid = true;
-      for (let k = 0; k < n; k++) {
-        const t = (k - (n - 1) / 2) * needWorld;
-        const sx = wcx + ux * t, sz = wcz + uz * t;
-        // Collapsing the pile's slight sideways scatter onto the axis costs
-        // travel; if that exceeds the budget the line is refused and the ring
-        // is tried instead.
-        const moved = Math.hypot(sx - shown[along[k].i].wx, sz - shown[along[k].i].wz) * pxPerWorld;
-        if (moved > budgetPx) { laid = false; break; }
-        order.push(along[k].i); seatWx.push(sx); seatWz.push(sz);
-      }
-      if (!laid) { order.length = 0; seatWx.length = 0; seatWz.length = 0; }
-    }
-
-    if (!laid) {
-      // ── Anything else opens onto a ring ─────────────────────────────────
+    {
+      // ── The pile opens onto a ring ──────────────────────────────────────
+      // 2.178.0 tried picking the SHAPE too — collinear piles spread along
+      // their own axis, clusters onto a ring — so a column would stay a
+      // column. Reverted: a pile's membership changes with zoom, so a pile
+      // that was a line gains one off-axis member and switches layout
+      // wholesale, and every badge in it jumps. The shape test itself was
+      // camera-independent; what was not stable was WHICH LAYOUT applied, and
+      // one layout for every pile is worth more than a better fit for some.
       // n badges evenly spaced on a circle of radius R sit 2·R·sin(π/n) apart,
       // so the radius that clears the widest pair is arithmetic with no search
       // in it, and every pair clears by construction. No radius inside the

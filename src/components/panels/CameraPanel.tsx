@@ -59,6 +59,12 @@ const TAP_MAX_MS = 400;
 // once already zoomed in, so at 1x this gesture is otherwise unused.
 const SWIPE_MIN_PX = 48;
 const SWIPE_DIR_RATIO = 1.6;
+// The same gesture from a trackpad or a tilt wheel arrives as wheel events, not
+// as a drag, so it needs its own threshold: total sideways travel before a step
+// fires, and a quiet period that ends the gesture so one long swipe cannot walk
+// through every camera.
+const WHEEL_SWIPE_PX = 120;
+const WHEEL_SWIPE_IDLE_MS = 320;
 // How often to refresh the fallback snapshot, and how many consecutive snapshot
 // failures to tolerate before declaring the camera unavailable.
 const SNAPSHOT_INTERVAL_MS = 800;
@@ -167,6 +173,30 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   zoomedRef.current = zoom.zoomed;
   const stepCameraRef = useRef(stepCamera);
   stepCameraRef.current = stepCamera;
+
+  // ── Sideways scroll steps between cameras (trackpad / tilt wheel) ────────
+  // The drag gesture below covers touch. A trackpad swipe is not a drag: it
+  // arrives as wheel events with deltaX, which useMediaZoom used to swallow as
+  // a zoom — so the gesture zoomed the picture instead of changing camera. The
+  // hook now leaves a horizontal wheel alone while the feed is unzoomed, and it
+  // is handled here. Zoomed, it goes back to the hook as a pan, so nothing
+  // about the zoom behaviour changes.
+  const wheelTravel = useRef(0);
+  const wheelIdle = useRef(0);
+  const onFeedWheel = useCallback((e: React.WheelEvent) => {
+    if (zoom.zoomed || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    window.clearTimeout(wheelIdle.current);
+    // A gesture ends after a quiet moment, so one long swipe steps once rather
+    // than walking through every camera.
+    wheelIdle.current = window.setTimeout(() => { wheelTravel.current = 0; }, WHEEL_SWIPE_IDLE_MS);
+    wheelTravel.current += e.deltaX;
+    if (Math.abs(wheelTravel.current) < WHEEL_SWIPE_PX) return;
+    // Content follows the gesture, matching the touch swipe: scrolling right
+    // (positive deltaX) brings the NEXT camera in from the right.
+    stepCameraRef.current(wheelTravel.current > 0 ? 1 : -1);
+    wheelTravel.current = 0;
+  }, [zoom.zoomed]);
+  useEffect(() => () => window.clearTimeout(wheelIdle.current), []);
 
   // Long-press (or hold, on mouse) either prev/next arrow opens a picker
   // listing every camera by name — jump straight to one instead of cycling
@@ -735,6 +765,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         // under the finger that is pressing it.
         onPointerDown={onFeedPointerDown}
         onPointerUp={onFeedPointerUp}
+        onWheel={onFeedWheel}
         onPointerCancel={() => { tapStart.current = null; }}
       >
         {/* Zoom/pan layer — FIRST child so the controls below paint on top of
