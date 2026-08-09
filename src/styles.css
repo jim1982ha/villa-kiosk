@@ -3633,26 +3633,10 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 
 /* --- Merged room-chip chooser (RoomChoiceSheet) --------------------------
-   A consequence of a tap on the map, not a departure from it: the same glass
-   pill language as the rest of the HUD, centred, sized to its content. It is
-   deliberately not .modal — a modal card would read as having left the villa
-   behind, when the user is still very much looking at it. */
-.room-choice-backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
-.room-choice-sheet {
-  min-width: min(320px, calc(100vw - 48px));
-  max-width: min(420px, calc(100vw - 48px));
-  padding: 14px;
-  border-radius: 18px;
-  background: var(--bg-overlay);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--hairline);
-  box-shadow: 0 18px 48px var(--shadow);
-}
-.room-choice-title {
-  font-family: var(--font-ui); font-size: var(--text-2xs); font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-dim);
-  margin: 2px 4px 10px;
-}
+   Only the bits the shared .modal shell cannot know: how wide this particular
+   card wants to be, and the rows inside it. Centring, scrim, entry animation
+   and safe-area padding all come from .modal-backdrop / .modal. */
+.room-choice-modal { width: min(360px, calc(100vw - 48px)); padding: 14px; }
 .room-choice-list { display: flex; flex-direction: column; gap: 4px; }
 .room-choice-row {
   display: flex; align-items: center; gap: 10px;
@@ -3664,8 +3648,8 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .room-choice-icon { flex: 0 0 auto; color: var(--text-dim); }
 .room-choice-row:hover .room-choice-icon { color: var(--accent); }
 .room-choice-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The count is why the row is distinguishable from its neighbour, so it gets
-   the same count-pill treatment the chip itself uses on the map. */
+/* The count is why one row is distinguishable from the next, so it reuses the
+   count-pill treatment the chip itself carries on the map. */
 .room-choice-count {
   flex: 0 0 auto; min-width: 24px; padding: 2px 8px;
   border-radius: 999px; background: var(--bg-modal);

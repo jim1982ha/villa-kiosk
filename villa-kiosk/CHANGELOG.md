@@ -1,3 +1,13 @@
+## 2.190.0
+
+### Fixed — badges summarised far too early on a phone
+
+2.187.0 scaled the travel budget down on small screens, which was backwards: a badge is the same size on a phone, so the clearance a pile needs there is the same too, and a smaller budget just meant no pile could be opened at all. The budget is the same on every screen again, and raised from 1.1 to 1.35 badge widths — piles of up to five now open out instead of two, on every form factor. Desktop keeps the ~59px it already had.
+
+### Fixed — the room chooser rendered against the corner instead of centred
+
+It was styling its own backdrop and card rather than using the app's one modal shell, and so reproduced — badly — layout that shell already does. It now uses `.modal-backdrop` + `.modal` like every other dialog and inherits the centring, scrim, entry animation and safe-area padding.
+
 ## 2.189.0
 
 ### Changed — dropped "(ongoing)" from the history tooltip

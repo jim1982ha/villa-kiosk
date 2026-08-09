@@ -12,10 +12,12 @@
 // device count, and a tap goes there — the same "disambiguate rather than
 // guess" pattern a map uses when several places share a pin.
 //
-// Deliberately NOT a full modal: it is a lightweight consequence of a tap on
-// the map, so it uses the same centred-pill language as the rest of the HUD and
-// dismisses on backdrop, Escape or choosing. A modal would imply the map had
-// been left behind.
+// Uses the app's ONE modal shell (.modal-backdrop + .modal), like every other
+// dialog: it inherits the centring, the scrim, the entry animation and the
+// safe-area padding from there rather than restating them. The first version
+// styled its own backdrop and card, and drifted immediately — it rendered
+// against the top-left corner instead of centred, because it was reproducing
+// layout the shared shell already does correctly.
 
 import { MapPin } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -36,16 +38,16 @@ export default function RoomChoiceSheet({
   // dialog in the app gets them.
   const dialogRef = useModalA11y(onClose);
   return (
-    <div className="modal-backdrop room-choice-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
-        className="room-choice-sheet"
+        className="modal room-choice-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Choose a room"
       >
-        <div className="room-choice-title">Which room?</div>
+        <div className="settings-section-title">Which room?</div>
         <div className="room-choice-list">
           {choices.map((c) => (
             <button
