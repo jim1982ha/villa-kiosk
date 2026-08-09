@@ -14,6 +14,7 @@ import DualSparkline from "./DualSparkline";
 import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
 import { fetchHistory } from "@/ha/HAHistoryAPI";
+import { useHistoryRange, HistoryHeader } from "./historyRange";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HistoryPoint } from "@/types/ha.types";
@@ -48,6 +49,9 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   });
   const numericRows = rows.filter((r) => r.numeric !== undefined);
   const numericIds = numericRows.map((r) => r.id).join(",");
+  // One range for the whole group — a temp+humidity pair plotted over two
+  // different windows would invite exactly the wrong comparison.
+  const { range, picker } = useHistoryRange();
 
   useEffect(() => {
     // History is fetched token-less through the add-on's Supervisor proxy.
@@ -55,13 +59,13 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
     let cancelled = false;
     Promise.all(
       numericIds.split(",").map((id) =>
-        fetchHistory(id, 24).then((h) => [id, h] as const),
+        fetchHistory(id, range.hours).then((h) => [id, h] as const),
       ),
     )
       .then((entries) => { if (!cancelled) setHistory(Object.fromEntries(entries)); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [numericIds]);
+  }, [numericIds, range.hours]);
 
   return (
     <BasePanel
@@ -99,7 +103,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
 
       {numericRows.length === 2 ? (
         <div className="field">
-          <label className="entity-label">Last 24 hours</label>
+          <HistoryHeader title={range.title} picker={picker} />
           <DualSparkline
             a={{ data: history[numericRows[0].id] ?? [], color: SERIES_COLORS[0], unit: numericRows[0].unit, label: numericRows[0].label }}
             b={{ data: history[numericRows[1].id] ?? [], color: SERIES_COLORS[1], unit: numericRows[1].unit, label: numericRows[1].label }}
@@ -116,7 +120,12 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       ) : (
         numericRows.map((r, i) => (
           <div className="field" key={r.id}>
-            <label className="entity-label">{r.label} — last 24 hours</label>
+            {/* The picker rides the FIRST series only — it drives one shared
+                fetch, so repeating it per series would imply each chart had
+                its own window. */}
+            {i === 0
+              ? <HistoryHeader title={`${r.label} — ${range.title.toLowerCase()}`} picker={picker} />
+              : <label className="entity-label">{r.label} — {range.title.toLowerCase()}</label>}
             <Sparkline data={history[r.id] ?? []} color={SERIES_COLORS[i % SERIES_COLORS.length]} unit={r.unit} />
           </div>
         ))

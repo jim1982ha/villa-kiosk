@@ -1,3 +1,13 @@
+## 2.156.0
+
+### Changed — the history range picker now covers every chart, not just the state timeline
+
+2.154.0 added 1h / 12h / 24h / 7d to the state timeline. The numeric views — a sensor's own sparkline, and a device group's temperature/humidity pair — were still pinned to a hardcoded 24 hours, so a panel could offer a range on one chart while the chart beside it silently stayed on a different window.
+
+The control is now one shared `useHistoryRange` hook that hands back both the chosen range and the rendered picker, used by all five history views (state timeline, enum timeline, binary-sensor timeline, single sparkline, dual sparkline). Returning the picker alongside the value is deliberate: it makes wiring up only half of it — a range that changes the fetch but no way to change the range, or vice versa — impossible to express.
+
+Two consequences worth stating. A device group gets ONE picker for the whole group rather than one per series: a temperature and a humidity trend plotted over different windows would invite exactly the wrong comparison. And where several sparklines stack, the picker rides the first one only, since they all share a single fetch and repeating it would imply each chart had its own window.
+
 ## 2.155.0
 
 ### Added — swipe left/right across the feed to change camera

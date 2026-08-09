@@ -13,6 +13,7 @@ import type { PanelProps } from "@/types/panel.types";
 import type { HistoryPoint, StateHistoryPoint } from "@/types/ha.types";
 import { useConfig } from "@/config/ConfigContext";
 import { fetchHistory, fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { useHistoryRange, HistoryHeader } from "./historyRange";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
@@ -33,6 +34,9 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   // panel just doesn't go through that shared hook, since it fetches ONE of
   // two different history shapes depending on isBinary/isEnum).
   const [historyLoading, setHistoryLoading] = useState(true);
+  // Shared range control — the enum timeline and the numeric sparkline below
+  // both read it, so a sensor that shows either always offers the same window.
+  const { range, picker } = useHistoryRange();
 
   const isBinary = mapping.type === "binary_sensor";
   const unavailable = isUnavailable(entity);
@@ -71,18 +75,18 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
     let cancelled = false;
     setHistoryLoading(true);
     if (isBinary || isEnum) {
-      fetchStateHistory(mapping.entityId, 24)
+      fetchStateHistory(mapping.entityId, range.hours)
         .then((h) => { if (!cancelled) { setStateHistory(h); setHistoryLoading(false); } })
         .catch(() => { if (!cancelled) setHistoryLoading(false); });
     } else {
-      fetchHistory(mapping.entityId, 24)
+      fetchHistory(mapping.entityId, range.hours)
         .then((h) => { if (!cancelled) { setHistory(h); setHistoryLoading(false); } })
         .catch(() => { if (!cancelled) setHistoryLoading(false); });
     }
     return () => {
       cancelled = true;
     };
-  }, [mapping.entityId, isBinary, isEnum]);
+  }, [mapping.entityId, isBinary, isEnum, range.hours]);
 
   const BinaryIcon = classInfo.icon;
   // Same resolution the 3D badge uses (babylon/badgeIconKeys.ts) — device_class,
@@ -120,7 +124,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
             </div>
           </div>
           <div className="field">
-            <label className="entity-label">Last 24 hours</label>
+            <HistoryHeader title={range.title} picker={picker} />
             <StateTimeline
               data={stateHistory}
               colorFor={(s) => binarySensorColor(s, alertState)}
@@ -140,13 +144,14 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
             {!unavailable && !isEnum && <span className="value-unit">{unit}</span>}
           </div>
           <div className="field">
-            <label className="entity-label">Last 24 hours</label>
+            <HistoryHeader title={range.title} picker={picker} />
             {isEnum ? (
               <StateTimeline
                 data={stateHistory}
                 colorFor={enumPalette!}
                 legend={enumDistinctStates.map((s) => ({ state: s, color: enumPalette!(s) }))}
                 loading={historyLoading}
+                bucketMinutes={range.bucketMinutes}
               />
             ) : (
               <Sparkline data={history} color={LEVEL_COLOR[level]} unit={unit} loading={historyLoading} />
