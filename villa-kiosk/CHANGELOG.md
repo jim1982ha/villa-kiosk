@@ -1,3 +1,19 @@
+## 2.153.0
+
+### Fixed — badges could visibly overlap, and a room could never be opened again
+
+Two reports, one screenshot each: three badges drawn on top of one another in a bedroom, and a room whose chip stayed a chip at every zoom level. Both are regressions I introduced, and they are the two halves of the same mistake.
+
+**The overlap** came from 2.152.0. Trying to stop the badge-size stepper from collapsing the badges it enlarged, that release divided the user's size preference back out of the grouping test. It worked, in the sense that raising the size no longer collapsed anything — because the layout was now reasoning about badges 2.25× smaller than the ones being painted. Genuine overlaps went undetected, so neither the fan nor the collapse fired and the badges simply sat on each other. **A layout decision may never use different geometry from the renderer**; the footprint is the drawn one again.
+
+**The unreachable room** came from 2.150.0, which collapsed on first touch and removed the fan tier. A collided pile went straight to its room's chip with no layout attempt, so fanning only ever ran for a huddle of co-located devices — never for two devices that merely touched at the current zoom. With no middle state left, such a room could not be opened by any amount of zooming.
+
+Both are fixed by restoring the three outcomes, tried in order: a badge on its own device; the pile laid out side by side near their devices; the room's chip when neither is possible. That is also what the report actually asked for — *never overlapping, either side by side or summarised* — and it is the headroom 2.152.0 was reaching for, obtained honestly rather than by shrinking the geometry. `pileFitsItsRoom` remains the guard: a row that would not fit its room, or that would slide a badge far from the device it labels, is refused and the room summarises instead.
+
+The co-located-units pre-pass added in 2.150.0 is removed with it. Its purpose was to stop naturally-stacked devices from being what triggered a collapse; with fanning restored a co-located pair is simply a pile that fans, which is the outcome it existed to protect. It was also a second O(n²) sweep over every visible badge on every layout pass, so it is deleted rather than left as decoration — the grouping is one union-find again, as it was before 2.150.0.
+
+The pan/orbit/tilt invariance the file header warns about is intact throughout: the test remains a pure function of world anchor positions and the quantised zoom, with zero hysteresis.
+
 ## 2.152.0
 
 ### Fixed — raising the badge size collapsed the badges it was supposed to enlarge
