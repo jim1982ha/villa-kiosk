@@ -418,19 +418,15 @@ const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
  * between this number and how early the room chip appears. They are the same
  * dial read from two ends.
  *
- * It was set to 0 in 2.159.0, which is why badges could not be made much
- * bigger: a fan and its own light are mounted on ONE fixture, roughly 24px
- * apart on screen at a normal framing, so with zero tolerance no badge wider
- * than 24px could ever be drawn there — no matter how much empty floor the
- * room has, because badges are anchored to devices, not spread over free
- * space. Half a width doubles that ceiling.
- *
- * Half is also what a map does: Google/Apple pins overlap constantly at city
- * zoom and stay perfectly readable, because a marker is recognisable and
- * tappable long before it is fully clear of its neighbour. The tap target is
- * still whole — the badge is not clipped, just partly behind another.
+ * Back to ZERO in 2.173.0, and it should stay there. It was raised to half a
+ * width in 2.168.0 as the only lever available while badges were pinned to
+ * their anchors — the size ceiling had to be bought from somewhere, and
+ * overlap was all there was. 2.169.0 let badges move again, which buys the
+ * same headroom without the cost, so the tolerance became a licence to
+ * overlap that nothing needed. Reported, correctly, as badges sitting on top
+ * of each other.
  */
-const GROUP_OVERLAP_ALLOW_WIDTHS = 0.5;
+const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
 /**
  * The same tolerance for the READOUT pass — zero, and it stays zero.
  * Overlapping icons read as depth; overlapping TEXT reads as corruption, and
@@ -3063,32 +3059,62 @@ export class EntityVisuals {
     // A single distance rather than a factor also means a badge that was never
     // crowded moves as little as everyone else — being swept into a pile by
     // transitivity no longer costs it a journey.
+    // ── Scale the pile's own geometry; do not push everyone out equally ────
+    // One shared push distance was the 2.172.0 arrangement, and it has a hole:
+    // pushing two badges outward by the same amount along the SAME bearing
+    // does not separate them at all. Members sitting on the same side of the
+    // pile's centre stayed exactly as close as they started, which is what was
+    // reported as badges still overlapping.
+    //
+    // Scaling the pile does separate every pair, because pairwise distance
+    // scales with it — that is the property a uniform push lacks. Each badge
+    // moves outward by however much the scale implies FOR ITS OWN radius, so a
+    // member near the centre barely moves and one further out moves more,
+    // which is exactly what opening a cluster looks like.
+    //
+    // The magnitude is still fully quantised: the scale comes from WORLD
+    // distances and the quantised pixels-per-world-unit, never from live
+    // projected spacing. Inside a zoom step nothing moves; crossing one
+    // changes it once and crossing back undoes it exactly. That was the fix in
+    // 2.172.0 and it is kept — only the shape of the transform changed.
     const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
     if (pxPerWorld <= 0) return;
-    let push = 0;
+
+    let wcx = 0, wcy = 0, wcz = 0;
+    for (const i of members) { wcx += shown[i].wx; wcy += shown[i].wy; wcz += shown[i].wz; }
+    wcx /= members.length; wcy /= members.length; wcz /= members.length;
+
+    let k = 1;
+    let widestNeed = 0;
     for (let a = 0; a < members.length; a++) {
       for (let b = a + 1; b < members.length; b++) {
         const i = members[a], j = members[b];
         const need = boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx;
+        if (need > widestNeed) widestNeed = need;
         const d = Math.hypot(shown[j].wx - shown[i].wx, shown[j].wy - shown[i].wy, shown[j].wz - shown[i].wz);
-        // Both badges move, so each only has to cover half the shortfall —
-        // the same arithmetic pileCanOpen used to decide this pile could stay.
-        const deficit = (need - d * pxPerWorld) / 2;
-        if (deficit > push) push = deficit;
+        if (d <= 1e-6) continue; // co-located: no geometry to scale, seeded below
+        const f = need / (d * pxPerWorld);
+        if (f > k) k = f;
       }
     }
-    if (push <= 0) return; // already clear
-    push = Math.min(push, SPREAD_MAX_TRAVEL_WIDTHS * BADGE_DIAMETER_PX * scale);
+    if (k <= 1 && widestNeed === 0) return;
 
-    // The bearing stays live: it is the direction the device actually lies in
-    // from the pile's centre, so the arrangement turns with the villa as the
-    // camera orbits, exactly as the furniture does. Only the DISTANCE had to
-    // be camera-independent, and now is.
+    const maxTravel = SPREAD_MAX_TRAVEL_WIDTHS * BADGE_DIAMETER_PX * scale;
     for (let a = 0; a < members.length; a++) {
+      const i = members[a];
+      const rw = Math.hypot(shown[i].wx - wcx, shown[i].wy - wcy, shown[i].wz - wcz);
+      // Two devices on one fixture have a radius of zero, so scaling can never
+      // move them. They get half the clearance they need instead, along the
+      // bearing hashed from their entity_id — the only case where a badge's
+      // direction is invented rather than observed, and the only case where
+      // there was no direction to observe.
+      let mag = rw <= 1e-6 ? widestNeed / 2 : rw * (k - 1) * pxPerWorld;
+      if (mag <= 0) continue;
+      mag = Math.min(mag, maxTravel);
       const r = Math.hypot(vx[a], vy[a]);
       if (r <= 0) continue;
-      shown[members[a]].offX = (vx[a] / r) * push;
-      shown[members[a]].offY = (vy[a] / r) * push;
+      shown[i].offX = (vx[a] / r) * mag;
+      shown[i].offY = (vy[a] / r) * mag;
     }
   }
 

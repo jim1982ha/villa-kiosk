@@ -1,3 +1,19 @@
+## 2.173.0
+
+### Fixed — badges still sat on top of one another
+
+Two separate causes, both mine, and both now removed.
+
+**The overlap was permitted.** 2.168.0 raised the tolerance to half a badge width, and at the time that was the only lever there was: badges were pinned to their anchors, so the size ceiling had to be bought from somewhere and overlap was the only currency. 2.169.0 let badges move again, which buys the same headroom without the cost — and the tolerance stayed, quietly licensing exactly what was reported. It is back to zero and should stay there: movement is the mechanism now, not permission to overlap.
+
+**And a uniform push cannot separate everything.** 2.172.0 moved every member of a pile outward by ONE shared distance, which fixed the wild sliding but has a hole in it: pushing two badges outward by the same amount along the SAME bearing does not separate them at all. Any members sitting on the same side of the pile's centre stayed exactly as close as they started, however large the push got.
+
+Scaling the pile does separate every pair, because pairwise distance scales with it — the property a uniform push lacks. Each badge now moves outward by however much the scale implies for its own radius, so a member near the centre barely moves and one further out moves more, which is what opening a cluster actually looks like.
+
+The quantisation that made 2.172.0 predictable is kept exactly: the scale is derived from WORLD distances and the quantised pixels-per-world-unit, never from live projected spacing. Inside a zoom step nothing moves at all; crossing one changes the arrangement once, and crossing back undoes it exactly. Only the shape of the transform changed, not what it depends on.
+
+Two devices on a single fixture have a radius of zero, so no scale can move them; they take half the clearance they need along the bearing hashed from their entity_id. That remains the one case where a badge's direction is invented rather than observed — and the only case where there was no direction to observe.
+
 ## 2.172.0
 
 ### Fixed — badges slid around, a lot and unpredictably, when the zoom changed
