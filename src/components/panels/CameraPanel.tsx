@@ -243,7 +243,6 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     const el = zoom.ref.current;
     if (!el || !canCycle) return;
     let downX = 0, downY = 0, downT = 0, tracking = false;
-    const SWIPE_MIN_PX = 60;
     const SWIPE_MAX_MS = 600;
     const onDown = (e: PointerEvent) => {
       if (zoomedRef.current) return;
@@ -257,7 +256,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
       const dx = e.clientX - downX, dy = e.clientY - downY;
       if (Date.now() - downT <= SWIPE_MAX_MS
           && Math.abs(dx) >= SWIPE_MIN_PX
-          && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          && Math.abs(dx) > Math.abs(dy) * SWIPE_DIR_RATIO) {
         stepCameraRef.current(dx < 0 ? 1 : -1); // swipe left -> next, right -> previous
       }
     };
@@ -440,17 +439,15 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
 
-    // Swipe first: it is the only reading of a long horizontal drag, and
-    // checking it before the tap test means a swipe can never also toggle the
-    // chrome. Skipped while zoomed, where the same drag is a pan (and
-    // useMediaZoom has already consumed it).
-    if (!zoom.zoomed && Math.abs(dx) > SWIPE_MIN_PX && Math.abs(dx) > Math.abs(dy) * SWIPE_DIR_RATIO) {
-      // Content follows the finger: dragging LEFT pulls the next camera in
-      // from the right, which is the direction every carousel uses.
-      if (cameraIds.length > 1) stepCamera(dx < 0 ? 1 : -1);
-      return;
-    }
-
+    // Swipe is NOT handled here — the pointer listener above owns it. It was
+    // handled in both places, so one drag stepped TWICE: two forward on a
+    // left swipe, two back on a right one, which with three cameras lands on
+    // the same entry either way and read as "every swipe goes to the next
+    // camera". A gesture gets exactly one reader.
+    //
+    // No guard is needed against a swipe also toggling the chrome: the tap
+    // test below requires the finger to have travelled less than TAP_SLOP_PX,
+    // and a swipe travels several times that.
     if (Math.hypot(dx, dy) > TAP_SLOP_PX) return;
     if (performance.now() - start.t > TAP_MAX_MS) return;
     if (chromeVisible) hideChrome(); else bumpChrome();

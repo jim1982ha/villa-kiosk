@@ -1,3 +1,13 @@
+## 2.181.0
+
+### Changed — badges are never moved; a crowded room becomes its pill
+
+Opening a collided pile out was tried three ways (a grid, a scale, a ring) and all three failed the same way: a pile's membership changes with the zoom, so crossing a step rearranged badges belonging to devices that had not moved. There are now two outcomes and no third — a badge on its device, or the whole room as one pill — which is a single predictable event and reuses the merging that already existed.
+
+### Fixed — every camera swipe went to the next camera, whichever way you swiped
+
+Two handlers were reading the same gesture, so one drag stepped twice: two forward on a left swipe, two back on a right one, which with three cameras lands on the same entry either way. A gesture now has exactly one reader.
+
 ## 2.180.0
 
 ### Reverted — piles are laid out on a ring again, always
