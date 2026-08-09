@@ -275,7 +275,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   // devices in a room fall within the same clash radius). 1.0x is the badge's
   // native (unscaled) size — still user-adjustable via the Settings slider.
   entityIconScale: 1.0,
-  badgeStyle: "classic",
+  badgeStyle: "card",
   showSummaryBar: true,
   deviceGroups: [],
 };

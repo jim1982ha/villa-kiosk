@@ -1,3 +1,23 @@
+## 2.166.0
+
+### Fixed — one tight pair hid every badge in the room
+
+Two screenshots one size-step apart: at the largest badge size that showed anything, the icons were barely a dozen pixels across — and one step up, all seven of the Master Bedroom's badges became a single "Master Bedroom 7" chip. 2.165.0 helped and did not go near the real disproportion.
+
+Clustering was decided **per room**. Any pile of two badges anywhere in a room set a flag on the whole room, and every badge in it was hidden. So a bedroom with seven devices, two of them mounted a hand's width apart, lost all seven the moment those two touched. The other five were nowhere near anything — their own spacing was simply never the question being asked — which is why no badge size and no zoom could bring them back, and why the size stepper felt like it had a hard ceiling. It did: the ceiling belonged to the tightest pair in the room and applied to everything around it.
+
+Clustering is now decided **per pile**, which is what every map engine does — a cluster marker swallows the markers that actually overlap, and its neighbours a street away are untouched. A chip now sits at the centroid of the devices it actually swallowed, is labelled from those members' own room, counts only them, and opens only them when tapped. Everything else in the room keeps its individual badge at full size.
+
+The practical effect is that the badge size stepper now runs a long way further before anything is summarised, because raising it only collapses the specific devices that genuinely have no room — not their whole floor of the villa. A pile straddling two rooms takes the busier room's name with the existing "+1" suffix, so it says so rather than silently filing itself under one side.
+
+Nothing else about the rules moved: badges are still never displaced, never shrunk, and never allowed to overlap, and grouping is still a pure function of world position and quantised zoom.
+
+### Changed — the card badge is now the default style
+
+The two floating-badge styles were "Default" (an icon with the reading on a small pill beneath it) and "Card" (one badge with the reading inline beside the icon). The card is the better default: it is one object rather than two stacked ones, it reads at a glance from across a room, and it is the style the villa is actually being run in.
+
+The old option was labelled "Default", which would now be false, so the pair is named for what each actually looks like — **Icon** and **Card** — and the tooltips say where the reading goes. This is a per-device preference, so anyone who has already chosen a style keeps it; only devices that never touched the setting move.
+
 ## 2.165.0
 
 ### Fixed — rooms collapsed into their chip with obvious space to spare

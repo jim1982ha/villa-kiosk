@@ -297,19 +297,19 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         <div className="row badge-style-row" style={{ gap: 10, marginTop: 6 }}>
           <div className="segmented settings-row-half" role="group" aria-label="Floating badge style">
             <button
-              className={(config.badgeStyle ?? "classic") === "classic" ? "active" : ""}
+              className={(config.badgeStyle ?? "card") === "classic" ? "active" : ""}
               onClick={() => update({ badgeStyle: "classic" })}
-              aria-pressed={(config.badgeStyle ?? "classic") === "classic"}
-              title="Default badge style"
-              aria-label="Default badge style"
+              aria-pressed={(config.badgeStyle ?? "card") === "classic"}
+              title="Icon badge style — the reading sits on a small pill under the icon"
+              aria-label="Icon badge style"
             >
-              <Circle size={16} /> <span className="badge-btn-label">Default</span>
+              <Circle size={16} /> <span className="badge-btn-label">Icon</span>
             </button>
             <button
-              className={config.badgeStyle === "card" ? "active" : ""}
+              className={(config.badgeStyle ?? "card") === "card" ? "active" : ""}
               onClick={() => update({ badgeStyle: "card" })}
-              aria-pressed={config.badgeStyle === "card"}
-              title="Card badge style"
+              aria-pressed={(config.badgeStyle ?? "card") === "card"}
+              title="Card badge style — the reading sits inline beside the icon (default)"
               aria-label="Card badge style"
             >
               <CreditCard size={16} /> <span className="badge-btn-label">Card</span>

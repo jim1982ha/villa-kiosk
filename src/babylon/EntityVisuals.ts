@@ -701,7 +701,20 @@ export class EntityVisuals {
    *  one (that path-dependence was the "stays grouped when I slide back"
    *  bug — see the grouping thresholds' comment). Kept as a field only so
    *  updateClusters and pickClusterAt can read the current frame's result. */
-  private roomClustered = new Map<string, boolean>();
+  /**
+   * entity_id → the key of the PILE it was clustered into this frame, for the
+   * badges that are actually hidden behind a chip. Absent = drawn normally.
+   *
+   * This was a per-ROOM flag, and that was the disproportion behind "the room
+   * badge appears far too early": one tight pair anywhere in a room hid EVERY
+   * badge in it. A bedroom with seven devices, two of them mounted a hand's
+   * width apart, lost all seven the moment those two touched — no badge size
+   * or zoom could show the other five, because their own spacing was never the
+   * question being asked. Clustering the pile instead is what every map engine
+   * does: a cluster marker swallows the markers that actually overlap, and its
+   * neighbours a street away are untouched.
+   */
+  private clusteredPileOf = new Map<string, string>();
   /** Room-cluster chips, keyed by room name. Built lazily the first time a
    *  room clusters; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
@@ -2421,7 +2434,7 @@ export class EntityVisuals {
     // disposed control and the chips would silently stop rendering.
     for (const c of this.clusters.values()) c.node.dispose();
     this.clusters.clear();
-    this.roomClustered.clear();
+    this.clusteredPileOf.clear();
     this.labels.clear();
     this.labelLayer.rootContainer.isVisible = true;
 
@@ -2863,10 +2876,12 @@ export class EntityVisuals {
     // the honest answer: there is no view in which those two badges could
     // both be read, and drawing one on top of the other hides a device
     // without saying so.
-    this.roomClustered.clear();
+    this.clusteredPileOf.clear();
+    let pileKey = 0;
     for (const members of piles) {
       if (members.length < 2) continue;
-      for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
+      const key = String(pileKey++);
+      for (const i of members) this.clusteredPileOf.set(shown[i].id, key);
     }
 
     for (const s of shown) {
@@ -2875,7 +2890,7 @@ export class EntityVisuals {
       // moves nothing relative to anything else.
       s.lbl.container.linkOffsetXInPixels = 0;
       s.lbl.container.linkOffsetYInPixels = baseY;
-      s.lbl.container.isVisible = s.inFront && !this.roomClustered.get(this.roomOf(s.id));
+      s.lbl.container.isVisible = s.inFront && !this.clusteredPileOf.has(s.id);
     }
     this.updateClusters(shown);
   }
@@ -3144,12 +3159,20 @@ export class EntityVisuals {
     // "diagnostic" classification declutters a flat settings LIST, it isn't
     // a verdict on whether a physically-real, mapped device belongs in a
     // room's device count.
-    const groups = new Map<string, { ids: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean }>();
+    // One group per PILE (see clusteredPileOf), not per room — so a chip sits
+    // on the devices it actually swallowed and stands for those alone, while
+    // the rest of the room keeps its individual badges.
+    const groups = new Map<string, {
+      ids: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean;
+      rooms: Map<string, number>;
+    }>();
     for (const s of shown) {
+      const key = this.clusteredPileOf.get(s.id);
+      if (key === undefined) continue;
       const room = this.roomOf(s.id);
-      if (!this.roomClustered.get(room)) continue;
-      let g = groups.get(room);
-      if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(room, g); }
+      let g = groups.get(key);
+      if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false, rooms: new Map() }; groups.set(key, g); }
+      g.rooms.set(room, (g.rooms.get(room) ?? 0) + 1);
       g.ids.push(s.id);
       g.sum.addInPlace(s.lbl.anchor.getAbsolutePosition());
       const st = this.lastState.get(s.id);
@@ -3216,9 +3239,17 @@ export class EntityVisuals {
     };
 
     const chips: Chip[] = [];
-    for (const [room, g] of groups) {
+    for (const g of groups.values()) {
+      // The key is now a pile id, not a room name, so the chip takes its label
+      // from the pile's own members — the room most of them belong to. `rooms`
+      // is the number of DISTINCT rooms in the pile, which feeds the existing
+      // "+N" suffix, so a pile straddling a doorway says so instead of silently
+      // filing itself under one side.
+      let room = NO_ROOM_LABEL;
+      let best = -1;
+      for (const [r, n] of g.rooms) if (n > best) { best = n; room = r; }
       const c: Chip = {
-        room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1,
+        room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: g.rooms.size,
         ringRed: g.ringRed, unavailable: g.unavailable,
         x: 0, y: 0, halfW: 0, halfH: 0,
       };
