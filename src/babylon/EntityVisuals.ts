@@ -2926,10 +2926,19 @@ export class EntityVisuals {
     this.roomClustered.clear();
     for (const members of piles) {
       if (members.length < 2) continue;
-      // Spread first; summarise only if the pile genuinely cannot be opened
-      // out within its travel budget.
-      if (this.spreadPile(shown, boxes, members)) continue;
-      for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
+      // THE DECISION IS WORLD-SPACE; the arrangement is screen-space. Keeping
+      // those apart is the invariant this whole subsystem is built on (see the
+      // file header) and 2.169.0 broke it: spreadPile works from PROJECTED
+      // positions, and its pass/fail was gating the collapse — so panning the
+      // camera changed the projected spacing, changed whether the pile fit, and
+      // flipped whole rooms between badges and a chip. Reported as icons
+      // vanishing when the view scrolled sideways, and as flicker while moving,
+      // which is that same flip oscillating around its threshold.
+      if (!this.pileCanOpen(shown, boxes, members)) {
+        for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
+        continue;
+      }
+      this.spreadPile(shown, boxes, members);
     }
 
     for (const s of shown) {
@@ -2941,6 +2950,45 @@ export class EntityVisuals {
       s.lbl.container.isVisible = s.inFront && !this.roomClustered.get(this.roomOf(s.id));
     }
     this.updateClusters(shown);
+  }
+
+  /**
+   * Can this pile be opened out enough for its badges to clear each other?
+   *
+   * WORLD SPACE ONLY, and that is the whole point. This answers the one
+   * question that decides whether a room keeps its badges or becomes a chip,
+   * so it must be a pure function of anchor positions, the quantised zoom and
+   * the badge size — never of where the camera happens to be looking from.
+   * Pan, orbit and tilt change the PROJECTED spacing of two fixed anchors;
+   * letting that decide grouping is the exact coupling six earlier rewrites
+   * died on, and 2.169.0 quietly reintroduced it by gating the collapse on
+   * spreadPile's screen-space result.
+   *
+   * Two badges d world-units apart are drawn d * pxPerWorld apart, and each
+   * may be pushed up to the travel budget, so the widest gap obtainable is
+   * that plus twice the budget. If even that is short of what the pair needs,
+   * no arrangement can save the pile and the room summarises.
+   */
+  private pileCanOpen(
+    shown: ShownLabel[],
+    boxes: { halfW: number; halfH: number; cy: number }[],
+    members: number[],
+  ): boolean {
+    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
+    if (pxPerWorld <= 0) return false;
+    const scale = this.iconUserScale * this.iconZoomScale;
+    const gapPx = BADGE_MIN_GAP_PX * scale;
+    const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
+    const reach = 2 * SPREAD_MAX_TRAVEL_WIDTHS * BADGE_DIAMETER_PX * scale;
+    for (let a = 0; a < members.length; a++) {
+      for (let b = a + 1; b < members.length; b++) {
+        const i = members[a], j = members[b];
+        const d = Math.hypot(shown[j].wx - shown[i].wx, shown[j].wy - shown[i].wy, shown[j].wz - shown[i].wz);
+        const need = boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx;
+        if (d * pxPerWorld + reach < need) return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -2975,7 +3023,7 @@ export class EntityVisuals {
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
     members: number[],
-  ): boolean {
+  ): void {
     const scale = this.iconUserScale * this.iconZoomScale;
     const gapPx = BADGE_MIN_GAP_PX * scale;
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
@@ -3007,12 +3055,12 @@ export class EntityVisuals {
       for (let b = a + 1; b < members.length; b++) {
         const need = boxes[members[a]].halfW * allow + boxes[members[b]].halfW * allow + gapPx;
         const d = Math.hypot(vx[a] - vx[b], vy[a] - vy[b]);
-        if (d < 0.001) return false; // identical seeds: nothing to scale
+        if (d < 0.001) continue; // identical seeds: nothing this pass can scale
         const f = need / d;
         if (f > factor) factor = f;
       }
     }
-    if (factor <= 1) return true; // already clear
+    if (factor <= 1) return; // already clear
 
     // A badge must stay recognisably ON its device. Expressed in badge widths
     // and scaled with the badge, so raising the icon size does not silently
@@ -3048,21 +3096,10 @@ export class EntityVisuals {
       py.push(vy[a] * (1 + grow));
     }
 
-    // Honesty check: the clamp may have left a pair still touching. If so the
-    // pile genuinely cannot be opened out here and the room summarises, which
-    // is the same contract as before — the clamp buys a better ARRANGEMENT,
-    // never a quietly overlapping one.
-    for (let a = 0; a < members.length; a++) {
-      for (let b = a + 1; b < members.length; b++) {
-        const need = boxes[members[a]].halfW * allow + boxes[members[b]].halfW * allow + gapPx;
-        if (Math.hypot(px[a] - px[b], py[a] - py[b]) < need) return false;
-      }
-    }
     for (let a = 0; a < members.length; a++) {
       shown[members[a]].offX = px[a] - vx[a];
       shown[members[a]].offY = py[a] - vy[a];
     }
-    return true;
   }
 
   /** A badge's room, normalised — the single definition every grouping,

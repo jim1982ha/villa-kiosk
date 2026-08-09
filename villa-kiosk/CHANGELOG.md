@@ -1,3 +1,15 @@
+## 2.171.0
+
+### Fixed — badges vanished when the camera panned, and flickered while it moved
+
+Two screenshots of the same villa a small pan apart: in the first, individual badges across the kitchen, living room and master bedroom; in the second, three chips reading "Kitchen 4", "Living Room 19" and "Master Bedroom 7" where those badges had been. Badges also flickered during camera movement.
+
+Both are the same defect, and it is one this subsystem was explicitly built to prevent. Grouping must be a pure function of anchor positions and the quantised zoom, because two fixed anchors project to different screen spacings as the camera pans, orbits or tilts — so any decision taken from projected positions changes when nothing about the villa has. The file header records six earlier rewrites that died on exactly that, and 2.169.0 reintroduced it: `spreadPile` works from projected positions, and its pass/fail was gating the collapse. Panning changed the projected spacing, changed whether the pile could be opened out, and flipped whole rooms between badges and a chip. The flicker was the same flip oscillating around its threshold, several times a second, while the view was in motion.
+
+The decision and the arrangement are now separate concerns. `pileCanOpen` answers "can this pile be opened out at all" from world distances, the quantised zoom and the badge size — nothing else, so the camera cannot influence it. Two badges d world-units apart are drawn d × pxPerWorld apart and each may be pushed up to the travel budget, so the widest gap obtainable is that plus twice the budget; if even that falls short of what the pair needs, the room summarises. `spreadPile` is now purely presentational: it arranges a pile that has already been cleared to stay, and decides nothing.
+
+That split also removes the last permanent-chip case. Two devices sharing one fixture are zero world-units apart, which used to be unopenable by construction; the budget alone is now enough to separate them, and the hashed bearings give them a stable direction to separate along.
+
 ## 2.170.0
 
 ### Fixed — badges flew to the far corners of a room on one zoom step
