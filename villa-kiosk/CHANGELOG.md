@@ -1,3 +1,9 @@
+## 2.186.0
+
+### Changed — badges open onto a tighter ring
+
+The travel budget goes from 1.1 badge widths to 0.85, so a badge sits closer to the device it labels. The ring a pile needs grows with its member count, so this also means a pile of four now summarises into its room pill where it previously opened out; three still opens.
+
 ## 2.185.0
 
 ### Fixed — one trackpad swipe could skip several cameras

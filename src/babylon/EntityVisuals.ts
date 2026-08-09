@@ -446,7 +446,7 @@ const BADGE_MIN_GAP_PX = 6;
  * and the room summarises instead. That is the ONLY thing deciding pile size,
  * which is why there is no separate member cap to keep in step with it.
  */
-const SPREAD_MAX_RADIUS_WIDTHS = 1.1;
+const SPREAD_MAX_RADIUS_WIDTHS = 0.85;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
