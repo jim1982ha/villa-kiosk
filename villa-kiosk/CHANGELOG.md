@@ -1,3 +1,25 @@
+## 2.152.0
+
+### Fixed — raising the badge size collapsed the badges it was supposed to enlarge
+
+Reported with a before/after pair: a room showing several small individual badges, and the same room one size-step later showing nothing but its room chip. The size stepper could not be used past a point, because using it is what hid the badges.
+
+`groupBadges` measured each badge's footprint from `labelBoxes`, which bakes in BOTH scales the app applies — the zoom-derived one and `iconUserScale`, the user's own size preference. Bigger badges therefore reached further, touched sooner, and collapsed earlier. At the 2.25× the reporter was using, two units collapsed once they were within **1.64 m** of each other, against 0.73 m at 1×; one more notch would have made it 2.19 m. A control whose effect is to hide the thing it enlarges is not a control.
+
+Only the zoom scale feeds the decision now. That is the right split rather than a softened constant: grouping answers "is this view too dense to show these separately", which is a property of how much world space the screen covers — not of how large the user asked their badges to be drawn. Zoom still collapses exactly as before; the stepper now only changes how big the badges are, at every zoom level, which is all it ever claimed to do. `labelBoxes` still bakes in both scales because DRAWING genuinely needs both — the user's half is divided back out at the point of decision.
+
+`minPxPerWorldToDeclutterRoom` (the "zoom in this far to separate these" hint) shares that reach/gap formula by contract and was changed in step, or it would report a target for a collapse that no longer happens.
+
+### Changed — the brand button shows the real app icon, not a black V
+
+The HUD's brand position used `VestaMark`, which paints the mono mark in `currentColor`. In the brand chip that resolves to `--text-primary`, so the product's icon rendered as a near-black V — while the actual app icon, already designed and shipping as the PWA/home-screen artwork, is the two-tone green V on its plate.
+
+It now uses that artwork, with the dark-theme variant swapping in under `dark` and `night`. Both URLs are handed to the element and the THEME picks one in CSS, rather than a component reading `data-theme` once in JS: that attribute changes at runtime, so a value read at render would keep the wrong icon after a theme switch, and an inline style would outrank any themed rule anyway.
+
+The two SVGs are imported from `src/assets/brand/` rather than referenced at their `public/` paths, so Vite rewrites the URLs. Bundled CSS resolves a relative `url()` against `/assets/`, which would have broken under HA Ingress's sub-path — the kind of thing that works in every local test and fails only on the sidebar deployment.
+
+`VestaMark` itself is unchanged and still used on the sign-in gate, where a single accent-coloured mark is the right treatment.
+
 ## 2.151.0
 
 ### Fixed — the brand mark rendered as a solid black square

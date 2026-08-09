@@ -1999,7 +1999,13 @@ export class EntityVisuals {
     // Own buffers, not the render loop's — see labelBoxes' docstring.
     const boxes = this.labelBoxes(members, [], []);
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
-    const gapPx = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
+    // Zoom scale only, and halfW with the user scale divided back out —
+    // groupBadges excludes the user's size preference from the grouping
+    // decision (see its own note), and this method's whole contract is that
+    // it reuses that identical reach/gap formula. Left in, it would report a
+    // "zoom in this far" target for a collapse that no longer happens.
+    const userScale = this.iconUserScale > 0 ? this.iconUserScale : 1;
+    const gapPx = FAN_GAP_PX * this.iconZoomScale;
     // Pairs that groupBadges merges into one CO-LOCATED UNIT are excluded
     // below: they overlap at every reachable zoom, so they never trigger the
     // room collapse and no zoom level "resolves" them. Including them would
@@ -2023,10 +2029,10 @@ export class EntityVisuals {
         );
         if (dist <= 0) continue; // exactly coincident: no zoom separates these
         if (refPx > 0) {
-          const coLocated = (boxes[i].halfW * allow + boxes[j].halfW * allow) / refPx + refGapW;
+          const coLocated = ((boxes[i].halfW / userScale) * allow + (boxes[j].halfW / userScale) * allow) / refPx + refGapW;
           if (dist < coLocated) continue; // one unit — see the note above
         }
-        const need = (boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx) / dist;
+        const need = ((boxes[i].halfW / userScale) * allow + (boxes[j].halfW / userScale) * allow + gapPx) / dist;
         if (need > required) required = need;
       }
     }
@@ -2960,7 +2966,26 @@ export class EntityVisuals {
       return x;
     };
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
-    const scale = this.iconUserScale * this.iconZoomScale;
+    // ── The user's badge-size preference is deliberately NOT in here ──────
+    // Only the ZOOM-derived scale is. Grouping asks "is this view too dense
+    // to show these individually", which is a property of how much world
+    // space the screen covers — not of how large the user has asked their
+    // badges to be drawn.
+    //
+    // Including iconUserScale made the size stepper fight itself: bigger
+    // badges reach further, so they touched sooner, so raising the size
+    // COLLAPSED the very badges the user had just asked to see more clearly,
+    // and past a certain step the control could not be used at all (reported
+    // with before/after screenshots — one notch up turned a room full of
+    // individual badges into a single room chip). A control whose effect is
+    // to hide the thing it enlarges is not a control.
+    //
+    // labelBoxes bakes both scales into halfW because DRAWING needs both;
+    // dividing the user's half back out here is what leaves the zoom term
+    // alone. Guarded against a zero/absent scale so a bad config value can
+    // never produce Infinity and group the whole villa into one pile.
+    const userScale = this.iconUserScale > 0 ? this.iconUserScale : 1;
+    const scale = this.iconZoomScale;
 
     // Squared world-space distance between two anchors. HEIGHT COUNTS
     // (2.114.0): a ceiling fan and the lamp beneath it are metres apart on the
@@ -2974,7 +2999,7 @@ export class EntityVisuals {
     };
     /** How much world space each badge's on-screen half-width covers. */
     const reachAt = (pxPerWorld: number) =>
-      boxes.map((b) => (b.halfW * allow) / pxPerWorld);
+      boxes.map((b) => ((b.halfW / userScale) * allow) / pxPerWorld);
 
     // ── Pass 1: merge the naturally-touching into units ──────────────────
     const refPx = this.pixelsPerWorldUnitAt(this.closestViewDistance());

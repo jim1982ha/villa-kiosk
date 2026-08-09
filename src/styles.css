@@ -2661,6 +2661,17 @@ label.toggle span { user-select: none; line-height: 1.4; }
   mask: var(--mark) center / contain no-repeat;
 }
 .profile-mark { margin: 0 auto 18px; color: var(--accent); }
+
+/* The plated app icon (components/VestaMark.tsx's VestaAppIcon). Square, so
+   no aspect maths — the artwork is a 1:1 rounded plate. The theme picks which
+   of the two inline-supplied URLs is painted; light is the default so a
+   browser that somehow has no data-theme still gets a valid icon. */
+.vesta-appicon {
+  display: block; flex: 0 0 auto;
+  background: var(--icon-light) center / contain no-repeat;
+}
+:root[data-theme="dark"] .vesta-appicon,
+:root[data-theme="night"] .vesta-appicon { background-image: var(--icon-dark); }
 .profile-title { font-family: var(--font-display); font-size: var(--text-display); margin: 0 0 6px; }
 .profile-sub { color: var(--text-secondary); margin: 0 0 26px; font-size: var(--text-md); }
 .profile-error { color: var(--status-danger); margin: 0 0 18px; font-size: var(--text-base); }

@@ -36,3 +36,38 @@ export default function VestaMark({ size = 24, className }: Props) {
     />
   );
 }
+
+// ── The APP ICON, as opposed to the bare mark above ───────────────────────
+// The plated, two-tone artwork the PWA/home-screen icon uses — cream plate
+// with the green V, and its dark-theme counterpart. This is what belongs in
+// the HUD's brand position: VestaMark paints in `currentColor`, which
+// resolves to --text-primary there and so rendered as a near-BLACK V, when
+// the product's actual icon is green and already designed for exactly this.
+//
+// Both URLs are handed in as custom properties and the THEME picks one in
+// CSS (see .vesta-appicon). It cannot be chosen in JS here: the theme lives
+// as a data-theme attribute that changes at runtime, so a component reading
+// it once would keep the wrong icon after a theme switch — and an inline
+// style would beat any themed rule anyway. Setting both and letting the
+// cascade choose is what makes it re-theme for free.
+//
+// Imported from src/assets (not referenced at their public/ paths) so Vite
+// rewrites the URLs — bundled CSS resolves relative URLs against /assets/,
+// which would break under HA Ingress's sub-path.
+import appIconLight from "@/assets/brand/vesta-appicon.svg?url";
+import appIconDark from "@/assets/brand/vesta-appicon-dark.svg?url";
+
+export function VestaAppIcon({ size = 28, className }: Props) {
+  return (
+    <span
+      className={`vesta-appicon${className ? ` ${className}` : ""}`}
+      style={{
+        ["--icon-light" as string]: `url("${appIconLight}")`,
+        ["--icon-dark" as string]: `url("${appIconDark}")`,
+        height: size,
+        width: size,
+      }}
+      aria-hidden="true"
+    />
+  );
+}
