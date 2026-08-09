@@ -1,3 +1,9 @@
+## 2.194.0
+
+### Changed — the badge hover tooltip is smaller
+
+Down to the type scale's dense-metadata step, with its padding brought in to match. A name that follows the cursor is a label on the map, not body copy.
+
 ## 2.193.0
 
 ### Fixed — the villa reloaded every time you came back to the app

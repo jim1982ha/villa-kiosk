@@ -3665,14 +3665,18 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .badge-tooltip {
   position: fixed; z-index: 80; pointer-events: none;
   transform: translate(14px, -50%);
-  max-width: 260px; padding: 6px 10px;
+  max-width: 240px; padding: 5px 9px;
   border-radius: 10px;
   background: var(--bg-overlay);
   backdrop-filter: blur(10px);
   border: 1px solid var(--hairline);
   box-shadow: 0 8px 22px var(--shadow);
   color: var(--text-primary);
-  font-family: var(--font-ui); font-size: var(--text-xs); font-weight: 600;
+  /* --text-2xs, the scale's dense-metadata step: a name that follows the
+     cursor is a label on the map, not body copy, and at --text-xs it competed
+     with the badge it was naming. Padding comes in with it so the pill stays
+     in proportion rather than looking padded. */
+  font-family: var(--font-ui); font-size: var(--text-2xs); font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   animation: fadeIn 0.12s ease-out;
 }
