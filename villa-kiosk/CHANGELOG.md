@@ -1,3 +1,21 @@
+## 2.162.0
+
+### Fixed — the 3D view could stop short of the bottom of the screen
+
+Reported on an iPad home-screen PWA: a band of background along the bottom edge, below where the villa stopped painting. It survived a clean reinstall, which ruled out the cached-launch-image cause that produced the superficially similar letterboxing in 2.144.0.
+
+The shell (`.app-root`) is pinned to the viewport with `position: fixed; inset: 0`, so it is full-screen by construction. The canvas inside it was sized with `height: 100%` instead — a percentage that has to RESOLVE against the containing block's height, on a REPLACED element, which is precisely the corner of the box model where engines have historically differed. It was also unnecessary: the shell is already pinned to all four edges, so the canvas can simply be pinned to the same four edges and be the same box by construction, with no resolution step left to get wrong.
+
+Two supporting details. The canvas takes no `z-index`, so at `auto` it stays behind every HUD and overlay sibling exactly as it did as an in-flow element — all of those already declare their own (≥5), so nothing about stacking changes. And `.app-root` now paints `--bg-base` itself, so there is no longer any way for something behind the shell to show through it.
+
+The light/dark asymmetry in the two screenshots is what pointed here rather than at iOS: the band was obvious on the light theme and invisible on the dark one. Space iOS never handed the web view would be painted with the manifest's static `background_color` and would look identical in both; the page's own themed background is the thing that changes with the theme.
+
+### Added — an on-demand diagnostics report for the device in your hand
+
+The full report (screen, viewport, safe-area insets, WebGL limits, model stats, recent errors) already existed, but `ErrorReport` was the only thing that rendered it — so it was reachable only once the app had already fallen over. That is both the least readable moment and no help at all for a problem that is not a crash: a layout that is wrong but working, or a device whose WebGL limits explain a slow load.
+
+Settings → Telemetry now has a **This device** button that builds the same report on demand, from the same builder, so the two cannot describe a device differently. It renders monospaced and scrollable in both axes rather than wrapping — a user agent or a WebGL renderer string reflowed across three lines is harder to read, not easier, and has to stay copyable verbatim.
+
 ## 2.161.0
 
 ### Fixed — badges kept their old theme's colours after a theme change

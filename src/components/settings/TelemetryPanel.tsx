@@ -9,8 +9,9 @@
 // explain an iOS white-screen-after-app-switch.
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Trash2, Copy, Check, Download } from "lucide-react";
+import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope } from "lucide-react";
 import { ingressPath } from "@/ha/ingress";
+import { buildReport, captureError } from "@/utils/diagnostics";
 
 interface TelemetryEvent {
   kind: string;
@@ -161,6 +162,8 @@ export default function TelemetryPanel() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  /** The on-demand report for THIS device (see the button below). */
+  const [selfReport, setSelfReport] = useState<string | null>(null);
 
   const load = useCallback(async (clear = false) => {
     setBusy(true);
@@ -243,7 +246,24 @@ export default function TelemetryPanel() {
         <button className="btn ghost" onClick={() => void load(true)} disabled={busy}>
           <Trash2 size={16} /> Clear after reading
         </button>
+        {/* THIS device, right now — as opposed to the fleet history above.
+            The report already existed but was only ever rendered by
+            ErrorReport, i.e. only once the app had already fallen over, which
+            is both the least readable moment and no use at all for a problem
+            that isn't a crash (a layout that's wrong but working, a device
+            whose WebGL limits explain a slow load). Same builder, so the two
+            can't describe the device differently. */}
+        <button className="btn ghost" onClick={() => setSelfReport((r) => (r ? null : buildReport(captureError("MANUAL_DIAGNOSTICS", new Error("Requested from Settings"), "TelemetryPanel"))))}>
+          <Stethoscope size={16} /> {selfReport ? "Hide this device" : "This device"}
+        </button>
       </div>
+
+      {selfReport && (
+        <div className="field">
+          <label className="entity-label">This device — screen, viewport, WebGL, model</label>
+          <pre className="diag-report">{selfReport}</pre>
+        </div>
+      )}
 
       {error && <div className="muted body-text">{error}</div>}
       {!error && events?.length === 0 && (

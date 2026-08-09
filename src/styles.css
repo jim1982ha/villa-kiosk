@@ -421,8 +421,21 @@ button {
 .body-text { font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.5; }
 
 /* --- App shell --- */
-.app-root { position: fixed; inset: 0; }
-.babylon-canvas { width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+/* The shell is pinned to the viewport, and paints the theme's own background
+   so nothing behind it can ever show through. */
+.app-root { position: fixed; inset: 0; background: var(--bg-base); }
+/* Pinned with inset, NOT sized with height:100%.
+   A percentage height has to resolve against the containing block's height,
+   and a REPLACED element (which <canvas> is) resolving one is exactly the
+   corner where engines differ — it is also unnecessary here, since the shell
+   above is already pinned to all four edges and can simply be matched. inset
+   makes the canvas the same box as the shell by construction, with no
+   resolution step to get wrong. Reported as a band of background along the
+   bottom of an iPad PWA, below where the 3D view stopped painting.
+   No z-index: every HUD/overlay sibling declares its own (>=5), so leaving
+   this at auto keeps the canvas behind all of them exactly as it was when it
+   was an in-flow element. */
+.babylon-canvas { position: absolute; inset: 0; display: block; outline: none; touch-action: none; }
 
 /* --- Buttons --- */
 .btn {
@@ -3518,4 +3531,25 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   .telemetry-row { flex-wrap: wrap; row-gap: 4px; }
   .telemetry-row > .telemetry-summary { flex: 1 1 100%; order: 1; }
   .telemetry-row > .telemetry-time { margin-left: auto; }
+}
+
+/* On-demand "this device" diagnostics (TelemetryPanel). Monospace and
+   scrollable in BOTH axes: the report has long unwrapped lines (a full user
+   agent, a WebGL renderer string) that must stay readable and copyable rather
+   than being reflowed into ambiguity. */
+.diag-report {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--hairline);
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  white-space: pre;
+  -webkit-user-select: text;
+  user-select: text;
 }
