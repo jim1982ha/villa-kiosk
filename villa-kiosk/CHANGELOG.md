@@ -1,3 +1,23 @@
+## 2.159.0
+
+### Changed — a badge is never moved; if badges would collide, the room summarises
+
+Reported with two screenshots one zoom step apart: four badges sitting in a diagonal line became a 2×2 block, in a different order.
+
+The cause was the middle tier of the layout, "fanning". When badges collided, a pile was laid out side by side near its devices instead of being summarised into the room's chip. That layout was a compact grid — `ceil(sqrt(n))` columns, cells sized from the widest member, slots filled in entity_id order. So a badge's position was a function of how many neighbours it happened to collide with and where its id sorted alphabetically, and **not** of where its device is. One zoom step changes which badges are in the pile, which resizes the grid and re-slots everyone. Nothing was wrong with the code; the idea itself made position depend on grouping.
+
+That is the same failure as the six screen-space attempts this subsystem's header documents, one level up. Those made GROUPING depend on the camera. Fanning made POSITION depend on grouping, which depends on zoom. So the fix is the same fix: remove the dependency rather than tune it. A badge is now drawn at its anchor's projection and nothing else. There are exactly two outcomes — a badge over its own device, or its room's chip — and the only thing zoom can change is which of the two you get.
+
+The overlap tolerance went with it. A badge was allowed to cover half of a neighbour before the two counted as piled, which was deliberate and reasonable while a pile could still be fanned apart: the slack delayed the decision and the fan then guaranteed nothing was actually drawn on top of anything. With badges pinned to their anchors there is no second chance, so whatever the tolerance permits is what the user sees overlapping — and "badges must never overlap" was itself an earlier explicit request. The test is now the plain one: footprints touch (plus a 6px gap), they are a pile.
+
+Two consequences, both intended, and worth stating rather than discovering.
+
+**Rooms group at a wider zoom than before.** Piles that used to fan now summarise. Zooming in reopens them on its own, because a badge's reach is its on-screen size converted to world units and that shrinks as the view closes in — any two devices at distinct points separate at some zoom. Tapping a room's chip still flies to exactly the zoom that declutters it (`minPxPerWorldToDeclutterRoom`, unchanged and now the only escape hatch, which is why it reuses the grouping test's own formula).
+
+**Two devices at the same 3D point keep their room summarised at every zoom.** A ceiling fan and its own light, a socket and its power meter: no zoom level separates them, so their room always shows its chip with a count. This is the honest reading rather than a regression to work around — there is no view in which both badges could be read, and the fan's answer was to nudge one aside, i.e. to draw a badge somewhere its device is not. If a room summarises at every zoom, that is the map telling you two of its devices share a location.
+
+`pileFitsItsRoom`, `fanBadges` and `fanLayout` are deleted, along with the room-width cache and the two constants that existed only to bound a fan. Grouping is now one union-find pass over the drawn footprints and nothing else.
+
 ## 2.158.0
 
 ### Fixed — the range picker rendered at full height and collided with the chart

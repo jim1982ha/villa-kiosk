@@ -373,6 +373,33 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  * distance. Note what did NOT change: the inputs are still anchor positions
  * and zoom, both independent of where the camera is looking from, so the
  * screen-space coupling that six earlier attempts died on is still absent.
+ *
+ * ── And a badge is never MOVED (2.159.0) ─────────────────────────────────
+ * The rule above governs which badges are shown together. A second rule now
+ * governs where a shown badge goes: on its anchor, always. There are exactly
+ * two outcomes — a badge over its own device, or its room's chip.
+ *
+ * The middle tier that used to sit between them ("fanning": laying a collided
+ * pile out side by side near its devices) was removed. It re-slotted a pile
+ * into a sqrt(n) grid ordered by entity_id, so a badge's position depended on
+ * how many neighbours it collided with and where its id sorted — not on where
+ * its device is. One zoom step changed the pile's membership, resized the grid
+ * and moved every member, which is what a user finally reported with two
+ * screenshots: four badges in a diagonal line becoming a 2x2 block in a
+ * different order.
+ *
+ * That is the same failure as the six screen-space attempts, one level up.
+ * Those made GROUPING depend on the camera; the fan made POSITION depend on
+ * grouping, which depends on zoom. Pinning badges to their anchors closes the
+ * loop: the only thing zoom can now change is whether a room is expanded.
+ *
+ * The price is paid honestly. A pile summarises where it used to fan, so
+ * rooms group at a wider zoom than before — and zooming in reopens them,
+ * because every badge's world-space reach shrinks as the view closes in. The
+ * one permanent case is two devices at the SAME point: no zoom separates
+ * them, so that room always shows its chip. That is not a regression to work
+ * around — there is no view in which both badges could be read, and the fan's
+ * answer (nudge one aside) was drawing a badge somewhere its device is not.
  */
 /** Zoom is quantised to steps of 1/N of a doubling before it feeds the
  *  grouping radius — the direct equivalent of a map engine clustering per
@@ -380,75 +407,34 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  *  pinch can't sit exactly on a threshold and chatter; crossing one is a
  *  single clean change, and crossing back undoes it exactly. */
 const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
-/** How much of its own width a badge may overlap a neighbour before the two
- *  count as piled together. Generous on purpose: a light overlap between two
- *  or three markers is normal, unremarkable map UI (Google/Apple Maps pins
- *  overlap constantly at city zoom) and summarising a whole room over it
- *  throws away detail the view had room for — the "grouping is far too
- *  eager" report. */
-const GROUP_OVERLAP_ALLOW_WIDTHS = 0.5;
+/**
+ * How much of its own width a badge may overlap a neighbour before the two
+ * count as piled together. ZERO — badges never overlap, at all.
+ *
+ * It was 0.5, deliberately generous, on the reasoning that a light overlap is
+ * normal map UI (Google/Apple Maps pins overlap constantly at city zoom). That
+ * held only while a pile could be FANNED apart: the tolerance bought the
+ * layout a little slack before it had to act, and the fan then made sure
+ * nothing actually ended up drawn on top of anything. With badges pinned to
+ * their anchors (see cullLabels' layout section) there is no second chance —
+ * whatever this tolerance permits is what the user sees overlapping. So the
+ * test is now the plain one: if the drawn footprints touch, they are a pile.
+ */
+const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
 
 /**
- * How much of the ROOM's own width a fanned-out pile may occupy before the
- * room summarises into its chip instead.
+ * Minimum clear gap between two badges' drawn footprints, in px. Below this
+ * they count as one pile and their rooms summarise.
  *
- * This replaced a fixed "more than N badges ⇒ cluster" count, which was the
- * wrong question to ask: it grouped a room of 5 ceiling devices even when
- * zoomed right into that room with obvious empty space around them (reported
- * with screenshots — dropping the badge SIZE made all 5 appear, proving the
- * space was there all along). Whether badges fit is a matter of how much
- * room there is versus how much they need, and a raw count knows neither.
+ * It is a GAP, not an overlap tolerance (see GROUP_OVERLAP_ALLOW_WIDTHS): two
+ * badges that merely kiss are legible but read as a smudge from across a room,
+ * which is the distance this app is used at.
  *
- * So the test is now literally "does the laid-out row fit in this room?":
- * the fanned width is converted to world units at the current zoom and
- * compared against the room's own real width. Zoomed out over the whole
- * villa a dense room's row is many times wider than the room, so it
- * summarises; zoomed into that same room the row easily fits, so every badge
- * is shown — which is exactly the behaviour asked for, and it falls out of
- * the geometry instead of needing a tuned count. Still a pure function of
- * world positions and zoom, so all the invariance above is preserved.
+ * Scaled by the same icon size/zoom factors as the footprints themselves, so
+ * the spacing rule looks identical at every badge size — a layout decision may
+ * never use different geometry from the renderer.
  */
-const FAN_MAX_ROOM_SPAN_FRACTION = 0.9;
-/**
- * How far a single badge may be slid from its own anchor when its huddle is
- * fanned, in multiples of its own width. This is the badge-level form of the
- * rule chips got in 2.120.0: a badge points at ONE device, so it must stay
- * visibly next to that device or it is simply lying about what it labels.
- *
- * FAN_MAX_ROOM_SPAN_FRACTION alone did not deliver that. It bounds the row's
- * TOTAL WIDTH against the room, which says nothing about how far any one
- * member travels — the row is centred on the huddle's mean x, so a member
- * sitting away from that mean is displaced by the mean-offset PLUS its slot
- * offset, and a wide room licenses a wide row in which the outermost badges
- * travel furthest. Deliberately expressed in badge widths, NOT scaled by an
- * extra zoom/user-size factor: the budget must not grow just because the
- * icons were made bigger (the exact defect that put a chip on the lawn).
- *
- * Raised from 1.5 to 3 in 2.122.0. 1.5 was set purely to stop badges landing
- * on the lawn, with no thought for the other side of the trade: too tight, and
- * ordinary huddles fail to fan and collapse into a room chip that costs an
- * extra tap to open. Three of its own widths is still unmistakably "next to
- * that device" while leaving room to actually resolve a crowd.
- */
-const FAN_MAX_TRAVEL_WIDTHS = 3;
-/**
- * Breathing room between two badges laid out side by side within a small
- * huddle (fanBadges) — explicitly requested ("it's ok to artificially move
- * the icon a bit to make them not overlap"), and the piece a pure
- * cluster-or-nothing map engine lacks. It exists because two devices can
- * share ONE fixture (a ceiling fan and its own light, a socket and its power
- * meter) and therefore sit at the same 3D point: no zoom level whatsoever
- * separates those, so without a fan they would either overlap forever or
- * force their whole room to stay grouped forever.
- *
- * This is NOT the force-relaxation that caused the earlier "dancing"
- * reports. There is no iteration, and no branch whose direction depends on
- * the current relative screen positions of two anchors — that dependency was
- * the actual defect, not nudging as such. A huddle is ordered by entity id
- * (fixed, camera-independent) and laid out around its own centre, so a badge
- * holds the same slot for as long as the huddle exists.
- */
-const FAN_GAP_PX = 6;
+const BADGE_MIN_GAP_PX = 6;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -495,7 +481,6 @@ interface ShownLabel {
   /** Anchor is in front of the camera, i.e. has a valid screen position at
    *  all. Purely a RENDER gate — deliberately not an input to grouping. */
   inFront: boolean;
-  off: { x: number; y: number };
 }
 
 // Status/enum SENSOR states (a text sensor like an AP's connectivity state).
@@ -720,15 +705,10 @@ export class EntityVisuals {
   /** Room-cluster chips, keyed by room name. Built lazily the first time a
    *  room clusters; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
-  /** Each room's real ground width from the drawn floor plan, keyed by
-   *  normalised room name — the space budget grouping lays badges out
-   *  against (see setRoomPolygons / FAN_MAX_ROOM_SPAN_FRACTION). */
-  private roomSpans = new Map<string, number>();
   /** Each room's real drawn polygon (world-space X/Z, original casing) — the
    *  geometric signal roomForEntity uses to auto-fill a freshly detected
-   *  entity's room on first sight (see getDetectedMappings). Separate from
-   *  roomSpans' normalised-key width cache since containment testing needs
-   *  the actual point list, not a derived number. */
+   *  entity's room on first sight (see getDetectedMappings). Stored as the
+   *  actual point list because containment testing needs it. */
   private roomPolys: { name: string; pts: { x: number; z: number }[] }[] = [];
   /** Active storey from FloorManager (1-based). Floors below it stay rendered
    *  (cumulative visibility), so enabled-state alone can't cull their badges —
@@ -1847,25 +1827,12 @@ export class EntityVisuals {
    *  (load + mirror-flip toggles), same trigger as the teleport grid. */
   setRoomPolygons(polys: { name: string; pts: { x: number; z: number }[]; floorY?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
     this.roomHighlight.setRooms(polys);
-    // Cache each room's real WIDTH (its larger ground dimension) — the
-    // "is there space here?" denominator for grouping, see
-    // FAN_MAX_ROOM_SPAN_FRACTION. Taken from the drawn floor plan rather than
-    // from where the devices happen to sit, because a room whose devices are
-    // all clustered at the ceiling centre still has its whole floor area
-    // available to lay badges out across.
-    this.roomSpans.clear();
+    // Each room's ground WIDTH used to be cached here too, as the "is there
+    // space here?" denominator for laying a pile of badges out across a room.
+    // Nothing lays badges out any more (2.159.0 — badges sit on their anchors
+    // or their room summarises), so the room's own size no longer takes part
+    // in any grouping decision and the cache is gone with the fan.
     this.roomPolys = polys.filter((p) => p.pts.length >= 3).map((p) => ({ name: p.name, pts: p.pts }));
-    for (const p of polys) {
-      if (p.pts.length === 0) continue;
-      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-      for (const q of p.pts) {
-        if (q.x < minX) minX = q.x;
-        if (q.x > maxX) maxX = q.x;
-        if (q.z < minZ) minZ = q.z;
-        if (q.z > maxZ) maxZ = q.z;
-      }
-      this.roomSpans.set(roomKey(p.name), Math.max(maxX - minX, maxZ - minZ));
-    }
   }
 
   /** Replace the resolved entity->room map (see the field's own docstring) —
@@ -1963,8 +1930,14 @@ export class EntityVisuals {
    * Reuses groupBadges' own reach/gap formula (same constants) so the two can
    * never disagree about when a pair is "too close". Null when the room has
    * fewer than 2 badges (nothing can ever group) or every pair is either
-   * already resolvable at any zoom or co-located (a shared fixture — no zoom
-   * level separates those; left for fanBadges' fixed-offset nudge, not this).
+   * already resolvable at any zoom or CO-LOCATED.
+   *
+   * That last case is now a real, visible outcome rather than a footnote: two
+   * devices sharing one 3D point (a ceiling fan and its own light, a socket
+   * and its power meter) are separated by no zoom level whatsoever, so their
+   * room shows its chip at every zoom and this returns null because there is
+   * no answer to give. It used to be deferred to the fan's fixed-offset
+   * nudge, which no longer exists — see cullLabels' layout section.
    */
   minPxPerWorldToDeclutterRoom(room: string): number | null {
     const key = roomKey(room);
@@ -1980,7 +1953,7 @@ export class EntityVisuals {
     // Own buffers, not the render loop's — see labelBoxes' docstring.
     const boxes = this.labelBoxes(members, [], []);
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
-    const gapPx = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
+    const gapPx = BADGE_MIN_GAP_PX * this.iconUserScale * this.iconZoomScale;
     let required = 0;
     for (let i = 0; i < members.length; i++) {
       for (let j = i + 1; j < members.length; j++) {
@@ -2798,7 +2771,7 @@ export class EntityVisuals {
       // allocates nothing at all.
       let s = this.shownPool[shownCount];
       if (!s) {
-        s = { id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, inFront: false, off: { x: 0, y: 0 } };
+        s = { id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, inFront: false };
         this.shownPool[shownCount] = s;
       }
       s.id = id;
@@ -2809,10 +2782,6 @@ export class EntityVisuals {
       s.wy = wp.y;
       s.wz = wp.z;
       s.inFront = p.z >= 0 && p.z <= 1;
-      // Every consumer treats `off` as "start at zero and get nudged" — it
-      // MUST be reset, or a reused slot inherits the previous frame's nudge.
-      s.off.x = 0;
-      s.off.y = 0;
       shown[shownCount] = s;
       shownCount++;
     }
@@ -2829,41 +2798,47 @@ export class EntityVisuals {
     const boxes = this.labelBoxes(shown);
     const piles = this.groupBadges(shown, boxes);
 
-    // ── Fan first, collapse only when a fan is impossible ────────────────
-    // Three outcomes, in order of preference: a badge on its own device; the
-    // pile laid out side by side near their devices; the room's chip.
+    // ── Two outcomes: a badge on its own device, or the room's chip ───────
+    // A BADGE IS NEVER MOVED. Its screen position is its anchor's projection
+    // and nothing else, so the same device is always in the same place and
+    // zooming only ever changes how far apart badges are — never which of
+    // them is where.
     //
-    // 2.150.0 removed the middle one, collapsing on first touch. Two reports
-    // showed why it has to exist. Rooms became unreachable — a collided pile
-    // went straight to a chip with no layout attempt, so fanning only ever
-    // ran for a co-located huddle and a room whose devices merely touched at
-    // the current zoom could never be opened by any amount of zooming. And
-    // with collapse as the ONLY answer to a touch, raising the badge size
-    // collapsed whole rooms at once, which 2.152.0 then "fixed" by shrinking
-    // the geometry the decision used — trading unreachable rooms for badges
-    // that visibly overlapped.
+    // There used to be a middle tier: a collided pile was laid out side by
+    // side ("fanned") near its devices, and only summarised when that layout
+    // could not be made to fit. It was removed in 2.159.0 after a report with
+    // two screenshots one zoom step apart — four badges in a diagonal line
+    // became a 2x2 block, in a different order.
     //
-    // Fanning is the headroom both of those were missing. It also matches
-    // what was actually asked for: never overlapping, either side by side or
-    // summarised. pileFitsItsRoom is the guard that keeps it honest — a row
-    // that would not fit the room, or that would slide a badge far from the
-    // device it labels, is refused and the room summarises instead.
+    // That was inherent to the idea, not a tuning problem. The fan re-slotted
+    // a pile into a sqrt(n) grid ordered by entity_id, so a badge's position
+    // was a function of how many neighbours it happened to collide with and
+    // where its id sorted — not of where its device is. Change the zoom, the
+    // pile's membership changes, the grid resizes and every member lands
+    // somewhere new. Stability under camera movement is the one thing this
+    // subsystem exists to guarantee (see the file header), and the fan was
+    // spending it to avoid a chip.
+    //
+    // So: if badges would collide, the room summarises. Zooming in shrinks
+    // every badge's world-space reach, so any two devices at DISTINCT points
+    // separate at some zoom and the room reopens on its own. Two devices at
+    // the SAME point (a fan and its own light, a socket and its power meter)
+    // never separate at any zoom — that room shows its chip always, which is
+    // the honest answer: there is no view in which those two badges could
+    // both be read, and drawing one on top of the other hides a device
+    // without saying so.
     this.roomClustered.clear();
-    const fannable: number[][] = [];
     for (const members of piles) {
       if (members.length < 2) continue;
-      if (this.pileFitsItsRoom(shown, boxes, members)) fannable.push(members);
-      else for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
+      for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
     }
-    // Fan only what stays individually visible — a badge about to hide behind
-    // its room's chip must not be nudged for nothing.
-    this.fanBadges(shown, boxes, fannable);
 
     for (const s of shown) {
-      s.lbl.container.linkOffsetXInPixels = s.off.x;
-      // off.y is the fanned grid's row offset (fanLayout); baseY is the fixed
-      // lift that centres every badge over its anchor.
-      s.lbl.container.linkOffsetYInPixels = baseY + s.off.y;
+      // No X offset exists any more, and baseY is a FIXED lift that centres
+      // every badge over its anchor — the same value for all of them, so it
+      // moves nothing relative to anything else.
+      s.lbl.container.linkOffsetXInPixels = 0;
+      s.lbl.container.linkOffsetYInPixels = baseY;
       s.lbl.container.isVisible = s.inFront && !this.roomClustered.get(this.roomOf(s.id));
     }
     this.updateClusters(shown);
@@ -2951,21 +2926,22 @@ export class EntityVisuals {
       boxes.map((b) => (b.halfW * allow) / pxPerWorld);
 
     // ── One union-find pass, at the current zoom ─────────────────────────
+    // Transitive on purpose: A touching B and B touching C makes one pile of
+    // three, even where A and C are clear of each other. Anything less is not
+    // a partition, and the caller needs a partition — it summarises whole
+    // rooms, so "which pile is this badge in" has to have one answer.
+    //
     // A dedicated "co-located units" pre-pass lived here between 2.150.0 and
     // 2.152.0, to stop naturally-stacked devices from being what triggered a
-    // collapse. Restoring the fan tier made it redundant — a co-located pair
-    // is simply a pile that fans, which is the outcome it existed to protect
-    // — and it was a second O(n^2) sweep of every visible badge on every
-    // layout pass, so it is gone rather than left as decoration.
-    // A collision between two units merges them into ONE pile, rather than
-    // condemning both to their room's chip on the spot. The caller then asks
-    // whether that pile can be laid out side by side (fanBadges) and only
-    // summarises the room when it genuinely cannot — which is the difference
-    // between "these two touch" and "there is no way to show these two".
+    // collapse. It is not coming back. Two devices at one point are exactly
+    // the case that CANNOT be drawn as two readable badges at any zoom, so
+    // exempting them from the collision test only means drawing one on top of
+    // the other and hiding a device without saying so. Their room summarising
+    // is the honest reading, and the chip's count says how many are there.
     const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
     if (pxPerWorld > 0) {
       const reach = reachAt(pxPerWorld);
-      const gapW = (FAN_GAP_PX * scale) / pxPerWorld;
+      const gapW = (BADGE_MIN_GAP_PX * scale) / pxPerWorld;
       for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
           const need = reach[i] + reach[j] + gapW;
@@ -3027,140 +3003,6 @@ export class EntityVisuals {
     if (!(raw > 0)) return 0;
     const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
     return Math.pow(2, Math.round(Math.log2(raw) * q) / q);
-  }
-
-  /**
-   * Lay the members of each still-individual huddle side by side so they
-   * don't actually overlap. Order is by entity id — fixed and
-   * camera-independent — so a badge holds the same slot for as long as its
-   * huddle exists; only the huddle's shared centre tracks the camera, like
-   * every other object anchored in the scene. See FAN_GAP_PX for why this is
-   * not a return of the relaxation solver that once made badges dance.
-   */
-  /**
-   * Would this pile, laid out side by side, fit across the room it sits in?
-   *
-   * The row's width is measured in pixels (that's what a badge's size is
-   * defined in), then converted to world units at the current zoom so it can
-   * be compared against the room's own real width from the floor plan. A
-   * pile spanning several rooms is judged against the widest of them, since
-   * that is the space actually available to it. Rooms with no drawn polygon
-   * (a point-only teleport spot) fall back to the spread of their own
-   * devices, which is the only measure available there.
-   */
-  private pileFitsItsRoom(
-    shown: ShownLabel[],
-    boxes: { halfW: number; halfH: number; cy: number }[],
-    members: number[],
-  ): boolean {
-    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
-    if (pxPerWorld <= 0) return false;
-    const { members: order, offsets, blockW } = this.fanLayout(shown, boxes, members);
-    const rowWorld = blockW / pxPerWorld;
-
-    let available = 0;
-    for (const i of members) {
-      // No drawn polygon, no fan. The fallback here used to be the spread of
-      // the room's OWN devices, which was unbounded in the one case that
-      // mattered: a sprawling outdoor/plot-wide bucket reported a span of the
-      // entire property, the guard waved through a row as wide as the villa,
-      // and its outermost badges were laid out on the lawn (reported with a
-      // screenshot). A room with no polygon has no measurable space, so its
-      // piles cluster instead — the same "merge rather than travel" answer
-      // chips got in 2.120.0.
-      const span = this.roomSpans.get(roomKey(this.roomOf(shown[i].id))) ?? 0;
-      if (span > available) available = span;
-    }
-    if (!(available > 0)) return false;
-    if (rowWorld > available * FAN_MAX_ROOM_SPAN_FRACTION) return false;
-
-    // …and no single badge may be slid far from the device it points at, which
-    // the block-width test above does not imply — see FAN_MAX_TRAVEL_WIDTHS.
-    // Judged on the exact offsets fanBadges will apply, not an estimate, and
-    // on the true 2-D distance now that the layout moves badges vertically too.
-    for (let k = 0; k < order.length; k++) {
-      const budget = boxes[order[k]].halfW * 2 * FAN_MAX_TRAVEL_WIDTHS;
-      if (Math.hypot(offsets[k].x, offsets[k].y) > budget) return false;
-    }
-    return true;
-  }
-
-  private fanBadges(
-    shown: ShownLabel[],
-    boxes: { halfW: number; halfH: number; cy: number }[],
-    piles: number[][],
-  ): void {
-    for (const pile of piles) {
-      if (pile.length < 2) continue;
-      const { members, offsets } = this.fanLayout(shown, boxes, pile);
-      for (let k = 0; k < members.length; k++) {
-        shown[members[k]].off.x = offsets[k].x;
-        shown[members[k]].off.y = offsets[k].y;
-      }
-    }
-  }
-
-  /**
-   * The fanned huddle's geometry, with no side effects — shared by fanBadges
-   * (which applies it) and pileFitsItsRoom (which has to judge it BEFORE
-   * deciding whether to fan at all). Kept as one function because the
-   * predicate testing a different layout than the one drawn is exactly how a
-   * badge ends up somewhere the guard believed it could never reach.
-   *
-   * A compact GRID, not the single horizontal row this used to lay out. The
-   * row's width grew LINEARLY with the number of badges, so a huddle of seven
-   * needed seven badge-widths of clear room; past a fairly small icon size
-   * that never fits, and the whole room collapsed into its chip. A grid grows
-   * as √n — the same seven badges need about three widths — which is what
-   * lets individual, directly tappable badges survive several more steps of
-   * icon size and zoom-out before anything has to be summarised. That matters
-   * because the chip is not a smaller badge, it is an extra tap between the
-   * user and the device, and this app is read from across a room where the
-   * icons need to be large.
-   *
-   * Uniform cells sized from the WIDEST member, so no two members of a pile
-   * can overlap by construction — no solver, nothing iterative, and the same
-   * input always yields the same layout (the badge subsystem's long history of
-   * regressions is entirely force-relaxation solvers that never settled).
-   * Deterministic member order (by entity id) for the same reason.
-   */
-  private fanLayout(
-    shown: ShownLabel[],
-    boxes: { halfW: number; halfH: number; cy: number }[],
-    pile: number[],
-  ): { members: number[]; offsets: { x: number; y: number }[]; blockW: number } {
-    const fanGap = FAN_GAP_PX * this.iconUserScale * this.iconZoomScale;
-    const members = [...pile].sort((a, b) => shown[a].id.localeCompare(shown[b].id));
-    let cellW = 0, cellH = 0;
-    for (const i of members) {
-      if (boxes[i].halfW * 2 > cellW) cellW = boxes[i].halfW * 2;
-      if (boxes[i].halfH * 2 > cellH) cellH = boxes[i].halfH * 2;
-    }
-    cellW += fanGap;
-    cellH += fanGap;
-    const cols = Math.ceil(Math.sqrt(members.length));
-    const rows = Math.ceil(members.length / cols);
-    // Centred on the huddle's own average projected position: members of a
-    // real huddle rarely project to the same point, so each offset has to
-    // subtract that member's OWN position — the spacing that must equal the
-    // cell size is the one between final screen positions, not between offsets.
-    let cx = 0, cy = 0;
-    for (const i of members) { cx += shown[i].x; cy += shown[i].y; }
-    cx /= members.length;
-    cy /= members.length;
-
-    const offsets: { x: number; y: number }[] = [];
-    for (let k = 0; k < members.length; k++) {
-      const r = Math.floor(k / cols);
-      // Last row is centred under the others rather than left-aligned, so the
-      // block stays visually balanced over the devices it covers.
-      const inRow = Math.min(cols, members.length - r * cols);
-      const c = k - r * cols;
-      const px = cx + (c - (inRow - 1) / 2) * cellW;
-      const py = cy + (r - (rows - 1) / 2) * cellH;
-      offsets.push({ x: px - shown[members[k]].x, y: py - shown[members[k]].y });
-    }
-    return { members, offsets, blockW: cols * cellW };
   }
 
   /** Each label's collision box in screen px, relative to its anchor point —
