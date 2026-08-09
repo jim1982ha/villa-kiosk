@@ -1,3 +1,21 @@
+## 2.164.0
+
+### Fixed — the 3D map vanished on Android and desktop (regression in 2.162.0)
+
+2.162.0 changed the canvas from `width: 100%; height: 100%` to `position: absolute; inset: 0`, on the reasoning that the shell is already pinned to all four edges so the canvas could simply match it rather than resolve a percentage. That is correct for an ordinary element and wrong for a **replaced** one, which `<canvas>` is.
+
+For an absolutely positioned replaced element, `width: auto` resolves to the element's **intrinsic** width (CSS 2.1 §10.3.8) and the `right` inset is then ignored — the box does not stretch. A `<canvas>`'s intrinsic size is its `width`/`height` **attributes**, which default to 300×150, and Babylon sets those attributes from `clientWidth`/`clientHeight`. So the box fed its own size back to itself and stayed 300×150 in the top-left corner, tucked under the top bar. Every other element in the app is an ordinary block and was unaffected, which is exactly why the report was "the map is gone but all the UI is there".
+
+The telemetry confirms nothing else was wrong: the model loaded completely on both devices (692 meshes, 383 textures, a 2.2s paint, `revealMs` of 7). It was drawing correctly the whole time, into a stamp.
+
+The rule is now explicit `width`/`height` again — the form that shipped for the app's whole life before 2.162.0. The comment that change replaced had actually named `<canvas>` as a replaced element as its justification, and then walked straight into the other replaced-element rule, so the new comment records both halves.
+
+The bottom-band investigation that motivated 2.162.0 is unresolved and back where it was. It will be settled with the diagnostics report added in that release (Settings → Telemetry → **This device**) rather than by another change reasoned from a screenshot.
+
+### Not a problem — two console warnings
+
+Both are report-only and neither touches the app. `static.cloudflareinsights.com/beacon.min.js` is injected by Cloudflare at the edge, not by this app, and is blocked by the browser's own content blocker; the CSP entry is report-only so nothing is enforced either way. The `blob:` connect violation is Babylon creating a worker URL, which is how it is supposed to work. Neither could affect rendering, and neither should be chased.
+
 ## 2.163.0
 
 ### Fixed — the loading spinner did not turn on iPad

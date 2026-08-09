@@ -424,18 +424,21 @@ button {
 /* The shell is pinned to the viewport, and paints the theme's own background
    so nothing behind it can ever show through. */
 .app-root { position: fixed; inset: 0; background: var(--bg-base); }
-/* Pinned with inset, NOT sized with height:100%.
-   A percentage height has to resolve against the containing block's height,
-   and a REPLACED element (which <canvas> is) resolving one is exactly the
-   corner where engines differ — it is also unnecessary here, since the shell
-   above is already pinned to all four edges and can simply be matched. inset
-   makes the canvas the same box as the shell by construction, with no
-   resolution step to get wrong. Reported as a band of background along the
-   bottom of an iPad PWA, below where the 3D view stopped painting.
-   No z-index: every HUD/overlay sibling declares its own (>=5), so leaving
-   this at auto keeps the canvas behind all of them exactly as it was when it
-   was an in-flow element. */
-.babylon-canvas { position: absolute; inset: 0; display: block; outline: none; touch-action: none; }
+/* EXPLICIT width/height — never `inset: 0` alone.
+   2.162.0 changed this to `position: absolute; inset: 0` with no width/height,
+   reasoning that the shell is already pinned to four edges so the canvas could
+   just match it. That is true for an ordinary element and FALSE for a replaced
+   one, which <canvas> is: for an absolutely positioned replaced element,
+   `width: auto` resolves to the element's INTRINSIC width (CSS 2.1 §10.3.8)
+   and the `right` inset is then ignored — it does not stretch. A <canvas>'s
+   intrinsic size is its width/height ATTRIBUTES, which default to 300x150, and
+   Babylon sets those from clientWidth/clientHeight — so the box fed its own
+   size back to itself and stuck at 300x150 in the top-left corner, under the
+   top bar. The villa loaded perfectly (telemetry showed 692 meshes and a
+   2.2s paint); it was just being drawn into a stamp-sized box.
+   The irony is that the comment being replaced here named <canvas> as a
+   replaced element and then walked into the other replaced-element rule. */
+.babylon-canvas { width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
 
 /* --- Buttons --- */
 .btn {
