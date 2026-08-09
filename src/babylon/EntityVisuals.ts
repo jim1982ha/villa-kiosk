@@ -408,19 +408,36 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  *  single clean change, and crossing back undoes it exactly. */
 const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
 /**
- * How much of its own width a badge may overlap a neighbour before the two
- * count as piled together. ZERO — badges never overlap, at all.
+ * How much of its own width a badge ICON may overlap a neighbour before the
+ * two count as piled together.
  *
- * It was 0.5, deliberately generous, on the reasoning that a light overlap is
- * normal map UI (Google/Apple Maps pins overlap constantly at city zoom). That
- * held only while a pile could be FANNED apart: the tolerance bought the
- * layout a little slack before it had to act, and the fan then made sure
- * nothing actually ended up drawn on top of anything. With badges pinned to
- * their anchors (see cullLabels' layout section) there is no second chance —
- * whatever this tolerance permits is what the user sees overlapping. So the
- * test is now the plain one: if the drawn footprints touch, they are a pile.
+ * This is THE control over how large badges can get before a room summarises,
+ * and there are only ever three ways to resolve two badges that want the same
+ * pixels: let them overlap, move one, or merge them. Moving is ruled out (it
+ * is the fan, removed in 2.159.0 — see the file header), so the choice is
+ * between this number and how early the room chip appears. They are the same
+ * dial read from two ends.
+ *
+ * It was set to 0 in 2.159.0, which is why badges could not be made much
+ * bigger: a fan and its own light are mounted on ONE fixture, roughly 24px
+ * apart on screen at a normal framing, so with zero tolerance no badge wider
+ * than 24px could ever be drawn there — no matter how much empty floor the
+ * room has, because badges are anchored to devices, not spread over free
+ * space. Half a width doubles that ceiling.
+ *
+ * Half is also what a map does: Google/Apple pins overlap constantly at city
+ * zoom and stay perfectly readable, because a marker is recognisable and
+ * tappable long before it is fully clear of its neighbour. The tap target is
+ * still whole — the badge is not clipped, just partly behind another.
  */
-const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
+const GROUP_OVERLAP_ALLOW_WIDTHS = 0.5;
+/**
+ * The same tolerance for the READOUT pass — zero, and it stays zero.
+ * Overlapping icons read as depth; overlapping TEXT reads as corruption, and
+ * the readout is the thing this design drops first precisely so the icons can
+ * afford the tolerance above.
+ */
+const TEXT_OVERLAP_ALLOW_WIDTHS = 0;
 
 /**
  * Minimum clear gap between two badges' drawn footprints, in px. Below this
@@ -702,19 +719,19 @@ export class EntityVisuals {
    *  bug — see the grouping thresholds' comment). Kept as a field only so
    *  updateClusters and pickClusterAt can read the current frame's result. */
   /**
-   * entity_id → the key of the PILE it was clustered into this frame, for the
-   * badges that are actually hidden behind a chip. Absent = drawn normally.
+   * Rooms summarised into a chip this frame.
    *
-   * This was a per-ROOM flag, and that was the disproportion behind "the room
-   * badge appears far too early": one tight pair anywhere in a room hid EVERY
-   * badge in it. A bedroom with seven devices, two of them mounted a hand's
-   * width apart, lost all seven the moment those two touched — no badge size
-   * or zoom could show the other five, because their own spacing was never the
-   * question being asked. Clustering the pile instead is what every map engine
-   * does: a cluster marker swallows the markers that actually overlap, and its
-   * neighbours a street away are untouched.
+   * Per ROOM, deliberately: when a room collapses it takes ALL of its badges
+   * with it. 2.166.0 briefly clustered per PILE instead — a chip swallowed
+   * only the devices that actually overlapped and left the room's other
+   * badges in place, the way a map clusters markers. It is a defensible model
+   * and it was rejected: a room that is half chip and half loose badges asks
+   * the user to work out which of its devices the chip stands for, and a
+   * count that covers some of a room but not the rest is not a fact anyone
+   * can use. All-or-nothing per room is the readable contract — the chip
+   * means "this room, summarised", every time.
    */
-  private clusteredPileOf = new Map<string, string>();
+  private roomClustered = new Map<string, boolean>();
   /** Room-cluster chips, keyed by room name. Built lazily the first time a
    *  room clusters; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
@@ -2434,7 +2451,7 @@ export class EntityVisuals {
     // disposed control and the chips would silently stop rendering.
     for (const c of this.clusters.values()) c.node.dispose();
     this.clusters.clear();
-    this.clusteredPileOf.clear();
+    this.roomClustered.clear();
     this.labels.clear();
     this.labelLayer.rootContainer.isVisible = true;
 
@@ -2825,7 +2842,7 @@ export class EntityVisuals {
     for (const s of shown) {
       s.lbl.valueWrap.isVisible = s.lbl.valueText.text.length > 0;
     }
-    for (const members of this.groupBadges(shown, this.labelBoxes(shown))) {
+    for (const members of this.groupBadges(shown, this.labelBoxes(shown), TEXT_OVERLAP_ALLOW_WIDTHS)) {
       if (members.length < 2) continue;
       for (const i of members) shown[i].lbl.valueWrap.isVisible = false;
     }
@@ -2876,12 +2893,10 @@ export class EntityVisuals {
     // the honest answer: there is no view in which those two badges could
     // both be read, and drawing one on top of the other hides a device
     // without saying so.
-    this.clusteredPileOf.clear();
-    let pileKey = 0;
+    this.roomClustered.clear();
     for (const members of piles) {
       if (members.length < 2) continue;
-      const key = String(pileKey++);
-      for (const i of members) this.clusteredPileOf.set(shown[i].id, key);
+      for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
     }
 
     for (const s of shown) {
@@ -2890,7 +2905,7 @@ export class EntityVisuals {
       // moves nothing relative to anything else.
       s.lbl.container.linkOffsetXInPixels = 0;
       s.lbl.container.linkOffsetYInPixels = baseY;
-      s.lbl.container.isVisible = s.inFront && !this.clusteredPileOf.has(s.id);
+      s.lbl.container.isVisible = s.inFront && !this.roomClustered.get(this.roomOf(s.id));
     }
     this.updateClusters(shown);
   }
@@ -2940,6 +2955,7 @@ export class EntityVisuals {
   private groupBadges(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
+    allowWidths = GROUP_OVERLAP_ALLOW_WIDTHS,
   ): number[][] {
     const n = shown.length;
     const parent = Array.from({ length: n }, (_, i) => i);
@@ -2947,7 +2963,7 @@ export class EntityVisuals {
       while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
       return x;
     };
-    const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
+    const allow = 1 - allowWidths;
     // ── This MUST be the footprint the renderer actually paints ──────────
     // Both scales, exactly as labelBoxes drew them. 2.152.0 divided the user's
     // size preference back out here, trying to stop the size stepper from
@@ -3159,20 +3175,15 @@ export class EntityVisuals {
     // "diagnostic" classification declutters a flat settings LIST, it isn't
     // a verdict on whether a physically-real, mapped device belongs in a
     // room's device count.
-    // One group per PILE (see clusteredPileOf), not per room — so a chip sits
-    // on the devices it actually swallowed and stands for those alone, while
-    // the rest of the room keeps its individual badges.
-    const groups = new Map<string, {
-      ids: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean;
-      rooms: Map<string, number>;
-    }>();
+    // One group per ROOM: a summarised room hands over ALL of its badges, so
+    // the chip's count is the room's device count and never a subset (see
+    // roomClustered).
+    const groups = new Map<string, { ids: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean }>();
     for (const s of shown) {
-      const key = this.clusteredPileOf.get(s.id);
-      if (key === undefined) continue;
       const room = this.roomOf(s.id);
-      let g = groups.get(key);
-      if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false, rooms: new Map() }; groups.set(key, g); }
-      g.rooms.set(room, (g.rooms.get(room) ?? 0) + 1);
+      if (!this.roomClustered.get(room)) continue;
+      let g = groups.get(room);
+      if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(room, g); }
       g.ids.push(s.id);
       g.sum.addInPlace(s.lbl.anchor.getAbsolutePosition());
       const st = this.lastState.get(s.id);
@@ -3239,17 +3250,9 @@ export class EntityVisuals {
     };
 
     const chips: Chip[] = [];
-    for (const g of groups.values()) {
-      // The key is now a pile id, not a room name, so the chip takes its label
-      // from the pile's own members — the room most of them belong to. `rooms`
-      // is the number of DISTINCT rooms in the pile, which feeds the existing
-      // "+N" suffix, so a pile straddling a doorway says so instead of silently
-      // filing itself under one side.
-      let room = NO_ROOM_LABEL;
-      let best = -1;
-      for (const [r, n] of g.rooms) if (n > best) { best = n; room = r; }
+    for (const [room, g] of groups) {
       const c: Chip = {
-        room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: g.rooms.size,
+        room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1,
         ringRed: g.ringRed, unavailable: g.unavailable,
         x: 0, y: 0, halfW: 0, halfH: 0,
       };

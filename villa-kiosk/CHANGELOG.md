@@ -1,3 +1,23 @@
+## 2.168.0
+
+### Changed — badge icons may overlap by half a width, which doubles how big they can get
+
+Why the size ceiling was where it was: badges are anchored to DEVICES, not spread over free space, and the four badges in the Master Bedroom belong to one ceiling fixture — the fan, its own light, a second light and a sensor. Two of them sit about 24 screen pixels apart at that framing. The empty floor around them is irrelevant to the question being asked, which is only ever "do these two specific badges fit". With the overlap tolerance at zero, no badge wider than ~24px could be drawn there, which is exactly the ceiling that kept being hit.
+
+There are only three ways to resolve two badges that want the same pixels: let them overlap, move one, or merge them. Moving is ruled out — that was the fan, removed in 2.159.0 after badges visibly re-arranged between zoom steps. So the tolerance and how early the chip appears are the same dial read from two ends, and 2.159.0 had it pinned at the end that produces the smallest possible icons.
+
+Icons may now overlap by half their width, doubling the size they can reach before a room summarises. This is what a map does — Google and Apple pins overlap constantly at city zoom and stay perfectly readable, because a marker is recognisable and tappable long before it is fully clear of its neighbour. The badge is not clipped; it is simply partly behind another, and its whole tap target is still there.
+
+The readout keeps a tolerance of ZERO and always will. Overlapping icons read as depth; overlapping text reads as corruption. The value is still the first thing dropped when things get tight (2.165.0), and that is precisely what lets the icons afford the tolerance.
+
+### Changed — a summarised room hands over ALL of its badges
+
+2.166.0 clustered per PILE: a chip swallowed only the devices that actually overlapped and left the room's other badges in place, the way a map clusters markers. It is a defensible model and it is not the one wanted here.
+
+A room that is half chip and half loose badges asks the user to work out which of its devices the chip stands for, and a count covering some of a room but not the rest is not a fact anyone can act on. All-or-nothing per room is the readable contract: the chip means "this room, summarised", every time, and its count is the room's device count. Clustering is per room again.
+
+The two changes pull in opposite directions on purpose. Per-room collapse is the more aggressive rule, and the overlap tolerance is what buys back the headroom it costs — with a lot left over, since the tolerance moves the ceiling by 2x and the room rule only matters once something has already collided.
+
 ## 2.167.0
 
 ### Fixed — the Energy tile's "high draw" threshold was a hardcoded per-site constant
