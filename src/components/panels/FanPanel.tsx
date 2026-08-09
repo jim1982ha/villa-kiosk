@@ -7,7 +7,6 @@ import UnavailableNotice from "./UnavailableNotice";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { useStateHistory } from "@/hooks/useStateHistory";
 import { onOffColor, isUnavailable } from "@/utils/stateColors";
 
 // Named labels for the common discrete-speed-count cases (matches how HA's
@@ -28,7 +27,6 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
   const on = entity?.state === "on";
   const presets = (entity?.attributes.preset_modes ?? []) as string[];
   const currentPreset = entity?.attributes.preset_mode;
-  const { data: history, loading: historyLoading } = useStateHistory(mapping.entityId);
 
   // Continuous speed, exposed as discrete steps (same idea as HA's own fan
   // more-info card) rather than a free-drag slider — a separate control from
@@ -96,7 +94,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline data={history} colorFor={onOffColor} loading={historyLoading} />
+      <LastDayTimeline entityId={mapping.entityId} colorFor={onOffColor} />
     </BasePanel>
   );
 }

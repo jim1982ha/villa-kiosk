@@ -8,7 +8,6 @@ import UnavailableNotice from "./UnavailableNotice";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { useStateHistory } from "@/hooks/useStateHistory";
 import { brightnessToPct } from "@/utils/colorUtils";
 import { onOffColor, isUnavailable } from "@/utils/stateColors";
 
@@ -22,7 +21,6 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
 
   const [brightness, setBrightness] = useState(entity?.attributes.brightness ?? 255);
   const [kelvin, setKelvin] = useState(entity?.attributes.color_temp_kelvin ?? 4000);
-  const { data: history, loading: historyLoading } = useStateHistory(mapping.entityId);
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Lightbulb size={22} />} onClose={onClose}>
@@ -58,7 +56,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline data={history} colorFor={onOffColor} loading={historyLoading} />
+      <LastDayTimeline entityId={mapping.entityId} colorFor={onOffColor} />
     </BasePanel>
   );
 }

@@ -48,6 +48,13 @@ const DANGER_COLOR = STATUS_COLOR.alert;
 
 /** Plain on/off devices (light, fan, switch): on = accent, off = neutral track. */
 export function onOffColor(state: string): string {
+  // "unavailable"/"unknown" is NOT "off" — painting a stretch where Home
+  // Assistant had lost contact in the same grey as a device that was
+  // deliberately switched off asserts a state nobody observed, and it is the
+  // one distinction this palette exists to keep (see UNAVAILABLE's own note
+  // and babylon/colors.ts). Amber on the timeline, exactly as the status pill
+  // and the map badge already report it.
+  if (state === "unavailable" || state === "unknown") return WARN_COLOR;
   return state === "on" ? ON_COLOR : OFF_COLOR;
 }
 

@@ -6,7 +6,6 @@ import LastDayTimeline from "./LastDayTimeline";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { useStateHistory } from "@/hooks/useStateHistory";
 import { coverColor, isUnavailable } from "@/utils/stateColors";
 
 export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
@@ -15,7 +14,6 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   const pos = entity?.attributes.current_position;
   const hasPosition = typeof pos === "number";
   const [position, setPosition] = useState<number>(hasPosition ? pos! : 0);
-  const { data: history, loading: historyLoading } = useStateHistory(mapping.entityId);
   // While the user is dragging the slider, ignore live HA updates: a state event
   // arriving mid-drag would otherwise snap `position` back to the device's value,
   // so the release would send the stale number (or nothing changed). Resume
@@ -72,7 +70,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline data={history} colorFor={coverColor} loading={historyLoading} />
+      <LastDayTimeline entityId={mapping.entityId} colorFor={coverColor} />
     </BasePanel>
   );
 }

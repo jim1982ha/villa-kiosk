@@ -1,3 +1,29 @@
+## 2.154.0
+
+### Fixed — a card-style badge's value was white text on a white badge
+
+Reported with a screenshot of the light theme: the readings beside each badge ("0 W", "1 W") were unreadable. `CARD_TEXT` was a hardcoded near-white, which was correct while the card style meant a saturated category-coloured card — the neutral-by-default redesign made that card a plain `--bg-modal`, and nothing updated the text with it. In the light theme that is white on near-white.
+
+The classic style was never affected: its value sits on its own dark pill, so fixed white is right there and that constant survives as `PILL_TEXT`. The card's value has no backing of its own — it sits directly on the badge surface — so it now takes that surface's glyph colour, which also means it tints with state exactly as the icon does instead of staying at its build-time colour when the card goes active or alerting.
+
+### Changed — the big On button now speaks the badge's language
+
+The panel's power button filled with an accent gradient when on. That is the app's primary-ACTION colour — the single solid accent a modal is allowed, which belongs to its Close button — being used to mean something entirely different, "this device is currently on". It also collided with the bottom bar's own on/off green, which is what made the two read as the same control.
+
+It now reuses exactly what `categorySurface()` hands the map badges and the bottom-bar tiles: a soft tint of the state colour, the state colour for the glyph and label, and a 1.5px ring. One vocabulary for "this is on", wherever it appears, and the panel is back to one solid accent on screen.
+
+### Added — a range picker on the device history timeline
+
+Every simple device panel ended with a fixed "Last 24 hours" strip. It now offers 1h / 12h / 24h / 7d, defaulting to 24h as before.
+
+The control lives in the shared `LastDayTimeline` rather than in each panel, and that component now owns the fetch instead of receiving `data` — which is the whole reason the range can live in one place rather than being duplicated as state in all five panels that show a timeline. Each preset carries its own bucket size (1 minute at an hour, 60 at a week): a 7-day window bucketed at the 24-hour window's resolution would be thousands of segments wide.
+
+### Fixed — a device Home Assistant had lost contact with was reported as "off"
+
+`onOffColor` mapped everything that was not "on" to the idle grey, so a stretch where HA had no contact with a light, fan or switch was painted identically to one where it was deliberately switched off. That asserts a state nobody observed, and it is precisely the distinction this palette exists to preserve — the same one `babylon/colors.ts` and the status pill already keep. `unavailable` and `unknown` now paint amber on the timeline, matching how the pill and the map badge already report them.
+
+This is also what makes the timeline meaningful for a device that is currently offline. It was already rendered for one (it sits outside every panel's `unavailable` guard), but a fully-offline window drew as a solid "off" bar, which said the opposite of what happened. Nothing new was invented for it: amber is the existing `STATUS_COLOR.unavailable`, one of the four meanings the Map colours legend documents.
+
 ## 2.153.0
 
 ### Fixed — badges could visibly overlap, and a room could never be opened again

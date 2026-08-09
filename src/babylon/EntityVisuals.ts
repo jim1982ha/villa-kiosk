@@ -276,7 +276,13 @@ const CARD_PAD_LEFT_PX = 4;        // extra LEFT breathing room (the baked inset
 // default, category- or danger-tinted only when active/alerting — see
 // VESTA-DESIGN.md §0), carrying the baked squircle icon (badgeImageDataUrl,
 // whose glyph stroke matches that same state) and white text.
-const CARD_TEXT = "#f8fafc";
+// The CLASSIC style's value pill is a dark stadium of its own, so its text is
+// fixed white regardless of theme. The CARD style has no such backing — its
+// text sits directly on the badge surface, which is now neutral and
+// theme-driven (see categorySurface), so a fixed white there is white-on-white
+// in the light theme. Card text takes the surface's own glyph colour instead;
+// this constant is only the classic pill's.
+const PILL_TEXT = "#f8fafc";
 
 // Entity types compactValue() can EVER return non-empty text for — must stay
 // in sync with that switch. Used by labelBoxes to reserve pill-sized
@@ -2579,8 +2585,12 @@ export class EntityVisuals {
 
       const valueText = new TextBlock(`lbl_value_${entityId}`);
       valueText.text = "";
-      // White on both: the classic pill (dark) and the coloured card.
-      valueText.color = CARD_TEXT;
+      // Card: the surface's glyph colour, so it stays legible on a neutral
+      // badge and shifts with state exactly as the icon does. Classic: white,
+      // on its own dark pill. updateLabel re-applies the card case per state.
+      valueText.color = card
+        ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).glyph
+        : PILL_TEXT;
       // Match the app's own UI typeface (--font-ui) instead of the GUI layer's
       // Babylon default (Arial) — that mismatch was rendering the pill in a
       // font that visually clashed with every other label in the app.
@@ -2663,6 +2673,10 @@ export class EntityVisuals {
       lbl.badge.thickness = surface.ring ? BADGE_RING_THICKNESS : 0;
       lbl.badge.color = surface.ring ?? "transparent";
       lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, state, override, BADGE_INSET_CARD);
+      // The inline value shares the card's surface, so it must track the same
+      // glyph colour — otherwise it stays at its build-time "off" colour and
+      // goes unreadable the moment the card tints for active/alert.
+      lbl.valueText.color = surface.glyph;
     } else {
       // Classic style bakes fill + ring straight into the glyph image itself
       // (see badgeIcons.ts) — the wrapping Rectangle stays a plain

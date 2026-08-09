@@ -6,7 +6,6 @@ import LastDayTimeline from "./LastDayTimeline";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { useStateHistory } from "@/hooks/useStateHistory";
 import { usePendingAck } from "@/hooks/usePendingAck";
 import { lockColor, isUnavailable } from "@/utils/stateColors";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
@@ -16,7 +15,6 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   const unavailable = isUnavailable(entity);
   const locked = entity?.state === "locked";
   const [confirming, setConfirming] = useState(false);
-  const { data: history, loading: historyLoading } = useStateHistory(mapping.entityId);
   // A deadbolt is the SLOWEST device class in the villa — a Z-Wave/Zigbee
   // lock routinely takes seconds to report back, and unlike a light there is
   // usually no way to see the result from where you're standing. This panel
@@ -94,7 +92,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
         </div>
       )}
 
-      <LastDayTimeline data={history} colorFor={lockColor} loading={historyLoading} />
+      <LastDayTimeline entityId={mapping.entityId} colorFor={lockColor} />
 
       {!unavailable && !locked && (
         <p className="muted body-text mt">
