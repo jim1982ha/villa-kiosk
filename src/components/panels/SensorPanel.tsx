@@ -128,6 +128,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
             <StateTimeline
               data={stateHistory}
               colorFor={(s) => binarySensorColor(s, alertState)}
+              hours={range.hours}
               loading={historyLoading}
             />
           </div>
@@ -151,6 +152,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
                 colorFor={enumPalette!}
                 legend={enumDistinctStates.map((s) => ({ state: s, color: enumPalette!(s) }))}
                 loading={historyLoading}
+                hours={range.hours}
                 bucketMinutes={range.bucketMinutes}
               />
             ) : (

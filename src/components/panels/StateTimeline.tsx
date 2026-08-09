@@ -23,7 +23,12 @@ interface Props {
    *  the window starts (typical of HA's history API, which includes the
    *  state active AT the window start as the first point). */
   data: StateHistoryPoint[];
-  hours?: number;
+  /** The window the bar spans, in hours — REQUIRED, because it is what the
+   *  x-axis means. It used to default to 24, and every caller let it: picking
+   *  "1h" then fetched an hour of history and drew it across a 24-hour axis, so
+   *  it appeared as a sliver at the right-hand edge with 23 hours of empty
+   *  track beside it. The data and the axis have to come from the same range. */
+  hours: number;
   colorFor: (state: string) => string;
   height?: number;
   /** Optional legend row below the bar — pass this for states whose colour
@@ -123,7 +128,7 @@ function prettyState(s: string): string {
 }
 
 export default function StateTimeline({
-  data, hours = 24, colorFor, height, legend, loading, vertical, bucketMinutes,
+  data, hours, colorFor, height, legend, loading, vertical, bucketMinutes,
   baselineStates,
 }: Props) {
   const [hover, setHover] = useState<{ x: number; cell: Cell } | null>(null);

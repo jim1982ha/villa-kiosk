@@ -1,3 +1,9 @@
+## 2.196.0
+
+### Fixed — the state timeline always drew a 24-hour axis whatever range you picked
+
+Its `hours` prop defaulted to 24 and no caller ever passed one, so choosing "1h" fetched an hour of history and drew it across a 24-hour axis — a sliver at the right edge — while "7d" showed only its last day. Every caller now passes the selected range, and the prop is required so a new one cannot inherit the wrong axis silently. The numeric sparklines already scaled to their own data and were correct.
+
 ## 2.195.0
 
 ### Fixed — the badge tooltip appeared over the camera feed

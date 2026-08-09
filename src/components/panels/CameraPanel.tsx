@@ -857,6 +857,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             // per-change segments, which is what made this bar overstate
             // motion and visibly reshuffle between renders. See
             // StateTimeline's bucketMinutes docstring.
+            hours={24}
             bucketMinutes={5}
             // `online` is the resting state — the camera being fine is not
             // news, so it is neither painted nor listed. What remains is a

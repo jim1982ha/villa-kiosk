@@ -40,6 +40,7 @@ export default function LastDayTimeline({
         data={data}
         colorFor={paint}
         loading={loading}
+        hours={range.hours}
         bucketMinutes={range.bucketMinutes}
       />
     </div>
