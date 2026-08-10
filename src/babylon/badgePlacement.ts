@@ -30,7 +30,11 @@
 //     members of THAT pile — there is no global scan and no cross-pile
 //     cascade to reason about.
 //
-// So union-find no longer decides what draws. It decides who competes.
+// So union-find no longer decides what draws. It decides who competes — and,
+// since 2.250.0, who SUMMARISES TOGETHER: a deferral bucket is keyed by pile
+// rather than by room, so the badge a loser is drawn with is the badge it
+// actually lost to. See step 5 for the whole-room collapse that keying by room
+// was causing.
 
 /** One badge offered to the solver. */
 export interface PlacementItem {
@@ -55,14 +59,49 @@ export interface PlacementItem {
 
 /** Badges that could not be drawn, gathered into one summary badge. */
 export interface DeferralBucket {
-  /** roomKey — one room per bucket, always. */
+  /** The bucket's PRIMARY roomKey — `rooms[0]`, i.e. the lowest in byte order.
+   *  Names the group and keys its controls. A bucket may span rooms (see
+   *  `rooms`), in which case this is one of several and the caller marks it. */
   room: string;
+  /**
+   * Every roomKey represented, sorted, unique. Length 1 is the common case.
+   *
+   * A bucket used to be one room BY CONSTRUCTION, because deferrals were
+   * bucketed by room. That rule cost far more than it protected: a badge that
+   * lost to a neighbour ACROSS a room boundary had no room-mate to summarise
+   * with, so it fell through to "a bucket of one has nothing to summarise
+   * with" and took its entire room to the chip — including badges metres away
+   * that had conflicted with nothing at all. Reported as "the whole Living
+   * Room becomes one chip and there is obviously space for the icons".
+   *
+   * Buckets are keyed by PILE now, so the partner a loser summarises with is
+   * the badge it actually lost to, whatever room that is in. See solvePlacement
+   * step 5.
+   */
+  rooms: string[];
   /** Stable identity across frames: the lowest sortKey of the whole PILE, not
    *  of the surviving members, so the group's GUI controls are not rebuilt
    *  (and do not flicker) when membership shifts by one at a zoom step. */
   pileKey: string;
   /** Indices into the input array. Always ≥ 2 — see solvePlacement. */
   members: number[];
+}
+
+/** Counters for `?debug`. Costs a handful of increments; never read otherwise. */
+export interface PlacementStats {
+  items: number;
+  exempt: number;
+  piles: number;
+  accepted: number;
+  /** Lost their own anchor in the greedy pass, before any pull-back. */
+  deferred: number;
+  /** Accepted badges dragged back into a bucket of one (step 6). */
+  pulledBack: number;
+  buckets: number;
+  /** Of `buckets`, how many span more than one room — the case that used to
+   *  be impossible and used to cost a whole room its badges. */
+  crossRoom: number;
+  chipRooms: number;
 }
 
 /**
@@ -80,8 +119,10 @@ export interface PlacementResult {
    *  `i < bucketCount` and ignore the rest. */
   buckets: DeferralBucket[];
   bucketCount: number;
-  /** roomKeys that must fall all the way to their chip. */
+  /** roomKeys that must fall all the way to their chip. Sorted. */
   chipRooms: string[];
+  /** `?debug` counters — see PlacementStats. */
+  stats: PlacementStats;
 }
 
 /** Reusable working set. One per caller — see solvePlacement. */
@@ -92,11 +133,16 @@ export interface PlacementScratch {
   deferred: Int32Array;
   cells: Map<number, number[]>;
   piles: number[][];
+  pileIdx: Int32Array;
   buckets: DeferralBucket[];
+  /** pile index → bucket index, or -1. Buckets are keyed by pile. */
+  pileBucket: Int32Array;
+  bucketDead: Uint8Array;
   chipRooms: string[];
+  chipped: Set<string>;
   roomCount: Map<string, number>;
-  roomOfBucket: Map<string, number>;
   contacts: Uint8Array;
+  stats: PlacementStats;
 }
 
 export function createPlacementScratch(): PlacementScratch {
@@ -107,11 +153,18 @@ export function createPlacementScratch(): PlacementScratch {
     deferred: new Int32Array(0),
     cells: new Map(),
     piles: [],
+    pileIdx: new Int32Array(0),
     buckets: [],
+    pileBucket: new Int32Array(0),
+    bucketDead: new Uint8Array(0),
     chipRooms: [],
+    chipped: new Set(),
     roomCount: new Map(),
-    roomOfBucket: new Map(),
     contacts: new Uint8Array(0),
+    stats: {
+      items: 0, exempt: 0, piles: 0, accepted: 0, deferred: 0,
+      pulledBack: 0, buckets: 0, crossRoom: 0, chipRooms: 0,
+    },
   };
 }
 
@@ -287,9 +340,13 @@ export function solvePlacement(
   accepted.fill(0, 0, n);
   st.chipRooms.length = 0;
   let bucketCount = 0;
+  const stats = st.stats;
+  stats.items = n; stats.exempt = 0; stats.piles = 0; stats.accepted = 0;
+  stats.deferred = 0; stats.pulledBack = 0; stats.buckets = 0;
+  stats.crossRoom = 0; stats.chipRooms = 0;
 
   if (n === 0) {
-    return { accepted, buckets: st.buckets, bucketCount: 0, chipRooms: st.chipRooms };
+    return { accepted, buckets: st.buckets, bucketCount: 0, chipRooms: st.chipRooms, stats };
   }
 
   // ── 1. Spatial index ─────────────────────────────────────────────────────
@@ -305,7 +362,8 @@ export function solvePlacement(
     // No usable geometry this frame (zoom unresolved, degenerate projection).
     // Draw everything rather than summarise on numbers we do not trust.
     accepted.fill(1, 0, n);
-    return { accepted, buckets: st.buckets, bucketCount: 0, chipRooms: st.chipRooms };
+    stats.accepted = n;
+    return { accepted, buckets: st.buckets, bucketCount: 0, chipRooms: st.chipRooms, stats };
   }
 
   const cells = st.cells;
@@ -358,8 +416,15 @@ export function solvePlacement(
   const piles = st.piles;
   let pileCount = 0;
   const pileOf = new Map<number, number>();
+  // -1 means "in no pile": an exempt badge, which takes no part in the graph.
+  // It has to be a real sentinel rather than the default 0, because a bucket
+  // is keyed by pile now and an exempt item left at 0 would read as a member
+  // of pile 0.
+  if (st.pileIdx.length < n) st.pileIdx = new Int32Array(n * 2);
+  const pileIdx = st.pileIdx;
+  pileIdx.fill(-1, 0, n);
   for (let i = 0; i < n; i++) {
-    if (items[i].exempt) { accepted[i] = 1; continue; }
+    if (items[i].exempt) { accepted[i] = 1; stats.exempt++; continue; }
     const r = find(i);
     let p = pileOf.get(r);
     if (p === undefined) {
@@ -369,7 +434,9 @@ export function solvePlacement(
       piles[p].length = 0;
     }
     piles[p].push(i);
+    pileIdx[i] = p;
   }
+  stats.piles = pileCount;
 
   // How many badges each room is showing — the denominator for "this bucket
   // covers the whole room, so it IS the room".
@@ -410,77 +477,94 @@ export function solvePlacement(
       else deferred[deferredCount++] = i;
     }
   }
+  stats.deferred = deferredCount;
 
-  // ── 5. Bucket the deferrals by room ──────────────────────────────────────
-  const roomOfBucket = st.roomOfBucket;
-  roomOfBucket.clear();
-  const pileKeyOf = (i: number): string => {
+  // ── 5. Bucket the deferrals by PILE ──────────────────────────────────────
+  // Not by room, which is what this used to do and what made a cross-room
+  // collision catastrophic.
+  //
+  // A pile is the set of badges that competed for the same piece of floor —
+  // they are transitively within a conflict distance of each other, by
+  // construction. So the badges that lost inside one pile are exactly the ones
+  // it is honest to draw as a single summary standing where they are, and a
+  // room boundary running through the middle of that pile is a fact about the
+  // floor plan, not about the crowding.
+  //
+  // Bucketing by room had two consequences, neither intended. Two deferrals
+  // from DIFFERENT piles in the same room merged into one summary drawn at the
+  // midpoint of both — a badge pointing at floor between two unrelated
+  // clusters. And a deferral whose only near neighbour was in another room was
+  // alone in its bucket with no room-mate close enough to pair with, so it fell
+  // to "a bucket of one has nothing to summarise with" and chipped its whole
+  // room. Both are fixed by asking the pile instead of the map.
+  const pileKeyOf = (p: number): string => {
     // The whole pile's lowest sortKey — stable even as membership shifts.
-    const members = piles[pileIndexOf(i)];
+    const members = piles[p];
     let k = items[members[0]].sortKey;
     for (let m = 1; m < members.length; m++) {
       if (byteLess(items[members[m]].sortKey, k)) k = items[members[m]].sortKey;
     }
     return k;
   };
-  const pileIdx = new Int32Array(n);
-  for (let p = 0; p < pileCount; p++) for (const i of piles[p]) pileIdx[i] = p;
-  function pileIndexOf(i: number): number { return pileIdx[i]; }
+  if (st.pileBucket.length < pileCount) st.pileBucket = new Int32Array(pileCount * 2);
+  const pileBucket = st.pileBucket;
+  pileBucket.fill(-1, 0, pileCount);
 
   for (let d = 0; d < deferredCount; d++) {
     const i = deferred[d];
-    const room = items[i].room;
-    let bi = roomOfBucket.get(room);
-    if (bi === undefined) {
+    const p = pileIdx[i];
+    let bi = pileBucket[p];
+    if (bi < 0) {
       bi = bucketCount++;
-      roomOfBucket.set(room, bi);
-      if (!st.buckets[bi]) st.buckets[bi] = { room, pileKey: "", members: [] };
+      pileBucket[p] = bi;
+      if (!st.buckets[bi]) st.buckets[bi] = { room: "", rooms: [], pileKey: "", members: [] };
       const b = st.buckets[bi];
-      b.room = room;
-      b.pileKey = pileKeyOf(i);
+      b.pileKey = pileKeyOf(p);
       b.members.length = 0;
+      b.rooms.length = 0;
     }
     st.buckets[bi].members.push(i);
   }
 
   // ── 6. A bucket of one is not a group ────────────────────────────────────
   // A summary badge showing "1" is a worse drawing of a badge. So a lone
-  // deferral pulls its NEAREST accepted room-mate down with it, making an
+  // deferral pulls its nearest accepted PILE-MATE down with it, making an
   // honest group of two.
   //
-  // This rule is load-bearing rather than cosmetic: a ceiling fan and its own
-  // light are one pile of two in one room, so the fan is accepted, the light
-  // deferred, and the pull-back turns them back into the group of 2 that
-  // 2.231.0 drew. New behaviour therefore appears only at pile size 3 and up,
-  // which is exactly where it was wanted — and the rule that two devices at
-  // one point can never be two readable badges is untouched.
+  // Searching the pile rather than the room is what makes this rule total. A
+  // bucket of one can only come from a pile of two or more, and that badge
+  // deferred precisely because it conflicted with something already accepted
+  // in the same pile — so an accepted partner always exists, and it is within
+  // one conflict distance, comfortably inside the bound below. The "nothing
+  // near enough, chip the room" outcome is therefore no longer reachable from
+  // here. It used to be the common case, because the search was restricted to
+  // room-mates and the badge that beat you is very often in the next room.
+  //
+  // The rule stays load-bearing for the case it was written for: a ceiling fan
+  // and its own light are one pile of two in one room, so the fan is accepted,
+  // the light deferred, and the pull-back turns them back into the group of 2
+  // that 2.231.0 drew.
   //
   // NEAREST rather than lowest-priority, and BOUNDED, because the group is
   // drawn at its members' centroid. An unbounded search happily paired a
   // device with a room-mate ten metres away and drew the summary at the
   // midpoint — a badge sitting where neither of the two devices it claims to
   // stand for actually is, which is a worse lie than the crowding it set out
-  // to solve. The partner must be within PULLBACK_REACH_FACTOR of the
-  // distance at which the two would have conflicted, so the summary lands
-  // within about a badge's width of both.
-  //
-  // Note no accepted room-mate can ever be closer than that conflict distance
-  // itself: if it were, the two would have conflicted, so it would be in the
-  // same pile and deferred rather than accepted.
+  // to solve.
   for (let b = 0; b < bucketCount; b++) {
     const bucket = st.buckets[b];
     if (bucket.members.length !== 1) continue;
     const lone = bucket.members[0];
     const li = items[lone];
     let best = -1, bestD2 = Infinity;
-    for (let i = 0; i < n; i++) {
-      if (!accepted[i] || items[i].room !== bucket.room || items[i].exempt) continue;
+    for (const i of piles[pileIdx[lone]]) {
+      if (!accepted[i]) continue;
       const dx = items[i].wx - li.wx, dy = items[i].wy - li.wy, dz = items[i].wz - li.wz;
       const d2 = dx * dx + dy * dy + dz * dz;
       const bound = PULLBACK_REACH_FACTOR
         * Math.max(li.reach + items[i].reach + gap, minSeparation);
       if (d2 > bound * bound) continue;
-      // Deterministic on ties, so two equidistant room-mates cannot alternate.
+      // Deterministic on ties, so two equidistant pile-mates cannot alternate.
       if (d2 < bestD2 || (d2 === bestD2 && best >= 0 && byteLess(items[i].sortKey, items[best].sortKey))) {
         best = i; bestD2 = d2;
       }
@@ -488,28 +572,75 @@ export function solvePlacement(
     if (best < 0) continue; // nothing near enough — falls to the chip below
     accepted[best] = 0;
     bucket.members.push(best);
+    stats.pulledBack++;
   }
 
-  // ── 7. Buckets that are really the room ──────────────────────────────────
+  // ── 7. Buckets that are really the room, and the chip cascade ────────────
   // Two renderings of the same content is how a viewer learns to distrust
   // both: a group covering everything its room has to show IS the room, and
-  // renders as the room chip. A bucket still stuck at one member has nothing
-  // to summarise with, so its room falls to the chip too — which for a room
-  // whose only badge that is, is exactly what the chip means.
+  // renders as the room chip instead.
+  //
+  // "Covering the room" now needs the SINGLE-ROOM qualifier. A bucket that
+  // holds both of the Living Room's badges plus one of the bedroom's is not
+  // the Living Room — it is a crowd that happens to straddle a wall, and
+  // collapsing it to a Living Room chip both mislabels it and loses the
+  // bedroom badge. Only a bucket whose every member is in one room can BE that
+  // room.
+  //
+  // The loop runs to a fixed point because chipping is contagious in one
+  // direction: a chipped room hides all of its badges (the all-or-nothing
+  // contract below), so any bucket holding one of them loses that member, and
+  // a bucket dropping under two members chips ITS rooms in turn. Rooms are
+  // only ever added to `chipped`, and there are finitely many, so this
+  // terminates; the round guard is belt and braces.
+  const chipped = st.chipped;
+  chipped.clear();
+  if (st.bucketDead.length < bucketCount) st.bucketDead = new Uint8Array(bucketCount * 2);
+  const dead = st.bucketDead;
+  dead.fill(0, 0, bucketCount);
+
+  for (let round = 0; round <= bucketCount + 1; round++) {
+    let changed = false;
+    for (let b = 0; b < bucketCount; b++) {
+      if (dead[b]) continue;
+      const bucket = st.buckets[b];
+      if (chipped.size > 0) {
+        let w = 0;
+        for (const i of bucket.members) if (!chipped.has(items[i].room)) bucket.members[w++] = i;
+        if (w !== bucket.members.length) { bucket.members.length = w; changed = true; }
+      }
+      // Rooms present, unique, sorted — deterministic on every device. The
+      // member list is short (a crowded pile is a handful of badges), so the
+      // linear scan is cheaper than any set.
+      bucket.rooms.length = 0;
+      for (const i of bucket.members) {
+        const r = items[i].room;
+        if (!bucket.rooms.includes(r)) bucket.rooms.push(r);
+      }
+      bucket.rooms.sort();
+      bucket.room = bucket.rooms[0] ?? "";
+      const whole = bucket.rooms.length === 1
+        && bucket.members.length >= (roomCount.get(bucket.room) ?? 0);
+      if (bucket.members.length >= 2 && !whole) continue;
+      dead[b] = 1;
+      changed = true;
+      // A bucket that cannot stand as a group hands its rooms to their chips.
+      // With the pile-wide pull-back above, "stuck at one member" is only
+      // reachable by the drop just performed, not by a failed partner search.
+      for (const r of bucket.rooms) chipped.add(r);
+    }
+    if (!changed) break;
+  }
+
   let live = 0;
   for (let b = 0; b < bucketCount; b++) {
-    const bucket = st.buckets[b];
-    const whole = bucket.members.length >= (roomCount.get(bucket.room) ?? 0);
-    if (bucket.members.length < 2 || whole) {
-      st.chipRooms.push(bucket.room);
-      for (const i of bucket.members) accepted[i] = 0;
-      continue;
-    }
+    if (dead[b]) continue;
     if (live !== b) {
       const tmp = st.buckets[live];
-      st.buckets[live] = bucket;
+      st.buckets[live] = st.buckets[b];
       st.buckets[b] = tmp;
     }
+    if (st.buckets[live].rooms.length > 1) stats.crossRoom++;
     live++;
   }
   bucketCount = live;
@@ -518,17 +649,15 @@ export function solvePlacement(
   // accepted elsewhere in the pass — all-or-nothing per room is the readable
   // contract, and a room that is half chip and half badges asks the viewer to
   // work out which devices the chip stands for.
+  for (const r of chipped) st.chipRooms.push(r);
+  st.chipRooms.sort();
   if (st.chipRooms.length > 0) {
-    const chipped = new Set(st.chipRooms);
     for (let i = 0; i < n; i++) if (chipped.has(items[i].room)) accepted[i] = 0;
-    for (let b = 0; b < bucketCount; b++) {
-      if (!chipped.has(st.buckets[b].room)) continue;
-      // Its members are already hidden by the chip; drop the duplicate group.
-      st.buckets[b] = st.buckets[bucketCount - 1];
-      bucketCount--;
-      b--;
-    }
   }
 
-  return { accepted, buckets: st.buckets, bucketCount, chipRooms: st.chipRooms };
+  stats.buckets = bucketCount;
+  stats.chipRooms = st.chipRooms.length;
+  for (let i = 0; i < n; i++) if (accepted[i]) stats.accepted++;
+
+  return { accepted, buckets: st.buckets, bucketCount, chipRooms: st.chipRooms, stats };
 }

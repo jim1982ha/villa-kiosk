@@ -85,7 +85,7 @@ import {
 import { badgeRank } from "./badgePriority";
 import {
   solvePlacement, markContacts, createPlacementScratch, conflicts,
-  type PlacementItem, type PlacementScratch,
+  type PlacementItem, type PlacementScratch, type PlacementStats,
 } from "./badgePlacement";
 import { clampIconScale } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
@@ -608,11 +608,15 @@ interface PendingEntityGroup {
    *  Membership is a pure function of world positions and quantised zoom, so
    *  the same pile yields the same key on every device and every frame. */
   key: string;
-  /** The room's name as it will be PRINTED (raw, from HA). */
+  /** The room's name as it will be PRINTED (raw, from HA), carrying the room
+   *  chip's own "+N" suffix when the group straddles a boundary — see
+   *  badgePlacement's DeferralBucket.rooms for why it now can. */
   room: string;
-  /** The same room as a Map key — see EntityVisuals.roomClustered for why the
-   *  two are carried separately rather than derived at each use. */
-  roomKey: string;
+  /** Every room the group covers, as Map keys — see EntityVisuals.roomClustered
+   *  for why the printable and the key form are carried separately rather than
+   *  derived at each use. A group that cannot be placed escalates ALL of them,
+   *  because all-or-nothing per room is what makes a chip readable. */
+  roomKeys: string[];
   members: number[];
   wx: number; wy: number; wz: number;
 }
@@ -750,6 +754,8 @@ export class EntityVisuals {
   private lastState = new Map<string, HassEntity>();
   /** User size multiplier (Settings slider) and live bird's-eye zoom factor;
    *  the badge container is scaled by their product. */
+  /** Last line emitted by logPlacement, so the pass logs only on CHANGE. */
+  private lastPlaceLog = "";
   private iconUserScale = 1;
   private iconZoomScale = 1;
   /** Every badge dimension, in CSS px, for the pointer currently driving this
@@ -3475,10 +3481,27 @@ export class EntityVisuals {
     // overlapped — and in an open-plan villa that fires constantly. It was the
     // single biggest cause of "everything is an aggregate badge".
     //
-    // A cross-room pile now resolves like any other: rank decides, the winner
-    // keeps its badge, and each loser falls to a group in ITS OWN room. No
-    // group ever spans rooms, so the labelling objection is still satisfied —
-    // it just no longer costs the bystanders.
+    // A cross-room pile now resolves like any other: rank decides and the
+    // winner keeps its badge.
+    //
+    // ── …and the loser summarises with the badge it LOST TO (2.250.0) ─────
+    // 2.232.0 sent each loser to a group in ITS OWN room, on the reasoning
+    // that a group spanning two rooms could not be labelled honestly. That
+    // reasoning was still the old one, and it still cost too much — just less
+    // visibly. A badge whose only near neighbour is across a boundary has no
+    // room-mate to summarise with, so it fell through "a group of one is not a
+    // group" and took its whole room to the chip, INCLUDING badges metres away
+    // that had conflicted with nothing. Reported with two screenshots one icon
+    // step apart: a living room with three badges and acres of empty floor
+    // collapsing to a single chip, because one camera on the bedroom wall lost
+    // to a bedroom device.
+    //
+    // Deferrals are bucketed by PILE now, so a group holds the badges that
+    // actually competed, whatever rooms they are in. The labelling objection is
+    // answered rather than avoided: a multi-room group prints the room chip's
+    // own "Living Room +1" form, and its tap opens the same device list, which
+    // names every member anyway. What it no longer does is spend the
+    // bystanders.
     //
     // ── A BADGE NEVER MOVES (2.206.0) ─────────────────────────────────────
     // There used to be a tier between 2 and 3: a collided pile was opened out
@@ -3501,17 +3524,22 @@ export class EntityVisuals {
     // a pile spread, some not — cannot occur because there is no spreading.
     //
     // Rules that keep the group from becoming a second, competing concept:
-    //   * ONE ROOM ONLY, so a group can always be labelled and navigated to.
-    //   * A group that would cover ALL of its room's badges IS the room, so it
-    //     renders as the room chip instead. Two renderings of the same content
-    //     is how a viewer learns to distrust both.
+    //   * ONE PILE ONLY, so a group always stands among the badges it replaced
+    //     rather than at the midpoint of two unrelated clusters.
+    //   * A SINGLE-ROOM group that would cover ALL of its room's badges IS the
+    //     room, so it renders as the room chip instead. Two renderings of the
+    //     same content is how a viewer learns to distrust both. The
+    //     single-room qualifier matters: a bucket holding both of a room's
+    //     badges plus one of the next room's is not that room, and collapsing
+    //     it to that room's chip would mislabel it and lose the third badge.
     //   * A group of ONE is not a group: a lone loser pulls its nearest
-    //     room-mate down with it (bounded, so the summary cannot land where
-    //     neither device is), and if nothing is near enough its room chips.
-    //     This is what keeps a fan and its own light rendering as the group of
-    //     2 they were before ranking existed.
-    //   * A group badge must clear everything a real badge must clear, or its
-    //     room falls to the chip.
+    //     accepted PILE-MATE down with it (bounded, so the summary cannot land
+    //     where neither device is). Because it deferred by losing to something
+    //     accepted in its own pile, a partner always exists and is always in
+    //     range. This is what keeps a fan and its own light rendering as the
+    //     group of 2 they were before ranking existed.
+    //   * A group badge must clear everything a real badge must clear, or
+    //     every room it covers falls to the chip.
     //
     // Tier 4 still takes the WHOLE room with it, never a subset: a room that is
     // half chip and half loose badges asks the viewer to work out which devices
@@ -3551,11 +3579,13 @@ export class EntityVisuals {
 
     const pending: PendingEntityGroup[] = this.pendingGroups;
     pending.length = 0;
+    let solved: PlacementStats | null = null;
     if (clearance) {
       const items = this.placementItems(shown, boxes, clearance);
       const result = solvePlacement(
         items, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.placeScratch,
       );
+      solved = result.stats;
       for (const room of result.chipRooms) this.roomClustered.set(room, true);
       for (let b = 0; b < result.bucketCount; b++) {
         const bucket = result.buckets[b];
@@ -3565,10 +3595,19 @@ export class EntityVisuals {
           this.entityGrouped.add(shown[i].id);
         }
         const n = bucket.members.length;
+        // Keyed by the PILE alone. It was `room|pileKey`, which was stable only
+        // while a bucket's room was — and a bucket's room can now change (a
+        // cross-room pile loses a member and becomes single-room), which would
+        // have rebuilt the group's GUI controls mid-zoom and flickered.
+        // pileKey is the pile's lowest entity_id, so it is already unique.
+        const primary = this.roomDisplay.get(bucket.room) ?? bucket.room;
         pending.push({
-          key: `${bucket.room}|${bucket.pileKey}`,
-          room: this.roomDisplay.get(bucket.room) ?? bucket.room,
-          roomKey: bucket.room,
+          key: `grp|${bucket.pileKey}`,
+          // The room chip's own convention for "and others" (see chipLabel), so
+          // a summary spanning two rooms reads the same way whichever tier
+          // drew it.
+          room: bucket.rooms.length > 1 ? `${primary} +${bucket.rooms.length - 1}` : primary,
+          roomKeys: bucket.rooms.slice(),
           // Members are indices into `shown`, which lives exactly as long as
           // this pass — copied because placeEntityGroups may drop a group and
           // the pooled bucket is about to be reused.
@@ -3597,6 +3636,7 @@ export class EntityVisuals {
     }
     this.updateClusters(shown);
     this.updateEntityGroups(shown, pending);
+    if (debugFlagEnabled()) this.logPlacement(shown, clearance, solved, pending);
     // Last, so every visibility flag it reads is this pass's, not the previous
     // frame's.
     if (debugFlagEnabled() && clearance) this.assertPlacementInvariants(shown, boxes, clearance);
@@ -3717,6 +3757,63 @@ export class EntityVisuals {
     }
     pool.length = shown.length;
     return pool;
+  }
+
+  /**
+   * `?debug`-only: one line describing what this pass DECIDED, emitted only
+   * when the decision changes.
+   *
+   * Written because the question "why did that room collapse into a chip"
+   * could not be answered from any log this app produced. The only signal was
+   * `pickBadgeAt`'s `visible=3/90`, which is the END of the pipeline and
+   * conflates four independent gates — the category/floor/enabled cull, the
+   * behind-the-camera gate, the solver, and the chips — so a report of
+   * "everything grouped and there is obviously room" could not be told from
+   * "everything is on the other floor". Each gate is now its own number.
+   *
+   * `rung` is the quantised pixels-per-world-unit the solve actually ran on,
+   * and it is the important one: placement is allowed to change when the rung
+   * changes and forbidden from changing when it does not. Two lines with the
+   * same rung and different verdicts are a purity violation — the exact class
+   * of bug six rewrites of this subsystem died of — and no log before this one
+   * could show it.
+   *
+   * Emitted on CHANGE only, so panning at a fixed zoom prints nothing at all.
+   * That silence is itself the assertion.
+   */
+  private logPlacement(
+    shown: ShownLabel[],
+    clearance: { pxPerWorld: number; gap: number; minSep: number } | null,
+    stats: PlacementStats | null,
+    placed: PendingEntityGroup[],
+  ): void {
+    if (!clearance || !stats) { this.lastPlaceLog = ""; return; }
+    let behind = 0, drawn = 0;
+    for (const s of shown) {
+      if (!s.inFront) behind++;
+      if (s.lbl.container.isVisible) drawn++;
+    }
+    const chips: string[] = [];
+    for (const [k, on] of this.roomClustered) if (on) chips.push(k);
+    chips.sort();
+    // Sorted so two frames with identical content produce identical text —
+    // otherwise Map iteration order would make this log its own noise source.
+    const groups = placed
+      .map((g) => `${g.room}:${g.members.length}`)
+      .sort()
+      .join(", ");
+    const line =
+      `place rung=${clearance.pxPerWorld.toFixed(3)} icon=${this.iconUserScale.toFixed(2)}x`
+      + ` zoom=${this.iconZoomScale.toFixed(2)} gap=${clearance.gap.toFixed(3)}`
+      + ` minSep=${clearance.minSep.toFixed(3)}`
+      + ` | badges=${this.labels.size} eligible=${shown.length} behind=${behind} drawn=${drawn}`
+      + ` | piles=${stats.piles} exempt=${stats.exempt} accepted=${stats.accepted}`
+      + ` deferred=${stats.deferred} pulledBack=${stats.pulledBack}`
+      + ` | groups=${placed.length}/${stats.buckets} cross=${stats.crossRoom}`
+      + ` [${groups}] chips=${chips.length} [${chips.join(", ")}]`;
+    if (line === this.lastPlaceLog) return;
+    this.lastPlaceLog = line;
+    tapDebug(line);
   }
 
   /**
@@ -3944,7 +4041,7 @@ export class EntityVisuals {
     if (pxPerWorld <= 0) {
       // No usable projection this frame — fall back to the tier that needs
       // none rather than drawing groups at unverified positions.
-      for (const g of pending) this.roomClustered.set(g.roomKey, true);
+      for (const g of pending) for (const k of g.roomKeys) this.roomClustered.set(k, true);
       pending.length = 0;
       return;
     }
@@ -3989,8 +4086,11 @@ export class EntityVisuals {
         if (d < mineHalf * 2 + gapPx) clear = false;
       }
       if (!clear) {
-        // Nowhere to stand: this is room-level crowding after all.
-        this.roomClustered.set(g.roomKey, true);
+        // Nowhere to stand: this is room-level crowding after all. EVERY room
+        // the group covered escalates, not just its primary one — a group that
+        // straddles a boundary and then fails to place cannot leave half its
+        // members behind a chip and half loose.
+        for (const k of g.roomKeys) this.roomClustered.set(k, true);
         continue;
       }
       placed.push(g);
@@ -4005,7 +4105,7 @@ export class EntityVisuals {
     // room regardless, so nothing ends up hidden with nothing in its place.
     pending.length = 0;
     for (const g of placed) {
-      if (this.roomClustered.get(g.roomKey)) continue;
+      if (g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
       pending.push(g);
     }
   }

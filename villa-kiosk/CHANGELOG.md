@@ -1,3 +1,95 @@
+## 2.250.0
+
+### Changed — a cross-room collision costs two badges, not a room
+
+Reported with two screenshots one icon-size step apart: a living room showing
+three badges over acres of empty tile, and then the same view one step larger
+with those badges replaced by a single "Living Room 2" chip. The reasonable
+reading — that the badges had run out of space — was wrong, and the actual
+chain ran through three rules none of which is about crowding.
+
+Placement is decided per PAIR, in world space. One badge lost a pairwise
+conflict; almost certainly to a badge in the NEXT room, since the camera in
+question sits on the bedroom boundary. It was therefore deferred, and landed in
+a deferral bucket keyed by ITS room, alone. A bucket of one cannot be drawn as
+a group (a summary reading "1" is a worse drawing of a badge), so it looked for
+an accepted room-mate to summarise with — and the only other Living Room badge
+was most of a room away, far outside the bound that keeps a summary standing
+near the devices it claims. With no partner, the rule was "this bucket has
+nothing to summarise with, so its room chips", and all-or-nothing per room then
+hid every other badge in the room, including one that had conflicted with
+absolutely nothing.
+
+So a room with two devices had no middle gear at all: both badges, or the chip,
+flipped by any single collision anywhere near either of them. The empty floor
+was invisible to every step.
+
+The constraint underneath was that a deferral bucket had to be one room,
+because a group badge is labelled with a room name. 2.232.0 had already
+narrowed this once — before it, a pile spanning two rooms sent BOTH rooms
+straight to their chips — but it kept the single-room bucket, and that is what
+was still costing bystanders.
+
+Buckets are keyed by PILE now. A pile is the set of badges that competed for
+the same piece of floor, transitively within a conflict distance of each other,
+so its losers are exactly the badges it is honest to draw as one summary
+standing where they are; a room boundary running through the middle of it is a
+fact about the floor plan, not about the crowding. The lone-deferral pull-back
+searches the pile rather than the room, which also makes it total: a bucket of
+one can only come from a pile of two or more, and that badge deferred precisely
+because it lost to something already accepted in the same pile — so a partner
+always exists and is always within one conflict distance, comfortably inside
+the bound. "Nothing near enough, chip the room" is no longer reachable from
+there. It used to be the common case, because the badge that beats you is very
+often in the next room.
+
+Two smaller consequences fall out. Deferrals from two DIFFERENT piles in one
+room used to merge into a single summary drawn at the midpoint of both — a
+badge pointing at floor between two unrelated clusters; they are now two
+summaries, each among its own devices. And "a bucket covering everything its
+room shows IS the room" gains a single-room qualifier: a bucket holding both of
+the Living Room's badges plus one of the bedroom's is not the Living Room, and
+collapsing it to that chip would both mislabel it and lose the third badge.
+
+The labelling objection that motivated the single-room rule is answered rather
+than avoided. A group spanning rooms prints the room chip's own "Living Room
++1" form, and its tap opens the same device list, which names every member
+anyway. A group that cannot be placed still escalates EVERY room it covered,
+not just its primary one — all-or-nothing per room is what makes a chip
+readable, and half a group behind a chip would break it. Chipping is contagious
+in one direction only (a chipped room hides its badges, so a bucket holding one
+loses that member, and a bucket dropping under two members chips its own rooms
+in turn), so that pass runs to a fixed point rather than in a single sweep.
+
+`npm run test:placement` now runs 33 assertions, including order-independence
+over 40 permutations of 120 badges — the purity guard — plus the cross-room
+case above and the two new bucket invariants (`rooms` is sorted, unique and
+complete; no single-room bucket survives covering its whole room).
+
+### Added — one `?debug` line per placement decision
+
+The question above could not be answered from any log this app produced. The
+only available signal was `pickBadgeAt`'s `visible=3/90`, which is the END of
+the pipeline and conflates four independent gates — the category/floor/enabled
+cull, the behind-the-camera gate, the solver, and the chips — so "everything
+grouped and there is obviously room" was indistinguishable from "everything is
+on the other floor".
+
+Each gate is now its own number, emitted only when the decision CHANGES:
+
+    place rung=12.480 icon=1.25x zoom=0.70 gap=0.031 minSep=0.113
+      | badges=90 eligible=41 behind=3 drawn=12
+      | piles=22 exempt=0 accepted=18 deferred=9 pulledBack=4
+      | groups=3/3 cross=1 [living room +1:2, kitchen:3] chips=1 [patio]
+
+`rung` is the quantised pixels-per-world-unit the solve actually ran on, and it
+is the important field: placement is ALLOWED to change when the rung changes
+and FORBIDDEN from changing when it does not. Two lines with the same rung and
+different verdicts are a purity violation — the class of bug six rewrites of
+this subsystem died of — and nothing before this could have shown it. Because
+the line is emitted on change only, panning at a fixed zoom prints nothing at
+all, and that silence is itself the assertion.
+
 ## 2.249.0
 
 ### Fixed — Babylon GUI padding subtracts, so the card badge had none of it
