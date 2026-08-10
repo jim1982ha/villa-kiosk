@@ -2841,6 +2841,24 @@ export class EntityVisuals {
       const card = this.config.badgeStyle === "card";
       const m = this.metrics;
       const labelH = card ? m.cardLabelHeightPx : m.labelHeightPx;
+      // ── The card's INNER height, which is not its height ─────────────────
+      // Babylon's Rectangle insets its children by its border on all four
+      // sides (rectangle.js: `_measureForChildren.height -= 2 * thickness`),
+      // so a card carrying the 3px state ring has only cardHeightPx - 6 of
+      // usable box. Sizing the glyph to the card's OUTER height put a 34px
+      // icon in a 28px area: it overflowed and was clipped 3px top and
+      // bottom, losing 18% of its height, which reads as an icon jammed
+      // against the badge's edges rather than centred in it. Reported exactly
+      // that way, and only ever for the card style — the classic badge bakes
+      // its ring into the image and runs thickness 0, so its children get the
+      // whole control.
+      //
+      // Reserved UNCONDITIONALLY, not only while a ring is showing: the ring
+      // comes and goes with state, and sizing the icon off the current one
+      // would resize the glyph every time a device turned on. Same rule the
+      // pill-capable collision box already follows — measure what it can be,
+      // not what it happens to be.
+      const cardInnerH = m.cardHeightPx - 2 * BADGE_RING_THICKNESS;
 
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
@@ -2899,7 +2917,7 @@ export class EntityVisuals {
       const row = card ? new StackPanel(`lbl_row_${entityId}`) : null;
       if (row) {
         row.isVertical = false;
-        row.height = `${m.cardHeightPx}px`;
+        row.height = `${cardInnerH}px`;
         row.adaptWidthToChildren = true;
         badge.addControl(row);
       }
@@ -2912,7 +2930,7 @@ export class EntityVisuals {
       const glyph = new Image(`lbl_glyph_${entityId}`,
         badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)), "off",
           this.config.entityMap[entityId]?.badgeColor, card ? BADGE_INSET_CARD : 0));
-      const glyphPx = card ? m.cardHeightPx : m.badgeDiameterPx;
+      const glyphPx = card ? cardInnerH : m.badgeDiameterPx;
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
       glyph.stretch = Image.STRETCH_UNIFORM;
@@ -2924,7 +2942,7 @@ export class EntityVisuals {
       valueWrap.thickness = 0;
       valueWrap.adaptWidthToChildren = true;
       if (card) {
-        valueWrap.height = `${m.cardHeightPx}px`;
+        valueWrap.height = `${cardInnerH}px`;
         valueWrap.background = "transparent";
         // No left padding: the icon↔value gap is the chip image's OWN baked-in
         // right margin (CHIP_INSET). The right padding matches that margin so

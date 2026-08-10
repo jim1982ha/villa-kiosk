@@ -1,3 +1,14 @@
+## 2.236.0
+
+### Fixed — the card badge's icon was over-sized for the box it sits in, and clipped
+
+Reported repeatedly as icons not being centred in their badge. They are centred; they are too big, and the clipping is what reads as an alignment fault.
+
+Babylon's `Rectangle` insets its children by its own border on all four sides — `rectangle.js`'s `_additionalProcessing` does `_measureForChildren.height -= 2 * thickness`, and the same for width, left and top. The card badge carries the 3px state ring, so its usable inner box is `cardHeightPx - 6`, not `cardHeightPx`. `rebuildLabels` was sizing the glyph, the icon/value row and the value wrap to the card's OUTER height, so a 34px icon was being laid into a 28px area: it overflowed 3px above and 3px below and was clipped, losing 18% of its height. On screen that is an icon squircle jammed against the badge's top, bottom and left edges while the value beside it has room — which is exactly what the screenshots showed.
+
+Only the card style was ever affected. The classic badge bakes its ring into the glyph image and runs `thickness = 0`, so its children get the whole control — which is why the plain squircle badges looked right in the same screenshot as the broken cards, and that contrast is what identified it.
+
+The three children are now sized to the card's inner height. The ring is reserved **unconditionally** rather than only while one is showing: the ring appears and disappears with device state, and sizing the icon off the current one would resize the glyph every time a device turned on. That is the same rule the pill-capable collision box already follows — measure what a badge CAN be, not what it happens to be this second.
 ## 2.235.0
 
 ### Fixed — every badge VALUE went blank in 2.234.0
