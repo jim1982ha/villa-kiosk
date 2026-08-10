@@ -1964,58 +1964,59 @@ export class EntityVisuals {
   }
 
   /**
-   * The badge scale to measure with when solving for a zoom the camera has not
-   * reached yet.
+   * The closest camera radius at which every one of this room's badges is
+   * drawn INDIVIDUALLY and lands FULLY on screen — the answer behind "tap a
+   * room, see its devices".
    *
-   * ── The fixed point this resolves (2.210.0) ───────────────────────────────
-   * A badge's drawn size is itself a function of zoom: OverviewController's
-   * getIconZoomCap shrinks badges (down to 0.7) once the camera is zoomed OUT
-   * past the whole-villa fit, and returns exactly 1 at the fit or closer. So
-   * measuring "how close must I get for these badges not to collide" while
-   * zoomed out measures badges up to 1/0.7 = 1.43x SMALLER than the ones that
-   * will actually be drawn when the camera arrives — the answer comes back too
-   * generous, the camera flies to it, the badges grow on arrival, and they
-   * collide again. Tapping a room chip moved the camera and left the chip
-   * exactly where it was, which is what was reported.
+   * ── Why this searches instead of solving (2.211.0) ────────────────────────
+   * Three releases tried to derive this distance in closed form, and each was
+   * exact arithmetic on a wrong input: a margin that approximated the zoom
+   * quantiser, a cap that approximated the framing limit, then badge sizes
+   * measured at the camera's CURRENT zoom rather than the destination's. Every
+   * one of them was invisible in review — the formula reads correctly, the
+   * value going in does not — and every one of them shipped, because the only
+   * test available was a person tapping a room chip on a phone.
    *
-   * Zoom-to-room always ends at or inside the villa fit, where the cap is 1 —
-   * so the destination scale is the user's configured size with no cap at all,
-   * and using it makes the calculation a fixed point rather than a guess about
-   * where the camera currently happens to be. In the rare case the solved shot
-   * lands OUTSIDE the fit, the cap there is below 1, badges are smaller than
-   * measured, and they separate more easily still: the error can only ever be
-   * in the safe direction.
+   * The derivation is the part that keeps being wrong, so it is gone. This
+   * walks the SAME discrete zoom ladder the renderer quantises to and, at each
+   * rung, asks the two questions literally:
+   *
+   *   * would groupBadges group anything here? — the identical pairwise reach
+   *     test, in world units, against the identical quantised zoom;
+   *   * is every badge inside the frame? — anchor distance from the shot's
+   *     centre, plus that badge's own drawn reach converted at THIS rung's
+   *     zoom, against the visible half-extent.
+   *
+   * and returns the first rung that satisfies both. There is no margin, no
+   * cap and no fudge factor, because there is nothing being approximated: the
+   * predicates are the same ones that will run when the camera arrives. It is
+   * the rule this file already learned once with spreadPile — whatever decides
+   * a thing must BE the thing that does it.
+   *
+   * Cost is ~40 rungs x pairs, once, on a tap. Nothing here runs per frame.
+   *
+   * Returns null when the room has nothing to solve for (fewer than two
+   * badges), and `fitOnly` when no rung can declutter it but one can frame it
+   * — two devices sharing a 3D point never separate at any zoom, and the
+   * caller would rather show the room properly than chase a rung that does
+   * not exist.
    */
-  private measurementScale(): number {
-    return this.iconUserScale;
-  }
-
-  /**
-   * Minimum screen-pixels-per-world-unit needed for this room's OWN badges to
-   * never mutually group — the exact inverse of groupBadges' pairwise test,
-   * solved for the zoom level instead of the grouping outcome. Used by
-   * SceneManager.computeRoomOverviewPose so "zoom to this room" (tapping its
-   * cluster chip) is guaranteed to land close enough to show every one of its
-   * badges individually, not just close enough to fit the room's WALLS in
-   * frame. Those are different distances for an elongated or multi-device
-   * room: fitting a long room's full footprint can still leave a tight pair
-   * of badges within it grouped, which is exactly the "tapped the chip and it
-   * stayed a chip" report — see the session handoff for the room-fit half of
-   * this story.
-   *
-   * Reuses groupBadges' own reach/gap formula (same constants) so the two can
-   * never disagree about when a pair is "too close". Null when the room has
-   * fewer than 2 badges (nothing can ever group) or every pair is either
-   * already resolvable at any zoom or CO-LOCATED.
-   *
-   * That last case is now a real, visible outcome rather than a footnote: two
-   * devices sharing one 3D point (a ceiling fan and its own light, a socket
-   * and its power meter) are separated by no zoom level whatsoever, so their
-   * room shows its chip at every zoom and this returns null because there is
-   * no answer to give. It used to be deferred to the fan's fixed-offset
-   * nudge, which no longer exists — see cullLabels' layout section.
-   */
-  minPxPerWorldToDeclutterRoom(room: string): number | null {
+  solveRoomZoomRadius(
+    room: string,
+    view: {
+      /** Render-target height in px — the units quantisedPixelsPerWorldUnit uses. */
+      vpH: number;
+      /** Vertical field of view in radians (Babylon's FOVMODE_VERTICAL_FIXED). */
+      vFov: number;
+      /** Half-angle of the TIGHTER of the two FOV axes — what actually limits
+       *  what fits, and on a portrait phone that is the horizontal one. */
+      halfAngle: number;
+      /** The shot's orbit centre, i.e. what the badges are measured against. */
+      cx: number; cy: number; cz: number;
+      /** Search bounds, world units. */
+      minRadius: number; maxRadius: number;
+    },
+  ): { radius: number; declutters: boolean } | null {
     const key = roomKey(room);
     const members: { lbl: LabelControls; wx: number; wy: number; wz: number }[] = [];
     for (const [id, lbl] of this.labels) {
@@ -2025,135 +2026,93 @@ export class EntityVisuals {
       members.push({ lbl, wx: p.x, wy: p.y, wz: p.z });
     }
     if (members.length < 2) return null;
+    if (!(view.vpH > 0) || !(view.vFov > 0) || !(view.halfAngle > 0)) return null;
 
-    // ── Measure the badges the DECISION will see, not the ones on screen now
-    // labelBoxes reads each badge's live valueWrap.isVisible for its width,
-    // but cullLabels drops every colliding badge's readout (tier 2) BEFORE
-    // running the grouping test — so the boxes that decide grouping are always
-    // icon-only, while these were whatever happened to be showing when the
-    // user tapped. The two therefore measured different badges, and the answer
-    // this returns is meant to be the exact inverse of that decision. Hiding
-    // the readouts for the measurement IS the icon-only measurement (same
-    // trick cullLabels itself uses), restored immediately afterwards so the
-    // frame in flight is untouched.
+    // ── Measure the badges the DECISION will see ──────────────────────────
+    // Two corrections, both of which were previously wrong in ways that read
+    // fine in review:
+    //   * ICON-ONLY. cullLabels drops a colliding badge's value readout before
+    //     it tests grouping, so the boxes that decide are always icon-only,
+    //     while these were whatever happened to be showing at the moment of
+    //     the tap.
+    //   * DESTINATION SCALE. getIconZoomCap shrinks badges (to 0.7) while the
+    //     camera is zoomed OUT past the villa fit — which is exactly where it
+    //     is when a room chip is tapped — and returns 1 at the fit or closer,
+    //     where this shot always lands. Measuring at the live scale sized the
+    //     badges up to 1.43x too small, so the camera flew to a distance
+    //     computed for badges that then grew on arrival and re-collided.
     const wasVisible = members.map((m) => m.lbl.valueWrap.isVisible);
     for (const m of members) m.lbl.valueWrap.isVisible = false;
-    // Own buffers, not the render loop's — see labelBoxes' docstring. Measured
-    // at the DESTINATION badge scale, not the current one — see
-    // measurementScale(); this was the whole bug.
-    const mScale = this.measurementScale();
+    const mScale = this.iconUserScale; // destination scale: cap is 1 there
     const boxes = this.labelBoxes(members, [], [], mScale);
     for (let i = 0; i < members.length; i++) members[i].lbl.valueWrap.isVisible = wasVisible[i];
+
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
     const gapPx = BADGE_MIN_GAP_PX * mScale;
-    let required = 0;
-    for (let i = 0; i < members.length; i++) {
-      for (let j = i + 1; j < members.length; j++) {
-        // 3D, matching groupBadges exactly (2.114.0) — this method's whole
-        // contract is that it reuses that same reach/gap formula, so dropping
-        // the height term here would make the "zoom to declutter" hint
-        // disagree with what the grouping actually does.
-        const dist = Math.hypot(
+    const n = members.length;
+    // Pairwise distances and per-badge geometry, hoisted out of the rung loop.
+    // Indexed i*n+j, NOT a running counter: the rung loop below breaks out of
+    // the inner loop the moment a pair collides, and a counter would then be
+    // out of step for every later row — reading another pair's distance and
+    // silently answering a different question.
+    const dist = new Float64Array(n * n);
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        dist[i * n + j] = Math.hypot(
           members[j].wx - members[i].wx,
           members[j].wy - members[i].wy,
           members[j].wz - members[i].wz,
         );
-        if (dist <= 0) continue; // co-located anchors: no zoom separates these
-        const need = (boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx) / dist;
-        if (need > required) required = need;
       }
     }
-    if (!(required > 0)) return null;
-    // ── Land on the ZOOM LADDER, not next to it ───────────────────────────
-    // groupBadges never tests `required` against a raw zoom: it quantises to
-    // GROUP_ZOOM_STEPS_PER_DOUBLING discrete steps first (see
-    // quantisedPixelsPerWorldUnit) precisely so grouping cannot flicker as the
-    // camera drifts. A raw threshold handed to the camera therefore lands on
-    // whichever side of the nearest step it happens to fall on, and the caller
-    // used to cover that with a 0.85 "half a step, with room to spare" fudge —
-    // a constant chosen to be approximately right, for a quantity that can be
-    // computed exactly.
-    //
-    // Exactly: the runtime value is 2^(round(log2(raw)·q)/q). The smallest
-    // STEP that clears `required` is k = ceil(log2(required)·q), and a raw
-    // zoom rounds up to at least step k once log2(raw)·q ≥ k − ½. Returning
-    // that raw value means the quantiser is guaranteed to land on k or above,
-    // with no margin to tune and nothing to drift.
+    // How far each badge is DRAWN from its own anchor: it hangs above it (|cy|)
+    // and has its own extent, so framing the anchors frames the wrong thing —
+    // the topmost badge clips while its anchor sits comfortably inside.
+    const reachPx = boxes.map((b) => Math.abs(b.cy) + Math.max(b.halfW, b.halfH));
+    // Distance of each anchor from the shot's centre, along the axes the frame
+    // actually bounds.
+    const fromCentre = members.map((m) =>
+      Math.hypot(m.wx - view.cx, m.wy - view.cy, m.wz - view.cz));
+
     const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
-    const k = Math.ceil(Math.log2(required) * q);
-    // A hair above the rounding boundary, so floating point cannot put us on
-    // the losing side of a `>=` that is exactly equal.
-    return Math.pow(2, (k - 0.5) / q) * 1.0001;
-  }
+    const tanV = Math.tan(view.vFov / 2);
+    const tanHalf = Math.tan(view.halfAngle);
+    // Walk the rungs from CLOSEST outward and take the first that works, so the
+    // answer is the tightest shot rather than merely a valid one.
+    const lo = Math.max(view.minRadius, 0.1);
+    const hi = Math.max(lo, view.maxRadius);
+    const kLo = Math.floor(Math.log2(lo) * q);
+    const kHi = Math.ceil(Math.log2(hi) * q);
+    let firstFitting: number | null = null;
+    for (let k = kLo; k <= kHi; k++) {
+      const radius = Math.pow(2, k / q);
+      if (radius < lo || radius > hi) continue;
+      // The zoom the renderer will actually quantise to at this radius.
+      const raw = view.vpH / (2 * radius * tanV);
+      if (!(raw > 0)) continue;
+      const pxPerWorld = Math.pow(2, Math.round(Math.log2(raw) * q) / q);
 
-  /**
-   * True when this room has badges that NO zoom can ever separate — two or
-   * more devices sharing one 3D point (a ceiling fan and its own light kit, a
-   * socket and its power meter). Their reach shrinks with zoom like everyone
-   * else's, but the distance between them stays zero, so the pair collides at
-   * every zoom level that exists.
-   *
-   * The point of asking is that "zoom to this room" is then a promise the
-   * camera cannot keep: it flies somewhere and the summary is still a summary,
-   * which reads as the tap having done nothing. A caller that knows this can
-   * offer the device list instead — the thing the person was actually after.
-   */
-  roomHasInseparableBadges(room: string): boolean {
-    const key = roomKey(room);
-    const pts: { x: number; y: number; z: number }[] = [];
-    for (const [id, lbl] of this.labels) {
-      if (roomKey(this.roomOf(id)) !== key) continue;
-      if (!lbl.anchor.isEnabled()) continue;
-      const p = lbl.anchor.getAbsolutePosition();
-      pts.push({ x: p.x, y: p.y, z: p.z });
-    }
-    for (let i = 0; i < pts.length; i++) {
-      for (let j = i + 1; j < pts.length; j++) {
-        // Same "no zoom separates these" test minPxPerWorldToDeclutterRoom
-        // skips its pairs on, so the two agree by construction about which
-        // pairs are hopeless.
-        if (Math.hypot(pts[j].x - pts[i].x, pts[j].y - pts[i].y, pts[j].z - pts[i].z) <= 0) return true;
+      // Every badge fully inside the frame?
+      const halfExtent = radius * tanHalf;
+      let fits = true;
+      for (let i = 0; i < n && fits; i++) {
+        if (fromCentre[i] + reachPx[i] / pxPerWorld > halfExtent) fits = false;
       }
-    }
-    return false;
-  }
+      if (!fits) continue;
+      if (firstFitting === null) firstFitting = radius;
 
-  /**
-   * How far, in screen pixels, this room's badges are DRAWN from their own
-   * anchors — the largest such reach in the room.
-   *
-   * A badge does not sit on its anchor: it hangs above it (labelBoxes' `cy`)
-   * and has its own width and height. So framing a room by its anchors alone
-   * frames the wrong thing — the topmost badge is clipped by the top edge
-   * while its anchor sits comfortably inside. This is the padding, in pixels,
-   * that turns "every anchor is on screen" into "every BADGE is fully on
-   * screen", which is what a person means by seeing a room's devices.
-   *
-   * Pixels, not world units, because that is what a badge actually is: its
-   * drawn size does not change with camera distance, which is precisely why
-   * the fit has to be solved for rather than scaled (see
-   * SceneManager.computeRoomOverviewPose).
-   */
-  roomBadgeReachPx(room: string): number {
-    const key = roomKey(room);
-    const members: { lbl: LabelControls }[] = [];
-    for (const [id, lbl] of this.labels) {
-      if (roomKey(this.roomOf(id)) !== key) continue;
-      if (!lbl.anchor.isEnabled()) continue;
-      members.push({ lbl });
+      // Nothing grouped? Same reach/gap test as groupBadges, world units.
+      let clean = true;
+      for (let i = 0; i < n && clean; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const need =
+            (boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx) / pxPerWorld;
+          if (dist[i * n + j] < need) { clean = false; break; }
+        }
+      }
+      if (clean) return { radius, declutters: true };
     }
-    if (members.length === 0) return 0;
-    // Destination scale, for the same reason the declutter solve uses it.
-    const boxes = this.labelBoxes(members, [], [], this.measurementScale());
-    let reach = 0;
-    for (const b of boxes) {
-      // |cy| is the lift from anchor to box centre; add the half-extent to get
-      // the furthest drawn pixel. max(halfW, halfH) because the badge has to
-      // clear the frame edge in whichever direction that edge lies.
-      const r = Math.abs(b.cy) + Math.max(b.halfW, b.halfH);
-      if (r > reach) reach = r;
-    }
-    return reach;
+    return firstFitting === null ? null : { radius: firstFitting, declutters: false };
   }
 
   /** Replace the named-viewpoint "rooms" (config.teleportPoints) that don't

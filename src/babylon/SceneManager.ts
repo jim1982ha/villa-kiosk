@@ -959,7 +959,8 @@ export class SceneManager {
    *  EntityVisuals.roomHasInseparableBadges — the caller uses this to offer
    *  the device list instead of a journey to nowhere. */
   roomCanDeclutter(roomName: string): boolean {
-    return !this.visuals.roomHasInseparableBadges(roomName);
+    if (this.viewMode !== "overview") return true; // not our question to answer
+    return this.computeRoomOverviewPose(roomName)?.declutters ?? true;
   }
 
   /**
@@ -993,7 +994,14 @@ export class SceneManager {
    */
   private computeRoomOverviewPose(
     roomName: string,
-  ): { alpha: number; beta: number; radius: number; target: { x: number; y: number; z: number } } | null {
+  ): {
+    alpha: number; beta: number; radius: number;
+    target: { x: number; y: number; z: number };
+    /** False when NO zoom this camera allows can separate the room's badges —
+     *  two devices on one 3D point, or a pair that only clears past the zoom
+     *  limit. The caller shows the device list instead. */
+    declutters: boolean;
+  } | null {
     const realBounds = this.camera.getRoomBounds(roomName);
     const bounds = realBounds ?? this.visuals.getRoomEntityBounds(roomName);
     if (!bounds) return null;
@@ -1019,53 +1027,41 @@ export class SceneManager {
     const halfAngle = Math.min(vFov, hFov) / 2;
     let radius = (sphere / Math.sin(halfAngle)) * (1 + marginFrac);
 
-    // ── Two competing distances, and the one that must win ────────────────
-    // Fitting the room's WALLS is not the same distance as separating its own
-    // badges: an elongated or multi-device room can need to back off further
-    // for its footprint than its tightest badge pair needs for clarity, which
-    // is exactly "tapped the chip and it stayed a chip" even though the camera
-    // visibly moved. So the shot TIGHTENS toward whatever zoom this room's
-    // badges actually require.
+    // ── Now ask the badges, by TESTING rather than deriving ───────────────
+    // The wall fit above frames the ROOM. It says nothing about whether the
+    // room's badges will be legible once the camera arrives, and those are
+    // different distances: an elongated or multi-device room can need to back
+    // off further for its footprint than its tightest badge pair can tolerate,
+    // which is "tapped the chip and it stayed a chip" even though the camera
+    // visibly moved.
     //
-    // What stops it tightening was, until 2.209.0, an arbitrary fraction of
-    // the wall fit (DECLUTTER_RADIUS_MIN_FRACTION = 0.5). That was the wrong
-    // instrument for a real problem: a fan and its own light kit, mounted
-    // centimetres apart, ask for a zoom that would fly the camera onto the
-    // bed. But "half the wall fit" is not why that shot is bad — it is bad
-    // because at that distance the room's OTHER badges are off screen. The
-    // honest limit is therefore the framing itself, and using it means a room
-    // that genuinely needs to be three times closer can now get there, while
-    // the fan+light case is still caught — by the constraint that actually
-    // describes it.
+    // Three releases tried to close that gap with a formula, and all three
+    // were exact arithmetic on a wrong input (see solveRoomZoomRadius's
+    // docstring for the list). The derivation is gone: the solver walks the
+    // renderer's own quantised zoom ladder and asks, at each rung, the two
+    // questions literally — does anything group here, and is every badge
+    // inside the frame — returning the closest rung where both hold.
+    //
+    // Bounded BELOW by the camera's own zoom-in limit rather than by any
+    // constant of ours, because that limit is the real one: a room whose
+    // badges only separate at maximum zoom should be taken to maximum zoom,
+    // not to whatever floor a heuristic thought was reasonable.
     const vpH = this.engine.getRenderHeight();
-    const minPxPerWorld = this.visuals.minPxPerWorldToDeclutterRoom(roomName);
-    if (minPxPerWorld && minPxPerWorld > 0 && vpH > 0) {
-      // No DECLUTTER_RADIUS_MARGIN: minPxPerWorldToDeclutterRoom now returns a
-      // zoom that is guaranteed to quantise onto a step that separates the
-      // room, so there is nothing left for a fudge factor to cover.
-      radius = Math.min(radius, vpH / (2 * minPxPerWorld * Math.tan(vFov / 2)));
-    }
-
-    // ── The floor: every badge stays FULLY on screen ──────────────────────
-    // A badge is drawn at a fixed PIXEL size, hanging above its anchor, so it
-    // does not shrink as the camera closes in — which means the closer the
-    // shot, the more of the frame the badges themselves occupy, and the
-    // constraint cannot be expressed as a world-space margin. Solving it
-    // instead: at radius r the visible world half-extent is r·tan(halfAngle),
-    // and a badge eats reachPx/pxPerWorld of it where pxPerWorld = vpH /
-    // (2·r·tan(vFov/2)) — so the badge's world footprint grows linearly in r
-    // too, and both sides collapse to a single division.
-    //
-    //   sphere + reachPx·2·tan(vFov/2)/vpH · r  ≤  r·tan(halfAngle)
-    //
-    // The denominator goes non-positive only if one badge is larger than the
-    // viewport can ever show, in which case there is no answer and the wall
-    // fit stands.
-    const reachPx = this.visuals.roomBadgeReachPx(roomName);
-    if (reachPx > 0 && vpH > 0) {
-      const badgeWorldPerRadius = (reachPx * 2 * Math.tan(vFov / 2)) / vpH;
-      const room = Math.tan(halfAngle) - badgeWorldPerRadius;
-      if (room > 0) radius = Math.max(radius, sphere / room);
+    const solved = this.visuals.solveRoomZoomRadius(roomName, {
+      vpH,
+      vFov,
+      halfAngle,
+      cx, cy: bounds.floorY, cz,
+      minRadius: this.overview.camera.lowerRadiusLimit ?? 2,
+      // The wall fit is the widest shot worth considering: past it the room no
+      // longer fills the frame, and nothing about badges improves by backing
+      // further away.
+      maxRadius: Math.max(radius, this.overview.camera.lowerRadiusLimit ?? 2),
+    });
+    let declutters = true;
+    if (solved) {
+      radius = solved.radius;
+      declutters = solved.declutters;
     }
     radius = Math.max(radius, MIN_ROOM_FIT_RADIUS);
 
@@ -1073,6 +1069,7 @@ export class SceneManager {
       alpha: cam.alpha,
       beta: cam.beta,
       radius,
+      declutters,
       // Orbit about the room's own CENTRE, at the height the room's floor
       // actually sits at — a teleport point stores the first-person EYE
       // position, so reusing its y tilted the framing up by eye height.

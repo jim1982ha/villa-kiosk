@@ -1,3 +1,9 @@
+## 2.211.0
+
+### Fixed — zoom-to-room now searches for the answer instead of deriving it
+
+Three releases tried to compute this distance in closed form and all three were exact arithmetic on a wrong input: a margin approximating the zoom quantiser, a cap approximating the framing limit, then badge sizes measured at the camera's current zoom rather than the destination's. Each read correctly in review — the formula was right and the value going into it was not — and each shipped, because the only available test was a person tapping a room chip on a phone. The derivation is gone. The solver now walks the same discrete zoom ladder the renderer quantises to and, at each rung, asks the two questions literally: would anything group here, and is every badge inside the frame. It returns the closest rung where both hold, with no margin, cap or fudge factor, because nothing is being approximated — the predicates are the ones that will run when the camera arrives. The search is also bounded below by the camera's own zoom-in limit rather than by a constant of ours, so a room whose badges only separate at maximum zoom is taken to maximum zoom. Where no rung can do both, the room is framed as tightly as it can be and the caller opens its device list instead.
+
 ## 2.210.0
 
 ### Fixed — zoom-to-room measured the badges at the wrong size, so it always stopped short
