@@ -2907,7 +2907,19 @@ export class EntityVisuals {
         // left/right get extra room here + on the value, so the card reads
         // short but not cramped horizontally.
         badge.adaptWidthToChildren = true;
+        // BOTH sides. The left pad alone was balanced only by the VALUE's own
+        // right padding, so a card carrying a readout looked right while a
+        // bare-icon one — most of the map — sat its icon 2px right of centre
+        // (6.8px of gap on the left against 2.8px on the right at the touch
+        // size). That is the "icon is not centred in the badge" report: it was
+        // horizontal, and it only ever showed on badges with no value, which
+        // is why the ones reading 98%/99% looked fine beside it.
+        //
+        // Symmetric here and the value keeps its own right padding on top, so
+        // the icon is centred when it is alone and the text still gets its
+        // breathing room when there is one.
         badge.paddingLeft = `${m.cardPadLeftPx}px`;
+        badge.paddingRight = `${m.cardPadLeftPx}px`;
       } else {
         badge.width = `${m.badgeDiameterPx}px`;
       }

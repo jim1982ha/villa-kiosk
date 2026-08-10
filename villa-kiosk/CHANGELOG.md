@@ -1,3 +1,16 @@
+## 2.240.0
+
+### Fixed — the card icon was off-centre HORIZONTALLY, and only on badges with no readout
+
+The report was "the icon is not centred in the badge", and it took far too long because it was read as a vertical problem and chased through ring thickness, clipping, text metrics and per-device scaling — all of which turned up real defects, none of which was this one.
+
+The card applies `paddingLeft` and nothing on the right. When a badge carries a value, the value's own right padding balances the card and it looks correct. When it does not — a light, a camera, a fan, most of the map — nothing balances it, and the icon sits right of centre: **6.8px of gap on the left against 2.8px on the right** at the touch size, 5.1 against 2.1 on a fine pointer. Two pixels, in the middle of a 34px badge, on every badge without a reading.
+
+That is also why the two devices disagreed without either being wrong: the screenshots that looked right were full of badges reading `98%` and `99%`, and the ones that looked wrong were full of bare icons. Same build, same code, different mix of content.
+
+The padding is symmetric now, with the value keeping its own right padding on top — so the icon is centred when it is alone, and the text still gets its breathing room when there is one.
+
+The lesson, for a subsystem that has now produced four wrong diagnoses in a row: a defect described as "not centred" was measured on the wrong axis for six releases. The arithmetic that found it — write down the actual gap on each side, in pixels, for the exact case in the screenshot — should have been the first thing done, not the last.
 ## 2.239.0
 
 ### Fixed — the card icon's size was a function of the RING, so two devices drew different badges
