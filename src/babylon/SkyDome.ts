@@ -33,8 +33,26 @@ export class SkyDome {
     mat.luminance = 0.7;
     this.mat = mat;
 
-    // Large box, pinned to the camera so the horizon never moves relative to it.
-    const box = MeshBuilder.CreateBox("skyBox", { size: 1000 }, scene);
+    // A SPHERE, not a box, and the difference is load-bearing (2.226.0).
+    //
+    // The sky shader takes its direction as
+    //   normalize(vPositionW - cameraPosition + cameraOffset)
+    // and adds the offset BEFORE normalising, to a vector that is not unit
+    // length. On a cube that vector runs from 500 at the centre of a face to
+    // 500*sqrt(3) ~= 866 at a corner, so a constant offset bends the direction
+    // by a different ANGLE depending on where you look — about 22 degrees at a
+    // face centre against 13 at a corner. The horizon shift went non-uniform
+    // and the cube's own faces and corners appeared as straight bright edges
+    // and a square halo around the sun, reported from the overview.
+    //
+    // On a sphere pinned to the camera that distance is the radius everywhere,
+    // so the same offset is the same angle in every direction and no seam can
+    // exist. It costs nothing here: this mesh is drawn once, its triangle count
+    // is irrelevant next to the villa's 2.5M, and with cameraOffset at 0 (first
+    // person) the two shapes were always mathematically identical — magnitude
+    // cancels in normalize(), which is why only the overview ever showed this.
+    const box = MeshBuilder.CreateSphere(
+      "skyBox", { diameter: 1000, segments: 32 }, scene);
     box.material = mat;
     box.infiniteDistance = true;     // always centred on the active camera
     box.isPickable = false;
@@ -83,8 +101,12 @@ export class SkyDome {
    * keeps its true position and stays perfectly round — the horizon slides
    * down past it rather than the sun being squashed or dragged along.
    *
-   * Units are world units against the dome's own half-extent (~500), not
-   * degrees, because the vector is not normalised before the offset is added.
+   * Units are world units against the dome's RADIUS (500), not degrees, because
+   * the vector is not normalised before the offset is added — so the angle this
+   * buys is `atan(units / 500)`, and 200 is about 22°. That arithmetic only
+   * holds because the dome is a sphere: on the box this started as, the same
+   * offset bent corners and face centres by different amounts and printed the
+   * cube's edges across the sky. See the constructor.
    */
   setHorizonDrop(units: number): void {
     this.mat.cameraOffset.y = units;

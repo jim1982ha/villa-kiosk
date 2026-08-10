@@ -1,3 +1,15 @@
+## 2.226.0
+
+### Fixed — the square halo and straight bright edges across the overview sky
+
+Reported straight after 2.224.0 dropped the overview horizon: a square-ish glow around the sun and hard diagonal seams in the gradient. That was the sky **box's own geometry becoming visible**, and it was caused by the horizon drop itself.
+
+The shader takes its direction as `normalize(vPositionW - cameraPosition + cameraOffset)` — adding the offset *before* normalising, to a vector that is not unit length. On a cube that vector runs from 500 at the centre of a face to 500√3 ≈ 866 at a corner. A constant offset therefore bends the direction by a **different angle depending on where you look**: about 22° at a face centre against 13° at a corner. The horizon shift went non-uniform across the sky and printed the cube's faces and corners onto it.
+
+The dome is now a sphere, where that distance is the radius in every direction, so one offset is one angle everywhere and no seam can exist. It costs nothing: the mesh is drawn once and its triangle count is irrelevant beside the villa's 2.5M. It also explains why this only ever appeared in the overview — first person runs at `cameraOffset` 0, where magnitude cancels inside `normalize()` and box and sphere are mathematically identical.
+
+The drop stays at 200 units, which on a 500 radius is `atan(200/500)` ≈ 22° — and that arithmetic is only well-defined now that the radius is actually constant.
+
 ## 2.225.0
 
 ### Added — moon position, phase and illumination, computed locally
