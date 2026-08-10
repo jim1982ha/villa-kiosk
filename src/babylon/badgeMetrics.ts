@@ -182,8 +182,11 @@ const COARSE: BadgeMetrics = {
   pillPadXPx: 10,
   pillValueFontPx: 11,
 
-  cardHeightPx: 34,
-  cardLabelHeightPx: 40,
+  // The card IS the frame now (the glyph is baked at inset 0, like the Icon
+  // style's), so this hugs the art instead of padding a second squircle
+  // inside it: 28 = 22px of icon + the 3px ring each side.
+  cardHeightPx: 28,
+  cardLabelHeightPx: 34,
   cardPadLeftPx: 4,
   cardValuePadRightPx: 8,
   cardValueFontPx: 13,
@@ -197,8 +200,8 @@ const COARSE: BadgeMetrics = {
   cardValueCharPx: 7.2,
   cardValuePadPx: 8,
 
-  // 28/34 — the ratio the touch badge has always drawn at.
-  cardIconFraction: 28 / 34,
+  // 22/28 — the art keeps the size it drew at before the inner frame went.
+  cardIconFraction: 22 / 28,
   ringThicknessPx: 3,
   minGapPx: 6,
   // Apple's 44pt hit region, which is also this app's --touch-min and exactly

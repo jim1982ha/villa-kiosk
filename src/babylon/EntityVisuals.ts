@@ -106,7 +106,7 @@ import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam, isStructureMesh } from "./meshRoles";
 import { axisWorldScale } from "./meshUnits";
 import { LightPool } from "./LightPools";
-import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
+import { badgeImageDataUrl, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
 import { COSMETIC_MAPPING_FIELDS } from "./entityMapDiff";
@@ -2936,14 +2936,19 @@ export class EntityVisuals {
         badge.addControl(row);
       }
 
-      // BOTH styles use the SAME baked squircle image (badgeImageDataUrl) —
-      // the app's one state-coloured icon square. The card just bakes an
-      // inset so the squircle sits padded on its neutral card; the classic
-      // badge fills its own control (inset 0). Its baked-in margin also
-      // supplies the card's icon↔value gap and top/bottom/left padding.
+      // BOTH styles use the SAME baked squircle image (badgeImageDataUrl) at
+      // the SAME inset — 0, so the art fills its control. The card used to
+      // bake a margin of its own on top of the border it already draws, which
+      // is two frames around one icon; see the glyph source below.
       const glyph = new Image(`lbl_glyph_${entityId}`,
+        // Inset 0 for BOTH styles now. The card used to bake a 10% margin so
+        // its squircle sat padded on the card — but the card draws its own
+        // border, so that produced two concentric frames with dead space
+        // between them, and a box sized for a card holding art sized for a
+        // chip. Reported as the Badge style's badges being too tall. The
+        // card's own Rectangle is the only frame; the art fills it.
         badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)), "off",
-          this.config.entityMap[entityId]?.badgeColor, card ? BADGE_INSET_CARD : 0));
+          this.config.entityMap[entityId]?.badgeColor, 0));
       // Sized off the CARD, not off cardInnerH: tying the icon to the inner
       // box made it a function of the ring, and a fine pointer's thinner ring
       // then drew a different icon-to-card ratio than a touch card's thicker
@@ -2964,10 +2969,9 @@ export class EntityVisuals {
       if (card) {
         valueWrap.height = `${cardInnerH}px`;
         valueWrap.background = "transparent";
-        // No left padding: the icon↔value gap is the chip image's OWN baked-in
-        // right margin (CHIP_INSET). The right padding matches that margin so
-        // left/gap/right all read the same — value text · then card edge.
-        valueWrap.paddingLeft = "0px";
+        // Explicit now: the icon↔value gap used to be the glyph image's own
+        // baked right margin, and that margin is gone with the inner frame.
+        valueWrap.paddingLeft = `${m.cardPadLeftPx}px`;
         valueWrap.paddingRight = `${m.cardValuePadRightPx}px`;
         valueWrap.isVisible = false;
         row!.addControl(valueWrap);
@@ -3124,7 +3128,7 @@ export class EntityVisuals {
       // the badge's outer edge where every other state's ring is.
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
-        surface.ringDashed ? 0 : BADGE_INSET_CARD, ringState);
+        0, ringState);
       // The inline value shares the card's surface, so it must track the same
       // glyph colour — otherwise it stays at its build-time "off" colour and
       // goes unreadable the moment the card tints for active/alert.

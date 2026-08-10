@@ -1,3 +1,14 @@
+## 2.241.0
+
+### Changed — the Badge style is a card again, not a chip inside a card
+
+Reported as the Badge style's badges being too tall, and as looking like the Icon style rather than a distinct thing. Measured, they were 77% of the Icon style's height — not identical, but close enough to read as the same object, and for a reason worth naming: **there were two frames**.
+
+The glyph image baked its own squircle with a 10% margin so it would sit padded on the card, *and* the card drew its own `Rectangle` border. So a 22.4px piece of art sat inside a 34px box with 5.8px of dead space between two concentric outlines. With a value beside it that reads as an icon chip on a card, which was the intent; with no value — a light, a camera, a fan, most of the map — it is just a small icon in a big frame, which is what looked wrong.
+
+The card is now the only frame. Both styles bake at inset 0, so the art fills its control exactly as the Icon style's always has, and the box hugs it: **28px on a coarse pointer, 20.5 on a fine one — 64% of the Icon style, on both**. The icon itself does not change size at all (22px and 16px, against 22.4 and 16.4 before), so this is the box shrinking onto the art rather than the art shrinking.
+
+Two details followed from removing the margin. The icon-to-value gap was that margin, so it is now explicit on the value's left padding; and the container height came down with the card. Chips and entity groups take the card's height through `summaryMetrics`, so they shrink with it and stay the same size as the badges they replace.
 ## 2.240.0
 
 ### Fixed — the card icon was off-centre HORIZONTALLY, and only on badges with no readout
