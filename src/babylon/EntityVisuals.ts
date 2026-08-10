@@ -447,6 +447,26 @@ const BADGE_MIN_GAP_PX = 6;
  * which is why there is no separate member cap to keep in step with it.
  */
 const SPREAD_MAX_RADIUS_WIDTHS = 1.35;
+/**
+ * ── The entity group's own geometry (2.204.0) ────────────────────────────
+ * A pile that cannot be opened onto a ring inside SPREAD_MAX_RADIUS_WIDTHS
+ * used to hand its WHOLE ROOM to the room chip. Now it first tries becoming
+ * one badge standing for just those devices — see cullLabels' tier list.
+ *
+ * Deliberately the same diameter as a real badge, and deliberately NOT a
+ * category colour (CLAUDE.md: category hues are reserved for categories, and
+ * a group covers several). It reads as a third distinct thing: a badge is an
+ * icon, a room chip is a name, an entity group is a number.
+ *
+ * The threshold "X" the group triggers at is not a new constant — it IS
+ * SPREAD_MAX_RADIUS_WIDTHS above. Two badges group exactly when no ring
+ * inside that travel budget can separate them, which is the same test that
+ * already decided everything else here. A second, independent distance would
+ * be a second definition of "too close" to drift out of step with the first,
+ * and this file's whole history is that drift.
+ */
+const EGROUP_DIAMETER_PX = BADGE_DIAMETER_PX;
+const EGROUP_FONT_PX = 17;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -564,6 +584,30 @@ interface ClusterControls {
   entityIds: string[];
   /** Every room this chip stands for — one unless chips merged. */
   roomNames: string[];
+}
+
+/** One entity group: several of a room's badges drawn as a single badge,
+ *  because no ring inside the travel budget could separate them. Distinct
+ *  from ClusterControls above — that one covers a WHOLE room and carries its
+ *  name; this covers a SUBSET and carries only a count. */
+interface EntityGroupControls {
+  container: Rectangle;
+  countText: TextBlock;
+  node: TransformNode;
+  entityIds: string[];
+  room: string;
+}
+
+/** An entity group decided this frame, before it has been checked for
+ *  clearance and given controls. */
+interface PendingEntityGroup {
+  /** Stable identity across frames: room + the lowest entity id in the pile.
+   *  Membership is a pure function of world positions and quantised zoom, so
+   *  the same pile yields the same key on every device and every frame. */
+  key: string;
+  room: string;
+  members: number[];
+  wx: number; wy: number; wz: number;
 }
 
 /** A live state distilled to one of the visual kinds the badge colour-codes. */
@@ -735,6 +779,12 @@ export class EntityVisuals {
   /** Room-cluster chips, keyed by room name. Built lazily the first time a
    *  room clusters; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
+  /** Entity groups drawn this frame, keyed by PendingEntityGroup.key. Same
+   *  lazy-build / dispose-with-rebuildLabels lifecycle as `clusters`. */
+  private entityGroups = new Map<string, EntityGroupControls>();
+  /** Entity ids currently standing behind an entity group, so cullLabels'
+   *  visibility pass hides them exactly like a room-clustered badge. */
+  private entityGrouped = new Set<string>();
   /** Each room's real drawn polygon (world-space X/Z, original casing) — the
    *  geometric signal roomForEntity uses to auto-fill a freshly detected
    *  entity's room on first sight (see getDetectedMappings). Stored as the
@@ -2451,6 +2501,12 @@ export class EntityVisuals {
     // disposed control and the chips would silently stop rendering.
     for (const c of this.clusters.values()) c.node.dispose();
     this.clusters.clear();
+    // Same reasoning for the entity groups: their controls were children of
+    // the cleared root, so the map holds disposed references and
+    // ensureEntityGroup would hand one back.
+    for (const c of this.entityGroups.values()) c.node.dispose();
+    this.entityGroups.clear();
+    this.entityGrouped.clear();
     this.roomClustered.clear();
     this.labels.clear();
     this.labelLayer.rootContainer.isVisible = true;
@@ -2871,8 +2927,8 @@ export class EntityVisuals {
     const boxes = this.labelBoxes(shown);
     const piles = this.groupBadges(shown, boxes);
 
-    // ── The last tier: the room's chip ────────────────────────────────────
-    // Four tiers, in order, and a badge holds its SIZE through all of them —
+    // ── The last tiers: the entity group, then the room's chip ────────────
+    // Five tiers, in order, and a badge holds its SIZE through all of them —
     // it is never shrunk, because a badge below the ~44px touch target is a
     // control nobody can hit, which is a worse answer than a chip that is at
     // least honestly tappable and says how many devices it covers:
@@ -2880,11 +2936,41 @@ export class EntityVisuals {
     //   1. badge on its device
     //   2. badge without its readout        (the text is dropped first)
     //   3. pile opened onto a ring          (spreadPile, bounded travel)
-    //   4. the room's chip
+    //   4. the pile as ONE badge            (entity group — 2.204.0)
+    //   5. the room's chip
     //
-    // Tier 4 takes the WHOLE room with it, never a subset: a room that is half
-    // chip and half loose badges asks the viewer to work out which devices the
-    // chip covers, and a count over part of a room is not actionable.
+    // ── Why tier 4 exists (2.204.0) ───────────────────────────────────────
+    // Tier 3 failing used to mean tier 5 immediately: three crowded devices
+    // in a corner took the room's other eight badges down with them. The
+    // penalty for a local problem was global, which is why the travel budget
+    // had to be argued about so much — it was the only thing standing between
+    // a slightly tight pile and losing a whole room.
+    //
+    // Tier 4 makes the penalty match the problem: exactly the badges that
+    // could not be separated become one badge, at their own centroid, and
+    // everything else in the room stays where it is. The trigger is not a new
+    // threshold — a pile groups precisely when spreadPile reports that no ring
+    // inside SPREAD_MAX_RADIUS_WIDTHS separates it, the same single test that
+    // already decides tier 3. Two definitions of "too close" is exactly the
+    // drift this file's history is made of.
+    //
+    // Three rules keep it from becoming a second, competing grouping concept:
+    //   * ONE ROOM ONLY. A pile spanning rooms is room-level crowding and goes
+    //     straight to tier 5 — a group badge covering two rooms could not be
+    //     labelled or navigated to honestly.
+    //   * A group that would cover ALL of its room's badges IS the room, so it
+    //     renders as the room chip instead. Two renderings of the same content
+    //     is how a viewer learns to distrust both.
+    //   * A group badge must clear everything a real badge must clear (loose
+    //     badges, ring seats, other groups) or its room falls to tier 5.
+    // The third-device case needs no special handling: membership is recomputed
+    // from the union-find pile every frame, so a device that comes within reach
+    // of a grouped pair is simply in that pile next frame, and the group is
+    // rebuilt with three members.
+    //
+    // Tier 5 still takes the WHOLE room with it, never a subset: a room that is
+    // half chip and half loose badges asks the viewer to work out which devices
+    // the chip covers, and a count over part of a room is not actionable.
     //
     // There used to be a middle tier: a collided pile was laid out side by
     // side ("fanned") near its devices, and only summarised when that layout
@@ -2901,15 +2987,26 @@ export class EntityVisuals {
     // subsystem exists to guarantee (see the file header), and the fan was
     // spending it to avoid a chip.
     //
-    // So: if badges would collide, the room summarises. Zooming in shrinks
-    // every badge's world-space reach, so any two devices at DISTINCT points
-    // separate at some zoom and the room reopens on its own. Two devices at
+    // So: if badges would collide, they group. Zooming in shrinks every
+    // badge's world-space reach, so any two devices at DISTINCT points
+    // separate at some zoom and the group opens on its own. Two devices at
     // the SAME point (a fan and its own light, a socket and its power meter)
-    // never separate at any zoom — that room shows its chip always, which is
-    // the honest answer: there is no view in which those two badges could
-    // both be read, and drawing one on top of the other hides a device
-    // without saying so.
+    // never separate at any zoom — those two show as a group of 2 always,
+    // which is the honest answer: there is no view in which both badges could
+    // be read, and drawing one on top of the other hides a device without
+    // saying so. (Before tier 4 that case cost the whole room its badges,
+    // permanently, at every zoom — the single worst outcome this subsystem
+    // produced, and the one tier 4 most obviously fixes.)
     this.roomClustered.clear();
+    this.entityGrouped.clear();
+    // How many badges each room is showing this frame — the denominator for
+    // "this group covers the whole room, so it IS the room" below. Keyed by
+    // roomKey(), never the raw name (see config/roomKey).
+    const roomShownCount = new Map<string, number>();
+    for (const s of shown) {
+      const k = roomKey(this.roomOf(s.id));
+      roomShownCount.set(k, (roomShownCount.get(k) ?? 0) + 1);
+    }
     // Piles are laid out one at a time, and a badge that has been seated is no
     // longer where its anchor is — so a later pile has to be checked against
     // the SEATS already taken, not against those badges' anchors. Doing it in a
@@ -2925,14 +3022,41 @@ export class EntityVisuals {
       .filter((m) => m.length >= 2)
       .sort((a, b) => this.pileKey(shown, a).localeCompare(this.pileKey(shown, b)));
     this.seatCount = 0;
+    const pending: PendingEntityGroup[] = [];
     for (const members of ordered) {
-      // Open the pile out onto a ring, or — if no ring fits inside the travel
-      // budget — hand the whole room over to its chip. spreadPile decides and
-      // arranges in one calculation, so the two cannot disagree about whether
-      // a pile fits, which is the hole every earlier version had.
+      // Open the pile out onto a ring. spreadPile decides and arranges in one
+      // calculation, so the two cannot disagree about whether a pile fits,
+      // which is the hole every earlier version had.
       if (this.spreadPile(shown, boxes, members, tm, vp, mobile)) continue;
-      for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
+
+      // ── Tier 4: the pile becomes one badge, if it is honestly one room ──
+      const room = this.roomOf(shown[members[0]].id);
+      const key = roomKey(room);
+      let oneRoom = true;
+      for (const i of members) {
+        if (roomKey(this.roomOf(shown[i].id)) !== key) { oneRoom = false; break; }
+      }
+      // Spanning rooms, or covering everything its room has to show: both are
+      // room-level crowding, and the room chip is already the right answer for
+      // it. Falling through to tier 5 here is what makes the escalation a
+      // continuous path rather than two rival mechanisms.
+      if (!oneRoom || members.length >= (roomShownCount.get(key) ?? 0)) {
+        for (const i of members) this.roomClustered.set(this.roomOf(shown[i].id), true);
+        continue;
+      }
+      let wx = 0, wy = 0, wz = 0;
+      for (const i of members) { wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz; }
+      const n = members.length;
+      pending.push({
+        key: `${key}|${this.pileKey(shown, members)}`,
+        room, members, wx: wx / n, wy: wy / n, wz: wz / n,
+      });
     }
+
+    // Placed only after every pile has had its turn: a group's clearance is
+    // measured against the ring seats, and those are not all known until the
+    // loop above has finished.
+    this.placeEntityGroups(shown, boxes, pending, mobile);
 
     for (const s of shown) {
       // No X offset exists any more, and baseY is a FIXED lift that centres
@@ -2940,9 +3064,12 @@ export class EntityVisuals {
       // moves nothing relative to anything else.
       s.lbl.container.linkOffsetXInPixels = s.offX;
       s.lbl.container.linkOffsetYInPixels = baseY + s.offY;
-      s.lbl.container.isVisible = s.inFront && !this.roomClustered.get(this.roomOf(s.id));
+      s.lbl.container.isVisible = s.inFront
+        && !this.roomClustered.get(this.roomOf(s.id))
+        && !this.entityGrouped.has(s.id);
     }
     this.updateClusters(shown);
+    this.updateEntityGroups(shown, pending);
   }
 
   /**
@@ -3351,6 +3478,220 @@ export class EntityVisuals {
     }
     boxes.length = shown.length;
     return boxes;
+  }
+
+  // ── Entity groups (tier 4 — several of a room's badges as one) ────────────
+
+  /**
+   * Decide which pending entity groups may actually be drawn, and drop the
+   * rest to their room's chip.
+   *
+   * A group badge is a badge: it has to clear everything a badge has to clear,
+   * or it is just a new way to draw two things on top of each other — the
+   * exact failure the whole subsystem exists to prevent. It is checked against
+   * the three things that can be in its way, all in WORLD space against the
+   * quantised zoom, like every other decision here:
+   *
+   *   * loose badges (not in any pile) — these stayed at their anchors;
+   *   * ring seats already taken by tier 3 — a seated badge is NOT at its
+   *     anchor, so testing the anchor would compare against a position it
+   *     never occupies (the same rule spreadPile follows for other piles);
+   *   * other groups, in a fixed order so each pair meets exactly once.
+   *
+   * The centroid being inside the pile's own hull makes a collision unlikely
+   * but not impossible — a point interior to a hull can sit closer to an
+   * outside badge than any vertex does — so it is checked rather than assumed.
+   *
+   * Mutates `this.entityGrouped` (which badges hide) and `this.roomClustered`
+   * (which rooms escalate), and prunes `pending` in place to what survived.
+   */
+  private placeEntityGroups(
+    shown: ShownLabel[],
+    boxes: { halfW: number; halfH: number; cy: number }[],
+    pending: PendingEntityGroup[],
+    mobile: boolean[],
+  ): void {
+    if (pending.length === 0) return;
+    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
+    const scale = this.iconUserScale * this.iconZoomScale;
+    if (pxPerWorld <= 0) {
+      // No usable projection this frame — fall back to the tier that needs
+      // none rather than drawing groups at unverified positions.
+      for (const g of pending) this.roomClustered.set(g.room, true);
+      pending.length = 0;
+      return;
+    }
+    const gapPx = BADGE_MIN_GAP_PX * scale;
+    const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
+    // Same half-extent rule as spreadPile: the larger of the two, because a
+    // neighbour can lie in any direction.
+    const halfOf = (i: number) => Math.max(boxes[i].halfW, boxes[i].halfH);
+    const mineHalf = (EGROUP_DIAMETER_PX / 2) * scale * allow;
+
+    // Fixed order (the key is stable and total), so which of two conflicting
+    // groups survives never depends on pile iteration order.
+    pending.sort((a, b) => a.key.localeCompare(b.key));
+    const placed: PendingEntityGroup[] = [];
+    for (const g of pending) {
+      let clear = true;
+      for (let j = 0; j < shown.length && clear; j++) {
+        if (mobile[j]) continue; // in a pile: seated below, or grouped itself
+        // A badge whose ROOM has already escalated is not drawn, so it is not
+        // in the way. Testing it anyway made one room's chip push another
+        // room's group to a chip it never needed — an escalation cascade
+        // triggered by geometry that is not on screen. Safe to read here and
+        // not inside the pile loop: every roomClustered decision is final by
+        // the time this method runs.
+        if (this.roomClustered.get(this.roomOf(shown[j].id))) continue;
+        const d = Math.hypot(g.wx - shown[j].wx, g.wy - shown[j].wy, g.wz - shown[j].wz) * pxPerWorld;
+        if (d < mineHalf + halfOf(j) * allow + gapPx) clear = false;
+      }
+      for (let q = 0; q < this.seatCount && clear; q++) {
+        const d = Math.hypot(g.wx - this.seatX[q], g.wy - this.seatY[q], g.wz - this.seatZ[q]) * pxPerWorld;
+        if (d < mineHalf + this.seatHalfW[q] + gapPx) clear = false;
+      }
+      for (const o of placed) {
+        if (!clear) break;
+        const d = Math.hypot(g.wx - o.wx, g.wy - o.wy, g.wz - o.wz) * pxPerWorld;
+        if (d < mineHalf * 2 + gapPx) clear = false;
+      }
+      if (!clear) {
+        // Nowhere to stand: this is room-level crowding after all.
+        this.roomClustered.set(g.room, true);
+        continue;
+      }
+      placed.push(g);
+      for (const i of g.members) this.entityGrouped.add(shown[i].id);
+    }
+    // A group whose room was escalated by a LATER pile must not also draw —
+    // the room chip already covers its members. Done after the loop because a
+    // room can be escalated by a pile ordered after the one that grouped.
+    pending.length = 0;
+    for (const g of placed) {
+      if (this.roomClustered.get(g.room)) {
+        for (const i of g.members) this.entityGrouped.delete(shown[i].id);
+        continue;
+      }
+      pending.push(g);
+    }
+  }
+
+  /** Draw (or hide) one badge-sized control per surviving entity group. */
+  private updateEntityGroups(shown: ShownLabel[], groups: PendingEntityGroup[]): void {
+    const layer = this.labelLayer;
+    if (!layer) return;
+    const live = new Set<string>();
+    if (groups.length > 0) {
+      // Floored like the room chip's, and for the same reason: a group badge
+      // that shrinks with the badges it replaced would be unreadable at
+      // exactly the zoom where grouping matters most.
+      const scale = Math.max(CLUSTER_MIN_SCALE, this.iconUserScale * this.iconZoomScale);
+      const surface = cssVar("--chip-surface") || CLUSTER_BG_COLOR;
+      const ink = cssVar("--chip-ink") || "#ffffff";
+      for (const g of groups) {
+        live.add(g.key);
+        const c = this.ensureEntityGroup(g.key, layer);
+        c.entityIds = g.members.map((i) => shown[i].id);
+        c.room = g.room;
+        c.node.position.set(g.wx, g.wy, g.wz);
+        c.countText.text = formatCountBadge(c.entityIds.length);
+        // Exactly the room chip's ring rule (BADGE_RING): red when at least
+        // one member is "on" or "alert". Unavailability is NOT a ring — it
+        // dims, same as an individual badge — so the two signals stay
+        // distinguishable at a glance on a group as on a badge.
+        let ringRed = false, unavailable = false;
+        for (const i of g.members) {
+          const st = this.lastState.get(shown[i].id);
+          if (!st) continue;
+          const kind = this.badgeKind(shown[i].lbl.type, st);
+          if (kind === "on" || kind === "alert") ringRed = true;
+          if (kind === "unavailable") unavailable = true;
+        }
+        c.container.thickness = ringRed ? 2 : 0;
+        c.container.color = ringRed ? ALERT_RED_HEX : "transparent";
+        c.container.background = surface;
+        // Reporting status rides on the COUNT, exactly as the room chip puts
+        // it on its count pill — red when at least one member is unavailable.
+        // Independent of the ring above, so "something is on" and "something
+        // is unreachable" stay separately readable, and no new colour or
+        // signal is invented for a control that already has a sibling with
+        // this exact problem solved. (The individual badge's genuinely dashed
+        // unavailable ring is baked pixels; a Babylon GUI Rectangle has no
+        // dashed border — the same limitation the "card" badge style already
+        // degrades around, see BADGE_RING_THICKNESS.)
+        c.countText.color = unavailable ? ALERT_RED_HEX : ink;
+        c.container.scaleX = scale;
+        c.container.scaleY = scale;
+        // Zero X offset and a fixed centring lift, exactly like the room chip:
+        // the group sits ON its anchor. It is a summary, not a nudged badge.
+        c.container.linkOffsetXInPixels = 0;
+        c.container.linkOffsetYInPixels = -(EGROUP_DIAMETER_PX / 2) * scale;
+        c.container.isVisible = true;
+      }
+    }
+    for (const [key, c] of this.entityGroups) {
+      if (!live.has(key)) c.container.isVisible = false;
+    }
+  }
+
+  private ensureEntityGroup(key: string, layer: AdvancedDynamicTexture): EntityGroupControls {
+    const existing = this.entityGroups.get(key);
+    if (existing) return existing;
+
+    const node = new TransformNode(`egroup_${key}`, this.scene);
+    const container = new Rectangle(`egroupBadge_${key}`);
+    container.width = `${EGROUP_DIAMETER_PX}px`;
+    container.height = `${EGROUP_DIAMETER_PX}px`;
+    container.cornerRadius = EGROUP_DIAMETER_PX / 2;
+    container.thickness = 0;
+    container.background = CLUSTER_BG_COLOR;
+    container.shadowColor = "rgba(0,0,0,0.4)";
+    container.shadowBlur = 6;
+    container.shadowOffsetY = 2;
+    container.isPointerBlocker = false; // taps resolve via pickEntityGroupAt
+
+    // The count IS the content — no icon. A group covers several categories,
+    // and borrowing one member's glyph would claim the group is that kind of
+    // device (CLAUDE.md: category hues/icons mean the category). A number
+    // claims only what is true: this many devices are here.
+    const countText = new TextBlock(`egroupCount_${key}`);
+    countText.color = "#ffffff";
+    // Babylon GUI TextBlocks do not inherit CSS and default to Arial — see
+    // CLAUDE.md's known gotchas; every one of them sets this explicitly.
+    countText.fontFamily = GUI_FONT_FAMILY;
+    countText.fontSize = EGROUP_FONT_PX;
+    countText.fontWeight = "700";
+    container.addControl(countText);
+
+    layer.addControl(container);
+    container.linkWithMesh(node);
+    container.linkOffsetYInPixels = -EGROUP_DIAMETER_PX / 2;
+
+    const c: EntityGroupControls = { container, countText, node, entityIds: [], room: "" };
+    this.entityGroups.set(key, c);
+    return c;
+  }
+
+  /** Entity ids behind the entity-group badge at these CSS-pixel client
+   *  coords, or null. Same Control.contains() hit test as pickClusterAt /
+   *  pickBadgeAt — see pickBadgeAt's docstring for why asking the rendered
+   *  control is the only approach that cannot drift from what is on screen.
+   *  Its members are hidden exactly while it is visible, so it can never take
+   *  a tap from a badge the user can actually see. */
+  pickEntityGroupAt(clientX: number, clientY: number): { room: string; entityIds: string[] } | null {
+    if (this.entityGroups.size === 0) return null;
+    const eng = this.scene.getEngine();
+    const canvas = eng.getRenderingCanvas();
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const px = (clientX - rect.left) * (eng.getRenderWidth() / rect.width);
+    const py = (clientY - rect.top) * (eng.getRenderHeight() / rect.height);
+    for (const c of this.entityGroups.values()) {
+      if (!c.container.isVisible) continue;
+      if (c.container.contains(px, py)) return { room: c.room, entityIds: [...c.entityIds] };
+    }
+    return null;
   }
 
   // ── Room clusters (the "clusters" LOD band) ───────────────────────────────

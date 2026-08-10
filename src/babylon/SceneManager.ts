@@ -281,6 +281,17 @@ export class SceneManager {
         opts.onClusterTapped(cluster.room, cluster.entityIds, cluster.roomNames);
         return;
       }
+      // Entity groups (tier 4) next, and before badges for the same reason:
+      // a group's members are hidden exactly while it is drawn, so it cannot
+      // steal a tap from a badge anyone can see. Unlike a room chip, a TAP
+      // opens the device list rather than navigating — you are already looking
+      // at the room, so "which of these did you mean" is the only question
+      // left, and it is the same list the room chip's long-press opens.
+      const eGroup = this.visuals.pickEntityGroupAt(x, y);
+      if (eGroup && opts.onClusterPicked) {
+        opts.onClusterPicked(eGroup.room, eGroup.entityIds);
+        return;
+      }
       const badgeEntity = this.visuals.pickBadgeAt(x, y);
       if (badgeEntity) { opts.onEntityPicked(badgeEntity, x, y); return; }
       this.pick.pickAtScreen(x, y);
@@ -290,6 +301,15 @@ export class SceneManager {
       const cluster = this.visuals.pickClusterAt(x, y);
       if (cluster && opts.onClusterPicked) {
         opts.onClusterPicked(cluster.room, cluster.entityIds);
+        return;
+      }
+      // Long-press does the same as tap on an entity group — there is no
+      // second, more-detailed thing to reveal, and a control that looks
+      // identical under both gestures should behave identically under both
+      // rather than appear unresponsive to one of them.
+      const eGroup = this.visuals.pickEntityGroupAt(x, y);
+      if (eGroup && opts.onClusterPicked) {
+        opts.onClusterPicked(eGroup.room, eGroup.entityIds);
         return;
       }
       const badgeEntity = this.visuals.pickBadgeAt(x, y);

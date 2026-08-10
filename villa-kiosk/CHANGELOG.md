@@ -1,3 +1,9 @@
+## 2.204.0
+
+### Added — a crowded pile becomes ONE badge before it costs the whole room (EXPERIMENTAL)
+
+Until now a pile that could not be opened onto a ring inside the travel budget handed its entire room to the room chip: three devices crowded in a corner took the room's other eight badges down with them, so a local problem carried a global penalty. A new tier sits between the two — exactly the badges that could not be separated collapse into a single badge at their own centroid, showing how many they stand for, while every other badge in the room stays exactly where it is. Tapping it opens the same device list the room chip's long-press opens. The trigger is not a new threshold: a pile groups precisely when the existing ring test reports that no radius inside `SPREAD_MAX_RADIUS_WIDTHS` separates it, so there is only ever one definition of "too close". A third device coming within reach joins the group automatically, because membership is recomputed from the collision pile every frame rather than maintained incrementally. Groups escalate to the room chip when a pile spans two rooms, when it covers everything its room has to show, or when the group badge itself has nowhere clear to stand — so the path up to a room summary stays continuous instead of becoming a rival mechanism. Flagged experimental: revert to 2.203.0 if it reads worse than the room chip did.
+
 ## 2.203.0
 
 ### Fixed — the villa was indexed twice on any load where its room data had changed
