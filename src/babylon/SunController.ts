@@ -9,7 +9,8 @@ import type { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import type { LightingSystem } from "./LightingSystem";
 import type { SkyDome } from "./SkyDome";
 import { type AppConfig, DEFAULT_RENDER } from "@/config/AppConfig";
-import { getSunPosition } from "@/utils/sunCalc";
+import { getSunPosition, getMoonPosition, getMoonIllumination } from "@/utils/sunCalc";
+import type { NightSky } from "./NightSky";
 
 export class SunController {
   private scene: Scene;
@@ -28,6 +29,7 @@ export class SunController {
   // atlas, 1 = the sun-free night atlas. Provided by ModelLoader when the
   // GLB carries a BAKED_Structure_Night texture; null = single-atlas GLB,
   // where night falls back to the exposure dim below.
+  private nightSky: NightSky | null = null;
   private nightBlend: ((t: number) => void) | null = null;
   // Pane dimmer from ModelLoader: ramps the glass materials' forced light
   // albedo + emissive sheen down after dark (they are excluded from every
@@ -143,6 +145,34 @@ export class SunController {
     const nightT = Math.min(1, Math.max(0, -altitude / TWILIGHT));
 
     this.applyDayNight(isDay, dir, nightT, skyDir);
+
+    // The moon rides the same beat as the sun, so an unattended kiosk walks it
+    // across the sky and through its phases on its own. Computed here from the
+    // same date/lat/lng — never from HA, whose sensor.moon_phase is an enum
+    // with no position at all (see utils/sunCalc) and which is opt-in, so it
+    // can never be a prerequisite for this running.
+    if (this.nightSky) {
+      const m = getMoonPosition(date, latitude, longitude);
+      const ill = getMoonIllumination(date);
+      // Same convention as skyDir above: a unit vector pointing AT the body.
+      this.nightSky.update({
+        dir: new Vector3(
+          -Math.sin(m.azimuth) * Math.cos(m.altitude),
+          Math.sin(m.altitude),
+          -Math.cos(m.azimuth) * Math.cos(m.altitude),
+        ).normalize(),
+        fraction: ill.fraction,
+        angle: ill.angle,
+        parallacticAngle: m.parallacticAngle,
+        nightT,
+      });
+    }
+  }
+
+  /** Optional — the scene works without it, and so does every install that
+   *  never enabled HA's Moon integration. */
+  setNightSky(ns: NightSky): void {
+    this.nightSky = ns;
   }
 
   /** Override from HA sun.sun entity ("above_horizon" | "below_horizon"). */

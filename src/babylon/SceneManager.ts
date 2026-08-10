@@ -52,6 +52,7 @@ import { OverviewController } from "./OverviewController";
 import { LightingSystem } from "./LightingSystem";
 import { SunController } from "./SunController";
 import { SkyDome } from "./SkyDome";
+import { NightSky } from "./NightSky";
 import { FloorManager } from "./FloorManager";
 import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
@@ -188,6 +189,7 @@ export class SceneManager {
   readonly pick: PickHandler;
   readonly visuals: EntityVisuals;
   readonly renderFx: RenderEnhancements;
+  private nightSky: NightSky;
 
   private config: AppConfig;
   private hemi: HemisphericLight;
@@ -290,6 +292,12 @@ export class SceneManager {
     // Procedural sky shown through the windows; driven by the same sun below.
     this.sky = new SkyDome(this.scene);
     this.sun = new SunController(this.scene, this.lighting, this.hemi, opts.config, this.sky);
+    // Moon + stars. Entirely optional to the rest of the scene, and computed
+    // from date/lat/lng — an install without HA's opt-in Moon integration gets
+    // exactly the same night sky, which is the requirement.
+    this.nightSky = new NightSky(this.scene);
+    this.sun.setNightSky(this.nightSky);
+
     this.sun.setRenderHook(() => this.requestRender());
     this.visuals = new EntityVisuals(
       this.scene, opts.config,
@@ -2355,6 +2363,7 @@ export class SceneManager {
     // camera/overview hold canvas pointer/key listeners.)
     this.renderFx.dispose();
     this.sky.dispose();
+    this.nightSky.dispose();
     this.camera.dispose();
     this.overview.dispose();
     this.visuals.dispose();

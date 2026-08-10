@@ -1,3 +1,15 @@
+## 2.227.0
+
+### Added — the moon and a starfield at night
+
+`babylon/NightSky.ts` renders both, on the same beat as the sun, so a kiosk left on a wall carries the night as well as the day.
+
+The **moon** is placed by `getMoonPosition` for the villa's own coordinates — it rises, crosses and sets where the real one does, and shows the correct phase for the date. The lit shape is drawn properly rather than approximated: the terminator is an **ellipse** of half-width `R·|1 − 2·lit|`, because the moon is a sphere lit from the side and the boundary is the projection of a great circle. The familiar "overlap two circles" trick is right only for crescents and visibly wrong for a gibbous moon. It is also rotated by the **parallactic angle**, which matters at this villa's latitude, where the moon passes near the zenith and the crescent reads as a "smile" rather than the vertical C of higher latitudes — get that wrong and it looks like a bug rather than like astronomy. A soft halo keeps it sitting in the sky instead of pasted onto it, and it fades over the last few degrees above the horizon rather than popping in.
+
+The **stars** are a fixed procedural field: uniform directions on the sphere (sampling UV directly would bunch every star at the poles), mostly faint with a cubic falloff so a few read as bright, and a slight warm/cool tint on the extremes. They are deliberately **not** the real sky for this latitude — the request was "simple but nice", and a plausible-but-invented starfield is honest decoration where one claimed to be real would not be. The seed is fixed so the sky is the same every night instead of reshuffling on each reload. Both fade in on the existing twilight ramp.
+
+Two constraints held throughout. Nothing is an image asset and nothing is fetched — both textures are drawn into canvases at runtime, because the target is an iPad that may have no internet. And **HA's Moon integration is never a dependency**: every value comes from date plus latitude and longitude, so an install that never enabled it gets exactly the same moon. The moon disc is redrawn only when the phase would actually look different, so a per-minute update repaints a handful of times a night rather than 1440.
+
 ## 2.226.0
 
 ### Fixed — the square halo and straight bright edges across the overview sky
