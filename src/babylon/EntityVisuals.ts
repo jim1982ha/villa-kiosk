@@ -2925,26 +2925,40 @@ export class EntityVisuals {
       // Tap/long-press handling is NOT wired here — see pickBadgeAt()'s
       // docstring for why. The badge is a purely visual control now.
       if (card) {
-        // The card hugs its icon+value row. Top/bottom padding is the glyph
-        // image's baked-in margin (BADGE_INSET_CARD, deliberately tight);
-        // left/right get extra room here + on the value, so the card reads
-        // short but not cramped horizontally.
+        // The card hugs its icon+value row. Top/bottom breathing room is the
+        // glyph image's baked-in margin (BADGE_INSET_CARD); left/right come
+        // from the padding below.
         badge.adaptWidthToChildren = true;
-        // ── DERIVED from the height, so a bare-icon card comes out SQUARE ──
-        // adaptWidthToChildren makes the card exactly `padding + glyph +
-        // padding` wide, while its height is fixed at cardHeightPx. So a
-        // CONSTANT horizontal pad can only produce a square by coincidence,
-        // and 4px against a 28px height did not: the card came out 24x28 —
-        // a tall narrow capsule, portrait, where every other badge on the map
-        // is a squircle. That is what "the icons appear without any padding
-        // and not centred in the card" looked like, and no amount of
-        // adjusting the icon's SIZE could fix it, because the fault was the
-        // card's aspect ratio rather than the icon's dimensions.
+        // ── PADDING IN BABYLON GUI SUBTRACTS. THIS FLAG IS WHAT ADDS IT ────
+        // The single defect behind ~15 releases of "the icon and the text have
+        // no padding and are not centred in the card", and it is not a number
+        // anywhere — it is which side of the box the padding lands on.
         //
-        // Half the leftover height puts the same gap on all four sides and
-        // makes width equal height by construction, at any icon size, on
-        // either pointer class. The VALUE keeps its own left padding for the
-        // icon-to-text gap; that is a different measurement and stays a metric.
+        // Babylon's default is an INSET: control.js:1645-1674 subtracts a
+        // control's own padding from its own _currentMeasure. Meanwhile
+        // container.js:369 ADDS that same padding to the width PROPERTY when
+        // adaptWidthToChildren is on. The two cancel at a stable fixed point
+        // that is silently wrong — the property read 28 while the card was
+        // DRAWN 22 wide against a fixed 28 height. Portrait, 0.79 aspect, with
+        // cornerRadius computed off the height (7.9px = 36% of the 22 actually
+        // drawn) so it rounded like a vertical capsule instead of a squircle.
+        // Inside it, the chip sat flush on the left border with 0px of margin
+        // and 3px on the right of the value: exactly the report, and exactly
+        // why adjusting the icon's SIZE, the ring, the inset or the fraction
+        // never helped. Every one of those fixes computed a correct number
+        // that was then subtracted instead of added.
+        //
+        // descendantsOnlyPadding is Babylon's CSS-padding mode
+        // (control.js:1536-1541): the padding is applied to the measure handed
+        // to the CHILDREN and left out of this control's own box. The property
+        // and the drawing now agree, so a bare-icon card is 28x28 — square by
+        // construction at any icon size, on either pointer class — and a card
+        // with a value reads pad | chip | gap | value | pad.
+        badge.descendantsOnlyPadding = true;
+        // Half the card's leftover height, so the chip's clear space is the
+        // same on all four sides and width equals height when there is no
+        // value. The icon-to-text gap is a different measurement and lives on
+        // the value below.
         badge.paddingLeft = `${iconPadX}px`;
         badge.paddingRight = `${iconPadX}px`;
       } else {
@@ -2987,6 +3001,13 @@ export class EntityVisuals {
       const valueWrap = new Rectangle(`lbl_valwrap_${entityId}`);
       valueWrap.thickness = 0;
       valueWrap.adaptWidthToChildren = true;
+      // Same reason as the card above, and it bit BOTH styles: this wrap is an
+      // adaptWidthToChildren container with its own left/right padding, so
+      // without this its padding cancelled to nothing. The classic style's
+      // dark pill was drawn exactly as wide as its text — pillPadXPx: 10 was
+      // being subtracted straight back out, which is why the value looked like
+      // it was touching the stadium's rounded ends.
+      valueWrap.descendantsOnlyPadding = true;
       if (card) {
         valueWrap.height = `${cardInnerH}px`;
         valueWrap.background = "transparent";
@@ -2996,13 +3017,14 @@ export class EntityVisuals {
         // against because it is the same object drawn in the DOM. A flat 4px
         // came out at 18% and read as the text crowding the chip's edge.
         valueWrap.paddingLeft = `${Math.round(glyphPx * chip.gap)}px`;
-        // Mirrors the chip→text gap once the card's OWN right padding is
-        // taken off, so the value has the same clear space on both sides.
-        // It was a flat constant, which put 6px between the chip and the text
-        // and 11px between the text and the card's edge — the value sitting
-        // 2.5px left of the space it occupies. Reported as the text not being
-        // centred in the card, and it was horizontal, like the icon before it.
-        valueWrap.paddingRight = `${Math.round(glyphPx * chip.gap) - iconPadX}px`;
+        // NONE. The card's own right padding (iconPadX) is the value's right
+        // margin, which makes the card's two outer margins equal — the chip
+        // has iconPadX to its left and the value has iconPadX to its right,
+        // with the gap between them the only asymmetric measurement, as it
+        // should be. This carried `gap - iconPadX` while padding was still
+        // being subtracted rather than added; keeping it now would put the
+        // whole gap on the right a second time.
+        valueWrap.paddingRight = "0px";
         valueWrap.isVisible = false;
         row!.addControl(valueWrap);
       } else {

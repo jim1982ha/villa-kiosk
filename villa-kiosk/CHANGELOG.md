@@ -1,3 +1,56 @@
+## 2.249.0
+
+### Fixed — Babylon GUI padding subtracts, so the card badge had none of it
+
+Fifteen releases of "the icon and the text appear without any padding and are
+not centred in the card", and the fault was never a number. It was which side
+of the box Babylon puts padding on.
+
+`Control._computeAlignment` (control.js:1645-1674) treats a control's own
+padding as an INSET: it subtracts it from that control's own `_currentMeasure`,
+the box that actually gets drawn. Meanwhile `Container._layout`
+(container.js:369) ADDS the same padding to the width PROPERTY whenever
+`adaptWidthToChildren` is on. The two cancel at a stable fixed point that
+nothing reports as wrong: the card's width property read 28 while the card was
+drawn 22 wide, against a height that stayed 28. Portrait — 0.79 aspect, where
+every other badge on the map is a squircle — with `cornerRadius` computed off
+the height (7.9 px, 28% of 28 but 36% of the 22 actually drawn), so it rounded
+like a vertical capsule. Inside it the icon chip sat flush on the left border
+with zero margin, the gap to the value was 6 px, and the value had 3 px to the
+card's right edge. Asked for was 3 / 6 / 3.
+
+That is the whole report, exactly: no padding, not centred, not a squircle. It
+also explains why nothing fixed it. Every attempt since 2.234.0 computed a
+padding, a ring thickness, an icon fraction or a card height that was correct,
+and every one of those numbers was then subtracted rather than added — deriving
+`iconPadX` from the leftover height (2.243.0) made the card's *property* square
+while leaving what was drawn portrait by exactly twice the padding.
+
+`descendantsOnlyPadding` is Babylon's CSS-padding mode (control.js:1536-1541):
+the padding is applied to the measure handed to the children and left out of
+the control's own box. Set on the card and on the value wrap, the property and
+the drawing agree — a bare-icon card is 28x28, square by construction at any
+icon size and on either pointer class, and a card with a value reads
+pad | chip | gap | value | pad with equal outer margins. The value's own
+`paddingRight` goes back to zero: it carried `gap - iconPadX` to compensate for
+the subtraction, and keeping it would now apply the gap on the right twice.
+
+The classic badge style was hit by the same mechanism and is fixed by the same
+flag: its dark value pill was drawn exactly as wide as its text, because
+`pillPadXPx: 10` was being subtracted straight back out on both sides. That is
+why the reading looked like it was touching the stadium's rounded ends.
+
+`textOpticalTopEm` is deliberately left where it is. The value text's VERTICAL
+position was measured rather than argued this time: reading the shipped
+`public-sans-var.woff2` gives ascent 0.950, descent 0.225 and cap height 0.723
+em, and Babylon draws the baseline at `ascent` inside a box of
+`ascent + descent`, so for a string with no descender ("0 W", "98%", a count)
+the ink lands 0.001 em from the box centre. The iOS fallback face (SF, 0.952 /
+0.241 / 0.705) gives 0.003 em. Both are centred, and every container in the
+chain between the text and the card centres on the same axis. So there is no
+vertical error to find in the text's own placement — but it was being judged
+inside a box that was genuinely deformed, and that is what changed here.
+
 ## 2.248.0
 
 ### Fixed — the value text ("0 W", "98%") sat high in the card
