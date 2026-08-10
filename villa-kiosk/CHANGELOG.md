@@ -1,3 +1,13 @@
+## 2.207.0
+
+### Fixed — the entity group stood half again as tall as the room chip beside it
+
+The two summaries had independent size constants, so they drifted the moment they were written: the group took the 44px BADGE size while the chip is 30px, which is plainly visible when one sits next to the other. The group's height and font are now DERIVED from the chip's, so they cannot diverge again — same height, same font, same scale floor, same neutral chrome. The only remaining differences carry meaning: the group is a squircle holding a count (it stands in for squircle badges), the chip is a pill holding a room name (it names a place).
+
+### Fixed — a group was measured at one size and drawn at another
+
+Its clearance check used the badge scale while it draws at the floored cluster scale, so at far zoom — where badges shrink past that floor and crowding is worst — the group was physically bigger on screen than the check assumed and could overlap a badge it was meant to clear. Both now use the floored scale.
+
 ## 2.206.0
 
 ### Fixed — a badge never moves now, so the half-spread intermediate cannot happen

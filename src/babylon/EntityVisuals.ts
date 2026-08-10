@@ -433,28 +433,6 @@ const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
  * never use different geometry from the renderer.
  */
 const BADGE_MIN_GAP_PX = 6;
-/**
- * ── The entity group's own geometry (2.204.0) ────────────────────────────
- * A pile that cannot be opened onto a ring inside SPREAD_MAX_RADIUS_WIDTHS
- * used to hand its WHOLE ROOM to the room chip. Now it first tries becoming
- * one badge standing for just those devices — see cullLabels' tier list.
- *
- * Deliberately the same diameter as a real badge, and deliberately NOT a
- * category colour (CLAUDE.md: category hues are reserved for categories, and
- * a group covers several). It reads as a third distinct thing: a badge is an
- * icon, a room chip is a name, an entity group is a number.
- *
- * The threshold "X" the group triggers at is not a new constant — it IS
- * SPREAD_MAX_RADIUS_WIDTHS above. Two badges group exactly when no ring
- * inside that travel budget can separate them, which is the same test that
- * already decided everything else here. A second, independent distance would
- * be a second definition of "too close" to drift out of step with the first,
- * and this file's whole history is that drift.
- */
-const EGROUP_DIAMETER_PX = BADGE_DIAMETER_PX;
-/** Count font: the room chip's own count-pill size stepped up to suit a 44px
- *  square instead of a 20px pill, so the two summaries read as one family. */
-const EGROUP_FONT_PX = 18;
 /** Room-cluster chip geometry. */
 const CLUSTER_HEIGHT_PX = 30;
 const CLUSTER_FONT_PX = 15;
@@ -478,6 +456,24 @@ const CLUSTER_GAP_PX = 6;
  *  proportion .icon-btn-count keeps against its 48px parent button. */
 const CLUSTER_COUNT_DIAMETER_PX = 20;
 const CLUSTER_COUNT_FONT_PX = 11;
+/**
+ * ── The entity group's own geometry ──────────────────────────────────────
+ * The two SUMMARIES on this map — a room's chip and an entity group — are one
+ * family and must be the same size. DERIVED from the chip's constants rather
+ * than given their own numbers, because when they were independent they drifted
+ * immediately: the group shipped at the 44px BADGE size against the chip's
+ * 30px, which put a group half again as tall as the chip beside it (reported
+ * with a screenshot of two "2" groups next to a "Living Room 20" chip).
+ *
+ * Same height, same font, same scale floor, same neutral chrome colour — the
+ * ONLY differences are shape and content, and both of those carry meaning: the
+ * group is a SQUIRCLE (it stands in for squircle badges, at a badge's own
+ * corner rounding) holding a count, the chip is a PILL (it names a place)
+ * holding a room name. Not a category colour either way — CLAUDE.md reserves
+ * the category hues for categories, and a summary covers several.
+ */
+const EGROUP_SIZE_PX = CLUSTER_HEIGHT_PX;
+const EGROUP_FONT_PX = CLUSTER_FONT_PX;
 /** Estimated advance width per character at CLUSTER_FONT_PX/weight 600, plus
  *  the TextBlock's own left+right padding. Babylon computes the real width
 const NO_ROOM_LABEL = "Other";
@@ -3332,7 +3328,16 @@ export class EntityVisuals {
     // Same half-extent rule as spreadPile: the larger of the two, because a
     // neighbour can lie in any direction.
     const halfOf = (i: number) => Math.max(boxes[i].halfW, boxes[i].halfH);
-    const mineHalf = (EGROUP_DIAMETER_PX / 2) * scale * allow;
+    // ── The group's OWN scale, which is not the badges' scale ─────────────
+    // A group is drawn at the floored CLUSTER_MIN_SCALE (updateEntityGroups),
+    // so at far zoom — where iconZoomScale falls below that floor — it is
+    // physically LARGER on screen than the badges around it. Measuring it here
+    // with the badge scale would have understated its footprint at exactly the
+    // zoom where things are most crowded, and let it overlap a badge it was
+    // supposed to clear: a layout decision using different geometry from the
+    // renderer, which is the mistake this file has made most often.
+    const groupScale = Math.max(CLUSTER_MIN_SCALE, scale);
+    const mineHalf = (EGROUP_SIZE_PX / 2) * groupScale * allow;
 
     // Fixed order (the key is stable and total), so which of two conflicting
     // groups survives never depends on pile iteration order.
@@ -3427,7 +3432,7 @@ export class EntityVisuals {
         // Zero X offset and a fixed centring lift, exactly like the room chip:
         // the group sits ON its anchor. It is a summary, not a nudged badge.
         c.container.linkOffsetXInPixels = 0;
-        c.container.linkOffsetYInPixels = -(EGROUP_DIAMETER_PX / 2) * scale;
+        c.container.linkOffsetYInPixels = -(EGROUP_SIZE_PX / 2) * scale;
         c.container.isVisible = true;
       }
     }
@@ -3442,8 +3447,8 @@ export class EntityVisuals {
 
     const node = new TransformNode(`egroup_${key}`, this.scene);
     const container = new Rectangle(`egroupBadge_${key}`);
-    container.width = `${EGROUP_DIAMETER_PX}px`;
-    container.height = `${EGROUP_DIAMETER_PX}px`;
+    container.width = `${EGROUP_SIZE_PX}px`;
+    container.height = `${EGROUP_SIZE_PX}px`;
     // SQUIRCLE, not a circle. It shipped as a circle (cornerRadius = size/2)
     // and read as a foreign object among the squircle badges it replaces and
     // the rounded room chip it escalates into — three different corner
@@ -3452,7 +3457,7 @@ export class EntityVisuals {
     // exactly this kind of match), so the group is the badge shape at the
     // badge size, and only its CONTENT — a count instead of a glyph — says it
     // stands for several devices.
-    container.cornerRadius = EGROUP_DIAMETER_PX * BADGE_CORNER_FRACTION;
+    container.cornerRadius = EGROUP_SIZE_PX * BADGE_CORNER_FRACTION;
     container.thickness = 0;
     container.background = CLUSTER_BG_COLOR;
     container.shadowColor = "rgba(0,0,0,0.4)";
@@ -3475,7 +3480,7 @@ export class EntityVisuals {
 
     layer.addControl(container);
     container.linkWithMesh(node);
-    container.linkOffsetYInPixels = -EGROUP_DIAMETER_PX / 2;
+    container.linkOffsetYInPixels = -EGROUP_SIZE_PX / 2;
 
     const c: EntityGroupControls = { container, countText, node, entityIds: [], room: "" };
     this.entityGroups.set(key, c);
