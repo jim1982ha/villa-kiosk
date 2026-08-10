@@ -1,3 +1,9 @@
+## 2.203.0
+
+### Fixed — the villa was indexed twice on any load where its room data had changed
+
+The central `.rooms.json` sidecar was folded into config in the reveal window, after `loadModel` had already indexed every mesh — and because `sh3dRooms`/`sh3dEntities` count as a structural change, that triggered a second, wholesale re-index behind the loading overlay. Field telemetry measured it at `rvRooms: 7243` out of a `13196 ms` iPhone load: 55% of the whole thing, with the first pass sitting right beside it as `indexMeshes: 1977`. Android paid 3,870 ms for the same thing. The sidecar is now applied *before* the model loads, where `updateConfig`'s heavy branch is skipped because no meshes exist yet, so the villa is indexed once with the right data and the plan→world calibration is fitted once instead of twice. It fires on any load where the GLB or its rooms data moved since that device last opened — the load most likely to be watched.
+
 ## 2.202.0
 
 ### Fixed — a reconnect replayed every entity in the instance through the scene
