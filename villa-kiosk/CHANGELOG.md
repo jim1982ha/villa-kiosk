@@ -1,3 +1,11 @@
+## 2.209.0
+
+### Fixed — tapping a room now zooms to the closest shot that shows every one of its badges
+
+Four separate things stopped "tap a room, see its devices" from landing. It only ran at all when the room had a SAVED teleport point, matched by exact string — so a case difference missed, and a fresh install (whose teleportPoints table deliberately ships empty) never zoomed at all; the pose was always solved from the room's own geometry, so the saved point was never what located it, and a room the camera can measure is now a room it can fly to. The declutter threshold was measured against badges WITH their value readouts while the grouping decision runs on icon-only badges, and it ignored the fact that grouping quantises zoom into discrete steps — a 0.85 fudge factor stood in for arithmetic that can be done exactly, so the shot could land one step the wrong side and stay grouped. And how far the camera could close in was capped at half the room's wall-fit distance, an arbitrary fraction that blocked any room genuinely needing to be three times closer.
+
+That cap is replaced by the constraint it was standing in for: every badge stays FULLY on screen. A badge is drawn at a fixed pixel size hanging above its anchor, so it does not shrink as the camera closes in — the shot is now solved for the closest distance at which the room's badges still fit the frame, badge pixels included. A fan and its own light kit still cannot be separated at any zoom, and are still stopped from flying the camera onto the bed, but now by the rule that actually describes why that shot is wrong.
+
 ## 2.208.0
 
 ### Fixed — the merged-chip room chooser rendered as a slab in the corner on a phone

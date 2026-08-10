@@ -639,11 +639,27 @@ export default function Dashboard() {
 
   const goToRoom = useCallback(
     (room: string, entityIds: string[]) => {
-      const point = config.teleportPoints.find((p) => p.name === room);
-      if (point) handleTeleport(point);
-      else setClusterGroup({ room, entityIds });
+      // roomKey(), not ===: every room-name comparison in this app is
+      // case- and whitespace-insensitive (see config/roomKey), and this one
+      // was the exception. A saved point named "Swimming pool" against a chip
+      // reading "Swimming Pool" simply missed, and the tap fell through to the
+      // device list — indistinguishable from a room that genuinely has no
+      // saved viewpoint.
+      const key = roomKey(room);
+      const point = config.teleportPoints.find((p) => roomKey(p.name) === key);
+      // A room with no SAVED viewpoint can still be framed: its geometry is
+      // what the pose is solved from (see computeRoomOverviewPose — room
+      // polygon, or the room's own device anchors), and the saved point only
+      // ever supplied the name and storey. Falling back to the device list
+      // here meant "zoom to this room" silently did nothing on any install
+      // whose teleportPoints are empty — which is every fresh install, since
+      // that table deliberately ships empty (CLAUDE.md's no-seeded-config
+      // rule). Only a room the camera cannot locate at all still falls back.
+      if (point) { handleTeleport(point); return; }
+      if (manager?.navigateToRoomByName(room)) return;
+      setClusterGroup({ room, entityIds });
     },
-    [config.teleportPoints, handleTeleport],
+    [config.teleportPoints, handleTeleport, manager],
   );
 
   const handleClusterTapped = useCallback(

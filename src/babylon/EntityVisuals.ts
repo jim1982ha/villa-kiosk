@@ -1999,8 +1999,21 @@ export class EntityVisuals {
     }
     if (members.length < 2) return null;
 
+    // ── Measure the badges the DECISION will see, not the ones on screen now
+    // labelBoxes reads each badge's live valueWrap.isVisible for its width,
+    // but cullLabels drops every colliding badge's readout (tier 2) BEFORE
+    // running the grouping test — so the boxes that decide grouping are always
+    // icon-only, while these were whatever happened to be showing when the
+    // user tapped. The two therefore measured different badges, and the answer
+    // this returns is meant to be the exact inverse of that decision. Hiding
+    // the readouts for the measurement IS the icon-only measurement (same
+    // trick cullLabels itself uses), restored immediately afterwards so the
+    // frame in flight is untouched.
+    const wasVisible = members.map((m) => m.lbl.valueWrap.isVisible);
+    for (const m of members) m.lbl.valueWrap.isVisible = false;
     // Own buffers, not the render loop's — see labelBoxes' docstring.
     const boxes = this.labelBoxes(members, [], []);
+    for (let i = 0; i < members.length; i++) members[i].lbl.valueWrap.isVisible = wasVisible[i];
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
     const gapPx = BADGE_MIN_GAP_PX * this.iconUserScale * this.iconZoomScale;
     let required = 0;
@@ -2020,7 +2033,64 @@ export class EntityVisuals {
         if (need > required) required = need;
       }
     }
-    return required > 0 ? required : null;
+    if (!(required > 0)) return null;
+    // ── Land on the ZOOM LADDER, not next to it ───────────────────────────
+    // groupBadges never tests `required` against a raw zoom: it quantises to
+    // GROUP_ZOOM_STEPS_PER_DOUBLING discrete steps first (see
+    // quantisedPixelsPerWorldUnit) precisely so grouping cannot flicker as the
+    // camera drifts. A raw threshold handed to the camera therefore lands on
+    // whichever side of the nearest step it happens to fall on, and the caller
+    // used to cover that with a 0.85 "half a step, with room to spare" fudge —
+    // a constant chosen to be approximately right, for a quantity that can be
+    // computed exactly.
+    //
+    // Exactly: the runtime value is 2^(round(log2(raw)·q)/q). The smallest
+    // STEP that clears `required` is k = ceil(log2(required)·q), and a raw
+    // zoom rounds up to at least step k once log2(raw)·q ≥ k − ½. Returning
+    // that raw value means the quantiser is guaranteed to land on k or above,
+    // with no margin to tune and nothing to drift.
+    const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
+    const k = Math.ceil(Math.log2(required) * q);
+    // A hair above the rounding boundary, so floating point cannot put us on
+    // the losing side of a `>=` that is exactly equal.
+    return Math.pow(2, (k - 0.5) / q) * 1.0001;
+  }
+
+  /**
+   * How far, in screen pixels, this room's badges are DRAWN from their own
+   * anchors — the largest such reach in the room.
+   *
+   * A badge does not sit on its anchor: it hangs above it (labelBoxes' `cy`)
+   * and has its own width and height. So framing a room by its anchors alone
+   * frames the wrong thing — the topmost badge is clipped by the top edge
+   * while its anchor sits comfortably inside. This is the padding, in pixels,
+   * that turns "every anchor is on screen" into "every BADGE is fully on
+   * screen", which is what a person means by seeing a room's devices.
+   *
+   * Pixels, not world units, because that is what a badge actually is: its
+   * drawn size does not change with camera distance, which is precisely why
+   * the fit has to be solved for rather than scaled (see
+   * SceneManager.computeRoomOverviewPose).
+   */
+  roomBadgeReachPx(room: string): number {
+    const key = roomKey(room);
+    const members: { lbl: LabelControls }[] = [];
+    for (const [id, lbl] of this.labels) {
+      if (roomKey(this.roomOf(id)) !== key) continue;
+      if (!lbl.anchor.isEnabled()) continue;
+      members.push({ lbl });
+    }
+    if (members.length === 0) return 0;
+    const boxes = this.labelBoxes(members, [], []);
+    let reach = 0;
+    for (const b of boxes) {
+      // |cy| is the lift from anchor to box centre; add the half-extent to get
+      // the furthest drawn pixel. max(halfW, halfH) because the badge has to
+      // clear the frame edge in whichever direction that edge lies.
+      const r = Math.abs(b.cy) + Math.max(b.halfW, b.halfH);
+      if (r > reach) reach = r;
+    }
+    return reach;
   }
 
   /** Replace the named-viewpoint "rooms" (config.teleportPoints) that don't
