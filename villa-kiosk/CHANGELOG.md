@@ -1,3 +1,14 @@
+## 2.242.0
+
+### Fixed — the card's icon had NO padding and sat flush on the border
+
+The close crop settled what several rounds of screenshots had not: the icon is not mis-centred, it is **touching the card's frame on every side**, with its own rounded corners colliding with the card's rounded corners — which is why it reads as clipped rather than as too big or off-centre.
+
+Self-inflicted, one release earlier. 2.241.0 removed the glyph's baked 10% inset to get rid of the second frame, which was right, and did not notice that the inset **was the padding**. It then sized the glyph to exactly the card's inner box — 22 into 22 on a coarse pointer, 16 into 16.5 on a fine one — leaving 0px and 0.25px of breathing room respectively. There was nothing left to see between the art and the border.
+
+The icon is now a fraction of the CARD rather than of its inner box: `16/28`, which leaves about 3px of card visible all the way round on touch and 2.3px on a fine pointer. The size is stated as a design decision instead of falling out of whatever the ring did not use — which is the same fault as 2.239.0's, in the other direction, and the reason both are now written down as fractions of the card with the reasoning attached.
+
+For the record on what the report actually was: "the icons and the text appear without any padding and not centred in the card". Padding, not size — and the previous release had been spent shrinking the box on the assumption it was size, because "too high" had been read as a complaint about height rather than about an icon with nowhere to breathe.
 ## 2.241.0
 
 ### Changed — the Badge style is a card again, not a chip inside a card

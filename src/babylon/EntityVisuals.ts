@@ -2949,10 +2949,17 @@ export class EntityVisuals {
         // card's own Rectangle is the only frame; the art fills it.
         badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)), "off",
           this.config.entityMap[entityId]?.badgeColor, 0));
-      // Sized off the CARD, not off cardInnerH: tying the icon to the inner
-      // box made it a function of the ring, and a fine pointer's thinner ring
-      // then drew a different icon-to-card ratio than a touch card's thicker
-      // one — the same build showing visibly different badges on two devices.
+      // Sized off the CARD, and DELIBERATELY smaller than its inner box.
+      //
+      // Two mistakes are encoded here, both reported. Tying the icon to
+      // cardInnerH made it a function of the RING, so a fine pointer's thinner
+      // ring drew a different icon-to-card ratio than a touch card's thicker
+      // one — the same build showing different badges on two devices. And
+      // filling the inner box exactly left NO PADDING at all: the art sat
+      // flush on the border with its rounded corners colliding with the
+      // card's, which reads as a clipped icon rather than one sitting in a
+      // badge. The fraction is of the CARD and leaves real space on all four
+      // sides; see badgeMetrics.cardIconFraction.
       const glyphPx = card
         ? Math.round(m.cardHeightPx * m.cardIconFraction)
         : m.badgeDiameterPx;

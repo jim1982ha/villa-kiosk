@@ -200,8 +200,11 @@ const COARSE: BadgeMetrics = {
   cardValueCharPx: 7.2,
   cardValuePadPx: 8,
 
-  // 22/28 — the art keeps the size it drew at before the inner frame went.
-  cardIconFraction: 22 / 28,
+  // 16/28 — the icon, NOT the card's inner box. Setting it to the inner box
+  // (22/28) left literally zero padding: the art sat flush on the border and
+  // its rounded corners collided with the card's, which reads as clipped.
+  // This leaves ~3px of card visible all the way round the icon.
+  cardIconFraction: 16 / 28,
   ringThicknessPx: 3,
   minGapPx: 6,
   // Apple's 44pt hit region, which is also this app's --touch-min and exactly
