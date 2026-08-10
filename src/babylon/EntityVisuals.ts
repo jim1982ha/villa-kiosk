@@ -78,6 +78,7 @@ import { Image } from "@babylonjs/gui/2D/controls/image";
 import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
+import { chipProportions } from "@/config/chipProportions";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics,
 } from "./badgeMetrics";
@@ -270,11 +271,6 @@ const GUI_FONT_FAMILY = "\"Public Sans\", -apple-system, BlinkMacSystemFont, sys
 // badge's hit area up to this whenever the PAINTED badge is smaller — which
 // is the whole point of letting a fine pointer have a smaller badge.
 const TOUCH_MIN_CSS_PX = 44;
-// Gap between a card's icon chip and its value, as a fraction of the chip.
-// 0.28 is the bottom bar's own ratio (a 46px chip with a 13px gap) — the same
-// component drawn in the DOM, and the reference this should have been checked
-// against from the start.
-const ICON_VALUE_GAP_FRACTION = 0.28;
 // Floor on that expansion, so a badge already at or above --touch-min still
 // forgives a slightly-off tap exactly as it did before this was derived.
 const TAP_SLOP_MIN_CSS_PX = 10;
@@ -2877,6 +2873,11 @@ export class EntityVisuals {
       // card's, which reads as a clipped icon rather than one sitting in a
       // badge. The fraction is of the CARD and leaves real space on all four
       // sides; see badgeMetrics.cardIconFraction.
+      // The bottom bar's own proportions, read from the tokens it is styled
+      // with (see config/chipProportions). The chip's CONTROL is the card
+      // minus its ring; the glyph drawn inside it is that fraction of the
+      // chip, exactly as `.summary-tile-icon svg` is of `.summary-tile-icon`.
+      const chip = chipProportions();
       const glyphPx = card
         ? Math.round(m.cardHeightPx * m.cardIconFraction)
         : m.badgeDiameterPx;
@@ -2905,7 +2906,7 @@ export class EntityVisuals {
       // are driven in updateLabel).
       const badge = new Rectangle(`lbl_badge_${entityId}`);
       badge.height = `${card ? m.cardHeightPx : m.badgeDiameterPx}px`;
-      badge.cornerRadius = (card ? m.cardHeightPx : m.badgeDiameterPx) * BADGE_CORNER_FRACTION;
+      badge.cornerRadius = (card ? m.cardHeightPx : m.badgeDiameterPx) * chip.radius;
       badge.thickness = 0;
       // Apply the style's resting fill NOW, not only in updateLabel: an entity
       // that has never reported (or is UNAVAILABLE and so never pushed a state
@@ -2992,7 +2993,7 @@ export class EntityVisuals {
         // i.e. 28% of the chip, and that is the proportion this is measured
         // against because it is the same object drawn in the DOM. A flat 4px
         // came out at 18% and read as the text crowding the chip's edge.
-        valueWrap.paddingLeft = `${Math.round(glyphPx * ICON_VALUE_GAP_FRACTION)}px`;
+        valueWrap.paddingLeft = `${Math.round(glyphPx * chip.gap)}px`;
         valueWrap.paddingRight = `${m.cardValuePadRightPx}px`;
         valueWrap.isVisible = false;
         row!.addControl(valueWrap);
@@ -3129,13 +3130,24 @@ export class EntityVisuals {
     lbl.glyph.alpha = 1; // never set elsewhere now — no cascading ambiguity
 
     if (this.config.badgeStyle === "card") {
-      // The card's own solid fill and ring both come straight from
-      // categorySurface — neutral by default, coloured only when active or
-      // alerting (VESTA-DESIGN.md §0). The card's fill is a plain colour
-      // (not baked pixels), so it's set directly here; the glyph image below
-      // bakes the SAME state so its stroke colour agrees with the card.
+      // ── NEUTRAL CARD, COLOURED CHIP ──────────────────────────────────
+      // The bottom bar's tiles are the same arrangement drawn in the DOM, and
+      // they invert what this used to do: `.summary-tile` is transparent while
+      // `.summary-tile-icon` carries `--tile-fill`. That is exactly what makes
+      // its chip read as a deliberate object.
+      //
+      // This card used to take the STATE fill itself, and the baked chip took
+      // the same one — so the chip was the same colour as the surface behind
+      // it and only its ring separated them, which drew as a faint vertical
+      // seam beside the value rather than as a chip. Reported as the icon and
+      // text having no padding and, later, as the rendering simply being
+      // wrong; the spacing was only half of it.
+      //
+      // So: the card is always the RESTING surface, and the chip below carries
+      // the state. The card's ring still shows state, because that is the
+      // attention signal and a neutral card must not swallow it.
       const surface = categorySurfaceRinged(lbl.category, state, ringState, override);
-      lbl.badge.background = surface.fill;
+      lbl.badge.background = categorySurface(lbl.category, "off", override).fill;
       // A DASHED ring is baked into the glyph image, so the card's own
       // Rectangle border must stand down — otherwise the badge carries two
       // rings at once, a solid one outside and the dashed one within it, which
@@ -3150,10 +3162,10 @@ export class EntityVisuals {
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
         surface.ringDashed ? 0 : BADGE_INSET_CARD, ringState);
-      // The inline value shares the card's surface, so it must track the same
-      // glyph colour — otherwise it stays at its build-time "off" colour and
-      // goes unreadable the moment the card tints for active/alert.
-      lbl.valueText.color = surface.glyph;
+      // Neutral ink, on a now-neutral card — the bottom bar's value is
+      // `--text-primary` beside a coloured chip, not the chip's own hue. The
+      // state is carried by the chip and the ring; the number is just a number.
+      lbl.valueText.color = categorySurface(lbl.category, "off", override).glyph;
     } else {
       // Classic style bakes fill + ring straight into the glyph image itself
       // (see badgeIcons.ts) — the wrapping Rectangle stays a plain

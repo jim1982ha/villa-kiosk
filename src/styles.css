@@ -156,6 +156,23 @@
   --panel-radius: 18px;
   --panel-padding: 24px;
   --touch-min: 44px;
+
+  /* ── THE ICON CHIP, defined once for both renderers ────────────────────
+     A category-coloured rounded square holding a glyph, with a label or a
+     value beside it. The bottom bar draws it in the DOM (.summary-tile-icon);
+     the map draws the same object in Babylon, where CSS cannot reach — so the
+     3D layer reads these tokens through cssVar() and works in PROPORTIONS of
+     --chip-size, which is what lets a 46px tile and a 22px map badge be
+     recognisably the same component.
+
+     Every geometry question asked of the map badge over 2.232.0-2.245.0 —
+     how big the glyph is, how much padding it gets, how far the value sits,
+     how round the corners are — already had an answer here. Change them here
+     and both surfaces follow. */
+  --chip-size: 46px;    /* the chip itself */
+  --chip-glyph: 24px;   /* the glyph inside it — 52% */
+  --chip-gap: 13px;     /* chip → its label/value — 28% */
+  --chip-radius: 13px;  /* corner rounding — 28% */
   /* Every top-bar chip/pill (.hud-brand, .hud-group) shares this height so the
      brand chip on the left reads as the same size as the category/alert pills
      on the right, not a visibly shorter section — see both selectors below.
@@ -1038,7 +1055,7 @@ button {
    just a section of it. */
 .summary-tile {
   flex: 0 0 auto;
-  display: flex; align-items: center; gap: 13px;
+  display: flex; align-items: center; gap: var(--chip-gap);
   min-width: 116px; max-width: 260px;
   padding: 6px 16px 6px 10px; border-radius: 10px;
   background: transparent; border: none;
@@ -1052,7 +1069,8 @@ button {
 
 .summary-tile-icon {
   display: flex; align-items: center; justify-content: center;
-  width: 46px; height: 46px; flex: 0 0 auto; border-radius: 13px;
+  width: var(--chip-size); height: var(--chip-size); flex: 0 0 auto;
+  border-radius: var(--chip-radius);
   /* State-driven fill/glyph — the same categorySurface() the 3D badges bake,
      so a tile's icon chip and that device's badge on the map are literally
      the same colour. OPAQUE (see surfaceBase() in EntityCategories.ts): the
@@ -1064,7 +1082,7 @@ button {
   background: var(--tile-fill, var(--bg-modal));
   border: 1px solid var(--hairline);
 }
-.summary-tile-icon svg { width: 24px; height: 24px; }
+.summary-tile-icon svg { width: var(--chip-glyph); height: var(--chip-glyph); }
 .summary-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.18; gap: 1px; }
 .summary-tile-label {
   /* 11px Jost caps, per the brand guidelines' bottom-bar spec — the label is

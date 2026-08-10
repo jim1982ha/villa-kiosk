@@ -1,3 +1,16 @@
+## 2.246.0
+
+### Changed — neutral card, coloured chip; and the chip's proportions are now defined ONCE
+
+Two changes that are really one: make the map badge look like the bottom bar, and then stop it being able to drift away again.
+
+**Neutral card, coloured chip.** The bottom bar's tile is transparent while `.summary-tile-icon` carries the fill, and that inversion is exactly what makes its chip read as a deliberate object. The map badge did the opposite — the card took the state fill and the baked chip took the same one, so the chip was the same colour as the surface behind it and only its ring separated them, drawing as a faint vertical seam beside the value. The card now always wears the resting surface and the chip carries the state, with the value in neutral ink. The card's RING still shows state, because that is the attention signal and a neutral card must not swallow it.
+
+**One definition, two renderers.** The chip is the same component in both places — a category-coloured rounded square holding a glyph, with a label or a value beside it — and it was two independent sets of numbers. The DOM side was right, because it is easy to see and easy to change. The Babylon side had accumulated a glyph size derived from a ring thickness, a padding that was a constant sitting next to a height it had no relationship with, and a gap picked to look about right.
+
+The numbers now live in `styles.css` as `--chip-size` / `--chip-glyph` / `--chip-gap` / `--chip-radius`. `.summary-tile-icon` is styled from them directly; `config/chipProportions.ts` reads them and reduces them to FRACTIONS for the map, which cannot reach CSS and has to work proportionally anyway — which is what lets a 46px bottom-bar tile and a 22px map badge be recognisably the same object at completely different sizes. Change them in one place and both surfaces follow.
+
+That is the actual lesson of 2.232.0 through 2.245.0. Every geometry question asked of the map badge over those fourteen releases — how big the glyph is, how much padding it gets, how far the value sits, how round the corners are — already had a correct, visible, working answer in three declarations of `.summary-tile-icon`. The bug was never any single number; it was that the same component was specified twice.
 ## 2.245.0
 
 ### Changed — the icon-to-value gap is measured against the bottom bar, not guessed

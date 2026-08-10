@@ -200,9 +200,13 @@ const COARSE: BadgeMetrics = {
   cardValueCharPx: 7.2,
   cardValuePadPx: 8,
 
-  // 22/28 — the icon CHIP's control. The chip's own art is inset 10% inside
-  // it (BADGE_INSET_CARD), so the drawn squircle is 0.8 x this, and the card
-  // shows around it on every side. See EntityVisuals' glyph block.
+  // The icon CHIP's control as a fraction of the card. The chip's own art is
+  // inset 10% inside it (BADGE_INSET_CARD), so the drawn squircle is 0.8x
+  // this and the card shows around it on every side. The GLYPH's fraction of
+  // the chip, the gap to the value and the corner radius all come from the
+  // shared chip tokens instead (config/chipProportions) — this is the one
+  // proportion the bottom bar has no equivalent for, because its chip sits on
+  // a transparent tile rather than inside a card.
   cardIconFraction: 22 / 28,
   ringThicknessPx: 3,
   minGapPx: 6,
