@@ -1,8 +1,8 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.231.0",
-  "description": "VESTA — a 3D interactive villa dashboard for Home Assistant",
+  "version": "2.232.0",
+  "description": "VESTA \u2014 a 3D interactive villa dashboard for Home Assistant",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
@@ -13,7 +13,8 @@
     "build": "tsc -b && vite build",
     "prepreview": "npm run build",
     "preview": "vite preview --host",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "test:placement": "node tests/badge_placement_test.ts"
   },
   "dependencies": {
     "@babylonjs/core": "^7.37.2",

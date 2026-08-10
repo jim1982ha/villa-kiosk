@@ -1,3 +1,52 @@
+## 2.232.0
+
+### Changed — crowded badges are now RANKED, not merged wholesale
+
+Reported as too much of the villa hiding behind aggregate badges, so reaching a device cost two or three taps instead of one. Reading the subsystem found three separate causes, and only one of them was about geometry.
+
+**A collision took the whole pile.** Any badges whose drawn footprints touched joined one connected component, and every member of it disappeared behind a single summary. Five colliding devices meant five devices two taps away, and the fifth was no more crowded than the first — the pile had no way to say which of its members mattered. That is not how a serious label renderer behaves: Mapbox places symbols in `symbol-sort-key` order and the first one into the collision index wins, deck.gl takes a `getCollisionPriority`, Google Maps has `OPTIONAL_AND_HIDES_LOWER_PRIORITY`. In each case the loser is dropped and the winner keeps its place, because a map with its important labels showing beats a map of blobs.
+
+A pile is now ordered by a **static rank** — controllable domains (light, switch, cover, fan, climate, lock, media player, camera) ahead of read-only ones (sensor, binary sensor), then the existing category order, then entity_id — and placed greedily. The winners keep real badges at their own anchors; only the losers merge. The rank is static *specifically* so the same devices win every time, because the request was explicitly to protect the muscle memory of "that device's icon is always about there". Three tempting dynamic inputs were considered and rejected outright, and `badgePriority.ts` records why: a live attention bit would make a badge appear and disappear on a state change rather than only on a zoom change, breaking the one guarantee this subsystem sells; recency would let the layout drift under the user; an explicit pin is defensible but is configuration nobody should have to maintain. Alerts already have their own channel — the ring and the pulse — and a summary badge inherits the worst state of its members, so an alert inside a group is still visible as an alert.
+
+**One cross-room collision collapsed both rooms.** A pile spanning rooms sent *every* room it touched straight to a chip, on the reasoning that a group badge covering two rooms could not be labelled honestly. The reasoning about labelling was right and still holds; the remedy was far too broad. A single badge in the living room touching a single badge in the kitchen hid both rooms entirely — twenty badges lost to two that overlapped — and in an open-plan villa that fires constantly. It was the single biggest cause of the reported symptom. A cross-room pile now resolves like any other: rank decides, the winner keeps its badge, and each loser falls to a group in its own room. No group ever spans rooms, so nothing about labelling changes; it simply no longer costs the bystanders.
+
+A lone loser is not left as a summary of one. It pulls its *nearest* room-mate down with it to make an honest group of two — bounded, so a device can never be paired with one ten metres away and the summary drawn at the midpoint where neither of them is. That bound is what keeps a ceiling fan and its own light rendering as exactly the group of 2 they were before ranking existed: new behaviour appears only at pile size three and up, which is where it was wanted.
+
+### Fixed — badge sizes were in the wrong unit, and touch devices got the smallest badges
+
+Babylon's GUI layer is sized from the engine's RENDER width, and the engine runs at `1/min(dpr,2)` hardware scaling. So a constant written in the scene file meant a different physical size on every device: `BADGE_DIAMETER_PX = 44` painted **22 CSS px on any DPR-2 iPad or phone** and 27.5 on a DPR-1.6 laptop. Its own comment described it as "the app-wide `--touch-min` … a wall tablet operated standing up, often by someone who has never seen it before", which is a fair statement of the intent and is not what shipped. 22 CSS px is under Apple's 44pt hit region, under Material's 48dp, and barely over WCAG 2.5.8's 24px AA floor — and the devices operated by finger were getting the smallest badges of all.
+
+Every badge dimension now lives in `badgeMetrics.ts` in **CSS pixels**, and the conversion to the GUI layer's space rides the scale chain that already existed. That is worth more than tidiness: the layout path multiplies by exactly the same scale the renderer does, so "a layout decision may never use different geometry from the renderer" — the rule this file has broken most often — now holds structurally instead of by discipline.
+
+Sizes are chosen by **pointer type**, not viewport. 2.187.0 scaled a badge travel budget by viewport short edge and 2.190.0 reverted it, correctly: "a badge is the same pixel size on a phone, so the clearance a pile needs there is identical." That reasoning still stands and nothing here reintroduces a viewport term — a phone and a desktop with the same pointer class get identical geometry. What legitimately differs is the input device. A fingertip is 8–10mm; a mouse cursor is a pixel. So a coarse pointer gets 44 CSS px painted with a 56 px minimum centre-to-centre pitch (Material's 48dp target plus 8dp spacing), and a fine pointer gets 32/32, which stays clear of the 24px floor while fitting roughly 1.9× the badges per unit area.
+
+The tap target does **not** shrink with the painted badge. `pickBadgeAt` now derives its slop from the drawn size — expand until the effective target reaches `--touch-min`, never below the 10px it always had — so it holds at any DPR, any icon-size setting and any zoom cap. This is the decoupling `styles.css` already applies to the HUD's icon buttons, quoted there as "the VISUAL size stays 32px and the TOUCH target is expanded to 44 … which is what the accessibility guidance actually measures (the pointer target area, not the painted pixels)".
+
+The minimum pitch is also what finally gives the cluster radius a *reason*. Supercluster ships 40px, Mapbox GL JS 50, Leaflet 80 — all tuned for a mouse. Two controls stop being independently tappable at exactly the point where their touch targets merge, so that is where badges now merge.
+
+One latent bug surfaced while doing it: the badge's vertical lift was not scaled, while the chip and group paths always had been (`-(CLUSTER_HEIGHT_PX / 2) * scale`). At scale 1 the two agree, which is why it never showed; at any other scale a container scaled about its centre needs `−H·s/2` to put its bottom edge on the anchor, so badges straddled their device above 1× and floated below it. Latent at extreme icon-size settings before, universal once the CSS conversion made the scale ≈2 on every retina display.
+
+### Fixed — a room whose HA Area name differed only in case could go half-chip, half-badges
+
+`roomShownCount` and the one-room test were keyed by `roomKey()` while the "this room is summarised" flag was keyed by the RAW name, and room names come from HA Areas with whatever casing and padding HA has. So "Master Bedroom" and "master bedroom " counted as one room for the denominator and two for the flag — a combination that can collapse one spelling and leave the other's badges drawn. That is precisely the half-chip, half-badges state the all-or-nothing rule exists to prevent, and it would have been reported as a mystery. Everything is keyed by `roomKey()` now, with the raw spelling carried alongside for anything a person reads or taps.
+
+### Changed — a state change only re-runs the layout when it can actually move something
+
+`apply()` ended with an unconditional `markLayoutDirty()`, so every HA state event forced a full relayout on the next frame even with the camera dead still — and a villa pushes those constantly. `cullLabels` runs inside `scene.render()`, so that cost lands squarely in frame time. Only three things can move a box: the category (it gates visibility), the value pill's visibility, and the value's text *length* — length, not content, because the width is measured in characters, and `21.4°C → 21.5°C` is the overwhelmingly common event and changes none of them. A pose swap still counts, because it changes which mesh a badge reads its position from. Everything else is colour at fixed geometry.
+
+Also here: the pairwise sweeps are replaced by a uniform grid (the same structure Mapbox's own collision index uses), the picker no longer copies the entire label map on each of its 17 hit-test samples — which it was also doing once per animation frame while the mouse moved — and the first-person zoom median no longer allocates an array per frame.
+
+Whether any of this shows up in the unexplained fixed per-frame cost on Safari is a question for the `renderMs` figure added in 2.230.0, not an assumption: compare it against `p50` on the same machine before and after. If `renderMs` sits far below `p50`, the cost is outside `scene.render()` entirely and none of this touches it.
+
+### Added — the invariants are now checked, not just documented
+
+The placement solver, the priority table and the metrics are three **pure** modules — no Babylon, no scene, no DOM. That makes the thing this project could never check before checkable without a browser, which matters because it is verified from screenshots by hand.
+
+`npm run test:placement` runs 31 assertions with no runner and no dependency (Node strips the types; `badgePlacement.ts` imports nothing). The one that matters most permutes 120 badges forty times and demands an identical accepted set, because placement must be a pure function of world position, quantised zoom and static rank — and the one place camera or frame state has historically leaked in is iteration order. Six rewrites of this subsystem died of exactly that. Two real defects were caught by writing it: the unbounded pull-back described above, and a pooled-return aliasing hazard that is now documented on the type and given each caller its own workspace.
+
+The same invariants are re-checked on the real device under `?debug` — no two drawn badges overlapping, no badge with a horizontal offset, no visible badge inside a summarised room, and a reversed re-solve every pass to catch order dependence where it would actually be reported.
+
+`BADGE_PLACEMENT` is a one-word kill switch back to 2.231.0's whole-pile merging, and the metrics are a separate one-line table, so size and behaviour can be backed out independently.
 ## 2.231.0
 
 ### Fixed — a reload no longer leaves the previous villa anchored in memory

@@ -812,6 +812,12 @@ export class SceneManager {
     const next = Math.min(HW_SCALE_FLOOR, cur * Math.sqrt(p50 / FRAME_TARGET_MS));
     if (next <= cur) return;
     this.engine.setHardwareScalingLevel(next);
+    // Badge geometry is authored in CSS px and converted through this exact
+    // value (EntityVisuals.cssToGui), so changing it here silently resizes
+    // every badge. Tell the layer, or badges keep the size they had for a
+    // resolution the engine has stopped rendering at — and the collision
+    // boxes keep measuring them at it too.
+    this.visuals.notifyRenderScaleChanged();
     this.requestRender();
   }
 
