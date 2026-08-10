@@ -1,3 +1,16 @@
+## 2.248.0
+
+### Fixed — the value text ("0 W", "98%") sat high in the card
+
+Restored on the evidence, after twice removing it on arithmetic.
+
+The correction was added in 2.234.0 and **never once ran**: it computed its offset by reading `fontSize` back off the control, which is a getter returning a string, so the result was `NaN` and Babylon silently stopped drawing the text altogether. By the time 2.235.0 fixed that, 2.238.0 had already removed the correction outright on the reasoning that Babylon's `rootY = ascent + (height - fontHeight) / 2` already centres the ink, because `GetFontOffset`'s ascent is the font's ascender rather than its cap height.
+
+That reasoning is probably correct in isolation, and it does not match what is on the screen — which means something else in the chain contributes an offset the model does not account for: the line box `resizeToFit` produces, the wrap it is centred inside, or the scale transform above it. Rather than keep modelling a stack of three components with a person telling me what the result looks like, the correction goes back in at half a descender — the size of the gap a full line box leaves when the text has no descender, which every string a badge draws lacks: `0 W`, `98%`, a count, a room name.
+
+Applied to the badge's value, the room chip's name and both counts. It is a fraction of the font size, so it holds at every icon size, pointer class and zoom, and it is one number if it now reads low.
+
+The lesson is not about text metrics. Twice in this series a measurement was overruled by a derivation, and both times the derivation was of a system too deep to model from its source — Babylon's GUI layout on top of a canvas transform on top of a font's own metrics. The person looking at the screen was the more reliable instrument, and the arithmetic's job was to explain the observation, not to overrule it.
 ## 2.247.0
 
 ### Fixed — the value sat left of the space it occupies

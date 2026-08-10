@@ -142,26 +142,27 @@ export interface BadgeMetrics {
   countFontFraction: number;
 
   /**
-   * Downward optical correction for badge text, as a fraction of its own font
-   * size. ZERO, and that is a measured answer rather than a default.
+   * Downward optical correction for badge text, as a fraction of its font
+   * size. The value sits high in the card without it — reported repeatedly,
+   * from a person looking at the real badge on real hardware.
    *
-   * 2.234.0 set this to 0.105em, reasoning that Babylon centres a TextBlock's
-   * whole line box — `rootY = ascent + (height - fontHeight) / 2` — so text
-   * with no descenders ("98%", a count, a room name) would sit high. The
-   * mechanism is real. The conclusion was backwards, because `ascent` there is
-   * not the cap height: `GetFontOffset` measures it from the baseline to the
-   * top of the line box, i.e. the font's ASCENDER including internal leading
-   * (~1.0em), which already accounts for the space a descender would occupy.
-   * Worked through for a 13px value in a 28px card, the ink lands 0.2-0.45px
-   * LOW of centre — close enough to be invisible, and in the OPPOSITE
-   * direction to the correction applied. So the nudge did not remove a 1.4px
-   * error, it introduced one, dropping the value visibly below the icon beside
-   * it. That is what "the icons and the text are not vertically centred"
-   * became after 2.234.0, and it took four rounds because the arithmetic was
-   * assumed instead of done.
+   * The honest history, because it is instructive. 2.234.0 added this at
+   * 0.105em and it NEVER RAN: the offset was computed by reading `fontSize`
+   * back off the control, which is a getter returning a string, so the result
+   * was NaN and Babylon silently stopped drawing the text (2.235.0). 2.238.0
+   * then removed the correction outright, on arithmetic saying Babylon's
+   * `rootY = ascent + (height - fontHeight) / 2` already centres the ink
+   * because `GetFontOffset`'s ascent is the ascender rather than the cap
+   * height. That arithmetic is probably right in isolation and it does not
+   * match what is on the screen — which means something else in the chain
+   * (the line box `resizeToFit` produces, the wrap it is centred in, the
+   * scale transform above it) contributes an offset the model does not
+   * account for.
    *
-   * Kept as a field rather than deleted, so the knob is one number if a future
-   * typeface genuinely needs it — but it must be DERIVED, never guessed.
+   * So this is restored on the evidence rather than on the model. Half a
+   * descender is the size of the correction a full line box needs when the
+   * text has no descender, which every string a badge draws lacks — "0 W",
+   * "98%", a count, a room name. If it now reads low, this is the one number.
    */
   textOpticalTopEm: number;
 }
@@ -213,7 +214,7 @@ const COARSE: BadgeMetrics = {
   minCentrePitchPx: 44,
   countPillFraction: 0.58,
   countFontFraction: 0.78,
-  textOpticalTopEm: 0,
+  textOpticalTopEm: 0.105,
 };
 
 /** Smallest legible label text. Cartographic practice puts the floor for map
