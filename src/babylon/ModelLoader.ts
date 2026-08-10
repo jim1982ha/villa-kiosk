@@ -535,7 +535,35 @@ export async function loadModelInto(
       if (looksLikeGlass([mat.name, m.name], glassHints) || alphaGlass.has(mat)) {
         mat.alpha = GLASS_ALPHA;
         mat.transparencyMode = Material.MATERIAL_ALPHABLEND;
-        mat.backFaceCulling = false; // see both faces of a thin pane
+        // ── Why glass is now SINGLE-sided (2.219.0) ───────────────────────
+        // This was `false` — draw both faces of a thin pane — which is
+        // incompatible with the forceDepthWrite set a few lines below, and the
+        // combination is what produced the blocky patches reported across
+        // several window panes.
+        //
+        // With both on, every triangle of the pane is drawn TWICE and each
+        // copy WRITES DEPTH, so whichever of the two is rasterised first
+        // occludes the other. Which one that is depends on the camera, so the
+        // pane breaks into patches of differing opacity that shift as you move
+        // — blocky because the patches are the pane's own triangles, and
+        // different on two copies of the same window because their tessellation
+        // sits at different angles to the viewer.
+        //
+        // That view-dependence is the fact that identifies it: a bake, an
+        // atlas or a texture is painted into the surface and cannot change
+        // when the camera moves. Several earlier attempts here (lightmap
+        // exclusion, bake denoising, atlas resolution) were chasing exactly
+        // those, and none of them could have fixed this.
+        //
+        // Culling the back face removes the second copy, so there is nothing
+        // left to self-occlude and forceDepthWrite keeps doing its real job
+        // against other geometry. Safe for SweetHome panes, which export as
+        // thin BOXES — from either side the near face is front-facing, so
+        // nothing disappears. A pane authored as a single unbacked QUAD would
+        // become invisible from behind; if that ever shows up, the fix is to
+        // drop forceDepthWrite for glass instead, NOT to restore
+        // double-siding, which is the half that breaks.
+        mat.backFaceCulling = true;
         // Alpha-blended materials don't write depth by default, so Babylon
         // sorts them back-to-front by distance-from-camera each frame — as
         // the camera moves, that sort can flip relative to nearby OPAQUE

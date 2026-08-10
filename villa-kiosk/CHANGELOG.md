@@ -1,3 +1,11 @@
+## 2.219.0
+
+### Fixed — the blocky patches on window panes: glass was drawing itself twice
+
+Glass was set both double-sided and force-depth-writing, and those two are incompatible on an alpha-blended material. Every triangle of a pane was drawn twice with each copy writing depth, so whichever was rasterised first occluded the other — and which one that is depends on the camera. The pane therefore broke into patches of differing opacity that shift as you move: blocky because the patches are the pane's own triangles, and different on two copies of the same window because their tessellation sits at different angles to the viewer.
+
+The identifying fact was that the artifact CHANGES WITH THE CAMERA. A bake, an atlas or a texture is painted into the surface and cannot do that. Several earlier attempts — excluding glass from the lightmap, denoising the bake, raising atlas resolution — were all chasing surface data, and none of them could ever have fixed this. Glass is now single-sided, which removes the second copy so there is nothing left to self-occlude, while forceDepthWrite keeps doing its real job against other geometry. Safe for SweetHome panes, which export as thin boxes whose near face is front-facing from either side.
+
 ## 2.218.0
 
 ### Changed — a better default look, with no new setting to tune
