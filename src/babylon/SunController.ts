@@ -147,6 +147,28 @@ export class SunController {
 
   /** Override from HA sun.sun entity ("above_horizon" | "below_horizon"). */
   applyHaSunState(state: string): void {
+    // ── Never overwrite a REAL sun with a synthetic one (2.224.0) ───────────
+    // sun.sun carries only "above_horizon"/"below_horizon" — no azimuth, no
+    // altitude — so everything below is a made-up direction pinned near noon.
+    // That is a fine last resort and a terrible update: this fires on every
+    // sun.sun state_changed, and HA republishes that entity's elevation/azimuth
+    // ATTRIBUTES about once a minute, so a correctly-computed sunset was being
+    // stomped to synthetic midday within a minute of every 15-minute
+    // applyRealSun tick. Reported as the sky "suddenly disappearing" and coming
+    // back, with the camera untouched and no reload — two writers to one sky,
+    // last-write-wins, and the crude one wrote 15x more often.
+    //
+    // When the villa's latitude/longitude are known, the event is still worth
+    // having — just as a TRIGGER to recompute rather than as a source of
+    // geometry. That keeps HA's promptness at the horizon crossing (no waiting
+    // out the remainder of a 15-minute tick) and, as a bonus, moves the sky to
+    // roughly per-minute updates, which is what a wall kiosk wants anyway.
+    const { latitude, longitude } = this.config;
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)
+      && (latitude !== 0 || longitude !== 0)) {
+      this.applyRealSun();
+      return;
+    }
     // Same day/night preview honoured here so the HA-driven path can't
     // silently undo the override on the next sun.sun state event.
     const preview = this.config.render?.dayNightPreview ?? "auto";

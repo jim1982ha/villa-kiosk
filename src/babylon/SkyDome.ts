@@ -61,6 +61,35 @@ export class SkyDome {
     this.mat.turbidity = isDay ? 2 : 4;
   }
 
+  /**
+   * Push the horizon DOWN in the view, so the graded band and the sun stay on
+   * screen at a steeper downward tilt than they otherwise would.
+   *
+   * ── Why this is a material setting and not a transform (2.224.0) ──────────
+   * The obvious instinct — move the dome, scale it, re-anchor it nearer the
+   * villa — cannot work, and it is worth writing down so nobody tries. The sky
+   * shader takes its direction as `normalize(vPositionW - cameraPosition)`, and
+   * the shaded point always lies ALONG the ray through that pixel. Any convex
+   * shape enclosing the camera therefore yields the identical direction per
+   * pixel: the dome's position, size and scale are all invisible to the result.
+   * "Bring the sun closer" is not something geometry can express here.
+   *
+   * What CAN move it is SkyMaterial's `cameraOffset`, which the shader adds to
+   * that vector before taking the zenith angle — and only for the zenith angle.
+   * A positive Y makes downward rays read as less-downward, so directions that
+   * previously fell below the horizon (and clamped to the flat slab of colour
+   * seen under the villa in overview) now sample the real gradient instead.
+   * Crucially the sun disc is computed from the UN-offset direction, so it
+   * keeps its true position and stays perfectly round — the horizon slides
+   * down past it rather than the sun being squashed or dragged along.
+   *
+   * Units are world units against the dome's own half-extent (~500), not
+   * degrees, because the vector is not normalised before the offset is added.
+   */
+  setHorizonDrop(units: number): void {
+    this.mat.cameraOffset.y = units;
+  }
+
   setEnabled(on: boolean): void {
     this.box.setEnabled(on);
   }

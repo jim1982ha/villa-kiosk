@@ -1,3 +1,21 @@
+## 2.224.0
+
+### Fixed — the sky "suddenly disappearing" and coming back, camera untouched
+
+Reported with four screenshots a minute apart: a graded sunset at 18:05, flat washed-out daytime blue at 18:06, the sunset again at 18:07, gone again at 18:08 — no camera movement, no reload, in both overview and first person.
+
+Two writers, one sky, last write wins. `applyRealSun()` computes the real azimuth and altitude from the villa's latitude/longitude and runs on a 15-minute interval. `applyHaSunState()` runs off Home Assistant's `sun.sun` entity, which carries only `above_horizon`/`below_horizon` — **no azimuth and no altitude at all** — so it substituted a hardcoded direction pinned near noon and pushed that straight into the same sky. `subscribeAll` fires on every `state_changed`, and HA republishes that entity's elevation/azimuth *attributes* roughly once a minute, so the crude writer won about fifteen times more often than the accurate one. A correct sunset survived until the next attribute tick and was then stomped back to synthetic midday.
+
+The HA event is still worth having — it is the prompt signal for the horizon crossing, and waiting out the remainder of a 15-minute tick to notice sunset would be worse. It is now used as a **trigger to recompute** rather than as a source of geometry: whenever the villa's coordinates are known, `sun.sun` simply re-runs the real calculation. The synthetic direction survives only as the genuine last resort, for an install with no coordinates configured. As a side effect the sky now refreshes about once a minute instead of once every fifteen, which is what a wall-mounted kiosk wanted anyway.
+
+### Changed — the overview horizon sits lower, so the sunset is visible without extreme tilt
+
+2.223.0 put the real sky behind the overview, but the horizon sits at the camera's own eye level — so looking down at the villa pushed it out of frame and left one flat slab of colour underneath, and the sunset only appeared if the view was deliberately tilted almost horizontal.
+
+Worth recording why the obvious fix is impossible, so it is not attempted again: moving the dome, scaling it, or re-anchoring it near the villa **cannot work**. The sky shader takes its direction as `normalize(vPositionW - cameraPosition)`, and the shaded point always lies along the ray through that pixel — so any convex shape enclosing the camera produces the identical direction per pixel. The dome's position, size and scale are invisible to the output. "Bring the sun closer" is not something geometry can express here.
+
+What does move it is `SkyMaterial.cameraOffset`, which the shader adds to that vector before taking the zenith angle, and *only* for the zenith angle. A positive Y makes downward rays read as less downward, so directions that used to fall below the horizon and clamp to the flat slab now sample the real gradient. The sun disc is computed from the un-offset direction, so it keeps its true position and stays perfectly round — the horizon slides down past it rather than the sun being squashed or dragged along. Applied in overview only (~200 units against the dome's ~500 half-extent, roughly 20° of extra tilt); first person keeps 0, because standing on the terrace the horizon belongs at eye level and anything else would put the sea's edge below the floor.
+
 ## 2.223.0
 
 ### Changed — the overview keeps the real sky, and follows the sun all day

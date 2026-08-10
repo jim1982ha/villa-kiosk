@@ -116,6 +116,13 @@ const FRAME_TARGET_MS = 22;
 // easeResolution for the rainbow-speckle regression that sets this floor.
 const HW_SCALE_FLOOR = 1;
 
+// How far to push the horizon down in OVERVIEW, in the sky dome's own world
+// units (its half-extent is ~500 — see SkyDome.setHorizonDrop for why this is
+// not an angle). ~200 buys roughly 20° of extra downward tilt before the
+// graded band leaves the frame, which covers the tilts the overview actually
+// sits at, without dropping the horizon so far that it reads as flying.
+const OVERVIEW_HORIZON_DROP = 200;
+
 // ── Zoom-to-room framing (see computeRoomOverviewPose) ──────────────────────
 // Breathing room left around a room once it fills the frame, as a FRACTION of
 // the distance needed to fit it exactly — so it scales with the room rather
@@ -872,6 +879,14 @@ export class SceneManager {
       // deliberately — a neutral wait screen is a different question).
       this.sky.setEnabled(true);
       this.sun.setBackgroundOverride(null);
+      // Overview looks DOWN at the villa, so the horizon — which sits at the
+      // camera's own eye level — leaves the frame as soon as the tilt steepens,
+      // and everything below it clamps to one flat slab of colour. Dropping the
+      // horizon keeps the graded band and the sun in shot at the tilt people
+      // actually use, instead of only at the near-horizontal one that had to be
+      // dialled in deliberately. See SkyDome.setHorizonDrop for why this is the
+      // only lever that exists (moving or scaling the dome provably cannot).
+      this.sky.setHorizonDrop(OVERVIEW_HORIZON_DROP);
     } else {
       this.overview.disable();
       this.scene.activeCamera = this.camera.camera;
@@ -891,6 +906,10 @@ export class SceneManager {
       // Restore the real sky for the immersive walk-through view.
       this.sky.setEnabled(true);
       this.sun.setBackgroundOverride(null);
+      // No horizon drop when walking: standing in the villa, the horizon
+      // belongs at eye level, which is what 0 means. Applying the overview's
+      // drop here would put the sea's edge below the terrace floor.
+      this.sky.setHorizonDrop(0);
       this.visuals.setIconZoomScale(1); // fixed screen size when walking
     }
     this.requestRender(600);
