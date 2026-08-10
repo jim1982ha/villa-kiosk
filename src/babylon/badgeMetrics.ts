@@ -200,11 +200,10 @@ const COARSE: BadgeMetrics = {
   cardValueCharPx: 7.2,
   cardValuePadPx: 8,
 
-  // 16/28 — the icon, NOT the card's inner box. Setting it to the inner box
-  // (22/28) left literally zero padding: the art sat flush on the border and
-  // its rounded corners collided with the card's, which reads as clipped.
-  // This leaves ~3px of card visible all the way round the icon.
-  cardIconFraction: 16 / 28,
+  // 22/28 — the icon CHIP's control. The chip's own art is inset 10% inside
+  // it (BADGE_INSET_CARD), so the drawn squircle is 0.8 x this, and the card
+  // shows around it on every side. See EntityVisuals' glyph block.
+  cardIconFraction: 22 / 28,
   ringThicknessPx: 3,
   minGapPx: 6,
   // Apple's 44pt hit region, which is also this app's --touch-min and exactly

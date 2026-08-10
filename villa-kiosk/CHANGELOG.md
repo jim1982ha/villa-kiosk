@@ -1,3 +1,18 @@
+## 2.244.0
+
+### Fixed — the icon chip is back, and a bare-icon card is square
+
+Two faults, and the screenshot that showed both at once: every badge WITHOUT a readout was a tall narrow capsule, while the `0 W` cards beside them — same code, same style, but carrying text — looked correct. Text was the only thing making the card wide enough to look like a card.
+
+**Aspect ratio.** `adaptWidthToChildren` makes the card exactly `padding + glyph + padding` wide (container.js adds the container's own padding at line 370), while its height is fixed at `cardHeightPx`. A CONSTANT horizontal padding therefore squares up only by coincidence, and none of the values tried did. The padding is now half the leftover height, so width equals height by construction at any icon size on either pointer class: **28x28** and **20.5x20.5**.
+
+**The icon chip.** 2.241.0 removed the glyph's baked 10% inset, reasoning that the card's own border made a second frame redundant. The reference this design has always been measured against — and the version this was reported as "perfectly displayed" in — has that chip, and removing it left the art with no padding of its own, flush against the border with its corners colliding. It is back: the chip's control is 22px inside a 28px card, its art is inset 10% within that, so the drawn squircle is 17.6px with 5.2px of card showing all the way round.
+
+The result matches the bottom bar's icon chips, which is what this should have been checked against from the start: a square chip with a centred glyph and real space around it, drawn in the scene instead of the DOM.
+
+### The pattern, recorded because it caused every one of these
+
+Across this run, each badge dimension was defined as a REMAINDER of another: the icon was whatever the ring left, the padding was a constant beside a height it had no relationship with, the width was whatever the children summed to. Remainders reach zero, or come out portrait, without anyone choosing that — and no line of code states the intent, so review finds nothing. Every one is now derived from the thing it has to agree with, with the arithmetic beside it, and the two that are genuinely design decisions (the chip's fraction of the card, the card's height) are stated as such.
 ## 2.243.0
 
 ### Fixed — a bare-icon card was PORTRAIT, not square
