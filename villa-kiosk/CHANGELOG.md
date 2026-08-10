@@ -1,3 +1,12 @@
+## 2.247.0
+
+### Fixed — the value sat left of the space it occupies
+
+Horizontal again, like the icon before it, and the same shape of fault: the value's right padding was a flat constant while its left gap was derived, so the two did not match. With the card's own right padding added on top the value had **6px between it and the chip and 11px between it and the card's edge** — 2.5px left of centre, which is what reads as text not centred in the card.
+
+The right padding now mirrors the chip-to-text gap with the card's own padding subtracted, so the value has identical clear space on both sides: 6px and 6px on touch, 5px and 5px on a fine pointer. `cardValuePadRightPx` is gone with it — the gap comes from the shared chip tokens now, so there is nothing left to keep in step by hand.
+
+That is the last of the remainders. Every measurement on this badge is now either read from the chip tokens both renderers share, or derived from the dimension it has to agree with, and the handful that are genuine design choices say so.
 ## 2.246.0
 
 ### Changed — neutral card, coloured chip; and the chip's proportions are now defined ONCE

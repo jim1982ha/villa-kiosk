@@ -2881,6 +2881,9 @@ export class EntityVisuals {
       const glyphPx = card
         ? Math.round(m.cardHeightPx * m.cardIconFraction)
         : m.badgeDiameterPx;
+      // Half the card's leftover height: the same clear space on all four
+      // sides of the chip, and it makes a bare-icon card square (see below).
+      const iconPadX = card ? (m.cardHeightPx - glyphPx) / 2 : 0;
 
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
@@ -2942,7 +2945,6 @@ export class EntityVisuals {
         // makes width equal height by construction, at any icon size, on
         // either pointer class. The VALUE keeps its own left padding for the
         // icon-to-text gap; that is a different measurement and stays a metric.
-        const iconPadX = (m.cardHeightPx - glyphPx) / 2;
         badge.paddingLeft = `${iconPadX}px`;
         badge.paddingRight = `${iconPadX}px`;
       } else {
@@ -2994,7 +2996,13 @@ export class EntityVisuals {
         // against because it is the same object drawn in the DOM. A flat 4px
         // came out at 18% and read as the text crowding the chip's edge.
         valueWrap.paddingLeft = `${Math.round(glyphPx * chip.gap)}px`;
-        valueWrap.paddingRight = `${m.cardValuePadRightPx}px`;
+        // Mirrors the chip→text gap once the card's OWN right padding is
+        // taken off, so the value has the same clear space on both sides.
+        // It was a flat constant, which put 6px between the chip and the text
+        // and 11px between the text and the card's edge — the value sitting
+        // 2.5px left of the space it occupies. Reported as the text not being
+        // centred in the card, and it was horizontal, like the icon before it.
+        valueWrap.paddingRight = `${Math.round(glyphPx * chip.gap) - iconPadX}px`;
         valueWrap.isVisible = false;
         row!.addControl(valueWrap);
       } else {

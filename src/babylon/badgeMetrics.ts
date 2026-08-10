@@ -62,7 +62,6 @@ export interface BadgeMetrics {
   cardHeightPx: number;
   cardLabelHeightPx: number;
   cardPadLeftPx: number;
-  cardValuePadRightPx: number;
   cardValueFontPx: number;
 
   // ── Collision box, relative to the anchor ────────────────────────────────
@@ -188,7 +187,6 @@ const COARSE: BadgeMetrics = {
   cardHeightPx: 28,
   cardLabelHeightPx: 34,
   cardPadLeftPx: 4,
-  cardValuePadRightPx: 8,
   cardValueFontPx: 13,
 
   classicHalfHPx: 20,
@@ -245,7 +243,6 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
     cardHeightPx: px(base.cardHeightPx),
     cardLabelHeightPx: px(base.cardLabelHeightPx),
     cardPadLeftPx: px(base.cardPadLeftPx),
-    cardValuePadRightPx: px(base.cardValuePadRightPx),
     cardValueFontPx: Math.max(MIN_VALUE_FONT_PX, px(base.cardValueFontPx)),
 
     classicHalfHPx: px(base.classicHalfHPx),
