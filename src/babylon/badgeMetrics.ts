@@ -95,6 +95,19 @@ export interface BadgeMetrics {
    * why an icon that looked acceptable on a phone looked wrong on a desktop.
    */
   ringThicknessPx: number;
+  /**
+   * The card's icon box, as a fraction of the card's HEIGHT.
+   *
+   * Stated, rather than left to equal the card's inner box. It used to be the
+   * inner box — card height minus twice the ring — which quietly made the icon
+   * a function of the RING, so a thinner ring on a fine pointer produced a
+   * different icon-to-card ratio than a thick one on a touch card (60% against
+   * 66%, with the overflow clipped so the icon ran to the badge's edges). Two
+   * devices on the same build drew visibly different badges. An icon's
+   * breathing room is a design decision and now reads as one number, and the
+   * ring can change thickness without touching it.
+   */
+  cardIconFraction: number;
   /** Clear space required between two drawn footprints. */
   minGapPx: number;
   /**
@@ -184,6 +197,8 @@ const COARSE: BadgeMetrics = {
   cardValueCharPx: 7.2,
   cardValuePadPx: 8,
 
+  // 28/34 — the ratio the touch badge has always drawn at.
+  cardIconFraction: 28 / 34,
   ringThicknessPx: 3,
   minGapPx: 6,
   // Apple's 44pt hit region, which is also this app's --touch-min and exactly
@@ -238,6 +253,8 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
       * (Math.max(MIN_VALUE_FONT_PX, px(base.cardValueFontPx)) / base.cardValueFontPx),
     cardValuePadPx: px(base.cardValuePadPx),
 
+    // A fraction: identical on both classes by construction.
+    cardIconFraction: base.cardIconFraction,
     ringThicknessPx: Math.max(1, px(base.ringThicknessPx)),
     minGapPx: base.minGapPx,
     minCentrePitchPx: base.minCentrePitchPx,

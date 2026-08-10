@@ -1,3 +1,14 @@
+## 2.239.0
+
+### Fixed — the card icon's size was a function of the RING, so two devices drew different badges
+
+The report came with the comparison that settled it: the same build, the card style, mobile correct and desktop wrong — and the classic style correct on both. That last part is what localised it, because the two styles differ in exactly one way that matters here: the classic badge bakes its ring into the glyph image and runs `thickness = 0`, while the card draws a real `Rectangle` border.
+
+Babylon insets a Rectangle's children by twice its border, so 2.236.0 sized the card's glyph to that inner box. Correct as far as it went, and it quietly made the icon a function of the ring — and the ring is not the same on both devices. On a coarse pointer the card is 34px with a 3px ring, giving an icon that occupies 66% of the card. On a fine pointer the card is 24.5px with a 2px ring, giving 60%, with the overflow clipped so the icon ran to the badge's edges instead of sitting inside them. Six points of difference, on the smaller badge, from a constant that was never meant to be a design input.
+
+The icon box is now a stated fraction of the card's height — `28/34`, the ratio the touch badge has always drawn at — so both pointer classes land on 66% and 65%, and the ring can change thickness without moving the icon at all. The row and the value wrap still take the inner box, because those genuinely do have to fit inside the border.
+
+The general fault, three times over this release series: a badge dimension that is *derived* from another dimension inherits every difference that other one has. `cardHeightPx` scales with the pointer class, `ringThicknessPx` scales with it too but rounds differently, and an icon defined as "whatever is left" picks up the difference between them. Breathing room is a design decision and now reads as one number.
 ## 2.238.0
 
 ### Fixed — the text nudge added in 2.234.0 was pointing the wrong way

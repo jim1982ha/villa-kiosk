@@ -2932,7 +2932,13 @@ export class EntityVisuals {
       const glyph = new Image(`lbl_glyph_${entityId}`,
         badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)), "off",
           this.config.entityMap[entityId]?.badgeColor, card ? BADGE_INSET_CARD : 0));
-      const glyphPx = card ? cardInnerH : m.badgeDiameterPx;
+      // Sized off the CARD, not off cardInnerH: tying the icon to the inner
+      // box made it a function of the ring, and a fine pointer's thinner ring
+      // then drew a different icon-to-card ratio than a touch card's thicker
+      // one — the same build showing visibly different badges on two devices.
+      const glyphPx = card
+        ? Math.round(m.cardHeightPx * m.cardIconFraction)
+        : m.badgeDiameterPx;
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
       glyph.stretch = Image.STRETCH_UNIFORM;
