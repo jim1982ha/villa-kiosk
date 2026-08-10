@@ -1,3 +1,17 @@
+## 2.222.0
+
+### Fixed — give back supersampling when the frame rate cannot pay for it
+
+The frame-time telemetry added in 2.221.0 came back from the Safari session immediately, and it says the lag is real and severe: **7 to 19 fps in first person**, p50 between 54 ms and 136 ms, worst frames up to 351 ms.
+
+It also eliminates the obvious suspect outright. Frame cost does not track scene complexity **at all** — the fastest burst had the MOST on screen (428 active meshes, 1.9M triangles, 54 ms) and the slowest had roughly half of it (209 meshes, 1.2M triangles, 136 ms). Draw-call overhead, triangle throughput and mesh count are all ruled out by that inversion, which is precisely why this needed measuring rather than reasoning: "679 draw calls against WebKit's higher per-draw cost" was the plausible answer, and it is wrong.
+
+Cost that ignores object count is per-PIXEL. There are two of those here. The first is **fill**: `hw: 0.5` means the backbuffer is 2880×1476 — 4.25 megapixels of 2× supersampling, with MSAA, every frame. The second is **lighting**: `MAX_SIMULTANEOUS_LIGHTS` is 8, so every material's shader runs up to eight lights per fragment, and which lights are in range depends on where the camera is standing — varying exactly the way the measurement varies, and exactly the way mesh count does not.
+
+This release addresses the first and, in doing so, discriminates them. Frame cost is linear in pixels and pixels go as 1/scale², so the scaling level that would reach a target frame time is a closed form rather than a search: one step, applied when a measured burst comes in slower than ~25fps. On this Mac that takes 4.25 Mpx to 1.06 Mpx, a 4× reduction in fill. **If the next dump shows `hw: 1` with fps up roughly fourfold, it was fill. If fps barely moves, fill is eliminated and the lights are what remain** — `lights` and `litOn` are now in the record to be read at that point.
+
+Three limits are deliberate. It never goes below **1× CSS**: the old iOS tier rendered under CSS resolution and its single-sample minification of tile textures showed as rainbow speckle around lit floors, which was reported and removed, so that floor stays. It is **monotonic** — scaling only ever coarsens, never refines again, because a controller free to move both ways would hunt around the threshold and the resolution would visibly pulse. And it only ever engages on a device that has **measured itself slow**: anything holding 60fps never reaches this code and keeps the full 2× supersampling. There is no new setting; "as nice as possible by default" is still the default, and 7fps is not nice by any reading of it.
+
 ## 2.221.0
 
 ### Added — frame-time telemetry, because "it's laggy" was unanswerable

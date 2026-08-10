@@ -105,6 +105,16 @@ const FRAME_SAMPLE_MIN = 45;
 // this is meant to be read ALONGSIDE. The first few bursts answer the
 // question; the hundredth adds nothing.
 const FRAME_REPORT_MAX = 8;
+// Below ~25fps interaction stops feeling like direct manipulation — that is
+// the point at which supersampling is no longer worth what it costs.
+const FRAME_SLOW_MS = 40;
+// What easeResolution aims for once it has decided to act (~45fps). Not 60:
+// overshooting to the resolution floor on one marginal burst would spend the
+// whole quality budget to chase frames the display may not even present.
+const FRAME_TARGET_MS = 22;
+// 1.0 = one backbuffer pixel per CSS pixel. Never coarser than this — see
+// easeResolution for the rainbow-speckle regression that sets this floor.
+const HW_SCALE_FLOOR = 1;
 
 // ── Zoom-to-room framing (see computeRoomOverviewPose) ──────────────────────
 // Breathing room left around a room once it fills the frame, as a FRACTION of
@@ -639,6 +649,7 @@ export class SceneManager {
     const at = (q: number) => s[Math.min(s.length - 1, Math.floor(s.length * q))];
     const ms = (x: number) => Math.round(x * 10) / 10;
     const render = this.deviceRenderConfig(this.config.render);
+    this.easeResolution(at(0.5));
     reportTelemetry("frames", {
       n: s.length,
       p50: ms(at(0.5)),
@@ -654,6 +665,12 @@ export class SceneManager {
       rw: this.engine.getRenderWidth(),
       rh: this.engine.getRenderHeight(),
       hw: Math.round(this.engine.getHardwareScalingLevel() * 100) / 100,
+      // The OTHER per-pixel cost besides fill. Every material runs up to
+      // MAX_SIMULTANEOUS_LIGHTS (8) lights per fragment, and which lights are
+      // in range is a function of where the camera stands — so this varies
+      // exactly the way the measured frame time does, and mesh count does not.
+      lights: this.scene.lights.length,
+      litOn: this.scene.lights.reduce((n, l) => n + (l.isEnabled() ? 1 : 0), 0),
       // Same string the load record carries, so a frames record read on its
       // own still says which renderer produced it — the whole point here is
       // comparing Safari's "Apple GPU" against Chrome's ANGLE/Metal path.
@@ -661,6 +678,48 @@ export class SceneManager {
       ibl: render.ibl,
       ssao: render.ssao && !this.renderFx.isBaked(),
     });
+  }
+
+  /**
+   * Give back supersampling when the measured frame rate cannot afford it.
+   *
+   * ── The measurement this exists because of (2.222.0) ──────────────────────
+   * Safari on a MacBook reported 7-19 fps in first person (p50 54-136ms). The
+   * frames records ruled out geometry outright: the FASTEST burst had the MOST
+   * on screen (428 meshes / 1.9M triangles at 54ms) and the slowest had half
+   * that (209 / 1.2M at 136ms). Cost that does not track object count is
+   * per-PIXEL, and the two per-pixel costs here are fill — 2880x1476, i.e.
+   * 4.25 megapixels of 2x supersampling with MSAA — and up to
+   * MAX_SIMULTANEOUS_LIGHTS lights per fragment.
+   *
+   * This addresses the first and DISCRIMINATES them. Frame cost is linear in
+   * pixels and pixels go as 1/scale², so the scale that would hit the target
+   * is a closed form — one step, not a slow crawl. If the next frames records
+   * show hw at 1.0 with fps up roughly 4x, it was fill. If fps barely moves,
+   * fill is eliminated and the lights are the remaining candidate (`lights`
+   * and `litOn` are in the record for exactly that reading).
+   *
+   * Deliberate limits:
+   * - **Never below 1x CSS.** The old iOS tier rendered under CSS resolution
+   *   and its single-sample minification of tile textures showed as rainbow
+   *   speckle around lit floors — reported, and removed. 1.0 is the floor.
+   * - **Monotonic.** Scaling only ever gets coarser, never finer again. A
+   *   controller that could go both ways would hunt around the threshold and
+   *   the resolution would visibly pulse; giving up supersampling once, on a
+   *   device that has demonstrated it cannot pay for it, does not.
+   * - **Only on a device that measured slow.** A machine holding 60fps never
+   *   reaches this and keeps the full 2x. Nothing to configure: the setting
+   *   the user asked for ("as nice as possible by default") is still the
+   *   default, and 7fps is not "nice" by any reading of it.
+   */
+  private easeResolution(p50: number): void {
+    if (p50 <= FRAME_SLOW_MS) return;
+    const cur = this.engine.getHardwareScalingLevel();
+    if (cur >= HW_SCALE_FLOOR) return;
+    const next = Math.min(HW_SCALE_FLOOR, cur * Math.sqrt(p50 / FRAME_TARGET_MS));
+    if (next <= cur) return;
+    this.engine.setHardwareScalingLevel(next);
+    this.requestRender();
   }
 
   /** Keep rendering for a short window (covers input latency + transitions). */

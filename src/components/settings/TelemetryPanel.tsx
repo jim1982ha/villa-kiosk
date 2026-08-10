@@ -145,7 +145,8 @@ function summarise(e: TelemetryEvent): string {
       // of 90ms reads as "laggy" even though the average looks fine, and that
       // gap is exactly what a single fps figure hides.
       const load = `${e.activeMeshes ?? "?"} meshes · ${e.activeKTris ?? "?"}k tris`
-        + ` · ${e.rw ?? "?"}×${e.rh ?? "?"}`;
+        + ` · ${e.rw ?? "?"}×${e.rh ?? "?"}@${e.hw ?? "?"}`
+        + ` · ${e.litOn ?? "?"}/${e.lights ?? "?"} lights on`;
       const passes = [e.ibl ? "IBL" : null, e.ssao ? "SSAO" : null]
         .filter(Boolean).join("+") || "no post";
       return `${e.fps ?? "?"} fps while ${e.mode ?? "?"}`
