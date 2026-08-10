@@ -30,6 +30,13 @@ export type TelemetryKind =
   // AFTER the villa is up. The long-task observer always saw these; only the
   // load snapshot ever reported them. See bootTimeline.reportPostLoadFreeze.
   | "freeze"
+  // How long INTERACTIVE frames actually take, summarised per burst of
+  // interaction (SceneManager.sampleFrame). `freeze` reports a thread BLOCKED;
+  // this reports one that is merely slow — every frame costing 40ms instead of
+  // 8 — which is a different complaint ("laggy to orbit / to walk") and was
+  // previously unmeasurable on any platform. It matters most on Safari, where
+  // the long-task observer behind `freeze` does not exist at all.
+  | "frames"
   | "lifecycle"       // pagehide / pageshow / visibility transitions
   | "recovered"       // we auto-reloaded after a restore onto a dead scene
   | "sync"            // shared-config pull/push outcome (see DeviceConfigSync)

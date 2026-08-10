@@ -88,6 +88,24 @@ import { entityMapDelta } from "./entityMapDiff";
 // left on. Interaction is never subject to this — see requestRender.
 const ANIMATION_FRAME_MS = 33;
 
+// ── Frame-time sampling (see sampleFrame) ───────────────────────────────────
+// A gap above this is the render loop RESUMING — the app went idle, the tab
+// was throttled, a modal held the thread — not one frame that took a second.
+// Well clear of even a 10fps frame, so a genuinely terrible frame is still
+// recorded as the bad news it is rather than filtered out as a resume.
+const FRAME_GAP_MAX_MS = 400;
+// ~10s of interaction at 60fps. Bounds both the array and, with the report
+// cap, how much a pathological session can send.
+const FRAME_SAMPLE_MAX = 600;
+// Below this a "burst" is a tap or a one-frame nudge, and its percentiles
+// would be noise quoted to one decimal place.
+const FRAME_SAMPLE_MIN = 45;
+// Telemetry is a fixed-size ring in /data shared with every other device; a
+// long session orbiting the villa must not evict the load and sync records
+// this is meant to be read ALONGSIDE. The first few bursts answer the
+// question; the hundredth adds nothing.
+const FRAME_REPORT_MAX = 8;
+
 // ── Zoom-to-room framing (see computeRoomOverviewPose) ──────────────────────
 // Breathing room left around a room once it fills the frame, as a FRACTION of
 // the distance needed to fit it exactly — so it scales with the room rather
@@ -173,6 +191,10 @@ export class SceneManager {
    *  requestAnimationRender / ANIMATION_FRAME_MS. */
   private animateUntil = 0;
   private lastAnimFrameAt = 0;
+  /** Frame-time samples for the `frames` telemetry record — see sampleFrame. */
+  private frameSamples: number[] = [];
+  private lastFrameAt = 0;
+  private frameReportsSent = 0;
   /** performance.now() of the last WebGL context loss, 0 when not lost — used
    *  to report how long the view was actually dead. */
   private contextLostAt = 0;
@@ -545,16 +567,99 @@ export class SceneManager {
         now < this.keepRenderingUntil ||
         !this.config.renderOnDemand
       ) {
+        this.sampleFrame(now);
         this.lastAnimFrameAt = now;
         this.scene.render();
         return;
       }
+      // The interaction burst just ended — that's the natural boundary to
+      // summarise it on, and the only one an always-continuous kiosk never
+      // reaches (sampleFrame flushes on its own sample cap for that case).
+      this.flushFrameSamples();
       // Everything else is a frame asked for purely by a continuous animation
       // (see requestAnimationRender), and is rate-capped.
       if (now < this.animateUntil && now - this.lastAnimFrameAt >= ANIMATION_FRAME_MS) {
         this.lastAnimFrameAt = now;
         this.scene.render();
       }
+    });
+  }
+
+  /**
+   * Measure how long INTERACTIVE frames actually take, and report a summary.
+   *
+   * ── Why this exists (2.221.0) ────────────────────────────────────────────
+   * "Safari on the MacBook is very laggy, I can barely orbit or walk" was
+   * unanswerable from the telemetry, because nothing in this app has ever
+   * measured a frame. The load record covers getting TO the first frame and
+   * stops there; `freeze` covers a main thread blocked long enough to notice
+   * as a hang. A steady low frame rate is neither — it is every frame costing
+   * 40ms instead of 8 — and it was invisible.
+   *
+   * That gap is worst exactly where it hurts. The long-task observer behind
+   * `freeze` is Chromium-only; Safari falls back to a timer watchdog
+   * (bootTimeline.installFreezeWatchdog) which detects blocks but not slow
+   * frames. Safari duly reported no freezes at all in the field dump — which
+   * is not "Safari is fine", it is "Safari is slow in the one way we cannot
+   * see". Guessing a cause from there is the failure mode this codebase has
+   * already paid for repeatedly, so: measure first.
+   *
+   * Only INTERACTIVE frames are sampled — the branch above that renders at
+   * the display's rate. Animation-only frames are deliberately rate-capped to
+   * ANIMATION_FRAME_MS, so including them would report the cap as if it were
+   * a performance ceiling. A gap longer than FRAME_GAP_MAX_MS is the loop
+   * resuming after idle rather than one slow frame, and is dropped.
+   *
+   * The record carries what a frame's cost is a function of — active meshes,
+   * active indices, backbuffer size, hardware scaling, and whether the two
+   * optional render passes are on — so the next question can be answered from
+   * the data instead of from another hypothesis.
+   */
+  private sampleFrame(now: number): void {
+    const prev = this.lastFrameAt;
+    this.lastFrameAt = now;
+    if (prev === 0) return;
+    const dt = now - prev;
+    if (dt > FRAME_GAP_MAX_MS) return;
+    this.frameSamples.push(dt);
+    if (this.frameSamples.length >= FRAME_SAMPLE_MAX) this.flushFrameSamples();
+  }
+
+  private flushFrameSamples(): void {
+    const s = this.frameSamples;
+    if (s.length === 0) return;
+    this.frameSamples = [];
+    // Not enough of a burst to say anything (a tap, a one-frame nudge). Reset
+    // the clock too, so the next burst never measures across the gap.
+    this.lastFrameAt = 0;
+    if (s.length < FRAME_SAMPLE_MIN || this.frameReportsSent >= FRAME_REPORT_MAX) return;
+    this.frameReportsSent += 1;
+
+    s.sort((a, b) => a - b);
+    const at = (q: number) => s[Math.min(s.length - 1, Math.floor(s.length * q))];
+    const ms = (x: number) => Math.round(x * 10) / 10;
+    const render = this.deviceRenderConfig(this.config.render);
+    reportTelemetry("frames", {
+      n: s.length,
+      p50: ms(at(0.5)),
+      p95: ms(at(0.95)),
+      worst: ms(s[s.length - 1]),
+      // The headline number, so a dump can be read without doing the division.
+      fps: Math.round(1000 / at(0.5)),
+      mode: this.viewMode,
+      activeMeshes: this.scene.getActiveMeshes().length,
+      activeKTris: Math.round(this.scene.getActiveIndices() / 3000),
+      meshes: this.scene.meshes.length,
+      materials: this.scene.materials.length,
+      rw: this.engine.getRenderWidth(),
+      rh: this.engine.getRenderHeight(),
+      hw: Math.round(this.engine.getHardwareScalingLevel() * 100) / 100,
+      // Same string the load record carries, so a frames record read on its
+      // own still says which renderer produced it — the whole point here is
+      // comparing Safari's "Apple GPU" against Chrome's ANGLE/Metal path.
+      gpu: String(this.engine.getGlInfo()?.renderer ?? "").slice(0, 96),
+      ibl: render.ibl,
+      ssao: render.ssao && !this.renderFx.isBaked(),
     });
   }
 

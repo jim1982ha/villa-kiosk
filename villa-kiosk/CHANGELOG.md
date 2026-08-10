@@ -1,3 +1,19 @@
+## 2.221.0
+
+### Added — frame-time telemetry, because "it's laggy" was unanswerable
+
+Safari on a MacBook was reported as barely usable — camera orbit and first-person movement both. The field dump backs the load half of that up plainly: that session's first frame took **21.6 s** (`paintMs: 21577`, of which `rdrMs: 20733`) against ~2.4 s for Chrome on the same machine, with every CPU phase 5× slower too (`parseMs` 11861 vs 2402, `probeMs` 5989 vs 880 for the *same* 43 raycasts).
+
+The moving-around half could not be answered at all, because **nothing in this app has ever measured a frame**. The load record covers getting to the first frame and then stops. `freeze` covers a main thread blocked long enough to read as a hang. A steady low frame rate is neither — it is every frame costing 40 ms instead of 8 — and there was no instrument anywhere that could see it.
+
+That blind spot is worst exactly where the complaint came from. The Long Tasks observer behind `freeze` is Chromium-only; Safari falls back to a timer watchdog that catches blocks but not slow frames. Safari accordingly reported **no freezes whatsoever** in the dump, which is not "Safari is fine" — it is "Safari is slow in the one way the instrument cannot see". Every `freeze` row in that file came from Chrome.
+
+So rather than guess: a new `frames` record summarises each burst of INTERACTIVE rendering — median, p95 and worst frame in ms, the fps that implies, whether the camera was in first-person or overview, and the things a frame's cost is a function of (active meshes, active triangles, backbuffer size, hardware scaling level, whether IBL and SSAO are actually on, and the GL renderer string). p95 is included because it is what a person feels: a 16 ms median with a 90 ms p95 reads as laggy while an average looks perfectly healthy.
+
+Only interactive frames are sampled — the branch that renders at the display's own rate. Animation-only frames are deliberately capped to 33 ms by `requestAnimationRender`, so counting them would report that cap as though it were a performance ceiling. A gap over 400 ms is the loop resuming from idle rather than one catastrophic frame, and is dropped. Bursts shorter than 45 frames are ignored as noise, and a session sends at most 8 records, so orbiting the villa for ten minutes cannot evict the load and sync records this is meant to be read next to.
+
+No diagnosis is claimed here and no optimisation was applied. There are several plausible culprits — 679 draw calls against WebKit's higher per-draw overhead, MSAA resolve on a 2880×1476 backbuffer, the absence of `freezeWorldMatrix`/`material.freeze()` on the static villa shell — and this codebase has a long record of plausible-sounding performance hypotheses that measurement then disproved. The next Safari session will produce a number, and the fix follows from that.
+
 ## 2.220.0
 
 ### Fixed — the moving light artifacts on glass and walls: the environment cube was 16x16

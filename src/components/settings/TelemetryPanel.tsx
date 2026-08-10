@@ -140,6 +140,18 @@ function summarise(e: TelemetryEvent): string {
       const how = e.src === "watchdog" ? " (timer lag)" : "";
       return `UI blocked ${ms(e.ms)}${how}${back} · ${ms(e.sinceLoadMs)} into this session`;
     }
+    case "frames": {
+      // p95 is the number a person actually feels: a median of 16ms with a p95
+      // of 90ms reads as "laggy" even though the average looks fine, and that
+      // gap is exactly what a single fps figure hides.
+      const load = `${e.activeMeshes ?? "?"} meshes · ${e.activeKTris ?? "?"}k tris`
+        + ` · ${e.rw ?? "?"}×${e.rh ?? "?"}`;
+      const passes = [e.ibl ? "IBL" : null, e.ssao ? "SSAO" : null]
+        .filter(Boolean).join("+") || "no post";
+      return `${e.fps ?? "?"} fps while ${e.mode ?? "?"}`
+        + ` · frame ${ms(e.p50)} median, ${ms(e.p95)} p95, ${ms(e.worst)} worst`
+        + ` · ${load} · ${passes}`;
+    }
     case "context-lost":
       return `WebGL context lost (${e.total ?? "?"} this session)`;
     case "context-restored":
