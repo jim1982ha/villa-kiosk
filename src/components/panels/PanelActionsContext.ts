@@ -34,15 +34,17 @@ export interface PanelActions {
     color?: string;
     /** Representative category colour, for the picker's "default" chip. */
     categoryColor: string;
-    /** Drives the header icon's fill/glyph/ring exactly like its map badge
-     *  (see config/EntityCategories.categorySurface + babylon/badgeIcons.ts,
-     *  which bakes this into the same image both places use) — "unavailable"
-     *  is the SAME isUnavailable() every status pill already reads, "alert"
-     *  is set whenever this device's linked entity (EntityMapping.
-     *  linkedEntityId, set in Advanced Settings) is presently "on", plus a
-     *  binary_sensor's own "on" state — computed the same way the map badge
-     *  is (live entity state, no separate lookup), just DOM-side. */
+    /** Drives the header icon's FILL and GLYPH exactly like its map badge
+     *  (config/EntityCategories.categorySurface + babylon/badgeIcons.ts bake
+     *  the same image both places use). This device's OWN state only —
+     *  "unavailable" is the same isUnavailable() every status pill reads, and
+     *  a binary_sensor's "on" is its own alert. A LINKED entity no longer
+     *  lands here: it rings the badge instead, see ringState. */
     state: DeviceSurfaceState;
+    /** The RING's state, when it differs from the face's — a linked entity
+     *  being on rings the badge without recolouring the device's own glyph.
+     *  See deviceActivity.badgeFaceAndRing. */
+    ringState?: DeviceSurfaceState;
   };
   /** Persist a new badge colour for the open entity (null = category default).
    *  Undefined when the profile may not edit config — the badge is then a plain,

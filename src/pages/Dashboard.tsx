@@ -31,7 +31,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
-import { badgeSurfaceFor } from "@/utils/deviceActivity";
+import { badgeFaceAndRing } from "@/utils/deviceActivity";
 import { dismissedEntitySet } from "@/config/dismissedEntities";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
@@ -856,7 +856,10 @@ export default function Dashboard() {
                 // this was written to fix. The MAP badge stays on confirmed
                 // state only — it is Babylon-side, and predicting scene
                 // appearance is the thing that was rightly reverted before.
-                state: badgeSurfaceFor(mapping.type, ent ?? phantomEntity(entityId), linkedAlert),
+                ...(() => {
+                  const b = badgeFaceAndRing(mapping.type, ent ?? phantomEntity(entityId), linkedAlert);
+                  return { state: b.face, ringState: b.ring };
+                })(),
               };
             })(),
             onSetBadgeColor: canEditConfig

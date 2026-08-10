@@ -6,7 +6,7 @@
 // data URL, same draw-once-cache approach the old emoji glyphs used.
 
 import type { Category } from "@/types/scene.types";
-import { categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
+import { categorySurfaceRinged, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { ICON_NODES, type IconPrimitive } from "./badgeIconNodes";
 
 // Rendered oversized relative to the badge's on-screen size (EntityVisuals'
@@ -132,9 +132,16 @@ export const BADGE_INSET_CARD = 0.10;
  *  (see categorySurface), so a light/dark/night switch must re-bake. */
 export function badgeImageDataUrl(
   category: Category, iconKey: string, state: DeviceSurfaceState, colorOverride?: string, inset = 0,
+  /** Draw the RING for a different state than the face — see
+   *  categorySurfaceRinged. Defaults to `state`, i.e. the ordinary badge. */
+  ringState?: DeviceSurfaceState,
 ): string {
   const theme = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") ?? "" : "";
-  const cacheKey = `${category}:${iconKey}:${state}:${colorOverride ?? ""}:${inset}:${theme}`;
+  // ringState is part of the key: two badges alike in every other respect but
+  // ringed differently are different pictures, and a cache that conflated them
+  // would serve whichever was baked first.
+  const ring = ringState ?? state;
+  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${theme}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -144,7 +151,7 @@ export function badgeImageDataUrl(
   const ctx = canvas.getContext("2d");
   let url = "";
   if (ctx) {
-    const surface = categorySurface(category, state, colorOverride);
+    const surface = categorySurfaceRinged(category, state, ring, colorOverride);
     const m = CANVAS_PX * inset;            // transparent margin
     const size = CANVAS_PX - 2 * m;         // the squircle itself
     const corner = size * BADGE_CORNER_FRACTION;

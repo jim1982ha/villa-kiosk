@@ -55,6 +55,36 @@ export function badgeKindFor(type: EntityType, s: HassEntity, linkedOn: boolean)
   return classifyDeviceActivity(type, s);
 }
 
+/**
+ * The badge's two independent readings: what its FACE says, and what its RING
+ * says.
+ *
+ * ── Why they were one, and why that was wrong (2.214.0) ───────────────────
+ * `linkedEntityId` has always been documented as driving a device's RING, but
+ * it was applied by forcing the whole badge to "alert" — so an armed camera
+ * went red edge to edge and its purple camera pictogram went with it. Two
+ * unrelated facts ("this camera is recording" and "its detection is armed")
+ * were competing for one set of pixels, and the glyph — the thing that says
+ * what the device even is — lost.
+ *
+ * They are separate now. The FACE is the device's own state and nothing else,
+ * so a camera stays its category colour whether armed or not. The RING carries
+ * the linked signal, which is what a ring is for.
+ *
+ * `unavailable` is the exception and stays whole-badge: a device Home
+ * Assistant has lost contact with has no trustworthy state to paint a face
+ * from, so claiming one — in any colour — would assert something never
+ * observed. It takes the amber dashed ring AND the muted face together.
+ */
+export function badgeFaceAndRing(
+  type: EntityType, s: HassEntity, linkedOn: boolean,
+): { face: DeviceSurfaceState; ring: DeviceSurfaceState } {
+  const own = badgeKindFor(type, s, false);
+  if (own === "unavailable") return { face: "unavailable", ring: "unavailable" };
+  const face = SURFACE_STATE[own];
+  return { face, ring: linkedOn ? "alert" : face };
+}
+
 /** `badgeKindFor` resolved straight to the surface row, for the callers that
  *  only ever want the painted state. */
 export function badgeSurfaceFor(type: EntityType, s: HassEntity, linkedOn: boolean): DeviceSurfaceState {

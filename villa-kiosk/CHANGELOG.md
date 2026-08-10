@@ -1,3 +1,9 @@
+## 2.214.0
+
+### Fixed — an armed camera lost its camera icon to the alert colour
+
+A device's linked entity has always been documented as driving its RING, but it was applied by forcing the whole badge to "alert" — so arming a camera turned it red edge to edge and took the purple camera pictogram with it. Two unrelated facts were competing for one set of pixels, and the one that says what the device even is lost. They are separate now: the FACE (fill and glyph) reports the device's own state, so a recording camera stays its category colour whether armed or not, and the RING carries the linked signal. Applied at the one shared rule, so all three surfaces that draw this badge follow — the 3D map, the device lists and the panel header. "Unavailable" deliberately stays whole-badge: a device Home Assistant has lost contact with has no trustworthy state to paint a face from, so it keeps the muted face and dashed amber ring together.
+
 ## 2.213.0
 
 ### Fixed — tapping a room now ALWAYS shows that room's badges, with no way to fail

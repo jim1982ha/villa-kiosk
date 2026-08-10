@@ -20,7 +20,7 @@ import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory } from "@/config/EntityCategories";
-import { badgeSurfaceFor } from "@/utils/deviceActivity";
+import { badgeFaceAndRing } from "@/utils/deviceActivity";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { isUnavailable } from "@/utils/stateColors";
@@ -278,7 +278,7 @@ export default function SummaryGroupPanel({
     // pump runs, and every one of them listed here as plain grey. Reported by
     // tapping an entity group of four pump-power badges — two red on the map,
     // four identical rows in the modal.
-    const badgeState = badgeSurfaceFor(
+    const badge = badgeFaceAndRing(
       type, e,
       // "Is the entity this one is linked to switched on" — the map holds the
       // same fact as a live set fed by state events (linkActiveIds); here the
@@ -307,7 +307,8 @@ export default function SummaryGroupPanel({
         >
           <img
             className="summary-entity-badge"
-            src={badgeImageDataUrl(cat, iconKeyFor(type, e), badgeState, config.entityMap[id]?.badgeColor, 0)}
+            src={badgeImageDataUrl(
+              cat, iconKeyFor(type, e), badge.face, config.entityMap[id]?.badgeColor, 0, badge.ring)}
             key={theme}
             alt=""
             draggable={false}

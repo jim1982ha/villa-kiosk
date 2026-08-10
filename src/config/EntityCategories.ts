@@ -190,6 +190,42 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
   }
 }
 
+/**
+ * A badge whose RING reports a different fact from its face.
+ *
+ * ── Why the two can differ (2.214.0) ──────────────────────────────────────
+ * `linkedEntityId` was always documented as driving a device's RING — "its
+ * ring is resolved ONCE here", says badgeKind — but it was implemented by
+ * swapping the whole surface state, so an armed camera turned red from edge to
+ * edge: fill, ring AND the camera glyph itself. Two independent facts were
+ * being drawn as one, and the more important of them (what KIND of device this
+ * is, and whether it is working) lost, because the glyph is what carries it.
+ *
+ * Reported for exactly that: an armed camera should keep its purple camera
+ * pictogram — the camera is fine, it is recording — while the RING says the
+ * detection is armed. Face = this device's own state. Ring = the linked
+ * signal. Neither has to borrow the other's colour any more.
+ *
+ * Composed from categorySurface() rather than adding a second table, so the
+ * §0 colours stay defined exactly once and a ring drawn here is always a ring
+ * that state would have drawn on its own.
+ */
+export function categorySurfaceRinged(
+  category: Category, state: DeviceSurfaceState, ringState: DeviceSurfaceState, override?: string,
+): CategorySurface {
+  const face = categorySurface(category, state, override);
+  if (ringState === state) return face;
+  const ring = categorySurface(category, ringState, override);
+  return {
+    fill: face.fill,
+    glyph: face.glyph,
+    ring: ring.ring,
+    ringDashed: ring.ringDashed,
+    ringBold: ring.ringBold,
+    ringHairline: ring.ringHairline,
+  };
+}
+
 /** Default category by device TYPE. Anything not listed here (and not caught by
  *  a device_class rule below) falls into "others". */
 const DEFAULT_CATEGORY_BY_TYPE: Partial<Record<EntityType, Category>> = {

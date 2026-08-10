@@ -83,8 +83,8 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
-import { effectiveCategory, categorySurface, cssVar } from "@/config/EntityCategories";
-import { badgeKindFor, SURFACE_STATE } from "@/utils/deviceActivity";
+import { effectiveCategory, categorySurface, categorySurfaceRinged, cssVar } from "@/config/EntityCategories";
+import { badgeKindFor, badgeFaceAndRing } from "@/utils/deviceActivity";
 import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable } from "@/utils/stateColors";
@@ -2849,8 +2849,14 @@ export class EntityVisuals {
     lbl.category = effectiveCategory(
       entityId, type, this.config.entityMap[entityId]?.category,
       entity.attributes.device_class as string | undefined);
-    const kind = this.badgeKind(type, entity);
-    const state = SURFACE_STATE[kind];
+    // FACE from this device's own state, RING from its linked entity — two
+    // independent facts, two independent sets of pixels. See badgeFaceAndRing.
+    // (badgeKind still folds the linked signal into ONE value for everything
+    // else that reads it — the alert pulse, a room chip's ring, an entity
+    // group's — because those all mean "is anything here demanding attention",
+    // which a linked entity being on genuinely is.)
+    const { face: state, ring: ringState } =
+      badgeFaceAndRing(type, entity, this.linkActiveIds.has(entityId));
     const iconKey = iconKeyFor(type, entity);
     const override = this.config.entityMap[entityId]?.badgeColor;
 
@@ -2867,7 +2873,7 @@ export class EntityVisuals {
       // alerting (VESTA-DESIGN.md §0). The card's fill is a plain colour
       // (not baked pixels), so it's set directly here; the glyph image below
       // bakes the SAME state so its stroke colour agrees with the card.
-      const surface = categorySurface(lbl.category, state, override);
+      const surface = categorySurfaceRinged(lbl.category, state, ringState, override);
       lbl.badge.background = surface.fill;
       // A DASHED ring is baked into the glyph image, so the card's own
       // Rectangle border must stand down — otherwise the badge carries two
@@ -2882,7 +2888,7 @@ export class EntityVisuals {
       // the badge's outer edge where every other state's ring is.
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
-        surface.ringDashed ? 0 : BADGE_INSET_CARD);
+        surface.ringDashed ? 0 : BADGE_INSET_CARD, ringState);
       // The inline value shares the card's surface, so it must track the same
       // glyph colour — otherwise it stays at its build-time "off" colour and
       // goes unreadable the moment the card tints for active/alert.
@@ -2894,7 +2900,7 @@ export class EntityVisuals {
       lbl.badge.background = "transparent";
       lbl.badge.thickness = 0;
       lbl.badge.color = "transparent";
-      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, state, override, 0);
+      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, state, override, 0, ringState);
     }
     lbl.badge.alpha = 1;
     // The value pill is never shown for an unavailable entity anyway
