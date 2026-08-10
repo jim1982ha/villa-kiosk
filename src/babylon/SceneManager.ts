@@ -817,7 +817,10 @@ export class SceneManager {
    * scattered across a dark-theme map.
    */
   private handleThemeChange = () => {
-    if (this.viewMode === "overview") this.sun.setBackgroundOverride(this.overviewBackdropColor());
+    // Nothing to do for the backdrop any more: overview shows the real sky
+    // (see setViewMode), which is driven by the SUN rather than by the UI
+    // theme. Re-pinning the themed colour here would silently undo that the
+    // first time an auto kiosk crossed into night.
     this.visuals.repaintBadges();
   };
 
@@ -850,11 +853,25 @@ export class SceneManager {
       this.scene.activeCamera = this.overview.camera;
       this.floors.setFirstPerson(false); // walker camera is parked; don't let its Y drive floors
       this.lastNavigatedRoom = null; // fresh overview: a later → first-person defaults to the staircase
-      // Bird's-eye floor plan reads best on a calm, neutral backdrop rather
-      // than the bright daytime sky blue (which "crashes the eyes", day or
-      // night). Hide the sky dome and pin a themed backdrop; lighting is untouched.
-      this.sky.setEnabled(false);
-      this.sun.setBackgroundOverride(this.overviewBackdropColor());
+      // The real sky, in overview too (2.223.0). This used to hide the dome and
+      // pin a flat themed backdrop, on the reasoning that a bird's-eye plan
+      // reads best on something calm and that daytime sky blue "crashes the
+      // eyes". What that traded away only became obvious once the sky earned
+      // its keep: at dawn and dusk the dome is a graded sunrise/sunset, and
+      // cutting to flat black or flat grey at the exact moment the villa looks
+      // its best is a worse trade than the glare it was avoiding.
+      //
+      // Free to do because the dome is `infiniteDistance` (SkyDome) — it is
+      // re-centred on whichever camera is active every frame, so it wraps the
+      // pulled-back overview camera with no resizing and no extra cost. Passing
+      // null hands clearColor back to the day/night value, which now only shows
+      // where the dome does not cover.
+      //
+      // If the glare complaint returns, this is the revert: re-disable the dome
+      // and re-pin overviewBackdropColor() here (the loading path still uses it,
+      // deliberately — a neutral wait screen is a different question).
+      this.sky.setEnabled(true);
+      this.sun.setBackgroundOverride(null);
     } else {
       this.overview.disable();
       this.scene.activeCamera = this.camera.camera;

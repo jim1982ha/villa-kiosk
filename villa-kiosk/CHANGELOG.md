@@ -1,3 +1,19 @@
+## 2.223.0
+
+### Changed — the overview keeps the real sky, and follows the sun all day
+
+First person has always shown the procedural sky dome, so at dawn and dusk the villa sits against a graded sunrise or sunset driven by the actual sun position for this site's latitude and longitude. Switching to the bird's-eye overview replaced all of that with flat black (or flat pale grey on the light theme).
+
+That was deliberate, and it is worth recording why it is being reversed rather than pretending it was a bug: `setViewMode` reasoned that a floor plan reads best on something calm and that daytime sky blue "crashes the eyes". What it traded away only became visible once the sky was good enough to be worth keeping — cutting to a flat void at exactly the moment the villa looks its best is the worse trade. The overview now keeps the dome and hands `clearColor` back to the day/night value.
+
+This costs nothing to do. The dome is `infiniteDistance` (see `SkyDome`), meaning Babylon re-centres it on whichever camera is active every frame — so it wraps the pulled-back overview camera with no resizing, no repositioning and no extra draw beyond the one it was already making in first person.
+
+**And yes, it tracks the day on its own.** `Dashboard` already re-runs `sun.applyRealSun()` on a 15-minute interval, and `SunController` holds a render hook that calls `requestRender()` whenever it changes anything — which matters specifically because this app renders on demand, so a sky that changed without asking for a frame would simply not repaint until something else happened to. A kiosk left on a wall all day will therefore walk through sunrise, midday, sunset and night by itself, in 15-minute steps, in the overview exactly as it already did in first person. Sunrise and sunset are additionally crossfaded rather than snapped: `nightT` ramps over civil twilight (the first 6° below the horizon, roughly 25 real minutes) and drives the bake crossfade, exposure and the window-pane dimming together.
+
+One related correction: `handleThemeChange` used to re-pin the themed backdrop whenever the resolved theme changed while in overview. Left in place, that would have quietly reverted the sky the first time an "auto" kiosk crossed into night — precisely the case this feature is for. The backdrop colour helper is still used, but now only for the loading screen, where a neutral wait behind "Loading the villa…" is a genuinely different question.
+
+If the glare objection returns, the revert is two lines in `setViewMode` and the docstring says which.
+
 ## 2.222.0
 
 ### Fixed — give back supersampling when the frame rate cannot pay for it
