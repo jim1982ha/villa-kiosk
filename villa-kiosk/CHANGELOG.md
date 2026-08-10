@@ -1,3 +1,17 @@
+## 2.235.0
+
+### Fixed — every badge VALUE went blank in 2.234.0
+
+Reported as badges showing an empty space where "98%" or "99%" used to be — the card was still the right width, the icon still drew, and the value simply was not there. Visible in both themes, which ruled out colour before anything else.
+
+2.234.0's optical text nudge computed its offset by reading the font size back off the control it had just written it to:
+
+    valueText.fontSize = card ? m.cardValueFontPx : m.pillValueFontPx;
+    valueText.top = `${(valueText.fontSize as number) * m.textOpticalTopEm}px`;
+
+`Control.fontSize` is a **getter that returns a string** — `"13px"`, not `13`. So the multiplication produced `NaN` and the assignment became `top: "NaNpx"`. Babylon does not throw on that; it parses to a NaN offset and the text simply never renders. And the `as number` cast is precisely what stopped the compiler from saying so, in a repo where `tsc` is the only automated gate there is.
+
+The value is now held in a local number and used for both the font size and the nudge. The rule this cost: never read a Babylon GUI dimension back to compute with — `fontSize`, `width`, `height`, `top` and `left` are all string-valued getters over a `ValueAndUnit`, and a cast will hide every one of them. The chip name and the two counts were never affected, because they multiplied a number that came from `summaryMetrics` rather than one read back off a control — which is also why the group counts kept rendering while every badge value did not, the detail that identified the fault.
 ## 2.234.0
 
 ### Fixed — blank white group badges

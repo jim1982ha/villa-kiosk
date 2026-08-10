@@ -2960,9 +2960,17 @@ export class EntityVisuals {
       // font that visually clashed with every other label in the app.
       valueText.fontFamily = GUI_FONT_FAMILY;
       valueText.fontWeight = "600";
-      valueText.fontSize = card ? m.cardValueFontPx : m.pillValueFontPx;
+      // Kept as a NUMBER for the nudge below. Control.fontSize is a getter
+      // that returns a STRING ("13px"), so reading it back and multiplying
+      // gave NaN — and `as number` was exactly what stopped the compiler
+      // saying so. `top: "NaNpx"` does not throw; it silently stops the text
+      // rendering at all, which is why every badge VALUE went blank in
+      // 2.234.0 while the chip and group counts (which used a real number)
+      // were fine. Never read a Babylon GUI dimension back to compute with.
+      const valueFontPx = card ? m.cardValueFontPx : m.pillValueFontPx;
+      valueText.fontSize = valueFontPx;
       // Optically centre it against the icon beside it — see textOpticalTopEm.
-      valueText.top = `${(valueText.fontSize as number) * m.textOpticalTopEm}px`;
+      valueText.top = `${valueFontPx * m.textOpticalTopEm}px`;
       valueText.resizeToFit = true;
       valueText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
       valueText.textVerticalAlignment = TextBlock.VERTICAL_ALIGNMENT_CENTER;
