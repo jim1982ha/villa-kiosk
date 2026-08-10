@@ -954,6 +954,14 @@ export class SceneManager {
     return true;
   }
 
+  /** Can flying to this room actually reveal its individual badges, or will it
+   *  still be a summary when the camera arrives? See
+   *  EntityVisuals.roomHasInseparableBadges — the caller uses this to offer
+   *  the device list instead of a journey to nowhere. */
+  roomCanDeclutter(roomName: string): boolean {
+    return !this.visuals.roomHasInseparableBadges(roomName);
+  }
+
   /**
    * Recompute a room's overview framing from its true size instead of
    * trusting whatever radius happened to be saved with its teleport point —

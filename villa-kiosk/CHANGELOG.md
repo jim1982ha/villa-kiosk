@@ -1,3 +1,13 @@
+## 2.210.0
+
+### Fixed — zoom-to-room measured the badges at the wrong size, so it always stopped short
+
+A badge's drawn size is itself a function of zoom: badges shrink (to 0.7) once the camera is zoomed OUT past the whole-villa fit, and return to full size at the fit or closer. The declutter solve ran while the camera was still zoomed out — where the room chip is visible and the tap happens — so it measured badges up to 1.43x smaller than the ones that would actually be drawn on arrival. The camera flew to a distance computed for small badges, the badges grew back to full size when it got there, and they collided again: the chip moved across the screen and stayed a chip. It now measures at the size badges will be at the destination, which makes the calculation a fixed point instead of a reading of wherever the camera happens to be standing.
+
+### Added — a room no zoom can declutter opens its device list instead
+
+Two devices sharing one 3D point (a ceiling fan and its own light kit, a socket and its power meter) collide at every zoom level that exists. Flying there was a promise the camera could not keep. Tapping such a room now opens the list of its devices — which is what the person was after — rather than travelling somewhere and changing nothing.
+
 ## 2.209.0
 
 ### Fixed — tapping a room now zooms to the closest shot that shows every one of its badges

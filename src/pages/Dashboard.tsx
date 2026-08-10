@@ -645,6 +645,17 @@ export default function Dashboard() {
       // reading "Swimming Pool" simply missed, and the tap fell through to the
       // device list — indistinguishable from a room that genuinely has no
       // saved viewpoint.
+      // Some rooms cannot be decluttered by ANY zoom — two devices sharing one
+      // 3D point stay one pile forever. Flying there would move the camera and
+      // leave the summary exactly as it was, which reads as the tap having
+      // done nothing (reported, with a screenshot of a terrace still showing
+      // its chip after the camera had visibly travelled). The device list is
+      // what that person was after anyway, so offer it rather than a journey
+      // that cannot deliver.
+      if (manager && !manager.roomCanDeclutter(room)) {
+        setClusterGroup({ room, entityIds });
+        return;
+      }
       const key = roomKey(room);
       const point = config.teleportPoints.find((p) => roomKey(p.name) === key);
       // A room with no SAVED viewpoint can still be framed: its geometry is

@@ -1964,6 +1964,33 @@ export class EntityVisuals {
   }
 
   /**
+   * The badge scale to measure with when solving for a zoom the camera has not
+   * reached yet.
+   *
+   * ── The fixed point this resolves (2.210.0) ───────────────────────────────
+   * A badge's drawn size is itself a function of zoom: OverviewController's
+   * getIconZoomCap shrinks badges (down to 0.7) once the camera is zoomed OUT
+   * past the whole-villa fit, and returns exactly 1 at the fit or closer. So
+   * measuring "how close must I get for these badges not to collide" while
+   * zoomed out measures badges up to 1/0.7 = 1.43x SMALLER than the ones that
+   * will actually be drawn when the camera arrives — the answer comes back too
+   * generous, the camera flies to it, the badges grow on arrival, and they
+   * collide again. Tapping a room chip moved the camera and left the chip
+   * exactly where it was, which is what was reported.
+   *
+   * Zoom-to-room always ends at or inside the villa fit, where the cap is 1 —
+   * so the destination scale is the user's configured size with no cap at all,
+   * and using it makes the calculation a fixed point rather than a guess about
+   * where the camera currently happens to be. In the rare case the solved shot
+   * lands OUTSIDE the fit, the cap there is below 1, badges are smaller than
+   * measured, and they separate more easily still: the error can only ever be
+   * in the safe direction.
+   */
+  private measurementScale(): number {
+    return this.iconUserScale;
+  }
+
+  /**
    * Minimum screen-pixels-per-world-unit needed for this room's OWN badges to
    * never mutually group — the exact inverse of groupBadges' pairwise test,
    * solved for the zoom level instead of the grouping outcome. Used by
@@ -2011,11 +2038,14 @@ export class EntityVisuals {
     // frame in flight is untouched.
     const wasVisible = members.map((m) => m.lbl.valueWrap.isVisible);
     for (const m of members) m.lbl.valueWrap.isVisible = false;
-    // Own buffers, not the render loop's — see labelBoxes' docstring.
-    const boxes = this.labelBoxes(members, [], []);
+    // Own buffers, not the render loop's — see labelBoxes' docstring. Measured
+    // at the DESTINATION badge scale, not the current one — see
+    // measurementScale(); this was the whole bug.
+    const mScale = this.measurementScale();
+    const boxes = this.labelBoxes(members, [], [], mScale);
     for (let i = 0; i < members.length; i++) members[i].lbl.valueWrap.isVisible = wasVisible[i];
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
-    const gapPx = BADGE_MIN_GAP_PX * this.iconUserScale * this.iconZoomScale;
+    const gapPx = BADGE_MIN_GAP_PX * mScale;
     let required = 0;
     for (let i = 0; i < members.length; i++) {
       for (let j = i + 1; j < members.length; j++) {
@@ -2057,6 +2087,38 @@ export class EntityVisuals {
   }
 
   /**
+   * True when this room has badges that NO zoom can ever separate — two or
+   * more devices sharing one 3D point (a ceiling fan and its own light kit, a
+   * socket and its power meter). Their reach shrinks with zoom like everyone
+   * else's, but the distance between them stays zero, so the pair collides at
+   * every zoom level that exists.
+   *
+   * The point of asking is that "zoom to this room" is then a promise the
+   * camera cannot keep: it flies somewhere and the summary is still a summary,
+   * which reads as the tap having done nothing. A caller that knows this can
+   * offer the device list instead — the thing the person was actually after.
+   */
+  roomHasInseparableBadges(room: string): boolean {
+    const key = roomKey(room);
+    const pts: { x: number; y: number; z: number }[] = [];
+    for (const [id, lbl] of this.labels) {
+      if (roomKey(this.roomOf(id)) !== key) continue;
+      if (!lbl.anchor.isEnabled()) continue;
+      const p = lbl.anchor.getAbsolutePosition();
+      pts.push({ x: p.x, y: p.y, z: p.z });
+    }
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        // Same "no zoom separates these" test minPxPerWorldToDeclutterRoom
+        // skips its pairs on, so the two agree by construction about which
+        // pairs are hopeless.
+        if (Math.hypot(pts[j].x - pts[i].x, pts[j].y - pts[i].y, pts[j].z - pts[i].z) <= 0) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * How far, in screen pixels, this room's badges are DRAWN from their own
    * anchors — the largest such reach in the room.
    *
@@ -2081,7 +2143,8 @@ export class EntityVisuals {
       members.push({ lbl });
     }
     if (members.length === 0) return 0;
-    const boxes = this.labelBoxes(members, [], []);
+    // Destination scale, for the same reason the declutter solve uses it.
+    const boxes = this.labelBoxes(members, [], [], this.measurementScale());
     let reach = 0;
     for (const b of boxes) {
       // |cy| is the lift from anchor to box centre; add the half-extent to get
@@ -3299,8 +3362,11 @@ export class EntityVisuals {
     shown: { lbl: LabelControls }[],
     out: { halfW: number; halfH: number; cy: number }[] = this.boxes,
     pool: { halfW: number; halfH: number; cy: number }[] = this.boxesPool,
+    /** Measure at a scale OTHER than the live one. Only "zoom to this room"
+     *  passes this, and it must: see measurementScale(). */
+    scaleOverride?: number,
   ): { halfW: number; halfH: number; cy: number }[] {
-    const scale = this.iconUserScale * this.iconZoomScale;
+    const scale = scaleOverride ?? this.iconUserScale * this.iconZoomScale;
     const card = this.config.badgeStyle === "card";
 
     // Classic layout (unscaled, anchor at 0, y grows downward, hangs ABOVE):
