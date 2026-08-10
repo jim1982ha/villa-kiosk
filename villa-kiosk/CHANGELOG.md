@@ -1,3 +1,17 @@
+## 2.206.0
+
+### Fixed — a badge never moves now, so the half-spread intermediate cannot happen
+
+Between "all badges apart" and "one grouped badge" there was a third state: a pile small enough for the ring still opened out, so three of four badges shifted and one stayed. The ring is gone entirely. Its seats were world points on a circle in the ground plane, so orbiting viewed that circle from a different azimuth and the same badges read as a column from one heading and a 2x2 from another — reported three times across 2.169.0-2.205.0 as "the icons move when I change the viewpoint", and every time the answer was to tighten the travel budget rather than notice that any budget above zero shows some of it. Removing it costs nothing now that a pile falls to one badge instead of losing the whole room, and it deletes the displacement machinery outright: a badge is drawn at its device or not at all.
+
+### Fixed — the entity group was a circle among squircles
+
+It used a full-round corner radius, so it read as a foreign object next to the squircle badges it replaces and the rounded room chip it escalates into. It now uses `BADGE_CORNER_FRACTION`, the same fraction the badge canvas rounds itself by, at the same 44px size — only its content (a count rather than a glyph) says it stands for several devices.
+
+### Fixed — a device list painted its icons from a different rule than the map
+
+Tapping an entity group of four pump-power sensors showed four identical grey rows for badges that were red on the map. The map applied the linked-entity override — an entity whose `linkedEntityId` is on rings as "alert", which is how a pump's power sensor shows its pump running — and the list had no equivalent. That rule now lives once in `deviceActivity.badgeSurfaceFor` and all three surfaces that draw the squircle read it: the 3D badge, the device lists, and the panel header.
+
 ## 2.205.0
 
 ### Fixed — the travel budget was too generous for the entity group to ever fire

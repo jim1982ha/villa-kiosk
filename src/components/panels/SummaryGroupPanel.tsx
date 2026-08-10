@@ -19,8 +19,8 @@ import type { HaSceneInfo } from "@/config/haScenes";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
-import { effectiveCategory, type DeviceSurfaceState } from "@/config/EntityCategories";
-import { classifyDeviceActivity } from "@/utils/deviceActivity";
+import { effectiveCategory } from "@/config/EntityCategories";
+import { badgeSurfaceFor } from "@/utils/deviceActivity";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { isUnavailable } from "@/utils/stateColors";
@@ -106,6 +106,11 @@ export default function SummaryGroupPanel({
   const { config, resolvedRooms } = useConfig();
   // Each row's badge is a PNG baked from the theme's tokens — see the hook.
   const theme = useResolvedTheme();
+  /** The live state of an entity another one is LINKED to, if any — the input
+   *  badgeSurfaceFor needs to paint a row exactly as the map paints its badge.
+   *  A linked entity is frequently not itself in this group (a pump's switch
+   *  lives elsewhere), so this reads the whole store, not the group's list. */
+  const linkedStateOf = (linkedId?: string) => (linkedId ? entities[linkedId]?.state : undefined);
   const { role } = useProfile();
   const entityLabel = useEntityLabel();
   // Bulk-toggling an entire group (potentially dozens of devices) from one
@@ -265,13 +270,21 @@ export default function SummaryGroupPanel({
     const isLock = domain === "lock";
     const canToggle = canControl && (TOGGLEABLE.has(domain) || isLock);
     const toggleOn = isLock ? e.state !== "locked" : !OFF.has(e.state);
-    // Same classifier the map badge and the panel header icon use (see
-    // utils/deviceActivity) — "on" maps to the coloured "active" surface,
-    // "alert" (e.g. an unlocked door) to the danger one.
-    const activity = classifyDeviceActivity(type, e);
-    const badgeState: DeviceSurfaceState = isUnavailable(e)
-      ? "unavailable"
-      : activity === "alert" ? "alert" : activity === "on" ? "active" : "off";
+    // EXACTLY what the map paints, via the one shared rule — see
+    // deviceActivity.badgeSurfaceFor. This used to re-derive the surface from
+    // classifyDeviceActivity plus its own unavailable check, which matched the
+    // map for most devices and silently disagreed for any entity with a
+    // `linkedEntityId`: a pump's power sensor rings red on the map while its
+    // pump runs, and every one of them listed here as plain grey. Reported by
+    // tapping an entity group of four pump-power badges — two red on the map,
+    // four identical rows in the modal.
+    const badgeState = badgeSurfaceFor(
+      type, e,
+      // "Is the entity this one is linked to switched on" — the map holds the
+      // same fact as a live set fed by state events (linkActiveIds); here the
+      // store already has every state, so it is one lookup.
+      linkedStateOf(config.entityMap[id]?.linkedEntityId) === "on",
+    );
     const offMapRow = !mappedEntityIds.has(id);
     // A user explicitly hid this in HA (registry hidden_by) — distinct from
     // being merely diagnostic-category, and worth surfacing explicitly: a

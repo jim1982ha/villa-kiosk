@@ -12,9 +12,54 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityType } from "@/types/scene.types";
+import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { TRANSITIONAL_STATES } from "@/utils/stateColors";
 
 export type DeviceActivity = "on" | "off" | "alert" | "info";
+
+/** The five-way live-state reading a badge is painted from: this module's own
+ *  four, plus "unavailable", which outranks all of them. */
+export type BadgeKind = DeviceActivity | "unavailable";
+
+// Maps that 5-way classification onto the 4-row surface table VESTA-DESIGN.md
+// §0 defines (config/EntityCategories.categorySurface, consumed by
+// badgeIcons.ts's baked squircle): "on" is that table's "active"; "info" (a
+// plain reading with no on/off concept — e.g. a temperature sensor) reads as
+// "off", neutral, since nothing is actively happening.
+export const SURFACE_STATE: Record<BadgeKind, DeviceSurfaceState> = {
+  on: "active", alert: "alert", info: "off", off: "off", unavailable: "unavailable",
+};
+
+/**
+ * What a badge for this entity should be painted as — the ONE definition, for
+ * the 3D map badge and for every DOM list that draws the same squircle.
+ *
+ * ── Why this is shared (2.206.0) ─────────────────────────────────────────
+ * The map and the device-list panels drew the same badge from two different
+ * rules. Both called classifyDeviceActivity, but only the map then applied
+ * the LINKED-ENTITY override: an entity whose `linkedEntityId` is on rings as
+ * "alert", which is how a pump's power sensor shows that its pump is running.
+ * The panel had no equivalent, so tapping a group of four pump-power sensors
+ * showed four identical grey rows for badges that were red on the map two
+ * pixels earlier — reported with exactly that pair of screenshots.
+ *
+ * `linkedOn` is passed in rather than resolved here because the two callers
+ * hold that fact differently: the map keeps a live set fed by state events
+ * (EntityVisuals.linkActiveIds), a panel reads the linked entity out of the
+ * store it already has. The RULE is what has to be shared, not the plumbing.
+ */
+export function badgeKindFor(type: EntityType, s: HassEntity, linkedOn: boolean): BadgeKind {
+  if (s.state === "unavailable" || s.state === "unknown") return "unavailable";
+  // Outranks the entity's own state vocabulary on purpose — see linkedEntityId.
+  if (linkedOn) return "alert";
+  return classifyDeviceActivity(type, s);
+}
+
+/** `badgeKindFor` resolved straight to the surface row, for the callers that
+ *  only ever want the painted state. */
+export function badgeSurfaceFor(type: EntityType, s: HassEntity, linkedOn: boolean): DeviceSurfaceState {
+  return SURFACE_STATE[badgeKindFor(type, s, linkedOn)];
+}
 
 // A known-bad enum/status reading — the value stays shown and the badge
 // rings red/alerts, so a real change is never silently swallowed. An

@@ -31,9 +31,9 @@ import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
-import { classifyDeviceActivity } from "@/utils/deviceActivity";
+import { badgeSurfaceFor } from "@/utils/deviceActivity";
 import { dismissedEntitySet } from "@/config/dismissedEntities";
-import { isUnavailable } from "@/utils/stateColors";
+import { phantomEntity } from "@/utils/phantomEntity";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { isQuickToggle } from "@/utils/quickAction";
 import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
@@ -825,38 +825,27 @@ export default function Dashboard() {
               const category = effectiveCategory(
                 entityId, mapping.type, liveMapping.category ?? mapping.category,
                 ent?.attributes.device_class as string | undefined);
-              // Same two alert sources as EntityVisuals' badgeKind (map
-              // badge), mirrored here so the panel header ring never
-              // disagrees with the badge that was just tapped to open it.
-              // motionEntityId is deliberately NOT one of them — it drives
-              // the map's detection beam, never a ring (see badgeKind).
-              // Reads the OPTIMISTIC value, the same one the switch below
-              // renders: within this panel the ring and the switch describe
-              // one thing, so they must move together — a ring that lagged
-              // seconds behind its own switch would look like the bug this
-              // was meant to fix. The MAP badge stays on confirmed state
-              // only (it's Babylon-side, and predicting scene appearance is
-              // the thing that was rightly reverted before).
+              // motionEntityId is deliberately NOT an alert source here — it
+              // drives the map's detection beam, never a ring (see badgeKind).
               const linkedAlert = !!liveMapping.linkedEntityId && linkedToggle.isOn;
-              // Same classifier the map badge uses (utils/deviceActivity) —
-              // covers binary_sensor's own "alert" case too, so there's no
-              // separate hand-written check for it here any more.
-              const activity = ent ? classifyDeviceActivity(mapping.type, ent) : "off";
               return {
                 category,
                 iconKey: iconKeyFor(mapping.type, ent),
                 color: liveMapping.badgeColor,
                 categoryColor: categoryColor(category),
-                // Same isUnavailable() every status pill (UnavailableNotice,
-                // LockPanel, CoverPanel, SensorPanel…) already uses — so the
-                // header badge fades in step with the pill right below it,
-                // instead of always rendering full-strength regardless of
-                // live state (the map badge already fades; this icon didn't).
-                state: isUnavailable(ent)
-                  ? "unavailable"
-                  : (linkedAlert || activity === "alert")
-                    ? "alert"
-                    : activity === "on" ? "active" : "off",
+                // The ONE shared rule (deviceActivity.badgeSurfaceFor), same as
+                // the map badge and the device lists — it already folds in the
+                // unavailable check every status pill uses and the linked-entity
+                // alert, both of which were hand-written here.
+                //
+                // `linkedAlert` is deliberately the OPTIMISTIC toggle state, not
+                // the confirmed one: this header sits directly above the switch
+                // the user just pressed, and the two are one thing, so a ring
+                // lagging seconds behind its own switch would look like the bug
+                // this was written to fix. The MAP badge stays on confirmed
+                // state only — it is Babylon-side, and predicting scene
+                // appearance is the thing that was rightly reverted before.
+                state: badgeSurfaceFor(mapping.type, ent ?? phantomEntity(entityId), linkedAlert),
               };
             })(),
             onSetBadgeColor: canEditConfig
