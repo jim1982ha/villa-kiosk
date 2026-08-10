@@ -1,3 +1,16 @@
+## 2.234.0
+
+### Fixed — blank white group badges
+
+2.233.0 moved the entity group onto the same neutral resting surface an idle badge wears, and left its count text white. White ink on the app's light panel fill is an invisible number, so every AVAILABLE group rendered as an empty white squircle. Only the unavailable ones stayed legible, because those paint their count in the alert red — and that mix of blank and red squircles in the same screenshot is exactly the tell. The count now takes the same neutral ink the surface hands out, like the room chip's name already did.
+
+### Fixed — badge text sat high against its icon
+
+Reported twice as icons and text not being vertically centred, and it is structural rather than a slip.
+
+Babylon centres a `TextBlock`'s **full line box, descender space included**: `rootY = ascent + (height − fontHeight) / 2`, with the metrics taken from measuring the string `"Hg"` (`GetFontOffset` in `engine.common`). That is correct typography for arbitrary text, and wrong-looking for every string a badge actually draws. `99%`, `26.8 °C`, a bare count, a room name in title case — none of them has a descender, so the visible ink occupies only the top of a box sized to fit a `g`, and reads as sitting high next to the icon beside it. The taller the badge, the more obvious.
+
+Half a descender puts the ink's own centre back on the box's centre. A sans descender runs about 0.21em — Public Sans and the system fallbacks are all close to it — so the correction is ~0.105em, applied to every place this file draws text: the badge's value, the room chip's name, the group's count and the chip's count pill. It is a fraction of the font size rather than a pixel nudge, so it holds at every icon size, pointer class and zoom.
 ## 2.233.0
 
 ### Fixed — one icon-size step collapsed whole rooms into their chip

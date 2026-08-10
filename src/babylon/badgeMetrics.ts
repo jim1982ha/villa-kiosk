@@ -120,6 +120,26 @@ export interface BadgeMetrics {
   countPillFraction: number;
   /** The count pill's text, as a fraction of the chip's own text size. */
   countFontFraction: number;
+
+  /**
+   * Downward optical correction for badge text, as a fraction of its own font
+   * size.
+   *
+   * Babylon centres a TextBlock's FULL LINE BOX, descender space included:
+   * `rootY = ascent + (height − fontHeight) / 2`, where the metrics come from
+   * measuring the string "Hg" (engine.common's GetFontOffset). That is correct
+   * typography for mixed text — and wrong-looking for every string a badge
+   * actually shows. "99%", "26.8 °C", a bare count, a room name in title case:
+   * none has a descender, so the visible ink occupies only the top of a box
+   * sized to fit a "g", and the text reads as sitting high against the icon
+   * beside it. Reported as icons and text not being vertically centred.
+   *
+   * Half a descender puts the ink's own centre on the box's centre. A sans
+   * descender runs about 0.21em (Public Sans and the system fallbacks are all
+   * close to it), so half is ~0.105em. Applied to the badge's value text, the
+   * chip's name and the group's count — every place this file draws text.
+   */
+  textOpticalTopEm: number;
 }
 
 /**
@@ -158,6 +178,7 @@ const COARSE: BadgeMetrics = {
   minCentrePitchPx: 44,
   countPillFraction: 0.58,
   countFontFraction: 0.78,
+  textOpticalTopEm: 0.105,
 };
 
 /** Smallest legible label text. Cartographic practice puts the floor for map
@@ -208,6 +229,7 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
     minCentrePitchPx: base.minCentrePitchPx,
     countPillFraction: base.countPillFraction,
     countFontFraction: base.countFontFraction,
+    textOpticalTopEm: base.textOpticalTopEm,
   };
 }
 

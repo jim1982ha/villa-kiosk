@@ -2961,6 +2961,8 @@ export class EntityVisuals {
       valueText.fontFamily = GUI_FONT_FAMILY;
       valueText.fontWeight = "600";
       valueText.fontSize = card ? m.cardValueFontPx : m.pillValueFontPx;
+      // Optically centre it against the icon beside it — see textOpticalTopEm.
+      valueText.top = `${(valueText.fontSize as number) * m.textOpticalTopEm}px`;
       valueText.resizeToFit = true;
       valueText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
       valueText.textVerticalAlignment = TextBlock.VERTICAL_ALIGNMENT_CENTER;
@@ -3950,7 +3952,12 @@ export class EntityVisuals {
         // unavailable ring is baked pixels; a Babylon GUI Rectangle has no
         // dashed border — the same limitation the "card" badge style already
         // degrades around, see BADGE_RING_THICKNESS.)
-        c.countText.color = unavailable ? ALERT_RED_HEX : "#ffffff";
+        // The badge's own ink, NOT white: 2.233.0 moved the group onto the
+        // neutral resting surface and left this white, so every AVAILABLE
+        // group rendered white-on-white — a blank squircle — while only the
+        // unavailable ones (red) stayed legible. Reported as "empty full-white
+        // badges", and the screenshot's mix of blank and red is the tell.
+        c.countText.color = unavailable ? ALERT_RED_HEX : rest.glyph;
         c.container.scaleX = scale;
         c.container.scaleY = scale;
         // Zero X offset and a fixed centring lift, exactly like the room chip:
@@ -3995,11 +4002,16 @@ export class EntityVisuals {
     // device (CLAUDE.md: category hues/icons mean the category). A number
     // claims only what is true: this many devices are here.
     const countText = new TextBlock(`egroupCount_${key}`);
-    countText.color = "#ffffff";
+    // Placeholder only — updateEntityGroups repaints this from the same
+    // neutral surface the container takes, on the same pass that creates it.
+    // It must not be white: the container is the badges' own light resting
+    // fill, and white here is an invisible count.
+    countText.color = categorySurface("others", "off").glyph;
     // Babylon GUI TextBlocks do not inherit CSS and default to Arial — see
     // CLAUDE.md's known gotchas; every one of them sets this explicitly.
     countText.fontFamily = GUI_FONT_FAMILY;
     countText.fontSize = sm.font;
+    countText.top = `${sm.font * this.metrics.textOpticalTopEm}px`;
     countText.fontWeight = "700";
     container.addControl(countText);
 
@@ -4285,6 +4297,7 @@ export class EntityVisuals {
     text.color = "#ffffff";
     text.fontFamily = GUI_FONT_FAMILY;
     text.fontSize = sm.font;
+    text.top = `${sm.font * this.metrics.textOpticalTopEm}px`;
     text.fontWeight = "600";
     text.resizeToFit = true;
     text.paddingLeft = "12px";
@@ -4325,6 +4338,7 @@ export class EntityVisuals {
     countText.color = "#ffffff";
     countText.fontFamily = GUI_FONT_FAMILY;
     countText.fontSize = sm.countFont;
+    countText.top = `${sm.countFont * this.metrics.textOpticalTopEm}px`;
     countText.fontWeight = "700";
     countBadge.addControl(countText);
 
