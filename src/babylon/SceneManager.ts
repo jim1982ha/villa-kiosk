@@ -9,6 +9,7 @@
 
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { Scene } from "@babylonjs/core/scene";
+import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
@@ -190,6 +191,8 @@ export interface SceneManagerOptions {
 export class SceneManager {
   readonly engine: Engine;
   readonly scene: Scene;
+  /** Per-frame draw-call and evaluation-time counters — see sampleFrame. */
+  private instrumentation: SceneInstrumentation | null = null;
   readonly camera: CameraController;
   readonly overview: OverviewController;
   readonly lighting: LightingSystem;
@@ -222,6 +225,8 @@ export class SceneManager {
   private lastAnimFrameAt = 0;
   /** Frame-time samples for the `frames` telemetry record — see sampleFrame. */
   private frameSamples: number[] = [];
+  /** Cost of the scene.render() call itself, paired with frameSamples. */
+  private renderSamples: number[] = [];
   private lastFrameAt = 0;
   private frameReportsSent = 0;
   /** performance.now() of the last WebGL context loss, 0 when not lost — used
@@ -281,6 +286,12 @@ export class SceneManager {
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 2));
 
     this.scene = new Scene(this.engine);
+    // Two clock reads and a counter reset per frame, against frames measured at
+    // 35ms — the cost is not observable, and without it engine._drawCalls is
+    // never reset per frame (nothing else calls fetchNewFrame on it), so the
+    // count would accumulate for the life of the session and mean nothing.
+    this.instrumentation = new SceneInstrumentation(this.scene);
+    this.instrumentation.captureActiveMeshesEvaluationTime = true;
     this.scene.clearColor = new Color4(0.7, 0.85, 1.0, 1);
     this.scene.collisionsEnabled = true;
     this.scene.gravity = new Vector3(0, -0.6, 0);
@@ -604,7 +615,17 @@ export class SceneManager {
       ) {
         this.sampleFrame(now);
         this.lastAnimFrameAt = now;
+        // Timed, because the split between "the frame cost is inside this call"
+        // and "the frame cost is somewhere else entirely" is the open question.
+        const t0 = performance.now();
         this.scene.render();
+        // Bounded here rather than in flushFrameSamples: sampleFrame drops the
+        // first frame of a burst and any gap over FRAME_GAP_MAX_MS, so this
+        // array runs slightly ahead of frameSamples and cannot rely on that
+        // cap firing. Both are percentiles over the same burst either way.
+        if (this.renderSamples.length < FRAME_SAMPLE_MAX) {
+          this.renderSamples.push(performance.now() - t0);
+        }
         return;
       }
       // The interaction burst just ended — that's the natural boundary to
@@ -649,6 +670,28 @@ export class SceneManager {
    * active indices, backbuffer size, hardware scaling, and whether the two
    * optional render passes are on — so the next question can be answered from
    * the data instead of from another hypothesis.
+   *
+   * ── What the 2.230.0 additions are for ───────────────────────────────────
+   * easeResolution's experiment ran and came back NEGATIVE. Safari reached
+   * `hw: 1` (1440x741, 1.07Mpx — a quarter of the 4.25Mpx it started at) and
+   * settled at p50 35ms / 29fps, against 30-32fps when it was rendering 1.84Mpx.
+   * Fewer pixels, no faster. Two readings in the same dump make that conclusive
+   * rather than suggestive: p50 was 35ms whether 48 meshes/312k triangles or
+   * 129/403k were active, and Chrome on the SAME Mac drew 4.27Mpx and 559
+   * meshes at 47-60fps. So the cost is fixed per frame — not fill, not
+   * geometry, not (on the evidence of `litOn` 8→28 moving Chrome not at all)
+   * the lights either.
+   *
+   * "Fixed per frame" is a shape, not a cause, and this codebase has already
+   * paid for six causes guessed from a shape. So instead of a seventh guess,
+   * three numbers that each falsify a different family:
+   *
+   * - `renderMs` — is the time even inside scene.render()? If it is not, every
+   *   theory about the scene is wrong before it is stated.
+   * - `drawCalls` — submission volume, which multi-pass lighting can inflate
+   *   far beyond the mesh count.
+   * - `evalMs` — the per-frame walk over ALL meshes, which is the one cost in
+   *   the render loop that legitimately does not care what is on screen.
    */
   private sampleFrame(now: number): void {
     const prev = this.lastFrameAt;
@@ -662,8 +705,16 @@ export class SceneManager {
 
   private flushFrameSamples(): void {
     const s = this.frameSamples;
-    if (s.length === 0) return;
+    if (s.length === 0) {
+      // Stops the two arrays drifting apart in the case sampleFrame kept none
+      // of the burst's gaps. The length check keeps the idle path (this runs on
+      // every non-interactive tick) down to a comparison.
+      if (this.renderSamples.length > 0) this.renderSamples = [];
+      return;
+    }
     this.frameSamples = [];
+    const r = this.renderSamples;
+    this.renderSamples = [];
     // Not enough of a burst to say anything (a tap, a one-frame nudge). Reset
     // the clock too, so the next burst never measures across the gap.
     this.lastFrameAt = 0;
@@ -673,6 +724,7 @@ export class SceneManager {
     s.sort((a, b) => a - b);
     const at = (q: number) => s[Math.min(s.length - 1, Math.floor(s.length * q))];
     const ms = (x: number) => Math.round(x * 10) / 10;
+    r.sort((a, b) => a - b);
     const render = this.deviceRenderConfig(this.config.render);
     this.easeResolution(at(0.5));
     reportTelemetry("frames", {
@@ -682,6 +734,22 @@ export class SceneManager {
       worst: ms(s[s.length - 1]),
       // The headline number, so a dump can be read without doing the division.
       fps: Math.round(1000 / at(0.5)),
+      // How much of p50 is spent INSIDE scene.render(). Near p50 means the
+      // frame is our own synchronous work (or the driver blocking us on a
+      // backed-up GPU); far below p50 means the time is somewhere else
+      // entirely — rAF scheduling, compositing, another main-thread task.
+      renderMs: r.length > 0 ? ms(r[Math.floor(r.length * 0.5)]) : undefined,
+      // Submissions for the last rendered frame. 108 lights against
+      // MAX_SIMULTANEOUS_LIGHTS means a mesh lit by more than 8 costs several
+      // passes, so this can be many times the active mesh count — and if it
+      // is, that is the cost, not the pixels.
+      drawCalls: this.instrumentation?.drawCallsCounter.current,
+      // Frustum culling and render-list building, which walks ALL meshes (874)
+      // rather than the active ones (as few as 48). Fixed per-frame CPU cost
+      // that does not scale with what is on screen is exactly its signature.
+      evalMs: this.instrumentation
+        ? ms(this.instrumentation.activeMeshesEvaluationTimeCounter.current)
+        : undefined,
       mode: this.viewMode,
       activeMeshes: this.scene.getActiveMeshes().length,
       activeKTris: Math.round(this.scene.getActiveIndices() / 3000),
@@ -2382,6 +2450,11 @@ export class SceneManager {
     // NEXT scene a texture belonging to this now-disposed one (the getScene()
     // guard already regenerates, but this also frees the reference for GC).
     resetLightPoolTextureCache();
+
+    // Holds observers on the scene's own observables — released before the
+    // scene goes, so nothing keeps a disposed scene reachable.
+    this.instrumentation?.dispose();
+    this.instrumentation = null;
 
     this.scene.dispose();
 

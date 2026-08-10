@@ -1,3 +1,20 @@
+## 2.230.0
+
+### Changed — the Safari frame-rate experiment came back negative, so measure the next layer down
+
+2.222.0 shipped `easeResolution` as an experiment as much as a fix: it gives back supersampling when frames are slow, and the prediction was written into the code — hardware scaling reaching `1.0` with the frame rate up roughly 4× would prove the cost was fill, and barely moving would eliminate fill and leave the lights. The field dump has now answered it, and the answer is **neither**.
+
+Safari reached `hw: 1` — 1440×741, **1.07 megapixels, a quarter of the 4.25 it started at** — and settled at a 35 ms median, 29 fps. At 1.84 megapixels it had been running 30–32 fps. Fewer pixels, no faster. Two further readings in the same dump turn that from suggestive into conclusive: within one Safari session the median was 35 ms whether **48 meshes / 312k triangles** or **129 / 403k** were active, and Chrome on the *same Mac* drew **4.27 megapixels and 559 meshes at 47–60 fps**. Four times the pixels, eleven times the meshes, twice the frame rate. Nor is it the remaining candidate: `litOn` moving from 8 to 28 does not shift Chrome at all.
+
+So the frame cost is fixed — it does not track pixels, meshes, triangles or lights. But "fixed per frame" is a *shape*, and this codebase has already paid for six causes guessed from a shape (the light-artifact hunt, where every plausible explanation was wrong until a measurement settled it). A seventh guess would be the same mistake in new clothes. The `frames` record therefore carries three more numbers, each of which falsifies a different family rather than confirming a favourite:
+
+- **`renderMs`** — the median cost of the `scene.render()` call itself, timed directly. Close to the frame median means the frame is our own synchronous work, or the driver blocking us on a backed-up GPU. Well under it means the time is somewhere else entirely — scheduling, compositing, another task on the main thread — and every theory about the scene is wrong before it is stated.
+- **`drawCalls`** — submissions for the last frame. With 108 lights against a `MAX_SIMULTANEOUS_LIGHTS` of 8, a mesh lit by more than eight costs several passes, so this can run far above the active mesh count. If it does, that is the cost and the pixels never mattered.
+- **`evalMs`** — frustum culling and render-list building, which walks *all* 874 meshes rather than the 48 that survive. A fixed per-frame cost that does not care what is on screen is precisely its signature.
+
+These come from Babylon's `SceneInstrumentation`, which also does something nothing else in the engine does: reset `engine._drawCalls` at the start of each frame. Without it that counter accumulates for the life of the session and reports a meaningless total. The cost of running it is two clock reads and a counter reset per frame, against frames currently measured at 35 ms.
+
+The panel row shows all three inline, so the split can be read on the device that produced it rather than only in a dump.
 ## 2.229.0
 
 ### Changed — "Interface" and "Villa lighting" now say what they are

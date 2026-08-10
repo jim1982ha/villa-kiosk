@@ -149,8 +149,14 @@ function summarise(e: TelemetryEvent): string {
         + ` · ${e.litOn ?? "?"}/${e.lights ?? "?"} lights on`;
       const passes = [e.ibl ? "IBL" : null, e.ssao ? "SSAO" : null]
         .filter(Boolean).join("+") || "no post";
+      // Where the frame went. renderMs close to the median says the cost is
+      // inside scene.render(); well under it says the time is elsewhere.
+      const cost = e.renderMs === undefined ? ""
+        : ` · ${ms(e.renderMs)} in render, ${e.drawCalls ?? "?"} draws,`
+          + ` ${ms(e.evalMs)} culling`;
       return `${e.fps ?? "?"} fps while ${e.mode ?? "?"}`
         + ` · frame ${ms(e.p50)} median, ${ms(e.p95)} p95, ${ms(e.worst)} worst`
+        + cost
         + ` · ${load} · ${passes}`;
     }
     case "context-lost":
