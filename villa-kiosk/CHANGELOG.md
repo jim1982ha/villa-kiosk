@@ -1,3 +1,18 @@
+## 2.245.0
+
+### Changed — the icon-to-value gap is measured against the bottom bar, not guessed
+
+Asked directly whether the card was going to render this way, which was the right question: the value sat too close to the icon chip, so the chip's rounded right edge read as a seam beside the text rather than as a separate object.
+
+The bottom bar is the same component drawn in the DOM — a 46px icon chip with a 13px gap to its label, i.e. **28% of the chip**. The card was using a flat 4px against a 22px chip: **18%**. The gap is now that fraction rather than a constant, so it holds at both pointer classes and at any icon size: 6px on touch, 4px on a fine pointer.
+
+That reference should have been the starting point rather than something arrived at nine releases in. It is a working, already-approved rendering of exactly this arrangement, with numbers that can be read straight out of the stylesheet.
+
+### Known, not fixed: the chip and the card share a fill
+
+Recorded rather than silently left. The baked chip takes `categorySurface(...).fill` and so does the card's own Rectangle, so the chip is the same colour as the surface behind it and only its ring distinguishes them — which is why it reads as a faint seam instead of a chip. The bottom bar does the opposite: its tile is transparent and the CHIP carries the fill, which is what makes it read as a deliberate object.
+
+Making the map badge match would mean the card surface going neutral while the chip takes the state colour — a real change to what the badge's colour means, not a measurement, so it wants a decision rather than a patch.
 ## 2.244.0
 
 ### Fixed — the icon chip is back, and a bare-icon card is square

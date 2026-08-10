@@ -270,6 +270,11 @@ const GUI_FONT_FAMILY = "\"Public Sans\", -apple-system, BlinkMacSystemFont, sys
 // badge's hit area up to this whenever the PAINTED badge is smaller — which
 // is the whole point of letting a fine pointer have a smaller badge.
 const TOUCH_MIN_CSS_PX = 44;
+// Gap between a card's icon chip and its value, as a fraction of the chip.
+// 0.28 is the bottom bar's own ratio (a 46px chip with a 13px gap) — the same
+// component drawn in the DOM, and the reference this should have been checked
+// against from the start.
+const ICON_VALUE_GAP_FRACTION = 0.28;
 // Floor on that expansion, so a badge already at or above --touch-min still
 // forgives a slightly-off tap exactly as it did before this was derived.
 const TAP_SLOP_MIN_CSS_PX = 10;
@@ -2982,9 +2987,12 @@ export class EntityVisuals {
       if (card) {
         valueWrap.height = `${cardInnerH}px`;
         valueWrap.background = "transparent";
-        // Explicit now: the icon↔value gap used to be the glyph image's own
-        // baked right margin, and that margin is gone with the inner frame.
-        valueWrap.paddingLeft = `${m.cardPadLeftPx}px`;
+        // The icon-to-text gap, as a fraction of the CHIP rather than a flat
+        // constant — the bottom bar's tiles run a 46px chip with a 13px gap,
+        // i.e. 28% of the chip, and that is the proportion this is measured
+        // against because it is the same object drawn in the DOM. A flat 4px
+        // came out at 18% and read as the text crowding the chip's edge.
+        valueWrap.paddingLeft = `${Math.round(glyphPx * ICON_VALUE_GAP_FRACTION)}px`;
         valueWrap.paddingRight = `${m.cardValuePadRightPx}px`;
         valueWrap.isVisible = false;
         row!.addControl(valueWrap);
