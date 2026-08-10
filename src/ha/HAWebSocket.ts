@@ -8,6 +8,7 @@ import type {
 } from "@/types/ha.types";
 import { ingressWsUrl } from "./ingress";
 import { captureError } from "@/utils/diagnostics";
+import { report as reportTelemetry } from "@/utils/telemetry";
 
 type Resolver = (result: unknown) => void;
 type Rejecter = (err: Error) => void;
@@ -32,6 +33,13 @@ export class HAWebSocket {
   private state: ConnectionState = "disconnected";
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
+  /** When the current socket finished authenticating — the denominator for the
+   *  disconnect record's `upMs`. 0 while down. */
+  private connectedAt = 0;
+  /** Set by the pong watchdog just before it closes a socket it believes is
+   *  dead, so the disconnect record can tell "the peer hung up" apart from "we
+   *  hung up on the peer". Cleared once reported. */
+  private pongTimedOut = false;
   /** Guards against reporting the same auth_invalid streak to telemetry on
    *  every ~30s retry forever — see the auth_invalid handler. Reset on the
    *  next successful auth so a LATER, separate occurrence still reports. */
@@ -159,6 +167,7 @@ export class HAWebSocket {
             this.setState("connected");
             this.reconnectAttempts = 0;
             this.authInvalidReported = false;
+            this.connectedAt = Date.now();
             this.resubscribeAll(socket);
             this.startHeartbeat();
             finish(() => resolve());
@@ -214,7 +223,38 @@ export class HAWebSocket {
         }
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (ev) => {
+        // ── Why the CLOSE EVENT is reported (2.202.0) ─────────────────────
+        // This handler used to take no argument at all, so the close code and
+        // reason — the only facts that say WHY a socket died — were dropped on
+        // the floor. A field telemetry dump then showed a kiosk left running
+        // overnight re-hydrating every ~16-18 minutes, i.e. the socket was
+        // dropping and reconnecting on a loose cycle all night, and the log
+        // had no way to distinguish the candidates: HA Core restarting, the
+        // add-on's proxy bridge closing, an idle timeout on the Cloudflare
+        // hop, or our own 5s pong watchdog firing on a slow reply. Each has a
+        // different fix and the data could not choose between them.
+        //
+        // `upMs` matters as much as the code: a socket that dies at a
+        // consistent age is being timed out by something, while a random
+        // spread is a flaky link. `byPong` separates "the peer closed it"
+        // from "we closed it ourselves because a ping went unanswered", which
+        // otherwise both arrive here looking identical.
+        // Gated on the same flag the reconnect is: a socket WE closed on
+        // purpose (provider teardown) is not a disconnect anyone needs to
+        // explain, and logging it would dilute the exact signal this record
+        // exists to isolate.
+        if (!this.manuallyClosed) reportTelemetry("ha-connect", {
+          phase: "disconnect",
+          code: ev.code,
+          reason: String(ev.reason ?? "").slice(0, 120),
+          wasClean: ev.wasClean,
+          upMs: this.connectedAt ? Date.now() - this.connectedAt : 0,
+          byPong: this.pongTimedOut,
+          attempts: this.reconnectAttempts,
+        });
+        this.connectedAt = 0;
+        this.pongTimedOut = false;
         this.stopHeartbeat();
         this.setState("disconnected");
         this.rejectAllPending(new Error("Connection closed"));
@@ -285,6 +325,7 @@ export class HAWebSocket {
     if (this.state !== "connected" || !this.ws || this.pongTimer) return;
     this.pongTimer = setTimeout(() => {
       this.pongTimer = null;
+      this.pongTimedOut = true; // read by onclose's disconnect record
       this.ws?.close(); // dead socket → onclose → reconnect
     }, 5000);
     try {

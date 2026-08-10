@@ -112,7 +112,19 @@ function summarise(e: TelemetryEvent): string {
       if (e.phase === "registry") {
         return `entity registry: ${e.rows} rows in ${ms(e.ms)} — ${where}`;
       }
-      return `hydrate: ${e.states} states, fetch ${ms(e.fetchMs)} + apply `
+      // A socket that died. `up` is the figure to read first: a consistent age
+      // across many rows means something is timing the connection out, a wild
+      // spread means a flaky link. `we closed it` distinguishes our own pong
+      // watchdog giving up from the peer hanging up.
+      if (e.phase === "disconnect") {
+        return `socket closed: code ${e.code}${e.reason ? ` "${e.reason}"` : ""}`
+          + ` after ${ms(e.upMs)} up${e.byPong ? " · we closed it (no pong)" : ""}`
+          + `${e.wasClean ? "" : " · unclean"}`;
+      }
+      // `pushed` is the share of the payload that reached a subscriber — on a
+      // reconnect into an unchanged villa it should be near zero.
+      const pushed = typeof e.pushed === "number" ? `, ${e.pushed} changed` : "";
+      return `hydrate: ${e.states} states${pushed}, fetch ${ms(e.fetchMs)} + apply `
         + `${ms(e.applyMs)} — ${where}`;
     }
     case "recovered":

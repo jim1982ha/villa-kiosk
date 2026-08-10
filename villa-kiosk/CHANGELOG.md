@@ -1,3 +1,13 @@
+## 2.202.0
+
+### Fixed — a reconnect replayed every entity in the instance through the scene
+
+Field telemetry from a kiosk left running overnight showed the Home Assistant socket dropping and reconnecting on a loose ~16–18 minute cycle for eight hours. Each reconnect re-hydrated all 1,074 entities and pushed every one of them into `EntityVisuals.apply()` — a full mesh, material, pose and badge rewrite plus a badge re-layout — for state that had not moved. The re-hydrate now pushes only the entities whose `state` or `last_updated` actually changed, so a reconnect into an unchanged villa costs nothing. The first connect is untouched: nothing has been painted yet, so everything still counts as changed.
+
+### Added — the socket now says why it closed
+
+`onclose` took no argument, so the close code and reason were discarded and the ~16-minute cycle above had no diagnosable cause: an HA Core restart, the add-on's proxy bridge, an idle timeout on the Cloudflare hop and our own 5-second pong watchdog all looked identical. Disconnects now report code, reason, how long the socket had been up, and whether we closed it ourselves — `upMs` clustering at a consistent age means something is timing the connection out, a wild spread means a flaky link.
+
 ## 2.201.0
 
 ### Fixed — the device colour leaked onto the slider and the panel footer

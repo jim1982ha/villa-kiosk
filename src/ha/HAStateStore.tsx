@@ -179,15 +179,49 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
     const t0 = performance.now();
     const all = await ws.getStates();
     const tFetched = performance.now();
+    // Compared against what we already hold, BEFORE setEntities replaces it.
+    const prev = entitiesRef.current;
     const map: Record<string, HassEntity> = {};
     for (const e of all) map[e.entity_id] = e;
     setEntities(map);
-    // Push initial values to imperative subscribers (scene paints correct state).
-    for (const e of all) notify(e);
+    // ── Why this pushes only what CHANGED (2.202.0) ──────────────────────
+    // hydrate() runs on the first connect AND on every automatic reconnect
+    // (see the effect below), and it used to fan every entity in the instance
+    // out to every imperative subscriber unconditionally. On the first connect
+    // that is exactly right — nothing has been painted yet. On a RECONNECT it
+    // is almost entirely wasted: each notify() reaches EntityVisuals.apply(),
+    // which scans deviceGroups for the entity, rewrites its meshes, materials,
+    // pose variant and badge, and marks the badge layout dirty.
+    //
+    // Field telemetry from a kiosk left running overnight made the cost
+    // concrete: the socket dropped and reconnected on a loose ~16-18 minute
+    // cycle for eight hours straight, and every one of those reconnects
+    // replayed 1,074 entities through that path — a full scene repaint and
+    // badge re-layout, on an idle wall-mounted tablet, for state that had not
+    // moved. (WHY the socket keeps dropping is a separate question the new
+    // disconnect record in HAWebSocket exists to answer; this makes the
+    // consequence cheap either way.)
+    //
+    // `last_updated` is the right discriminator rather than `last_changed`:
+    // HA bumps it on an ATTRIBUTES-only change too (a light's brightness, a
+    // media player's track), which subscribers do render. On the first
+    // hydrate `prev` is empty, so every entity is "changed" and the behaviour
+    // is identical to before.
+    let changed = 0;
+    for (const e of all) {
+      const before = prev[e.entity_id];
+      if (before && before.state === e.state && before.last_updated === e.last_updated) continue;
+      changed++;
+      notify(e);
+    }
     const tDone = performance.now();
     reportTelemetry("ha-connect", {
       phase: "hydrate",
       states: all.length,
+      // How much of that payload actually reached a subscriber. On a healthy
+      // reconnect this should be a small fraction of `states`; if it is not,
+      // the socket was down long enough for the villa to genuinely move on.
+      pushed: changed,
       fetchMs: Math.round(tFetched - t0),
       applyMs: Math.round(tDone - tFetched),
       // Was the villa already up, or is the profile/passcode screen showing?
