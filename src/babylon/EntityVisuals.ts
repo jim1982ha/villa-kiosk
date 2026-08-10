@@ -434,19 +434,42 @@ const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
  */
 const BADGE_MIN_GAP_PX = 6;
 /**
- * The largest ring a collided pile may be opened out onto, in badge widths.
+ * The largest ring a collided pile may be opened out onto, in badge widths —
+ * i.e. how far a badge may travel from the device it labels before the pile
+ * groups instead. THE dial for this whole subsystem, and the "X" of the
+ * grouping rule.
  *
- * This is the whole budget for moving a badge away from the device it labels,
- * and it doubles as the limit on how big a pile may be. Kept deliberately
- * tight (2.184.0): a badge that travels far stops reading as belonging to the
- * thing underneath it, and the room's pill is a better answer than a badge
- * pointing at nothing. A smaller budget means piles summarise sooner, which is
- * the trade being made on purpose — the ring a pile needs
- * grows with the number of badges on it, so past a certain count no ring fits
- * and the room summarises instead. That is the ONLY thing deciding pile size,
- * which is why there is no separate member cap to keep in step with it.
+ * ── Why the ring is what makes badges appear to re-order (2.205.0) ────────
+ * The seats are world points on a circle in the GROUND plane, so orbiting the
+ * camera views that circle from a different azimuth: the same four badges read
+ * as a vertical column from one heading and a 2x2 block from another. Nothing
+ * moved in world space — the ring is simply being seen edge-on or face-on —
+ * but on screen it is indistinguishable from the badges rearranging
+ * themselves, which is the one thing this subsystem exists to prevent.
+ * Reported with two screenshots one orbit apart, of four energy badges.
+ *
+ * So the budget is not a comfort setting; it decides how much apparent
+ * re-ordering a viewer can be shown. Since 2.204.0 exceeding it costs only
+ * that pile (it becomes one badge) rather than the whole room, a tight value
+ * is finally affordable — which is exactly why the entity group was built.
+ *
+ * ── Choosing a value ──────────────────────────────────────────────────────
+ * The radius is arithmetic, not a search: n badges of half-extent h with gap g
+ * need (2h + g) / (2 sin(pi/n)). So the budget picks the pile size at which
+ * grouping starts, and these are the actual figures for this app's badges:
+ *
+ *   pile size n:                    2      3      4      5      6
+ *   sensor/light/fan (h=30.5):    0.76   0.88   1.08   1.30   1.52
+ *   switch/lock/camera (h=22):    0.57   0.66   0.80   0.97   1.14
+ *
+ * 1.35 (2.184.0-2.204.0) let a pile of FIVE sensors spread, which is where the
+ * re-ordering above came from. 0.9 groups four or more, keeps a pair or a
+ * triple gently opened (a small symmetric adjustment that does not read as
+ * rearrangement), and leaves headroom above the n=3 figure so a pill appearing
+ * or disappearing cannot flip that case back and forth. Drop to 0.5 for "no
+ * badge ever moves — every collision groups"; raise it to spread more.
  */
-const SPREAD_MAX_RADIUS_WIDTHS = 1.35;
+const SPREAD_MAX_RADIUS_WIDTHS = 0.9;
 /**
  * ── The entity group's own geometry (2.204.0) ────────────────────────────
  * A pile that cannot be opened onto a ring inside SPREAD_MAX_RADIUS_WIDTHS

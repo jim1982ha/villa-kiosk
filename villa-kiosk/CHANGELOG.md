@@ -1,3 +1,9 @@
+## 2.205.0
+
+### Fixed — the travel budget was too generous for the entity group to ever fire
+
+2.204.0 added the entity group but left the ring's travel budget at 1.35 badge widths, so the tier almost never ran: the radius a pile needs is (2h+g)/(2 sin(pi/n)), which for four sensor badges is only 1.077 widths — comfortably inside budget, so they spread instead of grouping. The ring's seats are world points on a circle in the ground plane, so orbiting views that circle from a different azimuth and the same four badges read as a column from one heading and a 2x2 block from another; nothing moved, but on screen it is indistinguishable from the badges rearranging. Reported with two screenshots one orbit apart. The budget is now 0.9, which groups four or more and keeps a pair or triple gently opened. That figure is affordable only because 2.204.0 made exceeding it cost one pile rather than the whole room — the constant's docstring carries the full radius table so the dial can be moved in either direction (0.5 = no badge ever moves).
+
 ## 2.204.0
 
 ### Added — a crowded pile becomes ONE badge before it costs the whole room (EXPERIMENTAL)
