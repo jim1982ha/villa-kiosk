@@ -550,21 +550,51 @@ export async function loadModelInto(
       lmDayTex.coordinatesIndex = 1; // the pipeline's BakeUV → TEXCOORD_1
       const structureMeshes: AbstractMesh[] = [];
       const lmMats = new Set<LightmapMat>();
+      const noBakeUv: AbstractMesh[] = [];
       let missingUv2 = 0;
       for (const m of result.meshes) {
         if (!isStructureMesh(m)) continue;
         if (m.getTotalVertices() === 0) continue;
-        // Blender's glTF exporter drops UV layers no material references —
-        // pipeline < 2.7.1 lost BakeUV that way, and without TEXCOORD_1 the
-        // lightmap samples at the tiling texture UVs (light smeared per tile).
-        if (!m.isVerticesDataPresent(VertexBuffer.UV2Kind)) missingUv2++;
+        // Glass and no-BakeUV meshes still count as STRUCTURE — they keep the
+        // fill light and stay excluded from the scene's other lights like the
+        // rest of the shell. Only the lightmap itself is withheld below, which
+        // is the one thing that would be wrong for them.
         structureMeshes.push(m);
         const mat = m.material as LightmapMat | null;
-        if (!mat) continue;
         // Panes keep the runtime glass treatment above — a lightmap multiply
         // would just darken what you see through them.
-        if (mat.name && glassMats.has(mat.name)) continue;
-        lmMats.add(mat);
+        if (mat?.name && glassMats.has(mat.name)) continue;
+        // ── No TEXCOORD_1 means the lightmap CANNOT be applied here ────────
+        // Not merely counted-and-warned-about, which is what this did. The
+        // lightmap is bound with coordinatesIndex = 1; a mesh with no second
+        // UV set falls back to UV0, which on structure geometry is the TILING
+        // texture UV — so the bake atlas gets repeated across the surface and
+        // renders as a grid of unrelated grey patches. Reported as "weird
+        // artifacts in some of the glass", and it is exactly that: a window
+        // pane whose custom mesh arrived without BakeUV, wearing a tiled
+        // photograph of somebody else's baked light.
+        //
+        // A lightmap sampled through UVs it was not baked for carries no
+        // information at all, so there is nothing to weigh against dropping
+        // it: the mesh renders on its plain albedo and the scene's own lights
+        // instead, which is merely flatter, not wrong.
+        if (!m.isVerticesDataPresent(VertexBuffer.UV2Kind)) {
+          missingUv2++;
+          noBakeUv.push(m);
+          continue;
+        }
+        if (mat) lmMats.add(mat);
+      }
+      // The lightmap is set on the MATERIAL, and a material is routinely shared
+      // between meshes that do and do not have BakeUV — so excluding the mesh
+      // above is not enough on its own. Give those meshes their own copy, and
+      // only when the material they share is genuinely about to be lightmapped
+      // (a clone costs a shader compile, which is the load's dominant cost).
+      for (const m of noBakeUv) {
+        const src = m.material;
+        if (!src || !lmMats.has(src as unknown as LightmapMat)) continue;
+        const copy = src.clone(`${src.name}__noBakeUV`);
+        if (copy) m.material = copy;
       }
       for (const sm of lmMats) {
         // useLightmapAsShadowmap makes the PBR shader MULTIPLY the lit result
@@ -619,12 +649,17 @@ export async function loadModelInto(
         (lmNightTex ? "; night lightmap present (hard swap at twilight)" : ""),
       );
       if (missingUv2 > 0) {
+        // Reported in the LOAD RECORD too, not just the console: the devices
+        // this shows up on are a wall iPad and a phone, where nobody is going
+        // to open devtools, and "some windows look dirty" is otherwise
+        // impossible to attribute from a screenshot.
+        gl.glNoBakeUv = missingUv2;
         console.warn(
-          `[ModelLoader] ${missingUv2}/${structureMeshes.length} structure ` +
-          `mesh(es) have NO TEXCOORD_1 — the lightmap cannot be sampled at ` +
-          `its bake UVs and lighting will look wrong. This GLB was exported ` +
-          `by pipeline 2.7.0 (Blender drops the unused BakeUV layer); ` +
-          `re-bake with blender_pipeline ≥ 2.7.1.`,
+          `[ModelLoader] ${missingUv2} structure mesh(es) have NO TEXCOORD_1 — ` +
+          `the lightmap cannot be sampled at its bake UVs, so it is NOT applied ` +
+          `to them (they would show the bake atlas tiled across their surface). ` +
+          `They render unlit-by-bake instead. Re-export those pieces with ` +
+          `BakeUV — blender_pipeline >= 2.7.1 keeps it.`,
         );
       }
     }

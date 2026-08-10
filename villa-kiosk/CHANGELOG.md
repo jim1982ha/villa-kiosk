@@ -1,3 +1,9 @@
+## 2.215.0
+
+### Fixed — a grid of grey patches across some window panes
+
+The baked lightmap is bound to UV1 (the pipeline's BakeUV). A mesh that arrived without a second UV set falls back to UV0, which on structure geometry is the TILING texture UV — so the bake atlas was repeated across that surface and rendered as a grid of unrelated grey squares. It only affected the pieces missing BakeUV, which is why a few panes looked dirty and the rest were clean. The loader already detected this condition and warned about it, then applied the lightmap anyway. It now withholds it: a lightmap sampled through UVs it was not baked for carries no information, so there is nothing to weigh against dropping it, and the mesh renders on its plain albedo instead — flatter, but not wrong. Because the lightmap lives on the MATERIAL and materials are shared between meshes that do and do not have BakeUV, those meshes get their own copy, made only when the shared material was genuinely about to be lightmapped. The count now also rides in the load record as `glNoBakeUv`, since the devices this shows up on are a wall tablet and a phone where nobody is opening a console.
+
 ## 2.214.0
 
 ### Fixed — an armed camera lost its camera icon to the alert colour
