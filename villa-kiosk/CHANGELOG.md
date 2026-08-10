@@ -1,3 +1,17 @@
+## 2.225.0
+
+### Added — moon position, phase and illumination, computed locally
+
+Groundwork for showing the moon at night the way the sun already drives the day. `utils/sunCalc.ts` gains `getMoonPosition` (azimuth, altitude, distance, and the parallactic angle that says which way the lit limb leans), `getMoonIllumination` (lit fraction, phase, waxing/waning) and `moonPhaseName`, all in the same Meeus-derived style and the same conventions as the existing sun code, so a caller can place or light the moon exactly as it already does the sun. `declination`/`rightAscension` now take ecliptic latitude — 0 for the sun by definition, up to ~5° for the moon, which is why they read as constants before.
+
+**Why this is computed rather than read from Home Assistant.** The Moon integration creates exactly one entity, `sensor.moon_phase`, and checking a live install rather than trusting the documentation confirms it is an enum: eight phase *names*, `device_class: "enum"`, and **no elevation, no azimuth, no illumination percentage** in its attributes. It cannot place a moon in a sky. Substituting a plausible direction for one a coarse HA entity does not carry is exactly the bug fixed one release ago for `sun.sun`, so the split that survives is deliberate: **HA owns the name, this file owns the geometry.**
+
+**The integration is a nice-to-have and never a dependency.** Everything here derives from date plus latitude and longitude, so the moon behaves identically on an install that has never added it — which is the normal case, since it is opt-in. The docstring states the rule for future work: nothing may read the entity without falling back to `moonPhaseName`, and nothing may gate on its presence. It can confirm or label; it can never be a prerequisite. This also keeps the feature inside the add-on's no-internet rule, since nothing is fetched.
+
+Checked against reality rather than assumed correct: for 2026-08-10 18:12 local this returns `waning_crescent` at 6.7% lit, altitude −13.5° (below the horizon, right for a crescent that rises before dawn), distance 365,307 km (inside the true 356k–406k range). Home Assistant's sensor independently reported `waning_crescent` for the same moment.
+
+Maths only in this release — nothing renders a moon yet, and the sky is unchanged.
+
 ## 2.224.0
 
 ### Fixed — the sky "suddenly disappearing" and coming back, camera untouched
