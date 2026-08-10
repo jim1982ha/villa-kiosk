@@ -616,13 +616,15 @@ interface PendingEntityGroup {
   wx: number; wy: number; wz: number;
 }
 
-/** A live state distilled to one of the visual kinds the badge colour-codes. */
-// The "card" badge style's own Rectangle is a solid fill (not baked pixels —
-// see updateLabel), so IT still needs an explicit border for its ring;
-// Babylon GUI has no dashed-border support, so its unavailable ring falls
-// back to the same solid thickness as active/alert — a small, deliberate
-// degradation from the classic badge's baked (genuinely dashed) ring.
-const BADGE_RING_THICKNESS = 3;
+/* The state ring's stroke lives in badgeMetrics (`ringThicknessPx`) — it is a
+ * badge dimension and has to scale with the badge, because Babylon's Rectangle
+ * insets its children by it and a fixed value costs a small card far more of
+ * its icon than a large one. The card style needs an explicit border at all
+ * (the classic badge bakes its ring into the glyph image), and Babylon GUI has
+ * no dashed border, so the card's unavailable ring falls back to the same
+ * solid stroke as active/alert — a small, deliberate degradation from the
+ * classic badge's genuinely dashed one.
+ */
 
 export class EntityVisuals {
   private scene: Scene;
@@ -2858,7 +2860,7 @@ export class EntityVisuals {
       // would resize the glyph every time a device turned on. Same rule the
       // pill-capable collision box already follows — measure what it can be,
       // not what it happens to be.
-      const cardInnerH = m.cardHeightPx - 2 * BADGE_RING_THICKNESS;
+      const cardInnerH = m.cardHeightPx - 2 * m.ringThicknessPx;
 
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
@@ -3095,7 +3097,7 @@ export class EntityVisuals {
       // Rectangle border must stand down — otherwise the badge carries two
       // rings at once, a solid one outside and the dashed one within it, which
       // is what an unavailable device was showing.
-      lbl.badge.thickness = surface.ring && !surface.ringDashed ? BADGE_RING_THICKNESS : 0;
+      lbl.badge.thickness = surface.ring && !surface.ringDashed ? this.metrics.ringThicknessPx : 0;
       lbl.badge.color = surface.ring ?? "transparent";
       // The baked image normally sits INSET inside the card, because the
       // card's own Rectangle draws the edge. A DASHED ring cannot come from
@@ -3966,7 +3968,7 @@ export class EntityVisuals {
         // A badge is never ringless — even at rest it carries the hairline
         // the brand guidelines give the idle state, which is what keeps it a
         // deliberate object rather than a shape on the floor. Same here.
-        c.container.thickness = ringRed ? BADGE_RING_THICKNESS : 1;
+        c.container.thickness = ringRed ? this.metrics.ringThicknessPx : 1;
         c.container.color = (ringRed ? alert.ring : rest.ring) ?? "transparent";
         c.container.background = surface;
         // Reporting status rides on the COUNT, exactly as the room chip puts
@@ -3977,7 +3979,7 @@ export class EntityVisuals {
         // this exact problem solved. (The individual badge's genuinely dashed
         // unavailable ring is baked pixels; a Babylon GUI Rectangle has no
         // dashed border — the same limitation the "card" badge style already
-        // degrades around, see BADGE_RING_THICKNESS.)
+        // degrades around, see badgeMetrics' ringThicknessPx.)
         // The badge's own ink, NOT white: 2.233.0 moved the group onto the
         // neutral resting surface and left this white, so every AVAILABLE
         // group rendered white-on-white — a blank squircle — while only the
@@ -4245,7 +4247,7 @@ export class EntityVisuals {
       // (BADGE_RING): red when at least one member is "on" or "alert",
       // otherwise no ring — the only attention signal available once the
       // individual badges are gone.
-      c.container.thickness = chip.ringRed ? BADGE_RING_THICKNESS : 1;
+      c.container.thickness = chip.ringRed ? this.metrics.ringThicknessPx : 1;
       c.container.color = (chip.ringRed ? chipAlert.ring : chipRest.ring) ?? "transparent";
       // The count pill itself carries the room's REPORTING status — red if
       // at least one member is unavailable (HA has lost contact with it),

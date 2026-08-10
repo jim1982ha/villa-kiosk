@@ -1,3 +1,14 @@
+## 2.237.0
+
+### Fixed — why the clipped icon looked acceptable on a phone and wrong on a desktop
+
+Asked directly, and it is the right question: 2.236.0 explained the clipping but not why one device showed it and the other did not. The answer is that `BADGE_RING_THICKNESS` was a fixed 3px — the last badge dimension still living outside `badgeMetrics`, which is the rule 2.232.0 added and has now been broken three times in a row.
+
+Babylon's `Rectangle` insets its children by its border on all four sides, so the ring's cost is `2 × thickness` of the card's height whatever the card's size. A coarse-pointer card is 34px, so 6px is 17.6% of the icon. A fine-pointer card is 24.5px, so the same 6px is **24.5%** — the identical defect, 40% worse in proportion, on the device with the smaller badges. That is the whole of the difference: not a different bug, the same one weighted differently.
+
+The stroke now scales with the pointer class like every other dimension (3 coarse, 2 fine), which brings the icon-to-card ratio to 82% and 84% — the two devices finally drawing the same badge. Anything measured in badge pixels belongs in `badgeMetrics`; a constant left behind does not simply stay put, it silently becomes device-dependent.
+
+Note this is separate from the blank values fixed in 2.235.0, which were **not** device-dependent at all: `Control.fontSize` returns a string on every platform, and the phone was showing an older bundle. Two symptoms, one of them a real device difference and one an artefact of version skew across clients — worth keeping apart, because a PWA holds its build until it reloads and the telemetry has caught four versions live in the same minute.
 ## 2.236.0
 
 ### Fixed — the card badge's icon was over-sized for the box it sits in, and clipped

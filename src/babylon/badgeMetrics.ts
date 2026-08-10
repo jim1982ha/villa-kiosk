@@ -87,6 +87,14 @@ export interface BadgeMetrics {
   cardValuePadPx: number;
 
   // ── Clearance ────────────────────────────────────────────────────────────
+  /**
+   * The state ring's stroke. A badge DIMENSION, so it belongs here and scales
+   * with the rest: Babylon's Rectangle insets its children by this on all four
+   * sides, so a fixed 3px cost 17.6% of a 34px touch card but 24.5% of a
+   * 24.5px desktop one — the same defect, 40% worse in proportion, which is
+   * why an icon that looked acceptable on a phone looked wrong on a desktop.
+   */
+  ringThicknessPx: number;
   /** Clear space required between two drawn footprints. */
   minGapPx: number;
   /**
@@ -172,6 +180,7 @@ const COARSE: BadgeMetrics = {
   cardValueCharPx: 7.2,
   cardValuePadPx: 8,
 
+  ringThicknessPx: 3,
   minGapPx: 6,
   // Apple's 44pt hit region, which is also this app's --touch-min and exactly
   // what pickBadgeAt expands an undersized badge's slop to reach.
@@ -225,6 +234,7 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
       * (Math.max(MIN_VALUE_FONT_PX, px(base.cardValueFontPx)) / base.cardValueFontPx),
     cardValuePadPx: px(base.cardValuePadPx),
 
+    ringThicknessPx: Math.max(1, px(base.ringThicknessPx)),
     minGapPx: base.minGapPx,
     minCentrePitchPx: base.minCentrePitchPx,
     countPillFraction: base.countPillFraction,
