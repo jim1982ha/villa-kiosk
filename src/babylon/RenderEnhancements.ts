@@ -126,13 +126,39 @@ export class RenderEnhancements {
   }
 
   /**
-   * Build a small gradient cube map (sky above → horizon → ground below) used
-   * as the scene environment texture. Low-res on purpose: it drives soft diffuse
-   * IBL on matte interior surfaces (the main win) rather than sharp reflections,
-   * and needs no shipped HDR asset so it works fully offline in the add-on.
+   * Build a gradient cube map (sky above → horizon → ground below) used as the
+   * scene environment texture. Needs no shipped HDR asset, so it works fully
+   * offline in the add-on.
+   *
+   * ── Why this is 128 and not 16 (2.220.0) ─────────────────────────────────
+   * It was 16, deliberately, on the reasoning that this cube only has to drive
+   * soft DIFFUSE irradiance on matte interior surfaces. That is true of walls
+   * and floors — Babylon derives spherical harmonics from the cube for those,
+   * and SH throws the resolution away anyway.
+   *
+   * It is NOT true of the windows. A PBR material's SPECULAR lobe samples this
+   * same cube directly, at a mip chosen by roughness, and glass is set to
+   * roughness 0.1 (ModelLoader) — so it read mip 0, a literal 16x16 image in
+   * which one texel spans ~5.6 degrees of sky. Those texels were visible as
+   * pale square blocks in the panes, which was reported repeatedly and misread
+   * (by me) five times as a lightmap-bake, atlas, texture or geometry problem.
+   *
+   * The tell that ruled all of those out: two instances of the same SH3D asset,
+   * same name, same material, same dimensions, side by side — one clean, one
+   * blocky. Nothing keyed on name, material or UV can differ between those. An
+   * environment reflection can, because it is a function of the reflected VIEW
+   * direction: the two panes face different ways and sample different parts of
+   * the cube. It also explains why the blocks moved with the camera and stayed
+   * square and constant-size under heavy perspective foreshortening — they were
+   * never on the surface.
+   *
+   * 128 puts a texel at ~0.7 degrees, below the visible-banding threshold for a
+   * gradient this smooth. Cost is 6 * 128 * 128 * 4 B = 393 KB of VRAM (~524 KB
+   * with mips), it is generated once and lazily, and it adds NOTHING to the GLB
+   * and nothing to the network — which is the constraint this had to respect.
    */
   private buildGradientEnv(): RawCubeTexture {
-    const size = 16;
+    const size = 128;
     const sky: [number, number, number] = [120, 158, 210];
     const horizon: [number, number, number] = [178, 178, 182];
     const ground: [number, number, number] = [120, 110, 98];

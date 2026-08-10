@@ -1,3 +1,17 @@
+## 2.220.0
+
+### Fixed — the moving light artifacts on glass and walls: the environment cube was 16x16
+
+The scene's image-based lighting is a procedurally generated gradient cube, built in `RenderEnhancements.buildGradientEnv` so that nothing has to be downloaded and the kiosk still lights correctly with no internet. It was built at **16 pixels per face**, deliberately, on the reasoning that it only ever has to drive soft DIFFUSE irradiance on matte interior surfaces. That reasoning is sound for walls and floors — Babylon derives spherical harmonics from the cube for the diffuse term, and SH discards the resolution anyway.
+
+It is not sound for the windows. A PBR material's SPECULAR reflection samples that same cube directly, at a mip level chosen by roughness, and glass is set to roughness 0.1 in `ModelLoader` — so it was reading mip 0, a literal 16x16 image in which a single texel spans about 5.6 degrees of sky. Those texels were what was visible in the panes: pale, hard-edged square blocks. Matte surfaces near the rough end of the range sample the small mips instead, which is the same defect at a different scale and is what the blotchy mottling on the kitchen walls was.
+
+The observation that identified it is the one that had refuted every previous attempt: two instances of the same SweetHome asset, same name, same material, same dimensions, standing side by side — one clean, one blocky. Nothing keyed on name, material, UV or lightmap can differ between those two, which is why five earlier diagnoses (missing TEXCOORD_1, alpha-classified glass, bake noise, atlas resolution, and 2.219.0's double-sided self-occlusion) could not have been right, and were not. An environment reflection CAN differ, because it is a function of the reflected view direction: the two panes face different ways and sample different regions of the cube. The same fact explains the rest of the reported behaviour — that the blocks move when the camera moves, that they stay square and constant-size even when the window is foreshortened to a sliver (they are not on the surface at all), and that the shape differs between the Mac and the phone. It also explains the one asymmetry already in the code: iOS strips `ibl` in `SceneManager.deviceRenderConfig`, and iOS is the only target where the artifact was never reported.
+
+The cube is now 128 per face, which puts a texel at about 0.7 degrees — below the visible-banding threshold for a gradient this smooth. This respects the constraint the work was given: it adds **nothing** to the GLB, nothing to the network, and 393 KB of VRAM (about 524 KB with mips), generated once and lazily. For comparison the model itself carries 26 megapixels of texture. Nothing was added to the Settings panel; the default look is simply correct now.
+
+On denoising, asked directly: there is no evidence it is needed, and now a reason to think it is not. The wall mottling was the only remaining argument for it, and it has the same cause as the glass. The denoise flag added to the pipeline never engaged regardless — only `cycles.use_denoising` exists on that Blender build, which is a render-level setting that `bpy.ops.object.bake` does not route through — so it was never a tested hypothesis, only an untested one. `--bake-samples` remains the lever that genuinely reduces bake noise, if bake noise ever turns out to be a real problem.
+
 ## 2.219.0
 
 ### Fixed — the blocky patches on window panes: glass was drawing itself twice
