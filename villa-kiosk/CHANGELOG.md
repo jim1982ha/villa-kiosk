@@ -1,3 +1,20 @@
+## 2.238.0
+
+### Fixed — the text nudge added in 2.234.0 was pointing the wrong way
+
+Reverted to zero, after doing the arithmetic that should have preceded it.
+
+2.234.0 set a downward optical correction of 0.105em on badge text, reasoning that Babylon centres a `TextBlock`'s whole line box — `rootY = ascent + (height - fontHeight) / 2` — so a string with no descenders would sit high in a box sized to fit a "g". The mechanism is real and the code does exactly that. The conclusion was backwards, because `ascent` there is not the cap height: `GetFontOffset` measures it from the baseline to the top of the line box, i.e. the font's ascender *including internal leading* (~1.0em), which already accounts for the space a descender would occupy.
+
+Worked through for a 13px value in a 28px card, the ink lands **0.2–0.45px LOW** of centre — close enough to be invisible, and in the opposite direction to the correction applied. So the nudge did not remove a 1.4px error; it introduced one, dropping the value about 1.6px below the icon beside it. Four rounds of "the icons and text still are not centred" were, from 2.234.0 onward, this.
+
+The field stays, documented, so the knob is one number if a typeface ever genuinely needs it — but it has to be derived rather than guessed, which is the whole of what went wrong.
+
+### Note — the phone/desktop difference was never this
+
+Worth recording because it was asked directly and the tempting answer is wrong. This nudge is device-INDEPENDENT: it works out at 4.9% of the card's inner height on a coarse pointer and 5.1% on a fine one. It cannot be why one device looked right and the other did not.
+
+That difference was the ring, fixed in 2.236.0 and 2.237.0: a fixed 3px stroke costs 17.6% of a 34px touch card and 24.5% of a 24.5px desktop card, because Babylon insets a Rectangle's children by twice its border whatever the card's size. Two defects with two different distributions, and stretching one explanation over both is what kept the second one hidden.
 ## 2.237.0
 
 ### Fixed — why the clipped icon looked acceptable on a phone and wrong on a desktop

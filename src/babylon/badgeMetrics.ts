@@ -131,21 +131,25 @@ export interface BadgeMetrics {
 
   /**
    * Downward optical correction for badge text, as a fraction of its own font
-   * size.
+   * size. ZERO, and that is a measured answer rather than a default.
    *
-   * Babylon centres a TextBlock's FULL LINE BOX, descender space included:
-   * `rootY = ascent + (height − fontHeight) / 2`, where the metrics come from
-   * measuring the string "Hg" (engine.common's GetFontOffset). That is correct
-   * typography for mixed text — and wrong-looking for every string a badge
-   * actually shows. "99%", "26.8 °C", a bare count, a room name in title case:
-   * none has a descender, so the visible ink occupies only the top of a box
-   * sized to fit a "g", and the text reads as sitting high against the icon
-   * beside it. Reported as icons and text not being vertically centred.
+   * 2.234.0 set this to 0.105em, reasoning that Babylon centres a TextBlock's
+   * whole line box — `rootY = ascent + (height - fontHeight) / 2` — so text
+   * with no descenders ("98%", a count, a room name) would sit high. The
+   * mechanism is real. The conclusion was backwards, because `ascent` there is
+   * not the cap height: `GetFontOffset` measures it from the baseline to the
+   * top of the line box, i.e. the font's ASCENDER including internal leading
+   * (~1.0em), which already accounts for the space a descender would occupy.
+   * Worked through for a 13px value in a 28px card, the ink lands 0.2-0.45px
+   * LOW of centre — close enough to be invisible, and in the OPPOSITE
+   * direction to the correction applied. So the nudge did not remove a 1.4px
+   * error, it introduced one, dropping the value visibly below the icon beside
+   * it. That is what "the icons and the text are not vertically centred"
+   * became after 2.234.0, and it took four rounds because the arithmetic was
+   * assumed instead of done.
    *
-   * Half a descender puts the ink's own centre on the box's centre. A sans
-   * descender runs about 0.21em (Public Sans and the system fallbacks are all
-   * close to it), so half is ~0.105em. Applied to the badge's value text, the
-   * chip's name and the group's count — every place this file draws text.
+   * Kept as a field rather than deleted, so the knob is one number if a future
+   * typeface genuinely needs it — but it must be DERIVED, never guessed.
    */
   textOpticalTopEm: number;
 }
@@ -187,7 +191,7 @@ const COARSE: BadgeMetrics = {
   minCentrePitchPx: 44,
   countPillFraction: 0.58,
   countFontFraction: 0.78,
-  textOpticalTopEm: 0.105,
+  textOpticalTopEm: 0,
 };
 
 /** Smallest legible label text. Cartographic practice puts the floor for map
