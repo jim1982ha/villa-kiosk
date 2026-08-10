@@ -3053,7 +3053,7 @@ export class EntityVisuals {
       // badge and shifts with state exactly as the icon does. Classic: white,
       // on its own dark pill. updateLabel re-applies the card case per state.
       valueText.color = card
-        ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).glyph
+        ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).ink
         : PILL_TEXT;
       // Match the app's own UI typeface (--font-ui) instead of the GUI layer's
       // Babylon default (Arial) — that mismatch was rendering the pill in a
@@ -3201,7 +3201,7 @@ export class EntityVisuals {
       // Neutral ink, on a now-neutral card — the bottom bar's value is
       // `--text-primary` beside a coloured chip, not the chip's own hue. The
       // state is carried by the chip and the ring; the number is just a number.
-      lbl.valueText.color = categorySurface(lbl.category, "off", override).glyph;
+      lbl.valueText.color = categorySurface(lbl.category, "off", override).ink;
     } else {
       // Classic style bakes fill + ring straight into the glyph image itself
       // (see badgeIcons.ts) — the wrapping Rectangle stays a plain
@@ -4170,7 +4170,7 @@ export class EntityVisuals {
         // group rendered white-on-white — a blank squircle — while only the
         // unavailable ones (red) stayed legible. Reported as "empty full-white
         // badges", and the screenshot's mix of blank and red is the tell.
-        c.countText.color = unavailable ? ALERT_RED_HEX : rest.glyph;
+        c.countText.color = unavailable ? ALERT_RED_HEX : rest.ink;
         c.container.scaleX = scale;
         c.container.scaleY = scale;
         // Zero X offset and a fixed centring lift, exactly like the room chip:
@@ -4219,7 +4219,7 @@ export class EntityVisuals {
     // neutral surface the container takes, on the same pass that creates it.
     // It must not be white: the container is the badges' own light resting
     // fill, and white here is an invisible count.
-    countText.color = categorySurface("others", "off").glyph;
+    countText.color = categorySurface("others", "off").ink;
     // Babylon GUI TextBlocks do not inherit CSS and default to Arial — see
     // CLAUDE.md's known gotchas; every one of them sets this explicitly.
     countText.fontFamily = GUI_FONT_FAMILY;
@@ -4446,7 +4446,7 @@ export class EntityVisuals {
       // step with the badges without a second notification path.
       // Same neutral resting surface as an idle badge — see updateEntityGroups.
       c.container.background = chipRest.fill;
-      c.text.color = chipRest.glyph;
+      c.text.color = chipRest.ink;
       c.container.scaleX = scale;
       c.container.scaleY = scale;
       // ZERO horizontal offset, always: the chip sits exactly on its anchor.

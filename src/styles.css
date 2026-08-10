@@ -447,7 +447,8 @@ button {
 /* Small section caption ("LAST 24 HOURS", …). Slightly smaller and lighter
    than it was: at 13px/500 it competed with the actual content underneath it
    instead of quietly labelling it. */
-.entity-label { font-family: var(--font-ui); font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-dim); }
+/* Same eyebrow, same contrast fix as .summary-tile-label — see its comment. */
+.entity-label { font-family: var(--font-ui); font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-secondary); }
 .value-large { font-family: var(--font-ui); font-size: var(--text-display-lg); font-weight: 200; line-height: 1; }
 .value-unit { font-family: var(--font-ui); font-size: var(--text-lg); font-weight: 400; color: var(--text-secondary); }
 .body-text { font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.5; }
@@ -1089,7 +1090,13 @@ button {
      an eyebrow, which is display type, not body copy. The VALUE below it is
      Jost too (18px/500); everything a guest actually READS stays Public Sans. */
   font-family: var(--font-display);
-  font-size: var(--text-2xs); font-weight: 500; color: var(--text-dim);
+  /* --text-secondary, NOT --text-dim. #9AA09B on the light bar is 2.4:1,
+     which fails WCAG AA (4.5:1) for text this size by a wide margin and was
+     reported as simply hard to read; --text-secondary is 5.8:1. --text-dim is
+     a decorative tone in this palette (separators, placeholders, disabled
+     chevrons) and darkening the TOKEN enough to pass would have collapsed it
+     into --text-secondary, so the eyebrows move instead. */
+  font-size: var(--text-2xs); font-weight: 500; color: var(--text-secondary);
   text-transform: uppercase; letter-spacing: var(--tracking-label);
 }
 .summary-tile-value {
@@ -1152,7 +1159,7 @@ button {
    colour, just enough weight to separate one room's devices from the next. */
 .summary-room-heading {
   margin: 10px 2px 6px; font-size: var(--text-2xs); font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary);
 }
 .summary-room-heading:first-child { margin-top: 0; }
 /* "Scenes for this room" strip — SummaryGroupPanel's roomScenes, room-cluster
@@ -1951,7 +1958,7 @@ input[type="range"]::-moz-range-thumb {
 .settings-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; background: var(--bg-overlay); }
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
-.settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-dim); margin: 24px 0 12px; font-weight: 600; }
+.settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 24px 0 12px; font-weight: 600; }
 /* The collapsible variant (ConfigEditorModal's auto-detected-entities /
    device-telemetry sections) — same label typography, made clickable. Reset
    to a plain full-width row (buttons carry their own background/border/

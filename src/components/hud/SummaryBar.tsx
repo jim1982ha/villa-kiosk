@@ -319,7 +319,11 @@ function SceneMenu({ scenes, canRun, apply }: {
           // Same reason as Tile above: composited in JS, so re-theming needs
           // a re-render rather than the cascade.
           ["--tile-fill" as string]: categorySurface("others", "off").fill,
-          ["--tile-glyph" as string]: categorySurface("others", "off").glyph,
+          // .ink, not .glyph: the Scene tile is the app's OWN chrome, not a
+          // device, and CATEGORY_COLORS hues are reserved for devices (a room
+          // chip once drew in the Energy blue and read as a mis-tagged badge).
+          // Every other tile passes a real category through Tile above.
+          ["--tile-glyph" as string]: categorySurface("others", "off").ink,
         }}
         disabled={!canRun}
         aria-haspopup="menu"

@@ -16,12 +16,19 @@ import { STATUS_COLOR } from "@/utils/stateColors";
  *  default, coloured only when active or alerting, a dashed amber ring for
  *  unavailable. A representative category ("light") stands in for "whichever
  *  category this device belongs to" — the row is illustrating the STATE
- *  vocabulary, not any one category. */
+ *  vocabulary, not any one category.
+ *
+ *  "Neutral by default" is a rule about the SURFACE, and since 2.251.0 the
+ *  wording here has to say so: the fill and the ring still go quiet at rest,
+ *  but the PICTOGRAM always carries its category's hue, because what kind of
+ *  device something is stays true whether or not it is switched on. Keep this
+ *  copy in step with that function — a legend that describes a badge the app
+ *  no longer draws is worse than no legend. */
 const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; note: string }[] = [
   { label: "Active / alerting", state: "active",
     note: "Filled with the device's own category colour — the device is on, or doing something" },
   { label: "Off / idle", state: "off",
-    note: "Plain neutral square — the device is off or resting (the default look for most of the map)" },
+    note: "Neutral square, category-coloured icon — the device is off or resting (the default look for most of the map)" },
   { label: "Needs attention", state: "alert",
     note: "Filled red — the device needs attention (an unlocked door, a leak, low battery…)" },
   { label: "Unavailable", state: "unavailable",

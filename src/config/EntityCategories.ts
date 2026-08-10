@@ -132,7 +132,27 @@ const TINT_ALPHA = 0.14;
 export type DeviceSurfaceState = "off" | "active" | "alert" | "unavailable";
 export interface CategorySurface {
   fill: string;
+  /**
+   * The PICTOGRAM's colour — the camera, the bulb, the lock.
+   *
+   * Always the device's own hue (its category colour, or its per-entity
+   * `badgeColor` override) except where a STATUS colour outranks it: red for
+   * alert, amber for unavailable. It does not go neutral when the device is
+   * resting — see the `off` row for why.
+   */
   glyph: string;
+  /**
+   * TEXT drawn on this surface — a badge's value, a group's count, a chip's
+   * room name. NEVER the category hue.
+   *
+   * Split out from `glyph` in 2.251.0, when the resting glyph became coloured.
+   * Four call sites were reading `.glyph` for text purely because the two
+   * happened to be the same neutral grey, so colouring the pictogram would
+   * have taken "0 W", a group's "3" and every room chip's name with it. They
+   * are different questions and now have different fields: `glyph` says what
+   * KIND of device this is, `ink` is just legible text.
+   */
+  ink: string;
   ring: string | null;
   /** Unavailable only — the guidelines call for a DASHED ring there. */
   ringDashed?: boolean;
@@ -159,11 +179,11 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
   switch (state) {
     case "active": {
       const hue = override ?? categoryColor(category);
-      return { fill: tintOver(hue, TINT_ALPHA, base), glyph: hue, ring: hue };
+      return { fill: tintOver(hue, TINT_ALPHA, base), glyph: hue, ink: hue, ring: hue };
     }
     case "alert": {
       const danger = cssVar("--status-danger") || FALLBACK_DANGER;
-      return { fill: tintOver(danger, TINT_ALPHA, base), glyph: danger, ring: danger };
+      return { fill: tintOver(danger, TINT_ALPHA, base), glyph: danger, ink: danger, ring: danger };
     }
     case "unavailable": {
       const warning = cssVar("--status-warning") || FALLBACK_WARNING;
@@ -172,13 +192,30 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
       // (utils/stateColors STATUS_COLOR). It was briefly the danger red, which
       // made a device that is merely unreachable look like a confirmed alarm
       // and put a second answer next to the legend's.
-      return { fill: base, glyph: warning, ring: warning, ringDashed: true, ringBold: true };
+      return { fill: base, glyph: warning, ink: warning, ring: warning, ringDashed: true, ringBold: true };
     }
     case "off":
     default:
       return {
         fill: base,
-        glyph: cssVar("--text-secondary") || FALLBACK_NEUTRAL_GLYPH,
+        // ── The RESTING pictogram keeps its colour (2.251.0) ──────────────
+        // It used to go neutral grey with everything else, which made a
+        // device that is fine and reporting indistinguishable from one that
+        // is off, unbound or dead. Reported against a network sensor sitting
+        // at "connected": a grey gauge on a grey card, and formatSensorValue
+        // hides the word "Connected" as redundant on the stated grounds that
+        // "the badge is already category-coloured" — which it was not. The
+        // badge carried no information at all.
+        //
+        // Neutral-by-default (VESTA-DESIGN.md §0) is unchanged, because it is
+        // a rule about the SURFACE: the fill is still the plain panel colour
+        // and the ring is still a 1px hairline, so a resting badge is still a
+        // quiet white squircle and an active one still lights up. What the
+        // pictogram now says is what KIND of device this is — a fact that is
+        // true whether or not it happens to be switched on, and the one thing
+        // a person scanning a floor plan is actually reading.
+        glyph: override ?? categoryColor(category),
+        ink: cssVar("--text-secondary") || FALLBACK_NEUTRAL_GLYPH,
         // The brand guidelines' badge table gives even the IDLE state a ring:
         // a 1px hairline. It is what keeps a resting badge reading as a
         // deliberate object rather than a shape that happens to sit on the
@@ -219,6 +256,7 @@ export function categorySurfaceRinged(
   return {
     fill: face.fill,
     glyph: face.glyph,
+    ink: face.ink,
     ring: ring.ring,
     ringDashed: ring.ringDashed,
     ringBold: ring.ringBold,

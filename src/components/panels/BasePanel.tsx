@@ -113,7 +113,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
         className={`modal panel-modal${className ? ` ${className}` : ""}`}
         style={deviceTint ? {
           ["--device-fill" as string]: deviceTint.fill,
-          ["--device-ink" as string]: deviceTint.glyph,
+          ["--device-ink" as string]: deviceTint.ink,
           ["--device-ring" as string]: deviceTint.ring,
         } : undefined}
         onClick={(e) => e.stopPropagation()}

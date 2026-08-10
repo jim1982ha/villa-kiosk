@@ -1,3 +1,78 @@
+## 2.251.0
+
+### Fixed — the bottom bar's eyebrow labels failed WCAG AA in light theme
+
+LOCKS, POOL, LIGHTS, AC, ENERGY, SCENE were drawn in `--text-dim`, which in
+light theme is `#9AA09B`. Against the summary bar that is a contrast ratio of
+**2.4:1**; WCAG AA asks 4.5:1 for text at 11px, so the label was failing by
+nearly half and reading, correctly, as "too light". `--text-secondary`
+(`#5A5F5B`) is **5.8:1**.
+
+The token itself was left alone. Darkening `--text-dim` far enough to pass
+would have taken it to roughly `#6E736F`, which is within a hair of
+`--text-secondary` and would have collapsed a three-step text hierarchy into
+two — and the token has 18 uses, most of them decorative (separators, input
+placeholders, a disabled chevron, two backgrounds) where a dim tone is the
+point. The misuse was applying a decorative tone to text.
+
+So the four places drawing the SAME eyebrow — an uppercase, letter-spaced
+micro-caps label — move to `--text-secondary` together: the bottom bar's tile
+label, `.entity-label`, the settings section headings and the summary panel's
+room sub-headings. Rolled out by what the rule applies to rather than by the
+one site that was reported.
+
+### Changed — a badge's pictogram always carries its category colour
+
+Reported against a network sensor sitting at "connected": its badge drew a grey
+gauge on a grey card, indistinguishable from a device that is off, unbound or
+dead. Worse, `formatSensorValue` deliberately HIDES a nominal reading
+("Connected", "OK", "Normal") as redundant clutter, on the stated grounds that
+"the badge is already category-coloured" — which it was not. Between the two
+rules the badge carried no information at all: no colour, no text, just a grey
+shape saying a device exists somewhere.
+
+The classification was working as designed. `classifyDeviceActivity` reads a
+sensor with a plain reading as `info`, `SURFACE_STATE` maps `info` to the `off`
+surface row, and that row painted fill, ring AND glyph neutral.
+
+The pictogram now takes the device's own hue in every state except the two
+where a STATUS colour outranks it (red for alert, amber for unavailable). Fill
+and ring are untouched in every state, so **neutral by default is unchanged**:
+it is a rule about the SURFACE, and a resting badge is still a quiet white
+squircle with a 1px hairline, an active one still lights up with its tinted
+fill and full-weight ring. What the glyph now says is what KIND of device this
+is — a fact that is true whether or not it happens to be switched on, and the
+thing a person scanning a floor plan is actually reading.
+
+Because every surface in the app resolves through one function, this lands
+everywhere at once and identically: both 3D badge styles, the bottom bar's icon
+chips, the Cockpit's category tiles, the device-group list. That is the point
+of the function.
+
+`CategorySurface` grows an `ink` field, and this is the part worth knowing
+about. Four call sites were reading `.glyph` for TEXT — a card badge's value
+("0 W"), an entity group's count, a room chip's name, and the device panel's
+button ink — purely because the pictogram and the text happened to be the same
+neutral grey. Colouring the glyph would have taken all four with it, so every
+room chip would have been drawn in a category hue, which is precisely the
+mistake the "don't reuse CATEGORY_COLORS for non-category UI" rule exists to
+prevent. They are different questions and now have different fields: `glyph`
+says what kind of device this is, `ink` is just legible text. `ink` is exactly
+what `glyph` used to return for each state, so those four are byte-identical.
+The Scene tile moves to `.ink` for the same reason — it is the app's own
+chrome, not a device.
+
+The Map colours legend's "Off / idle" row is reworded to match ("Neutral
+square, category-coloured icon"). A legend describing a badge the app no longer
+draws is worse than no legend.
+
+One number to be aware of: on the light theme's near-white surface the six
+category hues sit between 4.2:1 and 5.7:1 against it, except `--cat-light`'s
+amber at about 2.95:1 — marginal against WCAG 1.4.11's 3:1 for a non-text
+component. It is unchanged from what the ACTIVE state has always drawn, so this
+is not a regression, but it is the one hue that would benefit from darkening if
+the resting bulb reads faint on a bright screen.
+
 ## 2.250.0
 
 ### Changed — a cross-room collision costs two badges, not a room
