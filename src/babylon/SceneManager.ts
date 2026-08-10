@@ -925,37 +925,39 @@ export class SceneManager {
   }
 
   /**
-   * Point the overview camera at a room so that ALL of its badges are drawn
-   * individually and fully on screen — the whole of "tap a room, see its
-   * devices", decided and executed in ONE place.
+   * Show a room: frame it, and guarantee every one of its badges is drawn
+   * individually. The whole of "tap a room, see its devices".
    *
-   * Returns:
-   *   "focused" — the pose was applied and the room's badges will be separate;
-   *   "cannot"  — no zoom this camera allows can separate them (two devices on
-   *               one 3D point, or a pair that only clears past the zoom
-   *               limit). NOTHING is moved: flying somewhere and leaving the
-   *               summary exactly as it was is the "it did nothing" report,
-   *               and the caller has something better to offer — the list.
-   *   null      — not applicable here (first-person, or a room the camera
-   *               cannot locate at all).
+   * ── Why this cannot fail ─────────────────────────────────────────────────
+   * Four earlier versions treated the guarantee as something the camera had to
+   * earn — find a zoom at which the room's badges happen not to collide — and
+   * every one of them could come back "I still see the chip", because for a
+   * room with two devices at ONE 3D point no such zoom exists. Reported four
+   * times.
    *
-   * One entry point on purpose. This was previously two — a `roomCanDeclutter`
-   * query followed by a separate navigate — which solved the same thing twice
-   * and, because the query took the chip's room name while the navigate took
-   * the teleport point's, could answer the two calls differently for one tap.
-   * That is how the same gesture produced three different outcomes.
+   * So the two halves are now separate, and only one of them can fail:
+   *   * the EXEMPTION (EntityVisuals.setFocusedRoom) makes that room's badges
+   *     take no part in grouping at all. This is unconditional — it needs no
+   *     geometry, no camera and no solve — so the room's badges are individual
+   *     the moment this returns, whatever else happens;
+   *   * the FRAMING picks the tightest shot that fits them all, separating
+   *     them too where a distance exists. If the room cannot be located, or we
+   *     are in first-person where there is no orbit radius, the framing is
+   *     simply skipped — and the exemption still stands.
    *
-   * No floor switch: a room chip is only drawn for badges on the ACTIVE storey
-   * (cullLabels), so a chip the user just tapped is on the floor they are
-   * already looking at, by construction.
+   * Deliberately returns nothing. There is no outcome for a caller to branch
+   * on any more: it never falls back to a modal, and it never leaves the room
+   * summarised. Callers that used to choose between those paths were the
+   * reason one gesture had three results.
    */
-  focusRoom(roomName: string): "focused" | "cannot" | null {
-    if (this.viewMode !== "overview") return null;
+  focusRoom(roomName: string): void {
+    // First, and unconditionally: the part that is a guarantee.
+    this.visuals.setFocusedRoom(roomName);
+    if (this.viewMode !== "overview") return;
     const framed = this.computeRoomOverviewPose(roomName);
-    if (!framed) return null;
-    if (!framed.declutters) return "cannot";
-    this.overview.applyPose(framed);
-    return "focused";
+    // `declutters` is now advisory, not a veto: it says whether the shot also
+    // separates the badges or merely frames them. Either way they are drawn.
+    if (framed) this.overview.applyPose(framed);
   }
 
   private computeRoomOverviewPose(

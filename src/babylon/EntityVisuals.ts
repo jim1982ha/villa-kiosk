@@ -748,6 +748,39 @@ export class EntityVisuals {
   /** Room-cluster chips, keyed by room name. Built lazily the first time a
    *  room clusters; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
+  /**
+   * The room the user asked to SEE (tapped its chip), as a roomKey — or null.
+   *
+   * ── Why an exemption exists at all ────────────────────────────────────────
+   * "Tap a room, see its devices" was implemented four times as a search for a
+   * zoom at which that room's badges happen not to collide, and it kept coming
+   * back as "I still see the chip". The last of those attempts is why: two
+   * devices mounted at ONE 3D point (a ceiling fan and its own light kit) are
+   * separated by no zoom level that exists, so for those rooms the promise is
+   * unkeepable by construction — no amount of solving finds a distance that
+   * is not there.
+   *
+   * The requirement is not "try hard to declutter". It is: tapping a room ALWAYS
+   * shows that room's badges, never a summary of them. So the focused room is
+   * simply exempt from grouping: its badges take no part in the pile-building
+   * at all (see groupBadges), which makes them individually drawn as a matter
+   * of fact rather than as an outcome the camera has to earn. The zoom solve
+   * still runs and still picks the tightest shot that separates them where one
+   * exists — it just no longer decides WHETHER the user gets what they asked
+   * for.
+   *
+   * The trade-off is explicit: for a room whose devices genuinely cannot be
+   * separated, its two badges will overlap at the chosen zoom. That is the
+   * honest presentation of "these two things are in the same place", and it is
+   * what was asked for over a chip that hides both.
+   */
+  private focusedRoom: string | null = null;
+  /** The quantised zoom the focus was granted at. The focus lasts exactly as
+   *  long as that zoom does — see cullLabels — so panning around a focused
+   *  room keeps it open, and zooming away lets the map behave normally again
+   *  without needing any camera-event plumbing to tell us the user did it. */
+  private focusedAtZoom = 0;
+
   /** Entity groups drawn this frame, keyed by PendingEntityGroup.key. Same
    *  lazy-build / dispose-with-rebuildLabels lifecycle as `clusters`. */
   private entityGroups = new Map<string, EntityGroupControls>();
@@ -1964,6 +1997,30 @@ export class EntityVisuals {
   }
 
   /**
+   * Grant (or drop) a room's exemption from grouping — see focusedRoom.
+   *
+   * Called when the user taps that room's chip. `null` drops it. Idempotent
+   * apart from marking the layout dirty, which it must, since the exemption
+   * changes what the very next pass will draw.
+   */
+  setFocusedRoom(room: string | null): void {
+    const key = room === null ? null : roomKey(room);
+    if (key === this.focusedRoom) return;
+    this.focusedRoom = key;
+    // Stamped on the NEXT pass, once the camera has actually been moved to the
+    // solved pose — reading the zoom here would capture the pre-flight one and
+    // clear the focus on arrival.
+    this.focusedAtZoom = 0;
+    this.markLayoutDirty();
+    this.requestRender();
+  }
+
+  /** The room currently exempt from grouping, if any (roomKey form). */
+  focusedRoomKey(): string | null {
+    return this.focusedRoom;
+  }
+
+  /**
    * The closest camera radius at which every one of this room's badges is
    * drawn INDIVIDUALLY and lands FULLY on screen — the answer behind "tap a
    * room, see its devices".
@@ -2994,6 +3051,21 @@ export class EntityVisuals {
     // shownPool, so refilling next frame reuses them.
     shown.length = shownCount;
 
+    // ── The focus lasts exactly as long as its zoom ───────────────────────
+    // Resolved BEFORE any grouping runs, so a single pass cannot group with a
+    // focus it is about to drop. No camera-event plumbing, and nothing that
+    // has to tell "the user zoomed" from "we flew there": the exemption is
+    // stamped with the quantised zoom of the first pass after it was granted
+    // and dropped the moment that zoom changes. Panning keeps it — the zoom is
+    // unchanged, and looking around a room you asked to see should not collapse
+    // it — while zooming out ends it, which is exactly when a summary becomes
+    // the right answer again.
+    if (this.focusedRoom !== null) {
+      const z = this.quantisedPixelsPerWorldUnit(shown);
+      if (this.focusedAtZoom === 0) this.focusedAtZoom = z;
+      else if (z !== this.focusedAtZoom) { this.focusedRoom = null; this.focusedAtZoom = 0; }
+    }
+
     // ── Layout ───────────────────────────────────────────────────────────
     // Grouping is decided in world space against the current zoom alone, so
     // panning/orbiting cannot change it and the same view always renders the
@@ -3291,8 +3363,18 @@ export class EntityVisuals {
     if (pxPerWorld > 0) {
       const reach = reachAt(pxPerWorld);
       const gapW = (BADGE_MIN_GAP_PX * scale) / pxPerWorld;
+      // A badge in the FOCUSED room joins no pile — see focusedRoom. Left out
+      // of the union entirely rather than filtered downstream, so it stays a
+      // singleton and every later tier (entity group, room chip) is a no-op
+      // for it by construction, with no branch anywhere else to keep in step.
+      const focus = this.focusedRoom;
+      const exempt = focus === null
+        ? null
+        : shown.map((sl) => roomKey(this.roomOf(sl.id)) === focus);
       for (let i = 0; i < n; i++) {
+        if (exempt?.[i]) continue;
         for (let j = i + 1; j < n; j++) {
+          if (exempt?.[j]) continue;
           const need = reach[i] + reach[j] + gapW;
           if (dist2(i, j) < need * need) {
             const ra = find(i), rb = find(j);

@@ -638,38 +638,23 @@ export default function Dashboard() {
   const [roomChoices, setRoomChoices] = useState<RoomChoice[] | null>(null);
 
   const goToRoom = useCallback(
-    (room: string, entityIds: string[]) => {
-      // roomKey(), not ===: every room-name comparison in this app is
-      // case- and whitespace-insensitive (see config/roomKey), and this one
-      // was the exception. A saved point named "Swimming pool" against a chip
-      // ── ONE decision, always the same three outcomes ──────────────────
-      // Tapping a room used to have three different results depending on
-      // which branch happened to fire: sometimes the device list, sometimes
-      // a camera move that left the chip exactly where it was, sometimes the
-      // badges. The cause was that "can this work?" and "do it" were separate
-      // calls, solved separately, and given different room names. focusRoom
-      // decides and acts in one place, so the outcome is a property of the
-      // room rather than of the path taken to it.
+    (room: string) => {
+      // ── Tapping a room ALWAYS shows that room's badges ─────────────────
+      // One call, no branches, no outcome to inspect. focusRoom exempts the
+      // room from grouping (unconditional — see its docstring) and frames it;
+      // it cannot report failure because there is no failure mode left to
+      // report. Everything that used to sit here — "can it declutter?", a
+      // saved-viewpoint fallback, a device-list fallback — existed to choose
+      // between outcomes, and choosing is precisely what made one gesture
+      // behave three different ways.
       //
-      //   focused → the badges are now individual on the map. Done.
-      //   cannot  → no zoom can separate them (two devices on one 3D point).
-      //             Nothing moved, and the device list is what the person was
-      //             actually after.
-      //   null    → first-person, or a room with no locatable geometry: fall
-      //             through to the saved viewpoint, then to the list.
-      const outcome = manager?.focusRoom(room) ?? null;
-      if (outcome === "focused") return;
-      if (outcome === "cannot") { setClusterGroup({ room, entityIds }); return; }
-      // roomKey(), not ===: every room-name comparison in this app is case-
-      // and whitespace-insensitive (config/roomKey), and this one was the
-      // exception — a point saved as "Swimming pool" against a chip reading
-      // "Swimming Pool" simply missed.
-      const key = roomKey(room);
-      const point = config.teleportPoints.find((p) => roomKey(p.name) === key);
-      if (point) { handleTeleport(point); return; }
-      setClusterGroup({ room, entityIds });
+      // In particular this must NEVER open the device list. A modal over the
+      // map is not "showing the room"; it is the answer to a different
+      // question (long-press, which still opens it), and reaching it from a
+      // plain tap is what the report was about.
+      manager?.focusRoom(room);
     },
-    [config.teleportPoints, handleTeleport, manager],
+    [manager],
   );
 
   const handleClusterTapped = useCallback(
@@ -686,7 +671,7 @@ export default function Dashboard() {
         })));
         return;
       }
-      goToRoom(room, entityIds);
+      goToRoom(room);
     },
     [goToRoom, resolvedRooms],
   );
@@ -941,11 +926,7 @@ export default function Dashboard() {
           onClose={() => setRoomChoices(null)}
           onPick={(room) => {
             setRoomChoices(null);
-            // Re-derive the chosen room's own devices; the chip's id list
-            // covered every room it had merged.
-            const ids = [...mappedEntityIds].filter(
-              (id) => roomKey(resolvedRooms[id] ?? "") === roomKey(room));
-            goToRoom(room, ids);
+            goToRoom(room);
           }}
         />
       )}

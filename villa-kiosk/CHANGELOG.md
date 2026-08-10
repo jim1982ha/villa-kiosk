@@ -1,3 +1,9 @@
+## 2.213.0
+
+### Fixed — tapping a room now ALWAYS shows that room's badges, with no way to fail
+
+Four previous attempts treated this as something the camera had to earn: search for a zoom at which the room's badges happen not to collide. For a room whose devices sit at one 3D point — a ceiling fan and its own light kit — no such zoom exists, so the promise was unkeepable by construction and the chip kept coming back. The two halves are now separate and only one of them can fail. The focused room is EXEMPT from grouping outright: its badges take no part in pile-building at all, which needs no geometry, no camera and no solve, so they are individually drawn the moment the tap lands. The framing then picks the tightest shot that fits them, still separating them where a distance exists; if the room cannot be located, or the view is first-person, the framing is skipped and the exemption stands regardless. A tap can no longer open a modal or leave a summary on screen, because there is no longer any outcome for it to branch on — long-press still opens the device list, which is a different question. The exemption lasts exactly as long as the zoom it was granted at, so panning around the room keeps it open and zooming out lets the map summarise normally again.
+
 ## 2.212.0
 
 ### Fixed — tapping a room gave three different answers depending on the path taken
