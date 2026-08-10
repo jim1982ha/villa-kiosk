@@ -1893,6 +1893,12 @@ input[type="range"]::-moz-range-thumb {
    Anchor from the right edge instead (opens leftward) whenever it's in a
    header row. */
 .settings-header .info-tip .info-pop { left: auto; right: 0; }
+/* The header's theme control now carries a written word. Two icon-only
+   sun/moon triplets on one screen (this and Villa lighting) were reported as
+   reading like the same duplicated control — see SettingsModal's note. The
+   label is the fix; changing one glyph was tried first and was not enough. */
+.settings-header-control { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.settings-inline-label { font-size: var(--text-2xs); color: var(--text-muted); white-space: nowrap; }
 /* Two sliders (or coordinate fields) side by side; stacks on narrow screens. */
 .slider-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-items: start; }
 .slider-pair > div { min-width: 0; }

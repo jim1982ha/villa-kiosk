@@ -119,12 +119,29 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               reaches it. The night theme itself is untouched — only the
               redundant way of asking for it is gone. A device that already
               has "night" stored keeps rendering in it; picking any of these
-              three moves it off, so nothing can get stuck. */}
+              three moves it off, so nothing can get stuck.
+
+              ⚠️ THIS IS NOT THE DAY/NIGHT PREVIEW, and the two being mistaken
+              for each other is a REPORTED problem, not a hypothetical one —
+              by the person who commissioned both. They are genuinely
+              different and neither is redundant:
+                • this one themes the INTERFACE (panels, badges, text);
+                • dayNightPreview below relights the VILLA (which baked atlas
+                  the 3D model shows), and only exists for a baked villa.
+              An earlier attempt to separate them swapped one icon (Sunrise
+              rather than Sun) and left both controls icon-only. That was not
+              enough: two unlabelled icon triplets of sun/moon glyphs on one
+              screen read as one duplicated control however the glyphs differ.
+              Both now carry a written label, which is the part that was
+              actually missing. Do not "de-duplicate" these by deleting one —
+              that removes real capability. */}
           {can("customizeAppearance") && (
-            <div className="segmented segmented-icons" role="group" aria-label="Theme">
+            <div className="settings-header-control">
+              <span className="settings-inline-label">Interface</span>
+            <div className="segmented segmented-icons" role="group" aria-label="Interface theme">
               {([
-                { key: "light", label: "Light theme", icon: Sun },
-                { key: "dark", label: "Dark theme", icon: Moon },
+                { key: "light", label: "Light interface theme", icon: Sun },
+                { key: "dark", label: "Dark interface theme", icon: Moon },
                 { key: "auto", label: "Auto — follows the system, and dims to the night theme after dark", icon: Monitor },
               ] as const).map(({ key, label, icon: Icon }) => (
                 <button
@@ -138,6 +155,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
                   <Icon size={17} />
                 </button>
               ))}
+            </div>
             </div>
           )}
         </div>
@@ -242,11 +260,19 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             // for "Day": the Theme selector above already uses Sun for its
             // Light option, and the two sat close enough on the same screen
             // to read as the same control.
-            <div className="segmented segmented-icons daynight-segmented" role="group" aria-label="Day/night preview">
+            // ⚠️ Distinct from the INTERFACE theme in the header — see the
+            // long note there. This relights the VILLA; that one themes the
+            // panels. The written label is what keeps them apart: it now sits
+            // in a labelled wrapper like its slider siblings, so the control
+            // states what it does instead of relying on the reader decoding a
+            // sun/moon glyph that the header control also uses.
+            <div style={{ flex: "0 0 auto", minWidth: 0 }}>
+            <label>Villa lighting</label>
+            <div className="segmented segmented-icons daynight-segmented" role="group" aria-label="Villa lighting">
               {([
-                { key: "day", label: "Force day view mode", icon: Sunrise },
-                { key: "night", label: "Force night view mode", icon: Moon },
-                { key: "auto", label: "Automatic mode — follows the real day/night cycle", icon: SunMoon },
+                { key: "day", label: "Light the villa as daytime", icon: Sunrise },
+                { key: "night", label: "Light the villa as night", icon: Moon },
+                { key: "auto", label: "Automatic — the villa follows the real day/night cycle", icon: SunMoon },
               ] as const).map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
@@ -260,11 +286,12 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
                 </button>
               ))}
             </div>
+            </div>
           )}
         </div>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
           Overall scene exposure, and how much extra dimming applies at night — both update live.
-          {(manager?.renderFx.isBaked() ?? false) && " Day/night preview forces this villa's baked look, or follows the real cycle on Auto."}
+          {(manager?.renderFx.isBaked() ?? false) && " Villa lighting forces this villa's baked day or night look, or follows the real cycle on Auto — it relights the 3D model, unlike the Interface theme in the header, which only recolours the panels."}
         </p>
 
         {/* Light effect strength scales a lit fixture's room illumination in

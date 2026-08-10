@@ -1,3 +1,16 @@
+## 2.229.0
+
+### Changed — "Interface" and "Villa lighting" now say what they are
+
+Reported as two controls that "feel the same", with a request to delete the redundant one. They are not redundant, and deleting either would have removed real capability — so this labels them instead.
+
+- **Interface** (header) themes the UI: panels, badges, text. Light / Dark / Auto.
+- **Villa lighting** (beside Brightness and Night dimming) relights the 3D model — which baked atlas the villa shows — and only exists for a baked villa at all.
+
+The confusion was already anticipated in the code: a comment explains that the day/night control uses `Sunrise` rather than `Sun` specifically because "the Theme selector above already uses Sun for its Light option, and the two sat close enough on the same screen to read as the same control". That mitigation was not enough, and the evidence is decisive — the person who commissioned both still could not tell them apart. Two unlabelled triplets of sun/moon glyphs on one screen read as one duplicated control however carefully the glyphs differ.
+
+Both now carry a written word, which is the part that was actually missing, and the helper text states the distinction outright rather than leaving it to be inferred. The `⚠️` note in `SettingsModal` records that neither may be deleted as a duplicate, so this does not get "cleaned up" later by someone reading the same two icon rows the same way.
+
 ## 2.228.0
 
 ### Fixed — the stars were soft white orbs, not stars
