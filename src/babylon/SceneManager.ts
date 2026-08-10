@@ -925,73 +925,39 @@ export class SceneManager {
   }
 
   /**
-   * Frame a room by NAME, for a room with no saved teleport point.
+   * Point the overview camera at a room so that ALL of its badges are drawn
+   * individually and fully on screen — the whole of "tap a room, see its
+   * devices", decided and executed in ONE place.
    *
-   * The saved point was never what located a room — computeRoomOverviewPose
-   * solves the whole pose from the room's own geometry (its wall polygon, or
-   * failing that its device anchors) and read only `name` off the point. So a
-   * room the camera can measure is a room it can fly to, saved viewpoint or
-   * not, and requiring one meant "zoom to this room" silently did nothing on
-   * any install with an empty teleportPoints table — i.e. every fresh one,
-   * since that table deliberately ships empty.
+   * Returns:
+   *   "focused" — the pose was applied and the room's badges will be separate;
+   *   "cannot"  — no zoom this camera allows can separate them (two devices on
+   *               one 3D point, or a pair that only clears past the zoom
+   *               limit). NOTHING is moved: flying somewhere and leaving the
+   *               summary exactly as it was is the "it did nothing" report,
+   *               and the caller has something better to offer — the list.
+   *   null      — not applicable here (first-person, or a room the camera
+   *               cannot locate at all).
    *
-   * No floor switch: a room chip is only drawn for badges on the ACTIVE
-   * storey (cullLabels), so a chip the user just tapped is on the floor they
-   * are already looking at, by construction.
+   * One entry point on purpose. This was previously two — a `roomCanDeclutter`
+   * query followed by a separate navigate — which solved the same thing twice
+   * and, because the query took the chip's room name while the navigate took
+   * the teleport point's, could answer the two calls differently for one tap.
+   * That is how the same gesture produced three different outcomes.
    *
-   * Overview only, and it says so by returning false rather than guessing.
-   * First-person navigation needs a walk-to POSITION and a storey — which is
-   * exactly what a teleport point carries and this path does not have — so
-   * inventing one (the room's centroid, on the current floor) could drop
-   * someone inside a wall. The caller falls back to the device list, which is
-   * useful rather than merely safe.
+   * No floor switch: a room chip is only drawn for badges on the ACTIVE storey
+   * (cullLabels), so a chip the user just tapped is on the floor they are
+   * already looking at, by construction.
    */
-  navigateToRoomByName(roomName: string): boolean {
-    if (this.viewMode !== "overview") return false;
+  focusRoom(roomName: string): "focused" | "cannot" | null {
+    if (this.viewMode !== "overview") return null;
     const framed = this.computeRoomOverviewPose(roomName);
-    if (!framed) return false;
+    if (!framed) return null;
+    if (!framed.declutters) return "cannot";
     this.overview.applyPose(framed);
-    return true;
+    return "focused";
   }
 
-  /** Can flying to this room actually reveal its individual badges, or will it
-   *  still be a summary when the camera arrives? See
-   *  EntityVisuals.roomHasInseparableBadges — the caller uses this to offer
-   *  the device list instead of a journey to nowhere. */
-  roomCanDeclutter(roomName: string): boolean {
-    if (this.viewMode !== "overview") return true; // not our question to answer
-    return this.computeRoomOverviewPose(roomName)?.declutters ?? true;
-  }
-
-  /**
-   * Recompute a room's overview framing from its true size instead of
-   * trusting whatever radius happened to be saved with its teleport point —
-   * an installer's one-time eyeballed zoom doesn't reliably frame the room,
-   * and a shot that isn't tight enough also leaves the room's badges grouped
-   * after "zooming to" it, since grouping is a function of zoom (see
-   * EntityVisuals.groupBadges). Both halves of that report come from the
-   * same cause and are fixed here.
-   *
-   * Framing uses the standard "fit the bounding SPHERE" construction every
-   * CAD/3D viewer's zoom-to-fit uses, rather than comparing a raw span to a
-   * radius. A sphere subtends the same angle from every direction, so the
-   * result is correct for ANY tilt/heading (the previous span-based formula
-   * silently under-framed at anything other than straight down, because a
-   * tilted view has to cover more ground depth than the room's own width),
-   * and it accounts for BOTH field-of-view axes so a portrait phone gets the
-   * same coverage as a landscape desktop.
-   *
-   * The room's REAL wall polygon is preferred; a point-only teleport spot
-   * (staircase landing, etc. — no polygon) falls back to the bounding box of
-   * its own registered entities, with a wider margin since anchors sit at
-   * individual devices rather than at the room's actual edges.
-   *
-   * The CURRENT heading/tilt is preserved — only the target and distance
-   * change — so flying to a room reads as the camera moving over to it
-   * rather than the view snapping to some stored orientation, the same way a
-   * map's "zoom to this feature" keeps your bearing. Returns null when the
-   * room has neither a polygon nor any entity to measure.
-   */
   private computeRoomOverviewPose(
     roomName: string,
   ): {

@@ -642,32 +642,31 @@ export default function Dashboard() {
       // roomKey(), not ===: every room-name comparison in this app is
       // case- and whitespace-insensitive (see config/roomKey), and this one
       // was the exception. A saved point named "Swimming pool" against a chip
-      // reading "Swimming Pool" simply missed, and the tap fell through to the
-      // device list — indistinguishable from a room that genuinely has no
-      // saved viewpoint.
-      // Some rooms cannot be decluttered by ANY zoom — two devices sharing one
-      // 3D point stay one pile forever. Flying there would move the camera and
-      // leave the summary exactly as it was, which reads as the tap having
-      // done nothing (reported, with a screenshot of a terrace still showing
-      // its chip after the camera had visibly travelled). The device list is
-      // what that person was after anyway, so offer it rather than a journey
-      // that cannot deliver.
-      if (manager && !manager.roomCanDeclutter(room)) {
-        setClusterGroup({ room, entityIds });
-        return;
-      }
+      // ── ONE decision, always the same three outcomes ──────────────────
+      // Tapping a room used to have three different results depending on
+      // which branch happened to fire: sometimes the device list, sometimes
+      // a camera move that left the chip exactly where it was, sometimes the
+      // badges. The cause was that "can this work?" and "do it" were separate
+      // calls, solved separately, and given different room names. focusRoom
+      // decides and acts in one place, so the outcome is a property of the
+      // room rather than of the path taken to it.
+      //
+      //   focused → the badges are now individual on the map. Done.
+      //   cannot  → no zoom can separate them (two devices on one 3D point).
+      //             Nothing moved, and the device list is what the person was
+      //             actually after.
+      //   null    → first-person, or a room with no locatable geometry: fall
+      //             through to the saved viewpoint, then to the list.
+      const outcome = manager?.focusRoom(room) ?? null;
+      if (outcome === "focused") return;
+      if (outcome === "cannot") { setClusterGroup({ room, entityIds }); return; }
+      // roomKey(), not ===: every room-name comparison in this app is case-
+      // and whitespace-insensitive (config/roomKey), and this one was the
+      // exception — a point saved as "Swimming pool" against a chip reading
+      // "Swimming Pool" simply missed.
       const key = roomKey(room);
       const point = config.teleportPoints.find((p) => roomKey(p.name) === key);
-      // A room with no SAVED viewpoint can still be framed: its geometry is
-      // what the pose is solved from (see computeRoomOverviewPose — room
-      // polygon, or the room's own device anchors), and the saved point only
-      // ever supplied the name and storey. Falling back to the device list
-      // here meant "zoom to this room" silently did nothing on any install
-      // whose teleportPoints are empty — which is every fresh install, since
-      // that table deliberately ships empty (CLAUDE.md's no-seeded-config
-      // rule). Only a room the camera cannot locate at all still falls back.
       if (point) { handleTeleport(point); return; }
-      if (manager?.navigateToRoomByName(room)) return;
       setClusterGroup({ room, entityIds });
     },
     [config.teleportPoints, handleTeleport, manager],

@@ -1,3 +1,11 @@
+## 2.212.0
+
+### Fixed — tapping a room gave three different answers depending on the path taken
+
+The same gesture could open the device list, move the camera and leave the chip exactly where it was, or show the badges properly. Two causes, both structural. The solver only considered the tapped room's OWN badges, but grouping runs over every badge on the map and is deliberately not filtered by what is on screen — so a pile spanning two rooms sends both to their chips, and a shot that separated a room's own pair perfectly could still land with one of them touching a neighbour's badge just off-frame. And "can this work?" and "do it" were two separate calls that solved the same thing twice, from two different room names (the chip's, and the saved teleport point's), so they could disagree about one tap.
+
+The solver now runs against every eligible badge, requiring only the tapped room's own to be framed, and asks the exact question that decides the outcome: is each of this room's badges clear of every other badge. Eligibility — category filter, floor, mesh enabled — is now one shared predicate rather than a copy in each place. And the whole gesture is one call with three outcomes: the badges are shown, or nothing moves and the device list opens because no zoom can separate them, or it falls through to the saved viewpoint for a room the camera cannot locate.
+
 ## 2.211.0
 
 ### Fixed — zoom-to-room now searches for the answer instead of deriving it

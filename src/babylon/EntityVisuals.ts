@@ -2017,16 +2017,27 @@ export class EntityVisuals {
       minRadius: number; maxRadius: number;
     },
   ): { radius: number; declutters: boolean } | null {
-    const key = roomKey(room);
-    const members: { lbl: LabelControls; wx: number; wy: number; wz: number }[] = [];
-    for (const [id, lbl] of this.labels) {
-      if (roomKey(this.roomOf(id)) !== key) continue;
-      if (!lbl.anchor.isEnabled()) continue;
-      const p = lbl.anchor.getAbsolutePosition();
-      members.push({ lbl, wx: p.x, wy: p.y, wz: p.z });
-    }
-    if (members.length < 2) return null;
     if (!(view.vpH > 0) || !(view.vFov > 0) || !(view.halfAngle > 0)) return null;
+    // ── EVERY eligible badge, not just this room's ────────────────────────
+    // groupBadges runs over the whole shown set and is deliberately NOT
+    // filtered by what is currently framed, so a pile can span rooms — and a
+    // pile that spans rooms sends BOTH of them to their chips (cullLabels'
+    // tier list). A solver that only looked at this room's own badges
+    // therefore promised shots it could not deliver: the room's two badges
+    // separated perfectly, one of them still touched a neighbour's badge just
+    // outside the frame, and the chip the user tapped was still there when the
+    // camera arrived. Same tap, different answer depending on where the
+    // neighbours happened to be — which is exactly the inconsistency reported.
+    const key = roomKey(room);
+    const hidden = this.config.hiddenCategories;
+    const all: { lbl: LabelControls; wx: number; wy: number; wz: number; mine: boolean }[] = [];
+    for (const [id, lbl] of this.labels) {
+      if (!this.badgeEligible(id, lbl, hidden)) continue;
+      const p = lbl.anchor.getAbsolutePosition();
+      all.push({ lbl, wx: p.x, wy: p.y, wz: p.z, mine: roomKey(this.roomOf(id)) === key });
+    }
+    const members = all;
+    if (members.filter((m) => m.mine).length < 2) return null;
 
     // ── Measure the badges the DECISION will see ──────────────────────────
     // Two corrections, both of which were previously wrong in ways that read
@@ -2069,10 +2080,14 @@ export class EntityVisuals {
     // and has its own extent, so framing the anchors frames the wrong thing —
     // the topmost badge clips while its anchor sits comfortably inside.
     const reachPx = boxes.map((b) => Math.abs(b.cy) + Math.max(b.halfW, b.halfH));
-    // Distance of each anchor from the shot's centre, along the axes the frame
-    // actually bounds.
+    // Distance of each anchor from the shot's centre. Only THIS room's badges
+    // have to be in frame — a neighbour's badge sitting off screen is fine and
+    // expected, and demanding it be visible would push every shot out to frame
+    // the whole villa.
     const fromCentre = members.map((m) =>
       Math.hypot(m.wx - view.cx, m.wy - view.cy, m.wz - view.cz));
+    const mine: number[] = [];
+    for (let i = 0; i < n; i++) if (members[i].mine) mine.push(i);
 
     const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
     const tanV = Math.tan(view.vFov / 2);
@@ -2095,20 +2110,27 @@ export class EntityVisuals {
       // Every badge fully inside the frame?
       const halfExtent = radius * tanHalf;
       let fits = true;
-      for (let i = 0; i < n && fits; i++) {
-        if (fromCentre[i] + reachPx[i] / pxPerWorld > halfExtent) fits = false;
+      for (const i of mine) {
+        if (fromCentre[i] + reachPx[i] / pxPerWorld > halfExtent) { fits = false; break; }
       }
       if (!fits) continue;
       if (firstFitting === null) firstFitting = radius;
 
-      // Nothing grouped? Same reach/gap test as groupBadges, world units.
+      // Is every badge of THIS room drawn on its own here? A badge joins a pile
+      // only if it directly touches something (union-find is transitive, but a
+      // chain still has to start with a direct contact), so "clear of every
+      // other eligible badge" is the exact test — against neighbours from other
+      // rooms too, since those are what put the room back in a chip.
       let clean = true;
-      for (let i = 0; i < n && clean; i++) {
-        for (let j = i + 1; j < n; j++) {
+      for (const i of mine) {
+        for (let j = 0; j < n; j++) {
+          if (j === i) continue;
+          const a = Math.min(i, j), b = Math.max(i, j);
           const need =
             (boxes[i].halfW * allow + boxes[j].halfW * allow + gapPx) / pxPerWorld;
-          if (dist[i * n + j] < need) { clean = false; break; }
+          if (dist[a * n + b] < need) { clean = false; break; }
         }
+        if (!clean) break;
       }
       if (clean) return { radius, declutters: true };
     }
@@ -2831,6 +2853,48 @@ export class EntityVisuals {
     this.markLayoutDirty();
   }
 
+  /**
+   * Does this badge take part in the layout at all?
+   *
+   * ONE definition, because there were two: cullLabels applied category,
+   * mesh-enabled and floor filters inline, and the zoom-to-room solver
+   * (solveRoomZoomRadius) applied a looser set of its own. So the solver could
+   * promise a shot that decluttered a set of badges the renderer was never
+   * going to draw, or miss one it was — which is how "tap a room" came out
+   * differently on consecutive taps.
+   *
+   * Deliberately NOT filtered: suppressedEntityIds (hidden-in-HA /
+   * config-diagnostic). A previous version hid the badge entirely for any
+   * suppressed entity, which regressed every UniFi access-point "State"
+   * sensor (diagnostic-category by the integration's own convention) off the
+   * map even though each was deliberately bound to real geometry. The map
+   * represents physical devices spatially; HA's "diagnostic" classification is
+   * about decluttering a flat SETTINGS list, a different concern entirely. The
+   * room chip's COUNT is filtered instead (updateClusters), which is the only
+   * place a mismatch against SummaryGroupPanel's list actually mattered.
+   *
+   * Enabled-state and floorIndex come from the entity's bound MESH (byEntity),
+   * not the anchor's own parent chain: most anchors are parented straight to
+   * their mesh (buildLabelAnchors) so the two agree, but a fan's anchor is
+   * deliberately detached onto its spin pivot's non-rotating parent
+   * (detachFanLabelAnchor) so the badge doesn't spin with the blades — and
+   * that parent is a shared container FloorManager never touches, so it always
+   * reads "enabled" with no floorIndex. Reading the anchor's parent for THAT
+   * case silently stopped culling the fan's badge on the other floor.
+   */
+  private badgeEligible(id: string, lbl: LabelControls, hidden: readonly Category[]): boolean {
+    if (hidden.includes(lbl.category)) return false;
+    const mesh = this.byEntity.get(id)?.[0];
+    if (!(mesh ? mesh.isEnabled() : lbl.anchor.isEnabled())) return false;
+    // Floors below the active one stay RENDERED (cumulative floors: the 2F
+    // view keeps the 1F shell underneath), but badges are GUI overlay and
+    // would draw straight through the 2F slab — only the active floor's.
+    const floorIdx = (mesh?.metadata as { floorIndex?: number } | null)?.floorIndex
+      ?? (lbl.anchor.metadata as { floorIndex?: number } | null)?.floorIndex
+      ?? (lbl.anchor.parent?.metadata as { floorIndex?: number } | null)?.floorIndex;
+    return floorIdx === undefined || floorIdx === this.activeFloor;
+  }
+
   /** Decide which badges are visible, then group the ones whose room is too
    *  crowded to show individually behind that room's cluster chip instead
    *  (updateRoomClustering/updateClusters) — never nudged, so a shown badge
@@ -2873,7 +2937,7 @@ export class EntityVisuals {
     let shownCount = 0;
 
     for (const [id, lbl] of this.labels) {
-      if (hidden.includes(lbl.category)) {
+      if (!this.badgeEligible(id, lbl, hidden)) {
         lbl.container.isVisible = false;
         continue;
       }
@@ -2899,23 +2963,6 @@ export class EntityVisuals {
       // FloorManager never touches, so it's always "enabled" with no
       // floorIndex of its own. Reading the anchor's parent for THAT case
       // silently stopped culling the fan's badge on the other floor.
-      const mesh = this.byEntity.get(id)?.[0];
-      const enabled = mesh ? mesh.isEnabled() : lbl.anchor.isEnabled();
-      if (!enabled) {
-        lbl.container.isVisible = false;
-        continue;
-      }
-      // Floors below the active one stay RENDERED (2.9.8 cumulative floors:
-      // the 2F view keeps the 1F shell underneath), but their badges are GUI
-      // overlay and would draw straight through the 2F slab — show only the
-      // active floor's badges.
-      const floorIdx = (mesh?.metadata as { floorIndex?: number } | null)?.floorIndex
-        ?? (lbl.anchor.metadata as { floorIndex?: number } | null)?.floorIndex
-        ?? (lbl.anchor.parent?.metadata as { floorIndex?: number } | null)?.floorIndex;
-      if (floorIdx !== undefined && floorIdx !== this.activeFloor) {
-        lbl.container.isVisible = false;
-        continue;
-      }
       // The anchor's WORLD position is what grouping runs on (see groupBadges);
       // its projection is only needed to draw it. Anchors projecting behind
       // the camera (z outside [0,1]) have no valid screen position, so they
