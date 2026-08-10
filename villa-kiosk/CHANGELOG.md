@@ -1,5 +1,13 @@
 ## 2.218.0
 
+### Changed — a better default look, with no new setting to tune
+
+The villa rendered flat and washed out: white cabinets, walls and chairs all clipping to the same pure white with no detail left in them, while wood and stone still read fine. That is the signature of too much EXPOSURE, and exposure happened to be the only one of the two look controls ever adjustable — so the instinct to raise it made the clipping worse. 1.15 made sense for an unbaked scene lit by the app's own lights; it does not for a LIGHTMAPPED one, where the bake already IS the finished lighting, so the neutral setting is 1.0 and anything above pushes highlights past where the tone mapper can still roll them off. Exposure is now 1.0 and contrast 1.30, which picks up the separation that costs by deepening mid-tones rather than raising the ceiling the highlights are hitting. Both are parameters of an image-processing pass that already runs every frame: nothing is added to the GLB, to texture memory, to CPU, or to the heap.
+
+Applied to existing installs too, not just fresh ones: `render` is stored whole, so any device that has opened Settings carries a full copy of the old values and would keep them forever. Only values still sitting exactly on the superseded default are moved — the signature of "never touched" — so a look someone tuned deliberately is never overwritten.
+
+## 2.218.0
+
 ### Added — a Contrast slider, next to Brightness
 
 `contrast` has been in the render config and applied by the render stack since it was built, with no control anywhere — so the one adjustment that actually answers "the villa looks washed out and flat" could only be reached by editing stored config by hand. Brightness is not a substitute and was the wrong thing to reach for: raising exposure on an already bright scene clips more highlights, which is the opposite of what a flat image needs. Same range and live-apply as its neighbours, and the helper text now says which of the two to reach for.

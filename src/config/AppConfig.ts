@@ -92,8 +92,29 @@ export interface RenderConfig {
  *  redundant Settings control; these are that tier's values. Day/night
  *  warmth of the fill light + IBL is handled live in SunController, so this
  *  is the *base* look — the night pass dims/warms it automatically. */
+/** Superseded exposure/contrast, kept so an install that never touched them
+ *  can be moved onto the new look — see adoptRenderLookDefaults. */
+const LEGACY_RENDER_LOOK = { exposure: 1.15, contrast: 1.12 } as const;
+
 export const DEFAULT_RENDER: RenderConfig = {
-  toneMapping: "khr_neutral", exposure: 1.15, contrast: 1.12,
+  // ── Why 1.0 / 1.30 and not 1.15 / 1.12 (2.218.0) ──────────────────────
+  // The villa rendered flat and washed out: white cabinets, walls and chairs
+  // all clipping to the same pure white with no detail left in them, while
+  // wood and stone still read fine. That is the signature of too much
+  // EXPOSURE, not too little contrast — and exposure was the only one of the
+  // two ever adjustable, so the instinct to raise it made the clipping worse.
+  //
+  // 1.15 made sense for an unbaked scene lit by the app's own lights. It does
+  // not for a LIGHTMAPPED one: the bake already IS the finished lighting, so
+  // the neutral setting is 1.0 and anything above it pushes highlights past
+  // where KHR PBR Neutral can still roll them off. Contrast picks up the
+  // separation that costs: it deepens mid-tones without touching the ceiling
+  // the highlights are hitting.
+  //
+  // Free by construction — both are parameters of an image-processing pass
+  // that already runs on every frame. No effect on the GLB, on texture
+  // memory, on CPU, or on the heap.
+  toneMapping: "khr_neutral", exposure: 1.0, contrast: 1.30,
   hemiIntensity: 0.45, sunIntensity: 1.05, ambientIntensity: 0.6,
   ibl: true, environmentIntensity: 0.6,
   ssao: true, ssaoRadius: 6, ssaoStrength: 0.25, ssaoSamples: 16,
@@ -347,13 +368,32 @@ export function loadConfig(): AppConfig {
       entityMap: { ...DEFAULT_CONFIG.entityMap, ...(stored.entityMap ?? {}) },
       meshBindings: { ...DEFAULT_CONFIG.meshBindings, ...(stored.meshBindings ?? {}) },
       alertThresholds: { ...DEFAULT_CONFIG.alertThresholds, ...(stored.alertThresholds ?? {}) },
-      render: { ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) },
+      render: adoptRenderLookDefaults({ ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) }),
       teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
     }));
   } catch (err) {
     console.warn("[AppConfig] failed to load, using defaults", err);
     return { ...DEFAULT_CONFIG };
   }
+}
+
+/**
+ * Move an install that never chose its own look onto the current defaults.
+ *
+ * `render` is stored WHOLE, so a device that has ever opened Settings has a
+ * complete copy of the old values and would keep them forever — a defaults
+ * change alone reaches only fresh installs, which is nobody who is already
+ * using the kiosk and seeing the problem.
+ *
+ * Only values still sitting exactly on the SUPERSEDED default are moved: that
+ * is the signature of "never touched". Anything else was chosen deliberately
+ * and is left alone, so this can never overwrite a look someone tuned.
+ */
+function adoptRenderLookDefaults(render: RenderConfig): RenderConfig {
+  const out = { ...render };
+  if (out.exposure === LEGACY_RENDER_LOOK.exposure) out.exposure = DEFAULT_RENDER.exposure;
+  if (out.contrast === LEGACY_RENDER_LOOK.contrast) out.contrast = DEFAULT_RENDER.contrast;
+  return out;
 }
 
 export function saveConfig(config: AppConfig): void {
