@@ -3673,10 +3673,18 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 
 /* --- Merged room-chip chooser (RoomChoiceSheet) --------------------------
-   Only the bits the shared .modal shell cannot know: how wide this particular
-   card wants to be, and the rows inside it. Centring, scrim, entry animation
-   and safe-area padding all come from .modal-backdrop / .modal. */
-.room-choice-modal { width: min(360px, calc(100vw - 48px)); padding: 14px; }
+   ONLY the rows. Everything about the card — width, centring, scrim, entry
+   animation, safe-area padding, and the phone override back to a centred card
+   — comes from BasePanel's .panel-modal / .panel-modal-backdrop, which this
+   dialog is now built on.
+
+   It used to set its own `width: min(360px, 100vw - 48px)` here. That looked
+   harmless and was the actual bug on phones: the shared shell turns into a
+   full-bleed top-anchored sheet below 640px (correct for Settings' long
+   forms), and this width rule — later in the file, so it won the cascade —
+   left a 360px square-cornered slab pinned to the top-left. A dialog that
+   states its own geometry is a dialog that cannot follow the shell's
+   responsive behaviour. Nothing here may set width, padding or position. */
 .room-choice-list { display: flex; flex-direction: column; gap: 4px; }
 .room-choice-row {
   display: flex; align-items: center; gap: 10px;

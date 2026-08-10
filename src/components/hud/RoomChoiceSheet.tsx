@@ -12,15 +12,31 @@
 // device count, and a tap goes there — the same "disambiguate rather than
 // guess" pattern a map uses when several places share a pin.
 //
-// Uses the app's ONE modal shell (.modal-backdrop + .modal), like every other
-// dialog: it inherits the centring, the scrim, the entry animation and the
-// safe-area padding from there rather than restating them. The first version
-// styled its own backdrop and card, and drifted immediately — it rendered
-// against the top-left corner instead of centred, because it was reproducing
-// layout the shared shell already does correctly.
+// ── Built on BasePanel, like every other short dialog (2.208.0) ────────────
+// It previously wrote its own `.modal-backdrop` + `.modal` markup. That IS the
+// shared shell, but only half of it: on a phone that shell deliberately
+// becomes a FULL-BLEED TOP-ANCHORED SHEET (see styles.css's max-width:640px
+// block), which is right for Settings' long forms and wrong for a two-row
+// question. The short dialogs opt back into a centred card through a SECOND
+// class, `.panel-modal` / `.panel-modal-backdrop`, and this file did not know
+// that — so on a phone it rendered as a square-cornered slab pinned to the top
+// left, partially wide because its own width rule fought the sheet's.
+//
+// Reaching for the CSS class would have fixed the screenshot and left the same
+// trap for the next dialog. BasePanel is where "a short centred dialog" is
+// actually defined — card shape and its phone override, backdrop dismissal,
+// Escape/focus-trap/focus-restore, header, and the footer Close button every
+// other modal has. Composing it means this file states only what is unique to
+// it: the question, and the rows. That is also what the panel a picked room
+// opens (SummaryGroupPanel) is built on, so the two steps of one gesture now
+// share their chrome instead of resembling each other.
+//
+// No `entityId` is passed on purpose: this dialog is a question about rooms,
+// not a device panel, so BasePanel's automatic history section correctly does
+// not apply (it is gated on that prop).
 
 import { MapPin } from "lucide-react";
-import { useModalA11y } from "@/hooks/useModalA11y";
+import BasePanel from "@/components/panels/BasePanel";
 
 export interface RoomChoice {
   room: string;
@@ -34,38 +50,30 @@ export default function RoomChoiceSheet({
   onPick: (room: string) => void;
   onClose: () => void;
 }) {
-  // Escape, focus trap and focus restore, from the one place every other
-  // dialog in the app gets them.
-  const dialogRef = useModalA11y(onClose);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div
-        ref={dialogRef}
-        className="modal room-choice-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Choose a room"
-      >
-        <div className="settings-section-title">Which room?</div>
-        <div className="room-choice-list">
-          {choices.map((c) => (
-            <button
-              key={c.room}
-              type="button"
-              className="room-choice-row"
-              onClick={() => onPick(c.room)}
-              // The count is the point of the row: it is what tells you which
-              // of two similarly-named rooms is the one you were looking at.
-              title={`Go to ${c.room} — ${c.count} device${c.count === 1 ? "" : "s"}`}
-            >
-              <MapPin size={16} className="room-choice-icon" />
-              <span className="room-choice-name">{c.room}</span>
-              <span className="room-choice-count">{c.count}</span>
-            </button>
-          ))}
-        </div>
+    <BasePanel
+      title="Which room?"
+      icon={<MapPin size={22} />}
+      className="room-choice-modal"
+      onClose={onClose}
+    >
+      <div className="room-choice-list">
+        {choices.map((c) => (
+          <button
+            key={c.room}
+            type="button"
+            className="room-choice-row"
+            onClick={() => onPick(c.room)}
+            // The count is the point of the row: it is what tells you which
+            // of two similarly-named rooms is the one you were looking at.
+            title={`Go to ${c.room} — ${c.count} device${c.count === 1 ? "" : "s"}`}
+          >
+            <MapPin size={16} className="room-choice-icon" />
+            <span className="room-choice-name">{c.room}</span>
+            <span className="room-choice-count">{c.count}</span>
+          </button>
+        ))}
       </div>
-    </div>
+    </BasePanel>
   );
 }

@@ -1,3 +1,9 @@
+## 2.208.0
+
+### Fixed — the merged-chip room chooser rendered as a slab in the corner on a phone
+
+It wrote its own `.modal-backdrop` + `.modal` markup, which is the shared shell but only half of it: below 640px that shell deliberately becomes a full-bleed top-anchored sheet (right for Settings' long forms), and the short dialogs opt back into a centred card through a second class, `.panel-modal`. This one did not, and its own `width: min(360px, calc(100vw - 48px))` — later in the stylesheet, so it won the cascade — left a square-cornered 312px slab pinned to the top-left of the screen. It is now built on BasePanel like every other short dialog, so the card shape, its phone override, backdrop dismissal, Escape/focus-trap and the footer Close button all come from the one place that defines them, and the file states only the question and its rows. That is also what picking a room opens (SummaryGroupPanel), so both steps of the gesture now share their chrome rather than resembling each other. Adding the CSS class would have fixed the screenshot and left the same trap for the next dialog.
+
 ## 2.207.0
 
 ### Fixed — the entity group stood half again as tall as the room chip beside it
