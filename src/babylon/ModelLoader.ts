@@ -226,6 +226,31 @@ const GLASS_NAME_HINTS = [
   "glazing", "glaze", "transparent", "cristal", "crystal",
   "vetro", "scheibe", "fenster", "glasscheibe",
 ];
+/**
+ * A material this transparent IS glass, whatever it is called — the second of
+ * the two signals blender_pipeline's `_glass_reason` uses, mirrored here at the
+ * same threshold as its `--glass-alpha-max` default.
+ *
+ * ── Why the app needs it too (2.217.0) ────────────────────────────────────
+ * The pipeline EXEMPTS every material it calls glass from the bake, so those
+ * materials carry no baked light at all — its own docstring warns that a false
+ * positive there "shows up as a pitch-black wall in the app". The app decided
+ * glass by NAME only, so a pane the pipeline exempted on ALPHA was invisible to
+ * it: not made see-through, and — the visible symptom — handed the lightmap
+ * anyway, sampling atlas texels that were never baked. That renders as a grid
+ * of unrelated grey patches across the pane.
+ *
+ * A real villa's bake log showed exactly two such materials, both at alpha=0.20
+ * with no glass keyword in their names, against thirteen caught by name — which
+ * is precisely why only a few panes looked dirty and the rest were clean.
+ *
+ * The threshold is deliberately LOW and must stay aligned with the pipeline's:
+ * its docstring records that 0.7 was tried and shipped ~40-50 m² of unbaked
+ * wall per floor, because SweetHome's palette greys sit at alpha 0.5 while
+ * SweetHome itself draws them opaque. 0.25 clears those and still catches a
+ * genuinely see-through pane.
+ */
+const GLASS_ALPHA_MAX = 0.25;
 // Opacity of a detected pane. 1 = opaque, 0 = invisible. Low enough to clearly see
 // through, but NOT zero — a faint tint so it still reads as a real glass surface
 // rather than an empty hole in the wall.
@@ -399,7 +424,49 @@ export async function loadModelInto(
     gl.glTexMp = Math.round((texPx / 1e6) * 10) / 10;
     gl.glTexImgs = seenImages.size;
     gl.glTexCompressed = compressedImages;
+
+    // ── Anisotropic filtering: the one sharpness win that costs no memory ──
+    // Babylon defaults every texture to 4x. A villa is looked at almost
+    // entirely at GRAZING angles — tiled floors running away from the camera,
+    // long counter tops, walls seen edge-on — which is precisely the case
+    // isotropic mip selection handles worst: it picks a mip for the LARGER of
+    // the two axis footprints, so the axis that is still nearly 1:1 on screen
+    // gets blurred to match the one that is heavily compressed. That reads as
+    // "the textures are not very clean", most visibly on floor tiles.
+    //
+    // It is the right lever here because of what it does NOT cost:
+    //   * the GLB is untouched — this is a sampler setting, not an asset;
+    //   * texture MEMORY is unchanged — same images, same mip chain, same
+    //     bytes resident on the GPU. Anisotropy takes extra SAMPLES from mips
+    //     that already exist;
+    //   * nothing is added to CPU work or to the JS heap.
+    // The cost is extra texture fetches, and only on the pixels whose footprint
+    // is actually anisotropic — flat-on surfaces fall back to a single sample.
+    // 8x rather than the 16x the hardware allows: the visible gain is almost
+    // entirely in the first few steps, and the app's target is a wall tablet.
+    // Clamped to what the GPU reports, so a device that cannot do it is simply
+    // left alone rather than asked for something it will ignore.
+    const maxAniso = scene.getEngine().getCaps().maxAnisotropy ?? 1;
+    const aniso = Math.min(8, maxAniso);
+    if (aniso > 1) {
+      for (const tex of scene.textures) {
+        // Never RAISE a texture that already asks for more, and skip the ones
+        // where it is meaningless (no mip chain to choose between).
+        if (tex.anisotropicFilteringLevel < aniso) tex.anisotropicFilteringLevel = aniso;
+      }
+      gl.glAniso = aniso;
+    }
+    // Read BEFORE the mesh loop below, which rewrites a detected pane's alpha
+    // to GLASS_ALPHA — after that the original value is gone, and a material
+    // shared by several meshes would answer differently on its second visit.
+    const alphaGlass = new Set<unknown>();
+    for (const mat of scene.materials) {
+      const a = (mat as unknown as { alpha?: number }).alpha;
+      if (typeof a === "number" && a > 0 && a < GLASS_ALPHA_MAX) alphaGlass.add(mat);
+    }
     const glassMats = new Set<string>();
+    /** Detected by transparency alone — no glass keyword in the name. */
+    const alphaOnly = new Set<string>();
     // Material OBJECT refs (a Set — one material is shared by many meshes) so
     // glassDim below can re-drive their colours every day/night tick.
     const glassMatObjs = new Set<{ albedoColor?: Color3; emissiveColor?: Color3 }>();
@@ -465,7 +532,7 @@ export async function loadModelInto(
         bakedDayMats.add(mat as BakedMat);
       }
 
-      if (looksLikeGlass([mat.name, m.name], glassHints)) {
+      if (looksLikeGlass([mat.name, m.name], glassHints) || alphaGlass.has(mat)) {
         mat.alpha = GLASS_ALPHA;
         mat.transparencyMode = Material.MATERIAL_ALPHABLEND;
         mat.backFaceCulling = false; // see both faces of a thin pane
@@ -507,7 +574,14 @@ export async function loadModelInto(
         if ("albedoColor" in mat) mat.albedoColor = GLASS_DAY_ALBEDO.clone();
         if ("emissiveColor" in mat) mat.emissiveColor = GLASS_DAY_SHEEN.clone();
         glassMatObjs.add(mat);
-        if (mat.name) glassMats.add(mat.name);
+        if (mat.name) {
+          glassMats.add(mat.name);
+          // Which signal caught it. A pane found only by ALPHA is one the name
+          // list does not know about, and is exactly the case that used to be
+          // lightmapped by mistake — worth being able to see in a load record
+          // rather than inferring from a screenshot.
+          if (!looksLikeGlass([mat.name, m.name], glassHints)) alphaOnly.add(mat.name);
+        }
       }
     }
     // Surfaced so the glass heuristic can be tuned from the browser console if a
@@ -726,9 +800,11 @@ export async function loadModelInto(
       return out.length > 240 ? `${out.slice(0, 240)}…` : out;
     };
     gl.glGlassMats = glassMats.size;
+    gl.glGlassByAlpha = alphaOnly.size;
     gl.glPaneCandidates = panes.length;
     const notes: Record<string, string> = {};
     if (glassMats.size) notes.glGlassNames = cap([...glassMats]);
+    if (alphaOnly.size) notes.glGlassByAlphaNames = cap([...alphaOnly]);
     if (panes.length) notes.glPaneNames = cap(panes.map((p) => p.material));
     // Day/night hook for the panes. Works in every mode: in lightmap/albedo
     // baked GLBs the panes skip the bake (a lightmap multiply would darken

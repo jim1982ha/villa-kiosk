@@ -1,3 +1,13 @@
+## 2.217.0
+
+### Fixed — the grey patches on some window panes, found in the bake log
+
+The pipeline classifies glass two ways — by name, or by a material being genuinely transparent (alpha below 0.25) — and EXEMPTS everything it calls glass from the bake, so those materials carry no baked light at all; its own docstring warns that a false positive there "shows up as a pitch-black wall in the app". The app only ever had the NAME half of that rule. A pane the pipeline exempted on alpha alone was therefore invisible to it: not made see-through, and handed the lightmap anyway, sampling atlas texels that were never baked — which renders as a grid of unrelated grey patches. The bake log showed exactly two such materials, both at alpha=0.20 with no glass keyword, against thirteen caught by name, which is why only a few panes looked dirty. The app now applies the same alpha test at the same threshold. The load record also reports what the rule decided (`glGlassMats`, `glGlassByAlpha` and the matching names), because those findings previously went only to `devLog`, which is DEV-gated and therefore invisible on the add-on build.
+
+### Added — anisotropic filtering, for sharper surfaces at grazing angles
+
+Textures were sampled at Babylon's default 4x. A villa is viewed almost entirely at grazing angles — tiled floors running away from the camera, long counters, walls edge-on — which is exactly where isotropic mip selection blurs worst, because it picks a mip for the larger of the two axis footprints. Now 8x, clamped to what the GPU reports. This adds nothing to the GLB (it is a sampler setting, not an asset), nothing to texture memory (same images, same mip chain, same bytes resident), and nothing to CPU work or the JS heap; the only cost is extra samples from mips that already exist, on the pixels whose footprint is actually anisotropic.
+
 ## 2.216.0
 
 ### Added — the glass heuristic now reports its decisions where they can be read
