@@ -2471,5 +2471,35 @@ export class SceneManager {
     } catch {
       // Best-effort — some contexts refuse the extension; not fatal.
     }
+
+    // Everything above is a correct teardown, and the heap still does not come
+    // back: a remount (each model upload changes Dashboard's `modelKey`) costs
+    // ~95MB that is never returned, six of them reach ~950MB, and the iPad this
+    // targets would be killed well before that. leakWatch is now measuring
+    // WHICH object graph survives; this is the half that does not need to know.
+    //
+    // A reference we failed to find retains this manager, not the villa — the
+    // villa hangs off these fields. Dropping them makes a retained manager an
+    // empty shell of a few hundred bytes instead of the anchor for 704 meshes,
+    // 373 textures and 2.4M vertices' worth of CPU-side geometry (which is
+    // itself about 95MB: 2.48M verts x 32 bytes of interleaved position,
+    // normal and UV — a suspiciously exact match for the step). So this is
+    // worth doing whether or not the retainer is ever found, and if the
+    // retainer IS found it costs nothing.
+    //
+    // Safe because `disposed` is already true: every public method guards on
+    // it, and the render loop is stopped. Nothing reads these again.
+    this.loadedMeshes = [];
+    this.highlightedMeshes = [];
+    this.calibratedPoints = null;
+    this.lastNavigatedRoom = null;
+    this.lastRoomPolyNames.clear();
+    this.frameSamples = [];
+    this.renderSamples = [];
+    // Callbacks registered by React components — a ready/calibrate handler
+    // closes over the component that registered it, so an uncleared set keeps
+    // that component's whole closure scope alive too.
+    this.readyCallbacks.clear();
+    this.calibrateCallbacks.clear();
   }
 }

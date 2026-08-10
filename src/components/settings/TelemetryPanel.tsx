@@ -96,9 +96,16 @@ function summarise(e: TelemetryEvent): string {
         : typeof e.reloadMs === "number"
           ? `${ms(e.reloadMs)} reload #${e.loadSeq ?? "?"}`
           : `${ms(e.totalMs)} total`;
+      // Loud on purpose: a previous villa still in memory two loads later is
+      // the difference between a kiosk that runs for months and one iOS kills.
+      const leaked = [
+        typeof e.mgr === "number" ? `${e.mgr} scene manager(s)` : null,
+        typeof e.scene === "number" ? `${e.scene} scene(s)` : null,
+      ].filter(Boolean).join(" + ");
+      const stale = leaked ? ` · ⚠️ ${leaked} NOT freed from earlier loads` : "";
       return `${head}${waited}${active} · bundle ${ms(e.bundleMs)}`
         + ` · mount ${ms(e.mountMs)} · parse ${ms(e.parseMs)} · reveal ${ms(e.revealMs)}`
-        + `${compiled}${painted}${weight}${stalled}${worst}${parked}`;
+        + `${compiled}${painted}${weight}${stalled}${worst}${parked}${stale}`;
     }
     case "error":
       return `${e.code}: ${String(e.message ?? "").slice(0, 120)}`;

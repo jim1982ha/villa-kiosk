@@ -16,6 +16,7 @@ import { parseRoomData } from "@/utils/sh3dParser";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { markBoot, beginLoad, endLoad, bootTimeline, hiddenMsTotal } from "@/utils/bootTimeline";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
+import { watchDisposed, staleDisposed } from "@/utils/leakWatch";
 import ModelUploader from "@/components/settings/ModelUploader";
 import ErrorReport from "@/components/ErrorReport";
 import {
@@ -462,6 +463,11 @@ export default function BabylonCanvas({
           configMs: Math.round(tConfigDone - tConfigStart),
           revealMs: Math.round(revealMs),
           ...(loadSeq === 1 ? { totalMs: Math.round(totalMs) } : {}),
+          // Scenes disposed two or more loads ago that are still reachable.
+          // Absent on a first load (nothing has been disposed yet) and zero on
+          // a healthy remount — see leakWatch for what a non-zero value in
+          // each key means, and why it is read here rather than at dispose.
+          ...staleDisposed(loadSeq),
           // Did the background download started on the profile screen actually
           // get used? Without this, "is the pre-load working?" was a question
           // nobody could answer from a device they don't hold — the phase
@@ -762,7 +768,13 @@ export default function BabylonCanvas({
       cancelled = true;
       canvasEl.removeEventListener("webglcontextlost", onCtxLost as EventListener, false);
       onManager(null);
+      // Grabbed BEFORE dispose() so the scene is still reachable to hand over.
+      // Both are stored as WeakRefs, so this cannot itself retain anything —
+      // see leakWatch's docstring for what the next load then reports.
+      const disposedScene = manager.scene;
       manager.dispose();
+      watchDisposed("mgr", manager, loadSeq);
+      watchDisposed("scene", disposedScene, loadSeq);
       managerRef.current = null;
       // The scene is gone; the next sign-in starts a fresh load cycle and must
       // not inherit this one's gate/passcode/scene marks.

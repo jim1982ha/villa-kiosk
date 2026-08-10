@@ -1,3 +1,28 @@
+## 2.231.0
+
+### Fixed — a reload no longer leaves the previous villa anchored in memory
+
+The same field dump that settled the frame-rate question showed something that had been recorded as a *settled fact* and was wrong. `mem` was documented as "~350–380MB from the moment the villa finishes loading, load cost rather than drift, and flat afterwards". That is true of a session that loads once. A session that reloads in place — every model upload changes `Dashboard`'s `modelKey`, which is a full unmount and remount — climbed like this across six of them:
+
+`376 → 462 → 551 → 588 → 615 → 675 → 795 → 848 → 872 → 941 → 948 MB`
+
+Individual samples swing both ways (one read 1,115MB and the next 795MB), because that is GC's sawtooth — and the sawtooth is itself the proof that collection is running fine. What never recovers is the **floor**: roughly 95MB per reload, held for the life of the document. Six uploads reach nearly a gigabyte on a desktop. The iPad this is actually built for would be killed by the OS long before six, and `autoReload.ts`'s heap-pressure valve cannot step in to save it, because **Safari does not expose `performance.memory` at all** — every Safari and iOS record in that dump has no `mem` field to read. The one platform that most needs the valve is the one platform where it is permanently blind.
+
+The teardown was not the problem, which is what made this hard to see by reading. Disposal already removes every window and document listener, disconnects both observers, disposes each subsystem explicitly, nulls the manager out of React state and out of its ref, revokes the model's blob URL in a `finally`, and force-loses the WebGL context so the driver releases it immediately. All of that is correct. The heap still does not come back, so a reference we have not found holds the manager.
+
+So this release does the half that does not require knowing which reference that is. What survives is the *manager*; the villa hangs off its fields. Disposal now drops them — loaded meshes, highlight list, calibrated points, room-polygon names, frame samples, and the ready/calibrate callback sets (each of those closes over the React component that registered it, so an uncleared set keeps that component's entire scope alive too). A retained manager becomes an empty shell of a few hundred bytes instead of the anchor for 704 meshes, 373 textures and 2.4 million vertices of CPU-side geometry — which is, on its own, about 95MB at 32 bytes of interleaved position, normal and UV per vertex. That the arithmetic lands on the observed step is suggestive rather than conclusive, and it is not the reason the change is worth making: dropping references that nothing will read again is right whether the retainer is ever found or not, and costs nothing if it is.
+
+### Added — the reload's own leak detector
+
+Finding the retainer needs a heap snapshot, which needs devtools attached to the kiosk at the moment it happens. `utils/leakWatch.ts` is the cheap thing that decides which heap is worth going to snapshot, reported from the field with no tooling: a `WeakRef` to each disposed manager and its scene, and a count in the next `load` record of how many are still reachable.
+
+The reading is a three-way split, and each branch is a different investigation:
+
+- **`mgr` non-zero** — the manager graph is still reachable, and something outside it holds the reference.
+- **`mgr` zero but `scene` non-zero** — the manager went and Babylon's own `Scene` outlived it, which is an engine-side registry rather than our code.
+- **both zero while `mem` still climbs** — nothing about the scene is retained and the growth is somewhere else entirely.
+
+A WeakRef that still derefs only proves "not collected yet", so an entry is not counted until a **full further load** has happened since the one it was disposed in — a whole villa parsed, ~18MB fetched, hundreds of megabytes allocated. If a major GC has not run across all of that, no number here would have been readable anyway. The settings panel prints a non-zero count in the load row with a warning marker rather than leaving it to a dump, because this is the failure that ends with the wall tablet being killed rather than the one that makes it briefly slow.
 ## 2.230.0
 
 ### Changed — the Safari frame-rate experiment came back negative, so measure the next layer down

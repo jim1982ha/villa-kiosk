@@ -2,7 +2,12 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    // ES2021.WeakRef and nothing else from ES2021: utils/leakWatch needs
+    // WeakRef to tell "this scene was collected" from "this scene is still
+    // reachable two loads later". Added as the single sub-lib rather than by
+    // raising the whole target, so no other ES2021 syntax silently becomes
+    // available to code that ships to an old iPad.
+    "lib": ["ES2020", "ES2021.WeakRef", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
 
