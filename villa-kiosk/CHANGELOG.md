@@ -1,3 +1,17 @@
+## 2.228.0
+
+### Fixed — the stars were soft white orbs, not stars
+
+Reported from both views, and the cause was the technique rather than the artwork. 2.227.0 painted the field into a 2048×1024 texture on a sphere viewed from the inside. At a ~50° field of view only about `(50/360)×2048 ≈ 284` texels are ever stretched across ~2000 screen pixels — roughly **7× magnification** — so every 1–2px dot became a soft blob. No sane texture size fixes it: the sphere would need to be around 14,000px wide.
+
+Stars are now **GL points**, which sidesteps magnification entirely because `gl_PointSize` is measured in *screen* pixels — a star is 2px whether the dome is near or far. That is also how a star genuinely behaves: a point source with no angular size, which is why it twinkles rather than resolving into a disc. Two layers do the work a single modulated field could not: 1600 faint 2px points, and 220 bright 3.5px ones. Same fixed seed, so the sky is the same every night rather than reshuffling on each reload.
+
+### Changed — the overview sunset reaches the tilt the overview actually uses
+
+2.224.0's horizon drop of 200 units bought about 22°, which was not enough: the near-top-down framing the overview normally sits at still looked at plain black, and the colour only appeared once the view had been deliberately tilted toward horizontal. It is now 700 — `atan(700/500)` ≈ 54°.
+
+Openly unphysical, and chosen that way on the explicit "it's ok if that's not too realistic": at this offset the graded band shows even looking steeply down, where a real sky would hand you ground. That is the right trade here, because the overview is a map of a villa against a sky rather than a simulation of standing under one. **First person is untouched and stays at 0**, where the horizon must remain at eye level — anything else would put the sea's edge below the terrace floor.
+
 ## 2.227.0
 
 ### Added — the moon and a starfield at night

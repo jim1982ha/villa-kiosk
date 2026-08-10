@@ -20,21 +20,24 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Constants } from "@babylonjs/core/Engines/constants";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import type { Scene } from "@babylonjs/core/scene";
 
 /** Distance from the camera, in world units. Inside the sky dome's 500 radius
  *  so it always reads as "in the sky", and far inside the 10000 default far
  *  plane so ordinary depth testing lets the villa occlude it. */
 const MOON_DIST = 380;
-const STAR_DIAMETER = 940;
+const STAR_RADIUS = 470;
 /** Moon disc size in world units at MOON_DIST — about 1.7°, a little larger
  *  than the real 0.5° because a physically-sized moon is a barely visible dot
  *  on a phone and reads as a rendering artifact rather than as the moon. */
 const MOON_SIZE = 11;
 const MOON_TEX = 256;
-const STAR_TEX_W = 2048;
-const STAR_TEX_H = 1024;
-const STAR_COUNT = 1400;
+// Two layers instead of per-star brightness: a large faint field plus a small
+// bright one. Cheaper and more legible than modulating one field, and it is
+// what actually makes a sky read as stars rather than as noise.
+const STAR_DIM_COUNT = 1600;
+const STAR_BRIGHT_COUNT = 220;
 
 export interface MoonLook {
   /** Unit vector FROM the camera TOWARD the moon. */
@@ -53,9 +56,7 @@ export class NightSky {
   private moon: Mesh;
   private moonMat: StandardMaterial;
   private moonTex: DynamicTexture;
-  private stars: Mesh;
-  private starMat: StandardMaterial;
-  private starTex: DynamicTexture;
+  private starLayers: { mesh: Mesh; mat: StandardMaterial; peak: number }[] = [];
   /** Last phase the texture was drawn for, so a per-minute update does not
    *  redraw an identical disc. The moon's lit fraction moves ~3% per hour, so
    *  a 1% band repaints a handful of times a night rather than 1440. */
@@ -63,35 +64,24 @@ export class NightSky {
 
   constructor(scene: Scene) {
     // ── Stars ──────────────────────────────────────────────────────────────
-    // Deliberately NOT the real sky for this latitude: the user asked for
-    // "simple but nice", and a wrong-but-plausible starfield is honest as
-    // decoration where a wrong-but-claimed-real one would not be.
-    this.starTex = new DynamicTexture(
-      "starTex", { width: STAR_TEX_W, height: STAR_TEX_H }, scene, false);
-    this.drawStars();
-
-    const starMat = new StandardMaterial("starMat", scene);
-    starMat.emissiveTexture = this.starTex;
-    starMat.disableLighting = true;
-    starMat.diffuseColor = Color3.Black();
-    starMat.specularColor = Color3.Black();
-    starMat.backFaceCulling = false;   // viewed from inside
-    // Additive: the black background contributes nothing, so the sky shows
-    // through untouched and only the stars add light. `alpha` then scales the
-    // source, which is what fades them in at dusk.
-    starMat.alphaMode = Constants.ALPHA_ADD;
-    starMat.alpha = 0;
-    this.starMat = starMat;
-
-    const stars = MeshBuilder.CreateSphere(
-      "starDome", { diameter: STAR_DIAMETER, segments: 24 }, scene);
-    stars.material = starMat;
-    stars.infiniteDistance = true;     // pinned to the camera, like the sky dome
-    stars.isPickable = false;
-    stars.applyFog = false;
-    stars.checkCollisions = false;
-    stars.ignoreCameraMaxZ = true;
-    this.stars = stars;
+    // GL POINTS, not a textured sphere — and that is the whole fix (2.228.0).
+    //
+    // The first attempt painted stars into a 2048x1024 texture on a sphere seen
+    // from the inside. At a ~50 degree field of view you only ever see about
+    // (50/360)*2048 = 284 texels stretched across ~2000 screen pixels, so every
+    // dot was magnified ~7x into a soft white orb — reported as "weird white
+    // orbs", which is exactly what it was. No sane texture size fixes that: the
+    // sphere would need to be ~14000px wide.
+    //
+    // A point cloud sidesteps magnification entirely, because gl_PointSize is
+    // in SCREEN pixels: a star is 1 or 2 px however near the dome is. That is
+    // also how a star actually behaves — a point source with no angular size.
+    //
+    // Deliberately NOT the real sky for this latitude. "Simple but nice" was
+    // the ask, and an invented field is honest decoration where one claimed to
+    // be real would not be.
+    this.starLayers.push(this.buildStarLayer(scene, "starsDim", STAR_DIM_COUNT, 2, 0.55, 0x2f6e2b1));
+    this.starLayers.push(this.buildStarLayer(scene, "starsBright", STAR_BRIGHT_COUNT, 3.5, 1, 0x9e3779b));
 
     // ── Moon ───────────────────────────────────────────────────────────────
     this.moonTex = new DynamicTexture(
@@ -132,7 +122,10 @@ export class NightSky {
    */
   update(look: MoonLook): void {
     const night = Math.max(0, Math.min(1, look.nightT));
-    this.starMat.alpha = night;
+    for (const l of this.starLayers) {
+      l.mat.alpha = night * l.peak;
+      l.mesh.setEnabled(night > 0);
+    }
     // Below the horizon the moon is simply not visible — no need to fade it,
     // and fading would leave a disc hanging in the ground half of the dome.
     const up = look.dir.y;
@@ -140,7 +133,6 @@ export class NightSky {
     // Ease the last few degrees so it does not pop in/out at the horizon.
     this.moonMat.alpha = visible ? night * Math.min(1, (up + 0.02) / 0.08) : 0;
     this.moon.setEnabled(visible);
-    this.stars.setEnabled(night > 0);
     if (!visible) return;
 
     this.moon.position = look.dir.scale(MOON_DIST);
@@ -210,54 +202,83 @@ export class NightSky {
     this.moonTex.update();
   }
 
-  /** A plausible starfield on an equirectangular sphere. Directions are sampled
-   *  uniformly and then converted to UV, rather than sampling UV directly,
-   *  which would bunch every star around the poles. */
-  private drawStars(): void {
-    const ctx = this.starTex.getContext() as CanvasRenderingContext2D;
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, STAR_TEX_W, STAR_TEX_H);
-
-    // Fixed seed: the sky is the same every night, as a real one is, and a
-    // starfield that reshuffled on every reload would read as flicker.
-    let seed = 0x2f6e2b1;
+  /**
+   * One layer of the field. Directions are sampled UNIFORMLY on the sphere —
+   * picking a latitude at random instead would bunch every star at the poles,
+   * which reads immediately as a rendering grid rather than as a sky.
+   *
+   * `peak` is the layer's brightness ceiling, reached at full night; `size` is
+   * in screen pixels. Two layers (many faint + a few bright at 2px) is what
+   * makes this legible as stars, and is simpler than modulating one field by
+   * vertex colour.
+   *
+   * The seed is fixed, so the sky is the same every night as a real one is —
+   * a field that reshuffled on every reload would read as flicker.
+   */
+  private buildStarLayer(
+    scene: Scene, name: string, count: number, size: number, peak: number, seed: number,
+  ): { mesh: Mesh; mat: StandardMaterial; peak: number } {
+    let st = seed >>> 0;
     const rnd = () => {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return seed / 0x100000000;
+      st = (st * 1664525 + 1013904223) >>> 0;
+      return st / 0x100000000;
     };
 
-    for (let i = 0; i < STAR_COUNT; i++) {
-      const z = rnd() * 2 - 1;                     // uniform on the sphere
+    const positions = new Float32Array(count * 3);
+    const indices: number[] = [];
+    for (let i = 0; i < count; i++) {
+      // Uniform on the sphere: z uniform in [-1,1], longitude uniform.
+      const z = rnd() * 2 - 1;
+      const r = Math.sqrt(Math.max(0, 1 - z * z));
       const lon = rnd() * Math.PI * 2;
-      const u = lon / (Math.PI * 2) * STAR_TEX_W;
-      const v = (Math.acos(z) / Math.PI) * STAR_TEX_H;
-      // Mostly faint with a few bright ones — an even brightness reads as noise.
-      const m = rnd();
-      const bright = m * m * m;
-      const r = 0.5 + bright * 1.6;
-      const a = 0.25 + bright * 0.75;
-      // A touch of colour on the brightest, as real stars have.
-      const tint = rnd();
-      const col = tint > 0.9 ? "190,210,255" : tint < 0.1 ? "255,225,200" : "255,255,255";
-      ctx.fillStyle = `rgba(${col},${a.toFixed(3)})`;
-      ctx.beginPath();
-      ctx.arc(u, v, r, 0, Math.PI * 2);
-      ctx.fill();
+      positions[i * 3] = Math.cos(lon) * r * STAR_RADIUS;
+      positions[i * 3 + 1] = z * STAR_RADIUS;
+      positions[i * 3 + 2] = Math.sin(lon) * r * STAR_RADIUS;
+      indices.push(i);
     }
-    this.starTex.update();
+
+    const mesh = new Mesh(name, scene);
+    const vd = new VertexData();
+    vd.positions = positions as unknown as number[];
+    vd.indices = indices;
+    vd.applyToMesh(mesh);
+
+    const mat = new StandardMaterial(`${name}Mat`, scene);
+    // pointsCloud switches the fill mode to GL_POINTS; pointSize is in pixels.
+    mat.pointsCloud = true;
+    mat.pointSize = size;
+    mat.disableLighting = true;
+    mat.emissiveColor = new Color3(1, 1, 1);
+    mat.diffuseColor = Color3.Black();
+    mat.specularColor = Color3.Black();
+    // Additive, so stars add light to the sky rather than punching holes in it,
+    // and `alpha` scales that contribution for the dusk fade.
+    mat.alphaMode = Constants.ALPHA_ADD;
+    mat.alpha = 0;
+
+    mesh.material = mat;
+    mesh.infiniteDistance = true;   // pinned to the camera, like the sky dome
+    mesh.isPickable = false;
+    mesh.applyFog = false;
+    mesh.checkCollisions = false;
+    mesh.ignoreCameraMaxZ = true;
+    // Its bounding box is centred on the origin, not the camera it actually
+    // follows, so frustum culling would drop it whenever the camera walked away.
+    mesh.alwaysSelectAsActiveMesh = true;
+    mesh.setEnabled(false);
+
+    return { mesh, mat, peak };
   }
 
   setEnabled(on: boolean): void {
     this.moon.setEnabled(on && this.moonMat.alpha > 0);
-    this.stars.setEnabled(on && this.starMat.alpha > 0);
+    for (const l of this.starLayers) l.mesh.setEnabled(on && l.mat.alpha > 0);
   }
 
   dispose(): void {
     this.moon.dispose();
     this.moonMat.dispose();
     this.moonTex.dispose();
-    this.stars.dispose();
-    this.starMat.dispose();
-    this.starTex.dispose();
+    for (const l of this.starLayers) { l.mesh.dispose(); l.mat.dispose(); }
   }
 }

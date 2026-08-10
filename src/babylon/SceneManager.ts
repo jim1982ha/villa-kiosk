@@ -118,11 +118,21 @@ const FRAME_TARGET_MS = 22;
 const HW_SCALE_FLOOR = 1;
 
 // How far to push the horizon down in OVERVIEW, in the sky dome's own world
-// units (its half-extent is ~500 — see SkyDome.setHorizonDrop for why this is
-// not an angle). ~200 buys roughly 20° of extra downward tilt before the
-// graded band leaves the frame, which covers the tilts the overview actually
-// sits at, without dropping the horizon so far that it reads as flying.
-const OVERVIEW_HORIZON_DROP = 200;
+// units (its radius is 500 — see SkyDome.setHorizonDrop for why this is not an
+// angle). The angle it buys is atan(drop / 500).
+//
+// 200 (~22°) was not enough: the overview's usual near-top-down framing still
+// looked at plain black, and the colour only appeared once the view had been
+// deliberately tilted toward horizontal. 700 is ~54°, which reaches the tilt
+// the overview actually sits at.
+//
+// Openly unphysical, and chosen that way on the user's explicit "it's ok if
+// that's not too realistic": at this offset the graded band shows even looking
+// steeply down, where a real sky would hand you ground. That is the right trade
+// here — the overview is a map of a villa against a sky, not a simulation of
+// standing under one. FIRST PERSON KEEPS 0, where it must: the horizon belongs
+// at eye level, and anything else puts the sea's edge below the terrace floor.
+const OVERVIEW_HORIZON_DROP = 700;
 
 // ── Zoom-to-room framing (see computeRoomOverviewPose) ──────────────────────
 // Breathing room left around a room once it fills the frame, as a FRACTION of
