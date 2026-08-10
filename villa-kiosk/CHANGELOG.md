@@ -1,3 +1,34 @@
+## 2.233.0
+
+### Fixed — one icon-size step collapsed whole rooms into their chip
+
+Reported precisely: raise the icon size by a single quarter-step and every Living Room badge disappears behind the room's aggregate. The cause was the accessibility floor added in 2.232.0, wrong in two separate ways.
+
+It was set to **56 CSS px** — Material's *comfort pitch*, a 48dp target plus 8dp of spacing. But the quantity that matters is the tap target itself, which is 44, and which `pickBadgeAt` already expands an undersized badge's slop to reach. At 56 the floor **dominated the badge-geometry term at every setting**, so grouping was decided by a constant rather than by how big the badges actually are: on a retina tablet in card style the required centre separation was 39 CSS px where 2.231.0 asked 22, i.e. roughly 1.8× more eager before anything else was considered.
+
+Worse, the floor was scaled by `min(1, iconUserScale × iconZoomScale)`. Folding the user's own size preference into an accessibility minimum meant that raising the icon size raised the *floor* as well as the badge — one quarter-step took the requirement from 39 to 49 CSS px, a 25% jump on top of an already inflated base. A room with three devices crosses from "two collide" to "all three collide" in that single step, and a group covering all of its room is by design the room chip. Hence a whole room vanishing on one click.
+
+The floor is now the tap target (44 coarse, and WCAG 2.5.8's 24 for a fine pointer, which is the real minimum for a pointer with no fingertip), and it decays with the far-zoom cap **only**. Growing badges still demand more room through the reach term, which is the honest reason for them to group; the floor is a fixed quantity on the glass and does not move because someone asked for bigger icons. At the default setting the badge geometry is back in charge, which is where the decision belongs.
+
+### Fixed — the aggregate badges looked like a different species
+
+Two reports, one cause: the summaries were the last badge dimensions still written outside `badgeMetrics.ts`, which is the rule 2.232.0 added to `CLAUDE.md` in the same release it broke.
+
+They sat on their own constants — 30px tall, 15px text — while badges moved to CSS pixels, *and* kept a separate `CLUSTER_MIN_SCALE` floor of 0.8 against the badges' 0.7 far-zoom cap, so at exactly the zoom where summaries appear they were drawn about 14% larger as well. A room chip and an entity group now take the current style's **badge height** and the current style's **own text size**, at the **same scale as the badges**, so the relationship holds at every zoom and icon-size setting by construction rather than by two tables being kept in step. The dual-scale complication in `placeEntityGroups` — which existed only to measure a group at a scale the badges did not use — goes with it.
+
+They also **looked** wrong, and that was a real inconsistency rather than a matter of taste: a dark slate pill carrying a heavy warm border, sitting among neutral white squircles. Both summaries now wear the same resting surface an idle badge wears — `categorySurface` at `"off"` is category-independent, so it is literally the app's neutral panel fill, its secondary ink and its 1px hairline — and they round with the card badge's own corner fraction instead of as a stadium. A summary should read as one of the badges it replaces. Re-read every pass like the badges', so a theme change lands without a rebuild.
+
+### Fixed — a dismissed device kept its badge on the map while the map said it had none
+
+`binary_sensor.door_network_contact` was listed under "Not on the map" in the Living Room's modal while its badge was plainly visible on the map a tap away, and Advanced Settings could not find it at all.
+
+Every one of those is the same fact seen from a different side. The entity **no longer exists in Home Assistant** (confirmed against the live instance), the villa model still carries a mesh named after it, and someone had used "Remove" on it in the unavailable-devices flow. Dismissing filters an id out of `effectiveMappedEntityIds`, which every list reads — the room modal, Advanced Settings, Facility readiness — but `EntityVisuals` built its badges straight from the model's geometry and had never heard of dismissals. So the badge stayed and the lists denied it.
+
+Dismissed entities are now ineligible for a badge, which makes "Remove" mean the same thing on the map as it does everywhere else — the principle `Dashboard` already states about filtering once. The set is pushed down rather than read from config because the test needs the live entity list (a dismissal only counts while HA genuinely has no such entity, so it lapses by itself if the device returns), and the Babylon layer deliberately does not hold one. This is **not** the same as `suppressedEntityIds`, HA's hidden/diagnostic flag, which stays unfiltered: that is HA decluttering a settings list, not a statement that a device is gone.
+
+### Fixed — two scene buttons that would not share a row on a phone
+
+"All fans OFF" and "All fans ON" each took a line of their own with obvious empty space beside them. The row was behaving correctly and the buttons were simply too wide: measured against the screenshot, 296px of button against 285px of content on a 360px-wide device — an **11px** shortfall. The base button's 18px horizontal padding is tuned for a full-width dialog, not a 285px column, so it is trimmed to 12 below the phone breakpoint, which buys 24px across the pair. Wrapping stays as the fallback for genuinely long scene names.
 ## 2.232.0
 
 ### Changed — crowded badges are now RANKED, not merged wholesale

@@ -135,6 +135,19 @@ export default function Dashboard() {
     () => dismissedEntitySet(config.dismissedEntityIds, entities),
     [config.dismissedEntityIds, entities],
   );
+  // Dismissing a device ("Remove", in the unavailable-devices flow) has to
+  // mean the same thing on the MAP as it does in every list. It did not: the
+  // lists all read effectiveMappedEntityIds, which strips dismissed ids, while
+  // EntityVisuals built its badges straight from the model's geometry — so a
+  // dismissed device whose GLB mesh still carried its name kept a badge on the
+  // map AND was listed under "Not on the map" in the room's own modal, one tap
+  // apart. Pushed rather than read from config because the test needs the LIVE
+  // entity list (a dismissal only counts while HA really has no such entity),
+  // which the Babylon layer deliberately does not hold.
+  useEffect(() => {
+    manager?.setDismissedEntityIds(dismissedIds);
+  }, [manager, dismissedIds]);
+
   const effectiveMappedEntityIds = useMemo(() => {
     const augmented = new Set<string>();
     for (const id of mappedEntityIds) if (!dismissedIds.has(id)) augmented.add(id);

@@ -1147,6 +1147,17 @@ button {
 }
 .summary-room-scenes .summary-room-heading { margin-top: 0; }
 .summary-room-scenes-row { display: flex; flex-wrap: wrap; gap: 8px; }
+/* On a phone two ordinary scene names miss sharing a row by a hair — measured
+   at 296px of button against 285px of content on a 360px-wide device, an
+   11px shortfall — so each fell onto its own line with obvious empty space
+   beside it, reading as a layout bug rather than as a wrap. The row is doing
+   the right thing; the buttons are simply too wide for it. Trimming the
+   horizontal padding (the base .btn's 18px is tuned for a full-width dialog,
+   not a 285px column) buys 24px across the pair, which clears it with room
+   to spare. Wrapping remains the fallback for genuinely long scene names. */
+@media (max-width: 720px) {
+  .summary-room-scenes-row .btn { padding: 0 12px; }
+}
 /* HA-only devices (no geometry in this villa model) — listed after the mapped
    ones under this heading and tinted, so it's clear they're not on the map. */
 .summary-offmap-heading {

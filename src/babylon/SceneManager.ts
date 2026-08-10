@@ -2415,6 +2415,10 @@ export class SceneManager {
   /** Push the live-resolved entity->room map (HA Area, falling back to
    *  roomForEntity's geometry) down to the badge-grouping/motion-routing
    *  layer — see EntityVisuals.setResolvedRooms. */
+  setDismissedEntityIds(ids: ReadonlySet<string>): void {
+    this.visuals.setDismissedEntityIds(ids);
+  }
+
   setResolvedRooms(rooms: Record<string, string>): void {
     this.visuals.setResolvedRooms(rooms);
   }

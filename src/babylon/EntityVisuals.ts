@@ -91,7 +91,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
-import { effectiveCategory, categorySurface, categorySurfaceRinged, cssVar } from "@/config/EntityCategories";
+import { effectiveCategory, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
 import { badgeKindFor, badgeFaceAndRing } from "@/utils/deviceActivity";
 import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
@@ -455,9 +455,10 @@ const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
  * badges that merely kiss are legible but read as a smudge from across a room,
  * which is the distance this app is used at.
  */
-/** Room-cluster chip geometry. */
-const CLUSTER_HEIGHT_PX = 30;
-const CLUSTER_FONT_PX = 15;
+/* The room chip's and entity group's geometry is DERIVED from the badge's —
+ * see EntityVisuals.summaryMetrics. They used to be independent constants here
+ * (30px tall, 15px text, floored at their own 0.8 scale) and drifted, drawing
+ * a summary noticeably larger than the badges it stood in for. */
 /** Neutral slate — NOT the app's own sky-blue accent (tried first: read as
  *  belonging to the Energy category, whose active-state hue is that same
  *  blue — see categoryColor("energy") — a room summary shouldn't look like a device
@@ -466,36 +467,30 @@ const CLUSTER_FONT_PX = 15;
  *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
  *  navigation affordance, not a device — rather than any category's badge. */
 const CLUSTER_BG_COLOR = "#475569"; // fallback only — see --chip-surface
-/** Clusters must stay legible at the far zoom where badges shrink hardest, so
- *  their scale is floored well above the badge floor (getIconZoomCap: 0.22). */
-const CLUSTER_MIN_SCALE = 0.8;
 /** Breathing room required between two chips. Chips are never nudged — this is
  *  purely the threshold at which two of them are judged too close and MERGE
  *  into one (see updateClusters). */
 const CLUSTER_GAP_PX = 6;
-/** The count pill's own diameter and font — sized down from the chip's own
- *  height/font (a badge-within-a-badge reads wrong at the same scale), same
- *  proportion .icon-btn-count keeps against its 48px parent button. */
-const CLUSTER_COUNT_DIAMETER_PX = 20;
-const CLUSTER_COUNT_FONT_PX = 11;
 /**
- * ── The entity group's own geometry ──────────────────────────────────────
- * The two SUMMARIES on this map — a room's chip and an entity group — are one
- * family and must be the same size. DERIVED from the chip's constants rather
- * than given their own numbers, because when they were independent they drifted
- * immediately: the group shipped at the 44px BADGE size against the chip's
- * 30px, which put a group half again as tall as the chip beside it (reported
- * with a screenshot of two "2" groups next to a "Living Room 20" chip).
+ * ── The two summaries are ONE family ─────────────────────────────────────
+ * A room's chip and an entity group must be the same size as each other, and
+ * (since 2.233.0) the same size as the BADGES THEY REPLACE. Both facts are now
+ * enforced by both of them reading summaryMetrics(), which derives from the
+ * badge — because every time these numbers have been independent they have
+ * drifted, twice with a screenshot attached:
  *
- * Same height, same font, same scale floor, same neutral chrome colour — the
- * ONLY differences are shape and content, and both of those carry meaning: the
+ *   * the group once shipped at the 44px badge size against the chip's 30px,
+ *     putting a group half again as tall as the chip beside it;
+ *   * then both sat on their own 30px/15px constants and their own 0.8 scale
+ *     floor while badges moved to CSS pixels and a 0.7 far-zoom cap, so a
+ *     summary was drawn visibly larger than the badges it stood in for.
+ *
+ * The ONLY differences left are shape and content, and both carry meaning: the
  * group is a SQUIRCLE (it stands in for squircle badges, at a badge's own
  * corner rounding) holding a count, the chip is a PILL (it names a place)
  * holding a room name. Not a category colour either way — CLAUDE.md reserves
  * the category hues for categories, and a summary covers several.
  */
-const EGROUP_SIZE_PX = CLUSTER_HEIGHT_PX;
-const EGROUP_FONT_PX = CLUSTER_FONT_PX;
 // Character-advance estimates for text this file has to MEASURE before Babylon
 // has laid it out live in `labelLayout.chipWidthPx`, whose docstring explains
 // why an estimate is the right answer here. The per-style values used by
@@ -770,6 +765,8 @@ export class EntityVisuals {
   private labelsNewestFirst: Array<[string, LabelControls]> = [];
   /** Scratch for quantisedPixelsPerWorldUnit's median. */
   private distPool: Float64Array = new Float64Array(0);
+  /** Entities the owner removed as "no longer in HA" — see badgeEligible. */
+  private dismissedEntityIds: ReadonlySet<string> = new Set();
   /** ?debug-only solver workspaces — see assertPlacementInvariants. Separate
    *  from the live ones because a PlacementResult is pooled and a second solve
    *  would rewrite the result the pass is still using. */
@@ -1984,6 +1981,18 @@ export class EntityVisuals {
     this.labelLayer = null;
   }
 
+  /** The entities the owner has dismissed as gone from HA (Dashboard's
+   *  dismissedEntitySet, which only counts ids HA really has no entity for).
+   *  Pushed in rather than read from config because the test needs the LIVE
+   *  entity list, which this layer deliberately does not hold. */
+  setDismissedEntityIds(ids: ReadonlySet<string>): void {
+    if (ids.size === this.dismissedEntityIds.size
+      && [...ids].every((id) => this.dismissedEntityIds.has(id))) return;
+    this.dismissedEntityIds = new Set(ids);
+    this.markLayoutDirty();
+    this.requestRender();
+  }
+
   /** Replace the calibrated room polygons (world space) — forwarded straight
    *  to RoomHighlight. Called by SceneManager after every plan→world re-fit
    *  (load + mirror-flip toggles), same trigger as the teleport grid. */
@@ -2705,11 +2714,31 @@ export class EntityVisuals {
     return this.iconUserScale * this.iconZoomScale * this.cssToGui();
   }
 
-  /** The chip/group scale: the same chain, but floored so a summary stays
-   *  readable at the zoom where summarising matters most. The floor is a
-   *  BADGE-space number, so it is converted after the max, not before. */
-  private chipScale(): number {
-    return Math.max(CLUSTER_MIN_SCALE, this.iconUserScale * this.iconZoomScale) * this.cssToGui();
+  /**
+   * How big a summary is drawn: EXACTLY the size of the badges it replaces.
+   *
+   * A room chip and an entity group both stand in for badges, so they take the
+   * current style's badge height and the current style's own text size. 2.232.0
+   * left them on their own constants (30px tall, 15px text) while badges moved
+   * to CSS pixels, and on top of that gave them a separate CLUSTER_MIN_SCALE
+   * floor of 0.8 against the badges' 0.7 far-zoom cap — so at the zoom where
+   * summaries actually appear they were drawn ~14% larger than the badges as
+   * well, and read as a different class of object. Reported exactly that way.
+   *
+   * Deriving both from the badge means the relationship cannot drift again: one
+   * scale, one height, one text size, at every zoom and icon-size setting.
+   */
+  private summaryMetrics(): { size: number; font: number; countSize: number; countFont: number } {
+    const m = this.metrics;
+    const card = this.config.badgeStyle === "card";
+    const size = card ? m.cardHeightPx : m.badgeDiameterPx;
+    const font = card ? m.cardValueFontPx : m.pillValueFontPx;
+    return {
+      size,
+      font,
+      countSize: Math.round(size * m.countPillFraction),
+      countFont: Math.round(font * m.countFontFraction),
+    };
   }
 
   /** Scale every badge container by user-size × zoom, around its anchor point. */
@@ -3107,6 +3136,24 @@ export class EntityVisuals {
    */
   private badgeEligible(id: string, lbl: LabelControls, hidden: readonly Category[]): boolean {
     if (hidden.includes(lbl.category)) return false;
+    // DISMISSED ("Remove" in the unavailable-devices flow) — the owner has
+    // said this device is gone from HA, and dismissedEntitySet only counts it
+    // while HA genuinely has no such entity, so the dismissal lapses by itself
+    // if it ever comes back.
+    //
+    // Filtered HERE as well as in every list because it was previously filtered
+    // ONLY in the lists: a device whose GLB mesh still carries its name kept
+    // its badge on the map while the room's own modal listed it under "Not on
+    // the map", which is the app contradicting itself about the same device in
+    // two panels one tap apart. Reported that way for a contact sensor whose
+    // integration had been removed from HA. Dashboard's own comment already
+    // states the principle — filtering once is what makes "Remove" mean the
+    // same thing everywhere — and the map is one of the places it has to mean.
+    //
+    // NOT the same as suppressedEntityIds (HA's hidden/diagnostic flag), which
+    // is deliberately NOT filtered here: that is HA decluttering a settings
+    // list, not a statement that the device is gone. See cullLabels.
+    if (this.dismissedEntityIds.has(id)) return false;
     const mesh = this.byEntity.get(id)?.[0];
     if (!(mesh ? mesh.isEnabled() : lbl.anchor.isEnabled())) return false;
     // Floors below the active one stay RENDERED (cumulative floors: the 2F
@@ -3504,11 +3551,18 @@ export class EntityVisuals {
     if (!(pxPerWorld > 0)) return null;
     const scale = this.effectiveScale();
     // The accessibility floor is a CSS-pixel quantity, so it converts through
-    // cssToGui like every other metric — but it decays with the badge when the
-    // USER shrinks it (or the far-zoom cap does), because a person who has
-    // asked for smaller badges has not asked for more aggressive grouping.
-    // Without that clamp a zoomed-out map would summarise harder than 2.231.0.
-    const shrink = Math.min(1, this.iconUserScale * this.iconZoomScale);
+    // cssToGui like every other metric — and it decays with the FAR-ZOOM CAP
+    // only.
+    //
+    // Not with the user's size preference, which 2.232.0 got wrong. Folding
+    // iconUserScale in here meant raising the icon size raised the floor as
+    // well as the badge, so a single quarter-step took the required centre
+    // separation from 39 to 49 CSS px and whole rooms collapsed to their chip
+    // in one click. An accessibility floor is a fixed quantity on the glass:
+    // it is the tap target, and the tap target does not grow because someone
+    // asked for bigger icons. Growing badges already demand more room through
+    // the reach term, which is the honest reason for them to group.
+    const shrink = Math.min(1, this.iconZoomScale);
     return {
       pxPerWorld,
       gap: (this.metrics.minGapPx * scale) / pxPerWorld,
@@ -3784,16 +3838,13 @@ export class EntityVisuals {
     // The larger of the two half-extents, because a neighbour can lie in any
     // direction and this is a radial test rather than a box overlap.
     const halfOf = (i: number) => Math.max(boxes[i].halfW, boxes[i].halfH);
-    // ── The group's OWN scale, which is not the badges' scale ─────────────
-    // A group is drawn at the floored CLUSTER_MIN_SCALE (updateEntityGroups),
-    // so at far zoom — where iconZoomScale falls below that floor — it is
-    // physically LARGER on screen than the badges around it. Measuring it here
-    // with the badge scale would have understated its footprint at exactly the
-    // zoom where things are most crowded, and let it overlap a badge it was
-    // supposed to clear: a layout decision using different geometry from the
-    // renderer, which is the mistake this file has made most often.
-    const groupScale = Math.max(CLUSTER_MIN_SCALE, scale);
-    const mineHalf = (EGROUP_SIZE_PX / 2) * groupScale * allow;
+    // A group is drawn at the badge scale and at the badge size (see
+    // summaryMetrics), so this measures it with the same numbers the renderer
+    // uses — no second scale to keep in step. There used to be one: the group
+    // was floored at CLUSTER_MIN_SCALE while badges took the 0.7 far-zoom cap,
+    // which made a summary bigger than the badges it replaced AND forced this
+    // method to reason in a scale of its own. Both went together.
+    const mineHalf = (this.summaryMetrics().size / 2) * scale * allow;
 
     // Fixed order (the key is stable and total), so which of two conflicting
     // groups survives never depends on the order the solver emitted them in.
@@ -3853,9 +3904,18 @@ export class EntityVisuals {
       // Floored like the room chip's, and for the same reason: a group badge
       // that shrinks with the badges it replaced would be unreadable at
       // exactly the zoom where grouping matters most.
-      const scale = this.chipScale();
-      const surface = cssVar("--chip-surface") || CLUSTER_BG_COLOR;
-      const ink = cssVar("--chip-ink") || "#ffffff";
+      const scale = this.effectiveScale();
+      // The SAME resting surface an idle badge wears. categorySurface at
+      // "off" is category-independent (see EntityCategories) — it is the
+      // app's neutral panel fill, its secondary ink and its 1px hairline — so
+      // a summary reads as one of the badges it replaces rather than as a
+      // different species. It was a dark slate pill with a heavy warm border
+      // sitting among white squircles, which is what "very inconsistent"
+      // meant. Re-read every pass, like the badges', so a theme change lands
+      // without a rebuild.
+      const rest = categorySurface("others", "off");
+      const alert = categorySurface("others", "alert");
+      const surface = rest.fill;
       for (const g of groups) {
         live.add(g.key);
         const c = this.ensureEntityGroup(g.key, layer);
@@ -3875,8 +3935,11 @@ export class EntityVisuals {
           if (kind === "on" || kind === "alert") ringRed = true;
           if (kind === "unavailable") unavailable = true;
         }
-        c.container.thickness = ringRed ? 2 : 0;
-        c.container.color = ringRed ? ALERT_RED_HEX : "transparent";
+        // A badge is never ringless — even at rest it carries the hairline
+        // the brand guidelines give the idle state, which is what keeps it a
+        // deliberate object rather than a shape on the floor. Same here.
+        c.container.thickness = ringRed ? BADGE_RING_THICKNESS : 1;
+        c.container.color = (ringRed ? alert.ring : rest.ring) ?? "transparent";
         c.container.background = surface;
         // Reporting status rides on the COUNT, exactly as the room chip puts
         // it on its count pill — red when at least one member is unavailable.
@@ -3887,13 +3950,13 @@ export class EntityVisuals {
         // unavailable ring is baked pixels; a Babylon GUI Rectangle has no
         // dashed border — the same limitation the "card" badge style already
         // degrades around, see BADGE_RING_THICKNESS.)
-        c.countText.color = unavailable ? ALERT_RED_HEX : ink;
+        c.countText.color = unavailable ? ALERT_RED_HEX : "#ffffff";
         c.container.scaleX = scale;
         c.container.scaleY = scale;
         // Zero X offset and a fixed centring lift, exactly like the room chip:
         // the group sits ON its anchor. It is a summary, not a nudged badge.
         c.container.linkOffsetXInPixels = 0;
-        c.container.linkOffsetYInPixels = -(EGROUP_SIZE_PX / 2) * scale;
+        c.container.linkOffsetYInPixels = -(this.summaryMetrics().size / 2) * scale;
         c.container.isVisible = true;
       }
     }
@@ -3908,8 +3971,9 @@ export class EntityVisuals {
 
     const node = new TransformNode(`egroup_${key}`, this.scene);
     const container = new Rectangle(`egroupBadge_${key}`);
-    container.width = `${EGROUP_SIZE_PX}px`;
-    container.height = `${EGROUP_SIZE_PX}px`;
+    const sm = this.summaryMetrics();
+    container.width = `${sm.size}px`;
+    container.height = `${sm.size}px`;
     // SQUIRCLE, not a circle. It shipped as a circle (cornerRadius = size/2)
     // and read as a foreign object among the squircle badges it replaces and
     // the rounded room chip it escalates into — three different corner
@@ -3918,7 +3982,7 @@ export class EntityVisuals {
     // exactly this kind of match), so the group is the badge shape at the
     // badge size, and only its CONTENT — a count instead of a glyph — says it
     // stands for several devices.
-    container.cornerRadius = EGROUP_SIZE_PX * BADGE_CORNER_FRACTION;
+    container.cornerRadius = sm.size * BADGE_CORNER_FRACTION;
     container.thickness = 0;
     container.background = CLUSTER_BG_COLOR;
     container.shadowColor = "rgba(0,0,0,0.4)";
@@ -3935,13 +3999,13 @@ export class EntityVisuals {
     // Babylon GUI TextBlocks do not inherit CSS and default to Arial — see
     // CLAUDE.md's known gotchas; every one of them sets this explicitly.
     countText.fontFamily = GUI_FONT_FAMILY;
-    countText.fontSize = EGROUP_FONT_PX;
+    countText.fontSize = sm.font;
     countText.fontWeight = "700";
     container.addControl(countText);
 
     layer.addControl(container);
     container.linkWithMesh(node);
-    container.linkOffsetYInPixels = -EGROUP_SIZE_PX / 2;
+    container.linkOffsetYInPixels = -sm.size / 2;
 
     const c: EntityGroupControls = { container, countText, node, entityIds: [], room: "" };
     this.entityGroups.set(key, c);
@@ -4030,7 +4094,9 @@ export class EntityVisuals {
       }
     }
 
-    const scale = this.chipScale();
+    const scale = this.effectiveScale();
+    const chipRest = categorySurface("others", "off");
+    const chipAlert = categorySurface("others", "alert");
 
     // ── Chips MERGE under pressure; they are never pushed (2.120.0) ────────
     // A force-relaxation solver used to separate them by displacement; it was
@@ -4076,7 +4142,7 @@ export class EntityVisuals {
       // Same width ESTIMATE the old path used (chipWidthPx) — it only has to be
       // close enough to decide overlap, not match the drawn glyphs exactly.
       c.halfW = (chipWidthPx(`${chipLabel(c)}  ${c.ids.length}`) / 2) * scale;
-      c.halfH = (CLUSTER_HEIGHT_PX / 2) * scale;
+      c.halfH = (this.summaryMetrics().size / 2) * scale;
     };
 
     const chips: Chip[] = [];
@@ -4141,8 +4207,8 @@ export class EntityVisuals {
       // (BADGE_RING): red when at least one member is "on" or "alert",
       // otherwise no ring — the only attention signal available once the
       // individual badges are gone.
-      c.container.thickness = chip.ringRed ? 2 : 0;
-      c.container.color = chip.ringRed ? ALERT_RED_HEX : "transparent";
+      c.container.thickness = chip.ringRed ? BADGE_RING_THICKNESS : 1;
+      c.container.color = (chip.ringRed ? chipAlert.ring : chipRest.ring) ?? "transparent";
       // The count pill itself carries the room's REPORTING status — red if
       // at least one member is unavailable (HA has lost contact with it),
       // the same "available" green everywhere else otherwise. Separate
@@ -4153,15 +4219,16 @@ export class EntityVisuals {
       // and Babylon GUI cannot consume a CSS variable, so the value has to be
       // read and re-applied. Doing it on the pass that already runs keeps it in
       // step with the badges without a second notification path.
-      c.container.background = cssVar("--chip-surface") || CLUSTER_BG_COLOR;
-      c.text.color = cssVar("--chip-ink") || "#ffffff";
+      // Same neutral resting surface as an idle badge — see updateEntityGroups.
+      c.container.background = chipRest.fill;
+      c.text.color = chipRest.glyph;
       c.container.scaleX = scale;
       c.container.scaleY = scale;
       // ZERO horizontal offset, always: the chip sits exactly on its anchor.
       // The only Y offset is the fixed half-height that centres the chip on
       // that anchor (see ensureCluster) — not a nudge.
       c.container.linkOffsetXInPixels = 0;
-      c.container.linkOffsetYInPixels = -(CLUSTER_HEIGHT_PX / 2) * scale;
+      c.container.linkOffsetYInPixels = -(this.summaryMetrics().size / 2) * scale;
       c.container.isVisible = true;
     }
     // Chips with no visible member (floor switch, category filter) — and rooms
@@ -4183,9 +4250,12 @@ export class EntityVisuals {
 
     const node = new TransformNode(`cluster_${key}`, this.scene);
     const container = new Rectangle(`clusterChip_${key}`);
-    container.height = `${CLUSTER_HEIGHT_PX}px`;
+    const sm = this.summaryMetrics();
+    container.height = `${sm.size}px`;
     container.adaptWidthToChildren = true;
-    container.cornerRadius = CLUSTER_HEIGHT_PX / 2;
+    // The card badge's own corner treatment, not a stadium: a summary is a
+    // badge that happens to be wide, so it rounds like one.
+    container.cornerRadius = sm.size * BADGE_CORNER_FRACTION;
     // Neutral slate — NOT the app's accent blue (that's the Energy category's
     // badge colour; a room summary shouldn't read as belonging to a device
     // category) and lighter than a translucent near-black (read as "just
@@ -4214,11 +4284,11 @@ export class EntityVisuals {
     text.text = key;
     text.color = "#ffffff";
     text.fontFamily = GUI_FONT_FAMILY;
-    text.fontSize = CLUSTER_FONT_PX;
+    text.fontSize = sm.font;
     text.fontWeight = "600";
     text.resizeToFit = true;
     text.paddingLeft = "12px";
-    text.paddingRight = `${CLUSTER_COUNT_DIAMETER_PX + 12}px`;
+    text.paddingRight = `${sm.countSize + 12}px`;
     container.addControl(text);
 
     // The device count as a small corner-overlay pill — matching the HUD's
@@ -4237,9 +4307,9 @@ export class EntityVisuals {
     // everything reporting), set every update in updateClusters — the value
     // here is just the pre-first-update placeholder.
     const countBadge = new Rectangle(`clusterCount_${key}`);
-    countBadge.width = `${CLUSTER_COUNT_DIAMETER_PX}px`;
-    countBadge.height = `${CLUSTER_COUNT_DIAMETER_PX}px`;
-    countBadge.cornerRadius = CLUSTER_COUNT_DIAMETER_PX / 2;
+    countBadge.width = `${sm.countSize}px`;
+    countBadge.height = `${sm.countSize}px`;
+    countBadge.cornerRadius = sm.countSize / 2;
     countBadge.thickness = 0;
     countBadge.background = AVAILABLE_GREEN_HEX;
     countBadge.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
@@ -4254,13 +4324,13 @@ export class EntityVisuals {
     const countText = new TextBlock(`clusterCountText_${key}`);
     countText.color = "#ffffff";
     countText.fontFamily = GUI_FONT_FAMILY;
-    countText.fontSize = CLUSTER_COUNT_FONT_PX;
+    countText.fontSize = sm.countFont;
     countText.fontWeight = "700";
     countBadge.addControl(countText);
 
     layer.addControl(container);
     container.linkWithMesh(node);
-    container.linkOffsetYInPixels = -CLUSTER_HEIGHT_PX / 2;
+    container.linkOffsetYInPixels = -sm.size / 2;
 
     const c: ClusterControls = {
       container, text, countBadge, countText, node,

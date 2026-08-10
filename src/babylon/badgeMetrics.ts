@@ -95,21 +95,40 @@ export interface BadgeMetrics {
    * The principled cluster radius, and the reason it is here rather than
    * copied from a map library (Supercluster ships 40px, Mapbox GL JS 50,
    * Leaflet 80 — all tuned for a mouse): two controls stop being
-   * independently tappable at exactly the point where their touch targets
-   * merge. Material puts that at 48dp of target plus 8dp of spacing = 56dp
-   * pitch; WCAG 2.5.8's spacing exception puts the absolute floor at 24 CSS
-   * px between centres. So this is derived from the input device, not chosen.
+   * independently tappable at exactly the point where their TOUCH TARGETS
+   * merge, whatever their painted size.
+   *
+   * So it is the tap target, and nothing more. 2.232.0 shipped Material's
+   * 56dp comfort PITCH (48dp target + 8dp spacing) and that was wrong twice
+   * over: 56 exceeds the target `pickBadgeAt` actually resolves against, and
+   * it dominated the badge-geometry term at every setting — so grouping was
+   * driven by this constant rather than by how big the badges are, roughly
+   * 1.8x more eagerly than 2.231.0. The fine value is WCAG 2.5.8's spacing
+   * exception (an undersized target needs 24 CSS px between centres), which
+   * is the real floor for a pointer that does not have a fingertip.
    */
   minCentrePitchPx: number;
+
+  // ── Summaries: the room chip and the entity group ────────────────────────
+  // Sized FROM the badge rather than independently. They stand in for badges,
+  // so a summary that is visibly bigger than the things it replaces reads as
+  // a different class of object — reported exactly that way. Their height is
+  // the badge's own height and their text is the badge's own text size, so
+  // the relationship holds at every zoom and icon-size setting by
+  // construction rather than by two tables being kept in step.
+  /** Diameter of the count pill on a room chip, as a fraction of chip height. */
+  countPillFraction: number;
+  /** The count pill's text, as a fraction of the chip's own text size. */
+  countFontFraction: number;
 }
 
 /**
  * Coarse pointer — finger or stylus. The wall tablet, and the target this app
  * was specified against.
  *
- * `badgeDiameterPx: 44` is Apple's hit region and the app's own `--touch-min`;
- * `minCentrePitchPx: 56` is Material's 48dp target + 8dp spacing. Both are now
- * true in CSS pixels rather than only in the render-pixel space nobody sees.
+ * `badgeDiameterPx: 44` is Apple's hit region and the app's own `--touch-min`,
+ * now true in CSS pixels rather than only in the render-pixel space nobody
+ * sees.
  */
 const COARSE: BadgeMetrics = {
   badgeDiameterPx: 44,
@@ -134,7 +153,11 @@ const COARSE: BadgeMetrics = {
   cardValuePadPx: 8,
 
   minGapPx: 6,
-  minCentrePitchPx: 56,
+  // Apple's 44pt hit region, which is also this app's --touch-min and exactly
+  // what pickBadgeAt expands an undersized badge's slop to reach.
+  minCentrePitchPx: 44,
+  countPillFraction: 0.58,
+  countFontFraction: 0.78,
 };
 
 /** Smallest legible label text. Cartographic practice puts the floor for map
@@ -183,6 +206,8 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
 
     minGapPx: base.minGapPx,
     minCentrePitchPx: base.minCentrePitchPx,
+    countPillFraction: base.countPillFraction,
+    countFontFraction: base.countFontFraction,
   };
 }
 
@@ -202,7 +227,9 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
  */
 const FINE: BadgeMetrics = {
   ...scaleGeometry(COARSE, 32 / 44),
-  minCentrePitchPx: 32,
+  // WCAG 2.5.8's spacing exception: an undersized target is acceptable when a
+  // 24 CSS px circle centred on each does not intersect its neighbour's.
+  minCentrePitchPx: 24,
 };
 
 export function badgeMetricsFor(pointer: PointerClass): BadgeMetrics {
