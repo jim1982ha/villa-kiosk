@@ -408,7 +408,7 @@ export default function BabylonCanvas({
         noteLoadPhase("import-mesh");
         // The versioned URL is the geometry's identity: it changes the instant a
         // different GLB is uploaded, so cached probes cannot outlive their model.
-        const { importMs, postMs, phases } = await manager.loadModel(data, loadedSource);
+        const { importMs, postMs, phases, notes } = await manager.loadModel(data, loadedSource);
         if (cancelled) return;
         noteLoadPhase("post-process");
         const tParseDone = performance.now();
@@ -492,6 +492,9 @@ export default function BabylonCanvas({
           // Which STEP of our own post-processing dominates. Without this a
           // slow load is only ever "post was 3.4s" with no way to act on it.
           ...phases,
+          // Names, not counts — currently the glass heuristic's own decisions.
+          // See LoadResult.importNotes for why they have to travel this way.
+          ...notes,
         });
 
         // Everything that does NOT change what is on screen, run once the villa

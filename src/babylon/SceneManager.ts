@@ -1313,6 +1313,8 @@ export class SceneManager {
    */
   async loadModel(data: ArrayBuffer, modelKey?: string): Promise<{
     importMs: number; postMs: number; phases?: Record<string, number>;
+    /** String-valued diagnostics (material names) — see LoadResult.importNotes. */
+    notes?: Record<string, string>;
   }> {
     // Lets indexMeshes reuse the previous load's floor probes when the model
     // is byte-identical — see EntityVisuals.setProbeCacheKey.
@@ -1421,7 +1423,7 @@ export class SceneManager {
       this.requestRender();
     });
 
-    return { importMs: result.importMs, postMs, phases };
+    return { importMs: result.importMs, postMs, phases, notes: result.importNotes };
   }
 
   /**

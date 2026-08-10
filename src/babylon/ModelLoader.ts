@@ -151,6 +151,17 @@ export interface LoadResult {
    * COUNT rather than with vertices or pixels.
    */
   importPhases: Record<string, number>;
+  /**
+   * Diagnostic NAMES (not counts) for the load record — material/mesh names the
+   * asset itself supplies.
+   *
+   * Exists because the glass heuristic's own findings were devLog-only, and
+   * devLog is DEV-gated: on the add-on build nobody can see which materials the
+   * rule matched or missed. That made "some window panes look wrong" a question
+   * only answerable by guessing, and it was guessed wrong once. These ride in
+   * the telemetry so the answer is in the next dump instead.
+   */
+  importNotes: Record<string, string>;
 }
 
 // A GLB produced by blender_pipeline.py --bake names its lit-structure material
@@ -697,6 +708,28 @@ export async function loadModelInto(
         panes,
       );
     }
+    // ── The same two findings, where they can actually be READ ────────────
+    // Both lists above were devLog-only, and devLog is DEV-gated — so on the
+    // add-on build the glass heuristic reported its decisions to nobody. A
+    // window pane that renders wrong is then indistinguishable from one the
+    // rule missed, and the only way to tell them apart is to ask the person
+    // holding the iPad to open devtools, which is not a diagnostic strategy.
+    //
+    // Names, deduplicated and length-capped: enough to identify the material
+    // to add to Settings' extra glass hints, without turning a load record
+    // into a mesh dump. These are the asset's OWN names, from the operator's
+    // own model, going to their own add-on — nothing here is shipped in code
+    // (see CLAUDE.md's no-villa-specific-data rule, which is about what the
+    // REPOSITORY contains).
+    const cap = (xs: string[]) => {
+      const out = [...new Set(xs)].join(",");
+      return out.length > 240 ? `${out.slice(0, 240)}…` : out;
+    };
+    gl.glGlassMats = glassMats.size;
+    gl.glPaneCandidates = panes.length;
+    const notes: Record<string, string> = {};
+    if (glassMats.size) notes.glGlassNames = cap([...glassMats]);
+    if (panes.length) notes.glPaneNames = cap(panes.map((p) => p.material));
     // Day/night hook for the panes. Works in every mode: in lightmap/albedo
     // baked GLBs the panes skip the bake (a lightmap multiply would darken
     // the view THROUGH them) so nothing else ever dims their colours; in
@@ -711,7 +744,7 @@ export async function loadModelInto(
           }
         }
       : undefined;
-    return { meshes: result.meshes, baked, lightmapped, nightBlend, glassDim, importMs, importPhases: gl };
+    return { meshes: result.meshes, baked, lightmapped, nightBlend, glassDim, importMs, importPhases: gl, importNotes: notes };
   } finally {
     URL.revokeObjectURL(url);
   }

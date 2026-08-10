@@ -1,3 +1,9 @@
+## 2.216.0
+
+### Added — the glass heuristic now reports its decisions where they can be read
+
+The loader has always logged which materials the glass rule matched and which pane-like meshes it did NOT, but through `devLog`, which is DEV-gated — so on the add-on build those findings went nowhere. A window pane that renders wrong was therefore indistinguishable from one the rule missed, and the only way to tell them apart was to ask whoever is holding the tablet to open devtools. The counts (`glGlassMats`, `glPaneCandidates`) and the material NAMES (`glGlassNames`, `glPaneNames`, deduplicated and length-capped) now ride in the load record instead, so the answer is in the next telemetry dump. The names come from the operator's own model and go to their own add-on; nothing about them is shipped in the repository.
+
 ## 2.215.0
 
 ### Fixed — a grid of grey patches across some window panes
