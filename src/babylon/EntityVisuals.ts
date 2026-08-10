@@ -2861,6 +2861,20 @@ export class EntityVisuals {
       // pill-capable collision box already follows — measure what it can be,
       // not what it happens to be.
       const cardInnerH = m.cardHeightPx - 2 * m.ringThicknessPx;
+      // Sized off the CARD, and DELIBERATELY smaller than its inner box.
+      //
+      // Two mistakes are encoded here, both reported. Tying the icon to
+      // cardInnerH made it a function of the RING, so a fine pointer's thinner
+      // ring drew a different icon-to-card ratio than a touch card's thicker
+      // one — the same build showing different badges on two devices. And
+      // filling the inner box exactly left NO PADDING at all: the art sat
+      // flush on the border with its rounded corners colliding with the
+      // card's, which reads as a clipped icon rather than one sitting in a
+      // badge. The fraction is of the CARD and leaves real space on all four
+      // sides; see badgeMetrics.cardIconFraction.
+      const glyphPx = card
+        ? Math.round(m.cardHeightPx * m.cardIconFraction)
+        : m.badgeDiameterPx;
 
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
@@ -2907,19 +2921,24 @@ export class EntityVisuals {
         // left/right get extra room here + on the value, so the card reads
         // short but not cramped horizontally.
         badge.adaptWidthToChildren = true;
-        // BOTH sides. The left pad alone was balanced only by the VALUE's own
-        // right padding, so a card carrying a readout looked right while a
-        // bare-icon one — most of the map — sat its icon 2px right of centre
-        // (6.8px of gap on the left against 2.8px on the right at the touch
-        // size). That is the "icon is not centred in the badge" report: it was
-        // horizontal, and it only ever showed on badges with no value, which
-        // is why the ones reading 98%/99% looked fine beside it.
+        // ── DERIVED from the height, so a bare-icon card comes out SQUARE ──
+        // adaptWidthToChildren makes the card exactly `padding + glyph +
+        // padding` wide, while its height is fixed at cardHeightPx. So a
+        // CONSTANT horizontal pad can only produce a square by coincidence,
+        // and 4px against a 28px height did not: the card came out 24x28 —
+        // a tall narrow capsule, portrait, where every other badge on the map
+        // is a squircle. That is what "the icons appear without any padding
+        // and not centred in the card" looked like, and no amount of
+        // adjusting the icon's SIZE could fix it, because the fault was the
+        // card's aspect ratio rather than the icon's dimensions.
         //
-        // Symmetric here and the value keeps its own right padding on top, so
-        // the icon is centred when it is alone and the text still gets its
-        // breathing room when there is one.
-        badge.paddingLeft = `${m.cardPadLeftPx}px`;
-        badge.paddingRight = `${m.cardPadLeftPx}px`;
+        // Half the leftover height puts the same gap on all four sides and
+        // makes width equal height by construction, at any icon size, on
+        // either pointer class. The VALUE keeps its own left padding for the
+        // icon-to-text gap; that is a different measurement and stays a metric.
+        const iconPadX = (m.cardHeightPx - glyphPx) / 2;
+        badge.paddingLeft = `${iconPadX}px`;
+        badge.paddingRight = `${iconPadX}px`;
       } else {
         badge.width = `${m.badgeDiameterPx}px`;
       }
@@ -2949,20 +2968,7 @@ export class EntityVisuals {
         // card's own Rectangle is the only frame; the art fills it.
         badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)), "off",
           this.config.entityMap[entityId]?.badgeColor, 0));
-      // Sized off the CARD, and DELIBERATELY smaller than its inner box.
-      //
-      // Two mistakes are encoded here, both reported. Tying the icon to
-      // cardInnerH made it a function of the RING, so a fine pointer's thinner
-      // ring drew a different icon-to-card ratio than a touch card's thicker
-      // one — the same build showing different badges on two devices. And
-      // filling the inner box exactly left NO PADDING at all: the art sat
-      // flush on the border with its rounded corners colliding with the
-      // card's, which reads as a clipped icon rather than one sitting in a
-      // badge. The fraction is of the CARD and leaves real space on all four
-      // sides; see badgeMetrics.cardIconFraction.
-      const glyphPx = card
-        ? Math.round(m.cardHeightPx * m.cardIconFraction)
-        : m.badgeDiameterPx;
+
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
       glyph.stretch = Image.STRETCH_UNIFORM;

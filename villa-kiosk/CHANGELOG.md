@@ -1,3 +1,16 @@
+## 2.243.0
+
+### Fixed — a bare-icon card was PORTRAIT, not square
+
+The comparison that finally made it obvious: a screenshot of what the badges look like next to one of what they should look like, and the bottom bar — whose icon chips are square, 46x46 with a 24px glyph centred in them — as the reference for both.
+
+A card badge with no value was **24 wide by 28 tall** on a coarse pointer, and 18 by 20.5 on a fine one. A tall narrow capsule, on a map where every other object is a squircle. That is what "the icons appear without any padding and not centred in the card" was describing, and it is why nothing done to the icon's SIZE ever helped: the fault was the card's aspect ratio, not the icon's dimensions. Three releases were spent adjusting the icon inside a box that was the wrong shape.
+
+`adaptWidthToChildren` makes the card exactly `padding + glyph + padding` wide while its height is fixed at `cardHeightPx`, so a CONSTANT horizontal padding can only produce a square by coincidence — and 4px against a 28px height did not. The padding is now half the leftover height, which puts the same gap on all four sides and makes width equal height by construction, at any icon size and on either pointer class: 28x28 with a 16px glyph and 6px all round, 20.5x20.5 with 12px and 4.25px. The glyph occupies 57-59% of the chip, against the bottom bar's 52% — the same object, drawn in the scene.
+
+The value keeps its own left padding for the icon-to-text gap, which is a different measurement and stays a metric.
+
+The recurring fault across this whole run, stated plainly: every badge dimension was defined as a REMAINDER of some other dimension — the icon was whatever the ring left, the padding was a constant that happened to sit next to a height it had no relationship with, the card's width was whatever its children added up to. Remainders can go to zero, or come out portrait, without anyone deciding they should. Each one is now derived from the thing it must agree with, with the arithmetic written next to it.
 ## 2.242.0
 
 ### Fixed — the card's icon had NO padding and sat flush on the border
