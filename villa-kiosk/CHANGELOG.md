@@ -1,3 +1,9 @@
+## 2.218.0
+
+### Added — a Contrast slider, next to Brightness
+
+`contrast` has been in the render config and applied by the render stack since it was built, with no control anywhere — so the one adjustment that actually answers "the villa looks washed out and flat" could only be reached by editing stored config by hand. Brightness is not a substitute and was the wrong thing to reach for: raising exposure on an already bright scene clips more highlights, which is the opposite of what a flat image needs. Same range and live-apply as its neighbours, and the helper text now says which of the two to reach for.
+
 ## 2.217.0
 
 ### Fixed — the grey patches on some window panes, found in the bake log

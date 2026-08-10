@@ -222,6 +222,21 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               onChange={(e) => applyRender({ exposure: Number(e.target.value) })}
             />
           </div>
+          {/* Contrast has been in RenderConfig and applied by RenderEnhancements
+              since the render stack was built, with NO control — so the one
+              adjustment that actually answers "everything looks washed out and
+              flat" was reachable only by editing stored config by hand.
+              Brightness is not a substitute: raising exposure on an already
+              bright scene clips more highlights, which is the opposite of what
+              a flat image needs. Same 0.6-2.0 span and live-apply as its
+              neighbours. */}
+          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+            <label>Contrast · {render.contrast.toFixed(2)}×</label>
+            <input
+              type="range" min={0.6} max={2} step={0.05} value={render.contrast}
+              onChange={(e) => applyRender({ contrast: Number(e.target.value) })}
+            />
+          </div>
           <div style={{ flex: "1 1 200px", minWidth: 0 }}>
             <label>Night dimming · {render.nightDimming.toFixed(1)}×</label>
             <input
@@ -263,7 +278,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           )}
         </div>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
-          Overall scene exposure, and how much extra dimming applies at night — both update live.
+          Overall scene exposure and mid-tone contrast, plus how much extra dimming applies at night — all update live. Raise contrast rather than brightness when the villa looks flat and washed out: more exposure on an already bright scene only clips more highlights.
           {(manager?.renderFx.isBaked() ?? false) && " Day/night preview forces this villa's baked look, or follows the real cycle on Auto."}
         </p>
 
