@@ -2787,56 +2787,16 @@ export class EntityVisuals {
    */
   private summaryMetrics(): {
     size: number; font: number; countSize: number; countFont: number;
-    chipSize: number; pairPitch: number; pairWidth: number; compactChip: number;
   } {
     const m = this.metrics;
     const card = this.config.badgeStyle === "card";
     const size = card ? m.cardHeightPx : m.badgeDiameterPx;
     const font = card ? m.cardValueFontPx : m.pillValueFontPx;
-    // The pair card's chip is the card badge's chip, at the card badge's
-    // proportion — a group of two has to read as two of the badges it replaced,
-    // not as a third kind of object.
-    const chipSize = Math.round(size * m.cardIconFraction);
     return {
       size,
       font,
       countSize: Math.round(size * m.countPillFraction),
       countFont: Math.round(font * m.countFontFraction),
-      chipSize,
-      // ── THE pair card is exactly TWO BADGES WIDE ────────────────────────
-      // Pitch = one badge, width = two. Each half of the card is therefore
-      // precisely the box of the badge it stands in for, which is the honest
-      // claim to make about a tap target and needs no number of its own.
-      //
-      // It was minCentrePitchPx (44) on the reasoning that two tappable chips
-      // owe each other the same centre distance two separate badges do. That
-      // was the wrong floor for this control. minCentrePitchPx exists because
-      // pickBadgeAt expands an undersized badge with a SLOP RING, so two
-      // badges closer than 44 have overlapping slop and a tap lands on
-      // whichever ring reached first. The pair card has no slop: its two zones
-      // TILE it, so every tap inside is assigned deterministically and the
-      // ambiguity that number prevents cannot occur. What actually matters
-      // here is how big each zone is, and at pitch 44 that was 36x28 — already
-      // under Apple's 44pt, so the floor was not being met either way, it was
-      // just costing 16 units of width. At pitch = size it is 28x28: exactly
-      // the badge, above WCAG 2.5.8's 24px AA floor, and a 22% smaller
-      // clearance disc, which is what gets the card granted more often.
-      pairPitch: size,
-      pairWidth: 2 * size,
-      // ── The COMPACT pair, for when the strip will not fit ───────────────
-      // Same footprint as the count badge it replaces — so it can never be
-      // refused where a count would have been accepted, and adding it costs
-      // no room its badges. Two half-size pictograms instead of the digit
-      // "2", because the digit is the one count in this app that carries no
-      // information: two pictograms already say "two", and they also say
-      // WHICH two. Its tap opens the list, exactly as the count's did.
-      //
-      // Sized inside the CARD'S OWN CHIP BOX (chipSize), not inside the whole
-      // card: a chip is inset from the card's edge by (size - chipSize) / 2
-      // everywhere else in this app, and deriving these two from `size`
-      // instead ran their art flush to the border — visible as an unavailable
-      // device's dashed ring appearing to hang off the card.
-      compactChip: Math.max(6, Math.floor((chipSize - 2) / 2)),
     };
   }
 
@@ -4223,7 +4183,9 @@ export class EntityVisuals {
     // method to reason in a scale of its own. Both went together.
     const sm = this.summaryMetrics();
     const squareHalf = (sm.size / 2) * scale * allow;
-    const stripHalfOf = (n: number) => ((n * sm.size) / 2) * scale * allow;
+    // From the SAME function that draws it — the width a group is TESTED at
+    // has to be the width it is DRAWN at, which is this file's oldest rule.
+    const stripHalfOf = (n: number) => (this.stripLayout(n, sm.size).width / 2) * scale * allow;
     // A group is tested at the width it would actually be DRAWN at — the
     // file's oldest rule, and the reason `pair` is decided here rather than in
     // the solver. Widened boxes are checked FIRST, and a pair that cannot
@@ -4493,6 +4455,40 @@ export class EntityVisuals {
   }
 
   /**
+   * THE geometry of a summary card that carries pictograms — for every form of
+   * it, at every size.
+   *
+   * `unit` is the badge the card is built out of: one chip's worth of card.
+   * A card of `n` chips is `n` units wide, its chips are pitched exactly one
+   * unit apart, and each chip is `cardIconFraction` of a unit — which is the
+   * SAME proportion a card badge gives its own chip. So the margin at the ends
+   * and the gap between the chips both fall out of one number and cannot
+   * disagree with each other or with the badge.
+   *
+   * ── Why this is a function and not two sets of constants ────────────────
+   * The wide pair and the compact pair each computed their own card width,
+   * chip size and pitch inline, from three different places — `sm.size`,
+   * `sm.chipSize` or a `compactChip` metric, and `sm.size` or
+   * `compactChip + 2` with a bare literal in it. They were not one rule at two
+   * sizes; they were two layouts that happened to be reached through the same
+   * branch, and they looked it: the same pair of devices drew with a visible
+   * gap and honest margins in one form and cramped against the border in the
+   * other. Reported exactly that way, with both on screen at once.
+   *
+   * The compact form is now nothing more than this same layout at HALF the
+   * unit, which is what makes it land on the count badge's own footprint
+   * (2 chips x half a badge = one badge) while staying recognisably the same
+   * object as the wide one.
+   */
+  private stripLayout(n: number, unit: number): { width: number; chip: number; pitch: number } {
+    return {
+      width: n * unit,
+      chip: Math.max(4, Math.round(unit * this.metrics.cardIconFraction)),
+      pitch: unit,
+    };
+  }
+
+  /**
    * Make sure this group has at least `n` chip+zone pairs, creating any that
    * are missing.
    *
@@ -4582,28 +4578,29 @@ export class EntityVisuals {
         const strip = Math.min(g.strip, n, MAX_STRIP_CHIPS);
         const compact = strip < 2 && n === 2;
         c.stripN = strip >= 2 ? strip : 0;
-        c.container.width = `${strip >= 2 ? strip * sm.size : sm.size}px`;
+        const drawn = strip >= 2 ? strip : compact ? 2 : 0;
+        // The compact pair is this layout at HALF the unit — two chips of half
+        // a badge each, which is one badge wide: exactly the count badge's
+        // footprint, so it can never be refused where a count would have been
+        // accepted. Same function, same proportions, one number different.
+        const lay = drawn > 0
+          ? this.stripLayout(drawn, strip >= 2 ? sm.size : sm.size / 2)
+          : { width: sm.size, chip: 0, pitch: 0 };
+        c.container.width = `${lay.width}px`;
         c.countText.isVisible = strip < 2 && !compact;
         c.countText.text = formatCountBadge(n);
-        const drawn = strip >= 2 ? strip : compact ? 2 : 0;
         this.growStrip(c, drawn, layer);
         for (let k = 0; k < c.chips.length; k++) {
           c.chips[k].isVisible = k < drawn;
           c.zones[k].isVisible = k < drawn;
         }
         if (drawn > 0) {
-          // Pitch = ONE BADGE for the strip, so every chip's zone is exactly
-          // the box of the badge it stands in for. The compact pair shares the
-          // count's single-badge footprint instead, and keeps the card's own
-          // 3-unit chip margin rather than running its art to the edge.
-          const chipPx = strip >= 2 ? sm.chipSize : sm.compactChip;
-          const pitch = strip >= 2 ? sm.size : sm.compactChip + 2;
           // Stable order: the solver's own (rank, entity_id), so the same
           // devices sit the same way round on every device and at every zoom.
           for (let k = 0; k < drawn; k++) {
-            const off = (k - (drawn - 1) / 2) * pitch;
-            c.chips[k].width = `${chipPx}px`;
-            c.chips[k].height = `${chipPx}px`;
+            const off = (k - (drawn - 1) / 2) * lay.pitch;
+            c.chips[k].width = `${lay.chip}px`;
+            c.chips[k].height = `${lay.chip}px`;
             c.chips[k].left = `${off}px`;
             c.zones[k].width = `${Math.round(100 / drawn)}%`;
             c.zones[k].left = `${((k - (drawn - 1) / 2) * 100) / drawn}%`;

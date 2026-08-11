@@ -1,3 +1,44 @@
+## 2.263.0
+
+### Fixed — the two side-by-side forms were two layouts, not one at two sizes
+
+Two summary cards on screen at once, the same object in both: one pair drawn
+with a visible gap and honest margins, the other cramped against its border.
+The question that came with the screenshot — "aren't you using DRY code to
+centralize the layout for this same function?" — was the right one, and the
+answer was no.
+
+Each form computed its own geometry inline, from three different places:
+
+    width = strip >= 2 ? strip * sm.size   : sm.size
+    chip  = strip >= 2 ? sm.chipSize       : sm.compactChip
+    pitch = strip >= 2 ? sm.size           : sm.compactChip + 2
+
+Three ternaries, a metric that existed only for one branch, and a bare literal
+in the pitch. They were not one rule at two sizes; they were two layouts that
+happened to be reached through the same branch, and nothing tied their
+proportions together — so one could drift from the other and did.
+
+There is now ONE function. A card of `n` chips is `n` units wide, its chips are
+pitched exactly one unit apart, and each chip is `cardIconFraction` of a unit —
+the same proportion a card badge gives its own chip. The end margins and the
+gap between chips both fall out of that single number, so they cannot disagree
+with each other, and they cannot disagree with the badge either.
+
+The compact form is now nothing but this same layout at HALF the unit. Two
+chips of half a badge each is one badge wide, which is exactly the count
+badge's footprint it has to land on — so it keeps the property that made it
+free (it can never be refused where a count would have been accepted) while
+being, by construction, the same object as the wide one at a smaller size.
+Margin-to-chip and gap-to-chip are now identical in both.
+
+`chipSize`, `pairPitch`, `pairWidth` and `compactChip` are gone from
+`summaryMetrics` — four numbers that existed to describe a layout that is now
+described once, in the function that draws it. `placeEntityGroups` measures a
+group through the same function, so the width a card is TESTED at is the width
+it is DRAWN at, which is this file's oldest rule and was previously two
+expressions that happened to agree.
+
 ## 2.262.0
 
 ### Fixed — a focused room drew every one of its devices in a single screen-wide card
