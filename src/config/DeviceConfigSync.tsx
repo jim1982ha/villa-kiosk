@@ -65,7 +65,7 @@ import { pushWithRebase } from "@/utils/keyedSync";
 import { useStoreRefresh } from "@/hooks/useStoreRefresh";
 import {
   fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
-  diffSharedConfig, applySharedConfigDiff, isSharedConfigDiffEmpty,
+  diffSharedConfig, applySharedConfigDiff, isSharedConfigDiffEmpty, describeSharedConfigDiff,
   loadSyncBaseline, saveSyncBaseline, baselineFromServer,
   type SharedDeviceConfig,
 } from "./deviceConfig";
@@ -150,8 +150,14 @@ export default function DeviceConfigSync() {
     // The fetch-rebase-write-retry protocol itself lives in utils/keyedSync —
     // the SAME loop the Facility Manager store uses. Only what a "diff" means
     // for this document, and what to report, belong here.
+    const ownDiff = diffSharedConfig(baseline, localRef.current);
+    // WHICH keys are being sent, by item count. See describeSharedConfigDiff:
+    // without this a push driven by a key that churns on its own is
+    // indistinguishable in a dump from a push driven by a real edit.
+    const changed = describeSharedConfigDiff(ownDiff);
+
     const outcome = await pushWithRebase({
-      diff: diffSharedConfig(baseline, localRef.current),
+      diff: ownDiff,
       isEmpty: isSharedConfigDiffEmpty,
       baseline,
       fetchFresh: async () => {
@@ -174,6 +180,7 @@ export default function DeviceConfigSync() {
       revRef.current = outcome.rev;
       reportSync({
         op: "push", ok: true, attempts: outcome.attempts, rev: outcome.rev,
+        changed,
         dismissed: outcome.next.dismissedEntityIds.length,
         entities: Object.keys(outcome.next.entityMap).length,
       });
@@ -183,7 +190,7 @@ export default function DeviceConfigSync() {
       return;
     }
     if (outcome.reason === "nothing-to-push") return;
-    reportSync({ op: "push", ok: false, reason: outcome.reason });
+    reportSync({ op: "push", ok: false, reason: outcome.reason, changed });
   }, [update, reportSync, commitBaseline]);
 
   const pull = useCallback(async () => {

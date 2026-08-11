@@ -544,7 +544,17 @@ export default function Dashboard() {
         // than stored, so the fresh fit already IS the whole truth.)
         const freshNames = new Set(pts.map((p) => p.name));
         const custom = configRef.current.teleportPoints.filter((p) => !freshNames.has(p.name));
-        update({ teleportPoints: [...pts, ...custom] });
+        const next = [...pts, ...custom];
+        // Only write when the fit actually MOVED something. This runs on every
+        // model load and every re-calibration, and an unconditional update()
+        // is never free even when the values are identical: it hands React a
+        // new array, which re-persists the whole config to localStorage (see
+        // ConfigContext's save effect) and re-runs everything downstream of
+        // teleportPoints. The fitted geometry is quantised at the source
+        // (SceneManager's `mm`), so equal geometry compares equal here.
+        if (JSON.stringify(next) !== JSON.stringify(configRef.current.teleportPoints)) {
+          update({ teleportPoints: next });
+        }
       }
     };
     const offReady = manager.onReady(adopt);

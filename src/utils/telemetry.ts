@@ -47,7 +47,13 @@ export type TelemetryKind =
   // finishes, and a session that stalls at the gate produces no `load` at all:
   // every gated load in the field dump that prompted this was simply missing,
   // which is why a reported freeze there had no data behind it.
-  | "ha-connect";
+  | "ha-connect"
+  // The loaded model's DRAW-CALL structure, and what it could be if the
+  // mergeable meshes were merged. Emitted once per model load, after the
+  // reveal. Describes the model rather than the load, which is why it is not
+  // folded into `load`: it is read next to `frames`, and those arrive later
+  // and only after a burst of interaction. See babylon/sceneAudit.ts.
+  | "drawcalls";
 
 let disabled = false;
 
@@ -97,6 +103,21 @@ export function report(kind: TelemetryKind, data: Record<string, unknown> = {}):
   }).catch(() => { /* offline / blocked — drop it, this is best-effort */ });
 }
 
+/**
+ * A return from hidden is only worth an event if the page was away long enough
+ * for the thing these records exist to explain — an iOS white screen, a scene
+ * whose WebGL context was reclaimed while backgrounded — to have happened.
+ *
+ * Below this it is a tab switch, and a tab switch is the single noisiest event
+ * the app can emit: `visibilitychange` fires on every app switch, every screen
+ * lock and every notification pull-down, and the server ring holds only the
+ * newest 500 events ACROSS ALL DEVICES. Reporting each one meant a phone in a
+ * pocket could evict a whole fleet's load, freeze and frame history — the very
+ * records anything is diagnosed from — with a list of times it was picked up.
+ * The sync store solved the same problem with a dedupe for the same reason.
+ */
+const VISIBILITY_REPORT_MIN_HIDDEN_MS = 30_000;
+
 /** Wire the page-lifecycle + WebGL signals that explain an iOS white screen.
  *  Idempotent; safe to call once at startup. */
 let installed = false;
@@ -105,14 +126,26 @@ export function installLifecycleTelemetry(): void {
   installed = true;
   // `persisted` is the exact field that misleads on iOS (see SceneManager's
   // handlePageHide) — recording it is what lets us confirm the diagnosis from
-  // a real device instead of inferring it.
+  // a real device instead of inferring it. Both of these are genuinely rare
+  // (a real navigation away or back), so neither is throttled.
   window.addEventListener("pagehide", (e) => {
     report("lifecycle", { event: "pagehide", persisted: e.persisted });
   });
   window.addEventListener("pageshow", (e) => {
     report("lifecycle", { event: "pageshow", persisted: e.persisted });
   });
+  // Only the RETURN, and only from a stretch long enough to matter. Going
+  // hidden is not reported at all: it carries no information the return does
+  // not, and it doubled the event count on the noisiest signal in the app.
+  let hiddenSince = document.visibilityState === "hidden" ? Date.now() : 0;
   document.addEventListener("visibilitychange", () => {
-    report("lifecycle", { event: "visibilitychange", state: document.visibilityState });
+    if (document.visibilityState === "hidden") {
+      if (!hiddenSince) hiddenSince = Date.now();
+      return;
+    }
+    const away = hiddenSince ? Date.now() - hiddenSince : 0;
+    hiddenSince = 0;
+    if (away < VISIBILITY_REPORT_MIN_HIDDEN_MS) return;
+    report("lifecycle", { event: "visible", hiddenMs: Math.round(away) });
   });
 }

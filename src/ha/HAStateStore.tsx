@@ -11,6 +11,7 @@ import { HAWebSocket, type ConnectionState } from "./HAWebSocket";
 import { devLog } from "@/utils/devLog";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { hasBootMark } from "@/utils/bootTimeline";
+import { beginSpan } from "@/utils/perfSpans";
 import { resolveEntityFloor } from "@/config/EntityMap";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 
@@ -149,9 +150,20 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
   const perEntity = useRef(new Map<string, Set<EntityCallback>>());
   const allSubs = useRef(new Set<(e: HassEntity) => void>());
 
+  // This is the imperative path into Babylon — a subscriber here repaints
+  // meshes, badges and lights synchronously. One entity is cheap; a BURST is
+  // the question, and a burst is exactly what an HA restart or a scene
+  // activation produces. Instrumented so a freeze record can say whether the
+  // blocked interval was spent in here. Almost always discarded by perfSpans'
+  // 8ms floor, so the steady-state cost is two clock reads per event.
   const notify = useCallback((entity: HassEntity) => {
-    perEntity.current.get(entity.entity_id)?.forEach((cb) => cb(entity));
-    allSubs.current.forEach((cb) => cb(entity));
+    const end = beginSpan("haNotify");
+    try {
+      perEntity.current.get(entity.entity_id)?.forEach((cb) => cb(entity));
+      allSubs.current.forEach((cb) => cb(entity));
+    } finally {
+      end();
+    }
   }, []);
 
   useEffect(() => {

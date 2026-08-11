@@ -63,6 +63,7 @@ import { resetLightPoolTextureCache } from "./LightPools";
 import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
 import { isIOS as detectIOS } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
+import { beginSpan } from "@/utils/perfSpans";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
@@ -89,6 +90,11 @@ import { entityMapDelta } from "./entityMapDiff";
 // bought nothing and cost a villa's GPU continuously for as long as a fan is
 // left on. Interaction is never subject to this — see requestRender.
 const ANIMATION_FRAME_MS = 33;
+
+/** Round a derived world coordinate to millimetres. Used where a computed
+ *  position is about to be STORED rather than only drawn — see the teleport
+ *  points built in calibrateRooms for why the precision has to be dropped. */
+const mm = (v: number): number => Math.round(v * 1000) / 1000;
 
 // ── Frame-time sampling (see sampleFrame) ───────────────────────────────────
 // A gap above this is the render loop RESUMING — the app went idle, the tab
@@ -721,6 +727,21 @@ export class SceneManager {
    *   far beyond the mesh count.
    * - `evalMs` — the per-frame walk over ALL meshes, which is the one cost in
    *   the render loop that legitimately does not care what is on screen.
+   *
+   * ── ALL THREE HAVE NOW ANSWERED (2026-08-11) ─────────────────────────────
+   * Controlled: same Mac, same build, same overview scene.
+   *   Chrome:      484 draws, 4.27Mpx, renderMs 7.2  -> 14.9us/draw, 53fps
+   *   Safari 26.2: 478 draws, 1.46Mpx, renderMs 33   -> 69us/draw,   16fps
+   * Chrome draws 2.9x the pixels 4.6x FASTER inside scene.render(). `evalMs`
+   * is 2ms on both, so culling is dead. `drawCalls/activeMeshes` has been
+   * exactly 1.00 since 2.265.0, so multi-pass lighting is dead. Same triangle
+   * count, so geometry is dead. Pixels were already dead (2.222.0).
+   *
+   * What is left is per-draw-call cost inside Safari's WebGL, which is not
+   * ours to change. THE ONLY LEVER WE HOLD IS THE NUMBER OF DRAW CALLS — and
+   * since the ratio is 1.00, that means the number of drawn meshes. Sizing
+   * that is what babylon/sceneAudit.ts measures; keep these three fields, they
+   * are how any change to it gets checked.
    */
   private sampleFrame(now: number): void {
     const prev = this.lastFrameAt;
@@ -1754,6 +1775,15 @@ export class SceneManager {
    * for a different villa with no calibration entities.
    */
   private calibrateRooms(meshes: AbstractMesh[]): void {
+    const endSpan = beginSpan("calibrateRooms");
+    try {
+      this.calibrateRoomsInner(meshes);
+    } finally {
+      endSpan();
+    }
+  }
+
+  private calibrateRoomsInner(meshes: AbstractMesh[]): void {
     // Prefer plan data parsed from an uploaded .sh3d (works for ANY villa);
     // otherwise fall back to the built-in reference data.
     const entityCalib: Record<string, { x: number; y: number }> = this.config.sh3dEntities?.length
@@ -1839,11 +1869,27 @@ export class SceneManager {
         catch (err) { console.warn("[Villa] stair glow conform failed; using flat patch", err); }
       }
       worldPolys.push({ name: room.name, pts, floorY, conform });
+      // QUANTISED TO MILLIMETRES, and that is not cosmetic — it is what stops
+      // this data pushing itself to the server on every single boot.
+      //
+      // These points are DERIVED: `planToWorld` is an affine fit re-solved on
+      // each load and `floorY` comes off a raycast, so both land on full
+      // double precision. Dashboard adopts them into `config.teleportPoints`,
+      // which is a SHARED key — and the sync layer diffs shared items with
+      // JSON.stringify (keyedSync's diffKeyed), so a single differing ULP in
+      // one coordinate makes the whole room read as an edit worth sending.
+      // Field telemetry showed a config push on essentially every boot with no
+      // user edit behind it, ~15/day, against a rule the sync layer's own
+      // docstring calls load-bearing ("push only real changes").
+      //
+      // A millimetre is far below anything the camera can express (these feed
+      // an eye position and a look-at target in metres) and far above the noise
+      // floor of a re-solved fit, so equal geometry now serialises equal.
       points.push({
         name: room.name,
         floor,
-        position: { x: wc.x, y: floorY + 1.7, z: wc.z },
-        target: { x: wc.x, y: floorY + 1.6, z: wc.z + 1.5 },
+        position: { x: mm(wc.x), y: mm(floorY + 1.7), z: mm(wc.z) },
+        target: { x: mm(wc.x), y: mm(floorY + 1.6), z: mm(wc.z + 1.5) },
       });
     }
 
@@ -1956,6 +2002,13 @@ export class SceneManager {
     return this.calibratedPoints;
   }
 
+  /** The model's meshes, for read-only inspection (see sceneAudit). Returned
+   *  as a readonly view so a caller cannot reorder the array the floor index
+   *  and highlight passes walk. */
+  getLoadedMeshes(): readonly AbstractMesh[] {
+    return this.loadedMeshes;
+  }
+
   /** Entities that resolved to real geometry in the loaded model — the devices
    *  actually visible on the 3D map (see EntityVisuals.mappedEntityIds). */
   mappedEntityIds(): string[] {
@@ -1999,6 +2052,15 @@ export class SceneManager {
    * alone, and turn on collision for vertical barriers.
    */
   private applyStructure(meshes: AbstractMesh[]): void {
+    const endSpan = beginSpan("applyStructure");
+    try {
+      this.applyStructureInner(meshes);
+    } finally {
+      endSpan();
+    }
+  }
+
+  private applyStructureInner(meshes: AbstractMesh[]): void {
     // Name patterns that are explicitly collidable (walls, railings, glass
     // barriers). Still NAME-based, and deliberately so for now: unlike the
     // pipeline's own structure groups, these are individual SweetHome catalog

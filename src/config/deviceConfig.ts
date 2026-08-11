@@ -128,6 +128,28 @@ export function diffSharedConfig(base: SharedDeviceConfig, next: SharedDeviceCon
   };
 }
 
+/**
+ * How many items each key contributes to a diff, omitting the keys that
+ * contribute none. This is telemetry, not logic — but it is the difference
+ * between a dump that says "this device pushed again" and one that says WHICH
+ * key it keeps pushing.
+ *
+ * "Every boot emits a config push" was visible in the field for a long time
+ * with no way to narrow it: `sync` records carried the outcome and the totals,
+ * so a push driven by one churning key looked exactly like a push driven by a
+ * real edit. Counts only — never item ids, which are entity_ids and villa
+ * data.
+ */
+export function describeSharedConfigDiff(diff: SharedConfigDiff): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const key of SHARED_CONFIG_KEYS) {
+    const d = diff[key] as KeyedDiff<unknown>;
+    const n = Object.keys(d.set).length + d.del.length;
+    if (n > 0) out[key] = n;
+  }
+  return out;
+}
+
 export function isSharedConfigDiffEmpty(diff: SharedConfigDiff): boolean {
   return keyedDiffIsEmpty(diff.entityMap) && keyedDiffIsEmpty(diff.meshBindings)
     && keyedDiffIsEmpty(diff.deviceGroups) && keyedDiffIsEmpty(diff.teleportPoints)

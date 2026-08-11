@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
+import { auditDrawCalls, countOrphanMaterials } from "@/babylon/sceneAudit";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { filterConfigForRole, hasCapability } from "@/auth/permissions";
@@ -574,6 +575,18 @@ export default function BabylonCanvas({
             });
           }).catch(() => {});
           autoDetectEntities();
+          // Draw-call structure: the ONE number that decides whether the Safari
+          // frame cost has a lever left (see sceneAudit's header). Reported as
+          // its own event rather than folded into `load`, because it describes
+          // the MODEL rather than the load, and because it is only meaningful
+          // next to the `frames` records — which arrive later and separately.
+          try {
+            const meshes = manager.getLoadedMeshes();
+            reportTelemetry("drawcalls", {
+              ...auditDrawCalls(meshes, configRef.current),
+              orphanMats: countOrphanMaterials(manager.scene, meshes),
+            });
+          } catch { /* diagnostic only — never fail a load for it */ }
         };
 
         // Auto-populate entityMap from meshes whose names are HA entity IDs

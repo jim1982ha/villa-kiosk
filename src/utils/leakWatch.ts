@@ -2,6 +2,23 @@
 // Answers ONE question about the in-place reload, and deliberately not more:
 // after a SceneManager is disposed, does it actually become garbage?
 //
+// ── STATUS: the leak this was built for is FIXED (2.272.0 + 2.273.0) ───────
+// This is kept as the REGRESSION GUARD, not as an open investigation. The
+// retainer was found — a callback prop written inline in Dashboard closed over
+// Dashboard's render scope, which held the previous SceneManager, and the
+// canvas captured it in a mount effect with `[]` deps — and the fix was to
+// route every callback prop through one ref assigned during render.
+//
+// Verified in the field: the `scene` key stopped appearing entirely (scenes
+// are collected now), and the heap floor after five reloads fell from never
+// below ~330MB to 171MB. `mgr` still counts up, but each retained manager is
+// an empty shell of 9-68kB — 2.272.0's dispose() nulls every subsystem — so a
+// non-zero `mgr` is no longer evidence of a memory problem on its own. What
+// matters is `scene`, and whether `mgr`'s SIZE ever returns.
+//
+// So: if `scene` is ever non-zero again, something has re-attached the scene
+// graph to a disposed manager and the fix above has been undone.
+//
 // ── The measurement this exists because of (2.231.0) ────────────────────────
 // A field dump caught a session that remounted BabylonCanvas six times (each
 // model upload bumps Dashboard's `modelKey`, which is a full unmount/remount)
@@ -19,16 +36,18 @@
 // record in that dump has no `mem` field to read.
 //
 // ── Why a WeakRef and not a heap snapshot ──────────────────────────────────
-// The retainer cannot be found by reading: the disposal path already removes
-// every window/document listener, disconnects both observers, disposes each
-// subsystem explicitly, nulls the manager out of React state and its ref,
-// revokes the model's blob URL in a `finally`, and force-loses the WebGL
-// context. All of that is correct, and the leak survives it. The next step is
-// a heap snapshot naming the retaining path — which needs a machine with
-// devtools attached to the kiosk, at the moment it happens.
+// A snapshot names the retaining path, but it needs a machine with devtools
+// attached to the kiosk at the moment it happens, and the shipped bundle is
+// minified — the constructor filter matches nothing until you know the
+// one-or-two-letter name, which is what __villaLeakHold below exists to hand
+// you. (Reading the disposal path was not enough on its own: it already
+// removed every listener, disconnected both observers, disposed each
+// subsystem, nulled the manager out of React state and force-lost the WebGL
+// context, and the leak survived all of it. The retainer was one scope
+// further out than any of that.)
 //
-// This is the cheap thing that decides WHICH heap to go and snapshot, from the
-// field, with no tooling:
+// This is the cheap thing that decides WHETHER to go and snapshot at all, from
+// the field, with no tooling:
 //
 // - `staleMgrs > 0` — the SceneManager object graph itself is still reachable.
 //   Something outside it holds a reference, and every mesh, geometry and
@@ -126,6 +145,16 @@ export function resetLeakWatch(): void {
 //                      the measurement for the rest of the session — which is
 //                      fine, because by then the question is no longer "is
 //                      something retained" but "by what".
+//
+// CALL __villaLeakHold() ONCE, AT THE END. It pins whatever it finds, and
+// calling it after every reload re-pins the survivors on each call — which
+// produces a tidy 1→2→3→4→5 climb that looks exactly like the leak and is
+// entirely the hook. One field session was read wrong for this reason before
+// the contradiction was spotted.
+//
+// Then, before the snapshot: clear every `temp*`, `delete window.__villaLeakHeld`,
+// and CLEAR THE CONSOLE — devtools retains every object it has printed, so
+// otherwise every retainer branch you find is your own handle.
 //
 // Guarded by `?debug` so nothing is attached to `window` in normal use.
 

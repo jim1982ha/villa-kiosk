@@ -1,3 +1,34 @@
+## 2.275.0
+
+### Fixed — the kiosk pushed shared config on every boot
+
+The teleport points are derived: the plan→world fit is re-solved and the floor
+height is raycast on each load, both at full double precision. They are also a
+*shared* config key, and the sync layer diffs shared items by JSON — so one
+differing bit in one coordinate made every room read as an edit worth sending.
+The fitted geometry is now quantised to millimetres, and the adopt step skips
+the write entirely when nothing moved.
+
+### Changed — a phone in a pocket no longer evicts the telemetry log
+
+`visibilitychange` was reported unthrottled, and the server ring holds only the
+newest 500 events across all devices. Only a return from 30s or more away is
+recorded now, carrying how long it was gone.
+
+### Added — freeze records say what was running
+
+A `freeze` row was a duration and nothing else, which is how one wrong cause
+(a GC of the leaked heap) survived months and a correlation before being
+disproved. Named spans around the heavy operations now ride on the record.
+`0% covered` is a real answer: the block was not in any code the app measures.
+
+### Added — draw-call audit
+
+Safari costs 69µs per draw against Chrome's 14.9µs and every other candidate is
+eliminated, so the only lever left is drawing fewer meshes. A new `drawcalls`
+event reports what the count would be if the safely-mergeable meshes were
+merged — the number that decides whether merging is worth doing at all.
+
 ## 2.274.0
 
 ### Fixed — a GLB upload could sit at one percentage for two minutes

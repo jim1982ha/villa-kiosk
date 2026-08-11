@@ -6,6 +6,7 @@ import {
 } from "react";
 import { type AppConfig, loadConfig, saveConfig, resetConfig } from "./AppConfig";
 import { resolveEffectiveTheme } from "@/utils/themeTime";
+import { beginSpan } from "@/utils/perfSpans";
 
 interface ConfigContextType {
   config: AppConfig;
@@ -55,7 +56,15 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   // Saving here instead means the checkbox paints first; persistence follows
   // a moment later, imperceptibly.
   useEffect(() => {
+    // Instrumented: this is a full JSON.stringify plus a SYNCHRONOUS
+    // localStorage write of a document that grows with the villa (entityMap,
+    // meshBindings, sh3dRooms), and it runs on every config change. Moving it
+    // out of the state updater made it stop blocking React's commit, but it
+    // still blocks the main thread when it runs — so it belongs in the set of
+    // candidates a freeze record can name. See perfSpans.
+    const end = beginSpan("saveConfig");
     saveConfig(config);
+    end();
   }, [config]);
 
   // Reflect the chosen theme onto the document root so the CSS variable

@@ -111,6 +111,7 @@ function summarise(e: TelemetryEvent): string {
       return `${e.code}: ${String(e.message ?? "").slice(0, 120)}`;
     case "lifecycle":
       return `${e.event}${e.persisted !== undefined ? ` persisted=${e.persisted}` : ""}`
+        + `${e.hiddenMs ? ` after ${ms(e.hiddenMs)} hidden` : ""}`
         + `${e.state ? ` (${e.state})` : ""}`;
     case "ha-connect": {
       // The headline is PRE-LOGIN or not: this work runs on the profile /
@@ -145,7 +146,28 @@ function summarise(e: TelemetryEvent): string {
       // "watchdog" is the Safari/iOS timer fallback — it measures total
       // event-loop lag rather than one task, so the figure is an upper bound.
       const how = e.src === "watchdog" ? " (timer lag)" : "";
-      return `UI blocked ${ms(e.ms)}${how}${back} · ${ms(e.sinceLoadMs)} into this session`;
+      // WHAT WAS RUNNING (see utils/perfSpans). `cover` is the field to read
+      // first and 0 is a real answer: it says none of the block was in code
+      // this app instruments, which rules out every app-side theory at once.
+      const blame = e.spans
+        ? ` · ${e.spans} (${e.cover ?? "?"}% covered)`
+        : typeof e.cover === "number"
+          ? ` · nothing instrumented was running (${e.cover}% covered)`
+          : "";
+      return `UI blocked ${ms(e.ms)}${how}${back} · ${ms(e.sinceLoadMs)} into this session${blame}`;
+    }
+    case "drawcalls": {
+      // The one comparison this record exists for. `dcProjected` is what the
+      // draw count would be after merging what is safely mergeable; if it is
+      // close to `dcDrawn` there is no lever here and the search moves on.
+      const cut = typeof e.dcDrawn === "number" && typeof e.dcProjected === "number" && e.dcDrawn > 0
+        ? ` (−${Math.round((1 - (e.dcProjected as number) / (e.dcDrawn as number)) * 100)}%)`
+        : "";
+      return `${e.dcDrawn ?? "?"} drawn meshes → ${e.dcProjected ?? "?"} if merged${cut}`
+        + `, ${e.dcProjectedDedup ?? "?"} if materials deduped first`
+        + ` · ${e.dcMats ?? "?"} materials, ${e.dcMatSig ?? "?"} distinct`
+        + ` · ${e.dcFixed ?? "?"} must stay separate`
+        + `${e.orphanMats ? ` · ${e.orphanMats} unused` : ""}`;
     }
     case "frames": {
       // p95 is the number a person actually feels: a median of 16ms with a p95

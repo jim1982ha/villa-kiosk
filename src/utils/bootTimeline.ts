@@ -26,6 +26,7 @@
 // of the JS the device actually executed.
 
 import { report } from "./telemetry";
+import { attributeFreeze, resetSpans } from "./perfSpans";
 
 /** Milestones, in the order they happen. */
 export type BootMark =
@@ -125,11 +126,22 @@ function reportPostLoadFreeze(
   if (freezeReports >= FREEZE_MAX_PER_SESSION) return;
   lastFreezeReportAt = now;
   freezeReports++;
+  // Read the span ring NOW, not inside the setTimeout below: the deferral is
+  // there so the reporting work doesn't join the stall being measured, but by
+  // the time it runs the ring may already have evicted the spans that explain
+  // this freeze. Attribution is a walk over at most 64 entries.
+  const attribution = attributeFreeze(startedAt, durationMs);
   // Deferred: reporting from inside the observer callback would add this
   // work to the very stall being measured.
   setTimeout(() => {
     report("freeze", {
       ms: Math.round(durationMs),
+      // WHAT WAS RUNNING. Without this a freeze record restates the symptom
+      // and nothing more — which is the state that let one wrong cause (a GC
+      // of the leaked heap) be argued from a correlation and then disproved
+      // months later. `cover: 0` is a real answer, not a missing one: it says
+      // the block is not in any code the app instruments.
+      ...attribution,
       // Which detector saw it. `longtask` attributes the block to ONE task and
       // is the better signal; `watchdog` is the Safari/iOS fallback and
       // measures total event-loop lag, so it can span several tasks.
@@ -287,6 +299,8 @@ export function endLoad(): void {
   }
   stalls.count = 0; stalls.totalMs = 0; stalls.maxMs = 0;
   stalls.maxAt = 0; stalls.preCount = 0; stalls.preMs = 0;
+  // The previous villa's work must never explain the next villa's freeze.
+  resetSpans();
   // The scene is going away, so the next load's own stalls are load cost
   // again, not freezes on a running villa.
   loadReportedAt = 0;

@@ -100,6 +100,7 @@ import { isUnavailable } from "@/utils/stateColors";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
+import { beginSpan } from "@/utils/perfSpans";
 import { pointInPolygon } from "@/utils/geometry";
 import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
@@ -1454,6 +1455,18 @@ export class EntityVisuals {
 
   /** Build the reverse index entity_id -> meshes from the loaded GLB. */
   indexMeshes(meshes: AbstractMesh[]): void {
+    // The single heaviest synchronous step in the app (measured at 1.1-3.4s on
+    // a real villa) and therefore the first suspect for any reported freeze —
+    // see perfSpans for why a named span rather than a profiler.
+    const endSpan = beginSpan("indexMeshes");
+    try {
+      this.indexMeshesInner(meshes);
+    } finally {
+      endSpan();
+    }
+  }
+
+  private indexMeshesInner(meshes: AbstractMesh[]): void {
     // Every anchor, mesh binding and label is rebuilt below.
     this.markLayoutDirty();
     // Restore the previous load's probes when they describe THIS geometry
@@ -3457,6 +3470,20 @@ export class EntityVisuals {
    *  regardless: anchors projecting behind the camera (z outside [0,1]),
    *  categories filtered off in the HUD, and entities on a hidden floor. */
   private cullLabels(): void {
+    // Runs on EVERY rendered frame, so this span is almost always discarded by
+    // perfSpans' 8ms floor and costs two clock reads. It is instrumented
+    // anyway because a badge re-solve is one of the few things in the app that
+    // could plausibly block for a second, and "the placement pass" has never
+    // been separable from "something froze" in a field record.
+    const endSpan = beginSpan("cullLabels");
+    try {
+      this.cullLabelsInner();
+    } finally {
+      endSpan();
+    }
+  }
+
+  private cullLabelsInner(): void {
     if (this.labels.size === 0) return;
     const cam = this.scene.activeCamera;
     if (!cam) return;
