@@ -2749,7 +2749,7 @@ export class EntityVisuals {
    */
   private summaryMetrics(): {
     size: number; font: number; countSize: number; countFont: number;
-    chipSize: number; pairPitch: number; pairWidth: number;
+    chipSize: number; pairPitch: number; pairWidth: number; compactChip: number;
   } {
     const m = this.metrics;
     const card = this.config.badgeStyle === "card";
@@ -2765,17 +2765,34 @@ export class EntityVisuals {
       countSize: Math.round(size * m.countPillFraction),
       countFont: Math.round(font * m.countFontFraction),
       chipSize,
-      // ── THE number that makes a pair card legitimate ────────────────────
-      // Two chips inside one card are two independently tappable controls, so
-      // they owe the same centre-to-centre distance two separate badges owe:
-      // minCentrePitchPx, Apple's hit region and what pickBadgeAt resolves
-      // against. That is ALSO the reason those badges grouped in the first
-      // place — an icon-only pair needs 16 + 16 + 6 = 38px of footprint but 44
-      // of pitch, so the floor is what binds, not the artwork. The pair card
-      // does not dodge the floor; it spends exactly it, and buys a visible
-      // pictogram per device and a one-tap target for each instead of a "2".
-      pairPitch: Math.max(chipSize + m.minGapPx, m.minCentrePitchPx),
-      pairWidth: Math.max(chipSize + m.minGapPx, m.minCentrePitchPx) + size,
+      // ── THE pair card is exactly TWO BADGES WIDE ────────────────────────
+      // Pitch = one badge, width = two. Each half of the card is therefore
+      // precisely the box of the badge it stands in for, which is the honest
+      // claim to make about a tap target and needs no number of its own.
+      //
+      // It was minCentrePitchPx (44) on the reasoning that two tappable chips
+      // owe each other the same centre distance two separate badges do. That
+      // was the wrong floor for this control. minCentrePitchPx exists because
+      // pickBadgeAt expands an undersized badge with a SLOP RING, so two
+      // badges closer than 44 have overlapping slop and a tap lands on
+      // whichever ring reached first. The pair card has no slop: its two zones
+      // TILE it, so every tap inside is assigned deterministically and the
+      // ambiguity that number prevents cannot occur. What actually matters
+      // here is how big each zone is, and at pitch 44 that was 36x28 — already
+      // under Apple's 44pt, so the floor was not being met either way, it was
+      // just costing 16 units of width. At pitch = size it is 28x28: exactly
+      // the badge, above WCAG 2.5.8's 24px AA floor, and a 22% smaller
+      // clearance disc, which is what gets the card granted more often.
+      pairPitch: size,
+      pairWidth: 2 * size,
+      // ── The COMPACT pair, for when the wide card will not fit ───────────
+      // Same footprint as the count badge it replaces — so it can never be
+      // refused where a count would have been accepted, and adding it costs
+      // no room its badges. Two half-size pictograms instead of the digit
+      // "2", because the digit is the one count in this app that carries no
+      // information: two pictograms already say "two", and they also say
+      // WHICH two. Its tap opens the list, exactly as the count's did.
+      compactChip: Math.max(6, Math.floor((size - m.minGapPx) / 2)),
     };
   }
 
@@ -4296,25 +4313,38 @@ export class EntityVisuals {
         c.room = g.room;
         c.node.position.set(g.wx, g.wy, g.wz);
         // ── PAIR CARD, or the count ────────────────────────────────────────
-        // Two devices drawn as "2" is the only summary in this app that costs
-        // a tap without telling you anything you could act on: the count is
-        // already implied by there being two pictograms. So a group of exactly
-        // two shows both devices instead — each in its own category colour and
-        // its own live state, each its own tap target — and the card is the
-        // one that grows, never the badges that move. Three or more keeps the
-        // count: three chips would be under the tap pitch, and beyond two the
-        // number IS the useful fact.
-        const pair = g.pair && c.entityIds.length === 2;
-        c.isPair = pair;
-        c.container.width = `${pair ? sm.pairWidth : sm.size}px`;
-        c.countText.isVisible = !pair;
-        c.chips[0].isVisible = pair;
-        c.chips[1].isVisible = pair;
-        if (pair) {
+        // ── A GROUP OF TWO NEVER DRAWS A DIGIT ────────────────────────────
+        // "2" is the one count in this app that carries no information: two
+        // pictograms already say two, and they also say WHICH two. So a
+        // two-member group always shows both devices, and only the TAP
+        // degrades when there is no room for the wide card:
+        //
+        //   wide     both devices, one tap each (zones tile the card)
+        //   compact  both devices at half size in the COUNT badge's own
+        //            footprint, tap opens the list
+        //
+        // The compact form is what makes this free. It is exactly as big as
+        // the count it replaces, so it can never be refused where a count
+        // would have been accepted, and no room loses its badges to it. The
+        // digit survives only for three or more — which is also the case the
+        // digit is genuinely about, two groups having merged.
+        const two = c.entityIds.length === 2;
+        const wide = g.pair && two;
+        c.isPair = wide;
+        c.container.width = `${wide ? sm.pairWidth : sm.size}px`;
+        c.countText.isVisible = !two;
+        c.chips[0].isVisible = two;
+        c.chips[1].isVisible = two;
+        if (two) {
+          const chipPx = wide ? sm.chipSize : sm.compactChip;
+          const half = (wide ? sm.pairPitch : sm.compactChip + this.metrics.minGapPx) / 2;
           // Stable left/right: the solver's own total order, so the same two
           // devices sit the same way round on every device and at every zoom.
           // Membership order out of the bucket is already (rank, entity_id).
           for (let k = 0; k < 2; k++) {
+            c.chips[k].width = `${chipPx}px`;
+            c.chips[k].height = `${chipPx}px`;
+            c.chips[k].left = `${(k === 0 ? -1 : 1) * half}px`;
             const s2 = shown[g.members[k]];
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
             const { face, ring } = badgeFaceAndRing(
@@ -4428,12 +4458,11 @@ export class EntityVisuals {
     // flicker with no upside. Positioned by `left` about the card's centre,
     // half the pitch each way, so the two chip CENTRES are exactly pairPitch
     // apart — the number summaryMetrics justifies.
-    const half = sm.pairPitch / 2;
+    // Size and offset are set per PASS (see updateEntityGroups): the same two
+    // controls serve the wide card and the compact one, and which is drawn
+    // depends on clearance, which changes with the zoom rung.
     const mkChip = (side: -1 | 1): Image => {
       const img = new Image(`egroupChip${side < 0 ? "A" : "B"}_${key}`);
-      img.width = `${sm.chipSize}px`;
-      img.height = `${sm.chipSize}px`;
-      img.left = `${side * half}px`;
       img.stretch = Image.STRETCH_UNIFORM;
       img.isVisible = false;
       container.addControl(img);
@@ -4445,9 +4474,13 @@ export class EntityVisuals {
     // same split a segmented control uses.
     const mkZone = (side: -1 | 1): Rectangle => {
       const z = new Rectangle(`egroupZone${side < 0 ? "A" : "B"}_${key}`);
-      z.width = `${sm.pairWidth / 2}px`;
+      // HALF the card, in percent — so the zones follow whatever width the
+      // card is drawn at this pass rather than a size captured at
+      // construction. A stale wide-card zone on a compact card would take
+      // taps outside the control that is actually on screen.
+      z.width = "50%";
       z.height = "100%";
-      z.left = `${side * sm.pairWidth / 4}px`;
+      z.left = `${side * 25}%`;
       z.thickness = 0;
       z.background = "";
       z.isPointerBlocker = false;
@@ -4496,6 +4529,9 @@ export class EntityVisuals {
       // than guessing, and a LONG press always does (see SceneManager) — the
       // list stays reachable, so nothing this card can do is a dead end.
       let entityId: string | null = null;
+      // `isPair` is the WIDE card only. The compact pair shows both devices in
+      // the count badge's own footprint, which is too small to split into two
+      // honest targets — so it keeps the count's behaviour and opens the list.
       if (c.isPair && c.entityIds.length === 2) {
         if (c.zones[0].contains(px, py)) entityId = c.entityIds[0];
         else if (c.zones[1].contains(px, py)) entityId = c.entityIds[1];

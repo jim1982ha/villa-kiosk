@@ -1,3 +1,60 @@
+## 2.259.0
+
+### Changed — a group of two never draws a digit again
+
+"2" is the one count in this app that carries no information. Two pictograms
+already say there are two, and they also say WHICH two — so a summary of
+exactly two devices should never be a number, and from here it is not. What
+degrades when space is tight is the TAP, not the drawing:
+
+* **wide** — both devices at badge size, the card split into two tiled zones,
+  one tap each. Unchanged from 2.256.0 except that it is now narrower.
+* **compact** — both devices at half size in the count badge's own footprint,
+  tap opens the list, exactly as the count's did.
+
+The compact form is what makes the guarantee free. It is exactly as big as the
+count it replaces, so it can never be refused where a count would have been
+accepted, and no room loses its badges to it. The previous fallback — a group
+of two that could not fit the wide card drew "2" — is gone, and nothing had to
+be traded for removing it.
+
+A digit therefore survives only for three or more, which is also the only case
+a digit is genuinely about: several piles' worth of devices that merged.
+
+### Changed — the wide pair card is exactly two badges wide
+
+Pitch = one badge, width = two, so each half of the card is precisely the box
+of the badge it stands in for. That is the honest claim to make about a tap
+target and it needs no constant of its own.
+
+It was `minCentrePitchPx` (44), on the reasoning that two tappable chips owe
+each other the same centre distance two separate badges do. That was the wrong
+floor for this control, and the field log is what made it obvious.
+`minCentrePitchPx` exists because `pickBadgeAt` expands an undersized badge
+with a SLOP RING: two badges closer than 44 have overlapping slop, so a tap
+lands on whichever ring reached first. The pair card has no slop — its two
+zones TILE it, so every tap inside is assigned deterministically and the
+ambiguity that number prevents cannot occur there. What actually matters is how
+big each zone is, and at pitch 44 that was 36x28: already under Apple's 44pt,
+so the floor was not being met either way. It was buying 16 units of width and
+nothing else.
+
+At pitch = size each zone is 28x28 — exactly the badge, above WCAG 2.5.8's 24px
+AA floor — and the card's clearance disc drops from 36 to 28 units. Since the
+`fits` test is radial (it must be: world distance scaled by the quantised zoom,
+because knowing whether a neighbour lies off the card's long axis would need
+the camera), that 22% is a straight increase in how often the wide card is
+granted. The 9-of-11 in the reported log was two cards refused at 58 units of
+required clearance; they now ask for 50.
+
+### The `?debug` line still says which
+
+    … | groups=10/14 cross=1 pairs=9/11 [Living Room:2, Kitchen:2, …]
+
+`pairs=granted/asked` now reads "9 wide, 2 compact" rather than "9 pair cards,
+2 digits". Every entry in that list is still a group of two showing two
+pictograms; the number only says how many got the roomier one.
+
 ## 2.258.0
 
 ### Fixed — `pickBadgeAt` was logging on every pointer move
