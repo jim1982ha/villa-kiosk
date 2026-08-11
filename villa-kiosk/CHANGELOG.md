@@ -1,3 +1,66 @@
+## 2.257.0
+
+### Fixed — one pair card's upgrade could demote another group
+
+Two pair cards drawn, one group of two still showing "2" beside a ceiling fan.
+The rule was applied; the CLEARANCE test refused that one, and the way it
+refused was the defect.
+
+2.256.0 asked for the pair card and settled for the count one group at a time,
+in key order. That is greedy in the wrong currency. A pair card is 72 units
+wide against a count badge's 28, and the clearance test is RADIAL — it has to
+be, because it works in world distance scaled by the quantised zoom, and
+knowing whether a neighbour lies off the card's long axis or its short one
+would need the camera, which is precisely the dependency this subsystem is
+built without. So a group upgraded early reserved a 72-DIAMETER disc, and the
+next group along could be pushed off its own seat by it: down to the compact
+count, or in the worst case all the way to its room's chip. One group's upgrade
+was being paid for by another group's demotion, and which one won depended on
+nothing more meaningful than which entity_id sorted first.
+
+Placement now runs in two passes. Every group is seated at COUNT width first —
+which reproduces the pre-2.256.0 result exactly and therefore cannot be worse
+than it — and only then are the two-member ones offered the wider card, in the
+same stable order, each tested against the seats everyone already holds. An
+upgrade that does not fit is simply declined. **A pair card can no longer cost
+anything.**
+
+`pair` is forced off for the whole of the first pass, including on groups
+already seated, because the test reads each neighbour's current width off the
+group itself; parking the request there would have let an early group reserve
+pair width DURING pass one, which is the same greed in a different place.
+
+### Added — `pairs=granted/asked` in the `?debug` placement line
+
+"Every group of two shows both its devices" is a claim, and it needed a number
+rather than an argument. The placement line now carries it:
+
+    … | groups=3/3 cross=1 pairs=2/3 [living room:2, kitchen:3] chips=0
+
+A gap between the two is the clearance test declining an upgrade — never the
+rule failing to apply. If a group of two still draws a count, that line says so
+and says how many others were in the same position, on the same frame.
+
+### Known, and the remaining lever
+
+What survives is the radial test itself: a 72x28 card reserves a 72-diameter
+disc, so a badge sitting directly above or below one — where the card is only
+28 tall — is rejected on a distance the card does not occupy. That is the
+standing price of camera independence and cannot be fixed without reintroducing
+the screen-space dependency six rewrites of this subsystem died of.
+
+The lever that remains is the card's WIDTH. `pairPitch` is currently
+`minCentrePitchPx` (44), inherited from the rule for two SEPARATE badges — each
+of which pickBadgeAt expands with a slop ring, so two closer than 44 have
+overlapping slop and a tap lands on whichever ring reached first. The pair
+card has no slop: its two zones tile it exactly, so every tap is assigned
+deterministically and the ambiguity that 44 exists to prevent cannot occur.
+Pitching the chips at `chipSize + minGapPx` (28) instead would make the card 56
+wide rather than 72 — a 22% smaller disc, so meaningfully more upgrades granted
+— at the cost of a 28x28 CSS px tap zone per device, above WCAG 2.5.8's 24px AA
+floor but below Apple's 44pt. Left at 44 because lowering a stated
+accessibility floor is not a change to make quietly.
+
 ## 2.256.0
 
 ### Added — a group of exactly two shows both devices, not a "2"

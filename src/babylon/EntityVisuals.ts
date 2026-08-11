@@ -773,6 +773,12 @@ export class EntityVisuals {
    *  the badge container is scaled by their product. */
   /** Last line emitted by logPlacement, so the pass logs only on CHANGE. */
   private lastPlaceLog = "";
+  /** `?debug` only: pair cards asked for and granted this pass. "Every group
+   *  of two shows both its devices" is a claim, and this is the number that
+   *  makes it checkable instead of arguable — a gap between the two is the
+   *  clearance test declining an upgrade, not the rule failing to apply. */
+  private pairCandidates = 0;
+  private pairUpgrades = 0;
   private iconUserScale = 1;
   private iconZoomScale = 1;
   /** Every badge dimension, in CSS px, for the pointer currently driving this
@@ -3664,6 +3670,8 @@ export class EntityVisuals {
 
     const pending: PendingEntityGroup[] = this.pendingGroups;
     pending.length = 0;
+    this.pairCandidates = 0;
+    this.pairUpgrades = 0;
     let solved: PlacementStats | null = null;
     if (clearance) {
       const items = this.placementItems(shown, boxes, clearance);
@@ -3898,6 +3906,7 @@ export class EntityVisuals {
       + ` | piles=${stats.piles} exempt=${stats.exempt} accepted=${stats.accepted}`
       + ` deferred=${stats.deferred} pulledBack=${stats.pulledBack}`
       + ` | groups=${placed.length}/${stats.buckets} cross=${stats.crossRoom}`
+      + ` pairs=${this.pairUpgrades}/${this.pairCandidates}`
       + ` [${groups}] chips=${chips.length} [${chips.join(", ")}]`;
     if (line === this.lastPlaceLog) return;
     this.lastPlaceLog = line;
@@ -4163,9 +4172,14 @@ export class EntityVisuals {
     // two clients must resolve the same conflict the same way.
     pending.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
     const placed: PendingEntityGroup[] = [];
-    /** Does this group clear every drawn badge and every group already placed,
-     *  at whatever width `g.pair` currently asks for? */
-    const fits = (g: PendingEntityGroup): boolean => {
+    /**
+     * Does this group clear every drawn badge, and every OTHER placed group, at
+     * whatever width `g.pair` currently asks for?
+     *
+     * `others` is passed rather than closed over because this runs in two
+     * passes and they need different sets — see below.
+     */
+    const fits = (g: PendingEntityGroup, others: PendingEntityGroup[]): boolean => {
       const mineHalf = groupHalf(g);
       for (let j = 0; j < shown.length; j++) {
         // Only badges that are actually DRAWN can be in the way, and a drawn
@@ -4181,24 +4195,41 @@ export class EntityVisuals {
         const d = Math.hypot(g.wx - shown[j].wx, g.wy - shown[j].wy, g.wz - shown[j].wz) * pxPerWorld;
         if (d < mineHalf + halfOf(j) * allow + gapPx) return false;
       }
-      for (const o of placed) {
+      for (const o of others) {
+        if (o === g) continue;
         const d = Math.hypot(g.wx - o.wx, g.wy - o.wy, g.wz - o.wz) * pxPerWorld;
         if (d < mineHalf + groupHalf(o) + gapPx) return false;
       }
       return true;
     };
 
+    // ── TWO PASSES: everyone gets a seat, THEN pairs are upgraded ──────────
+    // 2.256.0 asked for the pair card first and settled for the count, one
+    // group at a time. That is greedy in the wrong currency: a pair card is
+    // 72 units wide against a count's 28, and the clearance test is RADIAL
+    // (it has to be — it works in world distance scaled by the quantised zoom,
+    // and knowing whether a neighbour lies off the card's long axis or its
+    // short one would need the camera, which is exactly the dependency this
+    // subsystem exists without). So a group upgraded early reserved a
+    // 72-diameter disc and could push the NEXT group off its seat entirely —
+    // to the compact count, or in the worst case to its room's chip. One
+    // group's upgrade was being paid for by another group's demotion, and
+    // which group won depended on nothing more meaningful than key order.
+    //
+    // So: every group is seated at COUNT width first, which is exactly the
+    // pre-2.256.0 result and cannot be worse than it. Only then are the
+    // two-member ones offered the wider card, in the same stable order, each
+    // tested against the seats everyone already holds. An upgrade that does
+    // not fit is simply declined; it can no longer cost anybody anything.
+    // `pair` is forced OFF for the whole of pass 1 — including on groups
+    // already seated, since `fits` reads `groupHalf(o)` off them. Parking the
+    // request on the object itself would have let an early group reserve pair
+    // width DURING pass 1, which is the greed this restructure removes.
+    const wantsPair: boolean[] = [];
     for (const g of pending) {
-      // Ask for the pair card, settle for the count. The DOWNGRADE is what
-      // keeps this change free: without it a pair card that did not fit would
-      // take its whole room to the chip, and a group of two would be worse off
-      // than before it could show both its devices.
-      let clear = fits(g);
-      if (!clear && g.pair) {
-        g.pair = false;
-        clear = fits(g);
-      }
-      if (!clear) {
+      const wanted = g.pair;
+      g.pair = false;
+      if (!fits(g, placed)) {
         // Nowhere to stand: this is room-level crowding after all. EVERY room
         // the group covered escalates, not just its primary one — a group that
         // straddles a boundary and then fails to place cannot leave half its
@@ -4207,6 +4238,19 @@ export class EntityVisuals {
         continue;
       }
       placed.push(g);
+      wantsPair.push(wanted);
+    }
+
+    // Pass 2 — offer the wider card, same stable order. Each candidate is
+    // tested against the widths every other group currently holds, so two
+    // pairs that would collide cannot both be granted, and the first in key
+    // order wins deterministically.
+    for (let i = 0; i < placed.length; i++) {
+      if (!wantsPair[i]) continue;
+      placed[i].pair = true;
+      if (!fits(placed[i], placed)) placed[i].pair = false;
+      else this.pairUpgrades++;
+      this.pairCandidates++;
     }
     // A group whose room was escalated by a LATER pile must not also draw —
     // the room chip already covers its members. Done after the loop because a
