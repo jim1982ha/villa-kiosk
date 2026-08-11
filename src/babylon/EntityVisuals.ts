@@ -775,7 +775,6 @@ export class EntityVisuals {
   /** Scratch for quantisedPixelsPerWorldUnit's median. */
   private distPool: Float64Array = new Float64Array(0);
   /** Entities the owner removed as "no longer in HA" — see badgeEligible. */
-  private dismissedEntityIds: ReadonlySet<string> = new Set();
   /** ?debug-only solver workspaces — see assertPlacementInvariants. Separate
    *  from the live ones because a PlacementResult is pooled and a second solve
    *  would rewrite the result the pass is still using. */
@@ -1988,18 +1987,6 @@ export class EntityVisuals {
     this.lastState.clear();
     this.labelLayer?.dispose();
     this.labelLayer = null;
-  }
-
-  /** The entities the owner has dismissed as gone from HA (Dashboard's
-   *  dismissedEntitySet, which only counts ids HA really has no entity for).
-   *  Pushed in rather than read from config because the test needs the LIVE
-   *  entity list, which this layer deliberately does not hold. */
-  setDismissedEntityIds(ids: ReadonlySet<string>): void {
-    if (ids.size === this.dismissedEntityIds.size
-      && [...ids].every((id) => this.dismissedEntityIds.has(id))) return;
-    this.dismissedEntityIds = new Set(ids);
-    this.markLayoutDirty();
-    this.requestRender();
   }
 
   /** Replace the calibrated room polygons (world space) — forwarded straight
@@ -3328,24 +3315,31 @@ export class EntityVisuals {
    */
   private badgeEligible(id: string, lbl: LabelControls, hidden: readonly Category[]): boolean {
     if (hidden.includes(lbl.category)) return false;
-    // DISMISSED ("Remove" in the unavailable-devices flow) — the owner has
-    // said this device is gone from HA, and dismissedEntitySet only counts it
-    // while HA genuinely has no such entity, so the dismissal lapses by itself
-    // if it ever comes back.
+    // ── DISMISSAL DOES NOT HIDE A BADGE (2.254.0) ────────────────────────
+    // It used to: `if (dismissedEntityIds.has(id)) return false`, added so the
+    // map would stop disagreeing with the room's own modal about a device
+    // whose integration had been removed from HA. That killed the
+    // disagreement in the wrong direction. The mesh is still in the model and
+    // still resolves through resolveMeshToMapping, so it kept its blue
+    // "clickable" outline and still opened a panel — the app knew about a
+    // device it then refused to name anywhere, and the only visible evidence
+    // was geometry that glowed and led to a dead end.
     //
-    // Filtered HERE as well as in every list because it was previously filtered
-    // ONLY in the lists: a device whose GLB mesh still carries its name kept
-    // its badge on the map while the room's own modal listed it under "Not on
-    // the map", which is the app contradicting itself about the same device in
-    // two panels one tap apart. Reported that way for a contact sensor whose
-    // integration had been removed from HA. Dashboard's own comment already
-    // states the principle — filtering once is what makes "Remove" mean the
-    // same thing everywhere — and the map is one of the places it has to mean.
+    // A device the model carries and Home Assistant does not is a FACT worth
+    // reporting, not noise to suppress. It draws as unavailable — the dashed
+    // amber ring, from the phantom state rebuildLabels already paints it with
+    // — and every list files it under "Not in Home Assistant", its own
+    // heading beside "Not on the map" (SummaryGroupPanel).
     //
-    // NOT the same as suppressedEntityIds (HA's hidden/diagnostic flag), which
-    // is deliberately NOT filtered here: that is HA decluttering a settings
-    // list, not a statement that the device is gone. See cullLabels.
-    if (this.dismissedEntityIds.has(id)) return false;
+    // Dismissal keeps the meaning it was actually built for: it still strips
+    // the id from Dashboard's effectiveMappedEntityIds, so a dismissed device
+    // is not counted against Facility readiness and does not sit in the HUD's
+    // unavailable-devices alert. "Remove" means "stop nagging me", which it
+    // always did; it never needed to mean "pretend the geometry is not there".
+    //
+    // Nothing here makes a room chip red over it, either: both the chip's and
+    // the group's unavailable signal read `lastState`, and an entity HA has
+    // never reported has no entry in it.
     const mesh = this.byEntity.get(id)?.[0];
     if (!(mesh ? mesh.isEnabled() : lbl.anchor.isEnabled())) return false;
     // Floors below the active one stay RENDERED (cumulative floors: the 2F

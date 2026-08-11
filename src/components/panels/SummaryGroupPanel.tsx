@@ -141,10 +141,36 @@ export default function SummaryGroupPanel({
   // scenes" plumbing (a relay, a spare contact sensor…) a guest profile has
   // no reason to see or toggle, on top of the RBAC control gating already
   // covering whether they could act on it.
-  const onMap = all.filter((e) => mappedEntityIds.has(e.entity_id));
-  const offMap = role === "guest" ? [] : all.filter((e) => !mappedEntityIds.has(e.entity_id));
-  const rows = [...onMap, ...offMap];
-  const toggleables = rows.filter((e) => TOGGLEABLE.has(e.entity_id.split(".")[0]));
+  // ── THREE buckets, because there are three different facts ─────────────
+  // "on the map", "in HA but not modelled" and "modelled but HA has no such
+  // entity" were being answered with two headings, and the third case — a GLB
+  // object still named after a device whose integration was removed — was
+  // simply hidden. It was dismissible ("Remove", in the unavailable-devices
+  // flow) and a dismissal deleted it from every list AND from the map, which
+  // reported nothing at all: the mesh still glowed blue and still opened a
+  // panel, so the app knew about a device it refused to name anywhere.
+  //
+  // A phantom row IS the signal (see utils/phantomEntity — the same stand-in
+  // the 3D badge layer paints from), so the test is simply "did Home
+  // Assistant have an entity for this id".
+  const inHa = (e: HassEntity) => !!entities[e.entity_id];
+  // NOT hidden for Guest, unlike the off-map bucket below. An off-map device
+  // has no presence a guest could see, so omitting it creates no
+  // contradiction; a not-in-HA device is drawn on the map (unavailable, with
+  // the dashed amber ring) and is tappable, so leaving it out of the room's
+  // own list would put the two surfaces back into disagreement about a device
+  // one tap apart — the exact bug this section exists to end.
+  const notInHa = all.filter((e) => !inHa(e));
+  const onMap = all.filter((e) => inHa(e) && mappedEntityIds.has(e.entity_id));
+  const offMap = role === "guest"
+    ? []
+    : all.filter((e) => inHa(e) && !mappedEntityIds.has(e.entity_id));
+  const rows = [...onMap, ...offMap, ...notInHa];
+  // Deliberately NOT `rows`: a bulk turn-on must never address an entity Home
+  // Assistant does not have. The service call would be rejected for that id
+  // and the row could never reflect it either way.
+  const toggleables = [...onMap, ...offMap]
+    .filter((e) => TOGGLEABLE.has(e.entity_id.split(".")[0]));
   const anyOn = toggleables.some((e) => !OFF.has(e.state));
 
   const typeOf = (id: string): EntityType =>
@@ -219,6 +245,22 @@ export default function SummaryGroupPanel({
           ))}
         </>
       )}
+      {notInHa.length > 0 && (
+        <>
+          <div
+            className="summary-offmap-heading summary-notinha-heading"
+            title="This villa model has 3D geometry named after these devices, but Home Assistant has no such entity — most often the integration was removed, or the entity was renamed. Update the model, or re-add them in Home Assistant."
+          >
+            Not in Home Assistant
+          </div>
+          {groupByRoom(notInHa, roomOf).map(([room, list]) => (
+            <div key={room}>
+              <div className="summary-room-heading">{room}</div>
+              <div className="summary-entity-grid">{list.map(renderRow)}</div>
+            </div>
+          ))}
+        </>
+      )}
 
       {/* Scenes last — the room's own devices are why this modal was opened,
           scenes are a secondary shortcut for the same room. */}
@@ -268,7 +310,12 @@ export default function SummaryGroupPanel({
         : `${pretty(e.state)}${unit ? ` ${unit}` : ""}`;
 
     const isLock = domain === "lock";
-    const canToggle = canControl && (TOGGLEABLE.has(domain) || isLock);
+    // `rowInHa` gates every CONTROL on the row. A phantom is rendered so the
+    // device is reported, not so it can be operated: Home Assistant would
+    // reject the service call, and nothing would ever come back to change the
+    // row's state, so the control could only ever look broken.
+    const rowInHa = !!entities[id];
+    const canToggle = canControl && rowInHa && (TOGGLEABLE.has(domain) || isLock);
     const toggleOn = isLock ? e.state !== "locked" : !OFF.has(e.state);
     // EXACTLY what the map paints, via the one shared rule — see
     // deviceActivity.badgeSurfaceFor. This used to re-derive the surface from
@@ -285,7 +332,11 @@ export default function SummaryGroupPanel({
       // store already has every state, so it is one lookup.
       linkedStateOf(config.entityMap[id]?.linkedEntityId) === "on",
     );
-    const offMapRow = !mappedEntityIds.has(id);
+    const notInHaRow = !rowInHa;
+    // An id HA has no entity for is reported as THAT, not as "not on the map"
+    // — it may well have geometry, and saying it is missing from the model
+    // would send someone to fix the wrong thing.
+    const offMapRow = rowInHa && !mappedEntityIds.has(id);
     // A user explicitly hid this in HA (registry hidden_by) — distinct from
     // being merely diagnostic-category, and worth surfacing explicitly: a
     // caller that opted out of filterSuppressed (the room/category browses)
@@ -299,11 +350,16 @@ export default function SummaryGroupPanel({
         : callService(domain, "toggle", {}, { entity_id: id });
 
     return (
-      <div className={`summary-entity-row${offMapRow ? " is-offmap" : ""}`} key={id}>
+      <div
+        className={`summary-entity-row${offMapRow ? " is-offmap" : ""}${notInHaRow ? " is-notinha" : ""}`}
+        key={id}
+      >
         <button
           className="summary-entity-main"
           onClick={() => onOpenEntity(id)}
-          title={offMapRow ? `${label} — not on the 3D map` : `Open ${label}`}
+          title={notInHaRow
+            ? `${label} — Home Assistant has no entity with this id`
+            : offMapRow ? `${label} — not on the 3D map` : `Open ${label}`}
         >
           <img
             className="summary-entity-badge"

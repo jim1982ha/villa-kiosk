@@ -1,3 +1,74 @@
+## 2.254.0
+
+### Changed — "Not in Home Assistant" is now a reported category, not a hidden one
+
+`binary_sensor.door_network_contact` had a 3D object named after it, glowed blue
+as clickable, opened a panel reading UNAVAILABLE — and had no badge, no row in
+its room's device list, and no entry in Advanced Settings' auto-detected list.
+Home Assistant confirms it has no such entity at all: no state, no registry
+record, and nothing in any automation, script, scene or helper references the
+id. Its integration is gone; the villa model still carries the geometry.
+
+Everything except the glow was working exactly as written. The id had been
+dismissed ("Remove", in the unavailable-devices flow), and `badgeEligible`
+filtered dismissed ids out of the map — a rule added so the map would stop
+disagreeing with the room's own modal about precisely this kind of device. It
+killed the disagreement in the wrong direction. The mesh still resolves through
+`resolveMeshToMapping`, because the pipeline's primary convention is that the
+object's NAME is the binding, so it kept its outline and its tap target: the
+app knew about a device it then refused to name anywhere, and the only visible
+evidence was geometry that glowed and led to a dead end.
+
+A device the model carries and Home Assistant does not is a fact worth
+reporting. It draws on the map again, as unavailable — the dashed amber ring,
+painted from the phantom state `rebuildLabels` has always used for an id that
+never reported — and the device lists file it under its own heading, **Not in
+Home Assistant**, beside the existing "Not on the map".
+
+The two headings answer two different questions and had been collapsed into
+one, which is why the third case had nowhere to go:
+
+* **Not on the map** — Home Assistant has this device; this villa model has no
+  geometry for it. Tinted in the accent, as before.
+* **Not in Home Assistant** — this model has geometry named after the device;
+  Home Assistant has no such entity. Tinted `--status-warning`, the app's one
+  token for "Home Assistant has lost contact", the same amber the map badge's
+  dashed ring uses. Reusing the off-map accent would have said "exists in HA,
+  just not modelled" — the opposite of what the section means.
+
+Unlike the off-map bucket, this one is shown to Guest as well. An off-map device
+has no presence a guest could see, so omitting it creates no contradiction; a
+not-in-HA device is drawn on the map and is tappable, so leaving it out of the
+room's list would put two surfaces back into disagreement one tap apart.
+
+**Dismissal keeps the meaning it was actually built for.** It still strips the
+id from Dashboard's `effectiveMappedEntityIds`, so a dismissed device is not
+counted against Facility readiness and does not sit in the HUD's
+unavailable-devices alert. "Remove" means "stop nagging me", which it always
+did; it never needed to mean "pretend the geometry is not there". The map layer
+no longer needs to know about dismissals at all, so `setDismissedEntityIds` and
+the effect that pushed it are gone from EntityVisuals, SceneManager and
+Dashboard.
+
+Nothing here makes a room chip turn red over such a device: both the chip's and
+the entity group's unavailable signal read `lastState`, and an entity Home
+Assistant has never reported has no entry in it.
+
+Every control on a not-in-HA row is disabled, and the header's bulk turn-on/off
+addresses only the mapped and off-map buckets. Home Assistant would reject a
+service call for an id it does not have, and nothing would ever come back to
+change the row — the control could only ever look broken.
+
+### Known, unchanged: the mesh still glows blue
+
+The blue "clickable" outline (`SceneManager.applyHighlight`) and the mesh tap
+target (`PickHandler`) resolve straight from the object's name and know nothing
+about any of this. For a device Home Assistant has no entity for that is now
+CORRECT — the badge beside it says unavailable and the room list names it — so
+this is left as it is rather than silently made inert, which would have removed
+the only way to notice a stale object in the model. The real fix for that one
+device is to rename or drop the object in the source model and re-export.
+
 ## 2.253.0
 
 ### Fixed — the card badge sat six units above its own anchor

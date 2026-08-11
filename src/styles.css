@@ -1199,6 +1199,16 @@ button {
 }
 .summary-entity-row.is-offmap .summary-entity-name,
 .summary-entity-row.is-offmap .summary-entity-state { color: var(--accent); }
+/* Devices Home Assistant has no entity for at all — the villa model still
+   carries geometry named after them. A DIFFERENT fact from "not on the map"
+   and so a different colour: --status-warning is the app's one token for
+   "Home Assistant has lost contact with this", the same amber the map badge's
+   dashed ring uses (see categorySurface's `unavailable` row and the Map
+   colours legend). Reusing the off-map accent here would have said "exists in
+   HA, just not modelled", which is the opposite of what this section means. */
+.summary-notinha-heading { color: var(--status-warning); }
+.summary-entity-row.is-notinha .summary-entity-name,
+.summary-entity-row.is-notinha .summary-entity-state { color: var(--status-warning); }
 .summary-entity-row {
   display: flex; align-items: center; gap: 10px;
   border-radius: 14px; background: var(--bg-input);
