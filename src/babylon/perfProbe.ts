@@ -46,9 +46,18 @@ import type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture
  *  whole run outlasting the user's patience — six conditions at 60 frames is
  *  roughly six seconds. */
 const PROBE_FRAMES = 60;
-/** Discarded before timing. The first frames after a change pay for shader
- *  recompilation and cache misses that are not the steady-state cost. */
-const WARMUP_FRAMES = 12;
+/**
+ * Discarded before timing. The first frames after a change pay for shader
+ * recompilation and cache misses that are not the steady-state cost.
+ *
+ * Raised from 12 after the first field run reported that removing every light
+ * made Chrome SLOWER (6.9ms -> 10.2ms). Nothing gets faster by being asked to
+ * do more work; what that measured was 455 materials recompiling, because the
+ * light count is a shader DEFINE and changing it invalidates every program.
+ * Twelve frames was not enough to get past it. See the `lights` condition,
+ * which is still the least trustworthy row here for exactly this reason.
+ */
+const WARMUP_FRAMES = 40;
 
 export interface ProbeRow {
   name: string;
@@ -121,6 +130,12 @@ function buildConditions(scene: Scene, guiLayers: readonly { rootContainer: { is
       // 98 light objects with 3 enabled. A disabled light still participates in
       // material shader selection, and the villa reports far more of them than
       // MAX_SIMULTANEOUS_LIGHTS could ever use at once.
+      //
+      // READ THIS ROW WITH SUSPICION. The light count is a shader define, so
+      // turning lights off recompiles every material in the villa; a positive
+      // "cost" here can be recompilation that outlasted the warm-up rather
+      // than lighting work. It cannot be ablated cleanly without that side
+      // effect, which is why the warm-up is as long as it is.
       name: "no lights at all",
       apply: () => {
         const on = scene.lights.filter((l) => l.isEnabled());
@@ -152,6 +167,50 @@ function buildConditions(scene: Scene, guiLayers: readonly { rootContainer: { is
       // remains here is what no amount of scene work can reduce.
       name: "all meshes hidden",
       apply: () => hideMeshes(scene, 1),
+    },
+    // ── Decomposing the floor ────────────────────────────────────────────
+    // The first field run found the floor is where the problem actually is:
+    // with the ENTIRE villa hidden, Safari still spent 18ms of a 35ms frame
+    // inside scene.render() drawing one mesh, against Chrome's 2.2ms. Nothing
+    // above accounts for it — the GUI was 4ms, lights and IBL 1-2ms each.
+    // These two conditions split what is left.
+    {
+      // Everything the scene draws, gone. Whatever this still costs is the
+      // engine's own per-frame work: clearing, the MSAA resolve, and the
+      // driver's frame setup.
+      name: "empty scene, no GUI",
+      apply: () => {
+        const undoMeshes = hideMeshes(scene, 1);
+        const prev = guiLayers.map((l) => l.rootContainer.isVisible);
+        for (const l of guiLayers) l.rootContainer.isVisible = false;
+        return () => {
+          guiLayers.forEach((l, i) => { l.rootContainer.isVisible = prev[i]; });
+          undoMeshes?.();
+        };
+      },
+    },
+    {
+      // THE DISCRIMINATOR. Same empty scene, a quarter of the pixels.
+      //
+      // If the floor is per-PIXEL — an MSAA resolve, a clear, anything that
+      // touches the whole framebuffer — it falls by roughly four. If it is
+      // fixed per FRAME, it does not move. Those two answers point at
+      // completely different fixes (resolution/AA settings versus engine or
+      // driver overhead), and no measurement so far separates them.
+      name: "empty scene, no GUI, quarter pixels",
+      apply: () => {
+        const engine = scene.getEngine();
+        const prevScale = engine.getHardwareScalingLevel();
+        const undoMeshes = hideMeshes(scene, 1);
+        const prev = guiLayers.map((l) => l.rootContainer.isVisible);
+        for (const l of guiLayers) l.rootContainer.isVisible = false;
+        engine.setHardwareScalingLevel(prevScale * 2);
+        return () => {
+          engine.setHardwareScalingLevel(prevScale);
+          guiLayers.forEach((l, i) => { l.rootContainer.isVisible = prev[i]; });
+          undoMeshes?.();
+        };
+      },
     },
   ];
 }

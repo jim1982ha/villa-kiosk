@@ -1,3 +1,18 @@
+## 2.277.0
+
+### Changed — the frame-cost probe now decomposes the part that matters
+
+The first run found the cost is not the villa: with every mesh hidden, Safari
+still spent 18ms of a 35ms frame inside `scene.render()` and Chrome 2.2ms. Two
+new conditions split that floor — an empty scene with the GUI off, and the same
+at a quarter of the pixels, which separates a per-pixel cost (an MSAA resolve, a
+clear) from a fixed per-frame one.
+
+The warm-up went from 12 frames to 40. Removing every light appeared to make
+Chrome *faster to be slower* — 6.9ms to 10.2ms — because the light count is a
+shader define and 455 materials were still recompiling when timing began. That
+row is now labelled as the unreliable one it is.
+
 ## 2.276.0
 
 ### Fixed — the config push on every boot, properly this time
