@@ -174,7 +174,13 @@ function summarise(e: TelemetryEvent): string {
       const mpx = typeof e.rw === "number" && typeof e.rh === "number"
         ? ` · ${((e.rw * e.rh) / 1e6).toFixed(2)}Mpx@${e.hw ?? "?"}` : "";
       const tier = [e.ibl ? "IBL" : null, e.ssao ? "SSAO" : null].filter(Boolean).join("+") || "no post";
-      return `frame-cost probe (${e.mode ?? "?"}${mpx} · ${tier} · ${e.gpu ?? "?"})`
+      // Shown as the DRIVER's sample count, not the request — a run with the
+      // setting off but 4 samples still granted would otherwise read as
+      // evidence against MSAA when it never tested MSAA at all.
+      const aa = typeof e.aaSamples === "number"
+        ? ` · ${e.aaSamples > 1 ? `${e.aaSamples}× MSAA` : "no MSAA"}${e.aaWant === false && e.aaSamples > 1 ? " (ASKED OFF, GRANTED ON)" : ""}`
+        : "";
+      return `frame-cost probe (${e.mode ?? "?"}${mpx}${aa} · ${tier} · ${e.gpu ?? "?"})`
         + ` — baseline ${base.renderMs.toFixed(1)}ms · costs: ${rest}`;
     }
     case "drawcalls": {

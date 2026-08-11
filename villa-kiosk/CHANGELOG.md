@@ -1,3 +1,14 @@
+## 2.280.0
+
+### Added — the probe reports what anti-aliasing the framebuffer actually got
+
+Turning Smooth Edges off on the iPad changed the frame by nothing: 76ms before,
+77ms after, the same 67ms empty-scene floor. That has two very different
+explanations — MSAA is not the cost, or the setting never reached the WebGL
+context — and nothing in the data could tell them apart. The probe now reports
+the request, what the browser granted, and the driver's own sample count, which
+is the only one of the three that cannot be wishful thinking.
+
 ## 2.279.0
 
 ### Fixed — the resolution valve could not open on the device that needed it

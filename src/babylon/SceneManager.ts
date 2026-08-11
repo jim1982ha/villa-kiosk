@@ -2090,7 +2090,40 @@ export class SceneManager {
       // of difference that turns a comparison into a wrong conclusion.
       ibl: render.ibl,
       ssao: render.ssao && !this.renderFx.isBaked(),
+      ...this.msaaState(),
     };
+  }
+
+  /**
+   * What anti-aliasing the framebuffer ACTUALLY got, not what was asked for.
+   *
+   * This exists because of a null result that could not be trusted without it.
+   * Turning "Smooth Edges" off on the iPad changed the probe by nothing at all
+   * — 76ms before, 77ms after, and an identical 67ms empty-scene floor — and
+   * that has two completely different explanations: MSAA is not the cost, or
+   * the setting never reached the context. A measurement that cannot tell
+   * those apart is not a measurement, and this app has a rule about that.
+   *
+   * `aaWant` is the request. `aaGot` is what the browser granted, which it is
+   * free to ignore in either direction. `aaSamples` is the ground truth from
+   * the driver: 1 means no multisampling is happening whatever anyone asked.
+   *
+   * Read from the canvas rather than a Babylon internal — getContext() with
+   * the same type returns the context that already exists, so this is the
+   * real one, through a public API.
+   */
+  private msaaState(): Record<string, unknown> {
+    const out: Record<string, unknown> = { aaWant: this.config.render?.antialias ?? true };
+    try {
+      const gl = (this.canvas.getContext("webgl2") ?? this.canvas.getContext("webgl")) as
+        | WebGL2RenderingContext | WebGLRenderingContext | null;
+      if (!gl) return out;
+      out.aaGot = gl.getContextAttributes()?.antialias ?? null;
+      // SAMPLES on the default framebuffer. The number the hardware is really
+      // resolving, and the only one of the three that cannot be wishful.
+      out.aaSamples = gl.getParameter(gl.SAMPLES) as number;
+    } catch { /* diagnostic only */ }
+    return out;
   }
 
   /**
