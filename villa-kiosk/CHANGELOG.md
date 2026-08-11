@@ -1,3 +1,11 @@
+## 2.271.0
+
+### Fixed — enforcing the CSP would have stopped the villa loading
+
+The model is handed to Babylon as a blob URL and its loader fetches it, but
+`connect-src` did not list `blob:`. A real device reported the violation, which
+is exactly what shipping the policy report-only is for.
+
 ## 2.270.0
 
 ### Added — `__villaLeak()` in the console, with `?debug`
