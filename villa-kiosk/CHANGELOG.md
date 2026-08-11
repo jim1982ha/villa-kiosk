@@ -1,3 +1,55 @@
+## 2.252.0
+
+### Fixed — every card badge was drawing its ring twice
+
+Reported from one screenshot of the dark theme, and visible on every badge in
+it: each one carried an outer rounded square AND a second, smaller rounded
+square a few pixels inside it, with identical fill on both sides of the gap.
+Two concentric amber outlines on an active light, two purple ones on a camera,
+two faint grey ones on every resting lock, sensor and idle bulb.
+
+Two independent things were drawing the same ring. The card's own Babylon
+`Rectangle` strokes its border, and `badgeImageDataUrl` bakes a ring into the
+icon chip that sits INSET inside it — same colour, same state, a few pixels
+apart. The result was a nested-square artefact rather than the chip-inside-a-
+card it was meant to be, and it was worst exactly where the badge is quietest:
+on a resting badge neither outline carries any information, so the only thing
+either one contributes is a faint grey rectangle drawn twice.
+
+The doubling was already understood for ONE state. The comment on that line
+said a dashed ring is baked into the image "so the card's own Rectangle border
+must stand down — otherwise the badge carries two rings at once", and stood it
+down for `unavailable` only. It was true of every other state; the dash was
+just the case where the two rings looked different enough to notice.
+
+The Rectangle wins, because it is the one that can follow the control's own
+corner radius and scale, and the chip now bakes no ring at all
+(`badgeImageDataUrl`'s new `suppressRing`). `unavailable` remains the one
+exception in the other direction: Babylon GUI has no dashed border, so that
+dash can only come from the canvas — there the image spans the full control and
+the Rectangle stands down, which is what puts the dash on the badge's outer
+edge where every other state's ring is.
+
+A resting badge therefore reduces to one squircle with a category-coloured
+pictogram, which is what the bottom bar's tile has always drawn (a DOM element
+with a single CSS border and an inline SVG — it had no second ring to draw,
+which is why that one never looked wrong). An ACTIVE badge keeps its visible
+chip, because there the chip has a tinted fill of its own and is a real object
+rather than an outline.
+
+### Fixed — a resting card badge was stroked at the full state weight
+
+The same line carried a second defect. `ringThicknessPx` was applied
+unconditionally whenever a ring existed, but `categorySurface` marks the idle
+row `ringHairline` — the guidelines give a resting badge a 1px hairline, not
+the 1.5px state ring — and nothing read that flag. So every quiet badge on the
+map was outlined at the full active weight, which is a large part of why they
+read as heavy rather than as the quiet objects "neutral by default" describes.
+
+Now `ringHairline ? 1 : ringThicknessPx`, which is the rule the room chip and
+the entity group badge were already following (`ringRed ? ringThicknessPx : 1`)
+— three drawings of one badge, one rule.
+
 ## 2.251.0
 
 ### Fixed — the bottom bar's eyebrow labels failed WCAG AA in light theme

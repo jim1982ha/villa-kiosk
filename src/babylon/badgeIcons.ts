@@ -135,13 +135,30 @@ export function badgeImageDataUrl(
   /** Draw the RING for a different state than the face — see
    *  categorySurfaceRinged. Defaults to `state`, i.e. the ordinary badge. */
   ringState?: DeviceSurfaceState,
+  /**
+   * Bake NO ring at all — the caller is drawing it itself.
+   *
+   * The "card" badge style does: its Babylon Rectangle already strokes the
+   * badge's edge, and this image sits INSET inside that rectangle. With a ring
+   * baked here as well the badge carried two concentric outlines in the same
+   * colour, a few pixels apart, with identical fill on both sides of the gap —
+   * a nested-square artefact rather than the chip-inside-a-card it was meant to
+   * be, and most obvious exactly where the badge is quietest (a resting badge,
+   * where both outlines are the same faint hairline).
+   *
+   * The one state that must keep its baked ring is `unavailable`: Babylon GUI
+   * has no dashed border, so the dash can only come from this canvas. That case
+   * passes inset 0 and the caller stands its own rectangle down instead — the
+   * same trade in the other direction.
+   */
+  suppressRing = false,
 ): string {
   const theme = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") ?? "" : "";
   // ringState is part of the key: two badges alike in every other respect but
   // ringed differently are different pictures, and a cache that conflated them
   // would serve whichever was baked first.
   const ring = ringState ?? state;
-  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${theme}`;
+  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -165,7 +182,7 @@ export function badgeImageDataUrl(
     // when unavailable. Every state has one — which is also what keeps a
     // resting badge legible against both a bright white ceiling and dark night
     // grass, so there is no separate hardcoded edge any more.
-    if (surface.ring) {
+    if (surface.ring && !suppressRing) {
       const ringPx = surface.ringHairline
         ? Math.max(1, size * HAIRLINE_FRACTION)
         : Math.max(2, size * (surface.ringBold ? BOLD_RING_FRACTION : RING_FRACTION));

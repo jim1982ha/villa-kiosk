@@ -2995,7 +2995,11 @@ export class EntityVisuals {
         // was always measured against has the chip, and without it the art had
         // no padding of its own and sat flush on the border.
         badgeImageDataUrl(category, iconKeyFor(type, this.lastState.get(entityId)), "off",
-          this.config.entityMap[entityId]?.badgeColor, card ? BADGE_INSET_CARD : 0));
+          this.config.entityMap[entityId]?.badgeColor, card ? BADGE_INSET_CARD : 0,
+          // Card: the Rectangle above strokes the edge, so the chip bakes no
+          // ring of its own — see updateLabel for the doubled outline this
+          // stops. Classic: the image IS the badge and carries its own.
+          undefined, card));
 
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
@@ -3184,20 +3188,37 @@ export class EntityVisuals {
       // attention signal and a neutral card must not swallow it.
       const surface = categorySurfaceRinged(lbl.category, state, ringState, override);
       lbl.badge.background = categorySurface(lbl.category, "off", override).fill;
-      // A DASHED ring is baked into the glyph image, so the card's own
-      // Rectangle border must stand down — otherwise the badge carries two
-      // rings at once, a solid one outside and the dashed one within it, which
-      // is what an unavailable device was showing.
-      lbl.badge.thickness = surface.ring && !surface.ringDashed ? this.metrics.ringThicknessPx : 0;
+      // ── EXACTLY ONE RING, AT THE WEIGHT THE STATE ASKS FOR ─────────────
+      // Two independent things were drawing it: this Rectangle's border, and
+      // the ring baked into the chip image below. They are the same colour a
+      // few pixels apart with the same fill on both sides of the gap, so every
+      // card badge carried a nested-square outline — clearest on a RESTING
+      // badge, where the only thing either outline contributes is a faint grey
+      // rectangle drawn twice. The dashed unavailable state was already
+      // recognised as needing exactly one of them; it was true of every other
+      // state too.
+      //
+      // The Rectangle wins, because it is the one that can follow the control's
+      // own corner radius and scale. `unavailable` is the single exception:
+      // Babylon GUI has no dashed border, so that dash can only come from the
+      // canvas — there the image spans the full control (inset 0) and this
+      // Rectangle stands down instead, which puts the dash on the badge's outer
+      // edge where every other state's ring is.
+      //
+      // The WEIGHT was a second defect in the same line. `ringThicknessPx`
+      // went on unconditionally, so an idle badge — whose surface asks for a
+      // 1px hairline (categorySurface's `ringHairline`) — was stroked at the
+      // full state weight. That is what made a resting badge read as heavily
+      // outlined rather than quiet, and it is the same rule the room chip and
+      // the entity group already follow (`ringRed ? ringThicknessPx : 1`).
+      const dashed = !!surface.ringDashed;
+      lbl.badge.thickness = !surface.ring || dashed
+        ? 0
+        : surface.ringHairline ? 1 : this.metrics.ringThicknessPx;
       lbl.badge.color = surface.ring ?? "transparent";
-      // The baked image normally sits INSET inside the card, because the
-      // card's own Rectangle draws the edge. A DASHED ring cannot come from
-      // the Rectangle — Babylon GUI has no dashed border — so for that one
-      // state the image spans the full control instead, putting its dash on
-      // the badge's outer edge where every other state's ring is.
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
-        surface.ringDashed ? 0 : BADGE_INSET_CARD, ringState);
+        dashed ? 0 : BADGE_INSET_CARD, ringState, !dashed);
       // Neutral ink, on a now-neutral card — the bottom bar's value is
       // `--text-primary` beside a coloured chip, not the chip's own hue. The
       // state is carried by the chip and the ring; the number is just a number.
