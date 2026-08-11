@@ -981,17 +981,43 @@ export class SceneManager {
    *
    * AFTER the reveal, deliberately: the villa is already on screen, so this
    * costs a couple of seconds of rendering nobody is waiting on.
+   *
+   * ── IT WAITS FOR SAMPLES, NOT FOR A CLOCK ────────────────────────────────
+   * The first version pinned for a flat two seconds and did nothing at all.
+   * The reason is in the load record next to it: `paintMs` is 8.6 SECONDS on
+   * the iPad — the frames immediately after the reveal are compiling shaders
+   * for 855 materials, and their gaps run to whole seconds. sampleFrame drops
+   * anything over FRAME_GAP_MAX_MS as a resume rather than a slow frame, and
+   * rightly so. So a two-second window opened and closed entirely inside the
+   * compile storm, collected almost nothing it was allowed to keep, never
+   * reached VALVE_SAMPLE_MIN, and the valve never ran.
+   *
+   * Waiting on the sample count instead makes the compile storm irrelevant:
+   * frames that get dropped simply do not count toward the total, so this ends
+   * when the valve actually has what it needs. The timeout is a backstop for a
+   * device that never produces steady frames at all, not the mechanism.
    */
-  calibrateResolution(durationMs = 2000): void {
+  calibrateResolution(maxWaitMs = 20_000): void {
     if (this.disposed) return;
     const unpin = this.pinContinuous();
-    setTimeout(() => {
+    const started = performance.now();
+    const finish = () => {
       unpin();
-      // Nudge the loop so the burst actually ends and gets flushed: without a
-      // frame after the unpin, the samples sit in the array until the next
-      // interaction, which on an untouched kiosk may be never.
+      // Flush EXPLICITLY rather than waiting for the render loop to notice the
+      // burst ended. With `renderOnDemand` off the loop never takes the branch
+      // that flushes, so the samples would sit in the array until they hit
+      // FRAME_SAMPLE_MAX — a minute away on a slow device, and never at all if
+      // the villa is torn down first.
+      this.flushFrameSamples();
       this.requestRender();
-    }, durationMs);
+    };
+    const check = () => {
+      if (this.disposed) { unpin(); return; }
+      if (this.frameSamples.length >= VALVE_SAMPLE_MIN) { finish(); return; }
+      if (performance.now() - started > maxWaitMs) { finish(); return; }
+      setTimeout(check, 250);
+    };
+    setTimeout(check, 250);
   }
 
   /** Keep rendering for a short window (covers input latency + transitions). */

@@ -1,3 +1,23 @@
+## 2.284.0
+
+### Fixed — the resolution calibration never ran
+
+It pinned rendering for a flat two seconds starting at the reveal, and on the
+iPad the first 8.6 seconds after the reveal are spent compiling shaders for 855
+materials. Those frames are seconds apart and are correctly discarded as
+stalls, so the window collected almost nothing and the valve never fired. It
+now waits until it has enough usable frames rather than until a clock runs out.
+
+### Fixed — Clear needed pressing twice
+
+The endpoint hands back the events it deletes, and the panel was rendering them
+— so an emptied store looked untouched. The list now empties with the store.
+
+### Changed — shorter button labels
+
+Six two-line buttons took most of a phone screen. Every label is one word now,
+with the explanation moved to where a long one belongs: the tooltip.
+
 ## 2.283.1
 
 ### Changed — records the measurement that closes the anti-aliasing question

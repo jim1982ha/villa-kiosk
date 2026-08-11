@@ -262,7 +262,14 @@ export default function TelemetryPanel() {
       if (r.status === 403) { setError("Owner profile required to read telemetry."); setEvents([]); return; }
       if (!r.ok) { setError(`Couldn't load telemetry (HTTP ${r.status}).`); setEvents([]); return; }
       const d = (await r.json()) as { events?: TelemetryEvent[] };
-      setEvents(Array.isArray(d.events) ? [...d.events].reverse() : []); // newest first
+      // A clearing read RETURNS the events it deleted — that is the endpoint's
+      // whole "read and empty in one trip" contract, and it is right for a
+      // caller archiving them. It is wrong for this screen: rendering them
+      // afterwards makes an emptied store look untouched, so Clear read as
+      // broken and had to be pressed twice before anything appeared to happen.
+      // The list on screen already IS the copy the user was reading; Copy and
+      // Download are next to the button for keeping it.
+      setEvents(clear ? [] : Array.isArray(d.events) ? [...d.events].reverse() : []); // newest first
     } catch {
       setError("Couldn't reach the add-on.");
       setEvents([]);
@@ -336,23 +343,27 @@ export default function TelemetryPanel() {
         What every device that opens this kiosk has reported — load timings, JS
         errors, WebGL context losses and page-lifecycle transitions. This is how
         a problem on someone else&rsquo;s phone becomes diagnosable. Newest first;
-        the add-on keeps the last 500 events. Use <strong>Copy all</strong> or
-        <strong> Download .json</strong> to share the raw events (every field,
-        not just the summary shown here).
+        the add-on keeps the last 500 events. <strong>Copy</strong> and
+        <strong> Download</strong> give you the raw events (every field, not just
+        the summary shown here); <strong>Clear</strong> empties the store.
       </p>
 
       <div className="row" style={{ gap: 8, marginBottom: 12 }}>
-        <button className="btn ghost" onClick={() => void load()} disabled={busy}>
+        <button className="btn ghost" onClick={() => void load()} disabled={busy}
+          title="Re-read the events from the add-on">
           <RefreshCw size={16} /> Refresh
         </button>
-        <button className="btn ghost" onClick={() => void copyAll()} disabled={busy || !events?.length}>
-          {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Copied!" : "Copy all"}
+        <button className="btn ghost" onClick={() => void copyAll()} disabled={busy || !events?.length}
+          title="Copy every event, every field, as JSON">
+          {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Copied" : "Copy"}
         </button>
-        <button className="btn ghost" onClick={downloadAll} disabled={busy || !events?.length}>
-          <Download size={16} /> Download .json
+        <button className="btn ghost" onClick={downloadAll} disabled={busy || !events?.length}
+          title="Save every event as a .json file">
+          <Download size={16} /> Download
         </button>
-        <button className="btn ghost" onClick={() => void load(true)} disabled={busy}>
-          <Trash2 size={16} /> Clear after reading
+        <button className="btn ghost" onClick={() => void load(true)} disabled={busy}
+          title="Empty the add-on's event store. Copy or Download first if you want to keep them.">
+          <Trash2 size={16} /> Clear
         </button>
         {/* THIS device, right now — as opposed to the fleet history above.
             The report already existed but was only ever rendered by
@@ -361,8 +372,9 @@ export default function TelemetryPanel() {
             that isn't a crash (a layout that's wrong but working, a device
             whose WebGL limits explain a slow load). Same builder, so the two
             can't describe the device differently. */}
-        <button className="btn ghost" onClick={() => setSelfReport((r) => (r ? null : buildReport(captureError("MANUAL_DIAGNOSTICS", new Error("Requested from Settings"), "TelemetryPanel"))))}>
-          <Stethoscope size={16} /> {selfReport ? "Hide this device" : "This device"}
+        <button className="btn ghost" title="This device right now — screen, viewport, WebGL caps, loaded model"
+          onClick={() => setSelfReport((r) => (r ? null : buildReport(captureError("MANUAL_DIAGNOSTICS", new Error("Requested from Settings"), "TelemetryPanel"))))}>
+          <Stethoscope size={16} /> {selfReport ? "Hide" : "Device"}
         </button>
         {/* THE ONLY WAY TO RUN THIS ON THE DEVICES THAT MATTER.
             The frame-cost experiment also has a console form, and neither an
@@ -374,9 +386,9 @@ export default function TelemetryPanel() {
           className="btn ghost"
           onClick={() => void runProbe()}
           disabled={probing || !probeAvailable()}
-          title="Re-times the frame with the badges, lights, image-based lighting and geometry removed one at a time. Takes about 15 seconds, during which the villa will look wrong."
+          title="Frame-cost probe: re-times the frame with the badges, lights, image-based lighting and geometry removed one at a time. About 15 seconds, during which the villa will look wrong."
         >
-          <Activity size={16} /> {probing ? "Measuring…" : "Frame-cost probe"}
+          <Activity size={16} /> {probing ? "Measuring…" : "Probe"}
         </button>
       </div>
 
