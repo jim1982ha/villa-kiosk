@@ -51,6 +51,8 @@
 // allocated. If a major GC has not run across that, nothing would ever be
 // collectable and the number is unreadable anyway.
 
+import { debugFlagEnabled } from "@/utils/devLog";
+
 /** A disposed object, and the load sequence it was disposed during. */
 interface Watched {
   ref: WeakRef<object>;
@@ -103,4 +105,52 @@ export function staleDisposed(currentSeq: number): Record<string, number> {
 /** Test seam / remount hygiene — a fresh document starts with nothing. */
 export function resetLeakWatch(): void {
   watched = [];
+}
+
+// ── Reading the answer from the device, with `?debug` ──────────────────────
+// The counts ride on the `load` telemetry record, which needs three model
+// uploads and an export before anything can be read. That is a long loop for a
+// yes/no question, and the alternative — a heap snapshot — does not work on
+// what the kiosk actually serves: the production bundle is MINIFIED, so
+// `SceneManager` is a one-letter name and DevTools' constructor filter matches
+// nothing at all. (Field-tested: it matches nothing at all.)
+//
+// So the same numbers, on demand, from the console:
+//
+//   __villaLeak()      { mgr, scene } — objects disposed two or more loads ago
+//                      that are STILL reachable, plus how many are still
+//                      inside the grace period. Reads only WeakRefs, so asking
+//                      cannot change the answer.
+//   __villaLeakHold()  the surviving objects themselves, for a heap snapshot's
+//                      Retainers pane. This takes a STRONG reference and ends
+//                      the measurement for the rest of the session — which is
+//                      fine, because by then the question is no longer "is
+//                      something retained" but "by what".
+//
+// Guarded by `?debug` so nothing is attached to `window` in normal use.
+
+interface LeakWindow extends Window {
+  __villaLeak?: () => Record<string, number>;
+  __villaLeakHold?: () => object[];
+  /** Where __villaLeakHold parks what it found, so DevTools can reach it. */
+  __villaLeakHeld?: object[];
+}
+
+export function installLeakConsole(currentSeq: () => number): void {
+  if (!supported || !debugFlagEnabled()) return;
+  const w = window as LeakWindow;
+  w.__villaLeak = () => {
+    const seq = currentSeq();
+    // The grace period is the whole reason a naive read misleads: an object
+    // that has not been collected YET is not a retained object, and nothing
+    // can be concluded until a full further load has allocated hundreds of MB.
+    return { ...staleDisposed(seq), loadSeq: seq, watching: watched.length };
+  };
+  w.__villaLeakHold = () => {
+    const held = watched
+      .map((x) => x.ref.deref())
+      .filter((o): o is object => o !== undefined);
+    w.__villaLeakHeld = held;
+    return held;
+  };
 }

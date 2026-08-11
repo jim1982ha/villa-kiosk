@@ -4,7 +4,8 @@ import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { installGlobalErrorCapture } from "./utils/diagnostics";
 import { installLifecycleTelemetry } from "./utils/telemetry";
-import { markBoot, installStallObserver, installVisibilityTracker } from "./utils/bootTimeline";
+import { markBoot, installStallObserver, installVisibilityTracker, currentLoadSeq } from "./utils/bootTimeline";
+import { installLeakConsole } from "./utils/leakWatch";
 import { startModelPrefetch } from "./utils/modelPrefetch";
 import "./styles.css";
 
@@ -27,6 +28,11 @@ installGlobalErrorCapture();
 // Page-lifecycle + WebGL signals — the trail that explains an iOS white
 // screen after an app switch (see telemetry.ts / SceneManager.handlePageHide).
 installLifecycleTelemetry();
+// `?debug` only: __villaLeak() in the console answers "is a disposed villa
+// still reachable" without three uploads and a telemetry export, and without
+// a heap snapshot — which the shipped bundle's minified class names make
+// unreadable anyway. See leakWatch.
+installLeakConsole(currentLoadSeq);
 
 // Start pulling the villa's GLB bytes NOW — before React mounts, before any
 // screen has decided whether a passcode is needed. It is a plain fetch(): no

@@ -1,3 +1,14 @@
+## 2.270.0
+
+### Added — `__villaLeak()` in the console, with `?debug`
+
+Whether a disposed villa is still reachable was only readable from a telemetry
+export after three model uploads, and the alternative — a heap snapshot — is
+unusable on the shipped bundle, whose class names are minified to single
+letters. `__villaLeak()` returns the same counts on demand; `__villaLeakHold()`
+hands the survivors to DevTools for the Retainers pane, at the cost of ending
+the measurement.
+
 ## 2.269.0
 
 ### Fixed — badges at different heights were drawn on top of each other

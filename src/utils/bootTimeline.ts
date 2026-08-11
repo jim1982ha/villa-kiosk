@@ -60,6 +60,13 @@ export function beginLoad(): number {
   return ++loadSeq;
 }
 
+/** Which load the page is on right now, without opening one. For readers that
+ *  are not part of the load sequence — see leakWatch's console hook, whose
+ *  grace period is counted in exactly this. */
+export function currentLoadSeq(): number {
+  return loadSeq;
+}
+
 // ── Main-thread stalls ─────────────────────────────────────────────────────
 // A freeze is main-thread blocking, and the browser will simply TELL you where
 // it happened: any task over 50ms is reported as a `longtask` entry. Four
