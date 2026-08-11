@@ -1,3 +1,37 @@
+## 2.265.0
+
+### Fixed — a focused room only tidied its PAIRS, so everything else stacked
+
+Tapping "Patio 1F" framed the room and then drew two lights on top of each
+other and three cameras on top of each other. The focused pass was looking at
+piles of exactly two and skipping the rest, so any pile of three or more fell
+straight through to the old behaviour: every badge drawn at its anchor,
+exempt, stacked — and `badgeContaining` returns the topmost, so two of those
+three cameras could not be tapped at all.
+
+That cap was the wrong bound, and it is the third time the bound has been wrong
+in this one pass. Worth recording all three together, because they are the same
+mistake at different settings:
+
+* **2.260.0** took each pile's LOSERS. A pile of three drew an accepted badge
+  plus a card of the other two at the same point — the overlap came back with
+  an extra control in it.
+* **2.261.0** took the whole pile as a card of N chips. A focused room whose
+  badges transitively touch is ONE pile, so it painted a single card the full
+  width of the screen carrying a dozen pictograms.
+* **2.262.0** took only piles of exactly two, which is what left the cameras
+  stacked.
+
+The bound belongs on the CARD, not on which piles are looked at. Every pile of
+two or more now draws as exactly one control: two devices side by side, or —
+for three and up — a count badge, which is one badge wide and is the one case a
+digit is genuinely about. `MAX_STRIP_CHIPS` enforces the same limit at the
+drawing site, so the two cannot drift.
+
+**Nothing inside a focused room can overlap now, by construction.** Piles do
+not conflict with each other — that is what a pile is — so one control per pile
+is one control per clear patch of floor. A pile of one is still just its badge.
+
 ## 2.264.0
 
 ### Changed — a group of two is ALWAYS the full-size card

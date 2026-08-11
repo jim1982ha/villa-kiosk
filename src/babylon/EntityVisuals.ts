@@ -807,7 +807,10 @@ export class EntityVisuals {
    *  makes it checkable instead of arguable — it must equal the number of
    *  two-member groups in the same line's list. */
   private pairUpgrades = 0;
-  /** Pair cards made inside the focused room (see pairFocusedRoom). */
+  /** Summaries made inside the focused room — pair cards and counts alike
+   *  (see pairFocusedRoom). One per pile, so this is also "how many piles the
+   *  focused room had", which is the number worth watching: it should be small
+   *  after the zoom solver has framed the room. */
   private focusPairs = 0;
   private iconUserScale = 1;
   private iconZoomScale = 1;
@@ -3927,7 +3930,7 @@ export class EntityVisuals {
       + ` deferred=${stats.deferred} pulledBack=${stats.pulledBack}`
       + ` | groups=${placed.length}/${stats.buckets} cross=${stats.crossRoom}`
       + ` pairs=${this.pairUpgrades}`
-      + (this.focusPairs ? ` focusPairs=${this.focusPairs}` : "")
+      + (this.focusPairs ? ` focusGroups=${this.focusPairs}` : "")
       + ` [${groups}] chips=${chips.length} [${chips.join(", ")}]`;
     if (line === this.lastPlaceLog) return;
     this.lastPlaceLog = line;
@@ -4393,24 +4396,30 @@ export class EntityVisuals {
     }
 
     for (const pile of piles.values()) {
-      // ── EXACTLY TWO. NOT "TWO OR MORE" ────────────────────────────────
-      // This is the side-by-side rule, reused for the focused room and
-      // nothing else, and the bound is the whole of its safety.
+      // ── ONE PILE, ONE CONTROL. THE SIZE DECIDES WHICH ─────────────────
+      // A pile is a set of badges that are on top of each other, so it draws
+      // as exactly one thing — two devices side by side, or a count. That is
+      // what guarantees NOTHING inside a focused room overlaps: piles do not
+      // conflict with each other by definition, so one control per pile is one
+      // control per clear patch of floor.
       //
-      // 2.260.0 took every BUCKET of two, and a bucket is a pile's losers —
-      // so a pile of three drew an accepted badge plus a card of the other
-      // two at the same point, and the overlap came back with an extra
-      // control in it. 2.261.0 then over-corrected by making the whole pile
-      // one card of N chips, and a focused room whose badges transitively
-      // touch is ONE pile: it painted a single card the full width of the
-      // screen carrying a dozen pictograms. Both were the same mistake in
-      // opposite directions — reaching past a pair.
+      // The bound that matters is the CARD's, and it is on the strip below,
+      // not here. Three earlier shapes of this got the bound wrong:
       //
-      // A pile of three or more co-located devices stays exactly as it was
-      // before any of this: every badge drawn at its anchor, exempt, stacked.
-      // That is not ideal, but it is the behaviour the focus was specified
-      // with, and it is bounded; the alternatives above were not.
-      if (pile.length !== 2) continue;
+      //   2.260.0  took each pile's LOSERS. A pile of three drew an accepted
+      //            badge plus a card of the other two at the same point — the
+      //            overlap came back with an extra control in it.
+      //   2.261.0  took the whole pile as a card of N chips. A focused room
+      //            whose badges transitively touch is ONE pile, so it painted
+      //            a single card the full width of the screen.
+      //   2.262.0  took only piles of exactly two, which left every pile of
+      //            three or more stacked — reported, with three cameras and
+      //            two lights drawn on top of each other.
+      //
+      // The whole pile, always; and the CARD is capped at two chips, so a
+      // bigger pile becomes a count badge exactly one badge wide. Bounded by
+      // construction rather than by a rule about which piles to look at.
+      if (pile.length < 2) continue;
       const members = pile.map((k) => idx[k]);
       // The solver's own total order, so the chips sit the same way round on
       // every device, at every zoom, in every session.
@@ -4438,7 +4447,10 @@ export class EntityVisuals {
         roomKeys: [focus],
         members,
         wx: wx / n, wy: wy / n, wz: wz / n,
-        strip: n,
+        // Two devices side by side; three or more is a count, which is the one
+        // case a digit is genuinely about. MAX_STRIP_CHIPS enforces the same
+        // bound at the drawing site, so neither can drift.
+        strip: n === 2 ? 2 : 0,
         focused: true,
       });
       this.focusPairs++;
