@@ -50,13 +50,29 @@ export const MAX_GRID_CHIPS = 4;
  */
 export const MAX_TOTAL_CHIPS = 6;
 
-/** How many cells a group of `n` members actually draws. THE clamp — every
- *  measurement and every draw must go through it, or an arrangement can be
- *  measured at one size and drawn at another, which is this subsystem's oldest
- *  bug. */
+/**
+ * How many cells a group of `n` members actually draws. THE clamp — every
+ * measurement and every draw must go through it, or an arrangement can be
+ * measured at one size and drawn at another, which is this subsystem's oldest
+ * bug.
+ *
+ * ── Over the cap is ZERO, not the cap ─────────────────────────────────────
+ * A summary hides every device it stands for. Returning `MAX_TOTAL_CHIPS` for
+ * a pile of seven would therefore draw six of them and leave the seventh
+ * hidden AND with no cell to tap — invisible and unreachable, the one outcome
+ * this whole subsystem exists to prevent, and silent because six chips look
+ * perfectly correct. Zero cells is the count badge, which stands honestly for
+ * all seven. (`arrange` then lays the count out as its degenerate 1x1 card.)
+ *
+ * The producers used to spell this rule out themselves as
+ * `n <= MAX_TOTAL_CHIPS ? n : 0`, and the third one — the absorb phase, which
+ * grows a group's membership after the fact — did not, which is exactly how a
+ * cap a caller has to remember gets forgotten.
+ */
 export function gridCells(n: number): number {
   if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(Math.floor(n), MAX_TOTAL_CHIPS));
+  const cells = Math.max(0, Math.floor(n));
+  return cells > MAX_TOTAL_CHIPS ? 0 : cells;
 }
 
 export interface SubCard {
@@ -100,6 +116,7 @@ export interface CardArrangement {
  *   n <= 2 → a single row  (1x1, 2x1)
  *   n = 3, 4 → one 2x2, filled ROW-MAJOR so cell 3 is bottom-right
  *   n = 5, 6 → a 2x2 plus a second card holding the rest, side by side
+ *   n >= 7 → zero cells: the caller draws a count on the degenerate 1x1 card
  *
  * Cards are filled GREEDILY — four, then the remainder — so a device keeps its
  * CELL WITHIN ITS CARD when another joins. It does not keep its absolute

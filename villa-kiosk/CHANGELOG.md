@@ -1,3 +1,29 @@
+## 2.268.0
+
+### Fixed — a summary showing a count drew an empty squircle
+
+The count text is created with the group's control; the card behind it is
+created lazily on the first pass that draws one. `addControl` appends within a
+zIndex tie, so the card was added after the number and painted over it. The
+count now sits above the cards explicitly.
+
+### Fixed — a group of devices rang red when only one of them was
+
+A card that shows its devices lets each chip carry its own ring, so the card's
+ring now means "all of them", not "at least one" — and it reads the chips' own
+signal rather than plain "on", which is why three merely-connected cameras drew
+a red alert ring. A count badge keeps the room chip's rule: red if any member
+is on or alerting, since nothing inside it can say so.
+
+### Fixed — devices hidden with no summary and no chip
+
+A group spanning two rooms is dropped when one of them escalates to its chip,
+which left its members in the *other* room hidden behind nothing at all —
+invisible and untappable. A dropped group now takes every room it covered with
+it. Separately, the absorb phase could grow a group past a card's capacity and
+draw six of seven devices; over the cap is now the count badge, never a
+truncated card.
+
 ## 2.267.0
 
 ### Fixed — zooming right in on a room never decluttered it

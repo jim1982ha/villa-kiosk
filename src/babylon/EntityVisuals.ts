@@ -3750,10 +3750,11 @@ export class EntityVisuals {
           // order the solver hands them over in.
           members: this.sortCardMembers(shown, bucket.members.slice()),
           wx: wx / n, wy: wy / n, wz: wz / n,
-          // Every device the card can hold. Above the cap it is a count, which
-          // is the one case a digit is genuinely about: past four pictograms
-          // nobody reads the picture as a number anyway.
-          grid: n <= MAX_TOTAL_CHIPS ? n : 0,
+          // Every device, always: `gridCells` turns an over-cap ask into the
+          // count badge itself, so no producer restates the cap (see there —
+          // the one that did not restate it truncated its card and hid a
+          // device).
+          grid: n,
           focused: false,
         });
       }
@@ -4479,6 +4480,11 @@ export class EntityVisuals {
         // group, hidden as a badge, and NOT drawn as a cell — invisible and
         // untappable, which is worse than the overlap this is fixing.
         this.sortCardMembers(shown, g.members);
+        // The RAW membership — `gridCells` decides what that draws as. This
+        // line shipped as the truncating one: absorb is the only producer that
+        // can push a group past the card's capacity, and clamping there would
+        // have drawn six of seven devices and left the seventh hidden with no
+        // cell to tap.
         g.grid = g.members.length;
         g.roomKeys.sort();
         const primary = this.roomDisplay.get(g.roomKeys[0]) ?? g.roomKeys[0];
@@ -4523,22 +4529,40 @@ export class EntityVisuals {
       }
       placed.push(g);
     }
-    // A group whose room was escalated by a LATER pile must not also draw —
-    // the room chip already covers its members. Done after the loop because a
-    // room can be escalated by a pile ordered after the one that grouped.
-    // A group whose room was escalated by a LATER group must not also draw —
-    // the room chip already covers its members, and two renderings of the same
-    // content is how a viewer learns to distrust both. Its members stay in
-    // `entityGrouped`, which is harmless: the chip hides every badge in the
-    // room regardless, so nothing ends up hidden with nothing in its place.
-    pending.length = 0;
-    for (const g of placed) {
-      // Same exception, at the other end: the focused room is never chipped by
-      // its own pass, but another room's escalation must not take this one's
-      // card down with it either.
-      if (!g.focused && g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
-      pending.push(g);
+    // ── A DROPPED GROUP TAKES EVERY ROOM IT COVERED WITH IT ──────────────
+    // A group whose room was escalated by a LATER pile must not also draw: the
+    // chip already covers its members, and two renderings of the same content
+    // is how a viewer learns to distrust both.
+    //
+    // But dropping it is only half the move. This used to claim "the chip hides
+    // every badge in the room regardless, so nothing ends up hidden with
+    // nothing in its place", and that is true only of a SINGLE-ROOM group. A
+    // group straddling a boundary has members in a room that did not chip, and
+    // they stay marked in `entityGrouped` — hidden, with no summary and no
+    // chip. Invisible AND untappable, and the field log said so on nearly every
+    // pass: `PLACEMENT: N badge(s) hidden with no summary and no chip`.
+    //
+    // So it escalates all of its rooms, exactly as the `!fits` branch above
+    // does for the same reason. That costs chips — the honest price of not
+    // losing a device — and it has to run to a FIXPOINT, because escalating a
+    // room can drop a group that was already past in the sweep, whose own rooms
+    // then have to go too. Bounded: every round drops at least one group.
+    for (let round = 0; round <= placed.length; round++) {
+      let dropped = false;
+      for (let i = placed.length - 1; i >= 0; i--) {
+        const g = placed[i];
+        // The focused room is never chipped by its own pass, and another
+        // room's escalation must not take its card down either.
+        if (g.focused) continue;
+        if (!g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
+        placed.splice(i, 1);
+        for (const k of g.roomKeys) this.roomClustered.set(k, true);
+        dropped = true;
+      }
+      if (!dropped) break;
     }
+    pending.length = 0;
+    for (const g of placed) pending.push(g);
   }
 
   /**
@@ -4687,10 +4711,10 @@ export class EntityVisuals {
         roomKeys: [focus],
         members,
         wx: wx / n, wy: wy / n, wz: wz / n,
-        // Same rule as the main solve: every device the card can hold, a count
-        // above that. badgeCard's own cap enforces the bound at the drawing
-        // site too, so the two cannot drift.
-        grid: n <= MAX_TOTAL_CHIPS ? n : 0,
+        // Same rule as the main solve, and it is badgeCard's rule, not a copy
+        // of it: `gridCells` is where "more than a card can hold" becomes the
+        // count badge.
+        grid: n,
         focused: true,
       });
       this.focusPairs++;
@@ -4935,17 +4959,42 @@ export class EntityVisuals {
               0, ring);
           }
         }
-        // Exactly the room chip's ring rule (BADGE_RING): red when at least
-        // one member is "on" or "alert". Unavailability is NOT a ring — it
-        // dims, same as an individual badge — so the two signals stay
-        // distinguishable at a glance on a group as on a badge.
-        let ringRed = false, unavailable = false;
+        // ── A SUMMARY'S RING NEVER REPEATS A MEMBER'S OWN SIGNAL ────────────
+        // Two cases, because the ring means two different things depending on
+        // whether the summary can show what it stands for:
+        //
+        //   SHOWING ITS DEVICES  every chip already carries its own ring, so
+        //     the card's ring is only allowed to say something true of the
+        //     WHOLE set: red iff every member is red. A card that went red
+        //     because ONE of two devices was armed claimed the pair was armed,
+        //     and the other chip sitting there un-ringed said otherwise —
+        //     reported with exactly that pair on screen.
+        //
+        //   DRAWING A COUNT  nothing inside says anything, so the ring is the
+        //     only channel there is and it keeps the room chip's rule: red if
+        //     ANY member is on or alerting. Same rule as its sibling control,
+        //     for the same reason.
+        //
+        // And when it does show devices it reads the CHIPS' own vocabulary —
+        // `badgeFaceAndRing`'s ring, the linked/alert signal — not `badgeKind`,
+        // which folds in plain "on". Those disagree: a camera that is merely
+        // connected classifies as "on" (see classifyDeviceActivity), so three
+        // idle cameras drew three purple-ringed chips inside a red-ringed card
+        // that was claiming motion nobody had detected.
+        let unavailable = false;
+        let ringRed = drawn >= 2;
         for (const i of g.members) {
           const st = this.lastState.get(shown[i].id);
-          if (!st) continue;
-          const kind = this.badgeKind(shown[i].lbl.type, st);
-          if (kind === "on" || kind === "alert") ringRed = true;
-          if (kind === "unavailable") unavailable = true;
+          if (!st) { if (drawn >= 2) ringRed = false; continue; }
+          if (drawn >= 2) {
+            const { ring } = badgeFaceAndRing(
+              shown[i].lbl.type, st, this.linkActiveIds.has(shown[i].id));
+            if (ring !== "alert") ringRed = false;
+          } else {
+            const kind = this.badgeKind(shown[i].lbl.type, st);
+            if (kind === "on" || kind === "alert") ringRed = true;
+          }
+          if (this.badgeKind(shown[i].lbl.type, st) === "unavailable") unavailable = true;
         }
         // A badge is never ringless — even at rest it carries the hairline
         // the brand guidelines give the idle state, which is what keeps it a
@@ -5045,6 +5094,17 @@ export class EntityVisuals {
       weight: "700",
       metrics: this.metrics,
     });
+    // ── ABOVE THE CARDS, EXPLICITLY ──────────────────────────────────────
+    // 2 because the cards are 0 and the chips are 1. The count is created HERE,
+    // with the host, while a card is created lazily by growGrid on the first
+    // pass that draws one — and `Container.addControl` APPENDS within a zIndex
+    // tie, so at the default 0 the card is added after the count and paints
+    // straight over it. Every count badge on the map rendered as an empty
+    // squircle, which reads as a rendering failure rather than as a number
+    // nobody can see. (The count and the chips are mutually exclusive, so 2 vs
+    // 1 never actually competes; it is stated so the ordering is a rule rather
+    // than an accident of creation order.)
+    countText.zIndex = 2;
     container.addControl(countText);
 
     layer.addControl(container);
