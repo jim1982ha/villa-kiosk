@@ -1,3 +1,11 @@
+## 2.283.1
+
+### Changed — records the measurement that closes the anti-aliasing question
+
+Same iPad, same resolution, MSAA the only variable: 27ms with it and 26ms
+without, an 18ms empty-scene floor against 19ms. It is free on the slowest
+device this app runs on, so it stays on. Comment only.
+
 ## 2.283.0
 
 ### Changed — the app measures its own frame rate and picks a resolution, with nothing to configure

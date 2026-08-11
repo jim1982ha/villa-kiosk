@@ -302,13 +302,24 @@ export class SceneManager {
     // the cost". Only reporting the DRIVER's own SAMPLES caught it. Both are
     // passed the same value now so the two can never disagree again.
     //
-    // It stays ON, and that is a decision with a gap in it: MSAA has never
-    // actually been measured on this app, because the one attempt tested
-    // nothing. It is left on because the picture is already softer at the
-    // resolutions the valve below settles on, and because turning it off
-    // without a measurement is exactly the kind of guess this codebase keeps
-    // paying for. `?debug` -> the frame-cost probe is how to answer it if the
-    // frame rate ever needs more room.
+    // It stays ON, and that is now a MEASURED decision rather than a cautious
+    // one. Same iPad, same CSS resolution, MSAA the only variable, from the
+    // frame-cost probe:
+    //
+    //                        4x MSAA    no MSAA
+    //   baseline               27ms       26ms
+    //   empty scene, no GUI    18ms       19ms
+    //   quarter pixels          6ms        6ms
+    //
+    // Free, on the slowest device this app runs on — indistinguishable from
+    // noise, and worse on one row. So there is nothing to buy by turning it
+    // off and smoother edges to lose. Resolution is the entire frame cost (see
+    // calibrateResolution); anti-aliasing is not part of it.
+    //
+    // Do not re-open this without re-reading aaSamples in the probe record:
+    // the first attempt at this measurement tested nothing at all, because the
+    // positional argument above was overriding the request, and the unchanged
+    // numbers looked exactly like a real null result.
     const ANTIALIAS = true;
     this.engine = new Engine(canvas, ANTIALIAS, {
       preserveDrawingBuffer: false,
