@@ -1,3 +1,38 @@
+## 2.262.0
+
+### Fixed — a focused room drew every one of its devices in a single screen-wide card
+
+2.261.0 made the focused room's pass emit ONE card per pile with a chip for
+every member. A pile is a transitive chain, and inside a room framed by the
+zoom solver most badges touch something — so the whole room was one pile, and
+it painted a single card the full width of the phone carrying a dozen
+pictograms.
+
+That was over-correction, not a new idea going wrong. The rule as specified is
+"show the two devices side by side instead of a 2", and both of the last two
+releases reached past a pair in opposite directions:
+
+* 2.260.0 took every deferral BUCKET of two — and a bucket is a pile's LOSERS,
+  so a pile of three drew an accepted badge plus a card of the other two at the
+  same point, and the overlap came back with an extra control in it.
+* 2.261.0 fixed that by taking the whole pile, unbounded.
+
+The focused pass now takes piles of EXACTLY TWO and nothing else. A pile of
+three or more co-located devices goes back to precisely what it did before any
+of this: every badge drawn at its own anchor, exempt, stacked. That is not
+ideal — the topmost is still the only one that can be tapped — but it is the
+behaviour the focus was specified with, and it is bounded, which neither of the
+two attempts above was.
+
+`MAX_STRIP_CHIPS = 2` now caps the card at the DRAWING site as well, rather
+than trusting every producer to stay within the rule. A summary card is one
+badge wide per chip, so an unbounded chip count is an unbounded card, and that
+is not a thing any producer should be able to ask for by accident.
+
+Kept from 2.261.0: the compact pair's chips are still derived from the chip box
+rather than the card width, so their art keeps the same margin from the border
+that every other chip in the app has.
+
 ## 2.261.0
 
 ### Fixed — a focused room's pile of three drew a card ON TOP of a badge

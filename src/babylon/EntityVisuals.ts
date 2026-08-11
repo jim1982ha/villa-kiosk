@@ -446,6 +446,17 @@ const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
 const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
 
 /**
+ * The most pictograms a summary card may draw side by side.
+ *
+ * TWO — "show the two devices next to each other instead of a 2". A summary
+ * card is one badge wide per chip, so this is also the cap on how wide a
+ * summary can get, and it is enforced at the drawing site rather than trusted
+ * to every producer: 2.261.0 let the focused room's pass ask for a whole
+ * pile's worth and drew a card the full width of the screen.
+ */
+const MAX_STRIP_CHIPS = 2;
+
+/**
 /*
  * The minimum clear gap between two badges' drawn footprints now lives in
  * badgeMetrics as `minGapPx` — it is a badge DIMENSION, and keeping it here
@@ -4429,13 +4440,24 @@ export class EntityVisuals {
     }
 
     for (const pile of piles.values()) {
-      // ── THE WHOLE PILE BECOMES ONE STRIP ──────────────────────────────
-      // Not just its losers. Taking only a bucket of two left a pile of THREE
-      // co-located devices drawing an accepted badge AND a card of the other
-      // two at the same point — the card landed on the badge and the overlap
-      // was back, with an extra control. A pile is one object on screen, so it
-      // becomes one control: every device in it visible, every one tappable.
-      if (pile.length < 2) continue;
+      // ── EXACTLY TWO. NOT "TWO OR MORE" ────────────────────────────────
+      // This is the side-by-side rule, reused for the focused room and
+      // nothing else, and the bound is the whole of its safety.
+      //
+      // 2.260.0 took every BUCKET of two, and a bucket is a pile's losers —
+      // so a pile of three drew an accepted badge plus a card of the other
+      // two at the same point, and the overlap came back with an extra
+      // control in it. 2.261.0 then over-corrected by making the whole pile
+      // one card of N chips, and a focused room whose badges transitively
+      // touch is ONE pile: it painted a single card the full width of the
+      // screen carrying a dozen pictograms. Both were the same mistake in
+      // opposite directions — reaching past a pair.
+      //
+      // A pile of three or more co-located devices stays exactly as it was
+      // before any of this: every badge drawn at its anchor, exempt, stacked.
+      // That is not ideal, but it is the behaviour the focus was specified
+      // with, and it is bounded; the alternatives above were not.
+      if (pile.length !== 2) continue;
       const members = pile.map((k) => idx[k]);
       // The solver's own total order, so the chips sit the same way round on
       // every device, at every zoom, in every session.
@@ -4551,7 +4573,13 @@ export class EntityVisuals {
         // co-located devices becomes one card of three chips rather than
         // three badges the top of which is the only one anybody can tap.
         const n = c.entityIds.length;
-        const strip = Math.min(g.strip, n);
+        // HARD CAP. `strip` is a count and the card is `strip` badges wide, so
+        // an unbounded one is a card as wide as the group is big — which is
+        // exactly what shipped in 2.261.0 and painted a dozen chips across the
+        // whole screen. Two is the rule ("show two side by side"); nothing in
+        // this app has ever asked for three, and if something does it will
+        // have to justify the width here rather than inherit it silently.
+        const strip = Math.min(g.strip, n, MAX_STRIP_CHIPS);
         const compact = strip < 2 && n === 2;
         c.stripN = strip >= 2 ? strip : 0;
         c.container.width = `${strip >= 2 ? strip * sm.size : sm.size}px`;
