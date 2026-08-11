@@ -291,8 +291,22 @@ export class SceneManager {
     // `antialias` is a CONTEXT ATTRIBUTE — it can only be chosen here, which
     // is why it is a setting that needs a reload rather than a live toggle.
     // See RenderConfig.antialias for the measurement that made it one.
+    //
+    // ⚠️ IT GOES IN THE POSITIONAL ARGUMENT, NOT ONLY THE OPTIONS OBJECT.
+    // Engine's signature is (canvas, antialias?, options?, adaptToDeviceRatio?)
+    // and ThinEngine's constructor does `if (antialias != null)
+    // options.antialias = antialias` — so a hardcoded `true` there silently
+    // overwrites whatever the options object asked for.
+    //
+    // 2.279.0 shipped the setting with `true` still sitting in that slot, so
+    // turning "Smooth Edges" off did nothing at all. The frame numbers did not
+    // move, which read exactly like "MSAA is not the cost" — a conclusion I
+    // was one release away from writing down as fact. What caught it was
+    // reporting the DRIVER's own SAMPLES rather than the request:
+    // `aaWant: false, aaGot: true, aaSamples: 4` on both Chrome and WebKit,
+    // i.e. every device faithfully doing what the code actually said.
     const wantAA = this.config.render?.antialias ?? true;
-    this.engine = new Engine(canvas, true, {
+    this.engine = new Engine(canvas, wantAA, {
       preserveDrawingBuffer: false,
       stencil: true,
       antialias: wantAA,

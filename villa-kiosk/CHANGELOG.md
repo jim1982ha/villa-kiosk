@@ -1,3 +1,14 @@
+## 2.282.0
+
+### Fixed — Smooth Edges did nothing
+
+Babylon's Engine takes anti-aliasing as a positional argument *and* in its
+options object, and the positional one wins. A hardcoded `true` was sitting
+there overwriting the setting, so turning Smooth Edges off left 4× MSAA running
+on every device. The frame times did not move, which read convincingly like
+"anti-aliasing is not the cost" — the driver's own sample count is what gave it
+away.
+
 ## 2.281.0
 
 ### Added — Full Resolution can be turned off, and on iPad it is the whole game
