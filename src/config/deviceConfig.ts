@@ -48,11 +48,53 @@ export const SHARED_CONFIG_KEYS = [
 export type SharedConfigKey = (typeof SHARED_CONFIG_KEYS)[number];
 export type SharedDeviceConfig = Pick<AppConfig, SharedConfigKey>;
 
-/** Extract just the shared slice of a full config. */
+// ── Shared, but not ALL of it: derived items are excluded ──────────────────
+// `teleportPoints` holds two different kinds of thing under one key. A point
+// the user added ("Add room here") is authored data and has to reach every
+// device. A point fitted from the floor plan is DERIVED — recomputed on every
+// load from the GLB and its room data, both of which are already shared — so
+// storing it centrally adds nothing and costs a great deal:
+//
+// the fit is re-solved per device (an affine solve plus a raycast for the floor
+// height), so the coordinates differ slightly between them; the diff compares
+// items by JSON; every device therefore pushed all of its rooms on boot, pulled
+// a neighbour's fit, disagreed, and pushed again. Telemetry caught it as
+// `changed: {teleportPoints: 23}` from five devices in one session.
+//
+// The split is expressed exactly once, here, as a PAIR: pickSharedConfig
+// removes the derived items on the way out, mergeSharedConfig puts this
+// device's own back on the way in. Keeping them together is what stops a pull
+// blanking the fitted rooms until the next calibration.
+const isFittedPoint = (p: TeleportPoint): boolean => p.fitted === true;
+
+/** Extract just the shared slice of a full config — authored data only. */
 export function pickSharedConfig(config: AppConfig): SharedDeviceConfig {
   const out = {} as Record<string, unknown>;
   for (const key of SHARED_CONFIG_KEYS) out[key] = config[key];
+  out.teleportPoints = config.teleportPoints.filter((p) => !isFittedPoint(p));
   return out as SharedDeviceConfig;
+}
+
+/**
+ * What local config becomes after a pull: the server's authored data, with
+ * this device's own DERIVED items carried across untouched.
+ *
+ * Without the carry-across a pull would hand `update()` a teleportPoints list
+ * with every fitted room missing, emptying the Rooms menu until the next model
+ * load happened to re-calibrate.
+ */
+export function mergeSharedConfig(
+  current: AppConfig | SharedDeviceConfig,
+  server: Partial<SharedDeviceConfig>,
+): Partial<SharedDeviceConfig> {
+  if (!("teleportPoints" in server) || !Array.isArray(server.teleportPoints)) return server;
+  return {
+    ...server,
+    teleportPoints: [
+      ...current.teleportPoints.filter(isFittedPoint),
+      ...server.teleportPoints.filter((p) => !isFittedPoint(p)),
+    ],
+  };
 }
 
 /** Narrow an arbitrary parsed value from the server down to the shared fields

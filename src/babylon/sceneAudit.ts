@@ -180,10 +180,17 @@ export function auditDrawCalls(
 
     // Identity-carrying: something in the app addresses this mesh on its own,
     // so merging it away would break picking, a pose variant or a state visual.
+    //
+    // NOT `m.isPickable` — that is Babylon's DEFAULT for every mesh, so the
+    // first version of this test classified all 455 drawn meshes as fixed and
+    // reported dcBuckets: 0 from five devices. A projection that says "nothing
+    // can be merged" because it measured a library default is worse than no
+    // projection, because it looks like an answer. What actually carries
+    // identity is a resolvable entity binding.
     const bound = resolveMeshToMapping(
       m.name, config.entityMap, config.meshBindings, config.deniedTypes,
     );
-    if (bound || m.isPickable) { fixed++; continue; }
+    if (bound) { fixed++; continue; }
 
     // Storey and current visibility are part of the KEY, not something to
     // merge across — FloorManager toggles by storey and applyStructure hides

@@ -53,7 +53,12 @@ export type TelemetryKind =
   // reveal. Describes the model rather than the load, which is why it is not
   // folded into `load`: it is read next to `frames`, and those arrive later
   // and only after a burst of interaction. See babylon/sceneAudit.ts.
-  | "drawcalls";
+  | "drawcalls"
+  // Result of the on-device frame-cost A/B experiment (babylon/perfProbe.ts),
+  // run by hand from `?debug`. Reported as well as logged so a run on the iPad
+  // — the device that matters, and the hardest to attach devtools to — is
+  // readable afterwards instead of needing a console at the moment it ran.
+  | "probe";
 
 let disabled = false;
 

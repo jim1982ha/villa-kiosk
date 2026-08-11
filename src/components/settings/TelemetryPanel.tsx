@@ -156,6 +156,19 @@ function summarise(e: TelemetryEvent): string {
           : "";
       return `UI blocked ${ms(e.ms)}${how}${back} · ${ms(e.sinceLoadMs)} into this session${blame}`;
     }
+    case "probe": {
+      // Each row as "what it cost", which is the NEGATIVE of the delta the
+      // probe measured by removing it — the whole point is reading the cost of
+      // a thing, not the speed of the scene without it.
+      const rows = Array.isArray(e.rows) ? e.rows as Array<{ name: string; renderMs: number; deltaMs: number }> : [];
+      if (rows.length === 0) return "frame-cost probe (no rows)";
+      const base = rows[0];
+      const rest = rows.slice(1)
+        .sort((a, b) => a.deltaMs - b.deltaMs)
+        .map((r) => `${r.name} ${(-r.deltaMs).toFixed(1)}ms`)
+        .join(" · ");
+      return `frame-cost probe — baseline ${base.renderMs.toFixed(1)}ms · costs: ${rest}`;
+    }
     case "drawcalls": {
       // The one comparison this record exists for. `dcProjected` is what the
       // draw count would be after merging what is safely mergeable; if it is

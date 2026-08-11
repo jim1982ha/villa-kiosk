@@ -1,3 +1,28 @@
+## 2.276.0
+
+### Fixed — the config push on every boot, properly this time
+
+Telemetry named it: `changed: {teleportPoints: 23}` from five devices in one
+session. Fitted room points are derived — the plan fit is re-solved and the
+floor height raycast per load — so they differ slightly between devices, and
+each one pushed all 23, pulled a neighbour's fit, disagreed and pushed again.
+Quantising them to millimetres (2.275.0) was not enough because the fits really
+do differ. Derived points are now marked and excluded from the shared slice
+entirely: the GLB and its room data are already shared, so every client
+computes them for itself.
+
+### Added — an on-device frame-cost experiment
+
+`?debug` → `__villaPerfProbe()` re-measures `scene.render()` with the GUI layer,
+the lights, the IBL and half the geometry removed one at a time, and reports
+what each was costing. Its result is also sent to telemetry, so a run on the
+iPad is readable from the Settings panel afterwards.
+
+### Fixed — the draw-call audit measured a Babylon default
+
+It treated `isPickable` as "something addresses this mesh", but that is true of
+every mesh by default, so it reported that nothing at all could be merged.
+
 ## 2.275.0
 
 ### Fixed — the kiosk pushed shared config on every boot

@@ -66,6 +66,7 @@ import { useStoreRefresh } from "@/hooks/useStoreRefresh";
 import {
   fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
   diffSharedConfig, applySharedConfigDiff, isSharedConfigDiffEmpty, describeSharedConfigDiff,
+  mergeSharedConfig,
   loadSyncBaseline, saveSyncBaseline, baselineFromServer,
   type SharedDeviceConfig,
 } from "./deviceConfig";
@@ -103,6 +104,12 @@ export default function DeviceConfigSync() {
   // (which would re-register the focus listener on every single config edit).
   const localRef = useRef(local);
   localRef.current = local;
+  /** The FULL config, not the shared slice. mergeSharedConfig needs it: the
+   *  slice has already had this device's derived items filtered out, so
+   *  merging against it would find nothing to carry across and would blank
+   *  exactly the rows it exists to preserve. */
+  const configRef = useRef(config);
+  configRef.current = config;
 
   /** The full shared-config object THIS device is known to be in sync with —
    *  both the server's own last-seen state (pull) and, once a push succeeds,
@@ -185,8 +192,12 @@ export default function DeviceConfigSync() {
         entities: Object.keys(outcome.next.entityMap).length,
       });
       // Fold in whatever another device contributed, so this client's view
-      // reflects it immediately rather than waiting for its next pull.
-      update(outcome.next);
+      // reflects it immediately rather than waiting for its next pull. Through
+      // mergeSharedConfig for the same reason the pull is: `outcome.next` is
+      // the SHARED slice, which by construction carries no derived items, and
+      // handing it straight to update() would empty the fitted rooms out of
+      // config on every successful push.
+      update(mergeSharedConfig(configRef.current, outcome.next));
       return;
     }
     if (outcome.reason === "nothing-to-push") return;
@@ -265,7 +276,12 @@ export default function DeviceConfigSync() {
     // existed, must not blank that field). The baseline is that MERGED result,
     // which is what the local slice will equal once `update` commits — so the
     // push effect sees no change and the pull can't bounce straight back.
-    const merged = { ...localRef.current, ...server } as SharedDeviceConfig;
+    // mergeSharedConfig, not a bare spread: the server's copy of a key may be
+    // missing this device's DERIVED items (see pickSharedConfig's pair), and a
+    // plain overwrite would drop the fitted rooms out of config until the next
+    // calibration happened to put them back.
+    const fromServer = mergeSharedConfig(configRef.current, server);
+    const merged = { ...localRef.current, ...fromServer } as SharedDeviceConfig;
     const mergedJson = JSON.stringify(merged);
     // `merged` decides what local CONFIG becomes; the BASELINE is what the
     // server actually holds. They are not the same object and conflating them
@@ -300,7 +316,7 @@ export default function DeviceConfigSync() {
     // every focus regain, whether or not anything had actually changed.
     if (mergedJson === JSON.stringify(localRef.current)) return;
 
-    update(server);
+    update(fromServer);
   }, [update, role, pushOwnDiff, reportSync]);
 
   // Mount + focus/visibility + a slow visible-only heartbeat, via the shared

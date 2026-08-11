@@ -64,6 +64,7 @@ import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap"
 import { isIOS as detectIOS } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { beginSpan } from "@/utils/perfSpans";
+import { runPerfProbe, type ProbeRow } from "./perfProbe";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
@@ -1890,6 +1891,8 @@ export class SceneManager {
         floor,
         position: { x: mm(wc.x), y: mm(floorY + 1.7), z: mm(wc.z) },
         target: { x: mm(wc.x), y: mm(floorY + 1.6), z: mm(wc.z + 1.5) },
+        // DERIVED — never synced. See TeleportPoint.fitted.
+        fitted: true,
       });
     }
 
@@ -2007,6 +2010,28 @@ export class SceneManager {
    *  and highlight passes walk. */
   getLoadedMeshes(): readonly AbstractMesh[] {
     return this.loadedMeshes;
+  }
+
+  /**
+   * Run the frame-cost A/B experiment (babylon/perfProbe.ts) and return its
+   * rows. Owns the render-loop handover, which is why it lives here: the probe
+   * calls `scene.render()` itself, so this loop must be stopped for the whole
+   * run or every frame is rendered twice and every number is doubled.
+   *
+   * The loop is restored in a `finally` — a probe that threw halfway must not
+   * leave a kiosk with a frozen villa.
+   */
+  async runRenderProbe(): Promise<ProbeRow[]> {
+    if (this.disposed) return [];
+    this.engine.stopRenderLoop();
+    try {
+      return await runPerfProbe(this.scene, this.visuals.guiLayers());
+    } finally {
+      if (!this.disposed) {
+        this.startRenderLoop();
+        this.requestRender();
+      }
+    }
   }
 
   /** Entities that resolved to real geometry in the loaded model — the devices

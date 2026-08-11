@@ -1095,6 +1095,13 @@ export class EntityVisuals {
    *  in Home Assistant (see SummaryGroupPanel's "not on the map" styling).
    *  Derived from byEntity, which indexMeshes fills from real mesh bindings,
    *  so it can't drift from what's drawn. */
+  /** The fullscreen GUI textures this layer owns, for the render probe to
+   *  switch off and re-measure (see babylon/perfProbe.ts). Read-only access to
+   *  an existing layer — never creates one. */
+  guiLayers(): AdvancedDynamicTexture[] {
+    return this.labelLayer ? [this.labelLayer] : [];
+  }
+
   mappedEntityIds(): string[] {
     return [...this.byEntity.keys()];
   }

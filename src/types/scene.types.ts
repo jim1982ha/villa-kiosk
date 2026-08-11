@@ -102,4 +102,26 @@ export interface TeleportPoint {
   position: Vec3;
   target: Vec3;
   thumbnail?: string;
+  /**
+   * DERIVED, not authored: this point was fitted from the floor plan by
+   * SceneManager.calibrateRooms and is recomputed on every model load. Absent
+   * on a point the user added themselves ("Add room here" in the Rooms menu),
+   * which is the only kind worth storing anywhere.
+   *
+   * The flag exists because these are NOT SHARED CONFIG and were being synced
+   * as if they were. The plan→world fit is re-solved and the floor height is
+   * raycast per load, so the coordinates differ slightly between devices — and
+   * `teleportPoints` is a shared key whose diff compares items by JSON. Every
+   * device therefore pushed all 23 rooms on every boot, pulled another
+   * device's fit, disagreed with it, and pushed again: a feedback loop that
+   * telemetry finally caught as `changed: {teleportPoints: 23}` on all five
+   * devices in one session. Quantising the geometry did not stop it, because
+   * the fits genuinely differ by more than the quantum.
+   *
+   * The fix is to stop storing what is already derivable: the GLB and its room
+   * data are ALREADY shared, so every client computes these for itself from
+   * the same inputs. See pickSharedConfig/mergeSharedConfig, which are the one
+   * place that split lives.
+   */
+  fitted?: boolean;
 }

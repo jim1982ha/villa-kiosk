@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { auditDrawCalls, countOrphanMaterials } from "@/babylon/sceneAudit";
+import { formatProbe } from "@/babylon/perfProbe";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { filterConfigForRole, hasCapability } from "@/auth/permissions";
@@ -17,6 +18,7 @@ import { parseRoomData } from "@/utils/sh3dParser";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { markBoot, beginLoad, endLoad, bootTimeline, hiddenMsTotal } from "@/utils/bootTimeline";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
+import { debugFlagEnabled } from "@/utils/devLog";
 import { watchDisposed, staleDisposed } from "@/utils/leakWatch";
 import ModelUploader from "@/components/settings/ModelUploader";
 import ErrorReport from "@/components/ErrorReport";
@@ -877,6 +879,28 @@ export default function BabylonCanvas({
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneConfig]);
+
+  // ── `?debug` → __villaPerfProbe() ─────────────────────────────────────────
+  // The frame-cost experiment, on the device, from the console. Attached here
+  // because this is where a live manager is reachable; everything else about
+  // it lives in babylon/perfProbe.ts. Also reported to telemetry, so a run on
+  // the iPad — the device that matters and the one hardest to attach devtools
+  // to — is readable afterwards from the Settings panel rather than needing a
+  // console at the moment it ran.
+  useEffect(() => {
+    if (!debugFlagEnabled()) return;
+    const w = window as Window & { __villaPerfProbe?: () => Promise<string> };
+    w.__villaPerfProbe = async () => {
+      const m = managerRef.current;
+      if (!m) return "no scene yet";
+      const rows = await m.runRenderProbe();
+      reportTelemetry("probe", { rows });
+      const text = formatProbe(rows);
+      console.log(text);
+      return text;
+    };
+    return () => { delete w.__villaPerfProbe; };
+  }, []);
 
   // Pipe every state change into the scene (imperative — no React re-render of canvas).
   useEffect(() => {
