@@ -136,6 +136,24 @@ function summarise(e: TelemetryEvent): string {
       return `hydrate: ${e.states} states${pushed}, fetch ${ms(e.fetchMs)} + apply `
         + `${ms(e.applyMs)} — ${where}`;
     }
+    case "sync": {
+      // `sync` rows rendered blank before — the one kind with no summariser, in
+      // the screen whose whole job is to make an event readable.
+      const which = e.store === "fm" ? "facility" : "config";
+      if (e.op === "push") {
+        const changed = e.changed && typeof e.changed === "object"
+          ? Object.entries(e.changed as Record<string, number>)
+              .map(([k, n]) => `${k} ×${n}`).join(", ")
+          : "";
+        return e.ok
+          ? `${which} pushed${changed ? ` — ${changed}` : ""}`
+            + `${typeof e.attempts === "number" && e.attempts > 1 ? ` (${e.attempts} attempts)` : ""}`
+          : `${which} push FAILED: ${e.reason ?? "unknown"}`;
+      }
+      if (e.aborted) return `${which} pull skipped — ${e.aborted}`;
+      const held = typeof e.entities === "number" ? ` · ${e.entities} entities` : "";
+      return `${which} pulled${e.changed === false ? " (unchanged)" : ""}${held}`;
+    }
     case "recovered":
       return String(e.reason ?? "auto-reloaded");
     case "freeze": {
@@ -182,19 +200,6 @@ function summarise(e: TelemetryEvent): string {
         : "";
       return `frame-cost probe (${e.mode ?? "?"}${mpx}${aa} · ${tier} · ${e.gpu ?? "?"})`
         + ` — baseline ${base.renderMs.toFixed(1)}ms · costs: ${rest}`;
-    }
-    case "drawcalls": {
-      // The one comparison this record exists for. `dcProjected` is what the
-      // draw count would be after merging what is safely mergeable; if it is
-      // close to `dcDrawn` there is no lever here and the search moves on.
-      const cut = typeof e.dcDrawn === "number" && typeof e.dcProjected === "number" && e.dcDrawn > 0
-        ? ` (−${Math.round((1 - (e.dcProjected as number) / (e.dcDrawn as number)) * 100)}%)`
-        : "";
-      return `${e.dcDrawn ?? "?"} drawn meshes → ${e.dcProjected ?? "?"} if merged${cut}`
-        + `, ${e.dcProjectedDedup ?? "?"} if materials deduped first`
-        + ` · ${e.dcMats ?? "?"} materials, ${e.dcMatSig ?? "?"} distinct`
-        + ` · ${e.dcFixed ?? "?"} must stay separate`
-        + `${e.orphanMats ? ` · ${e.orphanMats} unused` : ""}`;
     }
     case "frames": {
       // p95 is the number a person actually feels: a median of 16ms with a p95

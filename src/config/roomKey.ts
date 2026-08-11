@@ -37,3 +37,13 @@ export function roomKey(name: string | undefined | null): string {
 // understood and maintained by everyone who opens this file, and this one was
 // additionally named in CLAUDE.md as a rule to follow, which made the
 // documentation describe a convention the code did not actually have.
+
+/**
+ * What a device with no resolvable room is filed under, on screen.
+ *
+ * One constant because it is a user-visible LABEL, and three copies of it
+ * (the map's badge grouping, the Cockpit's room list and the group panel) can
+ * drift into three different words for the same bucket. It is deliberately not
+ * derived from roomKey(): this is what a person reads, not a comparison key.
+ */
+export const NO_ROOM_LABEL = "Other";

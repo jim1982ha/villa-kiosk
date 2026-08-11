@@ -77,7 +77,7 @@ import { StackPanel } from "@babylonjs/gui/2D/controls/stackPanel";
 import { Image } from "@babylonjs/gui/2D/controls/image";
 import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { AppConfig } from "@/config/AppConfig";
-import { roomKey } from "@/config/roomKey";
+import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { chipProportions } from "@/config/chipProportions";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics,
@@ -600,7 +600,6 @@ const FAN_AXIS_TOP_SLICE = 0.25;
 
 /** Bucket name for badges whose entity has no room configured — they still
  *  cluster together rather than each becoming its own singleton chip. */
-const NO_ROOM_LABEL = "Other";
 
 interface LabelControls {
   container: StackPanel;
@@ -3477,20 +3476,6 @@ export class EntityVisuals {
    *  regardless: anchors projecting behind the camera (z outside [0,1]),
    *  categories filtered off in the HUD, and entities on a hidden floor. */
   private cullLabels(): void {
-    // Runs on EVERY rendered frame, so this span is almost always discarded by
-    // perfSpans' 8ms floor and costs two clock reads. It is instrumented
-    // anyway because a badge re-solve is one of the few things in the app that
-    // could plausibly block for a second, and "the placement pass" has never
-    // been separable from "something froze" in a field record.
-    const endSpan = beginSpan("cullLabels");
-    try {
-      this.cullLabelsInner();
-    } finally {
-      endSpan();
-    }
-  }
-
-  private cullLabelsInner(): void {
     if (this.labels.size === 0) return;
     const cam = this.scene.activeCamera;
     if (!cam) return;

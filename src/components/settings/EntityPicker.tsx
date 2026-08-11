@@ -5,6 +5,7 @@
 import { useEffect, useRef, useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
+import { ENTITY_ID_RE } from "@/utils/sh3dParser";
 
 interface Props {
   value?: string;
@@ -30,7 +31,6 @@ interface Props {
   compact?: boolean;
 }
 
-const ENTITY_ID_RE = /^[a-z_]+\.[a-z0-9_]+$/;
 
 export default function EntityPicker({
   value, onChange, domains, placeholder, allowCustom, hideCurrentLabel, onClear, compact,

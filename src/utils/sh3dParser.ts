@@ -27,7 +27,9 @@ export interface ParsedRoomData {
   entities: ParsedEntity[];
 }
 
-const ENTITY_ID_RE = /^[a-z_]+\.[a-z0-9_]+$/;
+/** The shape of a Home Assistant entity_id. Exported because the entity
+ *  picker validates typed input against the same rule and had its own copy. */
+export const ENTITY_ID_RE = /^[a-z_]+\.[a-z0-9_]+$/;
 
 /**
  * Parse + validate the pipeline's room-data sidecar (the JSON described above).

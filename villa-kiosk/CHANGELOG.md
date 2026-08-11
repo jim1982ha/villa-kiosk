@@ -1,3 +1,25 @@
+## 2.285.0
+
+### Removed — instrumentation whose questions are answered
+
+The draw-call audit ran on every load of every device and re-reported the same
+unchanging fact into a 500-event ring shared by the whole fleet; its answer
+(merging the villa's meshes would save nothing) is settled and recorded in code.
+The two hottest freeze-attribution spans went with it — one allocated a closure
+per rendered frame, and the field answer was that no instrumented code was ever
+running during a freeze, so neither had ever contributed anything.
+
+### Changed — four rules that existed in two places each
+
+"Which domains are a plain toggle", "which types can be given a confirm gate",
+what a device with no room is called, and the shape of an entity_id were each
+duplicated across files that could drift apart. One definition each now.
+
+### Fixed — sync rows in Device telemetry rendered blank
+
+The one event kind with no summariser, in the screen whose job is to make an
+event readable. Pulls, pushes and what a push actually changed now read as text.
+
 ## 2.284.0
 
 ### Fixed — the resolution calibration never ran

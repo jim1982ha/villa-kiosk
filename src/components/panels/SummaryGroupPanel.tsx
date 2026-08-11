@@ -25,8 +25,10 @@ import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { isUnavailable } from "@/utils/stateColors";
 import { phantomEntity } from "@/utils/phantomEntity";
+import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityType } from "@/types/scene.types";
+import { NO_ROOM_LABEL } from "@/config/roomKey";
 
 export interface SummaryGroup {
   title: string;
@@ -71,8 +73,6 @@ interface Props {
 }
 
 const OFF = new Set(["off", "unavailable", "unknown", ""]);
-const TOGGLEABLE = new Set(["light", "switch", "input_boolean", "fan"]);
-const NO_ROOM = "Other";
 
 const pretty = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
 
@@ -86,14 +86,14 @@ function groupByRoom(
 ): [string, HassEntity[]][] {
   const buckets = new Map<string, HassEntity[]>();
   for (const e of rows) {
-    const room = roomOf(e.entity_id) || NO_ROOM;
+    const room = roomOf(e.entity_id) || NO_ROOM_LABEL;
     const list = buckets.get(room) ?? [];
     list.push(e);
     buckets.set(room, list);
   }
   return [...buckets.entries()].sort(([a], [b]) => {
-    if (a === NO_ROOM) return b === NO_ROOM ? 0 : 1;
-    if (b === NO_ROOM) return -1;
+    if (a === NO_ROOM_LABEL) return b === NO_ROOM_LABEL ? 0 : 1;
+    if (b === NO_ROOM_LABEL) return -1;
     return a.localeCompare(b);
   });
 }
@@ -170,7 +170,7 @@ export default function SummaryGroupPanel({
   // Assistant does not have. The service call would be rejected for that id
   // and the row could never reflect it either way.
   const toggleables = [...onMap, ...offMap]
-    .filter((e) => TOGGLEABLE.has(e.entity_id.split(".")[0]));
+    .filter((e) => TOGGLEABLE_DOMAINS.has(e.entity_id.split(".")[0]));
   const anyOn = toggleables.some((e) => !OFF.has(e.state));
 
   const typeOf = (id: string): EntityType =>
@@ -315,7 +315,7 @@ export default function SummaryGroupPanel({
     // reject the service call, and nothing would ever come back to change the
     // row's state, so the control could only ever look broken.
     const rowInHa = !!entities[id];
-    const canToggle = canControl && rowInHa && (TOGGLEABLE.has(domain) || isLock);
+    const canToggle = canControl && rowInHa && (TOGGLEABLE_DOMAINS.has(domain) || isLock);
     const toggleOn = isLock ? e.state !== "locked" : !OFF.has(e.state);
     // EXACTLY what the map paints, via the one shared rule — see
     // deviceActivity.badgeSurfaceFor. This used to re-derive the surface from

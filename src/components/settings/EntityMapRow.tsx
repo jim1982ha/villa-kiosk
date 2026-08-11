@@ -25,6 +25,7 @@ import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory } from "@/config/EntityCategories";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
+import { CONFIRM_GATE_TYPES } from "@/utils/quickAction";
 
 const TYPES: EntityType[] = [
   "light", "climate", "lock", "camera", "cover", "fan",
@@ -36,7 +37,6 @@ const TYPES: EntityType[] = [
 // requireConfirm) — a type: "lock" doesn't need this option at all, it
 // already never quick-toggles and already has its own two-step Unlock
 // confirm, so the checkbox isn't shown there rather than offering a no-op.
-const CONFIRM_GATE_TYPES = new Set<EntityType>(["light", "switch", "input_boolean", "fan", "media_player"]);
 
 interface Props {
   entryKey: string;

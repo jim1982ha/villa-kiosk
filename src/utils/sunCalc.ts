@@ -146,35 +146,3 @@ export function getMoonIllumination(date: Date): MoonIllumination {
     angle,
   };
 }
-
-/**
- * Home Assistant's own eight phase names, so the kiosk and HA never disagree on
- * screen. Boundaries are the conventional 1/8-cycle bands; the four "moment"
- * phases (new/quarters/full) get a narrow band around the exact instant rather
- * than a full eighth, which is how HA's sensor reads too.
- *
- * ⚠️ THE MOON INTEGRATION IS NEVER A DEPENDENCY. Everything above is computed
- * from date + latitude/longitude alone, so the moon works identically on an
- * install that has never heard of `sensor.moon_phase` — which is the normal
- * case, since that integration is opt-in. Nothing may be written that reads the
- * entity without a fallback to this function, and nothing may gate on its
- * presence: it is strictly a nice-to-have that can CONFIRM or LABEL, never a
- * prerequisite. Verified against a live install on 2026-08-10 — this function
- * returned "waning_crescent" for that moment with no access to HA, and HA's
- * sensor independently said "waning_crescent".
- */
-export type MoonPhaseName =
-  | "new_moon" | "waxing_crescent" | "first_quarter" | "waxing_gibbous"
-  | "full_moon" | "waning_gibbous" | "last_quarter" | "waning_crescent";
-
-export function moonPhaseName(phase: number): MoonPhaseName {
-  const p = ((phase % 1) + 1) % 1;
-  if (p < 0.0625) return "new_moon";
-  if (p < 0.1875) return "waxing_crescent";
-  if (p < 0.3125) return "first_quarter";
-  if (p < 0.4375) return "waxing_gibbous";
-  if (p < 0.5625) return "full_moon";
-  if (p < 0.6875) return "waning_gibbous";
-  if (p < 0.8125) return "last_quarter";
-  return "waning_crescent";
-}

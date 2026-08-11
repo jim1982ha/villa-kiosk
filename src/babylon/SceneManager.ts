@@ -288,9 +288,7 @@ export class SceneManager {
     // check is what actually catches those.
     const isIOS = detectIOS();
     this.isIOS = isIOS;
-    // `antialias` is a CONTEXT ATTRIBUTE — it can only be chosen here, which
-    // is why it is a setting that needs a reload rather than a live toggle.
-    // See RenderConfig.antialias for the measurement that made it one.
+    // `antialias` is a CONTEXT ATTRIBUTE — it can only be chosen here.
     //
     // ⚠️ ANTI-ALIASING IS THE POSITIONAL ARGUMENT, NOT THE OPTIONS FIELD.
     // Engine's signature is (canvas, antialias?, options?, adaptToDeviceRatio?)
@@ -749,56 +747,30 @@ export class SceneManager {
    * optional render passes are on — so the next question can be answered from
    * the data instead of from another hypothesis.
    *
-   * ── What the 2.230.0 additions are for ───────────────────────────────────
-   * easeResolution's experiment ran and came back NEGATIVE. Safari reached
-   * `hw: 1` (1440x741, 1.07Mpx — a quarter of the 4.25Mpx it started at) and
-   * settled at p50 35ms / 29fps, against 30-32fps when it was rendering 1.84Mpx.
-   * Fewer pixels, no faster. Two readings in the same dump make that conclusive
-   * rather than suggestive: p50 was 35ms whether 48 meshes/312k triangles or
-   * 129/403k were active, and Chrome on the SAME Mac drew 4.27Mpx and 559
-   * meshes at 47-60fps. So the cost is fixed per frame — not fill, not
-   * geometry, not (on the evidence of `litOn` 8→28 moving Chrome not at all)
-   * the lights either.
+   * ── What renderMs / drawCalls / evalMs are for, and what they answered ───
+   * Three numbers, each falsifying a different family of cause. All three have
+   * reported, and between them plus the ablation probe (babylon/perfProbe.ts)
+   * the question is CLOSED — do not re-derive any of this from scratch:
    *
-   * "Fixed per frame" is a shape, not a cause, and this codebase has already
-   * paid for six causes guessed from a shape. So instead of a seventh guess,
-   * three numbers that each falsify a different family:
+   *   evalMs is ~2ms on every engine        -> culling is not the cost
+   *   drawCalls/activeMeshes has been 1.00
+   *     since 2.265.0                       -> multi-pass lighting is not it
+   *   identical triangle counts either side  -> geometry is not the gap
+   *   an EMPTY scene costs the iPad 67ms at
+   *     3.4Mpx and 19ms at a quarter of that,
+   *     while both Chrome engines pay the
+   *     same at either                       -> on WebKit it is PIXELS, and
+   *                                             almost nothing else
    *
-   * - `renderMs` — is the time even inside scene.render()? If it is not, every
-   *   theory about the scene is wrong before it is stated.
-   * - `drawCalls` — submission volume, which multi-pass lighting can inflate
-   *   far beyond the mesh count.
-   * - `evalMs` — the per-frame walk over ALL meshes, which is the one cost in
-   *   the render loop that legitimately does not care what is on screen.
+   * Two readings that look like answers and are not. "us per draw call" is
+   * renderMs/drawCalls — an average that divides a large fixed cost by the
+   * draw count, so it falls as draws rise whether or not draws cost anything;
+   * it is what made "the only lever is fewer draw calls" look true for a
+   * release. And merging meshes to reduce draws would save nothing here
+   * anyway: the villa's 204 mergeable meshes carry 204 distinct materials.
    *
-   * ── ALL THREE HAVE NOW ANSWERED (2026-08-11) ─────────────────────────────
-   * Controlled: same Mac, same build, same overview scene.
-   *   Chrome:      484 draws, 4.27Mpx, renderMs 7.2  -> 14.9us/draw, 53fps
-   *   Safari 26.2: 478 draws, 1.46Mpx, renderMs 33   -> 69us/draw,   16fps
-   * Chrome draws 2.9x the pixels 4.6x FASTER inside scene.render(). `evalMs`
-   * is 2ms on both, so culling is dead. `drawCalls/activeMeshes` has been
-   * exactly 1.00 since 2.265.0, so multi-pass lighting is dead. Same triangle
-   * count, so geometry is dead. Pixels were already dead (2.222.0).
-   *
-   * ── AND THE DRAW-CALL READING OF THAT WAS WRONG (2026-08-12) ─────────────
-   * "us per draw" is renderMs/drawCalls — an AVERAGE, which divides a large
-   * fixed cost by the draw count and therefore falls as draws rise whether or
-   * not draws cost anything. The ablation probe (babylon/perfProbe.ts) settled
-   * it directly. With every mesh hidden and one draw call left:
-   *
-   *   Mac Chrome (ANGLE)    3.5ms   -> 3.6ms at a QUARTER of the pixels
-   *   Android Chrome        2.8ms   -> 2.8ms at a quarter of the pixels
-   *   Mac Safari (WebKit)  21ms     -> 10ms at a quarter of the pixels
-   *   iPad, HA app         67ms     -> 19ms at a quarter of the pixels
-   *
-   * The two engine families differ in KIND. On ANGLE an empty frame costs the
-   * same whatever the resolution; on WebKit it is almost entirely per-PIXEL.
-   * The iPad spends 67 of its 76ms on an empty scene — the villa itself is 9%
-   * of the frame there. So the lever is PIXELS on WebKit (see easeResolution
-   * and RenderConfig.antialias), not draw calls; sceneAudit independently
-   * measured that merging would save nothing anyway (204 mergeable meshes,
-   * 204 distinct materials). Keep these three fields — they are still how any
-   * change gets checked — but do not re-derive a per-draw cost from them.
+   * Keep these three fields. They are how any future change gets checked, and
+   * they are what calibrateResolution's decision is visible in.
    */
   private sampleFrame(now: number): void {
     const prev = this.lastFrameAt;
@@ -2153,9 +2125,8 @@ export class SceneManager {
     return this.calibratedPoints;
   }
 
-  /** The model's meshes, for read-only inspection (see sceneAudit). Returned
-   *  as a readonly view so a caller cannot reorder the array the floor index
-   *  and highlight passes walk. */
+  /** The model's meshes, for read-only inspection. A readonly view so a caller
+   *  cannot reorder the array the floor index and highlight passes walk. */
   getLoadedMeshes(): readonly AbstractMesh[] {
     return this.loadedMeshes;
   }
@@ -2201,15 +2172,14 @@ export class SceneManager {
    * What anti-aliasing the framebuffer ACTUALLY got, not what was asked for.
    *
    * This exists because of a null result that could not be trusted without it.
-   * Turning "Smooth Edges" off on the iPad changed the probe by nothing at all
-   * — 76ms before, 77ms after, and an identical 67ms empty-scene floor — and
-   * that has two completely different explanations: MSAA is not the cost, or
-   * the setting never reached the context. A measurement that cannot tell
-   * those apart is not a measurement, and this app has a rule about that.
+   * An attempt to measure MSAA's cost changed the frame by nothing — which
+   * reads exactly like "MSAA is not the cost", and was in fact the request
+   * never reaching the context at all (see the constructor's warning). A
+   * measurement that cannot tell those two apart is not a measurement.
    *
-   * `aaWant` is the request. `aaGot` is what the browser granted, which it is
-   * free to ignore in either direction. `aaSamples` is the ground truth from
-   * the driver: 1 means no multisampling is happening whatever anyone asked.
+   * `aaGot` is what the browser granted, which it is free to ignore in either
+   * direction. `aaSamples` is the ground truth from the driver: 0 or 1 means
+   * no multisampling is happening whatever anyone asked for.
    *
    * Read from the canvas rather than a Babylon internal — getContext() with
    * the same type returns the context that already exists, so this is the

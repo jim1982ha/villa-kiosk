@@ -13,9 +13,30 @@
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 
-// Domains whose primary interaction is a plain on/off toggle. A tap toggles
-// them directly; a long-press opens their full panel.
-const TOGGLEABLE = new Set(["light", "switch", "input_boolean", "fan"]);
+/**
+ * Domains whose primary interaction is a plain on/off toggle. A tap toggles
+ * them directly; a long-press opens their full panel.
+ *
+ * Exported because the device lists ask the same question about the same set
+ * (SummaryGroupPanel decides which rows get an inline switch) and had their own
+ * copy of it. One list, so "what counts as a toggle" cannot drift between where
+ * a tap is handled and where a switch is drawn.
+ */
+export const TOGGLEABLE_DOMAINS: ReadonlySet<string> =
+  new Set(["light", "switch", "input_boolean", "fan"]);
+
+/**
+ * Types for which "Confirm before toggling" is worth offering at all — the
+ * ones a tap would otherwise act on instantly (see isQuickToggle below), plus
+ * media_player, whose panel toggle is equally immediate.
+ *
+ * Lives here rather than in the settings rows because it is the same rule
+ * `requireConfirm` overrides, and both Advanced Settings tables had their own
+ * copy: a type added to one and not the other would silently offer the option
+ * in one table and hide it in the other.
+ */
+export const CONFIRM_GATE_TYPES: ReadonlySet<string> =
+  new Set([...TOGGLEABLE_DOMAINS, "media_player"]);
 
 /**
  * True when a tap should act directly (on/off toggle) rather than open the panel.
@@ -32,5 +53,5 @@ const TOGGLEABLE = new Set(["light", "switch", "input_boolean", "fan"]);
 export function isQuickToggle(mapping: EntityMapping, entity: HassEntity | undefined): boolean {
   if (!entity) return false; // unmapped / not yet loaded → show the panel
   if (mapping.requireConfirm) return false;
-  return TOGGLEABLE.has(mapping.type);
+  return TOGGLEABLE_DOMAINS.has(mapping.type);
 }

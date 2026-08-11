@@ -10,7 +10,7 @@
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { CATEGORY_ORDER, effectiveCategory } from "@/config/EntityCategories";
 import { displayLabelFor } from "@/config/EntityMap";
-import { roomKey } from "@/config/roomKey";
+import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { scheduleBoard } from "@/fm/fmEngine";
 import type { FmData } from "@/fm/fmTypes";
 import { isOn } from "@/utils/entityState";
@@ -165,7 +165,6 @@ export function buildCategoryTiles(
   }));
 }
 
-const NO_ROOM = "Other";
 
 export interface RoomGroup {
   room: string;
@@ -202,7 +201,7 @@ export function buildRoomGroups(
 
   const idsByRoom = new Map<string, string[]>();
   for (const id of selectableIds) {
-    const room = resolvedRooms[id]?.trim() || NO_ROOM;
+    const room = resolvedRooms[id]?.trim() || NO_ROOM_LABEL;
     const list = idsByRoom.get(room) ?? [];
     list.push(id);
     idsByRoom.set(room, list);
@@ -210,12 +209,12 @@ export function buildRoomGroups(
   return [...idsByRoom.entries()]
     .map(([room, entityIds]) => {
       const haFloor = entityIds.map((id) => entityFloorNumbers[id]).find((f) => f != null);
-      const floor = room === NO_ROOM ? null : (haFloor ?? floorByRoom.get(roomKey(room)) ?? null);
+      const floor = room === NO_ROOM_LABEL ? null : (haFloor ?? floorByRoom.get(roomKey(room)) ?? null);
       return { room, count: entityIds.length, entityIds, floor };
     })
     .sort((a, b) => {
-      if (a.room === NO_ROOM) return b.room === NO_ROOM ? 0 : 1;
-      if (b.room === NO_ROOM) return -1;
+      if (a.room === NO_ROOM_LABEL) return b.room === NO_ROOM_LABEL ? 0 : 1;
+      if (b.room === NO_ROOM_LABEL) return -1;
       return a.room.localeCompare(b.room);
     });
 }

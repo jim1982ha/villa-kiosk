@@ -11,6 +11,7 @@ import EntityPicker from "./EntityPicker";
 import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory } from "@/config/EntityCategories";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { memo } from "react";
+import { CONFIRM_GATE_TYPES } from "@/utils/quickAction";
 
 const TYPES: EntityType[] = [
   "light", "climate", "lock", "camera", "cover", "fan",
@@ -19,7 +20,6 @@ const TYPES: EntityType[] = [
 ];
 
 // Same gate as EntityMapRow's own — see EntityMapping.requireConfirm.
-const CONFIRM_GATE_TYPES = new Set<EntityType>(["light", "switch", "input_boolean", "fan", "media_player"]);
 
 interface Props {
   mesh: string;

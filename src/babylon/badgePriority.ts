@@ -92,7 +92,3 @@ const CATEGORY_RANK: Record<Category, number> = Object.fromEntries(
 export function badgeRank(type: EntityType, category: Category): number {
   return DOMAIN_RANK[type] * CATEGORY_ORDER.length + CATEGORY_RANK[category];
 }
-
-/** The number of distinct ranks, so a caller can size a bucket array without
- *  re-deriving the arithmetic above. */
-export const BADGE_RANK_COUNT = 2 * CATEGORY_ORDER.length;

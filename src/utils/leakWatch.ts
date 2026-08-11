@@ -1,74 +1,32 @@
 // src/utils/leakWatch.ts
-// Answers ONE question about the in-place reload, and deliberately not more:
-// after a SceneManager is disposed, does it actually become garbage?
+// Regression guard for the in-place reload leak: after a SceneManager is
+// disposed, does it actually become garbage?
 //
-// ── STATUS: the leak this was built for is FIXED (2.272.0 + 2.273.0) ───────
-// This is kept as the REGRESSION GUARD, not as an open investigation. The
-// retainer was found — a callback prop written inline in Dashboard closed over
-// Dashboard's render scope, which held the previous SceneManager, and the
-// canvas captured it in a mount effect with `[]` deps — and the fix was to
-// route every callback prop through one ref assigned during render.
+// ── The leak itself is FIXED (2.272.0 + 2.273.0) ───────────────────────────
+// A callback prop written inline in Dashboard closed over Dashboard's render
+// scope, which held the previous SceneManager, and the canvas captured it in a
+// mount effect with `[]` deps. One dead villa retained per reload, ~35MB each,
+// chaining backwards. Every callback prop now goes through one ref assigned
+// during render (see BabylonCanvas), and dispose() nulls every subsystem.
 //
-// Verified in the field: the `scene` key stopped appearing entirely (scenes
-// are collected now), and the heap floor after five reloads fell from never
-// below ~330MB to 171MB. `mgr` still counts up, but each retained manager is
-// an empty shell of 9-68kB — 2.272.0's dispose() nulls every subsystem — so a
-// non-zero `mgr` is no longer evidence of a memory problem on its own. What
-// matters is `scene`, and whether `mgr`'s SIZE ever returns.
+// Verified in the field: the heap floor after five reloads fell from never
+// below ~330MB to 171MB.
 //
-// So: if `scene` is ever non-zero again, something has re-attached the scene
-// graph to a disposed manager and the fix above has been undone.
+// ── READ `scene`, NOT `mgr` ────────────────────────────────────────────────
+// `mgr` still counts up. Each retained manager is an empty shell of 9-68kB
+// because dispose() strips it, so a non-zero `mgr` is untidy, not a leak.
 //
-// ── The measurement this exists because of (2.231.0) ────────────────────────
-// A field dump caught a session that remounted BabylonCanvas six times (each
-// model upload bumps Dashboard's `modelKey`, which is a full unmount/remount)
-// and watched `mem` climb without ever coming back down:
+// `scene` is the alarm. Non-zero means the scene graph — every mesh, geometry
+// and texture — is reachable from a disposed manager again, i.e. the fix above
+// has been undone. It has read zero since 2.272.0.
 //
-//   376 → 462 → 551 → 588 → 615 → 675 → 795 → 848 → 872 → 941 → 948 MB
-//
-// Individual samples swing either way — one read 1,115MB and the next 795MB —
-// because that is GC's sawtooth, and the sawtooth is itself the proof that
-// collection IS running. What never recovers is the FLOOR: roughly 95MB per
-// reload, retained for the life of the document. Six uploads reach ~950MB on
-// a desktop; the same six on the iPad this ships to would be killed by the OS
-// long before that, and `autoReload.ts`'s heap valve cannot intervene because
-// Safari does not expose `performance.memory` at all — every Safari and iOS
-// record in that dump has no `mem` field to read.
-//
-// ── Why a WeakRef and not a heap snapshot ──────────────────────────────────
-// A snapshot names the retaining path, but it needs a machine with devtools
-// attached to the kiosk at the moment it happens, and the shipped bundle is
-// minified — the constructor filter matches nothing until you know the
-// one-or-two-letter name, which is what __villaLeakHold below exists to hand
-// you. (Reading the disposal path was not enough on its own: it already
-// removed every listener, disconnected both observers, disposed each
-// subsystem, nulled the manager out of React state and force-lost the WebGL
-// context, and the leak survived all of it. The retainer was one scope
-// further out than any of that.)
-//
-// This is the cheap thing that decides WHETHER to go and snapshot at all, from
-// the field, with no tooling:
-//
-// - `staleMgrs > 0` — the SceneManager object graph itself is still reachable.
-//   Something outside it holds a reference, and every mesh, geometry and
-//   texture hangs off that. Look for the reference.
-// - `staleMgrs === 0` but `staleScenes > 0` — the manager went, and Babylon's
-//   own `Scene` outlived it. That is an engine-side registry, not our code.
-// - Both zero, `mem` still climbing — nothing about the scene is retained and
-//   the growth is elsewhere entirely (a module-level cache, detached DOM,
-//   GPU-side allocations that never appear in `usedJSHeapSize` anyway).
-//
-// Each is a different investigation, and guessing between them is how six
-// wrong causes got proposed for the light-artifact bug before a measurement
-// settled it.
-//
-// ── The one-load grace period ──────────────────────────────────────────────
-// A WeakRef that still derefs proves "not collected YET", which is not the
-// same as "retained" — the collector is under no obligation to have run. So
-// an entry only counts once a FULL further load has happened after the one it
-// was disposed in: a whole villa parsed, ~18MB fetched, hundreds of MB
-// allocated. If a major GC has not run across that, nothing would ever be
-// collectable and the number is unreadable anyway.
+// ── The two-load grace period ──────────────────────────────────────────────
+// A WeakRef that still derefs proves "not collected YET", not "retained" — the
+// collector is under no obligation to have run. An entry only counts once a
+// FULL further load has happened after the one it was disposed in: a whole
+// villa parsed, ~18MB fetched, hundreds of MB allocated. If a major GC has not
+// run across that, nothing would ever be collectable and the number is
+// unreadable anyway.
 
 import { debugFlagEnabled } from "@/utils/devLog";
 
@@ -121,42 +79,26 @@ export function staleDisposed(currentSeq: number): Record<string, number> {
   return out;
 }
 
-/** Test seam / remount hygiene — a fresh document starts with nothing. */
-export function resetLeakWatch(): void {
-  watched = [];
-}
-
-// ── Reading the answer from the device, with `?debug` ──────────────────────
-// The counts ride on the `load` telemetry record, which needs three model
-// uploads and an export before anything can be read. That is a long loop for a
-// yes/no question, and the alternative — a heap snapshot — does not work on
-// what the kiosk actually serves: the production bundle is MINIFIED, so
-// `SceneManager` is a one-letter name and DevTools' constructor filter matches
-// nothing at all. (Field-tested: it matches nothing at all.)
+// ── `?debug` console hooks ─────────────────────────────────────────────────
+// The counts also ride on the `load` telemetry record, but that needs three
+// model uploads and an export before anything can be read. These give the same
+// numbers on demand:
 //
-// So the same numbers, on demand, from the console:
+//   __villaLeak()      { mgr, scene, loadSeq, watching }. Reads only WeakRefs,
+//                      so asking cannot change the answer.
+//   __villaLeakHold()  the survivors themselves, for a heap snapshot's
+//                      Retainers pane. Takes a STRONG reference, so it ends the
+//                      measurement for the session.
 //
-//   __villaLeak()      { mgr, scene } — objects disposed two or more loads ago
-//                      that are STILL reachable, plus how many are still
-//                      inside the grace period. Reads only WeakRefs, so asking
-//                      cannot change the answer.
-//   __villaLeakHold()  the surviving objects themselves, for a heap snapshot's
-//                      Retainers pane. This takes a STRONG reference and ends
-//                      the measurement for the rest of the session — which is
-//                      fine, because by then the question is no longer "is
-//                      something retained" but "by what".
-//
-// CALL __villaLeakHold() ONCE, AT THE END. It pins whatever it finds, and
-// calling it after every reload re-pins the survivors on each call — which
-// produces a tidy 1→2→3→4→5 climb that looks exactly like the leak and is
-// entirely the hook. One field session was read wrong for this reason before
-// the contradiction was spotted.
-//
-// Then, before the snapshot: clear every `temp*`, `delete window.__villaLeakHeld`,
-// and CLEAR THE CONSOLE — devtools retains every object it has printed, so
-// otherwise every retainer branch you find is your own handle.
-//
-// Guarded by `?debug` so nothing is attached to `window` in normal use.
+// If you ever need the Retainers pane again, three traps cost a whole field
+// session between them:
+//   * call __villaLeakHold() ONCE, at the end — it re-pins on every call, which
+//     manufactures a 1→2→3→4→5 climb that looks exactly like the leak;
+//   * before snapshotting, clear every `temp*`, delete window.__villaLeakHeld
+//     and CLEAR THE CONSOLE — devtools retains everything it has printed, so
+//     otherwise every retainer branch you find is your own handle;
+//   * the shipped bundle is MINIFIED, so DevTools' constructor filter matches
+//     nothing until __villaLeakHold tells you the one-or-two-letter class name.
 
 interface LeakWindow extends Window {
   __villaLeak?: () => Record<string, number>;
