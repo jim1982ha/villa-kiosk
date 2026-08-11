@@ -8,39 +8,72 @@
 //
 // ── One unit, integer multiples ────────────────────────────────────────────
 // A card is never given a size of its own. Its UNIT is the badge it stands in
-// for, and every dimension is that unit times a small integer: the card is
+// for, and every dimension is that unit times a small integer: a card is
 // `cols x rows` units, each chip is `cardIconFraction` of a unit, and the
-// margin at the card's edge and the gap between chips both fall out of that one
+// margin at a card's edge and the gap between chips both fall out of that one
 // fraction rather than being stated anywhere. Two past regressions came from
 // letting a summary carry numbers of its own and watching them drift from the
 // badges they replaced; derivation from one unit is what stops that recurring.
 //
-// ── Why the cap lives here ────────────────────────────────────────────────
-// `MAX_GRID_CHIPS` is enforced by `gridLayout` itself, not by its callers. A
-// card is one badge wide per column, so an unbounded chip count is an unbounded
-// card: 2.261.0 let a producer ask for a whole pile and painted a single card
-// the full width of the phone. A cap a caller has to remember is a cap that
-// will eventually be forgotten by one of them.
+// ── Why a group of cards, and not one bigger grid ─────────────────────────
+// Past four devices the arrangement adds a SECOND CARD beside the first rather
+// than growing to a 3x2. A card of at most four stays a recognisable object —
+// the same object a pair or a quad draws — where a 3x3 would be a third kind
+// of thing. The cost is width, which is why the total is capped low: the
+// clearance test between two summaries is a disc (direction would need the
+// camera), so a wide arrangement claims a disc as wide as it is and escalates
+// more rooms to their chip. See MAX_TOTAL_CHIPS.
+//
+// ── Why the caps live here ────────────────────────────────────────────────
+// `arrange` clamps its own input. A card is one badge wide per column, so an
+// unbounded cell count is an unbounded card: 2.261.0 let a producer ask for a
+// whole pile and painted a single card the full width of the phone. A cap a
+// caller has to remember is a cap that will eventually be forgotten by one of
+// them.
 
-/** The most device pictograms one card may show: a 2x2 grid.
+/** The most device pictograms ONE card may show: a 2x2 grid.
  *
- *  Beyond this the summary is a count badge instead. Three columns would put
- *  each chip's tap zone under a badge's own box, and past four the number is
- *  the useful fact anyway — nobody reads six pictograms as "six". */
+ *  Three columns would put each cell's tap zone under a badge's own box. */
 export const MAX_GRID_CHIPS = 4;
 
+/**
+ * The most pictograms an ARRANGEMENT may show across all its cards.
+ *
+ * Six — a 2x2 beside a 1x2 — and the number is set by the collision test, not
+ * by taste. Two summaries must clear each other and that test is a disc, so an
+ * arrangement claims a disc of its own diagonal: a 2x2 alone is 1.41 units,
+ * this is about 1.8, and two full 2x2s side by side would be 2.24 — at which
+ * point groups of five upward start failing to place and escalating their room
+ * to a chip, which is the complaint this whole area exists to answer. Above
+ * the cap the summary is a count badge, one unit square, which after the
+ * absorb phase no longer costs its room a chip either.
+ */
+export const MAX_TOTAL_CHIPS = 6;
+
 /** How many cells a group of `n` members actually draws. THE clamp — every
- *  measurement and every draw must go through it, or a card can be measured at
- *  one size and drawn at another, which is this subsystem's oldest bug. */
+ *  measurement and every draw must go through it, or an arrangement can be
+ *  measured at one size and drawn at another, which is this subsystem's oldest
+ *  bug. */
 export function gridCells(n: number): number {
   if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(Math.floor(n), MAX_GRID_CHIPS));
+  return Math.max(0, Math.min(Math.floor(n), MAX_TOTAL_CHIPS));
 }
 
-export interface CardLayout {
+export interface SubCard {
+  /** Centre offset from the arrangement's centre, in units. */
+  left: number;
+  width: number;
+  height: number;
   cols: number;
   rows: number;
-  /** Card size in the same units as `unit` (i.e. badge units, pre-scale). */
+  /** Global index of this card's first cell. */
+  first: number;
+  cells: number;
+}
+
+export interface CardArrangement {
+  cards: SubCard[];
+  /** The whole arrangement, in the same units as `unit`. */
   width: number;
   height: number;
   /** One pictogram's box. */
@@ -48,52 +81,96 @@ export interface CardLayout {
   /** Centre-to-centre distance between cells, on both axes: one unit, so a
    *  cell IS a badge box and its tap zone is exactly the badge it replaces. */
   pitch: number;
-  /** Cell centre offsets from the card's centre, for chip `k`. */
+  /** Cells drawn, after clamping. 0 means a count badge. */
+  cells: number;
+  /** Cell centre offsets from the ARRANGEMENT's centre, in units. */
   cellLeft(k: number): number;
   cellTop(k: number): number;
-  /** The same cell as a percentage of the card, for a hit zone. The zones TILE
-   *  it — every point inside the card belongs to exactly one cell — which is
-   *  what lets a zone be narrower than a slop-expanded badge without ever being
-   *  ambiguous about which device a tap meant. */
-  zonePct(k: number): { w: number; h: number; l: number; t: number };
+  /** The cell's hit zone — one unit square, centred on its own chip. The zones
+   *  TILE each card, so every point on a card belongs to exactly one device;
+   *  the gap BETWEEN cards belongs to none, and a tap there falls through to
+   *  whatever is underneath (see pickEntityGroupAt). */
+  zoneW: number;
+  zoneH: number;
 }
 
 /**
- * Lay out `n` chips.
+ * Lay out `n` chips as one or more cards.
  *
- *   n <= 2 → one row  (1x1, 2x1)
- *   n = 3, 4 → 2x2, filled ROW-MAJOR so cell 3 is bottom-right
+ *   n <= 2 → a single row  (1x1, 2x1)
+ *   n = 3, 4 → one 2x2, filled ROW-MAJOR so cell 3 is bottom-right
+ *   n = 5, 6 → a 2x2 plus a second card holding the rest, side by side
  *
- * Row-major matters: it is what lets the first three devices keep their cells
- * when a fourth joins. Cells are assigned in the solver's own total order
- * (rank, then entity_id), so a device only moves when something that sorts
- * before it appears or disappears — the same stability argument the badges
- * themselves rest on.
+ * Cards are filled GREEDILY — four, then the remainder — so a device keeps its
+ * CELL WITHIN ITS CARD when another joins. It does not keep its absolute
+ * position: the arrangement is centred, so a second card shifts the first one
+ * left by half its width. That is the honest claim; the stronger one is false.
  *
  * A 3-member card leaves its bottom-right cell EMPTY rather than centring the
  * odd chip, which would look tidier and would move all three every time the
  * fourth device came and went.
  */
-export function gridLayout(n: number, unit: number, iconFraction: number): CardLayout {
+export function arrange(
+  n: number, unit: number, iconFraction: number, gap: number,
+): CardArrangement {
   const cells = gridCells(n);
-  const cols = cells <= 2 ? Math.max(1, cells) : 2;
-  const rows = Math.max(1, Math.ceil(cells / cols));
-  const width = cols * unit;
-  const height = rows * unit;
+  const chip = Math.max(4, Math.round(unit * iconFraction));
+  const cards: SubCard[] = [];
+
+  // Greedy fill: a full card, then whatever is left.
+  let remaining = Math.max(1, cells);
+  let first = 0;
+  const shapes: { cols: number; rows: number; cells: number; first: number }[] = [];
+  while (remaining > 0) {
+    const take = Math.min(remaining, MAX_GRID_CHIPS);
+    const cols = take <= 2 ? Math.max(1, take) : 2;
+    shapes.push({ cols, rows: Math.max(1, Math.ceil(take / cols)), cells: take, first });
+    first += take;
+    remaining -= take;
+  }
+
+  const totalW = shapes.reduce((acc, sh) => acc + sh.cols * unit, 0)
+    + gap * (shapes.length - 1);
+  const height = Math.max(...shapes.map((sh) => sh.rows * unit));
+
+  let cursor = -totalW / 2;
+  for (const sh of shapes) {
+    const w = sh.cols * unit;
+    cards.push({
+      left: cursor + w / 2,
+      width: w,
+      height: sh.rows * unit,
+      cols: sh.cols,
+      rows: sh.rows,
+      first: sh.first,
+      cells: sh.cells,
+    });
+    cursor += w + gap;
+  }
+
+  const cardOfCell = (k: number): SubCard => {
+    for (let i = cards.length - 1; i >= 0; i--) if (k >= cards[i].first) return cards[i];
+    return cards[0];
+  };
+
   return {
-    cols,
-    rows,
-    width,
+    cards,
+    width: totalW,
     height,
-    chip: Math.max(4, Math.round(unit * iconFraction)),
+    chip,
     pitch: unit,
-    cellLeft: (k) => ((k % cols) - (cols - 1) / 2) * unit,
-    cellTop: (k) => (Math.floor(k / cols) - (rows - 1) / 2) * unit,
-    zonePct: (k) => ({
-      w: 100 / cols,
-      h: 100 / rows,
-      l: (((k % cols) - (cols - 1) / 2) * 100) / cols,
-      t: ((Math.floor(k / cols) - (rows - 1) / 2) * 100) / rows,
-    }),
+    cells,
+    cellLeft: (k) => {
+      const c = cardOfCell(k);
+      const i = k - c.first;
+      return c.left + ((i % c.cols) - (c.cols - 1) / 2) * unit;
+    },
+    cellTop: (k) => {
+      const c = cardOfCell(k);
+      const i = k - c.first;
+      return (Math.floor(i / c.cols) - (c.rows - 1) / 2) * unit;
+    },
+    zoneW: unit,
+    zoneH: unit,
   };
 }

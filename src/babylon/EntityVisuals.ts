@@ -109,7 +109,7 @@ import { axisWorldScale } from "./meshUnits";
 import { LightPool } from "./LightPools";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { badgeText } from "./badgeText";
-import { gridLayout, gridCells, MAX_GRID_CHIPS, type CardLayout } from "./badgeCard";
+import { arrange, gridCells, MAX_TOTAL_CHIPS, type CardArrangement } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
 import { COSMETIC_MAPPING_FIELDS } from "./entityMapDiff";
@@ -621,9 +621,14 @@ interface EntityGroupControls {
   node: TransformNode;
   entityIds: string[];
   room: string;
-  /** One device pictogram per chip of a STRIP card. Grow-only pool: a group's
-   *  membership changes as devices come and go, and rebuilding controls on
-   *  that boundary is a flicker with no upside. */
+  /** The visible card(s). The container itself is a transparent positioning
+   *  HOST — these carry the surface, the ring, the rounding and the shadow, so
+   *  a summary of five can draw a 2x2 beside a 1x1 with real space between
+   *  them rather than one wide box. Grow-only, like the rest. */
+  cards: Rectangle[];
+  /** One device pictogram per drawn cell. Grow-only pool: a group's membership
+   *  changes as devices come and go, and rebuilding controls on that boundary
+   *  is a flicker with no upside. */
   chips: Image[];
   /** Invisible equal-width hit zones, one per chip — the strip's tap split.
    *  Children of the container, so Control.contains() resolves them through
@@ -819,6 +824,9 @@ export class EntityVisuals {
   /** Last line emitted by logPlacement, so the pass logs only on CHANGE. */
   private lastPlaceLog = "";
 
+  /** `?debug` only: badges pulled into a summary because they were underneath
+   *  it (see the absorb phase in placeEntityGroups). */
+  private absorbed = 0;
   /** Summaries made inside the focused room — pair cards and counts alike
    *  (see pairFocusedRoom). One per pile, so this is also "how many piles the
    *  focused room had", which is the number worth watching: it should be small
@@ -3704,12 +3712,13 @@ export class EntityVisuals {
     const pending: PendingEntityGroup[] = this.pendingGroups;
     pending.length = 0;
     this.focusPairs = 0;
+    this.absorbed = 0;
     let solved: PlacementStats | null = null;
     if (clearance) {
       const items = this.placementItems(shown, boxes, clearance);
       const result = solvePlacement(
         items, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.placeScratch,
-        MAX_GRID_CHIPS,
+        MAX_TOTAL_CHIPS,
       );
       solved = result.stats;
       for (const room of result.chipRooms) this.roomClustered.set(room, true);
@@ -3744,7 +3753,7 @@ export class EntityVisuals {
           // Every device the card can hold. Above the cap it is a count, which
           // is the one case a digit is genuinely about: past four pictograms
           // nobody reads the picture as a number anyway.
-          grid: n <= MAX_GRID_CHIPS ? n : 0,
+          grid: n <= MAX_TOTAL_CHIPS ? n : 0,
           focused: false,
         });
       }
@@ -3944,10 +3953,13 @@ export class EntityVisuals {
     // `:3` and `:4` in the list beside it, and `count=` for nothing below five.
     const bySize = new Map<number, number>();
     let counts = 0;
+    let split = 0;
     for (const g of placed) {
       const cells = this.drawnCells(g, g.members.length);
-      if (cells >= 2) bySize.set(cells, (bySize.get(cells) ?? 0) + 1);
-      else counts++;
+      if (cells >= 2) {
+        bySize.set(cells, (bySize.get(cells) ?? 0) + 1);
+        if (this.cardOf(cells).cards.length > 1) split++;
+      } else counts++;
     }
     const cardSizes = [...bySize.entries()].sort(([a], [b]) => a - b)
       .map(([n, c]) => `${n}x${c}`).join(",") || "-";
@@ -3959,7 +3971,8 @@ export class EntityVisuals {
       + ` | piles=${stats.piles} exempt=${stats.exempt} accepted=${stats.accepted}`
       + ` deferred=${stats.deferred} pulledBack=${stats.pulledBack}`
       + ` | groups=${placed.length}/${stats.buckets} cross=${stats.crossRoom}`
-      + ` cards=${cardSizes} counts=${counts}`
+      + ` cards=${cardSizes} counts=${counts}${split ? `/${split}split` : ""}`
+      + (this.absorbed ? ` absorbed=${this.absorbed}` : "")
       + (this.focusPairs ? ` focusGroups=${this.focusPairs}` : "")
       + ` [${groups}] chips=${chips.length} [${chips.join(", ")}]`;
     if (line === this.lastPlaceLog) return;
@@ -4041,19 +4054,39 @@ export class EntityVisuals {
       tapDebug(`PLACEMENT: ${orphaned} badge(s) hidden with no summary and no chip`);
     }
 
+    // ── NOTHING IS DRAWN INSIDE A SUMMARY'S INK ──────────────────────────
+    // The invariant the absorb phase exists to establish, asserted rather than
+    // assumed. Its absence is what let a card sit exactly on top of an
+    // accepted badge at every zoom rung — and the symptom of that was a room
+    // that would not declutter no matter how far in you zoomed, which nobody
+    // would have connected to this without the check.
+    const pxPerWorld = clearance.pxPerWorld;
+    const scale = this.effectiveScale();
+    let buried = 0;
+    for (const g of groups) {
+      const lay = this.cardOf(this.drawnCells(g, g.members.length));
+      const inscribed = (Math.min(lay.width, lay.height) / 2) * scale * clearance.allow;
+      for (const s2 of shown) {
+        if (!s2.lbl.container.isVisible) continue;
+        const d = Math.hypot(g.wx - s2.wx, g.wy - s2.wy, g.wz - s2.wz) * pxPerWorld;
+        if (d < inscribed) buried++;
+      }
+    }
+    if (buried) tapDebug(`PLACEMENT: ${buried} drawn badge(s) inside a summary's ink`);
+
     // Order independence — the purity guard.
     const reversed = items.slice().reverse();
     // The SAME drawableMax as the live solve, or this guard verifies the
     // purity of a function that does not ship.
     const a = solvePlacement(
       items, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.debugScratchA,
-      MAX_GRID_CHIPS,
+      MAX_TOTAL_CHIPS,
     );
     const idsA = new Set<string>();
     for (let i = 0; i < items.length; i++) if (a.accepted[i]) idsA.add(items[i].sortKey);
     const b = solvePlacement(
       reversed, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.debugScratchB,
-      MAX_GRID_CHIPS,
+      MAX_TOTAL_CHIPS,
     );
     const idsB = new Set<string>();
     for (let i = 0; i < reversed.length; i++) if (b.accepted[i]) idsB.add(reversed[i].sortKey);
@@ -4262,6 +4295,23 @@ export class EntityVisuals {
       const lay = this.cardOf(this.drawnCells(g, g.members.length));
       return (Math.hypot(lay.width, lay.height) / 2) * scale * allow;
     };
+    /**
+     * The largest disc that fits INSIDE the card — "is this badge underneath
+     * my ink", which is a different question from "do we clear each other".
+     *
+     * It has to be the inscribed radius and not `cardHalfOf`'s circumscribed
+     * one. A 2x2 card's circumscribed disc is 1.41 units while its ink only
+     * reaches 1.0 on either axis, and `fits` accepts a badge from about 1.0
+     * plus a gap — so absorbing at 1.41 would swallow badges that are visibly
+     * clear of the card. That is deleting devices from the map to fix a bug
+     * about the opposite. Inscribed leaves exactly a `gapPx`-wide annulus
+     * between "absorbed" and "fits passes", which is the right amount of
+     * nothing.
+     */
+    const cardInscribedHalf = (g: PendingEntityGroup) => {
+      const lay = this.cardOf(this.drawnCells(g, g.members.length));
+      return (Math.min(lay.width, lay.height) / 2) * scale * allow;
+    };
     // A group is measured against OTHER GROUPS at the width it is actually
     // DRAWN at — the file's oldest rule. Against badges it is measured at the
     // count's box instead; see `fits` for why that asymmetry is deliberate.
@@ -4281,6 +4331,7 @@ export class EntityVisuals {
      * `others` is passed rather than closed over because this runs in two
      * passes and they need different sets — see below.
      */
+    const focus = this.focusedRoom;
     const fits = (g: PendingEntityGroup, others: PendingEntityGroup[]): boolean => {
       const mineHalf = groupHalf(g);
       // ── A SUMMARY MUST CLEAR OTHER SUMMARIES; IT MAY OVERLAP A BADGE ─────
@@ -4319,6 +4370,15 @@ export class EntityVisuals {
         // final by the time this runs.
         if (this.entityGrouped.has(shown[j].id)) continue;
         if (this.roomClustered.get(roomKey(this.roomOf(shown[j].id)))) continue;
+        // A FOCUSED room's badge blocks nobody — the same contract the `others`
+        // loop below already honours for focused groups, and the one
+        // PlacementItem.exempt states in the solver: "accepted unconditionally,
+        // AND never counted as a blocker for anyone else". This loop was the
+        // one place it was not honoured, so a focused room could push a
+        // NEIGHBOURING room's group to its chip while the focus lasted — the
+        // focus renegotiating the rest of the map, which is exactly what the
+        // exemption exists to prevent.
+        if (focus !== null && roomKey(this.roomOf(shown[j].id)) === focus) continue;
         const d = Math.hypot(g.wx - shown[j].wx, g.wy - shown[j].wy, g.wz - shown[j].wz) * pxPerWorld;
         if (d < vsBadge + halfOf(j) * allow + gapPx) return false;
       }
@@ -4358,6 +4418,94 @@ export class EntityVisuals {
     // world distance scaled by the quantised zoom, and knowing which way a
     // neighbour lies relative to the card's long axis would need the camera,
     // which is the dependency this whole subsystem exists without.
+
+    // ── ABSORB: NOTHING IS LEFT DRAWN UNDERNEATH A SUMMARY ───────────────
+    // The bug this closes, in full, because it is not obvious and it survived
+    // a long time: for a pile of CO-LOCATED devices the solver accepts the
+    // highest-ranked one — still drawn, at its own anchor — and defers the
+    // rest. The card for those losers is drawn at THEIR centroid, which for a
+    // co-located pile is the same world point as the badge still drawn there.
+    // `fits` then measured `d = hypot(worldDelta) * pxPerWorld = 0` against a
+    // requirement in fixed pixels, so `0 < requirement` held at EVERY zoom
+    // rung and the card was always refused, escalating the room to its chip.
+    //
+    // That is why zooming right in on such a room never decluttered it.
+    // Multiplying a world distance of ~0 by any zoom is still 0; no rung could
+    // ever satisfy the test. Every OTHER refusal in `fits` is a real distance
+    // that shrinks as the camera closes in, which is the behaviour people
+    // expect and were not getting.
+    //
+    // So: a summary swallows the drawn badges that lie inside its own ink,
+    // and only those (see cardInscribedHalf). It is the same reasoning as the
+    // solver's lone-deferral pull-back — a summary standing on top of a device
+    // it does not represent is a lie — applied at the one place that knows how
+    // big the summary is actually drawn.
+    //
+    // Batched per round, then the centroid is recomputed, then swept again:
+    // absorbing one at a time would move the centroid mid-round and make the
+    // result depend on which candidate was visited first. Membership only ever
+    // grows, so this cannot oscillate; the round bound is belt and braces.
+    let absorbed = 0;
+    for (const g of pending) {
+      // Focused groups already take whole piles and skip `fits`, so they have
+      // no badge of their own left to sit on — and eating a NEIGHBOURING
+      // pile's focused badge is the one thing the focus forbids.
+      if (g.focused) continue;
+      for (let round = 0; round <= shown.length; round++) {
+        const reach = cardInscribedHalf(g);
+        const take: number[] = [];
+        for (let j = 0; j < shown.length; j++) {
+          if (this.entityGrouped.has(shown[j].id)) continue;
+          const rk = roomKey(this.roomOf(shown[j].id));
+          if (this.roomClustered.get(rk)) continue;
+          if (focus !== null && rk === focus) continue;
+          const d = Math.hypot(g.wx - shown[j].wx, g.wy - shown[j].wy, g.wz - shown[j].wz)
+            * pxPerWorld;
+          if (d < reach) take.push(j);
+        }
+        if (take.length === 0) break;
+        for (const j of take) {
+          g.members.push(j);
+          // Claimed immediately, before any `fits` runs — otherwise the badge
+          // blocks its own group, and a second group in key order could claim
+          // it as well.
+          this.entityGrouped.add(shown[j].id);
+          const rk = roomKey(this.roomOf(shown[j].id));
+          if (!g.roomKeys.includes(rk)) g.roomKeys.push(rk);
+        }
+        absorbed += take.length;
+        // Everything the card reads about itself has to move with its
+        // membership. Miss any one of these and the absorbed device is in the
+        // group, hidden as a badge, and NOT drawn as a cell — invisible and
+        // untappable, which is worse than the overlap this is fixing.
+        this.sortCardMembers(shown, g.members);
+        g.grid = g.members.length;
+        g.roomKeys.sort();
+        const primary = this.roomDisplay.get(g.roomKeys[0]) ?? g.roomKeys[0];
+        g.room = g.roomKeys.length > 1 ? `${primary} +${g.roomKeys.length - 1}` : primary;
+        let wx = 0, wy = 0, wz = 0;
+        for (const i of g.members) { wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz; }
+        g.wx = wx / g.members.length;
+        g.wy = wy / g.members.length;
+        g.wz = wz / g.members.length;
+      }
+
+      // ── The whole-room rule, re-checked against the membership we ended up
+      // with. The solver applied it (badgePlacement step 7) against a room
+      // count taken BEFORE any of this, so absorb can manufacture a group that
+      // covers every badge its room shows. If that group draws a COUNT it is
+      // the thing the rule forbids — a number standing for a whole room, next
+      // to no room name — so it goes to the chip, which at least says which
+      // room. A group that draws its devices is not a duplicate of anything
+      // and stays.
+      if (g.roomKeys.length === 1 && this.drawnCells(g, g.members.length) < 2) {
+        let inRoom = 0;
+        for (const s2 of shown) if (roomKey(this.roomOf(s2.id)) === g.roomKeys[0]) inRoom++;
+        if (g.members.length >= inRoom) this.roomClustered.set(g.roomKeys[0], true);
+      }
+    }
+    this.absorbed = absorbed;
+
     for (const g of pending) {
       // A FOCUSED pair is seated unconditionally. It stands in for two badges
       // that the room exemption was already drawing on top of each other, so a
@@ -4542,7 +4690,7 @@ export class EntityVisuals {
         // Same rule as the main solve: every device the card can hold, a count
         // above that. badgeCard's own cap enforces the bound at the drawing
         // site too, so the two cannot drift.
-        grid: n <= MAX_GRID_CHIPS ? n : 0,
+        grid: n <= MAX_TOTAL_CHIPS ? n : 0,
         focused: true,
       });
       this.focusPairs++;
@@ -4615,11 +4763,13 @@ export class EntityVisuals {
     return gridCells(Math.min(g.grid, memberCount));
   }
 
-  /** This group's card geometry — see babylon/badgeCard. A count badge is the
-   *  degenerate 1x1 case, so every summary goes through one function. */
-  private cardOf(cells: number): CardLayout {
-    return gridLayout(
-      Math.max(1, cells), this.summaryMetrics().size, this.metrics.cardIconFraction);
+  /** This group's arrangement — see babylon/badgeCard. A count badge is the
+   *  degenerate one-card, zero-cell case, so every summary goes through one
+   *  function and there is no second code path to keep in step. */
+  private cardOf(cells: number): CardArrangement {
+    return arrange(
+      Math.max(1, cells), this.summaryMetrics().size,
+      this.metrics.cardIconFraction, this.metrics.minGapPx);
   }
 
   /**
@@ -4630,21 +4780,37 @@ export class EntityVisuals {
    * and go and as the zoom rung changes what fits, and disposing controls on
    * that boundary would flicker for no benefit. Surplus ones are hidden.
    */
-  private growGrid(c: EntityGroupControls, n: number, layer: AdvancedDynamicTexture): void {
-    void layer;
-    for (let k = c.chips.length; k < n; k++) {
+  private growGrid(
+    c: EntityGroupControls, cells: number, cards: number,
+  ): void {
+    // ── Z-ORDER IS EXPLICIT, BECAUSE CREATION ORDER IS NOT ────────────────
+    // Container.addControl inserts by zIndex and APPENDS within a tie, and
+    // these pools are grown lazily — a second sub-card created the first time
+    // a group reaches five members would otherwise be appended after the chips
+    // and paint straight over them. Cards below, pictograms above.
+    for (let k = c.cards.length; k < cards; k++) {
+      const r = new Rectangle(`egroupCard${k}_${c.container.name}`);
+      r.zIndex = 0;
+      r.isPointerBlocker = false;
+      r.isVisible = false;
+      c.container.addControl(r);
+      c.cards.push(r);
+    }
+    for (let k = c.chips.length; k < cells; k++) {
       const img = new Image(`egroupChip${k}_${c.container.name}`);
+      img.zIndex = 1;
       img.stretch = Image.STRETCH_UNIFORM;
       img.isVisible = false;
       c.container.addControl(img);
       c.chips.push(img);
 
-      // Every dimension is written per pass (see updateEntityGroups) and in
-      // PERCENT, so a zone follows whatever card is drawn this frame rather
-      // than a size captured when it was built. The zones TILE the card: every
-      // tap inside belongs to exactly one device, which is what lets them be
-      // narrower than a slop-expanded badge without becoming ambiguous.
+      // Every dimension is written per pass (see updateEntityGroups), in
+      // PIXELS from the arrangement's centre — one code path whether the
+      // summary is one card or two. The zones TILE each card, so every point
+      // on a card belongs to exactly one device; the gap BETWEEN cards belongs
+      // to none, and a tap there falls through to whatever is underneath.
       const z = new Rectangle(`egroupZone${k}_${c.container.name}`);
+      z.zIndex = 1;
       z.thickness = 0;
       z.background = "";
       z.isPointerBlocker = false;
@@ -4674,6 +4840,7 @@ export class EntityVisuals {
       const rest = categorySurface("others", "off");
       const alert = categorySurface("others", "alert");
       const surface = rest.fill;
+      const sm = this.summaryMetrics();
       for (const g of groups) {
         live.add(g.key);
         const c = this.ensureEntityGroup(g.key, layer);
@@ -4710,10 +4877,28 @@ export class EntityVisuals {
         c.container.height = `${lay.height}px`;
         c.countText.isVisible = drawn < 2;
         c.countText.text = formatCountBadge(n);
-        this.growGrid(c, drawn, layer);
+        this.growGrid(c, drawn, lay.cards.length);
         for (let k = 0; k < c.chips.length; k++) {
           c.chips[k].isVisible = k < drawn;
           c.zones[k].isVisible = k < drawn;
+        }
+        // ── The visible card(s) ──────────────────────────────────────────
+        // Every property written every pass, on every pooled control: `m` can
+        // fall from two to one when a group loses a member, and a stale box
+        // left behind would draw an empty card beside a real one.
+        for (let k = 0; k < c.cards.length; k++) {
+          const sub = c.cards[k];
+          const src = lay.cards[k];
+          sub.isVisible = !!src;
+          if (!src) continue;
+          sub.width = `${src.width}px`;
+          sub.height = `${src.height}px`;
+          sub.left = `${src.left}px`;
+          sub.top = "0px";
+          sub.cornerRadius = sm.size * BADGE_CORNER_FRACTION;
+          sub.shadowColor = "rgba(0,0,0,0.4)";
+          sub.shadowBlur = 6;
+          sub.shadowOffsetY = 2;
         }
         if (drawn >= 2) {
           // Stable order: the solver's own (rank, entity_id), so the same
@@ -4724,15 +4909,18 @@ export class EntityVisuals {
           // that laid out a 2x2 last pass keeps its half-height and its
           // quarter offset unless this overwrites them.
           for (let k = 0; k < drawn; k++) {
-            const zp = lay.zonePct(k);
             c.chips[k].width = `${lay.chip}px`;
             c.chips[k].height = `${lay.chip}px`;
             c.chips[k].left = `${lay.cellLeft(k)}px`;
             c.chips[k].top = `${lay.cellTop(k)}px`;
-            c.zones[k].width = `${zp.w}%`;
-            c.zones[k].height = `${zp.h}%`;
-            c.zones[k].left = `${zp.l}%`;
-            c.zones[k].top = `${zp.t}%`;
+            // One badge box, centred on its own chip — in PIXELS, like
+            // everything else here, so one code path serves a single card and
+            // a split. Percentages could not: half of a two-card arrangement
+            // is not a cell.
+            c.zones[k].width = `${lay.zoneW}px`;
+            c.zones[k].height = `${lay.zoneH}px`;
+            c.zones[k].left = `${lay.cellLeft(k)}px`;
+            c.zones[k].top = `${lay.cellTop(k)}px`;
             const s2 = shown[g.members[k]];
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
             const { face, ring } = badgeFaceAndRing(
@@ -4762,9 +4950,18 @@ export class EntityVisuals {
         // A badge is never ringless — even at rest it carries the hairline
         // the brand guidelines give the idle state, which is what keeps it a
         // deliberate object rather than a shape on the floor. Same here.
-        c.container.thickness = ringRed ? this.metrics.ringThicknessPx : 1;
-        c.container.color = (ringRed ? alert.ring : rest.ring) ?? "transparent";
-        c.container.background = surface;
+        // ── THE HOST IS TRANSPARENT; THE CARDS CARRY THE SURFACE ─────────
+        // The container is a positioning host now, so the visible box can be
+        // one card or two with real space between them. `thickness` must be 0
+        // as well as the background empty: a Rectangle insets its children by
+        // its border, so a host with one would shift every pixel offset below.
+        const stroke = ringRed ? this.metrics.ringThicknessPx : 1;
+        const strokeColor = (ringRed ? alert.ring : rest.ring) ?? "transparent";
+        for (const sub of c.cards) {
+          sub.thickness = stroke;
+          sub.color = strokeColor;
+          sub.background = surface;
+        }
         // Reporting status rides on the COUNT, exactly as the room chip puts
         // it on its count pill — red when at least one member is unavailable.
         // Independent of the ring above, so "something is on" and "something
@@ -4809,20 +5006,29 @@ export class EntityVisuals {
     // height) moves with its membership.
     container.width = `${sm.size}px`;
     container.height = `${sm.size}px`;
-    // SQUIRCLE, not a circle. It shipped as a circle (cornerRadius = size/2)
-    // and read as a foreign object among the squircle badges it replaces and
-    // the rounded room chip it escalates into — three different corner
-    // languages on one map. BADGE_CORNER_FRACTION is the same fraction the
-    // badge canvas rounds its own squircle by (badgeIcons.ts exports it for
-    // exactly this kind of match), so the group is the badge shape at the
-    // badge size, and only its CONTENT — a count instead of a glyph — says it
-    // stands for several devices.
-    container.cornerRadius = sm.size * BADGE_CORNER_FRACTION;
+    // ── A TRANSPARENT POSITIONING HOST ──────────────────────────────────
+    // The visible card(s) are its children (see updateEntityGroups), so a
+    // summary of five can draw a 2x2 beside a 1x1 with real space between
+    // them. Two properties are load-bearing here:
+    //
+    //   background "" + thickness 0 — a Rectangle insets its children by its
+    //     border, so any host stroke would shift every pixel offset below it,
+    //     and a host fill would draw a box across the gap between the cards.
+    //   clipChildren FALSE — it defaults to true, and a child's shadow is
+    //     painted by that child, so the sub-cards' shadows would be scissored
+    //     off at the host's edge. Safe to disable: the hit test calls
+    //     Control.contains directly rather than going through Babylon's own
+    //     picking, and isPointerBlocker is already false.
+    container.clipChildren = false;
+    // The CARDS are squircles (see updateEntityGroups, which rounds each by
+    // BADGE_CORNER_FRACTION — the same fraction the badge canvas uses, so a
+    // summary is the badge shape at the badge size and only its CONTENT says
+    // it stands for several devices). It shipped as a circle once and read as
+    // a foreign object among the squircle badges it replaces and the rounded
+    // room chip it escalates into — three different corner languages on one
+    // map.
     container.thickness = 0;
-    container.background = CLUSTER_BG_COLOR;
-    container.shadowColor = "rgba(0,0,0,0.4)";
-    container.shadowBlur = 6;
-    container.shadowOffsetY = 2;
+    container.background = "";
     container.isPointerBlocker = false; // taps resolve via pickEntityGroupAt
 
     // The count IS the content — no icon. A group covers several categories,
@@ -4849,7 +5055,7 @@ export class EntityVisuals {
     // are not created here.
     const c: EntityGroupControls = {
       container, countText, node, entityIds: [], room: "",
-      chips: [], zones: [], gridN: 0,
+      cards: [], chips: [], zones: [], gridN: 0,
     };
     this.entityGroups.set(key, c);
     return c;
@@ -4886,9 +5092,12 @@ export class EntityVisuals {
       // than guessing, and a LONG press always does (see SceneManager) — the
       // list stays reachable, so nothing this card can do is a dead end.
       let entityId: string | null = null;
-      // `gridN` is a CARD only. A count badge has no cells, so a tap on one
-      // resolves to no single device and opens the list — and so does a tap in
-      // the empty bottom-right cell of a three-member grid.
+      // `gridN` counts the CELLS across all of this summary's cards. Three
+      // taps resolve to no single device and fall through to the caller: a
+      // count badge (no cells at all), the empty bottom-right of a
+      // three-member grid, and the GAP between two cards of a split — which
+      // is host, not ink. SceneManager asks the badges next and opens the
+      // device list after that, so none of the three is a dead end.
       for (let k = 0; k < c.gridN && k < c.entityIds.length; k++) {
         if (c.zones[k].contains(px, py)) { entityId = c.entityIds[k]; break; }
       }

@@ -1,3 +1,32 @@
+## 2.267.0
+
+### Fixed — zooming right in on a room never decluttered it
+
+For a pile of co-located devices the solver accepts the highest-ranked one —
+still drawn, at its own anchor — and defers the rest, and the card for those
+losers is drawn at their centroid, which is the same world point. `fits` then
+compared `d = 0` against a requirement in fixed pixels, so the card was refused
+at *every* zoom rung and the room escalated to its chip. Multiplying ~0 by any
+zoom is still 0, so no amount of zooming could ever satisfy it.
+
+A summary now absorbs the drawn badges that lie inside its own ink, so nothing
+is left underneath one and every remaining refusal is a real distance that
+shrinks as you zoom in.
+
+### Added — a pile of five or six shows all of them
+
+Two cards side by side — a 2x2 plus a second holding the rest — rather than a
+bare `5`. Each cell still opens its own device. The group's control is now a
+transparent host and the cards are its children, so the split needs no
+displacement and stays one collision box. Seven and up is still a count, which
+after the fix above no longer costs its room a chip.
+
+### Fixed — a focused room could push a neighbour's group to its chip
+
+`fits` did not skip focused-room badges, though the solver's own contract says
+an exempt badge blocks nobody and the sibling test for focused groups already
+honoured it.
+
 ## 2.266.0
 
 ### Added — a group of three or four shows its devices instead of a count
