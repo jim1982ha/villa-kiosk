@@ -7,6 +7,7 @@
 
 import type { Category } from "@/types/scene.types";
 import { categorySurfaceRinged, type DeviceSurfaceState } from "@/config/EntityCategories";
+import { chipProportions } from "@/config/chipProportions";
 import { ICON_NODES, type IconPrimitive } from "./badgeIconNodes";
 
 // Rendered oversized relative to the badge's on-screen size (EntityVisuals'
@@ -14,7 +15,24 @@ import { ICON_NODES, type IconPrimitive } from "./badgeIconNodes";
 // the bird's-eye zoom scales the badge up.
 const CANVAS_PX = 128;
 const ICON_VIEWBOX = 24; // lucide's own viewBox is 0-24
-const ICON_FRACTION = 0.56; // icon size as a fraction of the badge
+/**
+ * Pictogram size as a fraction of the squircle — read from the SHARED chip
+ * token, not held here.
+ *
+ * `--chip-glyph / --chip-size` already answered this question for the bottom
+ * bar's `.summary-tile-icon`, and config/chipProportions was written to expose
+ * it to this side. It exposed `glyph` from the start and nothing ever consumed
+ * it: the baked badge kept a literal 0.56 while the DOM chip drew 24/46 =
+ * 0.52, so the same object rendered at two different ratios depending on which
+ * renderer drew it. One token now, and raising it raises both together.
+ *
+ * Resolved per bake rather than at module load, like the rest of
+ * chipProportions: a theme switch re-reads the same custom properties and the
+ * cache key includes the theme, so every affected image is re-baked anyway.
+ */
+function iconFraction(): number {
+  return chipProportions().glyph;
+}
 // Stroke in lucide VIEWBOX units — i.e. PROPORTIONAL to the icon, exactly like
 // the real lucide components the top bar renders. 1.5 matches the app-wide
 // icon standard (EntityCategories' CATEGORY_ICONS, the top bar, chips — see
@@ -195,7 +213,7 @@ export function badgeImageDataUrl(
       ctx.restore();
     }
 
-    const iconScale = (size / ICON_VIEWBOX) * ICON_FRACTION;
+    const iconScale = (size / ICON_VIEWBOX) * iconFraction();
     const iconPx = ICON_VIEWBOX * iconScale;
     const offset = (CANVAS_PX - iconPx) / 2; // centred in the canvas = in the squircle
     drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset, surface.glyph);

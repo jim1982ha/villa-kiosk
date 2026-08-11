@@ -1,3 +1,77 @@
+## 2.253.0
+
+### Fixed — the card badge sat six units above its own anchor
+
+Reported as the icon looking high in the badge, with visibly more room under
+the art than over it. The contents were centred; the BOX was not.
+
+In card mode the container held exactly one child — the card — and was still
+34 units tall against a 28-unit card. That 34 is a leftover of the classic
+layout, where the container genuinely does stack a badge, a gap and a value
+pill; the card style puts its value inside the card and has nothing to be
+taller than it for. A vertical StackPanel top-aligns its children, so all six
+units of the difference sat BELOW the art, and the container's bottom edge is
+what lands on the anchor (`linkOffsetY = -h/2` cancels Babylon's own
+`-height/2`), so the card floated six units clear of the point it is supposed
+to sit on. A box with all of its slack at the bottom is exactly what "the icon
+is too high, look at the space above and below" looks like.
+
+It was also breaking the file's oldest rule. `labelBoxes` needed a hand-tuned
+`- 4` to approximate the gap and still put the collision box seven units from
+where the card actually drew — a layout decision made about a badge in a
+different place from the one on screen. With one height there is nothing to
+keep in step: the card IS the container, its centre is half a card above the
+anchor, and the magic constant is gone.
+
+### Fixed — the badge's drop shadow was a fixed skirt of dark under the card
+
+The second half of the same symptom, and the reason centring the contents
+could never have answered it. `shadowBlur`/`shadowOffset` are applied in DEVICE
+pixels and do not ride the canvas transform, so the card's 2px downward offset
+was a constant band of extra dark below the badge at every zoom — worst in a
+close crop, which is how it was reported. On a dark badge over a bright floor
+that band reads as part of the badge, making the card look taller at the bottom
+and its contents look high.
+
+The offset is now zero. A directional drop shadow is a DOM idiom borrowed from
+a surface with a light source; a badge floating over a 3D villa does not have
+one, and an even halo cannot bias where the eye puts the centre. The blur
+stays — it is what keeps a pale badge legible against a bright wall.
+
+### Changed — one number decides the pictogram's size, and it went up
+
+`--chip-glyph` was 24px against a 46px chip (52%) and the baked map badge held
+a separate literal `ICON_FRACTION = 0.56`. The same object — a category-
+coloured squircle with a pictogram in it — was drawn at two different ratios
+depending on which renderer drew it, and `config/chipProportions` had exposed
+`glyph` for exactly this purpose since it was written without anything ever
+consuming it.
+
+`badgeIcons` reads it now, and the token is 28px (61%). The pictogram had
+looked small ever since the doubled ring came off in 2.252.0, which left
+visibly more room inside the squircle than the glyph was using. The chip's own
+size is unchanged in both renderers — only what sits inside it grew. If it
+wants further adjustment it is one number in `styles.css`, and both renderers
+follow.
+
+### Changed — the icon area's height is stated once
+
+`row.height` and `valueWrap.height` were each computed as
+`cardHeightPx - 2 * ringThicknessPx`: two derivations of one quantity that
+happened to agree, and that stopped describing the drawn card at all in
+2.252.0, when the ring became 0px, 1px or `ringThicknessPx` depending on state.
+Both now take `glyphPx` — the glyph is what the box exists to hold, so the
+glyph is what sizes it.
+
+The old expression survives as `cardMaxInnerH`, the card's WORST-CASE inner box
+(Babylon insets a Rectangle's children by its border, and that border is
+heaviest when the device is active), and `glyphPx` is CLAMPED to it rather than
+merely documented as fitting. `cardIconFraction` is a design decision and
+`ringThicknessPx` is a drawing constraint; they are tuned independently, so a
+heavier ring or a more generous fraction would otherwise clip the icon in the
+active state only — the state nobody screenshots, because the badge looks fine
+at rest.
+
 ## 2.252.0
 
 ### Fixed — every card badge was drawing its ring twice

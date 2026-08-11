@@ -170,7 +170,14 @@
      how round the corners are — already had an answer here. Change them here
      and both surfaces follow. */
   --chip-size: 46px;    /* the chip itself */
-  --chip-glyph: 24px;   /* the glyph inside it — 52% */
+  /* 61% of the chip. Both renderers read this now (config/chipProportions →
+     babylon/badgeIcons' iconFraction), so it is the ONE place the pictogram's
+     size is decided — the baked map badge held a separate literal 0.56 for a
+     long time while this said 0.52, and the same object drew at two ratios.
+     Raised from 24px because the map badge's glyph read as too small once the
+     doubled ring came off in 2.252.0 and there was visibly more room in the
+     squircle than the pictogram was using. */
+  --chip-glyph: 28px;
   --chip-gap: 13px;     /* chip → its label/value — 28% */
   --chip-radius: 13px;  /* corner rounding — 28% */
   /* Every top-bar chip/pill (.hud-brand, .hud-group) shares this height so the

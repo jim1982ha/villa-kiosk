@@ -2849,7 +2849,26 @@ export class EntityVisuals {
       // fixed-height panel so the badge never shifts when the pill shows/hides.
       const card = this.config.badgeStyle === "card";
       const m = this.metrics;
-      const labelH = card ? m.cardLabelHeightPx : m.labelHeightPx;
+      // ── THE CONTAINER IS THE CARD (2.253.0) ──────────────────────────
+      // In card mode the value lives INSIDE the card, so the container holds
+      // exactly one child and has nothing to be taller than it for. It was
+      // 34 against a 28-tall card — a leftover of the classic layout, where
+      // the container really does stack a badge, a gap and a pill.
+      //
+      // Those 6 units were not harmless. A vertical StackPanel top-aligns its
+      // children, so all of the slack sat BELOW the card; and the container's
+      // bottom edge is what lands on the anchor (linkOffsetY = -h/2 cancels
+      // Babylon's own -height/2, see labelBaseOffsetY), so the card floated
+      // six units clear of the point it is supposed to sit on. Reported as
+      // the icon looking high in the badge, with visibly more room under the
+      // art than over it — which is exactly what a box with all its slack at
+      // the bottom looks like.
+      //
+      // It also put labelBoxes out of step with the renderer: its `cy` needed
+      // a hand-tuned `- 4` to approximate the offset, and still landed 7 units
+      // from where the card actually drew. Layout geometry may never differ
+      // from render geometry; with one height there is nothing to keep in step.
+      const labelH = card ? m.cardHeightPx : m.labelHeightPx;
       // ── The card's INNER height, which is not its height ─────────────────
       // Babylon's Rectangle insets its children by its border on all four
       // sides (rectangle.js: `_measureForChildren.height -= 2 * thickness`),
@@ -2867,7 +2886,14 @@ export class EntityVisuals {
       // would resize the glyph every time a device turned on. Same rule the
       // pill-capable collision box already follows — measure what it can be,
       // not what it happens to be.
-      const cardInnerH = m.cardHeightPx - 2 * m.ringThicknessPx;
+      // The card's WORST-CASE inner box: Babylon's Rectangle insets its
+      // children by its border, and that border is at its heaviest
+      // (ringThicknessPx) whenever the device is active or alerting. Sizing
+      // the icon area to anything larger would clip it in exactly those
+      // states. Kept as the CEILING on the glyph rather than as the icon
+      // area's height — see glyphPx, which is the one number both the row
+      // and the value box are built from now.
+      const cardMaxInnerH = m.cardHeightPx - 2 * m.ringThicknessPx;
       // Sized off the CARD, and DELIBERATELY smaller than its inner box.
       //
       // Two mistakes are encoded here, both reported. Tying the icon to
@@ -2884,8 +2910,14 @@ export class EntityVisuals {
       // minus its ring; the glyph drawn inside it is that fraction of the
       // chip, exactly as `.summary-tile-icon svg` is of `.summary-tile-icon`.
       const chip = chipProportions();
+      // CLAMPED to the worst-case inner box rather than merely documented as
+      // fitting it: cardIconFraction is a design decision and ringThicknessPx
+      // is a drawing constraint, and the two are tuned independently. A future
+      // heavier ring, or a more generous fraction, would otherwise clip the
+      // icon in the active state only — the state nobody screenshots, because
+      // the badge looks fine at rest.
       const glyphPx = card
-        ? Math.round(m.cardHeightPx * m.cardIconFraction)
+        ? Math.min(Math.round(m.cardHeightPx * m.cardIconFraction), cardMaxInnerH)
         : m.badgeDiameterPx;
       // Half the card's leftover height: the same clear space on all four
       // sides of the chip, and it makes a bare-icon card square (see below).
@@ -2927,7 +2959,18 @@ export class EntityVisuals {
         : "transparent";
       badge.shadowColor = "rgba(0,0,0,0.55)";
       badge.shadowBlur = 6;
-      badge.shadowOffsetY = 2;
+      // ── SYMMETRIC. A canvas shadow does NOT ride the CTM ────────────────
+      // shadowBlur/shadowOffset are applied in device pixels regardless of the
+      // container's scale (see CLAUDE.md), so a 2px downward offset is a fixed
+      // skirt of extra dark under the card at every zoom. On a dark badge over
+      // a bright floor that skirt reads as part of the badge, which makes the
+      // card look taller at the bottom than the top and its contents look
+      // high — an optical offset no amount of centring the CONTENTS can
+      // answer, because the contents were centred. A drop shadow with a
+      // direction is a DOM idiom borrowed from a surface that has a light
+      // source; a badge floating over a 3D villa does not, so the halo is
+      // even.
+      badge.shadowOffsetY = 0;
       // Tap/long-press handling is NOT wired here — see pickBadgeAt()'s
       // docstring for why. The badge is a purely visual control now.
       if (card) {
@@ -2978,7 +3021,14 @@ export class EntityVisuals {
       const row = card ? new StackPanel(`lbl_row_${entityId}`) : null;
       if (row) {
         row.isVertical = false;
-        row.height = `${cardInnerH}px`;
+        // ONE height for everything inside the card, and it is the glyph's
+        // own size. It used to be `cardHeightPx - 2 * ringThicknessPx`
+        // computed separately here and again for the value box — two
+        // derivations of one quantity that happened to agree, and that stopped
+        // describing the drawn card at all in 2.252.0, when the ring became
+        // 0px, 1px or ringThicknessPx depending on state. The glyph is what
+        // this box exists to hold, so the glyph is what sizes it.
+        row.height = `${glyphPx}px`;
         row.adaptWidthToChildren = true;
         badge.addControl(row);
       }
@@ -3019,7 +3069,7 @@ export class EntityVisuals {
       // it was touching the stadium's rounded ends.
       valueWrap.descendantsOnlyPadding = true;
       if (card) {
-        valueWrap.height = `${cardInnerH}px`;
+        valueWrap.height = `${glyphPx}px`;
         valueWrap.background = "transparent";
         // The icon-to-text gap, as a fraction of the CHIP rather than a flat
         // constant — the bottom bar's tiles run a 46px chip with a 13px gap,
@@ -3684,7 +3734,7 @@ export class EntityVisuals {
    */
   private labelBaseOffsetY(): number {
     const card = this.config.badgeStyle === "card";
-    const h = card ? this.metrics.cardLabelHeightPx : this.metrics.labelHeightPx;
+    const h = card ? this.metrics.cardHeightPx : this.metrics.labelHeightPx;
     return -(h / 2) * this.effectiveScale();
   }
 
@@ -3996,7 +4046,10 @@ export class EntityVisuals {
         const cardW = m.cardPadLeftPx + m.cardHeightPx + valW;
         b.halfW = (cardW / 2) * scale;
         b.halfH = (m.cardHeightPx / 2 + 1) * scale;
-        b.cy = -(m.cardLabelHeightPx / 2 + m.cardHeightPx / 2 - 4) * scale;
+        // The card IS the container now, so its centre is the container's
+        // centre: exactly half a card above the anchor. No magic constant to
+        // approximate a gap that no longer exists.
+        b.cy = -(m.cardHeightPx / 2) * scale;
         continue;
       }
       const hasPill = s.lbl.valueWrap.isVisible;

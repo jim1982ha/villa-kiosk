@@ -60,7 +60,6 @@ export interface BadgeMetrics {
 
   // ── Card style (config.badgeStyle === "card") ────────────────────────────
   cardHeightPx: number;
-  cardLabelHeightPx: number;
   cardPadLeftPx: number;
   cardValueFontPx: number;
 
@@ -186,7 +185,6 @@ const COARSE: BadgeMetrics = {
   // style's), so this hugs the art instead of padding a second squircle
   // inside it: 28 = 22px of icon + the 3px ring each side.
   cardHeightPx: 28,
-  cardLabelHeightPx: 34,
   cardPadLeftPx: 4,
   cardValueFontPx: 13,
 
@@ -242,7 +240,6 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
     pillValueFontPx: Math.max(MIN_VALUE_FONT_PX, px(base.pillValueFontPx)),
 
     cardHeightPx: px(base.cardHeightPx),
-    cardLabelHeightPx: px(base.cardLabelHeightPx),
     cardPadLeftPx: px(base.cardPadLeftPx),
     cardValueFontPx: Math.max(MIN_VALUE_FONT_PX, px(base.cardValueFontPx)),
 
