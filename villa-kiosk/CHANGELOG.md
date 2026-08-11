@@ -1,3 +1,27 @@
+## 2.269.0
+
+### Fixed — badges at different heights were drawn on top of each other
+
+Clearance is measured in world units and compared against a size in pixels, but
+a metre of *height* is drawn as `sin(tilt)` metres of screen — nothing at all
+looking straight down. Two summaries, one at floor level and one at the ceiling
+above it, were therefore credited with a storey of separation they do not have
+on the glass. Vertical distance is now foreshortened by the camera's tilt,
+quantised into steps like the zoom already is.
+
+### Fixed — tapping a room could still show a summary reading `11`
+
+Its overlapping badges were grouped by *transitive* reach — A touches B, B
+touches C — so a chain across a room became one set whose members mostly did
+not overlap at all. A focused room now groups only badges that all overlap each
+other, capped at what a card can draw, so it can never show a count.
+
+### Changed — one message per upload
+
+Uploading a GLB also writes the room data lifted out of it, and reporting that
+second write made it look as though the model had been ignored in favour of a
+leftover `.rooms.json`. One operation now reports one outcome.
+
 ## 2.268.0
 
 ### Fixed — a summary showing a count drew an empty squircle

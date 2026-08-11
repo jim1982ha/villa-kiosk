@@ -38,7 +38,14 @@
 
 /** One badge offered to the solver. */
 export interface PlacementItem {
-  /** World-space anchor. THE input — see the header. */
+  /** World-space anchor. THE input — see the header.
+   *
+   *  `wy` arrives FORESHORTENED by the view's tilt (EntityVisuals.placementItems
+   *  scales it by `verticalScale()`), because everything measured against it is
+   *  a distance on the glass and a metre of height is not drawn as a metre.
+   *  Nothing in this file needs to know that: it is one multiplication at the
+   *  boundary, and `conflicts`, the spatial hash and the pull-back all inherit
+   *  it. Do NOT use these coordinates to position anything in the scene. */
   wx: number;
   wy: number;
   wz: number;
@@ -191,9 +198,14 @@ export function conflicts(
   const dx = b.wx - a.wx;
   const dy = b.wy - a.wy;
   const dz = b.wz - a.wz;
-  // HEIGHT COUNTS: a ceiling fan and the lamp beneath it share a ground
-  // position but are drawn metres apart, so a ground-plane-only test called
-  // them the same point and grouped two badges that never overlapped.
+  // HEIGHT COUNTS — AS MUCH AS THE VIEW LETS IT. A ceiling fan and the lamp
+  // beneath it share a ground position, so a ground-plane-only test called
+  // them the same point and grouped two badges that were drawn metres apart.
+  // But full 3D distance is the opposite error: looking straight down, that
+  // height is drawn as nothing at all and the two ARE the same point. `wy`
+  // arrives already scaled by the view's tilt (see PlacementItem), so this
+  // measures the separation on the glass at whatever angle the villa is
+  // currently being looked at, and both readings fall out of one expression.
   const d2 = dx * dx + dy * dy + dz * dz;
   const need = Math.max(a.reach + b.reach + gap, minSeparation);
   return d2 < need * need;

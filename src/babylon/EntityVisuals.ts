@@ -426,6 +426,30 @@ const BADGE_PLACEMENT = "priority" as "priority" | "legacy";
  *  single clean change, and crossing back undoes it exactly. */
 const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
 /**
+ * Steps the VERTICAL FORESHORTENING is quantised into, for exactly the reason
+ * the zoom above is quantised: so a slow drag of the tilt cannot sit on a
+ * threshold and chatter.
+ *
+ * ── What this factor is, and why it is not "the camera creeping back in" ───
+ * The clearance test converts drawn pixels into world units and then measures
+ * world distance — see worldClearance. That conversion is exact for a
+ * HORIZONTAL offset and wrong for a VERTICAL one: a metre of height is drawn
+ * as `sin(tilt)` metres of screen, and looking straight down it is drawn as
+ * nothing at all. The test was therefore crediting a ceiling fixture and the
+ * floor socket beneath it with 2.5 m of separation they do not have on the
+ * glass, which is how two summaries came to be drawn overlapping while the
+ * test that exists to forbid exactly that called them clear.
+ *
+ * So this is not a new dependency on the camera; it COMPLETES the one already
+ * there. pxPerWorld is a camera quantity too, and it is admitted for precisely
+ * this reason — pixels are what "too close to read" means. Pan and orbit stay
+ * out: this factor depends only on how far the camera is tilted, never on
+ * where it is or which way it faces.
+ */
+const VERTICAL_FORESHORTEN_STEPS = 8;
+/** Reused, because getDirectionToRef takes the local axis by reference. */
+const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
+/**
  * How much of its own width a badge ICON may overlap a neighbour before the
  * two count as piled together.
  *
@@ -757,6 +781,8 @@ export class EntityVisuals {
   private boxes: { halfW: number; halfH: number; cy: number }[] = [];
   /** Scratch for Vector3.ProjectToRef — avoids a Vector3 per badge per frame. */
   private projTmp = new Vector3();
+  /** Scratch for verticalScale()'s camera forward direction. */
+  private camForward = new Vector3();
 
   /** Something that can change WHERE or WHETHER a badge draws has happened —
    *  recompute the layout on the next frame. Cheap and deliberately generous:
@@ -2294,8 +2320,14 @@ export class EntityVisuals {
     const n = members.length;
     // Solver input, built once and re-reached per rung. Anchor positions do
     // not change with zoom; only `reach` does.
+    // `wy` foreshortened exactly as placementItems does it, because markContacts
+    // below is the SAME test the renderer will run — a rung that predicted a
+    // clean shot under different geometry from the one that draws it is the bug
+    // this whole solver was written to avoid. `fromCentre` above stays in real
+    // world units: framing a room is a 3D question, not a screen-overlap one.
+    const vScale = this.verticalScale();
     const items: PlacementItem[] = members.map((mm) => ({
-      wx: mm.wx, wy: mm.wy, wz: mm.wz,
+      wx: mm.wx, wy: mm.wy * vScale, wz: mm.wz,
       // rank/sortKey/room are unused by markContacts (it is a symmetric
       // contact sweep, not the ranked solve) — only the geometry matters here.
       reach: 0, rank: 0, sortKey: "", room: "", exempt: false,
@@ -3845,9 +3877,56 @@ export class EntityVisuals {
    * change by moving. Converting once, here, is what keeps pan, orbit and tilt
    * out of the placement decision entirely.
    */
+  /**
+   * How much of a world-space VERTICAL offset the current view actually draws,
+   * quantised — 0 looking straight down, 1 looking horizontally.
+   *
+   * Derived from the camera's forward direction rather than from any one
+   * camera's own angle property, so it is the same rule for the orbit camera
+   * and the walk camera: a world "up" of one unit is drawn `sin(theta)` long,
+   * where theta is the angle between the view direction and the vertical, and
+   * `sin(theta) = sqrt(1 - forward.y^2)` for a unit forward.
+   *
+   * See VERTICAL_FORESHORTEN_STEPS for why reading the tilt is legitimate here
+   * when reading the pan or the orbit is not.
+   */
+  private verticalScale(): number {
+    const cam = this.scene.activeCamera;
+    if (!cam) return 1;
+    cam.getDirectionToRef(CAMERA_LOCAL_FORWARD, this.camForward);
+    const f = this.camForward;
+    const len = Math.hypot(f.x, f.y, f.z);
+    if (!(len > 0)) return 1;
+    const fy = Math.min(1, Math.abs(f.y) / len);
+    const s = Math.sqrt(Math.max(0, 1 - fy * fy));
+    const q = VERTICAL_FORESHORTEN_STEPS;
+    return Math.round(s * q) / q;
+  }
+
+  /**
+   * The distance between two world points AS THE VIEW DRAWS IT: the vertical
+   * component foreshortened by `verticalScale`, the horizontal untouched.
+   *
+   * THE rule, and it is applied in exactly two places. Here, for the
+   * comparisons EntityVisuals makes itself (a summary against a badge, a
+   * summary against another summary, the absorb sweep); and in
+   * `placementItems`, which pre-scales `PlacementItem.wy` so that every
+   * distance the solver computes — `conflicts`, the spatial hash, the
+   * lone-deferral pull-back — inherits it without a single call site of its own
+   * having to remember. Same factor, one meaning: "how far apart are these two
+   * on the glass".
+   */
+  private drawnDistance(
+    ax: number, ay: number, az: number,
+    bx: number, by: number, bz: number,
+    vScale: number,
+  ): number {
+    return Math.hypot(ax - bx, (ay - by) * vScale, az - bz);
+  }
+
   private worldClearance(
     shown: ShownLabel[],
-  ): { pxPerWorld: number; gap: number; minSep: number; allow: number } | null {
+  ): { pxPerWorld: number; gap: number; minSep: number; allow: number; vScale: number } | null {
     const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
     if (!(pxPerWorld > 0)) return null;
     const scale = this.effectiveScale();
@@ -3869,6 +3948,7 @@ export class EntityVisuals {
       gap: (this.metrics.minGapPx * scale) / pxPerWorld,
       minSep: (this.metrics.minCentrePitchPx * this.cssToGui() * shrink) / pxPerWorld,
       allow: 1 - GROUP_OVERLAP_ALLOW_WIDTHS,
+      vScale: this.verticalScale(),
     };
   }
 
@@ -3879,11 +3959,16 @@ export class EntityVisuals {
    * the whole subsystem turns on. It comes from labelBoxes, which is also what
    * the renderer's geometry comes from, so a layout decision cannot be made
    * about a badge of a different size from the one on screen.
+   *
+   * `wy` is FORESHORTENED here, once, and every distance the solver goes on to
+   * compute inherits it — see drawnDistance. `reach` is a radius on the glass
+   * and is isotropic, so it can only be compared against a distance that is
+   * also on the glass.
    */
   private placementItems(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-    clearance: { pxPerWorld: number; allow: number },
+    clearance: { pxPerWorld: number; allow: number; vScale: number },
   ): PlacementItem[] {
     const pool = this.placeItems;
     const focus = this.focusedRoom;
@@ -3894,7 +3979,7 @@ export class EntityVisuals {
         it = { wx: 0, wy: 0, wz: 0, reach: 0, rank: 0, sortKey: "", room: "", exempt: false };
         pool[i] = it;
       }
-      it.wx = s.wx; it.wy = s.wy; it.wz = s.wz;
+      it.wx = s.wx; it.wy = s.wy * clearance.vScale; it.wz = s.wz;
       it.reach = (boxes[i].halfW * clearance.allow) / clearance.pxPerWorld;
       it.rank = badgeRank(s.lbl.type, s.lbl.category);
       it.sortKey = s.id;
@@ -3929,7 +4014,7 @@ export class EntityVisuals {
    */
   private logPlacement(
     shown: ShownLabel[],
-    clearance: { pxPerWorld: number; gap: number; minSep: number } | null,
+    clearance: { pxPerWorld: number; gap: number; minSep: number; vScale: number } | null,
     stats: PlacementStats | null,
     placed: PendingEntityGroup[],
   ): void {
@@ -3967,7 +4052,7 @@ export class EntityVisuals {
     const line =
       `place rung=${clearance.pxPerWorld.toFixed(3)} icon=${this.iconUserScale.toFixed(2)}x`
       + ` zoom=${this.iconZoomScale.toFixed(2)} gap=${clearance.gap.toFixed(3)}`
-      + ` minSep=${clearance.minSep.toFixed(3)}`
+      + ` minSep=${clearance.minSep.toFixed(3)} vScale=${clearance.vScale.toFixed(3)}`
       + ` | badges=${this.labels.size} eligible=${shown.length} behind=${behind} drawn=${drawn}`
       + ` | piles=${stats.piles} exempt=${stats.exempt} accepted=${stats.accepted}`
       + ` deferred=${stats.deferred} pulledBack=${stats.pulledBack}`
@@ -3998,7 +4083,7 @@ export class EntityVisuals {
   private assertPlacementInvariants(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-    clearance: { pxPerWorld: number; gap: number; minSep: number; allow: number },
+    clearance: { pxPerWorld: number; gap: number; minSep: number; allow: number; vScale: number },
     /** The summaries that SURVIVED placement — not the ones the solver asked
      *  for. A dropped one still leaves its members marked as covered. */
     groups: readonly PendingEntityGroup[],
@@ -4069,7 +4154,8 @@ export class EntityVisuals {
       const inscribed = (Math.min(lay.width, lay.height) / 2) * scale * clearance.allow;
       for (const s2 of shown) {
         if (!s2.lbl.container.isVisible) continue;
-        const d = Math.hypot(g.wx - s2.wx, g.wy - s2.wy, g.wz - s2.wz) * pxPerWorld;
+        const d = this.drawnDistance(
+          g.wx, g.wy, g.wz, s2.wx, s2.wy, s2.wz, clearance.vScale) * pxPerWorld;
         if (d < inscribed) buried++;
       }
     }
@@ -4266,6 +4352,12 @@ export class EntityVisuals {
     }
     const gapPx = this.metrics.minGapPx * scale;
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
+    // The same foreshortening the solver's items already carry — a summary is
+    // compared against badges and against other summaries, and both of those
+    // comparisons are about what overlaps ON SCREEN. Without it a card at floor
+    // level and a card at ceiling level, at the same plan position, were
+    // credited with the whole storey height and drawn on top of each other.
+    const vScale = this.verticalScale();
     // The larger of the two half-extents, because a neighbour can lie in any
     // direction and this is a radial test rather than a box overlap.
     const halfOf = (i: number) => Math.max(boxes[i].halfW, boxes[i].halfH);
@@ -4380,7 +4472,8 @@ export class EntityVisuals {
         // focus renegotiating the rest of the map, which is exactly what the
         // exemption exists to prevent.
         if (focus !== null && roomKey(this.roomOf(shown[j].id)) === focus) continue;
-        const d = Math.hypot(g.wx - shown[j].wx, g.wy - shown[j].wy, g.wz - shown[j].wz) * pxPerWorld;
+        const d = this.drawnDistance(
+          g.wx, g.wy, g.wz, shown[j].wx, shown[j].wy, shown[j].wz, vScale) * pxPerWorld;
         if (d < vsBadge + halfOf(j) * allow + gapPx) return false;
       }
       for (const o of others) {
@@ -4389,7 +4482,7 @@ export class EntityVisuals {
         // not (see PlacementItem.exempt). The focus is a deliberate, temporary
         // state and it does not get to renegotiate the rest of the map.
         if (o.focused) continue;
-        const d = Math.hypot(g.wx - o.wx, g.wy - o.wy, g.wz - o.wz) * pxPerWorld;
+        const d = this.drawnDistance(g.wx, g.wy, g.wz, o.wx, o.wy, o.wz, vScale) * pxPerWorld;
         if (d < mineHalf + groupHalf(o) + gapPx) return false;
       }
       return true;
@@ -4460,8 +4553,8 @@ export class EntityVisuals {
           const rk = roomKey(this.roomOf(shown[j].id));
           if (this.roomClustered.get(rk)) continue;
           if (focus !== null && rk === focus) continue;
-          const d = Math.hypot(g.wx - shown[j].wx, g.wy - shown[j].wy, g.wz - shown[j].wz)
-            * pxPerWorld;
+          const d = this.drawnDistance(
+            g.wx, g.wy, g.wz, shown[j].wx, shown[j].wy, shown[j].wz, vScale) * pxPerWorld;
           if (d < reach) take.push(j);
         }
         if (take.length === 0) break;
@@ -4588,15 +4681,14 @@ export class EntityVisuals {
    * a tap target — so the room's devices are MORE visible and MORE reachable
    * than the stack was, which is the promise, kept properly.
    *
-   * ── Why it is a second solve rather than a change to the first ───────────
+   * ── Why it is a second pass rather than a change to the first ────────────
    * The exemption is a property of the MAIN pass and has to stay one: a
    * focused badge must not block anybody, and letting exempt items into that
-   * graph would make them blockers. So this re-runs the SAME shared solver on
-   * the focused room alone, with the exemption dropped so its badges compete
-   * with each other — the same predicate, the same greedy order, the same
-   * pull-back — and takes only the buckets of exactly two. Nothing about the
-   * main result changes, badgePlacement is untouched, and a pile of three or
-   * more in the focused room draws exactly as it does today.
+   * graph would make them blockers. So this runs over the focused room alone,
+   * with the exemption dropped so its badges are compared with each other, and
+   * with the SAME overlap predicate (`conflicts`) and the SAME canonical order
+   * the rest of the subsystem uses. Nothing about the main result changes and
+   * badgePlacement is untouched.
    */
   private pairFocusedRoom(
     shown: ShownLabel[],
@@ -4627,38 +4719,60 @@ export class EntityVisuals {
     sub.length = idx.length;
     if (idx.length < 2) return;
 
-    // ── Piles, from the SAME predicate every other tier uses ──────────────
-    // Only the components are wanted here, not an accept/defer verdict:
-    // inside the focused room every device is drawn no matter what, so the
-    // question is purely "which of these are on top of each other". Running
-    // the full solver would have answered a question this pass is not asking
-    // and brought its chip rule with it — a focused room whose badges all fell
-    // into one bucket would have chipped itself, which is the one thing the
-    // focus exists to prevent.
+    // ── MUTUAL overlap, not TRANSITIVE reachability ──────────────────────
+    // The predicate is the same one every other tier uses. What changed is how
+    // a set is built out of it.
+    //
+    // Union-find answers "is there a CHAIN of overlaps from A to B", and inside
+    // one room that is almost always yes: A touches B, B touches C, and eleven
+    // badges strung across a living room collapse into a single component
+    // whose members mostly do not overlap each other at all. Tapping the room
+    // then produced one summary reading `11` — the opposite of the promise the
+    // focus makes, and the third time this exact chain has bitten (2.261.0
+    // painted the same component as a card the width of the screen; capping
+    // the card turned it into this digit instead of fixing it).
+    //
+    // A group here is therefore a CLIQUE: every member overlaps every other
+    // member. That is the honest reading of "these cannot be drawn separately",
+    // and it is what makes the card's claim true — the devices it hides really
+    // were all on top of one another. A chain breaks into the several small
+    // groups it always was, and everything else stays a badge of its own.
+    //
+    // Greedy, in the canonical (rank, entity_id) order every other decision
+    // here uses, so the result depends on nothing but geometry and rank. Capped
+    // at what a card can DRAW, which is what guarantees a focused room can
+    // never show a count badge again: a group that cannot show its devices is
+    // not an answer to "show me this room's devices".
     //
     // One room's badges, so the plain O(n^2) sweep is cheaper than any index.
-    const parent = new Int32Array(sub.length);
-    for (let i = 0; i < sub.length; i++) parent[i] = i;
-    const root = (x: number): number => {
-      let r = x;
-      while (parent[r] !== r) { parent[r] = parent[parent[r]]; r = parent[r]; }
-      return r;
-    };
-    for (let i = 0; i < sub.length; i++) {
-      for (let j = i + 1; j < sub.length; j++) {
-        if (!conflicts(sub[i], sub[j], clearance.gap, clearance.minSep)) continue;
-        const ri = root(i), rj = root(j);
-        if (ri !== rj) parent[ri] = rj;
+    // `sub` is indexed locally; `sortCardMembers` speaks in `shown` indices.
+    // Going through it rather than repeating its comparator is the point — one
+    // definition of "the canonical order", shared with the card renderer.
+    const local = new Map<number, number>();
+    for (let k = 0; k < idx.length; k++) local.set(idx[k], k);
+    const order = this.sortCardMembers(shown, idx.slice())
+      .map((i) => local.get(i) as number);
+    const taken = new Uint8Array(sub.length);
+    const piles: number[][] = [];
+    for (const seed of order) {
+      if (taken[seed]) continue;
+      taken[seed] = 1;
+      const pile = [seed];
+      for (const cand of order) {
+        if (pile.length >= MAX_TOTAL_CHIPS) break;
+        if (taken[cand]) continue;
+        let all = true;
+        for (const m of pile) {
+          if (!conflicts(sub[cand], sub[m], clearance.gap, clearance.minSep)) { all = false; break; }
+        }
+        if (!all) continue;
+        taken[cand] = 1;
+        pile.push(cand);
       }
-    }
-    const piles = new Map<number, number[]>();
-    for (let i = 0; i < sub.length; i++) {
-      const r = root(i);
-      const list = piles.get(r);
-      if (list) list.push(i); else piles.set(r, [i]);
+      piles.push(pile);
     }
 
-    for (const pile of piles.values()) {
+    for (const pile of piles) {
       // ── ONE PILE, ONE CONTROL. THE SIZE DECIDES WHICH ─────────────────
       // A pile is a set of badges that are on top of each other, so it draws
       // as exactly one thing — its devices side by side (up to a 2x2 card), or
@@ -4685,10 +4799,15 @@ export class EntityVisuals {
       //   2.262.0  took only piles of exactly two, which left every pile of
       //            three or more stacked — reported, with three cameras and
       //            two lights drawn on top of each other.
+      //   2.267.0  capped the CARD instead of the pile, so the screen-wide card
+      //            became a summary reading `11` in a room with visible space
+      //            all round it — reported as "I expect to see the entities".
       //
-      // The whole pile, always; and the CARD is capped in badgeCard, so a pile
-      // past four becomes a count badge exactly one badge square. Bounded by
-      // construction rather than by a rule about which piles to look at.
+      // The whole clique, and the clique is built no larger than a card can
+      // draw (see above), so a focused room cannot produce a count badge at
+      // all. Bounded where the set is BUILT rather than where it is drawn:
+      // capping the drawing only ever turns "too many to show" into "showing
+      // none of them".
       if (pile.length < 2) continue;
       // The same cell order the main solve's cards use — one comparator, so
       // the two producers cannot drift.

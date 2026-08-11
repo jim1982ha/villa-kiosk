@@ -49,11 +49,24 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
     });
   };
 
-  const uploadCentral = async (file: File, kind: "glb" | "rooms", opts?: { reload?: boolean }) => {
+  /** Format one upload's outcome. Shared so the combined path below reports
+   *  the same numbers in the same words as a lone upload does. */
+  const uploadedText = (size: number, path: string, extra = "") => {
+    const mb = size / 1_000_000;
+    const amount = mb < 1 ? `${(size / 1000).toFixed(0)} KB` : `${mb.toFixed(1)} MB`;
+    return `Uploaded ${amount} → ${path}${extra}. Reloading…`;
+  };
+
+  const uploadCentral = async (
+    file: File, kind: "glb" | "rooms",
+    /** `announce: false` uploads silently, leaving the message to the caller —
+     *  see uploadGlbAndRooms, where a GLB upload internally becomes two. */
+    opts?: { reload?: boolean; announce?: boolean },
+  ) => {
     const okExt = kind === "glb" ? [".glb"] : [".json"];
     if (!okExt.some((e) => file.name.toLowerCase().endsWith(e))) {
       setUploadMsg({ text: `Please choose a ${okExt.join(" / ")} file.`, ok: false });
-      return;
+      return null;
     }
     setUploadBusy(kind);
     setUploadMsg(null);
@@ -70,15 +83,16 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
       clearAddonConfigCache();
       clearVersionedModelUrlCache();
       setAddonCfg(await fetchAddonConfig());
-      const mb = size / 1_000_000;
-      setUploadMsg({ text: `Uploaded ${mb < 1 ? `${(size / 1000).toFixed(0)} KB` : `${mb.toFixed(1)} MB`} → ${path}. Reloading…`, ok: true });
+      if (opts?.announce ?? true) setUploadMsg({ text: uploadedText(size, path), ok: true });
       // Skippable so a combined GLB+rooms upload (see uploadGlbAndRooms) only
       // reloads once, after the SECOND file lands — reloading after the
       // first would tear down the canvas mid-sequence.
       if (opts?.reload ?? true) setTimeout(() => onModelChanged(), 600);
+      return { path, size };
     } catch (err) {
       setUploadPct(null);
       setUploadMsg({ text: (err as Error).message, ok: false });
+      return null;
     } finally {
       setUploadBusy(null);
     }
@@ -129,8 +143,26 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
         );
       }
     }
-    if (glb) await uploadCentral(glb, "glb", { reload: !rooms });
-    if (rooms) await uploadCentral(rooms, "rooms", { reload: true });
+    // ── ONE OPERATION, ONE MESSAGE ──────────────────────────────────────
+    // Uploading a GLB is TWO writes: the model, and the room data lifted out of
+    // it. The second is not a step the user took, and reporting it as one read
+    // as the app having ignored the GLB and uploaded some leftover sidecar
+    // instead — "Uploaded 19 KB → villa.rooms.json" after choosing a 12 MB
+    // model. The sidecar itself is not leftover: it is how every OTHER client
+    // gets the room data at load (BabylonCanvas.fetchRoomsSync), which is why
+    // it is written rather than dropped. Only the announcement was wrong.
+    const glbResult = glb
+      ? await uploadCentral(glb, "glb", { reload: !rooms, announce: !rooms })
+      : null;
+    const roomsResult = rooms
+      ? await uploadCentral(rooms, "rooms", { reload: true, announce: !glb })
+      : null;
+    if (glb && glbResult && roomsResult) {
+      setUploadMsg({
+        text: uploadedText(glbResult.size, glbResult.path, " with its room data"),
+        ok: true,
+      });
+    }
   };
 
   return {
