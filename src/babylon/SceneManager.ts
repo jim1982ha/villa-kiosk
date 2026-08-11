@@ -2013,6 +2013,42 @@ export class SceneManager {
   }
 
   /**
+   * What this device was actually rendering, for a measurement to be read
+   * against.
+   *
+   * A probe row is meaningless on its own — 18ms means one thing at 4.3
+   * megapixels and another at 1.0, and "the iPhone is faster than the Mac" is
+   * not a finding until you know the iPhone had IBL off. These are the fields
+   * that make one run comparable with another, and they ride on the probe
+   * record so a single telemetry export is self-sufficient: no console, no
+   * screenshot, no asking which device it came from.
+   *
+   * The same quantities the `frames` record carries, deliberately — two
+   * measurements of one scene should not describe it differently.
+   */
+  renderContext(): Record<string, unknown> {
+    if (this.disposed) return {};
+    const render = this.deviceRenderConfig(this.config.render);
+    return {
+      mode: this.viewMode,
+      rw: this.engine.getRenderWidth(),
+      rh: this.engine.getRenderHeight(),
+      hw: Math.round(this.engine.getHardwareScalingLevel() * 100) / 100,
+      // THE field that separates "Apple GPU" (WebKit's own path) from ANGLE.
+      gpu: String(this.engine.getGlInfo()?.renderer ?? "").slice(0, 96),
+      activeMeshes: this.scene.getActiveMeshes().length,
+      meshes: this.scene.meshes.length,
+      materials: this.scene.materials.length,
+      lights: this.scene.lights.length,
+      litOn: this.scene.lights.reduce((n, l) => n + (l.isEnabled() ? 1 : 0), 0),
+      // Render tier — an iPhone runs with IBL off, which is exactly the kind
+      // of difference that turns a comparison into a wrong conclusion.
+      ibl: render.ibl,
+      ssao: render.ssao && !this.renderFx.isBaked(),
+    };
+  }
+
+  /**
    * Run the frame-cost A/B experiment (babylon/perfProbe.ts) and return its
    * rows. Owns the render-loop handover, which is why it lives here: the probe
    * calls `scene.render()` itself, so this loop must be stopped for the whole

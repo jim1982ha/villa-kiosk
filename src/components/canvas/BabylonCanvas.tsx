@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { auditDrawCalls, countOrphanMaterials } from "@/babylon/sceneAudit";
-import { formatProbe } from "@/babylon/perfProbe";
+import { formatProbe, registerProbeRunner } from "@/babylon/perfProbe";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { filterConfigForRole, hasCapability } from "@/auth/permissions";
@@ -888,18 +888,39 @@ export default function BabylonCanvas({
   // to — is readable afterwards from the Settings panel rather than needing a
   // console at the moment it ran.
   useEffect(() => {
-    if (!debugFlagEnabled()) return;
-    const w = window as Window & { __villaPerfProbe?: () => Promise<string> };
-    w.__villaPerfProbe = async () => {
+    const run = async () => {
       const m = managerRef.current;
-      if (!m) return "no scene yet";
+      if (!m) return [];
+      // Read BEFORE the probe runs — it hides meshes and changes the hardware
+      // scaling as part of the experiment, so afterwards these would describe
+      // the last condition rather than the villa.
+      const context = m.renderContext();
       const rows = await m.runRenderProbe();
-      reportTelemetry("probe", { rows });
-      const text = formatProbe(rows);
-      console.log(text);
-      return text;
+      // Reported whichever way it was started, WITH the render context. A run
+      // on the wall tablet is only readable at all because of this, and the
+      // context is what lets one telemetry export stand on its own: the event
+      // already carries the User-Agent, viewport, DPR and PWA flag from
+      // report(), and this adds what was being drawn.
+      reportTelemetry("probe", { ...context, rows });
+      return rows;
     };
-    return () => { delete w.__villaPerfProbe; };
+    // The button in the owner-only telemetry panel — the ONLY route on a
+    // device with no console (see perfProbe's registry note).
+    registerProbeRunner(run);
+
+    // The console form, for a machine that has one.
+    const w = window as Window & { __villaPerfProbe?: () => Promise<string> };
+    if (debugFlagEnabled()) {
+      w.__villaPerfProbe = async () => {
+        const text = formatProbe(await run());
+        console.log(text);
+        return text;
+      };
+    }
+    return () => {
+      registerProbeRunner(null);
+      delete w.__villaPerfProbe;
+    };
   }, []);
 
   // Pipe every state change into the scene (imperative — no React re-render of canvas).

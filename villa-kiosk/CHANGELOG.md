@@ -1,3 +1,19 @@
+## 2.278.0
+
+### Added — the frame-cost probe is a button now, not a console command
+
+An iPad and an iPhone have no console, and inside the Home Assistant companion
+app or an installed PWA there is no URL to add `?debug` to either — so on the
+two devices the whole performance investigation is actually about, the probe
+could not be run at all. It now sits in the owner-only Device telemetry panel
+next to "This device".
+
+Its telemetry record also carries what was being rendered — view mode, render
+resolution and scaling, GPU string, mesh/material/light counts and the render
+tier. A baseline of 18ms means nothing without the pixel count behind it, and
+"the iPhone beat the Mac" is not a finding until you know the iPhone had
+image-based lighting switched off. One telemetry export is now enough.
+
 ## 2.277.0
 
 ### Changed — the frame-cost probe now decomposes the part that matters

@@ -9,9 +9,10 @@
 // explain an iOS white-screen-after-app-switch.
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope } from "lucide-react";
+import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope, Activity } from "lucide-react";
 import { ingressPath } from "@/ha/ingress";
 import { buildReport, captureError } from "@/utils/diagnostics";
+import { runRegisteredProbe, probeAvailable, formatProbe } from "@/babylon/perfProbe";
 
 interface TelemetryEvent {
   kind: string;
@@ -167,7 +168,14 @@ function summarise(e: TelemetryEvent): string {
         .sort((a, b) => a.deltaMs - b.deltaMs)
         .map((r) => `${r.name} ${(-r.deltaMs).toFixed(1)}ms`)
         .join(" · ");
-      return `frame-cost probe — baseline ${base.renderMs.toFixed(1)}ms · costs: ${rest}`;
+      // The context matters as much as the numbers: a baseline is meaningless
+      // without the pixel count, and a comparison between devices is wrong
+      // without the render tier. See SceneManager.renderContext.
+      const mpx = typeof e.rw === "number" && typeof e.rh === "number"
+        ? ` · ${((e.rw * e.rh) / 1e6).toFixed(2)}Mpx@${e.hw ?? "?"}` : "";
+      const tier = [e.ibl ? "IBL" : null, e.ssao ? "SSAO" : null].filter(Boolean).join("+") || "no post";
+      return `frame-cost probe (${e.mode ?? "?"}${mpx} · ${tier} · ${e.gpu ?? "?"})`
+        + ` — baseline ${base.renderMs.toFixed(1)}ms · costs: ${rest}`;
     }
     case "drawcalls": {
       // The one comparison this record exists for. `dcProjected` is what the
@@ -295,6 +303,27 @@ export default function TelemetryPanel() {
     URL.revokeObjectURL(url);
   }, [asJson]);
 
+  // The probe writes its own telemetry record, so the result is recoverable
+  // from a dump afterwards; showing it here as well is what makes the run
+  // useful ON the device, without a console and without an export round trip.
+  const [probing, setProbing] = useState(false);
+  const [probeText, setProbeText] = useState<string | null>(null);
+  const runProbe = useCallback(async () => {
+    setProbing(true);
+    setProbeText(null);
+    try {
+      const rows = await runRegisteredProbe();
+      setProbeText(rows ? formatProbe(rows) : "No scene is loaded to measure.");
+    } catch (err) {
+      setProbeText(`Probe failed: ${(err as Error).message}`);
+    } finally {
+      // In a finally because the probe hands the render loop back in its own
+      // finally — a failed run must not leave the button disabled forever on a
+      // kiosk whose villa is now rendering perfectly well again.
+      setProbing(false);
+    }
+  }, []);
+
   return (
     <div>
       <p className="muted body-text" style={{ marginBottom: 12 }}>
@@ -329,7 +358,30 @@ export default function TelemetryPanel() {
         <button className="btn ghost" onClick={() => setSelfReport((r) => (r ? null : buildReport(captureError("MANUAL_DIAGNOSTICS", new Error("Requested from Settings"), "TelemetryPanel"))))}>
           <Stethoscope size={16} /> {selfReport ? "Hide this device" : "This device"}
         </button>
+        {/* THE ONLY WAY TO RUN THIS ON THE DEVICES THAT MATTER.
+            The frame-cost experiment also has a console form, and neither an
+            iPad nor an iPhone has a console — nor, inside the Home Assistant
+            companion app or an installed PWA, a URL that `?debug` can be added
+            to. A button is the only route left, and those are exactly the
+            devices whose frame cost the whole investigation is about. */}
+        <button
+          className="btn ghost"
+          onClick={() => void runProbe()}
+          disabled={probing || !probeAvailable()}
+          title="Re-times the frame with the badges, lights, image-based lighting and geometry removed one at a time. Takes about 15 seconds, during which the villa will look wrong."
+        >
+          <Activity size={16} /> {probing ? "Measuring…" : "Frame-cost probe"}
+        </button>
       </div>
+
+      {probeText && (
+        <div className="field">
+          <label className="entity-label">
+            Frame cost on this device — what each thing was costing
+          </label>
+          <pre className="diag-report">{probeText}</pre>
+        </div>
+      )}
 
       {selfReport && (
         <div className="field">

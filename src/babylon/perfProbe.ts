@@ -266,6 +266,40 @@ export async function runPerfProbe(
   return rows;
 }
 
+// ── Reaching the probe without a console ───────────────────────────────────
+// The devices that matter most cannot run `__villaPerfProbe()` at all. On an
+// iPad or iPhone there is no console, and inside the Home Assistant companion
+// app or an installed PWA the URL is fixed — so `?debug` cannot be added and
+// `localStorage.setItem` cannot be typed either. Every route to the flag needs
+// the very thing the platform does not have.
+//
+// So the probe is also reachable from a BUTTON, in the owner-only telemetry
+// panel, with no flag. It is a deliberate action behind an advanced screen
+// that already refuses non-owners, and its result goes to telemetry, which is
+// how a run on the wall tablet gets read at all.
+//
+// A registry rather than a prop: the panel lives inside a settings modal, many
+// levels away from the canvas, and threading a SceneManager down to it would
+// put a scene reference into components that have no business holding one.
+
+let activeRunner: (() => Promise<ProbeRow[]>) | null = null;
+
+/** Called by the canvas when a scene exists, and with null when it goes away.
+ *  Registering null is what stops the button running against a dead scene. */
+export function registerProbeRunner(fn: (() => Promise<ProbeRow[]>) | null): void {
+  activeRunner = fn;
+}
+
+/** Whether there is a live scene to probe — the button's enabled state. */
+export function probeAvailable(): boolean {
+  return activeRunner !== null;
+}
+
+/** Run whatever is registered. Null when there is no scene yet. */
+export async function runRegisteredProbe(): Promise<ProbeRow[] | null> {
+  return activeRunner ? activeRunner() : null;
+}
+
 /** Format the result the way it needs to be read: what each thing COST, which
  *  is the negative of the delta from removing it. */
 export function formatProbe(rows: ProbeRow[]): string {
