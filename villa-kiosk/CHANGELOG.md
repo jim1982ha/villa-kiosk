@@ -1,3 +1,50 @@
+## 2.260.0
+
+### Added — the focused room pairs up its own overlapping badges
+
+Tapping a room grants it an exemption: its badges are accepted unconditionally
+and are never counted as blockers, because "tap a room, see its devices" is a
+promise the layout is not allowed to renegotiate, and two devices at ONE point
+are separated by no zoom that exists. So the zoom solver frames the room and
+anything genuinely co-located inside it — a ceiling fan, its own light, the
+sensor clipped to the same mount — draws stacked.
+
+Stacked is where that promise quietly stops being kept. `badgeContaining`
+returns the TOPMOST control containing the point, so a badge completely covered
+by another cannot be tapped at all: the device is on screen and unreachable,
+which is a worse answer than the chip the exemption exists to avoid.
+
+A focused room's co-located pairs now draw as pair cards — both pictograms, in
+their own colours and their own live states, each with its own tap target. The
+room's devices end up MORE visible and MORE reachable than the stack was, which
+is the promise, kept properly rather than nominally.
+
+**It is a second solve, not a change to the first.** The exemption is a
+property of the main pass and has to stay one: a focused badge must not block
+anybody, and letting exempt items into that graph would make them blockers.
+So this re-runs the SAME shared solver on the focused room alone with the
+exemption dropped, so its badges compete with each other — same predicate, same
+greedy order, same pull-back — and takes only the buckets of exactly two.
+`badgePlacement.ts` is untouched, the main result is unchanged, and a pile of
+three or more inside the focused room draws exactly as it did.
+
+Three properties keep it from leaking into the rest of the map:
+
+* A focused pair is **seated unconditionally** and keeps its wide card. It
+  stands in for two badges the exemption was already drawing on top of each
+  other, so refusing it on clearance would restore the exact overlap it exists
+  to remove.
+* It **can never escalate a room to its chip**, at either end of the pass —
+  chipping the room the user just asked to see would break the only promise the
+  focus makes.
+* It **blocks nobody**, exactly as the badges it replaces did not. A focus is
+  deliberate and temporary; it does not get to renegotiate the rest of the map,
+  and when the camera moves and the focus lapses every one of these cards
+  disappears and the ordinary rules resume unchanged.
+
+The `?debug` placement line carries `focusPairs=N` while a room is focused, and
+nothing at all when none is.
+
 ## 2.259.0
 
 ### Changed — a group of two never draws a digit again

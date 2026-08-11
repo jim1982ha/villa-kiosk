@@ -636,6 +636,16 @@ interface PendingEntityGroup {
    *  the way to its room's chip — a pair card is an upgrade, and an upgrade
    *  that costs a room its badges when it does not fit is not one. */
   pair: boolean;
+  /**
+   * Made inside the FOCUSED room (see pairFocusedRoom), not by the main solve.
+   *
+   * It skips the clearance test and can never escalate a room to its chip:
+   * it stands in for two badges that were already being drawn on top of each
+   * other, so refusing it would put back the very overlap it exists to
+   * remove, and chipping the room the user just asked to see would break the
+   * one promise the focus makes.
+   */
+  focused: boolean;
 }
 
 /* The state ring's stroke lives in badgeMetrics (`ringThicknessPx`) — it is a
@@ -779,6 +789,8 @@ export class EntityVisuals {
    *  clearance test declining an upgrade, not the rule failing to apply. */
   private pairCandidates = 0;
   private pairUpgrades = 0;
+  /** Pair cards made inside the focused room (see pairFocusedRoom). */
+  private focusPairs = 0;
   private iconUserScale = 1;
   private iconZoomScale = 1;
   /** Every badge dimension, in CSS px, for the pointer currently driving this
@@ -788,6 +800,13 @@ export class EntityVisuals {
   /** The layout pass's own solver workspace. solveRoomZoomRadius keeps a
    *  SEPARATE one — see PlacementResult's warning about pooled returns. */
   private placeScratch: PlacementScratch = createPlacementScratch();
+  /** Its own, because it solves a SUBSET while the main result is still live —
+   *  see the pooling warning on PlacementResult. */
+  private focusScratch: PlacementScratch = createPlacementScratch();
+  private focusItems: PlacementItem[] = [];
+  /** shown-index per focusItems slot, pooled: this runs per frame while a room
+   *  is focused, and the steady state should allocate nothing. */
+  private focusIdx: number[] = [];
   private zoomScratch: PlacementScratch = createPlacementScratch();
   /** Grow-only pools for the per-pass placement input and its groups. */
   private placeItems: PlacementItem[] = [];
@@ -3689,6 +3708,7 @@ export class EntityVisuals {
     pending.length = 0;
     this.pairCandidates = 0;
     this.pairUpgrades = 0;
+    this.focusPairs = 0;
     let solved: PlacementStats | null = null;
     if (clearance) {
       const items = this.placementItems(shown, boxes, clearance);
@@ -3726,8 +3746,10 @@ export class EntityVisuals {
           // Provisional: a group of two ASKS for the pair card, and
           // placeEntityGroups is what grants or refuses it on clearance.
           pair: n === 2,
+          focused: false,
         });
       }
+      this.pairFocusedRoom(shown, items, clearance, pending);
     }
 
     // Placed only after every bucket is known: a group's clearance is measured
@@ -3924,6 +3946,7 @@ export class EntityVisuals {
       + ` deferred=${stats.deferred} pulledBack=${stats.pulledBack}`
       + ` | groups=${placed.length}/${stats.buckets} cross=${stats.crossRoom}`
       + ` pairs=${this.pairUpgrades}/${this.pairCandidates}`
+      + (this.focusPairs ? ` focusPairs=${this.focusPairs}` : "")
       + ` [${groups}] chips=${chips.length} [${chips.join(", ")}]`;
     if (line === this.lastPlaceLog) return;
     this.lastPlaceLog = line;
@@ -4214,6 +4237,10 @@ export class EntityVisuals {
       }
       for (const o of others) {
         if (o === g) continue;
+        // A focused pair blocks nobody, exactly as the badges it replaces did
+        // not (see PlacementItem.exempt). The focus is a deliberate, temporary
+        // state and it does not get to renegotiate the rest of the map.
+        if (o.focused) continue;
         const d = Math.hypot(g.wx - o.wx, g.wy - o.wy, g.wz - o.wz) * pxPerWorld;
         if (d < mineHalf + groupHalf(o) + gapPx) return false;
       }
@@ -4244,6 +4271,12 @@ export class EntityVisuals {
     // width DURING pass 1, which is the greed this restructure removes.
     const wantsPair: boolean[] = [];
     for (const g of pending) {
+      // A FOCUSED pair is seated unconditionally, and keeps its wide card.
+      // It stands in for two badges that the exemption was already drawing on
+      // top of each other, so a refusal would restore the exact overlap it
+      // exists to remove — and it can never escalate the focused room to its
+      // chip, which would break the one promise tapping a room makes.
+      if (g.focused) { placed.push(g); wantsPair.push(false); continue; }
       const wanted = g.pair;
       g.pair = false;
       if (!fits(g, placed)) {
@@ -4279,8 +4312,109 @@ export class EntityVisuals {
     // room regardless, so nothing ends up hidden with nothing in its place.
     pending.length = 0;
     for (const g of placed) {
-      if (g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
+      // Same exception, at the other end: the focused room is never chipped by
+      // its own pass, but another room's escalation must not take this one's
+      // card down with it either.
+      if (!g.focused && g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
       pending.push(g);
+    }
+  }
+
+  /**
+   * Pair up the FOCUSED room's own overlapping badges.
+   *
+   * ── The gap this closes ───────────────────────────────────────────────────
+   * Tapping a room grants it an exemption: its badges are accepted
+   * unconditionally and are never counted as blockers, because "tap a room,
+   * see its devices" is a promise the layout is not allowed to renegotiate,
+   * and two devices at ONE point are separated by no zoom that exists. So the
+   * zoom solver frames the room, and anything genuinely co-located inside it —
+   * a ceiling fan, its own light, the sensor clipped to the same mount — draws
+   * stacked.
+   *
+   * Stacked is where the promise quietly stops being kept. `badgeContaining`
+   * returns the TOPMOST control containing the point, so a badge completely
+   * covered by another cannot be tapped at all: the device is on screen and
+   * unreachable, which is a worse answer than the chip the exemption exists to
+   * avoid.
+   *
+   * A pair card fixes exactly that and nothing else. It shows both
+   * pictograms, in their own colours and their own live states, and gives each
+   * a tap target — so the room's devices are MORE visible and MORE reachable
+   * than the stack was, which is the promise, kept properly.
+   *
+   * ── Why it is a second solve rather than a change to the first ───────────
+   * The exemption is a property of the MAIN pass and has to stay one: a
+   * focused badge must not block anybody, and letting exempt items into that
+   * graph would make them blockers. So this re-runs the SAME shared solver on
+   * the focused room alone, with the exemption dropped so its badges compete
+   * with each other — the same predicate, the same greedy order, the same
+   * pull-back — and takes only the buckets of exactly two. Nothing about the
+   * main result changes, badgePlacement is untouched, and a pile of three or
+   * more in the focused room draws exactly as it does today.
+   */
+  private pairFocusedRoom(
+    shown: ShownLabel[],
+    items: readonly PlacementItem[],
+    clearance: { gap: number; minSep: number },
+    pending: PendingEntityGroup[],
+  ): void {
+    const focus = this.focusedRoom;
+    if (focus === null) return;
+    // Indices into `shown`, so a bucket's members map straight back.
+    const idx = this.focusIdx;
+    idx.length = 0;
+    const sub = this.focusItems;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].room !== focus) continue;
+      const src = items[i];
+      let it = sub[idx.length];
+      if (!it) {
+        it = { wx: 0, wy: 0, wz: 0, reach: 0, rank: 0, sortKey: "", room: "", exempt: false };
+        sub[idx.length] = it;
+      }
+      it.wx = src.wx; it.wy = src.wy; it.wz = src.wz;
+      it.reach = src.reach; it.rank = src.rank;
+      it.sortKey = src.sortKey; it.room = src.room;
+      // The whole point: inside the focused room they DO compete, so the
+      // solver can tell which of them are actually on top of each other.
+      it.exempt = false;
+      idx.push(i);
+    }
+    sub.length = idx.length;
+    if (idx.length < 2) return;
+
+    const result = solvePlacement(
+      sub, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.focusScratch,
+    );
+    for (let b = 0; b < result.bucketCount; b++) {
+      const bucket = result.buckets[b];
+      // Two only. A bucket of three or more would have to become a count, and
+      // a count inside the room you just asked to see is the thing the
+      // exemption exists to prevent — those stay drawn, as today.
+      if (bucket.members.length !== 2) continue;
+      let wx = 0, wy = 0, wz = 0;
+      const members: number[] = [];
+      for (const m of bucket.members) {
+        const i = idx[m];
+        members.push(i);
+        wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz;
+        this.entityGrouped.add(shown[i].id);
+      }
+      pending.push({
+        // Distinct namespace from the main solve's `grp|`: the same two
+        // devices can be a focused pair now and an ordinary one after the
+        // focus lapses, and giving them one key would reuse a control whose
+        // placement rules just changed.
+        key: `fgrp|${bucket.pileKey}`,
+        room: this.roomDisplay.get(focus) ?? focus,
+        roomKeys: [focus],
+        members,
+        wx: wx / 2, wy: wy / 2, wz: wz / 2,
+        pair: true,
+        focused: true,
+      });
+      this.focusPairs++;
     }
   }
 
