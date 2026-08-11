@@ -619,8 +619,8 @@ interface EntityGroupControls {
    *  target than the card can afford to offer; the zones TILE, so every tap
    *  inside the card belongs to exactly one device. */
   zones: Rectangle[];
-  /** Chips drawn this pass, or 0 for a count / compact pair. Also how many
-   *  zones are live for hit-testing. */
+  /** Chips drawn this pass, or 0 for a count. Also how many zones are live
+   *  for hit-testing. */
   stripN: number;
 }
 
@@ -643,18 +643,16 @@ interface PendingEntityGroup {
   members: number[];
   wx: number; wy: number; wz: number;
   /**
-   * How many device pictograms to draw side by side, or 0 for a count /
-   * compact pair. The card is `strip * badge` wide, so every chip's tap zone
-   * is exactly the box of the badge it stands in for.
+   * How many device pictograms to draw side by side, or 0 for a count. The
+   * card is `strip * badge` wide, so every chip's tap zone is exactly the box
+   * of the badge it stands in for.
    *
-   * For an ordinary group this is 2 or 0, decided in placeEntityGroups —
-   * the only place that knows whether the wider card actually FITS. A group of
-   * two that cannot clear its neighbours falls back to the COMPACT pair (same
-   * footprint as a count, so it always fits) rather than to a digit, and never
-   * to its room's chip: a strip is an upgrade, and an upgrade that costs a
-   * room its badges when it does not fit is not one.
-   *
-   * Inside the FOCUSED room it is the whole pile — see pairFocusedRoom.
+   * 2 for every group of two, always, decided where the group is made and
+   * never revoked: the width is not a clearance decision any more. It was, and
+   * because clearance depends on the quantised ZOOM the same pair drew as a
+   * full-size card at one rung and a half-scale one at the next — one
+   * situation, two objects, which is not a distinction anybody reading a floor
+   * plan can act on.
    */
   strip: number;
   /**
@@ -804,11 +802,10 @@ export class EntityVisuals {
    *  the badge container is scaled by their product. */
   /** Last line emitted by logPlacement, so the pass logs only on CHANGE. */
   private lastPlaceLog = "";
-  /** `?debug` only: pair cards asked for and granted this pass. "Every group
-   *  of two shows both its devices" is a claim, and this is the number that
-   *  makes it checkable instead of arguable — a gap between the two is the
-   *  clearance test declining an upgrade, not the rule failing to apply. */
-  private pairCandidates = 0;
+  /** `?debug` only: pair cards drawn this pass. "Every group of two shows
+   *  both its devices side by side" is a claim, and this is the number that
+   *  makes it checkable instead of arguable — it must equal the number of
+   *  two-member groups in the same line's list. */
   private pairUpgrades = 0;
   /** Pair cards made inside the focused room (see pairFocusedRoom). */
   private focusPairs = 0;
@@ -3691,7 +3688,6 @@ export class EntityVisuals {
 
     const pending: PendingEntityGroup[] = this.pendingGroups;
     pending.length = 0;
-    this.pairCandidates = 0;
     this.pairUpgrades = 0;
     this.focusPairs = 0;
     let solved: PlacementStats | null = null;
@@ -3930,7 +3926,7 @@ export class EntityVisuals {
       + ` | piles=${stats.piles} exempt=${stats.exempt} accepted=${stats.accepted}`
       + ` deferred=${stats.deferred} pulledBack=${stats.pulledBack}`
       + ` | groups=${placed.length}/${stats.buckets} cross=${stats.crossRoom}`
-      + ` pairs=${this.pairUpgrades}/${this.pairCandidates}`
+      + ` pairs=${this.pairUpgrades}`
       + (this.focusPairs ? ` focusPairs=${this.focusPairs}` : "")
       + ` [${groups}] chips=${chips.length} [${chips.join(", ")}]`;
     if (line === this.lastPlaceLog) return;
@@ -4186,11 +4182,9 @@ export class EntityVisuals {
     // From the SAME function that draws it — the width a group is TESTED at
     // has to be the width it is DRAWN at, which is this file's oldest rule.
     const stripHalfOf = (n: number) => (this.stripLayout(n, sm.size).width / 2) * scale * allow;
-    // A group is tested at the width it would actually be DRAWN at — the
-    // file's oldest rule, and the reason `pair` is decided here rather than in
-    // the solver. Widened boxes are checked FIRST, and a pair that cannot
-    // clear its neighbours retries at the compact count width before giving
-    // up; only a group that fits at neither escalates to its room's chip.
+    // A group is measured against OTHER GROUPS at the width it is actually
+    // DRAWN at — the file's oldest rule. Against badges it is measured at the
+    // count's box instead; see `fits` for why that asymmetry is deliberate.
     const groupHalf = (g: PendingEntityGroup) =>
       (g.strip >= 2 ? stripHalfOf(g.strip) : squareHalf);
 
@@ -4209,6 +4203,16 @@ export class EntityVisuals {
      */
     const fits = (g: PendingEntityGroup, others: PendingEntityGroup[]): boolean => {
       const mineHalf = groupHalf(g);
+      // ── A SUMMARY MUST CLEAR OTHER SUMMARIES; IT MAY OVERLAP A BADGE ─────
+      // Against BADGES a group is measured at the count's single-badge box,
+      // not at the width it draws: a pair card is always full-size now, and
+      // making the wider box gate its EXISTENCE would send groups to their
+      // room's chip that a count would have seated — trading one visible
+      // regression for a worse one. Two SUMMARIES on top of each other is a
+      // different matter, and is still refused at full width: that is two
+      // controls each claiming to stand for the other's devices, which is the
+      // failure this tier exists to prevent.
+      const vsBadge = squareHalf;
       for (let j = 0; j < shown.length; j++) {
         // Only badges that are actually DRAWN can be in the way, and a drawn
         // badge is always at its own anchor because nothing here moves one —
@@ -4221,7 +4225,7 @@ export class EntityVisuals {
         if (this.entityGrouped.has(shown[j].id)) continue;
         if (this.roomClustered.get(roomKey(this.roomOf(shown[j].id)))) continue;
         const d = Math.hypot(g.wx - shown[j].wx, g.wy - shown[j].wy, g.wz - shown[j].wz) * pxPerWorld;
-        if (d < mineHalf + halfOf(j) * allow + gapPx) return false;
+        if (d < vsBadge + halfOf(j) * allow + gapPx) return false;
       }
       for (const o of others) {
         if (o === g) continue;
@@ -4235,38 +4239,37 @@ export class EntityVisuals {
       return true;
     };
 
-    // ── TWO PASSES: everyone gets a seat, THEN pairs are upgraded ──────────
-    // 2.256.0 asked for the pair card first and settled for the count, one
-    // group at a time. That is greedy in the wrong currency: a pair card is
-    // 72 units wide against a count's 28, and the clearance test is RADIAL
-    // (it has to be — it works in world distance scaled by the quantised zoom,
-    // and knowing whether a neighbour lies off the card's long axis or its
-    // short one would need the camera, which is exactly the dependency this
-    // subsystem exists without). So a group upgraded early reserved a
-    // 72-diameter disc and could push the NEXT group off its seat entirely —
-    // to the compact count, or in the worst case to its room's chip. One
-    // group's upgrade was being paid for by another group's demotion, and
-    // which group won depended on nothing more meaningful than key order.
+    // ── ONE PASS. THE WIDTH IS NOT A DECISION ANY MORE ────────────────────
+    // A group of two is ALWAYS the full-size card, so there is nothing to
+    // upgrade and nothing to decline: one situation, one appearance, one
+    // behaviour, everywhere on the map.
     //
-    // So: every group is seated at COUNT width first, which is exactly the
-    // pre-2.256.0 result and cannot be worse than it. Only then are the
-    // two-member ones offered the wider card, in the same stable order, each
-    // tested against the seats everyone already holds. An upgrade that does
-    // not fit is simply declined; it can no longer cost anybody anything.
-    // `pair` is forced OFF for the whole of pass 1 — including on groups
-    // already seated, since `fits` reads `groupHalf(o)` off them. Parking the
-    // request on the object itself would have let an early group reserve pair
-    // width DURING pass 1, which is the greed this restructure removes.
-    const wantsPair: number[] = [];
+    // Two earlier shapes of this are worth remembering, because both were
+    // attempts to have it both ways. 2.256.0 asked for the wide card and
+    // settled for a smaller one per group, in key order — which let an early
+    // group's upgrade demote a later one. 2.257.0 fixed the unfairness with a
+    // seat-then-upgrade pass, and 2.259.0 made the fallback a half-scale card
+    // rather than a digit. What none of them fixed is that the SAME situation
+    // then drew as two visibly different objects depending on how crowded its
+    // corner of the villa happened to be, which is not a distinction anybody
+    // reading a floor plan can act on. Reported exactly that way, with both
+    // forms on screen at once.
+    //
+    // The cost is stated rather than hidden: a pair card may now OVERLAP a
+    // badge where the clearance test would have shrunk it. That test is a DISC
+    // of the card's half-WIDTH while the card is half as tall, so most of what
+    // it refused was a neighbour directly above or below — rejected on a
+    // distance the card does not occupy. It has to be a disc: it works in
+    // world distance scaled by the quantised zoom, and knowing which way a
+    // neighbour lies relative to the card's long axis would need the camera,
+    // which is the dependency this whole subsystem exists without.
     for (const g of pending) {
-      // A FOCUSED pair is seated unconditionally, and keeps its wide card.
-      // It stands in for two badges that the exemption was already drawing on
-      // top of each other, so a refusal would restore the exact overlap it
-      // exists to remove — and it can never escalate the focused room to its
-      // chip, which would break the one promise tapping a room makes.
-      if (g.focused) { placed.push(g); wantsPair.push(0); continue; }
-      const wanted = g.strip;
-      g.strip = 0;
+      // A FOCUSED pair is seated unconditionally. It stands in for two badges
+      // that the room exemption was already drawing on top of each other, so a
+      // refusal would restore the exact overlap it exists to remove — and it
+      // can never escalate the focused room to its chip, which would break the
+      // one promise tapping a room makes.
+      if (g.focused) { placed.push(g); continue; }
       if (!fits(g, placed)) {
         // Nowhere to stand: this is room-level crowding after all. EVERY room
         // the group covered escalates, not just its primary one — a group that
@@ -4276,19 +4279,7 @@ export class EntityVisuals {
         continue;
       }
       placed.push(g);
-      wantsPair.push(wanted);
-    }
-
-    // Pass 2 — offer the wider card, same stable order. Each candidate is
-    // tested against the widths every other group currently holds, so two
-    // pairs that would collide cannot both be granted, and the first in key
-    // order wins deterministically.
-    for (let i = 0; i < placed.length; i++) {
-      if (!wantsPair[i]) continue;
-      placed[i].strip = wantsPair[i];
-      if (!fits(placed[i], placed)) placed[i].strip = 0;
-      else this.pairUpgrades++;
-      this.pairCandidates++;
+      if (g.strip >= 2) this.pairUpgrades++;
     }
     // A group whose room was escalated by a LATER pile must not also draw —
     // the room chip already covers its members. Done after the loop because a
@@ -4556,13 +4547,7 @@ export class EntityVisuals {
         // when there is no room for the strip:
         //
         //   strip    every device, one tap each (zones tile the card)
-        //   compact  both devices at half size in the COUNT badge's own
-        //            footprint, tap opens the list
-        //   count    three or more that could not be a strip
-        //
-        // The compact form is what makes the two-case free: it is exactly as
-        // big as the count it replaces, so it can never be refused where a
-        // count would have been accepted.
+        //   count    three or more
         //
         // `strip` is > 2 only inside the FOCUSED room, where the promise is
         // that tapping a room shows its devices — there a pile of three
@@ -4575,26 +4560,24 @@ export class EntityVisuals {
         // whole screen. Two is the rule ("show two side by side"); nothing in
         // this app has ever asked for three, and if something does it will
         // have to justify the width here rather than inherit it silently.
-        const strip = Math.min(g.strip, n, MAX_STRIP_CHIPS);
-        const compact = strip < 2 && n === 2;
-        c.stripN = strip >= 2 ? strip : 0;
-        const drawn = strip >= 2 ? strip : compact ? 2 : 0;
-        // The compact pair is this layout at HALF the unit — two chips of half
-        // a badge each, which is one badge wide: exactly the count badge's
-        // footprint, so it can never be refused where a count would have been
-        // accepted. Same function, same proportions, one number different.
-        const lay = drawn > 0
-          ? this.stripLayout(drawn, strip >= 2 ? sm.size : sm.size / 2)
+        const drawn = Math.min(g.strip, n, MAX_STRIP_CHIPS);
+        c.stripN = drawn >= 2 ? drawn : 0;
+        // ONE unit, always: a group of two is always the full-size card. There
+        // is no half-scale variant any more — the same situation drawing as
+        // two different objects depending on how crowded its corner of the
+        // villa happened to be was the whole of the last report.
+        const lay = drawn >= 2
+          ? this.stripLayout(drawn, sm.size)
           : { width: sm.size, chip: 0, pitch: 0 };
         c.container.width = `${lay.width}px`;
-        c.countText.isVisible = strip < 2 && !compact;
+        c.countText.isVisible = drawn < 2;
         c.countText.text = formatCountBadge(n);
         this.growStrip(c, drawn, layer);
         for (let k = 0; k < c.chips.length; k++) {
           c.chips[k].isVisible = k < drawn;
           c.zones[k].isVisible = k < drawn;
         }
-        if (drawn > 0) {
+        if (drawn >= 2) {
           // Stable order: the solver's own (rank, entity_id), so the same
           // devices sit the same way round on every device and at every zoom.
           for (let k = 0; k < drawn; k++) {

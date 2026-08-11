@@ -1,3 +1,48 @@
+## 2.264.0
+
+### Changed — a group of two is ALWAYS the full-size card
+
+Two screenshots of the same pair of devices at two zoom levels: full-size card
+at one, half-scale at the other. That is the fallback working exactly as
+designed, and the design was wrong.
+
+The width was a clearance decision. A full-size pair card is two badges across
+and reserves a two-badge disc; when that would not clear a neighbour the card
+dropped to a half-scale one in the count badge's single-badge footprint.
+Clearance is computed against the QUANTISED ZOOM, so the answer changes with
+the rung — and the same two devices therefore drew as two visibly different
+objects depending on how far in the camera happened to be. That is not a
+distinction anybody reading a floor plan can act on, and it is not something
+they should have to learn.
+
+The width is no longer negotiable. Every group of two draws the full-size card:
+two full-size pictograms, one tap each, identical everywhere on the map at
+every zoom. `strip` is set where the group is made and never revoked, so the
+two-pass seat-then-upgrade dance is gone with it — there is nothing left to
+upgrade.
+
+**The cost, stated plainly: a pair card may now overlap a badge.** That is the
+trade, chosen deliberately. Most of what the test was refusing was not a real
+overlap: it is a DISC of the card's half-WIDTH while the card is half as tall,
+so a badge directly above or below one was being rejected on a distance the
+card does not occupy. It has to be a disc — it works in world distance scaled
+by the quantised zoom, and knowing which way a neighbour lies relative to the
+card's long axis would need the camera, which is the dependency this whole
+subsystem exists without.
+
+**A summary must still clear other summaries.** The asymmetry is deliberate and
+is the line this change draws: against BADGES a group is now measured at the
+count's single-badge box, because making the wider box gate its EXISTENCE would
+send groups to their room's chip that a count would have seated — trading one
+visible regression for a worse one. Against other GROUPS it is still measured
+at full width, because two summaries on top of each other is two controls each
+claiming to stand for the other's devices, which is the failure this tier
+exists to prevent.
+
+`?debug` now reports `pairs=N` — how many pair cards were drawn — rather than
+granted-of-asked. There is nothing to ask for any more: N must simply equal the
+number of two-member groups in the same line's list.
+
 ## 2.263.0
 
 ### Fixed — the two side-by-side forms were two layouts, not one at two sizes
