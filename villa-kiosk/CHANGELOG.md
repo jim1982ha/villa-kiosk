@@ -1,3 +1,14 @@
+## 2.274.0
+
+### Fixed — a GLB upload could sit at one percentage for two minutes
+
+A stalled chunk had no retry: the request ran into its own 120s abort and the
+progress badge simply froze until it failed. Chunks are idempotent (the server
+reassembles by `upload_id` + offset), so each is now attempted up to three times
+with a shorter first timeout and a short backoff. While a retry is in flight the
+badge shows `↻2` and the message line says the upload stalled, instead of a
+percentage that appears stuck.
+
 ## 2.273.0
 
 ### Fixed — every model upload left the previous villa in memory

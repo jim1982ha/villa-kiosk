@@ -2,6 +2,7 @@
 // IndexedDB helper for the (large) GLB model, plus tiny localStorage helpers.
 
 import { ingressPath } from "@/ha/ingress";
+import { devLog } from "@/utils/devLog";
 
 const DB_NAME = "villa-kiosk-db";
 const STORE = "models";
@@ -253,19 +254,37 @@ export function clearVersionedModelUrlCache(): void {
 const SINGLE_SHOT_MAX_BYTES = 12 * 1024 * 1024;
 const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 
-/** Per-chunk ceiling. An 8 MB chunk over a slow uplink to Bali can legitimately
- *  take a while, so this is generous — it exists to turn a HUNG request into a
- *  readable error rather than to police speed. Without it a stalled chunk left
+/** Per-attempt ceiling, ESCALATING. It exists to turn a HUNG request into a
+ *  readable error rather than to police speed — without it a stalled chunk left
  *  the button reading "Uploading…" forever with nothing logged and no way to
- *  tell a slow upload from a dead one. */
-const UPLOAD_CHUNK_TIMEOUT_MS = 120_000;
+ *  tell a slow upload from a dead one.
+ *
+ *  Why it escalates instead of sitting at one generous value: a field capture
+ *  showed the first chunk stall at `offset=0` with ZERO bytes moved, our own
+ *  AbortController cancel it at the two-minute mark, and a manual retry then
+ *  complete in 920 ms. A flat 120 s meant every blip on the public hop cost two
+ *  minutes of a `0%` badge and a human deciding to try again.
+ *
+ *  The first attempt is short enough that a blip is noticed in well under a
+ *  minute, and the LAST is the old generous value so a genuinely slow uplink
+ *  still finishes. The floor that first number assumes is ~1.5 Mbit/s up for an
+ *  8 MB chunk; below that the first attempt is abandoned and re-sent, which
+ *  costs bandwidth but not the upload. Erring the other way — one long
+ *  timeout — costs the two minutes this exists to remove. */
+const UPLOAD_ATTEMPT_TIMEOUTS_MS = [45_000, 90_000, 120_000];
+/** Between attempts. Short: the failure being retried is a stalled connection,
+ *  not a rate limit, and the attempt itself already waited a long time. */
+const UPLOAD_RETRY_DELAY_MS = [700, 2_000];
 
-async function postUploadRequest(
-  query: string,
-  body: Blob,
+/** An error the connection caused, as opposed to an answer the server gave.
+ *  Only this kind is retried — see postUploadRequest. */
+class TransientUploadError extends Error {}
+
+async function postUploadOnce(
+  query: string, body: Blob, timeoutMs: number,
 ): Promise<{ path: string; size: number }> {
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), UPLOAD_CHUNK_TIMEOUT_MS);
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
   let resp: Response;
   try {
     resp = await fetch(ingressPath(`model-upload?${query}`), {
@@ -275,10 +294,9 @@ async function postUploadRequest(
       signal: ctl.signal,
     });
   } catch (e) {
-    throw new Error(
+    throw new TransientUploadError(
       (e as Error)?.name === "AbortError"
-        ? `Upload timed out after ${UPLOAD_CHUNK_TIMEOUT_MS / 1000}s with no response from the add-on. `
-          + "The connection stalled — check the network and try again."
+        ? `Upload stalled — no response from the add-on within ${timeoutMs / 1000}s.`
         : `Upload failed: ${(e as Error)?.message || "network error"}`,
     );
   } finally {
@@ -290,9 +308,51 @@ async function postUploadRequest(
       const j = await resp.json() as { error?: string };
       if (j?.error) msg = j.error;
     } catch { /* non-JSON error body */ }
+    // NOT transient: a 413/401/500 is an ANSWER — the file is too big, the
+    // session expired, the add-on refused it. Re-sending 8 MB to be told the
+    // same thing three times helps nobody and delays the real message. Same
+    // rule fetchModelWithRetry applies to a non-ok download.
     throw new Error(msg);
   }
   return resp.json() as Promise<{ path: string; size: number }>;
+}
+
+/**
+ * One chunk, retried through a stalled connection.
+ *
+ * Retrying is SAFE because the chunk protocol is idempotent: the server keys a
+ * partial upload by `upload_id` and writes each piece at its own `offset`, so
+ * re-sending the same piece overwrites the same bytes. That is what makes this
+ * a retry rather than a corruption risk, and it is why the wrapper lives here —
+ * around the request that carries those two parameters — rather than around the
+ * whole file.
+ */
+async function postUploadRequest(
+  query: string,
+  body: Blob,
+  /** Fires before each backoff, so the UI can say "retrying" instead of
+   *  freezing at the same percentage with no explanation. */
+  onRetry?: (attempt: number, of: number) => void,
+): Promise<{ path: string; size: number }> {
+  const attempts = UPLOAD_ATTEMPT_TIMEOUTS_MS.length;
+  for (let i = 0; ; i++) {
+    try {
+      return await postUploadOnce(query, body, UPLOAD_ATTEMPT_TIMEOUTS_MS[i]);
+    } catch (e) {
+      if (!(e instanceof TransientUploadError) || i >= attempts - 1) {
+        // Out of attempts on a transient failure: say what was actually tried,
+        // because "it stalled" and "it stalled three times over three minutes"
+        // are different problems for whoever reads it.
+        if (e instanceof TransientUploadError) {
+          throw new Error(`${e.message} Gave up after ${attempts} attempts.`);
+        }
+        throw e;
+      }
+      devLog(`[uploadCentralModel] attempt ${i + 1}/${attempts} stalled, retrying…`, e);
+      onRetry?.(i + 1, attempts);
+      await new Promise((r) => setTimeout(r, UPLOAD_RETRY_DELAY_MS[i]));
+    }
+  }
 }
 
 /**
@@ -311,6 +371,8 @@ export async function uploadCentralModel(
    *  progress. A 19 MB GLB is three round trips; without this the UI cannot
    *  distinguish "chunk 2 of 3 in flight" from "wedged". */
   onProgress?: (sentBytes: number, totalBytes: number) => void,
+  /** Called when a chunk stalled and is being re-sent — see postUploadRequest. */
+  onRetry?: (attempt: number, of: number) => void,
 ): Promise<{ path: string; size: number }> {
   // The original filename rides along so the add-on can record WHAT was
   // uploaded (the destination file keeps the configured name forever).
@@ -319,7 +381,7 @@ export async function uploadCentralModel(
 
   let result: { path: string; size: number };
   if (file.size <= SINGLE_SHOT_MAX_BYTES) {
-    result = await postUploadRequest(base, file);
+    result = await postUploadRequest(base, file, onRetry);
     onProgress?.(file.size, file.size);
   } else {
     const uploadId =
@@ -333,6 +395,7 @@ export async function uploadCentralModel(
       result = await postUploadRequest(
         `${base}&upload_id=${uploadId}&offset=${offset}${last ? "&last=1" : ""}`,
         piece,
+        onRetry,
       );
       onProgress?.(Math.min(offset + UPLOAD_CHUNK_BYTES, file.size), file.size);
     }

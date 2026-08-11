@@ -21,6 +21,12 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
   const [uploadMsg, setUploadMsg] = useState<{ text: string; ok: boolean } | null>(null);
   /** 0-100 while a chunked upload is in flight, null otherwise. */
   const [uploadPct, setUploadPct] = useState<number | null>(null);
+  // A stalled chunk is retried (storage.ts's postUploadRequest), which from the
+  // outside looks exactly like a frozen percentage for up to 45s — the reported
+  // symptom was "the upload badge never progresses and nothing happens". Say so
+  // instead: the count pill switches to the attempt number and the message line
+  // explains the pause, both cleared the moment a chunk lands.
+  const [uploadRetry, setUploadRetry] = useState<{ attempt: number; of: number } | null>(null);
 
   // Adopt a room-data sidecar (<model>.rooms.json emitted by the Blender
   // pipeline) into this running client immediately after a central upload.
@@ -71,10 +77,18 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
     setUploadBusy(kind);
     setUploadMsg(null);
     setUploadPct(0);
+    setUploadRetry(null);
     try {
       const { path, size } = await uploadCentralModel(
         file, kind, file.name,
-        (sent, total) => setUploadPct(Math.round((sent / total) * 100)),
+        (sent, total) => {
+          setUploadRetry(null); // a chunk landed — whatever stalled is over
+          setUploadPct(Math.round((sent / total) * 100));
+        },
+        (attempt, of) => {
+          setUploadRetry({ attempt, of });
+          setUploadMsg({ text: `Upload stalled — retrying (${attempt} of ${of})…`, ok: true });
+        },
       );
       // For the room-data sidecar, ALSO adopt it into this running client's
       // config so its rooms/beams take effect immediately (not just for other
@@ -94,6 +108,7 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
       setUploadMsg({ text: (err as Error).message, ok: false });
       return null;
     } finally {
+      setUploadRetry(null);
       setUploadBusy(null);
     }
   };
@@ -170,6 +185,7 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
     loadedModel: getLoadedModelInfo(),
     uploadBusy,
     uploadPct,
+    uploadRetry,
     uploadMsg,
     glbUploadRef,
     uploadGlbAndRooms,

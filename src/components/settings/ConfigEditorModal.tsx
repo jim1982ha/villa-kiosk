@@ -196,7 +196,9 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               >
                 <Upload size={18} />
                 {glbUpload.uploadPct !== null && (
-                  <span className="icon-btn-count" aria-hidden="true">{glbUpload.uploadPct}%</span>
+                  <span className="icon-btn-count" aria-hidden="true">
+                    {glbUpload.uploadRetry ? `↻${glbUpload.uploadRetry.attempt}` : `${glbUpload.uploadPct}%`}
+                  </span>
                 )}
               </button>
             </div>
