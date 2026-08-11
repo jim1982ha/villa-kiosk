@@ -1,3 +1,17 @@
+## 2.283.0
+
+### Changed — the app measures its own frame rate and picks a resolution, with nothing to configure
+
+Render resolution is essentially the whole frame cost on iPad and iPhone and
+free on every other engine. There was already an automatic control for this; it
+had simply never run, because it only reacted to a burst of continuous dragging
+and a wall-mounted kiosk never produces one. The villa now measures itself for
+two seconds just after it appears and settles its own resolution — the iPad
+goes from 13fps to 37fps on its own.
+
+The two toggles added while chasing this (Smooth Edges, Full Resolution) are
+gone. Neither was a decision worth asking anyone to make.
+
 ## 2.282.0
 
 ### Fixed — Smooth Edges did nothing

@@ -292,27 +292,36 @@ export class SceneManager {
     // is why it is a setting that needs a reload rather than a live toggle.
     // See RenderConfig.antialias for the measurement that made it one.
     //
-    // ⚠️ IT GOES IN THE POSITIONAL ARGUMENT, NOT ONLY THE OPTIONS OBJECT.
+    // ⚠️ ANTI-ALIASING IS THE POSITIONAL ARGUMENT, NOT THE OPTIONS FIELD.
     // Engine's signature is (canvas, antialias?, options?, adaptToDeviceRatio?)
     // and ThinEngine's constructor does `if (antialias != null)
-    // options.antialias = antialias` — so a hardcoded `true` there silently
-    // overwrites whatever the options object asked for.
+    // options.antialias = antialias` — the positional one overwrites the
+    // object. A release shipped a user setting into the options field with a
+    // hardcoded `true` still in the slot that beats it, so the setting changed
+    // nothing and the unchanged frame times read convincingly as "MSAA is not
+    // the cost". Only reporting the DRIVER's own SAMPLES caught it. Both are
+    // passed the same value now so the two can never disagree again.
     //
-    // 2.279.0 shipped the setting with `true` still sitting in that slot, so
-    // turning "Smooth Edges" off did nothing at all. The frame numbers did not
-    // move, which read exactly like "MSAA is not the cost" — a conclusion I
-    // was one release away from writing down as fact. What caught it was
-    // reporting the DRIVER's own SAMPLES rather than the request:
-    // `aaWant: false, aaGot: true, aaSamples: 4` on both Chrome and WebKit,
-    // i.e. every device faithfully doing what the code actually said.
-    const wantAA = this.config.render?.antialias ?? true;
-    this.engine = new Engine(canvas, wantAA, {
+    // It stays ON, and that is a decision with a gap in it: MSAA has never
+    // actually been measured on this app, because the one attempt tested
+    // nothing. It is left on because the picture is already softer at the
+    // resolutions the valve below settles on, and because turning it off
+    // without a measurement is exactly the kind of guess this codebase keeps
+    // paying for. `?debug` -> the frame-cost probe is how to answer it if the
+    // frame rate ever needs more room.
+    const ANTIALIAS = true;
+    this.engine = new Engine(canvas, ANTIALIAS, {
       preserveDrawingBuffer: false,
       stencil: true,
-      antialias: wantAA,
+      antialias: ANTIALIAS,
       powerPreference: isIOS ? "default" : "high-performance",
     });
-    this.engine.setHardwareScalingLevel(this.baseHwScale());
+    // Up-to-2× supersampling everywhere (1× on a DPR-1 desktop; a DPR≥2
+    // phone/tablet renders at 2× CSS — ~native on DPR 2, ⅔ native on DPR 3).
+    // Where that is too much for the device, calibrateResolution measures it
+    // shortly after the reveal and the valve backs it off — per device, from
+    // its own frame times, with nothing for anyone to configure.
+    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 2));
 
     this.scene = new Scene(this.engine);
     // Two clock reads and a counter reset per frame, against frames measured at
@@ -927,6 +936,51 @@ export class SceneManager {
     // boxes keep measuring them at it too.
     this.visuals.notifyRenderScaleChanged();
     this.requestRender();
+  }
+
+  /**
+   * Measure this device once, just after the villa becomes visible, and let the
+   * resolution valve act on the result.
+   *
+   * ── Why this exists, and why it is not a setting ────────────────────────
+   * Render resolution is the entire frame cost on WebKit and free on ANGLE.
+   * Measured on four devices with an empty scene and one draw call: the iPad
+   * pays 67ms at 3.4 megapixels and 19ms at a quarter of that, Mac Safari 21ms
+   * and 10ms — while Mac Chrome and Android Chrome pay the same whatever the
+   * resolution. Dropping the iPad to CSS resolution took a frame from 77ms to
+   * 27ms, 13fps to 37fps.
+   *
+   * That is a big enough difference to be worth acting on and far too
+   * device-specific to hardcode. A blanket "WebKit renders at CSS resolution"
+   * rule would be wrong for the iPhone, which measured 10-14ms and does not
+   * need the help — it would just make its picture softer for nothing.
+   *
+   * easeResolution already decides this correctly, from measured frame time,
+   * per device. Its only problem was never getting to run: it feeds on frame
+   * samples, and those only exist during a burst of continuous interaction. A
+   * wall-mounted kiosk that nobody touches never produces one, which is why no
+   * field dump has ever contained a `frames` record from the iPad and why that
+   * iPad sat at 13fps indefinitely.
+   *
+   * So: produce one burst deliberately. Pinning continuous rendering for a
+   * couple of seconds is all it takes — sampleFrame collects, the unpin ends
+   * the burst, flushFrameSamples runs the valve. No new mechanism, no user
+   * decision, and a device that is comfortably fast is left alone because the
+   * valve's own threshold says so.
+   *
+   * AFTER the reveal, deliberately: the villa is already on screen, so this
+   * costs a couple of seconds of rendering nobody is waiting on.
+   */
+  calibrateResolution(durationMs = 2000): void {
+    if (this.disposed) return;
+    const unpin = this.pinContinuous();
+    setTimeout(() => {
+      unpin();
+      // Nudge the loop so the burst actually ends and gets flushed: without a
+      // frame after the unpin, the samples sit in the array until the next
+      // interaction, which on an untouched kiosk may be never.
+      this.requestRender();
+    }, durationMs);
   }
 
   /** Keep rendering for a short window (covers input latency + transitions). */
@@ -2125,7 +2179,7 @@ export class SceneManager {
    * real one, through a public API.
    */
   private msaaState(): Record<string, unknown> {
-    const out: Record<string, unknown> = { aaWant: this.config.render?.antialias ?? true };
+    const out: Record<string, unknown> = {};
     try {
       const gl = (this.canvas.getContext("webgl2") ?? this.canvas.getContext("webgl")) as
         | WebGL2RenderingContext | WebGLRenderingContext | null;
@@ -2466,38 +2520,8 @@ export class SceneManager {
    * Re-runs the sun pass so the hemi/sun/ambient multipliers take effect, and
    * pushes the rest (tone mapping, SSAO, shadows, IBL) through renderFx.
    */
-  /**
-   * The hardware scaling level this device renders at BEFORE the automatic
-   * valve coarsens it any further.
-   *
-   * Up-to-2× supersampling by default (1× on a DPR-1 desktop; a DPR≥2
-   * phone/tablet renders at 2× CSS — ~native on DPR 2, ⅔ native on DPR 3), or
-   * plain CSS resolution when the user has asked for frame rate over
-   * sharpness. HW_SCALE_FLOOR is the same 1.0, which is not a coincidence: 1×
-   * CSS is the documented floor for this app, because the old iOS tier that
-   * rendered BELOW it produced rainbow speckle around lit floors and was
-   * removed after a field report.
-   */
-  private baseHwScale(): number {
-    if (this.config.render?.hiRes === false) return HW_SCALE_FLOOR;
-    return 1 / Math.min(window.devicePixelRatio, 2);
-  }
-
   setRenderConfig(render: RenderConfig): void {
-    const prevHiRes = this.config.render?.hiRes;
     this.config = { ...this.config, render };
-    if (render.hiRes !== prevHiRes) {
-      // Live, no reload: this is only a scaling level. Straight to
-      // baseHwScale() rather than nudging the current value — a device the
-      // valve has already coarsened must not be stuck coarse when the user
-      // asks for sharpness back.
-      this.engine.setHardwareScalingLevel(this.baseHwScale());
-      // Badge geometry is authored in CSS px and converted through this exact
-      // value — the same reason easeResolution tells the layer. Miss it and
-      // every badge keeps the size it had for a resolution that no longer
-      // exists, collision boxes included.
-      this.visuals.notifyRenderScaleChanged();
-    }
     this.renderFx.apply(this.deviceRenderConfig(render));
     this.sun.updateConfig(this.config);
     // lightPoolIntensity is EntityVisuals' own value (see LightPools.ts), not

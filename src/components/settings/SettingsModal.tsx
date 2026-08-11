@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom, Sparkles, Maximize,
+  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -218,45 +218,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               <Move size={16} /> Natural Scroll
             </button>
           </div>
-          {/* Its own row, and worded to say so: this is the ONE render setting
-              that cannot take effect where it is changed. `antialias` is a
-              WebGL context attribute chosen when the engine is created, so it
-              needs the villa to load again. See RenderConfig.antialias for the
-              measurement that made it a setting at all — on WebKit an empty
-              frame's cost is almost entirely per-pixel, and the MSAA resolve
-              is the per-pixel work that does not care what is on screen. */}
-          <div className="segmented settings-row-half" role="group" aria-label="Smooth edges (anti-aliasing)">
-            <button
-              className={(render.antialias ?? true) ? "active" : ""}
-              onClick={() => applyRender({ antialias: !(render.antialias ?? true) })}
-              aria-pressed={render.antialias ?? true}
-              title="Anti-aliasing smooths jagged edges. Takes effect after the villa reloads."
-            >
-              <Sparkles size={16} /> Smooth Edges
-            </button>
-          </div>
-          {/* The one with the measured payoff. On an iPad this is a quarter of
-              the pixels, and pixels are essentially the whole frame cost on
-              WebKit — 67ms of a 76ms frame goes on an EMPTY scene at full
-              resolution, 19ms at a quarter of it. Applies live; it is only a
-              hardware scaling level. See RenderConfig.hiRes. */}
-          <div className="segmented settings-row-half" role="group" aria-label="Full resolution">
-            <button
-              className={(render.hiRes ?? true) ? "active" : ""}
-              onClick={() => applyRender({ hiRes: !(render.hiRes ?? true) })}
-              aria-pressed={render.hiRes ?? true}
-              title="Render at the display's full resolution. Turning it off is the biggest frame-rate gain on iPad and iPhone; the picture gets slightly softer. Applies immediately."
-            >
-              <Maximize size={16} /> Full Resolution
-            </button>
-          </div>
         </div>
-        <p className="muted body-text" style={{ marginTop: 6 }}>
-          <strong>Full Resolution</strong> off is the biggest frame-rate gain on
-          iPad and iPhone — a quarter of the pixels, slightly softer picture,
-          applies immediately. <strong>Smooth Edges</strong> applies when the
-          villa next loads. Both are per-device and are never shared.
-        </p>
 
         {/* Brightness/Night dimming apply to every villa; the day/night
             preview override (moved here from the header, no longer a single

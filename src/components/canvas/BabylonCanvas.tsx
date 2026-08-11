@@ -589,6 +589,11 @@ export default function BabylonCanvas({
               orphanMats: countOrphanMaterials(manager.scene, meshes),
             });
           } catch { /* diagnostic only — never fail a load for it */ }
+          // Measure this device and let the resolution valve settle it — see
+          // SceneManager.calibrateResolution. After the reveal, so the couple
+          // of seconds of rendering it needs are behind an already-visible
+          // villa rather than in front of one.
+          manager.calibrateResolution();
         };
 
         // Auto-populate entityMap from meshes whose names are HA entity IDs
