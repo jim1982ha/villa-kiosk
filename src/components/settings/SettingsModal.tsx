@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
+  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom, Sparkles,
 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -218,7 +218,28 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               <Move size={16} /> Natural Scroll
             </button>
           </div>
+          {/* Its own row, and worded to say so: this is the ONE render setting
+              that cannot take effect where it is changed. `antialias` is a
+              WebGL context attribute chosen when the engine is created, so it
+              needs the villa to load again. See RenderConfig.antialias for the
+              measurement that made it a setting at all — on WebKit an empty
+              frame's cost is almost entirely per-pixel, and the MSAA resolve
+              is the per-pixel work that does not care what is on screen. */}
+          <div className="segmented settings-row-half" role="group" aria-label="Smooth edges (anti-aliasing)">
+            <button
+              className={(render.antialias ?? true) ? "active" : ""}
+              onClick={() => applyRender({ antialias: !(render.antialias ?? true) })}
+              aria-pressed={render.antialias ?? true}
+              title="Anti-aliasing smooths jagged edges. Costs GPU time on every frame, most of all on iPad and iPhone. Takes effect after the villa reloads."
+            >
+              <Sparkles size={16} /> Smooth Edges
+            </button>
+          </div>
         </div>
+        <p className="muted body-text" style={{ marginTop: 6 }}>
+          Smooth Edges applies when the villa next loads. Turning it off is the
+          biggest single frame-rate saving on iPad and iPhone.
+        </p>
 
         {/* Brightness/Night dimming apply to every villa; the day/night
             preview override (moved here from the header, no longer a single

@@ -1,3 +1,23 @@
+## 2.279.0
+
+### Fixed — the resolution valve could not open on the device that needed it
+
+The auto-scaler that drops render resolution when a device misses frame budget
+sat behind a *telemetry* gate: it needed a 45-frame continuous drag to run at
+all, and stopped for the rest of the session after 8 reports. The iPad never
+produced a single frames record in any field dump, so it had never run there —
+while the frame-cost probe measured that same iPad at 76ms a frame, 67ms of it
+an empty scene. It now runs on its own threshold, every burst.
+
+### Added — Smooth Edges (anti-aliasing) can be turned off
+
+On WebKit an empty frame's cost is almost entirely per-pixel: a quarter of the
+pixels took the iPad from 67ms to 19ms and Mac Safari from 21ms to 10ms. On
+Chrome it does not move at all. The MSAA resolve is the per-pixel work that
+does not care what is on screen, so it is now switchable — in Settings, under
+Render quality. It is a WebGL context attribute, so it applies when the villa
+next loads. Still on by default.
+
 ## 2.278.0
 
 ### Added — the frame-cost probe is a button now, not a console command

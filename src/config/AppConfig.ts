@@ -67,6 +67,30 @@ export interface RenderConfig {
   ssaoStrength: number;
   /** SSAO sample count — perf/quality trade-off (4/8/16/32). */
   ssaoSamples: number;
+  /**
+   * Multisample anti-aliasing on the main framebuffer. **Applied at ENGINE
+   * CREATION**, so changing it only takes effect on the next load — it is a
+   * WebGL context attribute, not a scene property.
+   *
+   * A setting rather than a constant because of what the frame-cost probe
+   * found, which is the only measurement in this app's history where the two
+   * engine families disagree in KIND rather than degree. With every mesh
+   * hidden and one draw call left:
+   *
+   *   Mac Chrome (ANGLE)   3.5ms, and 3.6ms at a QUARTER of the pixels
+   *   Android Chrome       2.8ms, and 2.8ms at a quarter of the pixels
+   *   Mac Safari (WebKit) 21ms,   and 10ms at a quarter of the pixels
+   *   iPad HA app (WebKit) 67ms,  and 19ms at a quarter of the pixels
+   *
+   * On ANGLE the empty-frame cost does not depend on pixels at all. On WebKit
+   * it is almost entirely per-pixel — and the MSAA resolve is the per-pixel,
+   * per-frame, geometry-independent operation. That makes this the one lever
+   * worth testing, and it cannot be tested without being switchable.
+   *
+   * Default ON: the whole point is to measure before changing what anyone
+   * gets. Undefined counts as on, so an existing stored config is unaffected.
+   */
+  antialias?: boolean;
   /** How much EXTRA dimming (beyond the base day/night look) is applied at
    *  night, 0..1. 0 = the mild dim this app always had; 1 = maximum — dim
    *  enough that a lit fixture's own light clearly dominates the room, but

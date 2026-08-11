@@ -109,6 +109,12 @@ const FRAME_SAMPLE_MAX = 600;
 // Below this a "burst" is a tap or a one-frame nudge, and its percentiles
 // would be noise quoted to one decimal place.
 const FRAME_SAMPLE_MIN = 45;
+/** Frames the RESOLUTION VALVE needs before it may act — see flushFrameSamples
+ *  for why this is separate from, and lower than, the telemetry minimum. About
+ *  a third of a second at 60fps and over a second at 13fps, which is enough to
+ *  be sure of a device's frame budget and short enough that a single pan on a
+ *  struggling tablet is sufficient. */
+const VALVE_SAMPLE_MIN = 20;
 // Telemetry is a fixed-size ring in /data shared with every other device; a
 // long session orbiting the villa must not evict the load and sync records
 // this is meant to be read ALONGSIDE. The first few bursts answer the
@@ -282,10 +288,14 @@ export class SceneManager {
     // check is what actually catches those.
     const isIOS = detectIOS();
     this.isIOS = isIOS;
+    // `antialias` is a CONTEXT ATTRIBUTE — it can only be chosen here, which
+    // is why it is a setting that needs a reload rather than a live toggle.
+    // See RenderConfig.antialias for the measurement that made it one.
+    const wantAA = this.config.render?.antialias ?? true;
     this.engine = new Engine(canvas, true, {
       preserveDrawingBuffer: false,
       stencil: true,
-      antialias: true,
+      antialias: wantAA,
       powerPreference: isIOS ? "default" : "high-performance",
     });
     // Up-to-2× supersampling everywhere (1× on DPR-1 desktops; a DPR≥2
@@ -738,11 +748,25 @@ export class SceneManager {
    * exactly 1.00 since 2.265.0, so multi-pass lighting is dead. Same triangle
    * count, so geometry is dead. Pixels were already dead (2.222.0).
    *
-   * What is left is per-draw-call cost inside Safari's WebGL, which is not
-   * ours to change. THE ONLY LEVER WE HOLD IS THE NUMBER OF DRAW CALLS — and
-   * since the ratio is 1.00, that means the number of drawn meshes. Sizing
-   * that is what babylon/sceneAudit.ts measures; keep these three fields, they
-   * are how any change to it gets checked.
+   * ── AND THE DRAW-CALL READING OF THAT WAS WRONG (2026-08-12) ─────────────
+   * "us per draw" is renderMs/drawCalls — an AVERAGE, which divides a large
+   * fixed cost by the draw count and therefore falls as draws rise whether or
+   * not draws cost anything. The ablation probe (babylon/perfProbe.ts) settled
+   * it directly. With every mesh hidden and one draw call left:
+   *
+   *   Mac Chrome (ANGLE)    3.5ms   -> 3.6ms at a QUARTER of the pixels
+   *   Android Chrome        2.8ms   -> 2.8ms at a quarter of the pixels
+   *   Mac Safari (WebKit)  21ms     -> 10ms at a quarter of the pixels
+   *   iPad, HA app         67ms     -> 19ms at a quarter of the pixels
+   *
+   * The two engine families differ in KIND. On ANGLE an empty frame costs the
+   * same whatever the resolution; on WebKit it is almost entirely per-PIXEL.
+   * The iPad spends 67 of its 76ms on an empty scene — the villa itself is 9%
+   * of the frame there. So the lever is PIXELS on WebKit (see easeResolution
+   * and RenderConfig.antialias), not draw calls; sceneAudit independently
+   * measured that merging would save nothing anyway (204 mergeable meshes,
+   * 204 distinct materials). Keep these three fields — they are still how any
+   * change gets checked — but do not re-derive a per-draw cost from them.
    */
   private sampleFrame(now: number): void {
     const prev = this.lastFrameAt;
@@ -769,15 +793,36 @@ export class SceneManager {
     // Not enough of a burst to say anything (a tap, a one-frame nudge). Reset
     // the clock too, so the next burst never measures across the gap.
     this.lastFrameAt = 0;
-    if (s.length < FRAME_SAMPLE_MIN || this.frameReportsSent >= FRAME_REPORT_MAX) return;
-    this.frameReportsSent += 1;
 
     s.sort((a, b) => a - b);
     const at = (q: number) => s[Math.min(s.length - 1, Math.floor(s.length * q))];
+
+    // ── THE RESOLUTION VALVE RUNS FIRST, AND ON ITS OWN TERMS ──────────────
+    // It used to sit below the telemetry gate, which meant a *reporting* rule
+    // decided whether the device was allowed to protect its own frame rate:
+    // FRAME_REPORT_MAX caps the dump at 8 records per session, so after eight
+    // bursts the valve stopped working for the rest of the session, and the
+    // 45-frame minimum meant a device running at 13fps had to be dragged
+    // CONTINUOUSLY for three and a half seconds before it could react at all.
+    //
+    // The iPad is the case that exposed it: not one `frames` record in any
+    // field dump, so the valve had never opened on it — and the frame-cost
+    // probe then measured that same iPad at 76ms a frame, of which 67ms was an
+    // EMPTY scene at 3.4 megapixels. On WebKit that floor is per-pixel (a
+    // quarter of the pixels took it 67ms -> 19ms), so resolution is exactly
+    // the lever, and the thing holding it shut was a telemetry counter.
+    //
+    // Its own minimum is lower because it is answering an easier question than
+    // the telemetry is: "is this device comfortably missing frame budget",
+    // not "characterise this burst". Still monotonic, still floored at 1x CSS.
+    if (s.length >= VALVE_SAMPLE_MIN) this.easeResolution(at(0.5));
+
+    if (s.length < FRAME_SAMPLE_MIN || this.frameReportsSent >= FRAME_REPORT_MAX) return;
+    this.frameReportsSent += 1;
+
     const ms = (x: number) => Math.round(x * 10) / 10;
     r.sort((a, b) => a - b);
     const render = this.deviceRenderConfig(this.config.render);
-    this.easeResolution(at(0.5));
     reportTelemetry("frames", {
       n: s.length,
       p50: ms(at(0.5)),
