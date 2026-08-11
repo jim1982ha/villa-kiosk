@@ -351,10 +351,25 @@ export class SceneManager {
       // left, and it is the same list the room chip's long-press opens.
       const eGroup = this.visuals.pickEntityGroupAt(x, y);
       if (eGroup) {
-        // A PAIR CARD's half opens that device directly — the same panel its
-        // own badge would have opened, one tap, no list in between. Anything
-        // else about a group still opens the list.
+        // A CARD's cell opens that device directly — the same panel its own
+        // badge would have opened, one tap, no list in between.
         if (eGroup.entityId) { opts.onEntityPicked(eGroup.entityId, x, y); return; }
+        // ── NO CELL: LOOK FOR A BADGE BEFORE FALLING BACK TO THE LIST ─────
+        // A group's own members are hidden while it draws, which used to make
+        // "the group cannot steal a tap from a badge anyone can see" true by
+        // construction. It stopped being true when a card grew past one badge
+        // box: a card is anchored bottom-edge-on-anchor, so a 2x2 one reaches
+        // two badge-heights straight up, while `placeEntityGroups` still tests
+        // it against badges as a disc of half a box — deliberately, because
+        // measuring at the full card would send groups to their room's chip
+        // that a count would have seated. A card can therefore cover a badge
+        // belonging to another pile entirely.
+        //
+        // So a tap that landed on the card but in no cell — a count badge, or
+        // the empty bottom-right of a three-member grid — asks the badges
+        // first. A tap that lands on something visible belongs to that thing.
+        const under = this.visuals.pickBadgeAt(x, y, true);
+        if (under) { opts.onEntityPicked(under, x, y); return; }
         if (opts.onClusterPicked) {
           opts.onClusterPicked(eGroup.room, eGroup.entityIds);
           return;
@@ -371,12 +386,20 @@ export class SceneManager {
         opts.onClusterPicked(cluster.room, cluster.entityIds);
         return;
       }
-      // Long-press does the same as tap on an entity group — there is no
-      // second, more-detailed thing to reveal, and a control that looks
-      // identical under both gestures should behave identically under both
-      // rather than appear unresponsive to one of them.
+      // A long press on a summary always opens the LIST, cell or no cell: it
+      // is the "show me all of them" gesture, and a card's short tap already
+      // reaches each device individually.
+      //
+      // The one exception is the same as the tap path's — a card can cover a
+      // badge belonging to another pile (see handleTap), so a press that landed
+      // on the card in NO cell asks the badges first rather than answering for
+      // something it merely happens to be drawn over.
       const eGroup = this.visuals.pickEntityGroupAt(x, y);
       if (eGroup && opts.onClusterPicked) {
+        if (!eGroup.entityId) {
+          const under = this.visuals.pickBadgeAt(x, y, true);
+          if (under) { opts.onEntityLongPressed(under, x, y); return; }
+        }
         opts.onClusterPicked(eGroup.room, eGroup.entityIds);
         return;
       }

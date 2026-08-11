@@ -1,3 +1,42 @@
+## 2.266.0
+
+### Added — a group of three or four shows its devices instead of a count
+
+A bare `4` says how many devices are hidden and nothing about which, and costs a
+second tap to reach any of them. Three and four members now draw a 2x2 card of
+pictograms, each cell its own tap target opening that device. Three fills
+row-major and leaves the bottom-right empty, so the first three keep their cells
+when a fourth joins. Five and up is still a count.
+
+### Changed — a room whose devices all fit one card no longer collapses to a chip
+
+The whole-room rule escalated any bucket covering every badge in a room, which
+is why a two-device room drew `Kitchen 2` rather than the pair card.
+`solvePlacement` takes the caller's `drawableMax` now and only escalates above
+it. In practice this is the two-device case: a pile of *n* leaves a bucket of
+*n-1*, so only the lone-deferral pull-back ever produced a whole-room bucket.
+
+### Fixed — a summary could take a tap from a badge it merely covers
+
+A card is anchored bottom-edge-on-anchor, so a two-row one reaches two
+badge-heights above its anchor while still being measured against badges at one
+badge box. A tap or long-press that lands on a card in no cell now asks the
+badges before answering. Group-vs-group clearance moves to the card's
+circumscribed radius: half the width let two 2x2 cards overlap on the diagonal.
+
+### Fixed — three latent faults a taller card would have exposed
+
+A group was measured from the raw member count but drawn from a clamped one.
+Bucket members reached the renderer in deferral order (the pull-back appends the
+badge it rescues), so grid cells would have reshuffled between zoom rungs. And
+the card's height was written once at construction, so a group shrinking from
+four members to two kept a stale two-row box.
+
+Card geometry moves to `babylon/badgeCard.ts`, which imports nothing, so
+`npm run test:placement` covers it — 65 assertions now. `?debug`'s placement
+line reports `cards=2x7,4x3 counts=1`, and a new invariant checks that every
+badge is drawn, inside a summary that survived placement, or chipped.
+
 ## 2.265.0
 
 ### Fixed — a focused room only tidied its PAIRS, so everything else stacked

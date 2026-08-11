@@ -326,6 +326,21 @@ export function solvePlacement(
   minSeparation: number,
   mode: "priority" | "legacy",
   scratch: PlacementScratch,
+  /**
+   * The largest bucket the CALLER can still draw as a summary that shows every
+   * one of its devices — see the `whole` rule in step 7.
+   *
+   * Zero (the default) means "nothing is drawable", which reproduces the
+   * behaviour this module had before the caller could draw a card of
+   * pictograms: any bucket covering its whole room escalates to that room's
+   * chip. The renderer passes its own cap.
+   *
+   * It is a plain integer and STAYS one: it must not become a function of
+   * available space, camera distance or anything else this module cannot see,
+   * or the output stops being a pure function of world position, quantised
+   * zoom and static rank.
+   */
+  drawableMax = 0,
 ): PlacementResult {
   const n = items.length;
   const st = scratch;
@@ -619,8 +634,19 @@ export function solvePlacement(
       }
       bucket.rooms.sort();
       bucket.room = bucket.rooms[0] ?? "";
+      // ── …AND ONLY IF THE CALLER CANNOT DRAW IT ───────────────────────
+      // The rule exists because two renderings of the same content is how a
+      // viewer learns to distrust both: a summary covering everything its room
+      // shows IS the room. That is true while the summary is a COUNT — a room
+      // name beside a number, against a number, is the same non-information
+      // twice. It stops being true the moment the caller can draw every one of
+      // the bucket's devices as its own pictogram with its own tap target,
+      // which is strictly MORE than the chip says rather than a duplicate of
+      // it. `drawableMax` is where the caller states how many it can draw;
+      // above that the bucket is a count again and the rule applies as before.
       const whole = bucket.rooms.length === 1
-        && bucket.members.length >= (roomCount.get(bucket.room) ?? 0);
+        && bucket.members.length >= (roomCount.get(bucket.room) ?? 0)
+        && bucket.members.length > drawableMax;
       if (bucket.members.length >= 2 && !whole) continue;
       dead[b] = 1;
       changed = true;
