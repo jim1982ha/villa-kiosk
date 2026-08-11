@@ -1,3 +1,78 @@
+## 2.256.0
+
+### Added — a group of exactly two shows both devices, not a "2"
+
+A screenshot of the ground floor with roughly a dozen "2" badges on it: two
+devices, one tap to open a list of two, which is a list nobody needs. The count
+is the least useful thing a summary of two can say — that there are two is
+already obvious from any drawing that shows two.
+
+The obvious fix is to draw the two badges next to each other, and that is the
+one thing this subsystem's rules forbid. It is worth writing down why the
+answer is a different shape rather than a "no".
+
+An icon-only card badge is 32 CSS px wide, so two of them need
+`16 + 16 + 6 = 38` px of footprint clearance — but `minCentrePitchPx` is 44.
+Those pairs are not grouping because the artwork is too big. They are grouping
+because 44 px between centres is the accessibility floor (Apple's hit region,
+which is also what `pickBadgeAt` expands an undersized badge's slop to reach);
+below it two tap targets merge and the tap lands on whichever the slop ring
+reached first. So ANY answer that gives one-tap access to both devices has to
+spend 44 CSS px between them. The only real question is what occupies it.
+
+Displacing the badges spends it by moving them off their devices, which breaks
+"a badge never moves" — a rule three separate reverts were paid for across
+2.169.0-2.205.0 — and spends the muscle memory the whole subsystem exists to
+build. The card spends it by growing, and nothing moves: the pair card sits at
+the same centroid the "2" sat at, and the individual badges are still drawn at
+their anchors or not at all.
+
+So a bucket of exactly two now draws one card carrying both devices'
+pictograms, each in its own category colour and its own live state, their
+centres exactly `pairPitch` apart. Tapping a half opens that device's own panel
+— the same panel its badge would have opened, one tap, no list. A long press
+still opens the list, and a tap that somehow lands in neither half opens it
+too, so nothing the card can do is a dead end.
+
+Three or more still shows the count: three chips would be under the tap pitch,
+and past two the number genuinely is the useful fact.
+
+The edges that make it safe rather than merely nice:
+
+* **It can be refused.** `placeEntityGroups` measures every group at the width
+  it will actually be DRAWN at, so a pair card is checked at pair width and, if
+  it cannot clear its neighbours, RETRIED at the compact count width before
+  anything escalates. Without that downgrade a pair card that did not fit would
+  take its whole room to the chip, and a group of two would be worse off than
+  before it could show both its devices. `pair` is therefore decided in the
+  placer, which is the only thing that knows about clearance, and not in the
+  solver.
+* **Left/right is static.** Members come out of the bucket in the solver's own
+  total order — rank, then entity_id — so the same two devices sit the same way
+  round on every device, at every zoom, in every session.
+* **The tap split is a real control.** Two invisible half-width zones live
+  inside the card, so `Control.contains()` resolves them through the same
+  transform stack the card is drawn with — the only hit test this file trusts.
+  A chip's own 22px box would have been a meaner target than the card can
+  afford; the midline is unambiguous because a pair card is only ever two
+  devices, and it is the split a segmented control uses.
+* **The controls are built unconditionally and hidden.** A group flips between
+  2 and 3 members as devices come and go, and rebuilding its controls on that
+  boundary is a flicker with no upside.
+* **Chips bake at inset 0**, so each IS a badge rather than a badge inside a
+  second frame — the doubled-ring artefact 2.252.0 removed from the card badge
+  does not come back through this door. They are not concentric with the card
+  either (they sit half a pitch either side of its centre), so the card reads
+  as two chips on a surface, exactly like a bottom-bar tile.
+* **Cross-room pairs work unchanged.** A bucket spanning two rooms (2.250.0)
+  draws both chips and each still opens its own device; the room label is only
+  used by the list.
+
+Nothing in the placement solver changed. Badges are still accepted or deferred
+by the same pure function of world position, quantised zoom and static rank,
+and `npm run test:placement`'s 33 assertions — including order-independence
+over 40 permutations of 120 badges — are untouched and still pass.
+
 ## 2.255.0
 
 ### Changed — every string the map draws is created by one function

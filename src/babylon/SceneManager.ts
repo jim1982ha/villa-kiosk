@@ -350,9 +350,15 @@ export class SceneManager {
       // at the room, so "which of these did you mean" is the only question
       // left, and it is the same list the room chip's long-press opens.
       const eGroup = this.visuals.pickEntityGroupAt(x, y);
-      if (eGroup && opts.onClusterPicked) {
-        opts.onClusterPicked(eGroup.room, eGroup.entityIds);
-        return;
+      if (eGroup) {
+        // A PAIR CARD's half opens that device directly — the same panel its
+        // own badge would have opened, one tap, no list in between. Anything
+        // else about a group still opens the list.
+        if (eGroup.entityId) { opts.onEntityPicked(eGroup.entityId, x, y); return; }
+        if (opts.onClusterPicked) {
+          opts.onClusterPicked(eGroup.room, eGroup.entityIds);
+          return;
+        }
       }
       const badgeEntity = this.visuals.pickBadgeAt(x, y);
       if (badgeEntity) { opts.onEntityPicked(badgeEntity, x, y); return; }

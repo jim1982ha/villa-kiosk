@@ -597,6 +597,19 @@ interface EntityGroupControls {
   node: TransformNode;
   entityIds: string[];
   room: string;
+  /** The two device pictograms a group of EXACTLY TWO draws instead of a
+   *  count. Always built; shown only in pair mode. */
+  chips: [Image, Image];
+  /** Invisible half-width hit zones, one per chip — the pair card's tap
+   *  split. Children of the container, so Control.contains() resolves them
+   *  through the same transform stack the drawn card uses, which is the only
+   *  hit-test this file trusts (see pickBadgeAt). A chip's own box would be a
+   *  meaner target than the card can afford to offer; the midline is
+   *  unambiguous because there are only ever two. */
+  zones: [Rectangle, Rectangle];
+  /** Drawn as a pair card this pass (2 members AND it cleared its
+   *  neighbours), rather than as a count. */
+  isPair: boolean;
 }
 
 /** An entity group decided this frame, before it has been checked for
@@ -617,6 +630,12 @@ interface PendingEntityGroup {
   roomKeys: string[];
   members: number[];
   wx: number; wy: number; wz: number;
+  /** Decided in placeEntityGroups, which is the only place that knows whether
+   *  the wider pair card actually FITS. A group of two that cannot clear its
+   *  neighbours at pair width falls back to the compact count rather than all
+   *  the way to its room's chip — a pair card is an upgrade, and an upgrade
+   *  that costs a room its badges when it does not fit is not one. */
+  pair: boolean;
 }
 
 /* The state ring's stroke lives in badgeMetrics (`ringThicknessPx`) — it is a
@@ -2722,16 +2741,35 @@ export class EntityVisuals {
    * Deriving both from the badge means the relationship cannot drift again: one
    * scale, one height, one text size, at every zoom and icon-size setting.
    */
-  private summaryMetrics(): { size: number; font: number; countSize: number; countFont: number } {
+  private summaryMetrics(): {
+    size: number; font: number; countSize: number; countFont: number;
+    chipSize: number; pairPitch: number; pairWidth: number;
+  } {
     const m = this.metrics;
     const card = this.config.badgeStyle === "card";
     const size = card ? m.cardHeightPx : m.badgeDiameterPx;
     const font = card ? m.cardValueFontPx : m.pillValueFontPx;
+    // The pair card's chip is the card badge's chip, at the card badge's
+    // proportion — a group of two has to read as two of the badges it replaced,
+    // not as a third kind of object.
+    const chipSize = Math.round(size * m.cardIconFraction);
     return {
       size,
       font,
       countSize: Math.round(size * m.countPillFraction),
       countFont: Math.round(font * m.countFontFraction),
+      chipSize,
+      // ── THE number that makes a pair card legitimate ────────────────────
+      // Two chips inside one card are two independently tappable controls, so
+      // they owe the same centre-to-centre distance two separate badges owe:
+      // minCentrePitchPx, Apple's hit region and what pickBadgeAt resolves
+      // against. That is ALSO the reason those badges grouped in the first
+      // place — an icon-only pair needs 16 + 16 + 6 = 38px of footprint but 44
+      // of pitch, so the floor is what binds, not the artwork. The pair card
+      // does not dodge the floor; it spends exactly it, and buys a visible
+      // pictogram per device and a one-tap target for each instead of a "2".
+      pairPitch: Math.max(chipSize + m.minGapPx, m.minCentrePitchPx),
+      pairWidth: Math.max(chipSize + m.minGapPx, m.minCentrePitchPx) + size,
     };
   }
 
@@ -3660,6 +3698,9 @@ export class EntityVisuals {
           // the pooled bucket is about to be reused.
           members: bucket.members.slice(),
           wx: wx / n, wy: wy / n, wz: wz / n,
+          // Provisional: a group of two ASKS for the pair card, and
+          // placeEntityGroups is what grants or refuses it on clearance.
+          pair: n === 2,
         });
       }
     }
@@ -4106,7 +4147,15 @@ export class EntityVisuals {
     // was floored at CLUSTER_MIN_SCALE while badges took the 0.7 far-zoom cap,
     // which made a summary bigger than the badges it replaced AND forced this
     // method to reason in a scale of its own. Both went together.
-    const mineHalf = (this.summaryMetrics().size / 2) * scale * allow;
+    const sm = this.summaryMetrics();
+    const squareHalf = (sm.size / 2) * scale * allow;
+    const pairHalf = (sm.pairWidth / 2) * scale * allow;
+    // A group is tested at the width it would actually be DRAWN at — the
+    // file's oldest rule, and the reason `pair` is decided here rather than in
+    // the solver. Widened boxes are checked FIRST, and a pair that cannot
+    // clear its neighbours retries at the compact count width before giving
+    // up; only a group that fits at neither escalates to its room's chip.
+    const groupHalf = (g: PendingEntityGroup) => (g.pair ? pairHalf : squareHalf);
 
     // Fixed order (the key is stable and total), so which of two conflicting
     // groups survives never depends on the order the solver emitted them in.
@@ -4114,9 +4163,11 @@ export class EntityVisuals {
     // two clients must resolve the same conflict the same way.
     pending.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
     const placed: PendingEntityGroup[] = [];
-    for (const g of pending) {
-      let clear = true;
-      for (let j = 0; j < shown.length && clear; j++) {
+    /** Does this group clear every drawn badge and every group already placed,
+     *  at whatever width `g.pair` currently asks for? */
+    const fits = (g: PendingEntityGroup): boolean => {
+      const mineHalf = groupHalf(g);
+      for (let j = 0; j < shown.length; j++) {
         // Only badges that are actually DRAWN can be in the way, and a drawn
         // badge is always at its own anchor because nothing here moves one —
         // so the anchor is the position to test and there is no seat to look
@@ -4128,12 +4179,24 @@ export class EntityVisuals {
         if (this.entityGrouped.has(shown[j].id)) continue;
         if (this.roomClustered.get(roomKey(this.roomOf(shown[j].id)))) continue;
         const d = Math.hypot(g.wx - shown[j].wx, g.wy - shown[j].wy, g.wz - shown[j].wz) * pxPerWorld;
-        if (d < mineHalf + halfOf(j) * allow + gapPx) clear = false;
+        if (d < mineHalf + halfOf(j) * allow + gapPx) return false;
       }
       for (const o of placed) {
-        if (!clear) break;
         const d = Math.hypot(g.wx - o.wx, g.wy - o.wy, g.wz - o.wz) * pxPerWorld;
-        if (d < mineHalf * 2 + gapPx) clear = false;
+        if (d < mineHalf + groupHalf(o) + gapPx) return false;
+      }
+      return true;
+    };
+
+    for (const g of pending) {
+      // Ask for the pair card, settle for the count. The DOWNGRADE is what
+      // keeps this change free: without it a pair card that did not fit would
+      // take its whole room to the chip, and a group of two would be worse off
+      // than before it could show both its devices.
+      let clear = fits(g);
+      if (!clear && g.pair) {
+        g.pair = false;
+        clear = fits(g);
       }
       if (!clear) {
         // Nowhere to stand: this is room-level crowding after all. EVERY room
@@ -4181,12 +4244,47 @@ export class EntityVisuals {
       const rest = categorySurface("others", "off");
       const alert = categorySurface("others", "alert");
       const surface = rest.fill;
+      const sm = this.summaryMetrics();
       for (const g of groups) {
         live.add(g.key);
         const c = this.ensureEntityGroup(g.key, layer);
         c.entityIds = g.members.map((i) => shown[i].id);
         c.room = g.room;
         c.node.position.set(g.wx, g.wy, g.wz);
+        // ── PAIR CARD, or the count ────────────────────────────────────────
+        // Two devices drawn as "2" is the only summary in this app that costs
+        // a tap without telling you anything you could act on: the count is
+        // already implied by there being two pictograms. So a group of exactly
+        // two shows both devices instead — each in its own category colour and
+        // its own live state, each its own tap target — and the card is the
+        // one that grows, never the badges that move. Three or more keeps the
+        // count: three chips would be under the tap pitch, and beyond two the
+        // number IS the useful fact.
+        const pair = g.pair && c.entityIds.length === 2;
+        c.isPair = pair;
+        c.container.width = `${pair ? sm.pairWidth : sm.size}px`;
+        c.countText.isVisible = !pair;
+        c.chips[0].isVisible = pair;
+        c.chips[1].isVisible = pair;
+        if (pair) {
+          // Stable left/right: the solver's own total order, so the same two
+          // devices sit the same way round on every device and at every zoom.
+          // Membership order out of the bucket is already (rank, entity_id).
+          for (let k = 0; k < 2; k++) {
+            const s2 = shown[g.members[k]];
+            const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
+            const { face, ring } = badgeFaceAndRing(
+              s2.lbl.type, st, this.linkActiveIds.has(s2.id));
+            c.chips[k].source = badgeImageDataUrl(
+              s2.lbl.category, iconKeyFor(s2.lbl.type, st), face,
+              this.config.entityMap[s2.id]?.badgeColor,
+              // Inset 0: this chip IS the badge here, exactly as the classic
+              // style's is. The card behind it is the group's own surface, not
+              // a second frame — see updateLabel for the doubled ring that
+              // insetting inside a bordered card produced.
+              0, ring);
+          }
+        }
         c.countText.text = formatCountBadge(c.entityIds.length);
         // Exactly the room chip's ring rule (BADGE_RING): red when at least
         // one member is "on" or "alert". Unavailability is NOT a ring — it
@@ -4226,7 +4324,7 @@ export class EntityVisuals {
         // Zero X offset and a fixed centring lift, exactly like the room chip:
         // the group sits ON its anchor. It is a summary, not a nudged badge.
         c.container.linkOffsetXInPixels = 0;
-        c.container.linkOffsetYInPixels = -(this.summaryMetrics().size / 2) * scale;
+        c.container.linkOffsetYInPixels = -(sm.size / 2) * scale;
         c.container.isVisible = true;
       }
     }
@@ -4280,7 +4378,45 @@ export class EntityVisuals {
     container.linkWithMesh(node);
     container.linkOffsetYInPixels = -sm.size / 2;
 
-    const c: EntityGroupControls = { container, countText, node, entityIds: [], room: "" };
+    // ── The pair card's two chips, and their tap split ──────────────────
+    // Built unconditionally and hidden: a group flips between 2 and 3 members
+    // as devices come and go, and rebuilding controls on that boundary is a
+    // flicker with no upside. Positioned by `left` about the card's centre,
+    // half the pitch each way, so the two chip CENTRES are exactly pairPitch
+    // apart — the number summaryMetrics justifies.
+    const half = sm.pairPitch / 2;
+    const mkChip = (side: -1 | 1): Image => {
+      const img = new Image(`egroupChip${side < 0 ? "A" : "B"}_${key}`);
+      img.width = `${sm.chipSize}px`;
+      img.height = `${sm.chipSize}px`;
+      img.left = `${side * half}px`;
+      img.stretch = Image.STRETCH_UNIFORM;
+      img.isVisible = false;
+      container.addControl(img);
+      return img;
+    };
+    // A tap anywhere in a half belongs to that half's device. The chip's own
+    // box would be a meaner target than the card can afford — the midline is
+    // unambiguous because a pair card is only ever two devices, and it is the
+    // same split a segmented control uses.
+    const mkZone = (side: -1 | 1): Rectangle => {
+      const z = new Rectangle(`egroupZone${side < 0 ? "A" : "B"}_${key}`);
+      z.width = `${sm.pairWidth / 2}px`;
+      z.height = "100%";
+      z.left = `${side * sm.pairWidth / 4}px`;
+      z.thickness = 0;
+      z.background = "";
+      z.isPointerBlocker = false;
+      container.addControl(z);
+      return z;
+    };
+    const chips: [Image, Image] = [mkChip(-1), mkChip(1)];
+    const zones: [Rectangle, Rectangle] = [mkZone(-1), mkZone(1)];
+
+    const c: EntityGroupControls = {
+      container, countText, node, entityIds: [], room: "",
+      chips, zones, isPair: false,
+    };
     this.entityGroups.set(key, c);
     return c;
   }
@@ -4291,7 +4427,9 @@ export class EntityVisuals {
    *  control is the only approach that cannot drift from what is on screen.
    *  Its members are hidden exactly while it is visible, so it can never take
    *  a tap from a badge the user can actually see. */
-  pickEntityGroupAt(clientX: number, clientY: number): { room: string; entityIds: string[] } | null {
+  pickEntityGroupAt(
+    clientX: number, clientY: number,
+  ): { room: string; entityIds: string[]; entityId: string | null } | null {
     if (this.entityGroups.size === 0) return null;
     const eng = this.scene.getEngine();
     const canvas = eng.getRenderingCanvas();
@@ -4302,7 +4440,23 @@ export class EntityVisuals {
     const py = (clientY - rect.top) * (eng.getRenderHeight() / rect.height);
     for (const c of this.entityGroups.values()) {
       if (!c.container.isVisible) continue;
-      if (c.container.contains(px, py)) return { room: c.room, entityIds: [...c.entityIds] };
+      if (!c.container.contains(px, py)) continue;
+      // A PAIR CARD resolves to ONE device: the half you tapped. That is the
+      // whole point of drawing two pictograms instead of a count — a group of
+      // two used to cost a tap to open a list of two, which is a list nobody
+      // needs. The zones are real controls inside the card, so contains()
+      // resolves them through the same transform stack the card is drawn with,
+      // which is the only hit test this file trusts (see pickBadgeAt).
+      //
+      // A tap that somehow lands in neither half still opens the list rather
+      // than guessing, and a LONG press always does (see SceneManager) — the
+      // list stays reachable, so nothing this card can do is a dead end.
+      let entityId: string | null = null;
+      if (c.isPair && c.entityIds.length === 2) {
+        if (c.zones[0].contains(px, py)) entityId = c.entityIds[0];
+        else if (c.zones[1].contains(px, py)) entityId = c.entityIds[1];
+      }
+      return { room: c.room, entityIds: [...c.entityIds], entityId };
     }
     return null;
   }
