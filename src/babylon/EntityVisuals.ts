@@ -597,19 +597,20 @@ interface EntityGroupControls {
   node: TransformNode;
   entityIds: string[];
   room: string;
-  /** The two device pictograms a group of EXACTLY TWO draws instead of a
-   *  count. Always built; shown only in pair mode. */
-  chips: [Image, Image];
-  /** Invisible half-width hit zones, one per chip — the pair card's tap
-   *  split. Children of the container, so Control.contains() resolves them
-   *  through the same transform stack the drawn card uses, which is the only
-   *  hit-test this file trusts (see pickBadgeAt). A chip's own box would be a
-   *  meaner target than the card can afford to offer; the midline is
-   *  unambiguous because there are only ever two. */
-  zones: [Rectangle, Rectangle];
-  /** Drawn as a pair card this pass (2 members AND it cleared its
-   *  neighbours), rather than as a count. */
-  isPair: boolean;
+  /** One device pictogram per chip of a STRIP card. Grow-only pool: a group's
+   *  membership changes as devices come and go, and rebuilding controls on
+   *  that boundary is a flicker with no upside. */
+  chips: Image[];
+  /** Invisible equal-width hit zones, one per chip — the strip's tap split.
+   *  Children of the container, so Control.contains() resolves them through
+   *  the same transform stack the drawn card uses, which is the only hit-test
+   *  this file trusts (see pickBadgeAt). A chip's own box would be a meaner
+   *  target than the card can afford to offer; the zones TILE, so every tap
+   *  inside the card belongs to exactly one device. */
+  zones: Rectangle[];
+  /** Chips drawn this pass, or 0 for a count / compact pair. Also how many
+   *  zones are live for hit-testing. */
+  stripN: number;
 }
 
 /** An entity group decided this frame, before it has been checked for
@@ -630,12 +631,21 @@ interface PendingEntityGroup {
   roomKeys: string[];
   members: number[];
   wx: number; wy: number; wz: number;
-  /** Decided in placeEntityGroups, which is the only place that knows whether
-   *  the wider pair card actually FITS. A group of two that cannot clear its
-   *  neighbours at pair width falls back to the compact count rather than all
-   *  the way to its room's chip — a pair card is an upgrade, and an upgrade
-   *  that costs a room its badges when it does not fit is not one. */
-  pair: boolean;
+  /**
+   * How many device pictograms to draw side by side, or 0 for a count /
+   * compact pair. The card is `strip * badge` wide, so every chip's tap zone
+   * is exactly the box of the badge it stands in for.
+   *
+   * For an ordinary group this is 2 or 0, decided in placeEntityGroups —
+   * the only place that knows whether the wider card actually FITS. A group of
+   * two that cannot clear its neighbours falls back to the COMPACT pair (same
+   * footprint as a count, so it always fits) rather than to a digit, and never
+   * to its room's chip: a strip is an upgrade, and an upgrade that costs a
+   * room its badges when it does not fit is not one.
+   *
+   * Inside the FOCUSED room it is the whole pile — see pairFocusedRoom.
+   */
+  strip: number;
   /**
    * Made inside the FOCUSED room (see pairFocusedRoom), not by the main solve.
    *
@@ -800,9 +810,7 @@ export class EntityVisuals {
   /** The layout pass's own solver workspace. solveRoomZoomRadius keeps a
    *  SEPARATE one — see PlacementResult's warning about pooled returns. */
   private placeScratch: PlacementScratch = createPlacementScratch();
-  /** Its own, because it solves a SUBSET while the main result is still live —
-   *  see the pooling warning on PlacementResult. */
-  private focusScratch: PlacementScratch = createPlacementScratch();
+  /** Solver input for the focused room's own pass — see pairFocusedRoom. */
   private focusItems: PlacementItem[] = [];
   /** shown-index per focusItems slot, pooled: this runs per frame while a room
    *  is focused, and the steady state should allocate nothing. */
@@ -2804,14 +2812,20 @@ export class EntityVisuals {
       // clearance disc, which is what gets the card granted more often.
       pairPitch: size,
       pairWidth: 2 * size,
-      // ── The COMPACT pair, for when the wide card will not fit ───────────
+      // ── The COMPACT pair, for when the strip will not fit ───────────────
       // Same footprint as the count badge it replaces — so it can never be
       // refused where a count would have been accepted, and adding it costs
       // no room its badges. Two half-size pictograms instead of the digit
       // "2", because the digit is the one count in this app that carries no
       // information: two pictograms already say "two", and they also say
       // WHICH two. Its tap opens the list, exactly as the count's did.
-      compactChip: Math.max(6, Math.floor((size - m.minGapPx) / 2)),
+      //
+      // Sized inside the CARD'S OWN CHIP BOX (chipSize), not inside the whole
+      // card: a chip is inset from the card's edge by (size - chipSize) / 2
+      // everywhere else in this app, and deriving these two from `size`
+      // instead ran their art flush to the border — visible as an unavailable
+      // device's dashed ring appearing to hang off the card.
+      compactChip: Math.max(6, Math.floor((chipSize - 2) / 2)),
     };
   }
 
@@ -3743,9 +3757,9 @@ export class EntityVisuals {
           // the pooled bucket is about to be reused.
           members: bucket.members.slice(),
           wx: wx / n, wy: wy / n, wz: wz / n,
-          // Provisional: a group of two ASKS for the pair card, and
+          // Provisional: a group of two ASKS for the strip, and
           // placeEntityGroups is what grants or refuses it on clearance.
-          pair: n === 2,
+          strip: n === 2 ? 2 : 0,
           focused: false,
         });
       }
@@ -4198,13 +4212,14 @@ export class EntityVisuals {
     // method to reason in a scale of its own. Both went together.
     const sm = this.summaryMetrics();
     const squareHalf = (sm.size / 2) * scale * allow;
-    const pairHalf = (sm.pairWidth / 2) * scale * allow;
+    const stripHalfOf = (n: number) => ((n * sm.size) / 2) * scale * allow;
     // A group is tested at the width it would actually be DRAWN at — the
     // file's oldest rule, and the reason `pair` is decided here rather than in
     // the solver. Widened boxes are checked FIRST, and a pair that cannot
     // clear its neighbours retries at the compact count width before giving
     // up; only a group that fits at neither escalates to its room's chip.
-    const groupHalf = (g: PendingEntityGroup) => (g.pair ? pairHalf : squareHalf);
+    const groupHalf = (g: PendingEntityGroup) =>
+      (g.strip >= 2 ? stripHalfOf(g.strip) : squareHalf);
 
     // Fixed order (the key is stable and total), so which of two conflicting
     // groups survives never depends on the order the solver emitted them in.
@@ -4269,16 +4284,16 @@ export class EntityVisuals {
     // already seated, since `fits` reads `groupHalf(o)` off them. Parking the
     // request on the object itself would have let an early group reserve pair
     // width DURING pass 1, which is the greed this restructure removes.
-    const wantsPair: boolean[] = [];
+    const wantsPair: number[] = [];
     for (const g of pending) {
       // A FOCUSED pair is seated unconditionally, and keeps its wide card.
       // It stands in for two badges that the exemption was already drawing on
       // top of each other, so a refusal would restore the exact overlap it
       // exists to remove — and it can never escalate the focused room to its
       // chip, which would break the one promise tapping a room makes.
-      if (g.focused) { placed.push(g); wantsPair.push(false); continue; }
-      const wanted = g.pair;
-      g.pair = false;
+      if (g.focused) { placed.push(g); wantsPair.push(0); continue; }
+      const wanted = g.strip;
+      g.strip = 0;
       if (!fits(g, placed)) {
         // Nowhere to stand: this is room-level crowding after all. EVERY room
         // the group covered escalates, not just its primary one — a group that
@@ -4297,8 +4312,8 @@ export class EntityVisuals {
     // order wins deterministically.
     for (let i = 0; i < placed.length; i++) {
       if (!wantsPair[i]) continue;
-      placed[i].pair = true;
-      if (!fits(placed[i], placed)) placed[i].pair = false;
+      placed[i].strip = wantsPair[i];
+      if (!fits(placed[i], placed)) placed[i].strip = 0;
       else this.pairUpgrades++;
       this.pairCandidates++;
     }
@@ -4361,7 +4376,7 @@ export class EntityVisuals {
   ): void {
     const focus = this.focusedRoom;
     if (focus === null) return;
-    // Indices into `shown`, so a bucket's members map straight back.
+    // Indices into `shown`, so a strip's members map straight back.
     const idx = this.focusIdx;
     idx.length = 0;
     const sub = this.focusItems;
@@ -4376,45 +4391,114 @@ export class EntityVisuals {
       it.wx = src.wx; it.wy = src.wy; it.wz = src.wz;
       it.reach = src.reach; it.rank = src.rank;
       it.sortKey = src.sortKey; it.room = src.room;
-      // The whole point: inside the focused room they DO compete, so the
-      // solver can tell which of them are actually on top of each other.
       it.exempt = false;
       idx.push(i);
     }
     sub.length = idx.length;
     if (idx.length < 2) return;
 
-    const result = solvePlacement(
-      sub, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.focusScratch,
-    );
-    for (let b = 0; b < result.bucketCount; b++) {
-      const bucket = result.buckets[b];
-      // Two only. A bucket of three or more would have to become a count, and
-      // a count inside the room you just asked to see is the thing the
-      // exemption exists to prevent — those stay drawn, as today.
-      if (bucket.members.length !== 2) continue;
+    // ── Piles, from the SAME predicate every other tier uses ──────────────
+    // Only the components are wanted here, not an accept/defer verdict:
+    // inside the focused room every device is drawn no matter what, so the
+    // question is purely "which of these are on top of each other". Running
+    // the full solver would have answered a question this pass is not asking
+    // and brought its chip rule with it — a focused room whose badges all fell
+    // into one bucket would have chipped itself, which is the one thing the
+    // focus exists to prevent.
+    //
+    // One room's badges, so the plain O(n^2) sweep is cheaper than any index.
+    const parent = new Int32Array(sub.length);
+    for (let i = 0; i < sub.length; i++) parent[i] = i;
+    const root = (x: number): number => {
+      let r = x;
+      while (parent[r] !== r) { parent[r] = parent[parent[r]]; r = parent[r]; }
+      return r;
+    };
+    for (let i = 0; i < sub.length; i++) {
+      for (let j = i + 1; j < sub.length; j++) {
+        if (!conflicts(sub[i], sub[j], clearance.gap, clearance.minSep)) continue;
+        const ri = root(i), rj = root(j);
+        if (ri !== rj) parent[ri] = rj;
+      }
+    }
+    const piles = new Map<number, number[]>();
+    for (let i = 0; i < sub.length; i++) {
+      const r = root(i);
+      const list = piles.get(r);
+      if (list) list.push(i); else piles.set(r, [i]);
+    }
+
+    for (const pile of piles.values()) {
+      // ── THE WHOLE PILE BECOMES ONE STRIP ──────────────────────────────
+      // Not just its losers. Taking only a bucket of two left a pile of THREE
+      // co-located devices drawing an accepted badge AND a card of the other
+      // two at the same point — the card landed on the badge and the overlap
+      // was back, with an extra control. A pile is one object on screen, so it
+      // becomes one control: every device in it visible, every one tappable.
+      if (pile.length < 2) continue;
+      const members = pile.map((k) => idx[k]);
+      // The solver's own total order, so the chips sit the same way round on
+      // every device, at every zoom, in every session.
+      members.sort((x, y) => {
+        const a = shown[x], b = shown[y];
+        const ra = badgeRank(a.lbl.type, a.lbl.category);
+        const rb = badgeRank(b.lbl.type, b.lbl.category);
+        return ra !== rb ? ra - rb : (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+      });
       let wx = 0, wy = 0, wz = 0;
-      const members: number[] = [];
-      for (const m of bucket.members) {
-        const i = idx[m];
-        members.push(i);
+      let pileKey = shown[members[0]].id;
+      for (const i of members) {
         wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz;
+        if (shown[i].id < pileKey) pileKey = shown[i].id;
         this.entityGrouped.add(shown[i].id);
       }
+      const n = members.length;
       pending.push({
-        // Distinct namespace from the main solve's `grp|`: the same two
-        // devices can be a focused pair now and an ordinary one after the
-        // focus lapses, and giving them one key would reuse a control whose
+        // Distinct namespace from the main solve's `grp|`: the same devices
+        // can be a focused strip now and an ordinary group after the focus
+        // lapses, and giving them one key would reuse a control whose
         // placement rules just changed.
-        key: `fgrp|${bucket.pileKey}`,
+        key: `fgrp|${pileKey}`,
         room: this.roomDisplay.get(focus) ?? focus,
         roomKeys: [focus],
         members,
-        wx: wx / 2, wy: wy / 2, wz: wz / 2,
-        pair: true,
+        wx: wx / n, wy: wy / n, wz: wz / n,
+        strip: n,
         focused: true,
       });
       this.focusPairs++;
+    }
+  }
+
+  /**
+   * Make sure this group has at least `n` chip+zone pairs, creating any that
+   * are missing.
+   *
+   * Grow-only and never shrunk: a group's membership moves as devices come
+   * and go and as the zoom rung changes what fits, and disposing controls on
+   * that boundary would flicker for no benefit. Surplus ones are hidden.
+   */
+  private growStrip(c: EntityGroupControls, n: number, layer: AdvancedDynamicTexture): void {
+    void layer;
+    for (let k = c.chips.length; k < n; k++) {
+      const img = new Image(`egroupChip${k}_${c.container.name}`);
+      img.stretch = Image.STRETCH_UNIFORM;
+      img.isVisible = false;
+      c.container.addControl(img);
+      c.chips.push(img);
+
+      // Percent width/left, so a zone follows whatever width the card is drawn
+      // at this pass rather than a size captured when it was built. The zones
+      // TILE the card: every tap inside belongs to exactly one device, which
+      // is what lets them be narrower than a slop-expanded badge without
+      // becoming ambiguous.
+      const z = new Rectangle(`egroupZone${k}_${c.container.name}`);
+      z.height = "100%";
+      z.thickness = 0;
+      z.background = "";
+      z.isPointerBlocker = false;
+      c.container.addControl(z);
+      c.zones.push(z);
     }
   }
 
@@ -4447,38 +4531,54 @@ export class EntityVisuals {
         c.room = g.room;
         c.node.position.set(g.wx, g.wy, g.wz);
         // ── PAIR CARD, or the count ────────────────────────────────────────
-        // ── A GROUP OF TWO NEVER DRAWS A DIGIT ────────────────────────────
+        // ── A GROUP NEVER DRAWS A DIGIT IT DOES NOT NEED ─────────────────
         // "2" is the one count in this app that carries no information: two
-        // pictograms already say two, and they also say WHICH two. So a
-        // two-member group always shows both devices, and only the TAP
-        // degrades when there is no room for the wide card:
+        // pictograms already say two, and they also say WHICH two. A group of
+        // two therefore always shows both devices, and only the TAP degrades
+        // when there is no room for the strip:
         //
-        //   wide     both devices, one tap each (zones tile the card)
+        //   strip    every device, one tap each (zones tile the card)
         //   compact  both devices at half size in the COUNT badge's own
         //            footprint, tap opens the list
+        //   count    three or more that could not be a strip
         //
-        // The compact form is what makes this free. It is exactly as big as
-        // the count it replaces, so it can never be refused where a count
-        // would have been accepted, and no room loses its badges to it. The
-        // digit survives only for three or more — which is also the case the
-        // digit is genuinely about, two groups having merged.
-        const two = c.entityIds.length === 2;
-        const wide = g.pair && two;
-        c.isPair = wide;
-        c.container.width = `${wide ? sm.pairWidth : sm.size}px`;
-        c.countText.isVisible = !two;
-        c.chips[0].isVisible = two;
-        c.chips[1].isVisible = two;
-        if (two) {
-          const chipPx = wide ? sm.chipSize : sm.compactChip;
-          const half = (wide ? sm.pairPitch : sm.compactChip + this.metrics.minGapPx) / 2;
-          // Stable left/right: the solver's own total order, so the same two
+        // The compact form is what makes the two-case free: it is exactly as
+        // big as the count it replaces, so it can never be refused where a
+        // count would have been accepted.
+        //
+        // `strip` is > 2 only inside the FOCUSED room, where the promise is
+        // that tapping a room shows its devices — there a pile of three
+        // co-located devices becomes one card of three chips rather than
+        // three badges the top of which is the only one anybody can tap.
+        const n = c.entityIds.length;
+        const strip = Math.min(g.strip, n);
+        const compact = strip < 2 && n === 2;
+        c.stripN = strip >= 2 ? strip : 0;
+        c.container.width = `${strip >= 2 ? strip * sm.size : sm.size}px`;
+        c.countText.isVisible = strip < 2 && !compact;
+        c.countText.text = formatCountBadge(n);
+        const drawn = strip >= 2 ? strip : compact ? 2 : 0;
+        this.growStrip(c, drawn, layer);
+        for (let k = 0; k < c.chips.length; k++) {
+          c.chips[k].isVisible = k < drawn;
+          c.zones[k].isVisible = k < drawn;
+        }
+        if (drawn > 0) {
+          // Pitch = ONE BADGE for the strip, so every chip's zone is exactly
+          // the box of the badge it stands in for. The compact pair shares the
+          // count's single-badge footprint instead, and keeps the card's own
+          // 3-unit chip margin rather than running its art to the edge.
+          const chipPx = strip >= 2 ? sm.chipSize : sm.compactChip;
+          const pitch = strip >= 2 ? sm.size : sm.compactChip + 2;
+          // Stable order: the solver's own (rank, entity_id), so the same
           // devices sit the same way round on every device and at every zoom.
-          // Membership order out of the bucket is already (rank, entity_id).
-          for (let k = 0; k < 2; k++) {
+          for (let k = 0; k < drawn; k++) {
+            const off = (k - (drawn - 1) / 2) * pitch;
             c.chips[k].width = `${chipPx}px`;
             c.chips[k].height = `${chipPx}px`;
-            c.chips[k].left = `${(k === 0 ? -1 : 1) * half}px`;
+            c.chips[k].left = `${off}px`;
+            c.zones[k].width = `${Math.round(100 / drawn)}%`;
+            c.zones[k].left = `${((k - (drawn - 1) / 2) * 100) / drawn}%`;
             const s2 = shown[g.members[k]];
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
             const { face, ring } = badgeFaceAndRing(
@@ -4493,7 +4593,6 @@ export class EntityVisuals {
               0, ring);
           }
         }
-        c.countText.text = formatCountBadge(c.entityIds.length);
         // Exactly the room chip's ring rule (BADGE_RING): red when at least
         // one member is "on" or "alert". Unavailability is NOT a ring — it
         // dims, same as an individual badge — so the two signals stay
@@ -4586,47 +4685,11 @@ export class EntityVisuals {
     container.linkWithMesh(node);
     container.linkOffsetYInPixels = -sm.size / 2;
 
-    // ── The pair card's two chips, and their tap split ──────────────────
-    // Built unconditionally and hidden: a group flips between 2 and 3 members
-    // as devices come and go, and rebuilding controls on that boundary is a
-    // flicker with no upside. Positioned by `left` about the card's centre,
-    // half the pitch each way, so the two chip CENTRES are exactly pairPitch
-    // apart — the number summaryMetrics justifies.
-    // Size and offset are set per PASS (see updateEntityGroups): the same two
-    // controls serve the wide card and the compact one, and which is drawn
-    // depends on clearance, which changes with the zoom rung.
-    const mkChip = (side: -1 | 1): Image => {
-      const img = new Image(`egroupChip${side < 0 ? "A" : "B"}_${key}`);
-      img.stretch = Image.STRETCH_UNIFORM;
-      img.isVisible = false;
-      container.addControl(img);
-      return img;
-    };
-    // A tap anywhere in a half belongs to that half's device. The chip's own
-    // box would be a meaner target than the card can afford — the midline is
-    // unambiguous because a pair card is only ever two devices, and it is the
-    // same split a segmented control uses.
-    const mkZone = (side: -1 | 1): Rectangle => {
-      const z = new Rectangle(`egroupZone${side < 0 ? "A" : "B"}_${key}`);
-      // HALF the card, in percent — so the zones follow whatever width the
-      // card is drawn at this pass rather than a size captured at
-      // construction. A stale wide-card zone on a compact card would take
-      // taps outside the control that is actually on screen.
-      z.width = "50%";
-      z.height = "100%";
-      z.left = `${side * 25}%`;
-      z.thickness = 0;
-      z.background = "";
-      z.isPointerBlocker = false;
-      container.addControl(z);
-      return z;
-    };
-    const chips: [Image, Image] = [mkChip(-1), mkChip(1)];
-    const zones: [Rectangle, Rectangle] = [mkZone(-1), mkZone(1)];
-
+    // Chips and zones are grown on demand by `strip()` — see it for why they
+    // are not created here.
     const c: EntityGroupControls = {
       container, countText, node, entityIds: [], room: "",
-      chips, zones, isPair: false,
+      chips: [], zones: [], stripN: 0,
     };
     this.entityGroups.set(key, c);
     return c;
@@ -4663,12 +4726,11 @@ export class EntityVisuals {
       // than guessing, and a LONG press always does (see SceneManager) — the
       // list stays reachable, so nothing this card can do is a dead end.
       let entityId: string | null = null;
-      // `isPair` is the WIDE card only. The compact pair shows both devices in
-      // the count badge's own footprint, which is too small to split into two
-      // honest targets — so it keeps the count's behaviour and opens the list.
-      if (c.isPair && c.entityIds.length === 2) {
-        if (c.zones[0].contains(px, py)) entityId = c.entityIds[0];
-        else if (c.zones[1].contains(px, py)) entityId = c.entityIds[1];
+      // `stripN` is the STRIP only. A compact pair shows both devices in the
+      // count badge's own footprint, which is too small to split into honest
+      // targets — it keeps the count's behaviour and opens the list.
+      for (let k = 0; k < c.stripN && k < c.entityIds.length; k++) {
+        if (c.zones[k].contains(px, py)) { entityId = c.entityIds[k]; break; }
       }
       return { room: c.room, entityIds: [...c.entityIds], entityId };
     }

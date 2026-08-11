@@ -1,3 +1,45 @@
+## 2.261.0
+
+### Fixed — a focused room's pile of three drew a card ON TOP of a badge
+
+2.260.0 took only the buckets of TWO out of the focused room's own pass, and a
+bucket is a pile's LOSERS. So a pile of three co-located devices resolved to
+one accepted badge plus a pair card of the other two — both drawn at
+essentially the same point, because the devices are at the same point. The
+overlap was back, now with an extra control in it. That is the doubled badge in
+the reported screenshot.
+
+A pile is one object on screen, so it becomes one control. The focused room's
+pass now emits ONE strip per pile, containing every member of it — winners
+included — with a chip per device, each in its own live state and each with its
+own tap zone. Every device in the pile is visible and reachable, and there is
+nothing left at the anchors to be overlapped.
+
+The pair card generalises to a strip of N: pitch is one badge and the card is
+`n × badge` wide, so every chip's zone is exactly the box of the badge it
+stands in for, whether there are two of them or four. The ordinary (unfocused)
+path still only ever asks for two — three or more out there is a count, as
+before — and strips wider than two exist only inside the focused room, where
+the promise is that tapping a room shows you its devices.
+
+The focused pass also stopped using the full solver. It only ever wanted the
+PILES, not an accept/defer verdict — inside a focused room every device is
+drawn regardless — and running the whole thing brought its chip rule along:
+a focused room whose badges all fell into one bucket would have chipped itself,
+which is the single thing the focus exists to prevent. It is a union-find over
+`badgePlacement.conflicts`, the same predicate every other tier calls, and
+nothing else.
+
+### Fixed — the compact pair's art ran flush to the card's border
+
+Its two half-size chips were derived from the card's full width rather than
+from the chip box a card actually gives its art — every other chip in this app
+is inset `(size - chipSize) / 2` from the card's edge — so they touched the
+border on both sides. Most visible on an unavailable device, whose dashed ring
+is drawn at the chip's own edge and therefore appeared to hang off the card.
+Derived from `chipSize` now, so the compact pair keeps the same margin the
+badge and the strip do.
+
 ## 2.260.0
 
 ### Added — the focused room pairs up its own overlapping badges
