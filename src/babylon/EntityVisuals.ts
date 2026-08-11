@@ -4862,9 +4862,24 @@ export class EntityVisuals {
    * its 20px radius. Asking the rendered control directly cannot drift from
    * what's on screen, at any scale, zoom, or DPI.
    */
-  pickBadgeAt(clientX: number, clientY: number): string | null {
+  pickBadgeAt(
+    clientX: number, clientY: number,
+    /**
+     * Log the result.
+     *
+     * OFF by default, and that default is the point. This runs on every
+     * pointermove for the hover cursor AND again from PickHandler's own
+     * predicate, i.e. ~60 lines a second while a finger is down, and a real
+     * field log came back with thousands of `hit=none (visible=34/90)` lines
+     * burying the placement decisions it was collected to show. Only a
+     * genuine TAP or long-press asks for the line, which is the only moment
+     * "did this resolve to a badge, and if not what was on screen" is a
+     * question anyone has.
+     */
+    verbose = false,
+  ): string | null {
     if (this.labels.size === 0) {
-      tapDebug(`pickBadgeAt: no badges (labels=${this.labels.size})`);
+      if (verbose) tapDebug(`pickBadgeAt: no badges (labels=${this.labels.size})`);
       return null;
     }
     const eng = this.scene.getEngine();
@@ -4908,13 +4923,17 @@ export class EntityVisuals {
       const dy = TAP_RING_UNIT[sIdx + 1] * r;
       const hit = this.badgeContaining(px + dx, py + dy);
       if (hit) {
-        tapDebug(`pickBadgeAt(${px.toFixed(0)},${py.toFixed(0)}) hit=${hit} offset=${Math.hypot(dx, dy).toFixed(0)}px`);
+        if (verbose) {
+          tapDebug(`pickBadgeAt(${px.toFixed(0)},${py.toFixed(0)}) hit=${hit} offset=${Math.hypot(dx, dy).toFixed(0)}px`);
+        }
         return hit;
       }
     }
-    let visible = 0;
-    for (const lbl of this.labels.values()) if (lbl.container.isVisible) visible++;
-    tapDebug(`pickBadgeAt(${px.toFixed(0)},${py.toFixed(0)}) hit=none (visible=${visible}/${this.labels.size})`);
+    if (verbose) {
+      let visible = 0;
+      for (const lbl of this.labels.values()) if (lbl.container.isVisible) visible++;
+      tapDebug(`pickBadgeAt(${px.toFixed(0)},${py.toFixed(0)}) hit=none (visible=${visible}/${this.labels.size})`);
+    }
     return null;
   }
 

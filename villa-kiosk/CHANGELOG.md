@@ -1,3 +1,39 @@
+## 2.258.0
+
+### Fixed — `pickBadgeAt` was logging on every pointer move
+
+A field log collected to answer "why is that group still a 2" came back with
+several thousand lines of
+
+    pickBadgeAt(949,406) hit=none (visible=34/90)
+
+and eight placement decisions buried in them. `pickBadgeAt` runs on every
+pointermove for the hover cursor AND again from PickHandler's own predicate —
+roughly sixty lines a second while a finger is down — and every one of them was
+logged.
+
+It takes a `verbose` flag now, off by default, and only a genuine TAP or
+long-press passes it. That is the only moment "did this resolve to a badge, and
+if not, what was on screen" is a question anyone has; during a drag it is
+noise, and noise that hides the answer is worse than no log.
+
+### Added — the debug panel can be moved and resized, and remembers where
+
+It is fixed to the bottom-left corner, which on several layouts sits directly
+over the villa's own controls, so reading the log meant losing the thing the
+log was about.
+
+Drag it by its header (pointer events with capture, so a finger works and a
+fast drag that leaves the header does not drop it mid-move), resize it from its
+corner, and both are persisted to `localStorage` — having to reposition a
+diagnostic after every reload is exactly the friction that makes one go unused.
+A saved position is clamped back into view on load and on window resize, so a
+geometry saved on a wider screen (or before a rotate) can never park the panel
+somewhere it cannot be dragged back from.
+
+The body now flexes to the panel's height rather than a fixed `55vh`, so
+dragging the panel taller actually shows more log.
+
 ## 2.257.0
 
 ### Fixed — one pair card's upgrade could demote another group

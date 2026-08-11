@@ -27,6 +27,84 @@ let box: HTMLDivElement | null = null;
 let bodyEl: HTMLDivElement | null = null;
 let copyBtn: HTMLButtonElement | null = null;
 
+// Where the reader last dragged/resized the panel. Persisted because the
+// panel's default corner is over the villa's own controls on some layouts,
+// and having to move it again after every reload is exactly the friction
+// that makes a diagnostic go unused.
+const GEOM_KEY = "villa:debug:geom";
+
+interface BoxGeom { left: number; top: number; w: number; h: number; }
+
+function loadGeom(): BoxGeom | null {
+  try {
+    const raw = localStorage.getItem(GEOM_KEY);
+    if (!raw) return null;
+    const g = JSON.parse(raw) as Partial<BoxGeom>;
+    if ([g.left, g.top, g.w, g.h].some((v) => typeof v !== "number" || !Number.isFinite(v))) return null;
+    return g as BoxGeom;
+  } catch {
+    return null;
+  }
+}
+
+function saveGeom(el: HTMLDivElement): void {
+  try {
+    const r = el.getBoundingClientRect();
+    localStorage.setItem(GEOM_KEY, JSON.stringify({
+      left: Math.round(r.left), top: Math.round(r.top),
+      w: Math.round(r.width), h: Math.round(r.height),
+    }));
+  } catch { /* private mode, quota — the panel still works, it just forgets */ }
+}
+
+/** Keep the panel reachable after a rotate or a window resize: a saved
+ *  position from a wider viewport must not park it off-screen with no way to
+ *  drag it back. */
+function clampIntoView(el: HTMLDivElement): void {
+  const r = el.getBoundingClientRect();
+  const maxLeft = Math.max(0, window.innerWidth - Math.min(r.width, window.innerWidth));
+  const maxTop = Math.max(0, window.innerHeight - 40); // a header's worth stays grabbable
+  el.style.left = `${Math.min(Math.max(0, r.left), maxLeft)}px`;
+  el.style.top = `${Math.min(Math.max(0, r.top), maxTop)}px`;
+}
+
+/** Drag the panel by its header. Pointer events (not mouse) so it works with
+ *  a finger on the kiosk tablet this exists for, and setPointerCapture so a
+ *  fast drag that leaves the header does not drop the panel mid-move. */
+function makeDraggable(el: HTMLDivElement, handle: HTMLElement): void {
+  handle.style.cursor = "move";
+  handle.style.touchAction = "none";
+  let dx = 0, dy = 0, dragging = false;
+  handle.addEventListener("pointerdown", (e) => {
+    // Let the Copy button have its own taps.
+    if ((e.target as HTMLElement).tagName === "BUTTON") return;
+    const r = el.getBoundingClientRect();
+    dx = e.clientX - r.left;
+    dy = e.clientY - r.top;
+    dragging = true;
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  handle.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    el.style.left = `${e.clientX - dx}px`;
+    el.style.top = `${e.clientY - dy}px`;
+    // Anchored top-left from here on, so the two must be cleared or the
+    // panel is pinned by all four edges and the drag does nothing.
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+  });
+  const end = (e: PointerEvent) => {
+    if (!dragging) return;
+    dragging = false;
+    try { handle.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    clampIntoView(el);
+    saveGeom(el);
+  };
+  handle.addEventListener("pointerup", end);
+  handle.addEventListener("pointercancel", end);
+}
+
 function fallbackCopy(text: string): boolean {
   try {
     const ta = document.createElement("textarea");
@@ -66,13 +144,19 @@ function copyAll(): void {
 function ensureBox(): HTMLDivElement {
   if (box) return box;
   box = document.createElement("div");
+  // `resize:both` needs a non-visible overflow and an explicit size to bite,
+  // and the BODY's own scroll has to be driven by the box's height rather
+  // than a fixed max — otherwise resizing the panel taller shows no more log.
   box.style.cssText =
-    "position:fixed;bottom:8px;left:8px;z-index:99999;max-width:92vw;" +
+    "position:fixed;bottom:8px;left:8px;z-index:99999;" +
+    "width:min(560px,92vw);height:320px;min-width:220px;min-height:90px;" +
+    "max-width:100vw;max-height:100vh;resize:both;overflow:hidden;" +
+    "display:flex;flex-direction:column;" +
     "background:rgba(0,0,0,0.85);color:#4ade80;font:11px/1.4 monospace;" +
     "padding:8px 10px;border-radius:8px;pointer-events:auto;";
 
   const header = document.createElement("div");
-  header.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;";
+  header.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex:0 0 auto;";
 
   const title = document.createElement("span");
   title.textContent = "villa:debug";
@@ -100,12 +184,38 @@ function ensureBox(): HTMLDivElement {
   // The scrollable region is this inner div, not the outer box — so the
   // header (and its Copy all button) stays pinned in place instead of
   // scrolling out of view as lines accumulate.
+  // flex:1 rather than a fixed max-height: the box now has a real height the
+  // reader controls, and the body has to take whatever is left of it or
+  // dragging the panel taller would reveal nothing.
   bodyEl.style.cssText =
-    "max-height:55vh;overflow-y:auto;white-space:pre-wrap;" +
+    "flex:1 1 auto;min-height:0;overflow:auto;white-space:pre;" +
     "pointer-events:auto;user-select:text;-webkit-user-select:text;";
   box.appendChild(bodyEl);
 
+  makeDraggable(box, header);
+  const saved = loadGeom();
+  if (saved) {
+    box.style.left = `${saved.left}px`;
+    box.style.top = `${saved.top}px`;
+    box.style.right = "auto";
+    box.style.bottom = "auto";
+    box.style.width = `${saved.w}px`;
+    box.style.height = `${saved.h}px`;
+  }
+  // The resize grabber is a native CSS affordance with no event of its own,
+  // so the size is captured by observing the element rather than by listening
+  // for a gesture that does not exist.
+  if (typeof ResizeObserver !== "undefined") {
+    let t: ReturnType<typeof setTimeout> | null = null;
+    new ResizeObserver(() => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => box && saveGeom(box), 300);
+    }).observe(box);
+  }
+  window.addEventListener("resize", () => { if (box) clampIntoView(box); });
+
   document.body.appendChild(box);
+  if (saved) clampIntoView(box);
   return box;
 }
 

@@ -360,7 +360,7 @@ export class SceneManager {
           return;
         }
       }
-      const badgeEntity = this.visuals.pickBadgeAt(x, y);
+      const badgeEntity = this.visuals.pickBadgeAt(x, y, true);
       if (badgeEntity) { opts.onEntityPicked(badgeEntity, x, y); return; }
       this.pick.pickAtScreen(x, y);
     };
@@ -380,7 +380,7 @@ export class SceneManager {
         opts.onClusterPicked(eGroup.room, eGroup.entityIds);
         return;
       }
-      const badgeEntity = this.visuals.pickBadgeAt(x, y);
+      const badgeEntity = this.visuals.pickBadgeAt(x, y, true);
       if (badgeEntity) { opts.onEntityLongPressed(badgeEntity, x, y); return; }
       this.pick.pickAtScreen(x, y, true);
     };
