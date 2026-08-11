@@ -1,3 +1,54 @@
+## 2.255.0
+
+### Changed — every string the map draws is created by one function
+
+Reported against the count in a room chip's status pill: the number sits off
+centre in its circle, while the badge value text checked in 2.248.0 does not.
+
+The optical correction was not the difference — all four of the scene layer's
+TextBlocks applied `textOpticalTopEm`. `resizeToFit` was. The badge's value and
+the chip's room name set it; the entity group's count and the chip's count pill
+did not, and a TextBlock without it is sized 100% of its parent. That changes
+which box Babylon centres the ink in: `_renderLines` uses
+`rootY = ascent + (height - fontHeight) / 2` against the CONTROL's height, so
+with `resizeToFit` that height is the line box and the parent's own alignment
+does the centring, and without it the ink is placed inside the pill's height
+directly, with each measure separately truncated to an integer. Two calculations
+for one question, and the number in the circle was using the one nobody had
+checked against hardware.
+
+Five properties have to be set on every TextBlock this app draws — font family
+(Babylon GUI does not inherit CSS and falls back to Arial), size, weight,
+`resizeToFit`, and the optical nudge — and missing any of them is invisible to
+`tsc` and to review. Two of them have now been missed in production: the font
+one produced a "the font didn't change" report years ago, and this. So they are
+not five things a call site remembers; they are one function, `badgeText()` in
+`babylon/badgeText.ts`, and `new TextBlock` no longer appears in the scene
+layer at all. The four call sites are one line each and cannot disagree.
+
+`GUI_FONT_FAMILY` moves there with it, deliberately unexported: going through
+the factory is what guarantees it is applied.
+
+### Audited — the DOM is not the same problem, and must not get the same fix
+
+The obvious next DRY step is to hoist `textOpticalTopEm` into a CSS token so
+the DOM's own count pill (`.icon-btn-count`) shares it. That would be wrong,
+and it is worth writing down why, because it looks right.
+
+Read the shipped Public Sans metrics (ascent 0.950, descent 0.225, cap height
+0.723 em — measured out of the woff2, not assumed) through Babylon's centring,
+and a string with no descender — which is every string the map draws: "0 W",
+"98%", "18", a room name — lands 0.001 em from the box centre. The arithmetic
+says no correction is needed at all. It does not match the screen, and the
+value that does was arrived at by a person looking at real hardware after the
+arithmetic had twice been trusted over them.
+
+So the nudge is a correction for something in Babylon's own chain, not a fact
+about type. The DOM centres the same strings with `line-height`, has never been
+reported wrong, and would be pushed OFF centre by inheriting this. It stays in
+`badgeMetrics` and is applied only by `badgeText`. `CLAUDE.md`'s known-gotchas
+entry now says so, next to the rule that replaces it.
+
 ## 2.254.0
 
 ### Changed — "Not in Home Assistant" is now a reported category, not a hidden one

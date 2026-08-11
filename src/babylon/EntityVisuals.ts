@@ -108,6 +108,7 @@ import { blocksCameraBeam, isStructureMesh } from "./meshRoles";
 import { axisWorldScale } from "./meshUnits";
 import { LightPool } from "./LightPools";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
+import { badgeText } from "./badgeText";
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
 import { COSMETIC_MAPPING_FIELDS } from "./entityMapDiff";
@@ -258,14 +259,11 @@ const LABEL_ANCHOR_MARGIN = 0.12;
 // account; what matters here is that a dimension may no longer be written down
 // in this one, or the two spaces drift apart again.
 
-// Babylon GUI's canvas text defaults to Arial regardless of the app's own
-// --font-ui — every TextBlock in this file must set this explicitly, or its
-// text silently reverts to that default. Public Sans first (self-hosted, see
-// styles.css's @font-face): canvas text can use a webfont once it has
-// loaded, so the in-scene chips read as the same family as the DOM rather
-// than as the platform's own UI font sitting next to it. The system stack
-// remains behind it as the pre-load / failure fallback.
-const GUI_FONT_FAMILY = "\"Public Sans\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif";
+// Every piece of text this file draws is created by badgeText() — the font
+// stack, the weight, the centring and the optical correction all live there,
+// because five properties had to be set on each of four TextBlocks and one of
+// them (resizeToFit) had quietly drifted apart between them. `new TextBlock`
+// does not belong in this file; see badgeText.ts for the whole argument.
 
 // The app-wide --touch-min (styles.css), in CSS px. pickBadgeAt expands a
 // badge's hit area up to this whenever the PAINTED badge is smaller — which
@@ -3088,33 +3086,17 @@ export class EntityVisuals {
         container.addControl(valueWrap);
       }
 
-      const valueText = new TextBlock(`lbl_value_${entityId}`);
-      valueText.text = "";
       // Card: the surface's glyph colour, so it stays legible on a neutral
       // badge and shifts with state exactly as the icon does. Classic: white,
       // on its own dark pill. updateLabel re-applies the card case per state.
-      valueText.color = card
-        ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).ink
-        : PILL_TEXT;
-      // Match the app's own UI typeface (--font-ui) instead of the GUI layer's
-      // Babylon default (Arial) — that mismatch was rendering the pill in a
-      // font that visually clashed with every other label in the app.
-      valueText.fontFamily = GUI_FONT_FAMILY;
-      valueText.fontWeight = "600";
-      // Kept as a NUMBER for the nudge below. Control.fontSize is a getter
-      // that returns a STRING ("13px"), so reading it back and multiplying
-      // gave NaN — and `as number` was exactly what stopped the compiler
-      // saying so. `top: "NaNpx"` does not throw; it silently stops the text
-      // rendering at all, which is why every badge VALUE went blank in
-      // 2.234.0 while the chip and group counts (which used a real number)
-      // were fine. Never read a Babylon GUI dimension back to compute with.
-      const valueFontPx = card ? m.cardValueFontPx : m.pillValueFontPx;
-      valueText.fontSize = valueFontPx;
-      // Optically centre it against the icon beside it — see textOpticalTopEm.
-      valueText.top = `${valueFontPx * m.textOpticalTopEm}px`;
-      valueText.resizeToFit = true;
-      valueText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
-      valueText.textVerticalAlignment = TextBlock.VERTICAL_ALIGNMENT_CENTER;
+      const valueText = badgeText(`lbl_value_${entityId}`, {
+        fontPx: card ? m.cardValueFontPx : m.pillValueFontPx,
+        color: card
+          ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).ink
+          : PILL_TEXT,
+        weight: "600",
+        metrics: m,
+      });
       valueWrap.addControl(valueText);
 
       this.labels.set(entityId, { container, badge, glyph, valueWrap, valueText, anchor, type, category });
@@ -4282,18 +4264,16 @@ export class EntityVisuals {
     // and borrowing one member's glyph would claim the group is that kind of
     // device (CLAUDE.md: category hues/icons mean the category). A number
     // claims only what is true: this many devices are here.
-    const countText = new TextBlock(`egroupCount_${key}`);
-    // Placeholder only — updateEntityGroups repaints this from the same
-    // neutral surface the container takes, on the same pass that creates it.
-    // It must not be white: the container is the badges' own light resting
-    // fill, and white here is an invisible count.
-    countText.color = categorySurface("others", "off").ink;
-    // Babylon GUI TextBlocks do not inherit CSS and default to Arial — see
-    // CLAUDE.md's known gotchas; every one of them sets this explicitly.
-    countText.fontFamily = GUI_FONT_FAMILY;
-    countText.fontSize = sm.font;
-    countText.top = `${sm.font * this.metrics.textOpticalTopEm}px`;
-    countText.fontWeight = "700";
+    // The colour is a placeholder only — updateEntityGroups repaints it from
+    // the same neutral surface the container takes, on the same pass that
+    // creates it. It must not be white: the container is the badges' own light
+    // resting fill, and white here is an invisible count.
+    const countText = badgeText(`egroupCount_${key}`, {
+      fontPx: sm.font,
+      color: categorySurface("others", "off").ink,
+      weight: "700",
+      metrics: this.metrics,
+    });
     container.addControl(countText);
 
     layer.addControl(container);
@@ -4570,17 +4550,13 @@ export class EntityVisuals {
     // the container's full width by default; THIS is what stops a long room
     // name's last letters from landing under the badge (reported: "Guest
     // Bathroom" read as "Guest Bathroo[4]" with the badge over the "m").
-    const text = new TextBlock(`clusterText_${key}`);
+    const text = badgeText(`clusterText_${key}`, {
+      fontPx: sm.font, color: "#ffffff", weight: "600", metrics: this.metrics,
+    });
     // Placeholder only: updateClusters overwrites this with chipLabel(chip)
     // (the raw spelling, plus a "+N" when chips merged) on the same pass that
     // created the control, so the key is never what a person reads.
     text.text = key;
-    text.color = "#ffffff";
-    text.fontFamily = GUI_FONT_FAMILY;
-    text.fontSize = sm.font;
-    text.top = `${sm.font * this.metrics.textOpticalTopEm}px`;
-    text.fontWeight = "600";
-    text.resizeToFit = true;
     text.paddingLeft = "12px";
     text.paddingRight = `${sm.countSize + 12}px`;
     container.addControl(text);
@@ -4615,12 +4591,9 @@ export class EntityVisuals {
     countBadge.top = "3px";
     container.addControl(countBadge);
 
-    const countText = new TextBlock(`clusterCountText_${key}`);
-    countText.color = "#ffffff";
-    countText.fontFamily = GUI_FONT_FAMILY;
-    countText.fontSize = sm.countFont;
-    countText.top = `${sm.countFont * this.metrics.textOpticalTopEm}px`;
-    countText.fontWeight = "700";
+    const countText = badgeText(`clusterCountText_${key}`, {
+      fontPx: sm.countFont, color: "#ffffff", weight: "700", metrics: this.metrics,
+    });
     countBadge.addControl(countText);
 
     layer.addControl(container);
