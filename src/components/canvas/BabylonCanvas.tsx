@@ -88,19 +88,57 @@ export default function BabylonCanvas({
   // without being recreated (BabylonCanvas mounts once with empty deps).
   const configRef = useRef(config);
   useEffect(() => { configRef.current = config; }, [config]);
-  // The pick callbacks close over live HA state (entities/ws) and config, so they
-  // are recreated on every relevant change. The SceneManager is created ONCE, so
-  // capturing the callbacks directly would freeze them at their mount-time values
-  // (empty entities, null ws) — every tap would then wrongly open the panel and
-  // toggles would no-op. Route through refs so the scene always calls the latest.
-  const onPickedRef = useRef(onEntityPicked);
-  const onLongPressedRef = useRef(onEntityLongPressed);
-  const onClusterRef = useRef(onClusterPicked);
-  const onClusterTappedRef = useRef(onClusterTapped);
-  useEffect(() => { onPickedRef.current = onEntityPicked; }, [onEntityPicked]);
-  useEffect(() => { onLongPressedRef.current = onEntityLongPressed; }, [onEntityLongPressed]);
-  useEffect(() => { onClusterRef.current = onClusterPicked; }, [onClusterPicked]);
-  useEffect(() => { onClusterTappedRef.current = onClusterTapped; }, [onClusterTapped]);
+  // ── EVERY CALLBACK PROP, IN ONE REF, ASSIGNED DURING RENDER ─────────────
+  //
+  // Two separate reasons, and the second one is a memory leak that took three
+  // releases to find, so both are written down.
+  //
+  // ── 1. Freshness (the original reason) ────────────────────────────────
+  // The pick callbacks close over live HA state (entities/ws) and config, so
+  // they are recreated on every relevant change. The SceneManager is created
+  // ONCE, so capturing them directly freezes them at their mount-time values
+  // (empty entities, null ws) — every tap would wrongly open the panel and
+  // toggles would no-op.
+  //
+  // ── 2. A CLOSURE OVER A PROP RETAINS THE PARENT'S WHOLE RENDER SCOPE ───
+  // `onFloorChange` is `(f) => setCurrentFloor(f)`, written inline in
+  // Dashboard, so its closure IS Dashboard's render scope — and that scope
+  // holds Dashboard's `manager` state. The mount effect below runs with `[]`
+  // deps, so React keeps its closure (and its cleanup) for the life of the
+  // canvas, which pins the render scope it was created in. At MOUNT time
+  // Dashboard's `manager` was still the PREVIOUS villa. One dead SceneManager
+  // retained per remount, each chaining to the one before it: measured at
+  // ~35 MB apiece, and traced from a field heap snapshot as
+  //
+  //   scene.onPointerObservable -> Observer.callback (PickHandler)
+  //     -> { …, onFloorChange, … } -> Dashboard's render scope -> old manager
+  //
+  // ── Why refs, and why assigned during RENDER rather than in an effect ──
+  // A ref would not have been enough on its own. V8 allocates ONE context per
+  // scope and puts a variable in it if ANY inner function references it — so
+  // `useEffect(() => { xRef.current = x }, [x])` is itself a closure over `x`,
+  // which context-allocates the prop and hands the mount effect exactly the
+  // reference this is trying to remove. That is why the four callbacks that
+  // were ALREADY routed through refs leaked anyway.
+  //
+  // A plain assignment during render captures nothing, so no prop is
+  // context-allocated at all and the mount effect's scope cannot reach the
+  // parent. It is the "latest ref" pattern; writing a ref during render is
+  // safe here because nothing reads it during that render and a double-render
+  // under StrictMode simply assigns the same value twice.
+  //
+  // THE RULE, and it is all-or-nothing: no closure in this component may name
+  // a prop. One that does re-allocates the whole context and restores the
+  // leak, silently — including a JSX handler like `() => onNeedModel()`.
+  // Everything goes through `cbRef.current`.
+  const cbRef = useRef({
+    onManager, onEntityPicked, onEntityLongPressed, onClusterPicked,
+    onClusterTapped, onFloorChange, onRoomChange, onNeedModel, onModelUploaded,
+  });
+  cbRef.current = {
+    onManager, onEntityPicked, onEntityLongPressed, onClusterPicked,
+    onClusterTapped, onFloorChange, onRoomChange, onNeedModel, onModelUploaded,
+  };
   const [status, setStatus] = useState<"loading" | "ready" | "no-model" | "error" | "crash-loop">("loading");
   const [progress, setProgress] = useState(0); // 0..1 GLB download progress
   // True while fetchModelWithRetry is riding through a transient network
@@ -175,12 +213,14 @@ export default function BabylonCanvas({
       noteLoadPhase("engine-init");
       manager = new SceneManager(canvasEl, {
         config: sceneConfig,
-        onEntityPicked: (id, x, y) => onPickedRef.current(id, x, y),
-        onEntityLongPressed: (id, x, y) => onLongPressedRef.current(id, x, y),
-        onClusterPicked: (room, ids) => onClusterRef.current(room, ids),
-        onClusterTapped: (room, ids, roomNames) => onClusterTappedRef.current(room, ids, roomNames),
-        onFloorChange,
-        onRoomChange,
+        // Trampolines over the ONE ref — see cbRef. Naming a prop directly
+        // here is what put Dashboard's render scope inside the scene graph.
+        onEntityPicked: (id, x, y) => cbRef.current.onEntityPicked(id, x, y),
+        onEntityLongPressed: (id, x, y) => cbRef.current.onEntityLongPressed(id, x, y),
+        onClusterPicked: (room, ids) => cbRef.current.onClusterPicked(room, ids),
+        onClusterTapped: (room, ids, roomNames) => cbRef.current.onClusterTapped(room, ids, roomNames),
+        onFloorChange: (floor) => cbRef.current.onFloorChange(floor),
+        onRoomChange: (room) => cbRef.current.onRoomChange(room),
       });
     } catch (err) {
       // WebGL unavailable/blocked — show a clear message, not a blank canvas.
@@ -190,7 +230,7 @@ export default function BabylonCanvas({
     }
     const tEngineDone = performance.now();
     managerRef.current = manager;
-    onManager(manager);
+    cbRef.current.onManager(manager);
 
     // A lost GPU/WebGL context (often memory pressure) would otherwise freeze
     // the canvas. Record it; if it happens before the villa finished loading,
@@ -767,7 +807,7 @@ export default function BabylonCanvas({
     return () => {
       cancelled = true;
       canvasEl.removeEventListener("webglcontextlost", onCtxLost as EventListener, false);
-      onManager(null);
+      cbRef.current.onManager(null);
       // Grabbed BEFORE dispose() so the scene is still reachable to hand over.
       // Both are stored as WeakRefs, so this cannot itself retain anything —
       // see leakWatch's docstring for what the next load then reports.
@@ -870,7 +910,7 @@ export default function BabylonCanvas({
               <div className="muted body-text">
                 Upload a villa GLB to start exploring.
               </div>
-              <ModelUploader minimal onUploaded={onModelUploaded} />
+              <ModelUploader minimal onUploaded={() => cbRef.current.onModelUploaded()} />
             </>
           )}
         </div>
@@ -881,7 +921,7 @@ export default function BabylonCanvas({
           hint={<span style={{ whiteSpace: "pre-line" }}>{errorMsg}</span>}
           detail={report}
           actions={!addonError && canManageModel
-            ? <button className="btn ghost" onClick={onNeedModel}>Upload model</button>
+            ? <button className="btn ghost" onClick={() => cbRef.current.onNeedModel()}>Upload model</button>
             : undefined}
         />
       )}
@@ -906,7 +946,7 @@ export default function BabylonCanvas({
                 Try once more
               </button>
               {canManageModel && (
-                <button className="btn ghost" onClick={() => { clearCrashLoop(); onNeedModel(); }}>
+                <button className="btn ghost" onClick={() => { clearCrashLoop(); cbRef.current.onNeedModel(); }}>
                   Upload a lighter model
                 </button>
               )}

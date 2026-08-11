@@ -1,3 +1,18 @@
+## 2.273.0
+
+### Fixed — every model upload left the previous villa in memory
+
+A callback written inline in Dashboard closes over Dashboard's whole render
+scope, which holds the SceneManager. The canvas captured those callbacks in its
+mount effect, so the live villa pinned the render scope from the moment it
+mounted — and at that moment the state still held the *previous* villa. One
+dead villa retained per reload, each chaining to the one before.
+
+Callback props now go through a single ref assigned during render, so nothing
+in the scene layer closes over a prop. Routing them through a ref updated in an
+effect — which four of them already did — does not work: the updater is itself
+a closure over the prop.
+
 ## 2.272.0
 
 ### Fixed — a retained villa cost 35 MB instead of nothing
