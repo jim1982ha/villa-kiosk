@@ -2511,16 +2511,8 @@ export class SceneManager {
     // WHICH object graph survives; this is the half that does not need to know.
     //
     // A reference we failed to find retains this manager, not the villa — the
-    // villa hangs off these fields. Dropping them makes a retained manager an
-    // empty shell of a few hundred bytes instead of the anchor for 704 meshes,
-    // 373 textures and 2.4M vertices' worth of CPU-side geometry (which is
-    // itself about 95MB: 2.48M verts x 32 bytes of interleaved position,
-    // normal and UV — a suspiciously exact match for the step). So this is
-    // worth doing whether or not the retainer is ever found, and if the
-    // retainer IS found it costs nothing.
-    //
-    // Safe because `disposed` is already true: every public method guards on
-    // it, and the render loop is stopped. Nothing reads these again.
+    // villa hangs off these fields. So drop them all, and a retained manager
+    // becomes an empty shell instead of the anchor for the whole scene.
     this.loadedMeshes = [];
     this.highlightedMeshes = [];
     this.calibratedPoints = null;
@@ -2533,5 +2525,55 @@ export class SceneManager {
     // that component's whole closure scope alive too.
     this.readyCallbacks.clear();
     this.calibrateCallbacks.clear();
+
+    // ── AND THE SUBSYSTEMS, THE SCENE AND THE ENGINE ────────────────────
+    // 2.231.0 stopped at the arrays above and claimed the result was "a few
+    // hundred bytes". It is not: a field heap snapshot priced three retained
+    // managers at 36.8 / 35.1 / 35.0 MB — about 107 MB of a 454 MB heap, which
+    // is the ~95 MB-per-reload floor that has never come back. The arrays were
+    // never where the weight was. `scene` is, and every subsystem below holds
+    // it too, so all of them have to go or the shell is not a shell.
+    //
+    // ── The cost, stated plainly ────────────────────────────────────────
+    // `readonly` is a compile-time contract for CALLERS; it does not stop the
+    // owner writing the field, and the cast below is what says so out loud.
+    // After this, calling ANY method on a disposed manager throws a TypeError
+    // instead of quietly half-working. That is the accepted risk, and it is
+    // not covered by a blanket guard: only eight sites test `this.disposed`,
+    // so "every public method guards on it" — as an earlier version of this
+    // comment claimed — is FALSE. What makes it survivable is that nothing
+    // holds a live handle to a disposed manager by design: BabylonCanvas nulls
+    // both its ref and React's state in the same teardown, the window and
+    // document listeners are gone, the render loop is stopped, and
+    // `scene.dispose()` has already cleared onPointerObservable (scene.js:4310)
+    // so no input can arrive either. A call reaching here was already a bug;
+    // it will now be a loud one rather than a silent one.
+    //
+    // Mapped over `keyof SceneManager` rather than a list of strings, so
+    // renaming a field is a compile error here instead of a silently missed
+    // reference that quietly restores the leak.
+    const shell = this as unknown as {
+      -readonly [K in keyof SceneManager]: SceneManager[K] | null;
+    };
+    shell.engine = null;
+    shell.scene = null;
+    shell.camera = null;
+    shell.overview = null;
+    shell.lighting = null;
+    shell.sun = null;
+    shell.sky = null;
+    shell.floors = null;
+    shell.pick = null;
+    shell.visuals = null;
+    shell.renderFx = null;
+    // Private, and mutable already — no cast needed, but the same reasoning.
+    // `canvas` is a DOM element React has just detached: holding it here is a
+    // detached-DOM leak on top of the scene one.
+    this.nightSky = null as unknown as NightSky;
+    this.hemi = null as unknown as HemisphericLight;
+    this.config = null as unknown as AppConfig;
+    (this as unknown as { canvas: HTMLCanvasElement | null }).canvas = null;
+    this.resizeObserver = null;
+    this.themeObserver = null;
   }
 }

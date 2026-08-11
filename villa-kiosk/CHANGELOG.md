@@ -1,3 +1,14 @@
+## 2.272.0
+
+### Fixed — a retained villa cost 35 MB instead of nothing
+
+A heap snapshot from a real session priced three disposed SceneManagers at
+36.8 / 35.1 / 35.0 MB — the ~95 MB-per-reload growth that never comes back.
+2.231.0 dropped the manager's arrays and claimed the result was "a few hundred
+bytes"; it was not, because `scene` and every subsystem were still held.
+Disposal now drops those too, so whatever is holding a dead manager holds an
+empty shell. The reference itself is a separate fix.
+
 ## 2.271.0
 
 ### Fixed — enforcing the CSP would have stopped the villa loading
