@@ -1,3 +1,15 @@
+## 2.281.0
+
+### Added — Full Resolution can be turned off, and on iPad it is the whole game
+
+Pixels are essentially the entire frame cost on iPad and iPhone: 67ms of a 76ms
+frame goes on an EMPTY scene at full resolution, and 19ms at a quarter of it.
+Both Chrome engines pay the same either way. There was already an automatic
+valve for this, but it only reacts to a burst of continuous dragging — which a
+wall-mounted kiosk never produces. Settings → Render quality → Full Resolution
+turns it off directly: a quarter of the pixels, a slightly softer picture,
+applied immediately with no reload.
+
 ## 2.280.0
 
 ### Added — the probe reports what anti-aliasing the framebuffer actually got

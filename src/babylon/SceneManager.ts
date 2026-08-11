@@ -298,9 +298,7 @@ export class SceneManager {
       antialias: wantAA,
       powerPreference: isIOS ? "default" : "high-performance",
     });
-    // Up-to-2× supersampling everywhere (1× on DPR-1 desktops; a DPR≥2
-    // phone/tablet renders at 2× CSS — ~native on DPR 2, ⅔ native on DPR 3).
-    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 2));
+    this.engine.setHardwareScalingLevel(this.baseHwScale());
 
     this.scene = new Scene(this.engine);
     // Two clock reads and a counter reset per frame, against frames measured at
@@ -2454,8 +2452,38 @@ export class SceneManager {
    * Re-runs the sun pass so the hemi/sun/ambient multipliers take effect, and
    * pushes the rest (tone mapping, SSAO, shadows, IBL) through renderFx.
    */
+  /**
+   * The hardware scaling level this device renders at BEFORE the automatic
+   * valve coarsens it any further.
+   *
+   * Up-to-2× supersampling by default (1× on a DPR-1 desktop; a DPR≥2
+   * phone/tablet renders at 2× CSS — ~native on DPR 2, ⅔ native on DPR 3), or
+   * plain CSS resolution when the user has asked for frame rate over
+   * sharpness. HW_SCALE_FLOOR is the same 1.0, which is not a coincidence: 1×
+   * CSS is the documented floor for this app, because the old iOS tier that
+   * rendered BELOW it produced rainbow speckle around lit floors and was
+   * removed after a field report.
+   */
+  private baseHwScale(): number {
+    if (this.config.render?.hiRes === false) return HW_SCALE_FLOOR;
+    return 1 / Math.min(window.devicePixelRatio, 2);
+  }
+
   setRenderConfig(render: RenderConfig): void {
+    const prevHiRes = this.config.render?.hiRes;
     this.config = { ...this.config, render };
+    if (render.hiRes !== prevHiRes) {
+      // Live, no reload: this is only a scaling level. Straight to
+      // baseHwScale() rather than nudging the current value — a device the
+      // valve has already coarsened must not be stuck coarse when the user
+      // asks for sharpness back.
+      this.engine.setHardwareScalingLevel(this.baseHwScale());
+      // Badge geometry is authored in CSS px and converted through this exact
+      // value — the same reason easeResolution tells the layer. Miss it and
+      // every badge keeps the size it had for a resolution that no longer
+      // exists, collision boxes included.
+      this.visuals.notifyRenderScaleChanged();
+    }
     this.renderFx.apply(this.deviceRenderConfig(render));
     this.sun.updateConfig(this.config);
     // lightPoolIntensity is EntityVisuals' own value (see LightPools.ts), not

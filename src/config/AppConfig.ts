@@ -91,6 +91,26 @@ export interface RenderConfig {
    * gets. Undefined counts as on, so an existing stored config is unaffected.
    */
   antialias?: boolean;
+  /**
+   * Render at the display's full resolution (true, the default) or at CSS
+   * resolution (false) — a quarter of the pixels on a retina panel.
+   *
+   * Unlike `antialias` this applies LIVE; it is only a hardware scaling level.
+   *
+   * It exists because pixels turned out to be the entire frame cost on WebKit
+   * and there was no way to ask for fewer of them. The frame-cost probe, empty
+   * scene, one draw call: the iPad pays 67ms at 3.4 megapixels and 19ms at a
+   * quarter of that, while both Chrome engines pay the same at either. There
+   * IS an automatic valve (SceneManager.easeResolution) that does this on its
+   * own, but it only reacts to a burst of continuous interaction — which a
+   * wall-mounted kiosk nobody is touching never produces, and which makes it
+   * useless as an experiment because a null result cannot be told apart from
+   * a gesture that was too short.
+   *
+   * So: an explicit switch. Sharpness for frame rate, one tap, visible
+   * immediately.
+   */
+  hiRes?: boolean;
   /** How much EXTRA dimming (beyond the base day/night look) is applied at
    *  night, 0..1. 0 = the mild dim this app always had; 1 = maximum — dim
    *  enough that a lit fixture's own light clearly dominates the room, but

@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom, Sparkles,
+  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom, Sparkles, Maximize,
 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -230,15 +230,32 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               className={(render.antialias ?? true) ? "active" : ""}
               onClick={() => applyRender({ antialias: !(render.antialias ?? true) })}
               aria-pressed={render.antialias ?? true}
-              title="Anti-aliasing smooths jagged edges. Costs GPU time on every frame, most of all on iPad and iPhone. Takes effect after the villa reloads."
+              title="Anti-aliasing smooths jagged edges. Takes effect after the villa reloads."
             >
               <Sparkles size={16} /> Smooth Edges
             </button>
           </div>
+          {/* The one with the measured payoff. On an iPad this is a quarter of
+              the pixels, and pixels are essentially the whole frame cost on
+              WebKit — 67ms of a 76ms frame goes on an EMPTY scene at full
+              resolution, 19ms at a quarter of it. Applies live; it is only a
+              hardware scaling level. See RenderConfig.hiRes. */}
+          <div className="segmented settings-row-half" role="group" aria-label="Full resolution">
+            <button
+              className={(render.hiRes ?? true) ? "active" : ""}
+              onClick={() => applyRender({ hiRes: !(render.hiRes ?? true) })}
+              aria-pressed={render.hiRes ?? true}
+              title="Render at the display's full resolution. Turning it off is the biggest frame-rate gain on iPad and iPhone; the picture gets slightly softer. Applies immediately."
+            >
+              <Maximize size={16} /> Full Resolution
+            </button>
+          </div>
         </div>
         <p className="muted body-text" style={{ marginTop: 6 }}>
-          Smooth Edges applies when the villa next loads. Turning it off is the
-          biggest single frame-rate saving on iPad and iPhone.
+          <strong>Full Resolution</strong> off is the biggest frame-rate gain on
+          iPad and iPhone — a quarter of the pixels, slightly softer picture,
+          applies immediately. <strong>Smooth Edges</strong> applies when the
+          villa next loads. Both are per-device and are never shared.
         </p>
 
         {/* Brightness/Night dimming apply to every villa; the day/night
