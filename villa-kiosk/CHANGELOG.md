@@ -1,3 +1,41 @@
+## 2.298.0
+
+### Fixed — press-and-hold on a cell inside a summary card opened the group, not the device
+
+Reported directly: press and hold one of the two, three or four devices drawn
+inside a summary card and the group's device list opens, where holding a lone
+badge opens that device's details. The two gestures disagreed about what a
+cell is.
+
+A cell is not a shorthand for the group. A summary of 2-6 draws one badge box
+per member and HIDES those members' own badges, so while the card is on screen
+a cell is the only representation that device has anywhere in the villa. Both
+gestures therefore have to mean on a cell exactly what they mean on a lone
+badge — tap toggles, press-and-hold opens the details — and the tap half
+already did, which is what made the disagreement visible.
+
+`handleLongPress` reached the group before it looked at the cell: it read
+`eGroup.entityId` only to decide whether to check for a badge the card might
+be covering, then opened the list regardless. It now answers with the cell
+first, in the same order `handleTap` and the hover tooltip already use. The
+justification it was carrying — that a long press is the "show me all of them"
+gesture — is sound, but only for something that represents a set rather than a
+device: a ROOM CHIP, which stands for a room and never names a device, and a
+COUNT badge, which names none either. Both still open the list, and neither
+was touched.
+
+The exception the old code existed to handle is kept intact and now sits under
+the no-cell branch where it belongs: a card is anchored bottom-edge-on-anchor
+and measured against badges at one badge box, so it can be drawn over a badge
+belonging to a different pile entirely. A press that lands on the card but in
+no cell — a count, the empty bottom-right of a three-member grid, the gap
+between two cards — still asks the badges before answering for something it
+merely happens to cover.
+
+This lands next to 2.293.0, which fixed the same disagreement in the hover
+tooltip for the same reason: with two identical icons in one card, the gesture
+that tells them apart is precisely the one that must not answer for the group.
+
 ## 2.297.0
 
 ### Fixed — the empty bar at the bottom of the iPhone PWA, measured at last

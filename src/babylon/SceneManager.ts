@@ -434,22 +434,33 @@ export class SceneManager {
         opts.onClusterPicked(cluster.room, cluster.entityIds);
         return;
       }
-      // A long press on a summary always opens the LIST, cell or no cell: it
-      // is the "show me all of them" gesture, and a card's short tap already
-      // reaches each device individually.
-      //
-      // The one exception is the same as the tap path's — a card can cover a
-      // badge belonging to another pile (see handleTap), so a press that landed
-      // on the card in NO cell asks the badges first rather than answering for
-      // something it merely happens to be drawn over.
+      // Entity groups next, and the CELL ANSWERS FIRST — exactly as it does in
+      // handleTap, because a cell IS that device's badge. A summary of 2-6
+      // draws one badge box per member and hides the badges themselves, so a
+      // cell is not a shorthand for the group: it is the only representation
+      // that device has on screen while the card is drawn. Both gestures must
+      // therefore mean on a cell what they mean on a lone badge — tap toggles,
+      // press-and-hold opens the details — or press-and-hold silently loses
+      // the one thing it exists for at exactly the moment two identical icons
+      // (two lights, say) make telling them apart matter most. It used to open
+      // the group list here on the argument that a long press is the "show me
+      // all of them" gesture; that argument holds for a ROOM CHIP, which
+      // represents a room and never a device, and for a COUNT badge, which
+      // names no device either. Both still open the list, below and above.
       const eGroup = this.visuals.pickEntityGroupAt(x, y);
-      if (eGroup && opts.onClusterPicked) {
-        if (!eGroup.entityId) {
-          const under = this.visuals.pickBadgeAt(x, y, true);
-          if (under) { opts.onEntityLongPressed(under, x, y); return; }
+      if (eGroup) {
+        if (eGroup.entityId) { opts.onEntityLongPressed(eGroup.entityId, x, y); return; }
+        // NO CELL — a count badge, or the empty bottom-right of a three-member
+        // grid, or the gap between two cards. Same exception as the tap path:
+        // a card can cover a badge belonging to another pile entirely (see
+        // handleTap), so ask the badges before answering for something the
+        // card merely happens to be drawn over.
+        const under = this.visuals.pickBadgeAt(x, y, true);
+        if (under) { opts.onEntityLongPressed(under, x, y); return; }
+        if (opts.onClusterPicked) {
+          opts.onClusterPicked(eGroup.room, eGroup.entityIds);
+          return;
         }
-        opts.onClusterPicked(eGroup.room, eGroup.entityIds);
-        return;
       }
       const badgeEntity = this.visuals.pickBadgeAt(x, y, true);
       if (badgeEntity) { opts.onEntityLongPressed(badgeEntity, x, y); return; }
