@@ -2496,9 +2496,10 @@ export class EntityVisuals {
       (mm) => projectToView(basis, mm.wx, mm.wy, mm.wz, { px: 0, py: 0, pz: 0 }));
     const items: PlacementItem[] = members.map(() => ({
       sx: 0, sy: 0, sz: 0,
-      // rank/sortKey/room are unused by markContacts (it is a symmetric
-      // contact sweep, not the ranked solve) — only the geometry matters here.
-      reach: 0, rank: 0, sortKey: "", room: "", exempt: false,
+      // rank/sortKey/category/room are unused by markContacts (it is a
+      // symmetric contact sweep, not the ranked solve, and it never runs the
+      // pull-back) — only the geometry matters here.
+      reach: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false,
     }));
     // How far each badge is DRAWN from its own anchor: it hangs above it (|cy|)
     // and has its own extent, so framing the anchors frames the wrong thing —
@@ -4174,7 +4175,7 @@ export class EntityVisuals {
       const s = shown[i];
       let it = pool[i];
       if (!it) {
-        it = { sx: 0, sy: 0, sz: 0, reach: 0, rank: 0, sortKey: "", room: "", exempt: false };
+        it = { sx: 0, sy: 0, sz: 0, reach: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
         pool[i] = it;
       }
       projectToView(clearance.basis, s.wx, s.wy, s.wz, p);
@@ -4183,6 +4184,8 @@ export class EntityVisuals {
       it.reach = boxes[i].halfW * clearance.allow;
       it.rank = badgeRank(s.lbl.type, s.lbl.category);
       it.sortKey = s.id;
+      // Tiebreak only, never a gate — see PlacementItem.category.
+      it.category = s.lbl.category;
       it.room = roomKey(this.roomOf(s.id));
       it.exempt = focus !== null && it.room === focus;
     }
@@ -5196,12 +5199,12 @@ export class EntityVisuals {
       const src = items[i];
       let it = sub[idx.length];
       if (!it) {
-        it = { sx: 0, sy: 0, sz: 0, reach: 0, rank: 0, sortKey: "", room: "", exempt: false };
+        it = { sx: 0, sy: 0, sz: 0, reach: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
         sub[idx.length] = it;
       }
       it.sx = src.sx; it.sy = src.sy; it.sz = src.sz;
       it.reach = src.reach; it.rank = src.rank;
-      it.sortKey = src.sortKey; it.room = src.room;
+      it.sortKey = src.sortKey; it.category = src.category; it.room = src.room;
       it.exempt = false;
       idx.push(i);
     }

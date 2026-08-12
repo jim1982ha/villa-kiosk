@@ -1,3 +1,47 @@
+## 2.295.0
+
+### Changed — a rescued pair prefers a partner of its own category
+
+Asked for after a phone screenshot showing several electrical devices near one
+another but split across different summaries: could the layout prefer to group
+devices of the same category together?
+
+Mostly it cannot, and that is worth writing down rather than half-attempting.
+Who shares a summary is not a choice this subsystem makes. A summary exists
+because its members overlap, and "overlaps" partitions the badges into
+connected components — every member of a component is in the same summary
+because there is nowhere else for it to be. Preferring a partner requires a
+second candidate, and for that partition there is never one.
+
+Two adjacent summaries could in principle be merged on the strength of sharing
+a category, and that is the version this release declines. They are separate
+summaries precisely because they do NOT overlap; merging them would draw one
+card at a centroid between two clusters that never touched, with every member
+some distance from the thing standing for it. That is the smaller sibling of
+the count badge reading "50" that 2.294.0 has just removed, and it would buy
+nothing, because both clusters were already summarised — no device becomes
+visible, they merely move further from their label.
+
+What was already true, and is worth stating because the screenshot suggests it
+is not obvious: a card's cells have always been ordered by the badge's static
+rank, which is derived from its category, so the devices inside one card are
+already clustered by kind. Two lights in a card of four are always adjacent.
+
+What has genuinely changed is the one place where the solver does choose. When
+a pile leaves exactly one device deferred, the pull-back demotes an accepted
+pile-mate so that the summary is an honest group of two rather than a badge
+standing alone for one device. It used to take the nearest pile-mate of any
+kind; it now prefers the nearest one of the SAME category, and only when that
+one is within about 12% of the nearest overall. The strict nearest still sets
+the scale, so the preference can never reach outside the bound the search
+already had — the card cannot be dragged anywhere the old rule would not have
+been willing to draw it.
+
+The bound is what keeps this honest. A pair is drawn at its two members'
+centroid, so every pixel of extra distance moves the card away from the device
+that was actually crowded out; the slack is deliberately small, and setting it
+to 1 disables the preference exactly.
+
 ## 2.294.0
 
 ### Fixed — a badge reading "50" in the middle of the villa, standing for fifty devices in a dozen rooms

@@ -69,6 +69,18 @@ export interface PlacementItem {
   rank: number;
   /** Total, locale-independent tiebreak — the entity_id. */
   sortKey: string;
+  /**
+   * The device's category, as a TIEBREAK and never as a gate.
+   *
+   * Nothing about who groups with whom is decided here and nothing may be: a
+   * summary exists because its members overlap, and who overlaps whom is a
+   * connected-component partition with no freedom in it. The one place a
+   * preference is expressible is the lone-deferral pull-back below, which
+   * genuinely chooses among several pile-mates that all satisfy the same
+   * bound — and there, all else near-equal, a light is a better partner for a
+   * light than a camera is.
+   */
+  category: string;
   /** roomKey() form, never a raw name. Buckets deferrals and keys chips. */
   room: string;
   /** The focused room's badges: accepted unconditionally, AND never counted
@@ -237,6 +249,18 @@ export function conflicts(
  * cross-room crowding would fall to a room chip it does not need.
  */
 const PULLBACK_REACH_FACTOR = 2;
+/**
+ * How much further a SAME-CATEGORY pile-mate may be and still win the
+ * lone-deferral pull-back. Squared distances are compared, so 1.25 is about
+ * 12% in length.
+ *
+ * Small on purpose. The preference is cosmetic — it makes a rescued pair read
+ * as one thing rather than two unrelated ones — and the geometry is not: the
+ * summary is drawn at its two members' centroid, so every pixel of extra
+ * distance moves the card away from the device that was actually crowded out.
+ * 1 disables the preference exactly.
+ */
+const PULLBACK_SAME_CATEGORY_SLACK = 1.25;
 
 /** Byte order, never localeCompare: collation is environment-dependent, so a
  *  locale-sensitive sort would let two clients order the same pile
@@ -600,6 +624,22 @@ export function solvePlacement(
     const lone = bucket.members[0];
     const li = items[lone];
     let best = -1, bestD2 = Infinity;
+    // ── SAME CATEGORY, ALL ELSE NEAR-EQUAL ──────────────────────────────
+    // The nearest same-category pile-mate is tracked alongside the nearest of
+    // any kind, and wins only if it is within `PULLBACK_SAME_CATEGORY_SLACK`
+    // of it. That ordering matters: the strict nearest still sets the scale,
+    // so the preference can shorten no distance and lengthen it by a bounded
+    // fraction of an already-bounded search. The card cannot be dragged
+    // anywhere the un-preferred rule would not have been willing to draw it.
+    //
+    // Why this is the ONLY place a category preference belongs: everywhere
+    // else, membership is forced. A summary exists because its members
+    // overlap, and overlap partitions into connected components — there is no
+    // second candidate to prefer. Here the solver is genuinely choosing which
+    // accepted pile-mate to demote, and a pair of lights reads as one thing
+    // where a light beside a camera reads as two unrelated ones that happen to
+    // be near each other.
+    let same = -1, sameD2 = Infinity;
     for (const i of piles[pileIdx[lone]]) {
       if (!accepted[i]) continue;
       const dx = items[i].sx - li.sx, dy = items[i].sy - li.sy, dz = items[i].sz - li.sz;
@@ -611,7 +651,12 @@ export function solvePlacement(
       if (d2 < bestD2 || (d2 === bestD2 && best >= 0 && byteLess(items[i].sortKey, items[best].sortKey))) {
         best = i; bestD2 = d2;
       }
+      if (items[i].category === li.category
+        && (d2 < sameD2 || (d2 === sameD2 && same >= 0 && byteLess(items[i].sortKey, items[same].sortKey)))) {
+        same = i; sameD2 = d2;
+      }
     }
+    if (same >= 0 && sameD2 <= bestD2 * PULLBACK_SAME_CATEGORY_SLACK) best = same;
     if (best < 0) continue; // nothing near enough — falls to the chip below
     accepted[best] = 0;
     bucket.members.push(best);
