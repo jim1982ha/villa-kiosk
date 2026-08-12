@@ -1,3 +1,70 @@
+## 2.297.0
+
+### Fixed — the empty bar at the bottom of the iPhone PWA, measured at last
+
+Reported again from a friend's iPhone, and correctly noted as something that
+has been "addressed" several times without ever being fixed. It has now been
+measured rather than reasoned from a screenshot, and the cause is a single
+meta tag that has been in index.html since long before the reports started.
+
+The measurement, from a 2.296.0 telemetry record on that handset: standalone
+true, vw 402, vh 812. A 402-point-wide device at devicePixelRatio 3 is a
+402x874 screen whose top safe-area inset is 62 — and 874 minus 812 is 62,
+exactly. The frames record from the same session puts the canvas at 402x812
+CSS pixels, so the app was already painting every pixel it had been given.
+The band is not space the page is wasting. It is space the page was never
+handed, and no stylesheet can reach it, because the document does not extend
+there. That single subtraction is what four earlier attempts were missing,
+and it is why 2.162.0's canvas pinning could not have worked from the start —
+it changed the layer that was already correct, and broke the map on Android
+and desktop while it was there.
+
+The cause is `apple-mobile-web-app-status-bar-style: black-translucent`. That
+value asks iOS to hand the standalone web view the whole screen and let the
+page draw underneath the status bar. Since iOS 15 it grants half the request:
+the view really is anchored at y=0 — which is why the pool and lawn render
+behind the clock and the Dynamic Island in every screenshot of this bug — but
+its height is still computed as screen height minus the status bar. The
+leftover strip lands at the BOTTOM, outside the web view, and iOS paints it
+with the manifest's `background_color`. That is `#F7F4EE`, and a manifest
+colour has no dark counterpart, which is why the band reads as the same pale
+bar whichever theme the villa is in.
+
+The value is now `default`. iOS reserves the status bar for itself and gives
+the page the entire remainder: the same 812 points, positioned below the bar,
+with nothing left over. The app also stops paying for that inset twice —
+`env(safe-area-inset-top)` becomes 0 in standalone, so `--safe-top` goes to 0
+and the HUD topbar stops reserving 62 points of its own clearance, which is
+the path this CSS has always taken on Android and desktop. The reserved strip
+is painted from the page's own theme-color and background, both of which
+already ship light and dark variants, so it follows the theme where the
+manifest colour could not.
+
+What this costs is the render bleeding up behind the status bar. Nothing but
+the canvas ever used that band — the HUD was already inset below it — so the
+trade is a decoration for the bug. What it cannot cost is a repeat of 2.162.0:
+this meta is iOS-standalone-only and is not observable from Android, desktop
+or HA Ingress at all.
+
+**The home-screen icon must be deleted and re-added.** iOS caches the whole
+`apple-mobile-web-app-*` block at icon-creation time, so an installed PWA
+keeps its old presentation no matter what the served HTML says. This is the
+same caveat that has sat in index.html since 2.145.0, and it is the reason a
+fix here cannot be verified by pulling to refresh.
+
+### Changed — telemetry carries the screen, not just the viewport
+
+Every event now reports `scrw`/`scrh` beside `vw`/`vh`. The gap between them
+is a whole class of bug that the ring simply could not express: "the page laid
+out short" and "the host gave the page less than the screen" look identical in
+a screenshot, need completely different fixes, and are told apart by one
+subtraction that was not performable from the data being collected. The only
+way to get those numbers was to ask whoever owned the affected handset to open
+Settings, find the telemetry panel and copy a report out by hand — which is a
+poor thing to need from someone else's phone in another country. Two integers
+per event, and the bar above would have been diagnosed the first time it was
+reported.
+
 ## 2.296.0
 
 ### Fixed — a room chip and a summary card had no idea how big the screen was

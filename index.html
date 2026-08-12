@@ -12,7 +12,52 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="VESTA" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- "default", NOT "black-translucent" — this ONE value is the whole
+         "empty bar at the bottom on iPhone" bug, reported repeatedly and
+         chased through the CSS layer three times before it was measured.
+
+         black-translucent asks iOS to hand the web view the WHOLE screen and
+         let the page draw under the status bar. Since iOS 15 it does only
+         half of that: the view is anchored at y=0 (so the villa really does
+         render behind the clock and Dynamic Island — that part works), but
+         its HEIGHT is still computed as screenHeight − statusBarHeight. The
+         missing strip is therefore left over at the BOTTOM, outside the web
+         view entirely, and iOS fills it with the manifest's background_color
+         (#F7F4EE — light, with no dark counterpart possible in a manifest,
+         which is why the band reads as a pale bar in either theme).
+
+         Measured, not inferred, from a 2.296.0 telemetry record on an iPhone
+         16 Pro home-screen PWA: standalone true, vw 402, vh 812. That screen
+         is 402x874 and its top safe-area inset is 62 — and 874 − 812 = 62
+         exactly. The frames record from the same session reports the canvas
+         at 402x812 CSS, i.e. the app was already filling every pixel it was
+         given. NO CSS CAN REACH THAT STRIP: the document does not extend
+         there. That is why 2.162.0's canvas pinning could not have worked
+         and only managed to break the map on Android and desktop.
+
+         With "default" iOS reserves the status bar for itself and gives the
+         page the entire remainder — the same 812pt, but positioned BELOW the
+         bar with nothing left over. The app also stops paying for it twice:
+         env(safe-area-inset-top) becomes 0 in standalone, so --safe-top goes
+         to 0 and .hud-topbar no longer reserves 62pt of its own clearance,
+         which is the Android/desktop path this CSS has always taken. The
+         reserved strip is painted from the page's own theme-color/background,
+         both of which already ship light and dark variants.
+
+         Cost: the render no longer bleeds up behind the status bar. Nothing
+         but the canvas ever used that band — the HUD was already inset below
+         it — so this trades a decoration for the bug.
+
+         This meta is iOS-standalone-only: Android, desktop and HA Ingress
+         cannot observe it at all, which is the property 2.162.0 lacked.
+
+         ⚠️ iOS caches this whole apple-mobile-web-app-* block AT ICON
+         CREATION. An already-installed PWA keeps the old presentation
+         forever — the home-screen icon MUST be deleted and re-added before
+         this takes effect. If the band is still there after re-adding, the
+         cause is not this block and the next measurement is the screen-vs-
+         window delta now carried on every telemetry event (utils/telemetry.ts). -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" media="(prefers-color-scheme: light)" />
     <link rel="icon" type="image/svg+xml" href="./favicon-dark.svg" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="./icons/favicon.ico" sizes="any" />

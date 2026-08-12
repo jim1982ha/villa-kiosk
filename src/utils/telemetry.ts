@@ -74,6 +74,20 @@ export function report(kind: TelemetryKind, data: Record<string, unknown> = {}):
     // the PWA from the HA-sidebar iframe (they behave differently on iOS).
     vw: window.innerWidth,
     vh: window.innerHeight,
+    // The SCREEN, alongside the viewport, because the gap between them is a
+    // whole class of bug that was previously invisible here. "There's an empty
+    // bar at the bottom on iPhone" was chased through the CSS three times over
+    // several releases; what settled it was noticing that vh was 812 on a
+    // 402x874 device, i.e. iOS had handed the web view 62pt LESS than the
+    // screen and no stylesheet could ever have reached the difference. Without
+    // these two numbers that subtraction is not performable from the ring at
+    // all, and the only way to get it was to ask someone to open Settings →
+    // Telemetry on the affected handset and copy a report out by hand.
+    // Cheap (two ints), and they make "the page laid out short" and "the host
+    // gave the page less than the screen" distinguishable at a glance — they
+    // need completely different fixes and look identical in a screenshot.
+    scrw: screen.width,
+    scrh: screen.height,
     dpr: Math.round((window.devicePixelRatio || 1) * 100) / 100,
     standalone: window.matchMedia?.("(display-mode: standalone)").matches === true
       || (navigator as Navigator & { standalone?: boolean }).standalone === true,
