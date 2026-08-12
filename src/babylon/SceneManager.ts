@@ -164,8 +164,9 @@ const MIN_ROOM_FIT_RADIUS = 1.5;
 // live at this spot and both are gone (2.209.0).
 //   * DECLUTTER_RADIUS_MARGIN (0.85) padded the declutter zoom so it would
 //     still clear groupBadges' QUANTISED step. That is arithmetic, not a
-//     margin — minPxPerWorldToDeclutterRoom now snaps onto the step ladder
-//     itself and there is nothing left to pad.
+//     margin — solveRoomZoomRadius (which is what minPxPerWorldToDeclutterRoom
+//     became) now snaps onto the step ladder itself and there is nothing left
+//     to pad.
 //   * DECLUTTER_RADIUS_MIN_FRACTION (0.5) capped how far the declutter step
 //     could tighten the shot, because a fan and its own light kit once drove
 //     the camera point-blank onto a bed. The cap was the wrong description of

@@ -1,3 +1,62 @@
+## 2.286.0
+
+### Fixed — the badge-overlap assertion could not fail
+
+Reported with four screenshots, two Android and two iPhone: badges and whole
+summary cards drawn on top of each other, mildly at a steep camera angle and
+solidly at a shallow one. The debug guard that exists to catch exactly that has
+been reporting a clean layout the whole time, and the reason is that it was
+circular. It built `placementItems` and fed them back into `conflicts` — the
+same items, the same predicate, the same gap and pitch the solver had satisfied
+a few lines earlier. It restated its subject's own conclusion, so it could not
+disagree with it whatever the screen looked like, and being read as evidence is
+what made it worse than having no check at all. The "nothing is drawn inside a
+summary's ink" check was circular the same way, through `drawnDistance`.
+
+Overlap is now measured where a person sees it. `cullLabels` has always
+projected every anchor through the true perspective matrix the GUI layer draws
+with, and has never read the result back — `ShownLabel.x`/`.y` were dead fields,
+which `tsc` does not police. Those, the badge collision boxes and the card
+layout are all already in render pixels, so the check costs one projection per
+summary and shares no arithmetic at all with the solver.
+
+Four counters, deliberately kept apart rather than summed. Badge ink overlapping
+badge ink is the headline. Badges closer than the tap pitch are counted
+separately because that is an accessibility rule, not a legibility one, and the
+first excusable case would otherwise teach the reader to skip the line. Badges
+under a summary are split into *buried under its ink*, which is a bug the absorb
+phase should have prevented, and *under the card's overhang*, which is allowed
+and documented — one undifferentiated number would be permanently non-zero, and
+a permanently non-zero assertion is a disabled one. Focused-room badges get
+their own bucket because their overlap is deliberate. Summary against summary is
+new: `fits` promises it absolutely and nothing had ever verified it.
+
+The card is measured at the box it is *drawn* in, half a card above its anchor,
+not at the disc the layout models it as. Using the layout's model here would
+report overlaps nobody can see and miss the ones they can, which is the failure
+this stops repeating.
+
+### Changed — records why the badges overlap, ahead of the fix
+
+The comment introducing the vertical foreshortening claimed the pixels-to-world
+conversion "is exact for a HORIZONTAL offset". It is not, and that sentence is
+why the other half of the correction went unwritten. Exactness holds only for a
+horizontal offset *across* the view; a horizontal offset *along* it is
+foreshortened by precisely the factor the vertical one is not — the same bug,
+on the axis nobody looked at. At the shallowest camera the overview allows, the
+depth axis is credited with 5.9 times the separation it is drawn with. Worse,
+depth and height land on the same screen axis and can cancel, and a distance
+that adds them in quadrature cannot express a cancellation at all.
+
+No behaviour changes here. The comment now carries the derivation, names the
+projection that retires the constant, and records the trap waiting for whoever
+fixes it: the depth coefficient must not be derived from the quantised vertical
+scale, because that quantises a cosine into eight steps and the complement is
+exactly zero across the top eleven degrees of the camera's range — every badge
+on every view ray would merge.
+
+Two comments naming a function deleted in 2.209.0 now name its successor.
+
 ## 2.285.0
 
 ### Removed — instrumentation whose questions are answered

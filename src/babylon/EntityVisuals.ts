@@ -54,6 +54,7 @@ import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator"
 // nothing to the bundle — ShadowGenerator already pulls this module in.
 import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture";
 import { Vector3, Matrix, Quaternion } from "@babylonjs/core/Maths/math.vector";
+import type { Viewport } from "@babylonjs/core/Maths/math.viewport";
 // Type-only: annotates the viewport cullLabels already computes and passes to
 // Vector3.ProjectToRef. A `import type` adds no runtime import, so it cannot
 // disturb the side-effect import discipline this file depends on elsewhere.
@@ -433,13 +434,42 @@ const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
  *
  * ── What this factor is, and why it is not "the camera creeping back in" ───
  * The clearance test converts drawn pixels into world units and then measures
- * world distance — see worldClearance. That conversion is exact for a
- * HORIZONTAL offset and wrong for a VERTICAL one: a metre of height is drawn
- * as `sin(tilt)` metres of screen, and looking straight down it is drawn as
- * nothing at all. The test was therefore crediting a ceiling fixture and the
- * floor socket beneath it with 2.5 m of separation they do not have on the
- * glass, which is how two summaries came to be drawn overlapping while the
- * test that exists to forbid exactly that called them clear.
+ * world distance — see worldClearance. That conversion is wrong for a VERTICAL
+ * offset: a metre of height is drawn as `sin(tilt)` metres of screen, and
+ * looking straight down it is drawn as nothing at all. The test was therefore
+ * crediting a ceiling fixture and the floor socket beneath it with 2.5 m of
+ * separation they do not have on the glass, which is how two summaries came to
+ * be drawn overlapping while the test that exists to forbid exactly that
+ * called them clear.
+ *
+ * ── AND THIS FACTOR IS ONLY HALF THE CORRECTION. KNOWN, OPEN. ──────────────
+ * This block used to claim the conversion "is exact for a HORIZONTAL offset".
+ * It is not, and that sentence is why the other half went unwritten for so
+ * long. Exactness holds only for a horizontal offset ACROSS the view. Split a
+ * world offset into `c` (horizontal, across), `h` (horizontal, ALONG the view)
+ * and `dy` (vertical), and with the pitch below horizontal called phi the true
+ * screen offset is
+ *
+ *     ( c ,  sin(phi)*h + cos(phi)*dy ) * pxPerWorld
+ *
+ * so `h` is foreshortened by exactly the factor `dy` is NOT — the mirror image
+ * of the bug this constant fixed, on the axis nobody looked at. The overview
+ * camera allows beta up to 1.4 (OverviewController.BETA_MAX), i.e. phi ~ 9.8
+ * degrees, where the depth axis is over-credited by 5.9x. Worse, `h` and `dy`
+ * land on the SAME screen axis and can CANCEL — a device both higher and
+ * further away draws almost where a lower, nearer one does — and a distance
+ * that adds them in quadrature, as drawnDistance does, cannot express a
+ * cancellation at all.
+ *
+ * That is a real, reported defect: badges and whole summary cards drawn on top
+ * of each other, mildly at a steep camera and catastrophically at a shallow
+ * one. The fix is not a third fudge factor on a third axis — it is to project
+ * onto the view plane and measure there, which retires this constant entirely.
+ * Until then, do not "complete" the correction by deriving the depth
+ * coefficient as sqrt(1 - verticalScale()^2): this quantises the COSINE into 8
+ * steps, so that expression is EXACTLY ZERO for every tilt in the top ~11
+ * degrees of the camera's range, and every badge on every view ray would
+ * merge. Quantise the angles, not their trig functions.
  *
  * So this is not a new dependency on the camera; it COMPLETES the one already
  * there. pxPerWorld is a camera quantity too, and it is admitted for precisely
@@ -3835,7 +3865,7 @@ export class EntityVisuals {
     // Last, so every visibility flag it reads is this pass's, not the previous
     // frame's.
     if (debugFlagEnabled() && clearance) {
-      this.assertPlacementInvariants(shown, boxes, clearance, pending);
+      this.assertPlacementInvariants(shown, boxes, clearance, pending, tm, vp);
     }
   }
 
@@ -4106,21 +4136,152 @@ export class EntityVisuals {
     /** The summaries that SURVIVED placement — not the ones the solver asked
      *  for. A dropped one still leaves its members marked as covered. */
     groups: readonly PendingEntityGroup[],
+    /** The renderer's OWN view-projection matrix and viewport, passed in
+     *  rather than re-derived or stashed on `this`. This method is the one
+     *  place in the file allowed to know what actually got painted, and
+     *  hiding that in instance state is how it would stop being obvious. */
+    tm: Matrix,
+    vp: Viewport,
   ): void {
     const items = this.placementItems(shown, boxes, clearance);
-    const drawn = (i: number) =>
-      !this.entityGrouped.has(shown[i].id)
-      && !this.roomClustered.get(roomKey(this.roomOf(shown[i].id)));
 
-    let overlaps = 0;
+    // ── OVERLAP, MEASURED IN THE SPACE A PERSON ACTUALLY SEES ────────────
+    // What used to be here fed `placementItems` straight back into
+    // `conflicts` — the same items, the same predicate, the same gap and
+    // minSep the solver had satisfied a few lines earlier. That is a
+    // tautology: it could not fail whatever the screen looked like, and for
+    // as long as it existed it reported a clean layout over screenshots full
+    // of badges and cards drawn on top of each other. An assertion that
+    // restates its subject's own conclusion is worse than no assertion,
+    // because it is read as evidence.
+    //
+    // Everything below is measured from `Vector3.ProjectToRef` — the TRUE
+    // perspective projection the GUI layer draws through, which cullLabels
+    // has always computed and, until now, never read (ShownLabel.x/y were
+    // dead fields; `tsc` does not police unused interface members). It shares
+    // no arithmetic at all with the solver, which is the only reason it is
+    // able to disagree with it.
+    //
+    // Everything is in RENDER pixels and that is commensurable by
+    // construction: Vector3.Project works in the global viewport, and
+    // effectiveScale() carries cssToGui() — the render-pixel conversion —
+    // so `boxes` and the card layout are already in the same space as `p`.
+    interface ScreenBox { cx: number; cy: number; hw: number; hh: number }
+    const onScreen = (b: ScreenBox) =>
+      b.cx + b.hw >= vp.x && b.cx - b.hw <= vp.x + vp.width
+      && b.cy + b.hh >= vp.y && b.cy - b.hh <= vp.y + vp.height;
+    // Ink on ink. No gap, no minimum pitch, no tolerance: two things either
+    // cover the same pixels or they don't, and that is the one claim about
+    // this subsystem nobody can argue with from a screenshot.
+    const hits = (a: ScreenBox, b: ScreenBox) =>
+      Math.abs(a.cx - b.cx) < a.hw + b.hw && Math.abs(a.cy - b.cy) < a.hh + b.hh;
+
+    const scale = this.effectiveScale();
+    const focus = this.focusedRoom;
+    const p = new Vector3();
+
+    // `container.isVisible` rather than a reconstruction of the same decision
+    // from entityGrouped/roomClustered: the renderer's own answer to "is this
+    // drawn", read after the visibility loop has run.
+    const badgeBoxes: ScreenBox[] = [];
+    const badgeExempt: boolean[] = [];
     for (let i = 0; i < shown.length; i++) {
-      if (!drawn(i) || items[i].exempt) continue;
-      for (let j = i + 1; j < shown.length; j++) {
-        if (!drawn(j) || items[j].exempt) continue;
-        if (conflicts(items[i], items[j], clearance.gap, clearance.minSep)) overlaps++;
+      const s = shown[i];
+      if (!s.inFront || !s.lbl.container.isVisible) continue;
+      const b: ScreenBox = {
+        cx: s.x, cy: s.y + boxes[i].cy, hw: boxes[i].halfW, hh: boxes[i].halfH,
+      };
+      if (!onScreen(b)) continue; // off-screen overlap is not something anyone sees
+      badgeBoxes.push(b);
+      badgeExempt.push(focus !== null && roomKey(this.roomOf(s.id)) === focus);
+    }
+
+    // A card is drawn ENTIRELY ABOVE its anchor — updateEntityGroups sets
+    // linkOffsetYInPixels = -(lay.height / 2) * scale so the card's bottom
+    // edge lands on the anchor, exactly as a badge's does. The LAYOUT models
+    // the same card as a disc centred ON the anchor (cardHalfOf), a documented
+    // asymmetry; using the layout's model here would report overlaps nobody
+    // can see and miss the ones they can, which is the whole failure mode this
+    // method just stopped repeating.
+    const cardBoxes: ScreenBox[] = [];
+    const cardInk: ScreenBox[] = [];
+    const cardFocused: boolean[] = [];
+    for (const g of groups) {
+      const lay = this.cardOf(this.drawnCells(g, g.members.length));
+      p.set(g.wx, g.wy, g.wz);
+      Vector3.ProjectToRef(p, Matrix.IdentityReadOnly, tm, vp, p);
+      if (!(p.z >= 0 && p.z <= 1)) continue;
+      const hw = (lay.width / 2) * scale;
+      const hh = (lay.height / 2) * scale;
+      const box: ScreenBox = { cx: p.x, cy: p.y - hh, hw, hh };
+      if (!onScreen(box)) continue;
+      cardBoxes.push(box);
+      // The square INSCRIBED in the card — "is this badge under my ink", the
+      // question absorb exists to answer, and a different question from "do we
+      // clear each other". Same distinction cardInscribedHalf draws.
+      const inner = Math.min(hw, hh);
+      cardInk.push({ cx: box.cx, cy: box.cy, hw: inner, hh: inner });
+      cardFocused.push(g.focused);
+    }
+
+    // (a) Drawn badge vs drawn badge. The headline number.
+    //
+    // The accessibility PITCH is counted separately from visual overlap on
+    // purpose: they mean different things (one is a tap-target rule, the other
+    // is legibility) and one of them is much more likely to be non-zero for a
+    // legitimate reason. Rolled together, the first excusable case would
+    // teach whoever reads this to ignore the line.
+    //
+    // Focused-room badges get their own bucket rather than being dropped:
+    // their overlap is DELIBERATE (the exemption stacks them, which is exactly
+    // why pairFocusedRoom exists), so mixing them in would poison the number
+    // that matters while hiding the one case where the pairing failed.
+    const minSepPx = clearance.minSep * clearance.pxPerWorld;
+    let overlaps = 0, tooClose = 0, focusOverlaps = 0;
+    for (let i = 0; i < badgeBoxes.length; i++) {
+      for (let j = i + 1; j < badgeBoxes.length; j++) {
+        const a = badgeBoxes[i], b = badgeBoxes[j];
+        const ink = hits(a, b);
+        if (badgeExempt[i] || badgeExempt[j]) { if (ink) focusOverlaps++; continue; }
+        if (ink) overlaps++;
+        else if (Math.hypot(a.cx - b.cx, a.cy - b.cy) < minSepPx) tooClose++;
       }
     }
-    if (overlaps) tapDebug(`PLACEMENT: ${overlaps} overlapping DRAWN badge pair(s)`);
+    if (overlaps) tapDebug(`PLACEMENT: ${overlaps} drawn badge pair(s) OVERLAP on screen`);
+    if (tooClose) tapDebug(`PLACEMENT: ${tooClose} drawn badge pair(s) closer than the ${Math.round(minSepPx)}px tap pitch`);
+    if (focusOverlaps) tapDebug(`PLACEMENT: ${focusOverlaps} overlapping pair(s) inside the FOCUSED room (expected; pairFocusedRoom's leftovers)`);
+
+    // (b) Drawn badge vs summary card, split in two — and the split is what
+    // makes the line actionable. Only the first is a violation: a card MAY be
+    // drawn over a badge outside its ink, because gating a card's existence on
+    // its full width sends groups to room chips instead (see `fits`). A single
+    // undifferentiated counter would be permanently non-zero for a documented
+    // reason, and a permanently non-zero assertion is a disabled one.
+    let buried = 0, overhung = 0;
+    for (let k = 0; k < cardBoxes.length; k++) {
+      if (cardFocused[k]) continue; // skips `fits` by design — see PendingEntityGroup.focused
+      for (let i = 0; i < badgeBoxes.length; i++) {
+        if (badgeExempt[i]) continue;
+        if (hits(cardInk[k], badgeBoxes[i])) buried++;
+        else if (hits(cardBoxes[k], badgeBoxes[i])) overhung++;
+      }
+    }
+    if (buried) tapDebug(`PLACEMENT: ${buried} drawn badge(s) BURIED under a summary's ink`);
+    if (overhung) tapDebug(`PLACEMENT: ${overhung} drawn badge(s) under a card's overhang (allowed)`);
+
+    // (c) Summary vs summary. This one must be EXACTLY ZERO, always — it is
+    // the single clearance guarantee `fits` makes without qualification, and
+    // nothing has ever verified it. Focused groups are excluded because they
+    // never went through `fits` at all.
+    let summaryOverlaps = 0;
+    for (let i = 0; i < cardBoxes.length; i++) {
+      if (cardFocused[i]) continue;
+      for (let j = i + 1; j < cardBoxes.length; j++) {
+        if (cardFocused[j]) continue;
+        if (hits(cardBoxes[i], cardBoxes[j])) summaryOverlaps++;
+      }
+    }
+    if (summaryOverlaps) tapDebug(`PLACEMENT: ${summaryOverlaps} summary pair(s) OVERLAP on screen — fits() promises this cannot happen`);
 
     // A badge never moves: the layout writes one shared lift and no X offset.
     let moved = 0;
@@ -4159,26 +4320,12 @@ export class EntityVisuals {
       tapDebug(`PLACEMENT: ${orphaned} badge(s) hidden with no summary and no chip`);
     }
 
-    // ── NOTHING IS DRAWN INSIDE A SUMMARY'S INK ──────────────────────────
-    // The invariant the absorb phase exists to establish, asserted rather than
-    // assumed. Its absence is what let a card sit exactly on top of an
-    // accepted badge at every zoom rung — and the symptom of that was a room
-    // that would not declutter no matter how far in you zoomed, which nobody
-    // would have connected to this without the check.
-    const pxPerWorld = clearance.pxPerWorld;
-    const scale = this.effectiveScale();
-    let buried = 0;
-    for (const g of groups) {
-      const lay = this.cardOf(this.drawnCells(g, g.members.length));
-      const inscribed = (Math.min(lay.width, lay.height) / 2) * scale * clearance.allow;
-      for (const s2 of shown) {
-        if (!s2.lbl.container.isVisible) continue;
-        const d = this.drawnDistance(
-          g.wx, g.wy, g.wz, s2.wx, s2.wy, s2.wz, clearance.vScale) * pxPerWorld;
-        if (d < inscribed) buried++;
-      }
-    }
-    if (buried) tapDebug(`PLACEMENT: ${buried} drawn badge(s) inside a summary's ink`);
+    // "Nothing is drawn inside a summary's ink" — the invariant the absorb
+    // phase exists to establish — used to be checked separately here, via
+    // drawnDistance. That made it circular in exactly the way the badge-pair
+    // check was: absorb decides with drawnDistance, so re-asking drawnDistance
+    // could only ever agree. It is check (b)'s `buried` counter now, measured
+    // against the card's drawn box.
 
     // Order independence — the purity guard.
     const reversed = items.slice().reverse();
@@ -4255,12 +4402,12 @@ export class EntityVisuals {
    *  ONE definition, shared by the placement solver, the room-cluster
    *  chips and solveRoomZoomRadius, so none can disagree about how much room a
    *  badge actually needs. */
-  /** `out`/`pool` default to the render loop's own reused buffers. A caller
-   *  OUTSIDE the frame path (minPxPerWorldToDeclutterRoom, driven by the UI)
-   *  passes its own so it can never clobber a layout pass mid-flight — the two
-   *  do not currently interleave, but sharing a mutable buffer across a public
-   *  method and the render loop is precisely the coupling that stops being
-   *  true after some later edit. */
+  /** `out`/`pool` default to the render loop's own reused buffers. The one
+   *  caller OUTSIDE the frame path (solveRoomZoomRadius, driven by the UI's
+   *  "zoom to this room") passes its own so it can never clobber a layout pass
+   *  mid-flight — the two do not currently interleave, but sharing a mutable
+   *  buffer across a UI-driven method and the render loop is precisely the
+   *  coupling that stops being true after some later edit. */
   private labelBoxes(
     shown: { lbl: LabelControls }[],
     out: { halfW: number; halfH: number; cy: number }[] = this.boxes,
