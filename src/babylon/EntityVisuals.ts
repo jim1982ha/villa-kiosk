@@ -579,10 +579,12 @@ interface ShownLabel {
   wx: number;
   wy: number;
   wz: number;
-  /** The anchor projected onto this pass's view plane, in GUI pixels — THE
-   *  input to grouping. Written by placementItems, which is the one place the
-   *  projection happens; see badgeProjection for why the decision is made in
-   *  this plane rather than in world space or in true perspective. */
+  /** Where the badge's BOX IS DRAWN on this pass's view plane, in GUI pixels —
+   *  THE input to grouping. The anchor projected (see badgeProjection for why
+   *  the decision is made in this plane rather than in world space or in true
+   *  perspective) and then lifted by the badge's own `cy`, because a badge
+   *  hangs above its anchor by an amount that differs between badges. Written
+   *  by placementItems, the one place the projection happens. */
   sx: number;
   sy: number;
   sz: number;
@@ -2456,7 +2458,10 @@ export class EntityVisuals {
       // from the shared one (see PlacementResult).
       for (let i = 0; i < n; i++) {
         items[i].sx = plane[i].px * pxPerWorld;
-        items[i].sy = plane[i].py * pxPerWorld;
+        // `cy` here for the same reason placementItems adds it: the box the
+        // renderer paints hangs above the anchor, by an amount that differs
+        // between badges. This ladder must run the identical test.
+        items[i].sy = plane[i].py * pxPerWorld + boxes[i].cy;
         items[i].sz = plane[i].pz * pxPerWorld;
         items[i].reach = boxes[i].halfW * allow;
       }
@@ -4045,6 +4050,18 @@ export class EntityVisuals {
    * goes on to compute inherits it — see drawnDistance. The result is also
    * written back onto the ShownLabel, because placeEntityGroups needs the same
    * plane coordinates and projecting twice is how two spaces drift apart.
+   *
+   * ── AND THE BOX IS CENTRED WHERE IT IS DRAWN, NOT ON THE ANCHOR ───────
+   * `boxes[i].cy` is added in. A badge HANGS above its anchor, and by how
+   * much depends on the badge: the classic style sits 56 CSS px up without a
+   * value readout and 45.5 with one, so two neighbours in different states are
+   * drawn 10.5 CSS px apart vertically — more than 20 render px on a retina
+   * tablet — while a test that compared their ANCHORS called them level.
+   *
+   * The file's oldest rule is that a layout decision may never use different
+   * geometry from the renderer. That was only ever enforced for a badge's SIZE.
+   * Its POSITION was exempt by omission, which is the same bug in a second
+   * place, and 2.287.0's screen-space counters are what made it visible.
    */
   private placementItems(
     shown: ShownLabel[],
@@ -4063,7 +4080,7 @@ export class EntityVisuals {
         pool[i] = it;
       }
       projectToView(clearance.basis, s.wx, s.wy, s.wz, p);
-      s.sx = p.px * k; s.sy = p.py * k; s.sz = p.pz * k;
+      s.sx = p.px * k; s.sy = p.py * k + boxes[i].cy; s.sz = p.pz * k;
       it.sx = s.sx; it.sy = s.sy; it.sz = s.sz;
       it.reach = boxes[i].halfW * clearance.allow;
       it.rank = badgeRank(s.lbl.type, s.lbl.category);
@@ -4620,6 +4637,24 @@ export class EntityVisuals {
       return (Math.hypot(lay.width, lay.height) / 2) * scale * allow;
     };
     /**
+     * The plane Y where the card's INK actually is: its anchor lifted by half
+     * its OWN height, exactly as updateEntityGroups sets linkOffsetYInPixels.
+     *
+     * Two cards of different heights are lifted by different amounts, so a test
+     * that compared their ANCHORS was measuring points up to half a card apart
+     * from where the ink is. Circumscribed discs at the anchors are no defence:
+     * shifting one box relative to the other closes the gap the discs were
+     * counting on, and 2.287.0's counters found real pairs doing it — up to
+     * five at once on a phone, against a promise `fits` makes absolutely.
+     *
+     * Same rule as the badge's `cy` (see placementItems): measure the card
+     * where it is drawn.
+     */
+    const cardCentreY = (g: PendingEntityGroup) => {
+      const lay = this.cardOf(this.drawnCells(g, g.members.length));
+      return g.sy - (lay.height / 2) * scale;
+    };
+    /**
      * The largest disc that fits INSIDE the card — "is this badge underneath
      * my ink", which is a different question from "do we clear each other".
      *
@@ -4703,7 +4738,8 @@ export class EntityVisuals {
         // focus renegotiating the rest of the map, which is exactly what the
         // exemption exists to prevent.
         if (focus !== null && roomKey(this.roomOf(shown[j].id)) === focus) continue;
-        const d = this.drawnDistance(g.sx, g.sy, g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
+        const d = this.drawnDistance(
+          g.sx, cardCentreY(g), g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
         if (d < vsBadge + halfOf(j) * allow + gapPx) return false;
       }
       for (const o of others) {
@@ -4712,7 +4748,8 @@ export class EntityVisuals {
         // not (see PlacementItem.exempt). The focus is a deliberate, temporary
         // state and it does not get to renegotiate the rest of the map.
         if (o.focused) continue;
-        const d = this.drawnDistance(g.sx, g.sy, g.sz, o.sx, o.sy, o.sz);
+        const d = this.drawnDistance(
+          g.sx, cardCentreY(g), g.sz, o.sx, cardCentreY(o), o.sz);
         if (d < mineHalf + groupHalf(o) + gapPx) return false;
       }
       return true;
@@ -4783,7 +4820,8 @@ export class EntityVisuals {
           const rk = roomKey(this.roomOf(shown[j].id));
           if (this.roomClustered.get(rk)) continue;
           if (focus !== null && rk === focus) continue;
-          const d = this.drawnDistance(g.sx, g.sy, g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
+          const d = this.drawnDistance(
+            g.sx, cardCentreY(g), g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
           if (d < reach) take.push(j);
         }
         if (take.length === 0) break;

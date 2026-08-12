@@ -1,3 +1,36 @@
+## 2.288.0
+
+### Fixed — the clearance tests measured every badge and card in the wrong place
+
+2.287.0 fixed the *space* placement is measured in, and the field numbers
+confirmed it: on a laptop, genuinely overlapping drawn badges at a
+near-horizontal camera went from 5 to 0, and on a phone from 20–30 to 1–2, with
+the whole 1/sin(tilt) gradient gone. What it did not fix was still visible in
+the counters — summary cards overlapping each other, one pair on the laptop
+through the middle of the tilt range and up to **five at once** on the phone,
+against a promise `fits` makes without qualification.
+
+The cause is the same mistake in a second place. A badge does not sit *on* its
+anchor and a card does not either: both hang above it. A badge's lift is its
+own `cy`, which for the classic style is 56 CSS px without a value readout and
+45.5 with one — so two neighbours in different states are drawn more than 20
+render pixels apart vertically on a retina tablet while a test comparing their
+anchors called them level. A card's lift is half its own height, so a two-row
+card and a one-row card beside it are lifted by different amounts.
+
+Circumscribed discs at the anchors are no defence against that. Shifting one
+box relative to the other closes exactly the gap the discs were counting on:
+two cards at the disc-clearance distance, offset diagonally and differing by
+one row in height, overlap as drawn ink while the test calls them clear. That
+is a pair the counter was finding, repeatedly.
+
+Every clearance test now measures the box where the renderer paints it. This
+file's oldest rule is that a layout decision may never use different geometry
+from the renderer; it had only ever been enforced for a badge's SIZE, and its
+POSITION was exempt by omission. The zoom-to-room ladder gets the same
+correction, because it has to run the identical test or it goes back to
+promising shots the renderer declines.
+
 ## 2.287.0
 
 ### Fixed — badges and summary cards drawn on top of each other
