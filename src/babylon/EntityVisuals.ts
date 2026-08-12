@@ -487,6 +487,36 @@ const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
  * of each other.
  */
 const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
+/**
+ * Do room chips take part in the collision they were the answer to?
+ *
+ * Until 2.290.0 they did not, and the omission was invisible because it looks
+ * like a completed cascade: a crowded room hands its badges to a chip, and the
+ * chip is the tier of last resort, so nothing checks it against anything. But
+ * `updateClusters` only ever tested chips against OTHER CHIPS. A chip sits at
+ * its room's device centroid, which is nobody's badge position and nobody's
+ * card position, and it is far wider than either — so a neighbouring room's
+ * badge or summary lands on top of it routinely. That is the card sitting on
+ * "Staircase" in the top-down screenshots.
+ *
+ * The resolution is the same one every other tier uses: the thing that can
+ * escalate does. A drawn badge or a placed card overlapping a chip sends its
+ * OWN room(s) to their own chip — never the other way round, because a chip is
+ * already the last tier and has nowhere to go. Rooms are only ever added to
+ * `roomClustered`, so the loop is monotone and terminates in at most one round
+ * per room.
+ *
+ * Two spaces, deliberately, and this must not be "tidied up" into one:
+ * chip-vs-chip MERGING stays in true perspective (it is cosmetic, post-hoc,
+ * cannot feed back into the solve, and being exact there is free), while
+ * chip-vs-badge/card ESCALATION uses the view plane, because it decides what
+ * is drawn and must stay invariant to where the camera is standing.
+ *
+ * `false` restores the pre-2.290.0 behaviour exactly. It is here because this
+ * is the tier that spends chips, and how many chips is too many is a judgement
+ * only a screenshot can make.
+ */
+const CHIP_COLLISION = true as boolean;
 
 
 
@@ -515,6 +545,37 @@ const CLUSTER_BG_COLOR = "#475569"; // fallback only — see --chip-surface
  *  purely the threshold at which two of them are judged too close and MERGE
  *  into one (see updateClusters). */
 const CLUSTER_GAP_PX = 6;
+/**
+ * One room chip as DERIVED — everything needed to decide where it lands and
+ * what it swallows, before a single GUI control is touched.
+ *
+ * Lifted out of `updateClusters` when that method split into `deriveChips`
+ * (pure) and `renderChips`: CHIP_COLLISION has to re-derive the chips several
+ * times in one pass, and a function that also writes to the GUI cannot be run
+ * in a loop.
+ */
+interface RoomChip {
+  /** roomKey() — identity, and the key its GUI controls live under. */
+  key: string;
+  /**
+   * EVERY roomKey this chip stands for, its own included, growing as it merges.
+   * `key` alone was enough while nothing outside the merge loop asked what a
+   * chip covered; the collision pass does, and `roomNames` cannot answer it —
+   * those are printable spellings, and roomKey() exists precisely because a
+   * printable spelling is not an identity.
+   */
+  keys: string[];
+  /** The raw name this chip PRINTS. */
+  room: string; ids: string[]; centre: Vector3; rooms: number; roomNames: string[];
+  ringRed: boolean; unavailable: boolean;
+  /** True-perspective screen position and half-extents — the merge test only.
+   *  The collision test re-projects `centre` onto the view plane instead; see
+   *  CHIP_COLLISION for why the two spaces are not the same one. */
+  x: number; y: number; halfW: number; halfH: number;
+}
+/** A merged chip says so with "+N", so the count pill's total is never
+ *  mistaken for one room's device count. */
+const chipLabelOf = (c: RoomChip) => (c.rooms > 1 ? `${c.room} +${c.rooms - 1}` : c.room);
 /**
  * ── The summaries are ONE family, built from ONE unit ────────────────────
  * A summary is never given a size of its own. Every dimension of the room
@@ -3883,6 +3944,11 @@ export class EntityVisuals {
     // settled until the solve above has finished.
     if (clearance) this.placeEntityGroups(shown, boxes, pending, clearance);
 
+    // Chips are derived and drawn LAST, but which rooms have one is settled
+    // here — a chip can push a neighbour's badge or card to its own room's
+    // chip, and every visibility flag below has to be this pass's final answer.
+    const chips = this.settleChips(shown, boxes, pending, clearance);
+
     for (const s of shown) {
       // ZERO X offset and a FIXED Y lift that centres every badge over its
       // own anchor — the same value for all of them, so nothing here can move
@@ -3895,13 +3961,13 @@ export class EntityVisuals {
         && !this.roomClustered.get(roomKey(this.roomOf(s.id)))
         && !this.entityGrouped.has(s.id);
     }
-    this.updateClusters(shown);
+    this.renderChips(chips);
     this.updateEntityGroups(shown, pending);
     if (debugFlagEnabled()) this.logPlacement(shown, clearance, solved, pending);
     // Last, so every visibility flag it reads is this pass's, not the previous
     // frame's.
     if (debugFlagEnabled() && clearance) {
-      this.assertPlacementInvariants(shown, boxes, clearance, pending, tm, vp);
+      this.assertPlacementInvariants(shown, boxes, clearance, pending, chips, tm, vp);
     }
   }
 
@@ -4215,6 +4281,9 @@ export class EntityVisuals {
     /** The summaries that SURVIVED placement — not the ones the solver asked
      *  for. A dropped one still leaves its members marked as covered. */
     groups: readonly PendingEntityGroup[],
+    /** The chips that SURVIVED the same pass, so the tier of last resort is
+     *  checked against the tiers it outranks — see CHIP_COLLISION. */
+    chips: readonly RoomChip[],
     /** The renderer's OWN view-projection matrix and viewport, passed in
      *  rather than re-derived or stashed on `this`. This method is the one
      *  place in the file allowed to know what actually got painted, and
@@ -4361,6 +4430,26 @@ export class EntityVisuals {
       }
     }
     if (summaryOverlaps) tapDebug(`PLACEMENT: ${summaryOverlaps} summary pair(s) OVERLAP on screen — fits() promises this cannot happen`);
+
+    // (d) Room chip vs everything the chip outranks. A chip is the tier of
+    // last resort and nothing used to test it against anything but another
+    // chip — see CHIP_COLLISION. Measured in TRUE perspective like every other
+    // counter here, against the chip's DRAWN box (it is lifted by half its own
+    // height, exactly as badges and cards are). Focused-room badges are
+    // excluded: they are exempt from the escalation pass by design, because
+    // tapping a room must not be able to make that room vanish.
+    let chipHits = 0;
+    for (const c of chips) {
+      const box: ScreenBox = { cx: c.x, cy: c.y - c.halfH, hw: c.halfW, hh: c.halfH };
+      if (!onScreen(box)) continue;
+      for (let i = 0; i < badgeBoxes.length; i++) {
+        if (!badgeExempt[i] && hits(box, badgeBoxes[i])) chipHits++;
+      }
+      for (let k = 0; k < cardBoxes.length; k++) {
+        if (!cardFocused[k] && hits(box, cardBoxes[k])) chipHits++;
+      }
+    }
+    if (chipHits) tapDebug(`PLACEMENT: ${chipHits} drawn badge(s)/card(s) OVERLAP a room chip`);
 
     // A badge never moves: the layout writes one shared lift and no X offset.
     let moved = 0;
@@ -4910,24 +4999,39 @@ export class EntityVisuals {
       }
       placed.push(g);
     }
-    // ── A DROPPED GROUP TAKES EVERY ROOM IT COVERED WITH IT ──────────────
-    // A group whose room was escalated by a LATER pile must not also draw: the
-    // chip already covers its members, and two renderings of the same content
-    // is how a viewer learns to distrust both.
-    //
-    // But dropping it is only half the move. This used to claim "the chip hides
-    // every badge in the room regardless, so nothing ends up hidden with
-    // nothing in its place", and that is true only of a SINGLE-ROOM group. A
-    // group straddling a boundary has members in a room that did not chip, and
-    // they stay marked in `entityGrouped` — hidden, with no summary and no
-    // chip. Invisible AND untappable, and the field log said so on nearly every
-    // pass: `PLACEMENT: N badge(s) hidden with no summary and no chip`.
-    //
-    // So it escalates all of its rooms, exactly as the `!fits` branch above
-    // does for the same reason. That costs chips — the honest price of not
-    // losing a device — and it has to run to a FIXPOINT, because escalating a
-    // room can drop a group that was already past in the sweep, whose own rooms
-    // then have to go too. Bounded: every round drops at least one group.
+    this.dropEscalatedGroups(placed);
+    pending.length = 0;
+    for (const g of placed) pending.push(g);
+  }
+
+  /**
+   * ── A DROPPED GROUP TAKES EVERY ROOM IT COVERED WITH IT ──────────────
+   * A group whose room was escalated by a LATER pile must not also draw: the
+   * chip already covers its members, and two renderings of the same content
+   * is how a viewer learns to distrust both.
+   *
+   * But dropping it is only half the move. This used to claim "the chip hides
+   * every badge in the room regardless, so nothing ends up hidden with
+   * nothing in its place", and that is true only of a SINGLE-ROOM group. A
+   * group straddling a boundary has members in a room that did not chip, and
+   * they stay marked in `entityGrouped` — hidden, with no summary and no
+   * chip. Invisible AND untappable, and the field log said so on nearly every
+   * pass: `PLACEMENT: N badge(s) hidden with no summary and no chip`.
+   *
+   * So it escalates all of its rooms, exactly as the `!fits` branch does for
+   * the same reason. That costs chips — the honest price of not losing a
+   * device — and it has to run to a FIXPOINT, because escalating a room can
+   * drop a group that was already past in the sweep, whose own rooms then have
+   * to go too. Bounded: every round drops at least one group.
+   *
+   * Extracted in 2.290.0 because CHIP_COLLISION escalates rooms from OUTSIDE
+   * this method and must settle the groups the same way. Writing a second
+   * escalation path is how the orphan bug in the paragraph above got made in
+   * the first place; there is one.
+   *
+   * Prunes `placed` IN PLACE.
+   */
+  private dropEscalatedGroups(placed: PendingEntityGroup[]): void {
     for (let round = 0; round <= placed.length; round++) {
       let dropped = false;
       for (let i = placed.length - 1; i >= 0; i--) {
@@ -4942,8 +5046,6 @@ export class EntityVisuals {
       }
       if (!dropped) break;
     }
-    pending.length = 0;
-    for (const g of placed) pending.push(g);
   }
 
   /**
@@ -5589,10 +5691,95 @@ export class EntityVisuals {
    * straight to that existing modal instead of inventing a second grouping
    * concept.
    */
-  private updateClusters(shown: ShownLabel[]): void {
-    const layer = this.labelLayer;
-    if (!layer) return; // no GUI layer yet — nothing to attach chips to
+  /**
+   * Derive the room chips, then let them take part in the collision they were
+   * the answer to — see CHIP_COLLISION for why they did not until 2.290.0 and
+   * why only ONE direction of escalation is available here.
+   *
+   * A drawn badge or a placed card overlapping a chip sends its OWN room(s) to
+   * their own chip. Never the reverse: a chip is already the last tier, so
+   * "yield to the badge" has nothing to yield to. That asymmetry is what makes
+   * this terminate — `roomClustered` only ever gains keys, and there are
+   * finitely many rooms, which is the same monotonicity the existing chip
+   * cascade runs on.
+   *
+   * Boxes, not discs, and that is now expressible: a chip is a wide, short
+   * pill (a room name plus a count), so a circumscribed disc would reserve
+   * most of its own width above and below itself and chip half the villa.
+   * Since 2.287.0 the plane's axes ARE the screen's axes, so an exact
+   * axis-aligned test is available where a radial approximation used to be the
+   * only honest option. The chip-vs-chip merge in `deriveChips` has always
+   * tested boxes for the same reason.
+   *
+   * Returns the chips to draw; `pending` is pruned in place to the groups that
+   * survived.
+   */
+  private settleChips(
+    shown: ShownLabel[],
+    boxes: { halfW: number; halfH: number; cy: number }[],
+    pending: PendingEntityGroup[],
+    clearance: { pxPerWorld: number; basis: ViewBasis } | null,
+  ): RoomChip[] {
+    let chips = this.deriveChips(shown);
+    if (!CHIP_COLLISION || !clearance || clearance.pxPerWorld <= 0) return chips;
+    const scale = this.effectiveScale();
+    const gapPx = this.metrics.minGapPx * scale;
+    const focus = this.focusedRoom;
+    const half = (this.summaryMetrics().size / 2) * scale;
+    // One round per room is the worst case: each has to be able to escalate,
+    // and nothing can un-escalate. The `<=` is the belt to that braces.
+    for (let round = 0; round <= this.roomDisplay.size; round++) {
+      // A chip is drawn ENTIRELY ABOVE its anchor — renderChips sets
+      // linkOffsetYInPixels to minus half its height, exactly as a badge and a
+      // card do. Measured where it is DRAWN, which is this file's oldest rule
+      // and the one 2.288.0 had to restate for badges and cards.
+      const chipBoxes = chips.map((c) => {
+        const q = this.planeOf(clearance, c.centre.x, c.centre.y, c.centre.z);
+        return { cx: q.sx, cy: q.sy - half, hw: c.halfW + gapPx, hh: half + gapPx };
+      });
+      const clears = (cx: number, cy: number, hw: number, hh: number) => {
+        for (const b of chipBoxes) {
+          if (Math.abs(cx - b.cx) < hw + b.hw && Math.abs(cy - b.cy) < hh + b.hh) return false;
+        }
+        return true;
+      };
+      let escalated = false;
+      // Drawn badges. The same three exclusions `fits` applies, for the same
+      // reasons: a grouped badge is not drawn, a chipped room's badge is not
+      // drawn, and a FOCUSED room's badge blocks nobody and is not allowed to
+      // spend its own room's chip either — tapping a room must not be able to
+      // make that room disappear.
+      for (let i = 0; i < shown.length; i++) {
+        const s2 = shown[i];
+        if (this.entityGrouped.has(s2.id)) continue;
+        const rk = roomKey(this.roomOf(s2.id));
+        if (this.roomClustered.get(rk)) continue;
+        if (focus !== null && rk === focus) continue;
+        if (clears(s2.sx, s2.sy, boxes[i].halfW, boxes[i].halfH)) continue;
+        this.roomClustered.set(rk, true);
+        escalated = true;
+      }
+      // Placed summaries, measured at the card they actually draw.
+      for (const g of pending) {
+        if (g.focused) continue;
+        if (g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
+        const lay = this.cardOf(this.drawnCells(g, g.members.length));
+        const hh = (lay.height / 2) * scale;
+        if (clears(g.sx, g.sy - hh, (lay.width / 2) * scale, hh)) continue;
+        for (const k of g.roomKeys) this.roomClustered.set(k, true);
+        escalated = true;
+      }
+      if (!escalated) break;
+      // The EXISTING fixpoint, not a second escalation path — a group whose
+      // room just chipped has to take every other room it covered with it or
+      // its members are hidden with nothing in their place.
+      this.dropEscalatedGroups(pending);
+      chips = this.deriveChips(shown);
+    }
+    return chips;
+  }
 
+  private deriveChips(shown: ShownLabel[]): RoomChip[] {
     // Bucket by room, accumulating the centroid and worst state as we go —
     // but only for rooms flagged as grouped THIS frame (cullLabels); everyone
     // else keeps their individual badges and gets no chip at all. Off-screen
@@ -5636,8 +5823,6 @@ export class EntityVisuals {
     }
 
     const scale = this.effectiveScale();
-    const chipRest = categorySurface("others", "off");
-    const chipAlert = categorySurface("others", "alert");
 
     // ── Chips MERGE under pressure; they are never pushed (2.120.0) ────────
     // A force-relaxation solver used to separate them by displacement; it was
@@ -5666,33 +5851,24 @@ export class EntityVisuals {
     const vp = cam ? cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight()) : null;
     const tm = this.scene.getTransformMatrix();
 
-    interface Chip {
-      /** roomKey() — identity, and the key its GUI controls live under. */
-      key: string;
-      /** The raw name this chip PRINTS. */
-      room: string; ids: string[]; centre: Vector3; rooms: number; roomNames: string[];
-      ringRed: boolean; unavailable: boolean;
-      x: number; y: number; halfW: number; halfH: number;
-    }
-    const chipLabel = (c: Chip) => (c.rooms > 1 ? `${c.room} +${c.rooms - 1}` : c.room);
-    const measure = (c: Chip) => {
+    const measure = (c: RoomChip) => {
       if (vp) {
         const p = Vector3.Project(c.centre, Matrix.IdentityReadOnly, tm, vp);
         c.x = p.x; c.y = p.y;
       }
       // Same width ESTIMATE the old path used (chipWidthPx) — it only has to be
       // close enough to decide overlap, not match the drawn glyphs exactly.
-      c.halfW = (chipWidthPx(`${chipLabel(c)}  ${c.ids.length}`) / 2) * scale;
+      c.halfW = (chipWidthPx(`${chipLabelOf(c)}  ${c.ids.length}`) / 2) * scale;
       c.halfH = (this.summaryMetrics().size / 2) * scale;
     };
 
-    const chips: Chip[] = [];
+    const chips: RoomChip[] = [];
     for (const [key, g] of groups) {
       // Back to the raw spelling for anything a person reads or taps: the key
       // is a Map key only (CLAUDE.md), and roomDisplay holds what to print.
       const room = this.roomDisplay.get(key) ?? key;
-      const c: Chip = {
-        key, room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
+      const c: RoomChip = {
+        key, keys: [key], room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
         ringRed: g.ringRed, unavailable: g.unavailable,
         x: 0, y: 0, halfW: 0, halfH: 0,
       };
@@ -5726,6 +5902,7 @@ export class EntityVisuals {
       // Keep the NAMES, not just the count: a merged chip has to be able to
       // offer the rooms it swallowed when it is tapped, and "+2" cannot.
       keep.roomNames = [...a.roomNames, ...b.roomNames];
+        keep.keys = [...a.keys, ...b.keys];
         keep.ringRed = a.ringRed || b.ringRed;
         keep.unavailable = a.unavailable || b.unavailable;
         chips.splice(chips.indexOf(drop), 1);
@@ -5733,6 +5910,20 @@ export class EntityVisuals {
       }
     }
 
+    return chips;
+  }
+
+  /**
+   * Draw the chips `deriveChips` settled on. Split off it in 2.290.0 so the
+   * derivation can run repeatedly inside one pass (see CHIP_COLLISION) without
+   * repainting the GUI on every round.
+   */
+  private renderChips(chips: RoomChip[]): void {
+    const layer = this.labelLayer;
+    if (!layer) return; // no GUI layer yet — nothing to attach chips to
+    const scale = this.effectiveScale();
+    const chipRest = categorySurface("others", "off");
+    const chipAlert = categorySurface("others", "alert");
     for (const chip of chips) {
       const c = this.ensureCluster(chip.key, layer);
       c.entityIds = chip.ids;
@@ -5742,7 +5933,7 @@ export class EntityVisuals {
       // Room name and count render as separate controls (see ensureCluster).
       // A chip that absorbed others says so with a "+N" suffix, so the count
       // pill's total is never mistaken for one room's device count.
-      c.text.text = chipLabel(chip);
+      c.text.text = chipLabelOf(chip);
       c.countText.text = formatCountBadge(chip.ids.length);
       // The chip's own ring mirrors the individual badge ring rule exactly
       // (BADGE_RING): red when at least one member is "on" or "alert",

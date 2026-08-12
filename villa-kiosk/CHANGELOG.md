@@ -1,3 +1,73 @@
+## 2.290.0
+
+### Fixed — the room chip was the one thing on the map that collided with nothing
+
+A room chip is the tier of last resort: when a room is too crowded to draw its
+devices, it hands all of them to one chip that says the room's name and its
+device count. Because it is last, nothing ever checked it against anything.
+`updateClusters` tested chips against OTHER CHIPS — that is what the merging
+rule is — and there it stopped.
+
+But a chip does not sit where its room's badges sit. It sits at the room's
+device centroid, which is nobody's badge position and nobody's summary
+position, and it is several times wider than either, because it prints a name
+rather than a pictogram. A neighbouring room's badge or summary card landing
+on top of it is not an edge case, it is the ordinary outcome — the summary
+card sitting across the "Staircase" chip in the top-down screenshots, and one
+of the two things left in the field logs that a person could actually see.
+
+Chips now take part. A drawn badge or a placed summary that overlaps a chip
+sends its OWN room or rooms to their own chip. Only that direction is
+available, and the asymmetry is the point: a chip is already the last tier, so
+"yield to the badge" has nothing to yield to. It is also what makes the pass
+terminate — rooms are only ever added to the summarised set, never removed, so
+the loop is monotone and settles in at most one round per room, the same
+monotonicity the existing chip cascade has always run on.
+
+Two details are load-bearing and are written down beside the code rather than
+left to be inferred.
+
+The first is that this reuses the drop-fixpoint that already existed instead
+of writing a second escalation path. When a room summarises, any group holding
+one of its members must go too, and must take every OTHER room it covered with
+it — otherwise that group's members in the neighbouring room stay marked as
+covered while nothing covers them: hidden and untappable, with no summary and
+no chip. That bug has been made once already, on nearly every pass, and the
+way it was made was by having more than one place that escalates a room.
+
+The second is that this test uses boxes where the summary tests use discs, and
+that the two are not an inconsistency to be tidied away. A disc is what you
+reach for when you do not know which way a neighbour lies relative to the
+thing you are testing — which was true of every clearance test in this
+subsystem while it measured world distance. It has not been true since 2.287.0
+put placement on the camera's view plane, whose axes ARE the screen's axes. It
+matters most here: a chip is a wide, short pill, so its circumscribed disc
+reserves most of its own width above and below itself, and testing that way
+would summarise half the villa. For the same reason the chip-vs-chip merge has
+always compared boxes.
+
+Chip-vs-chip merging stays in true perspective; chip-vs-badge and chip-vs-card
+escalation uses the view plane. Deliberate, and the code says so: merging is
+cosmetic and post-hoc and cannot feed back into what is drawn, so being exact
+there is free, while escalation decides what is drawn and therefore has to
+stay invariant to where the camera is standing — the property the whole 2.287.0
+projection exists to preserve.
+
+Expect visibly more chips than before, in the places that were double-drawn.
+`CHIP_COLLISION` reverts the whole thing in one word, because how many chips is
+too many is a judgement only a screenshot can make, and this release exists to
+put that judgement in front of one. `?debug` grows the counter that measures
+it: `N drawn badge(s)/card(s) OVERLAP a room chip`, in true perspective like
+every other line there, which read non-zero on every pass before this change
+and should now read zero.
+
+### Changed — updateClusters split in two
+
+`deriveChips` decides what the chips are; `renderChips` draws them. The
+collision pass has to re-derive several times within one layout pass, and a
+function that also repaints the GUI cannot be run in a loop. No behaviour of
+its own.
+
 ## 2.289.0
 
 ### Fixed — a summary swallowed the badges whose CENTRE was under it, not the ones it was drawn over
