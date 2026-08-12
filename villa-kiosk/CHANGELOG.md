@@ -1,3 +1,48 @@
+## 2.289.0
+
+### Fixed — a summary swallowed the badges whose CENTRE was under it, not the ones it was drawn over
+
+The 2.288.0 field sweep answered the question it was shipped to answer, and
+then pointed at the next one. Summary cards drawn on top of each other went
+from five or six at once on a phone to none anywhere in a full tilt-and-zoom
+sweep, and the one remaining pair on the laptop appears only inside a narrow
+band of tilt and zoom and is gone in the resting view. But one counter never
+moved and never went quiet: on both machines, at every angle, in a view
+nobody was even touching, the debug overlay kept reporting two to four
+`drawn badge(s) BURIED under a summary's ink`.
+
+That one is not the orthographic approximation and it is not a tuning
+question. Burial is a question about a badge's BOX — the thing that has ink
+in it — and the sweep that absorbs buried badges was asking about its CENTRE.
+A badge whose centre sits just outside the card's inscribed square while half
+of the badge sits inside it was absorbed by nobody: not by that sweep, which
+had already decided it was outside, and not by the clearance test that seats
+the card, which only starts refusing a badge one full badge box plus the
+minimum gap further out. Everything in that ring is drawn half underneath a
+summary, permanently, at any zoom, because the geometry that produces it does
+not change with the camera.
+
+The code had already written down the rule it was breaking. The comment on
+the inscribed radius says in as many words that it "leaves exactly a
+`gapPx`-wide annulus between 'absorbed' and 'fits passes', which is the right
+amount of nothing". The annulus was never `gapPx` wide; it was a badge's own
+half-extent wider than that, and the extra width was solid overlap. The fix
+adds the badge's half-extent to the test, which makes the sentence true
+instead of rewording it, and widens what a summary eats by not one pixel of
+its own ink — it is the same inscribed square, grown by the thing being
+measured against it.
+
+Two things this deliberately does NOT do. It does not touch the inscribed
+radius itself: absorbing at the circumscribed one would swallow badges that
+are visibly clear of the card, which is deleting devices from the map to fix
+a bug about the opposite, and that reasoning still stands. And it does not
+pre-tune anything for the laptop's remaining summary pair. That pair is the
+stated cost of measuring placement on an orthographic view plane while the
+renderer divides every card by its own depth — two cards further from the
+camera than the zoom rung's reference depth draw closer together than the
+plane predicts — and the honest answer to it is a measurement, not a constant
+picked to make one screenshot look right.
+
 ## 2.288.0
 
 ### Fixed — the clearance tests measured every badge and card in the wrong place

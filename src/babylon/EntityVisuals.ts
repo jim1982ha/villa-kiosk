@@ -4822,7 +4822,23 @@ export class EntityVisuals {
           if (focus !== null && rk === focus) continue;
           const d = this.drawnDistance(
             g.sx, cardCentreY(g), g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
-          if (d < reach) take.push(j);
+          // ── THE BADGE'S OWN HALF-EXTENT COUNTS ───────────────────────
+          // Burial is a question about the badge's BOX, not its centre. This
+          // compared the centre alone, so a badge straddling the edge of the
+          // ink — centre just outside, half of it inside — was neither
+          // absorbed here nor refused by `fits` (which starts one badge box
+          // plus `gapPx` further out). That annulus is drawn HALF UNDER the
+          // card, and it is what 2.286.0's `BURIED under a summary's ink`
+          // counter kept reporting on both a laptop and a phone, at every
+          // tilt, in a resting view nobody was even moving.
+          //
+          // `cardInscribedHalf`'s own docstring already claimed the annulus
+          // between "absorbed" and "`fits` passes" was exactly `gapPx` wide.
+          // It was `halfOf(j) + gapPx` wide. This makes the sentence true
+          // rather than rewording it, and it does not widen what a summary
+          // eats by one pixel of the card's own ink: the same inscribed
+          // square, grown by the thing being measured against it.
+          if (d < reach + halfOf(j)) take.push(j);
         }
         if (take.length === 0) break;
         for (const j of take) {
