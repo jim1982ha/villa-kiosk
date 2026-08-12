@@ -1,3 +1,37 @@
+## 2.293.0
+
+### Fixed — hovering a summary card named nothing, so two identical icons were two anonymous devices
+
+A summary of two to six devices draws their pictograms, one per cell, and each
+cell has been its own tap target since it gained cells. The pointer never got
+the same treatment: the hover tooltip asked only `pickBadgeAt`, which knows
+individual badges and nothing at all about a card's cells, so moving the mouse
+over a summary produced no name.
+
+That was survivable while a summary drew a count — there was nothing to name.
+It stopped being survivable the moment the card started drawing its members,
+because the commonest summary in a villa is two of the same kind of device: two
+lights, two cameras, two switches. Two identical pictograms with no name are
+not two devices, they are one device drawn twice, and the only way to tell them
+apart was to open one and see what it turned out to be.
+
+The tooltip now asks the card's cell first and the badges second — the same
+hit-tests a tap goes through, in the same order, which is the promise this
+method was always supposed to make: what a pointer names and what a tap opens
+can never be two different devices. The fallback is mirrored too, so a point on
+the card but in no cell (a count, the empty corner of a three-member grid, the
+gap between two cards of a split) still asks the badges, because a card can be
+drawn over a badge belonging to another pile entirely.
+
+Room chips are deliberately not asked. A chip prints its own room name and
+stands for a room rather than a device, so a tooltip has nothing to add that
+the chip is not already showing.
+
+Touch is unaffected and already had an answer: there is no hover on a
+touchscreen, but a press-and-hold anywhere on a summary opens its device list,
+which names every member — and a plain tap on a cell opens that device
+directly.
+
 ## 2.292.0
 
 ### Fixed — the last of the overlap, paid for with the dial that was always the right one

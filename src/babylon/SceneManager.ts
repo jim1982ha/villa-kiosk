@@ -1179,11 +1179,36 @@ export class SceneManager {
     this.requestRender(600);
   }
 
-  /** The entity whose badge is under this screen point, or null — for the
-   *  hover tooltip. Reuses the SAME hit-test taps go through
-   *  (EntityVisuals.pickBadgeAt), so what a pointer highlights and what a tap
-   *  opens can never be two different badges. */
+  /**
+   * The entity under this screen point, or null — for the hover tooltip.
+   *
+   * Reuses the SAME hit-tests a TAP goes through, in the same order, because
+   * the promise this method makes is that what a pointer names and what a tap
+   * opens can never be two different devices.
+   *
+   * ── WHY THE GROUP CARD IS ASKED FIRST (2.293.0) ─────────────────────────
+   * It used to ask `pickBadgeAt` alone, which knows individual badges and
+   * nothing about a summary's cells — so hovering a card named nothing at all.
+   * That was survivable while a summary drew a count, and stopped being so the
+   * moment it started drawing its members' pictograms: a card of two lights is
+   * two identical icons, and identical icons with no name are not two devices,
+   * they are one device drawn twice. The tap path has resolved a cell to its
+   * own device since the card gained cells; only the pointer was left guessing.
+   *
+   * Order mirrors `handleTap` exactly — the card's cell first, then the
+   * badges — including the fallback: a point on the card but in NO cell (a
+   * count, the empty corner of a three-member grid, the gap between two cards
+   * of a split) asks the badges, because a card can be drawn over a badge from
+   * another pile entirely and a pointer over something visible belongs to that
+   * thing.
+   *
+   * Room chips are deliberately NOT asked. A chip already prints its own room
+   * name and stands for a whole room rather than a device, so there is no
+   * label a tooltip could add that the chip is not already showing.
+   */
   hoverBadgeAt(clientX: number, clientY: number): string | null {
+    const eGroup = this.visuals.pickEntityGroupAt(clientX, clientY);
+    if (eGroup?.entityId) return eGroup.entityId;
     return this.visuals.pickBadgeAt(clientX, clientY);
   }
 
