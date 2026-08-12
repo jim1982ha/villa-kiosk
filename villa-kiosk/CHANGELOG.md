@@ -1,3 +1,52 @@
+## 2.292.0
+
+### Fixed — the last of the overlap, paid for with the dial that was always the right one
+
+This closes the badge-placement work that ran from 2.286.0, and it closes it
+by spending an approximation rather than by hunting one more bug.
+
+Everything structural is now fixed and measured: the distance metric was
+geometrically wrong on the depth axis and was corrected (2.287.0), every
+clearance test measured boxes at their anchors rather than where they are drawn
+(2.288.0), the absorb sweep tested a badge's centre rather than its box
+(2.289.0) and then tested a square with a disc (2.291.0), and room chips took
+part in no collision at all (2.290.0). Against a phone that started at twenty
+to thirty overlapping badge pairs at a low camera angle, the residual after all
+of that is one to five, plus one summary pair inside a narrow band of tilt and
+one or two things sitting over a room chip.
+
+That residual is not another defect. It is the price 2.287.0 paid for being
+correct: placement is measured on an orthographic view plane at ONE
+pixels-per-world for the whole scene, while the renderer divides every drawn
+thing by its own depth. Anything further from the camera than the zoom rung's
+reference depth draws closer together than the plane predicted. No
+position-invariant metric can know that ratio, because knowing it is exactly
+what "invariant to where the camera is standing" forbids — and camera-position
+invariance is the property six earlier rewrites of this subsystem died for.
+
+An approximation that always errs in one direction is covered, not chased. The
+error is always the plane over-estimating separation, so `GROUP_OVERLAP_ALLOW_WIDTHS`
+goes to -0.15: every clearance test now reserves fifteen per cent more than the
+ink it protects. Read as written the constant means "how much of its own width
+a badge may overlap a neighbour", so a negative value asks for extra clearance
+instead — the same dial, turned the other way. Its own docstring warns that it
+should stay at zero; that warning is about RAISING it, which in 2.168.0 was a
+licence to overlap that nothing needed, and this is the opposite direction.
+
+One constant buys all three counters because all three read it: the badge
+solver's reach, the summary's clearance against badges and against other
+summaries, and the zoom ladder that has to agree with both.
+
+The cost is stated rather than hidden: everything merges very slightly earlier,
+so a crowded corner reaches its summary card, and a summary reaches its room
+chip, at a marginally wider zoom than before. That is the trade this dial has
+always been — it is described in the source as the control over how large
+badges can get before a room summarises — and it is the right side of it,
+because a badge that has merged into a card is still visible and still tappable
+through that card, while a badge drawn underneath another one is neither.
+
+Setting the constant back to `0` restores the pre-2.292.0 geometry exactly.
+
 ## 2.291.0
 
 ### Fixed — a disc cannot reach the corners of a square, and burial happens in the corners

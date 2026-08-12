@@ -486,7 +486,39 @@ const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
  * overlap that nothing needed. Reported, correctly, as badges sitting on top
  * of each other.
  */
-const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
+const GROUP_OVERLAP_ALLOW_WIDTHS = -0.15;
+/*
+ * ── WHY IT IS NEGATIVE (2.292.0), AND WHY THAT IS NOT THE 2.168.0 MISTAKE ──
+ * Read as written, this is "how much of its own width a badge may overlap a
+ * neighbour". A NEGATIVE value is the opposite request: every clearance test
+ * must reserve 15% MORE than the ink it is protecting. It is the same dial,
+ * turned the other way, and the paragraph above — which says the tolerance
+ * should stay at zero — is a warning about raising it, not about lowering it.
+ *
+ * It pays for the one thing 2.287.0 bought its correctness with. Placement is
+ * measured on an orthographic view plane at ONE pixels-per-world for the whole
+ * scene; the renderer divides every drawn thing by its OWN depth. Two objects
+ * further from the camera than the zoom rung's reference depth therefore draw
+ * closer together than the plane predicted, by the ratio of those depths, and
+ * nothing inside a position-invariant metric can know that ratio — knowing it
+ * is precisely what "invariant to where the camera stands" forbids.
+ *
+ * So it is not an error to be removed, it is a bounded approximation to be
+ * covered, and 15% is what the field numbers cost: after 2.291.0 the residual
+ * was one to five overlapping badge pairs out of twenty to thirty-four drawn,
+ * one summary pair inside a narrow band of tilt, and one or two things over a
+ * room chip — small, and always in the direction of the plane over-estimating
+ * separation. This buys all three at once because all three read `allow`.
+ *
+ * The cost is stated: everything merges very slightly earlier, so a crowded
+ * corner reaches its summary card, and a summary reaches its room chip, at a
+ * marginally wider zoom than before. That is the trade this dial has always
+ * been — "how large badges can get before a room summarises" — and it is the
+ * right side of it, because a badge that has merged is still reachable through
+ * its card while a badge drawn under another one is not.
+ *
+ * ZERO restores the pre-2.292.0 geometry exactly.
+ */
 /**
  * Do room chips take part in the collision they were the answer to?
  *
