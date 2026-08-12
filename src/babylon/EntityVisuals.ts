@@ -81,7 +81,7 @@ import type { AppConfig } from "@/config/AppConfig";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { chipProportions } from "@/config/chipProportions";
 import {
-  badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics,
+  badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
 import {
@@ -126,7 +126,7 @@ import {
   pickNearestVariant, desiredVariantWord, orderVariantWords,
 } from "./meshVariants";
 // Pure label/chip overlap geometry — see labelLayout.ts.
-import { chipWidthPx } from "./labelLayout";
+import { chipWidthPx, fitChipLabel } from "./labelLayout";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 1.3;
@@ -597,8 +597,18 @@ interface RoomChip {
    * printable spelling is not an identity.
    */
   keys: string[];
-  /** The raw name this chip PRINTS. */
-  room: string; ids: string[]; centre: Vector3; rooms: number; roomNames: string[];
+  /** The raw name this chip stands for — the identity a person reads and the
+   *  modal title. NOT necessarily what is drawn: see `label`. */
+  room: string;
+  /**
+   * The string actually PRINTED, i.e. `room` (+ any "+N") after truncation to
+   * the viewport budget. Set by `measure` so the width the merge test reserves
+   * and the width `renderChips` paints are the same string through the same
+   * estimator — reserving one width and painting another is this subsystem's
+   * oldest rule broken.
+   */
+  label: string;
+  ids: string[]; centre: Vector3; rooms: number; roomNames: string[];
   ringRed: boolean; unavailable: boolean;
   /** True-perspective screen position and half-extents — the merge test only.
    *  The collision test re-projects `centre` onto the view plane instead; see
@@ -5397,7 +5407,50 @@ export class EntityVisuals {
    * careless producer away from happening.
    */
   private drawnCells(g: PendingEntityGroup, memberCount: number): number {
-    return gridCells(Math.min(g.grid, memberCount));
+    const cells = gridCells(Math.min(g.grid, memberCount));
+    // ── AND IT MUST FIT THE SCREEN IT IS DRAWN ON (2.296.0) ──────────────
+    // Six cells is two 2x2 cards side by side — four badge boxes wide however
+    // big a badge happens to be, which is about 45% of a phone's width and
+    // about 15% of a laptop's. The cap above is stated in badge units and
+    // cannot see that difference.
+    //
+    // Over budget the summary draws its COUNT, never fewer cells. A card that
+    // drops a member hides a device with no cell to tap, which is the exact
+    // regression `g.grid` was made to carry the raw membership to prevent —
+    // and a count is one badge box, so it always fits and, since 2.294.0, is
+    // itself checked for standing where its devices are.
+    return cells > this.cardCellCap() ? 0 : cells;
+  }
+
+  /**
+   * The most cells an arrangement may draw before it exceeds its share of the
+   * viewport — measured with `cardOf`, the same function that lays the card
+   * out, so there is no second width formula to keep in step.
+   *
+   * Cached on the two inputs that can change it. `drawnCells` is called inside
+   * loops over every group and every member, and this walks the arrangement
+   * sizes; recomputing it per call would be the only measurably expensive
+   * thing in the layout pass.
+   */
+  private capCells = MAX_TOTAL_CHIPS;
+  private capScale = -1;
+  private capWidth = -1;
+  private cardCellCap(): number {
+    const width = this.scene.getEngine().getRenderWidth();
+    const scale = this.effectiveScale();
+    if (width === this.capWidth && scale === this.capScale) return this.capCells;
+    this.capWidth = width; this.capScale = scale;
+    let cells = MAX_TOTAL_CHIPS;
+    if (scale > 0 && width > 0) {
+      const budget = (width * CARD_MAX_VIEWPORT_FRACTION) / scale;
+      // Down to 2 and no further: a pair card is two badge boxes, which fits
+      // any screen this app can run on, and stopping there keeps the "a group
+      // of two is ALWAYS the full-size card" promise the one-pass placement
+      // rests on.
+      while (cells > 2 && this.cardOf(cells).width > budget) cells--;
+    }
+    this.capCells = cells;
+    return cells;
   }
 
   /** This group's arrangement — see babylon/badgeCard. A count badge is the
@@ -5953,14 +6006,23 @@ export class EntityVisuals {
     const vp = cam ? cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight()) : null;
     const tm = this.scene.getTransformMatrix();
 
+    // How wide a chip may be DRAWN, expressed in the same units chipWidthPx
+    // returns: the viewport's share, divided back through the scale the
+    // renderer will multiply by. `scale` carries cssToGui, and the render
+    // width carries it too, so the device-pixel ratio cancels and this is a
+    // pure fraction of the screen — see CHIP_MAX_VIEWPORT_FRACTION.
+    const chipBudget = scale > 0
+      ? (eng.getRenderWidth() * CHIP_MAX_VIEWPORT_FRACTION) / scale
+      : 0;
     const measure = (c: RoomChip) => {
+      c.label = fitChipLabel(chipLabelOf(c), formatCountBadge(c.ids.length), chipBudget);
       if (vp) {
         const p = Vector3.Project(c.centre, Matrix.IdentityReadOnly, tm, vp);
         c.x = p.x; c.y = p.y;
       }
       // Same width ESTIMATE the old path used (chipWidthPx) — it only has to be
       // close enough to decide overlap, not match the drawn glyphs exactly.
-      c.halfW = (chipWidthPx(`${chipLabelOf(c)}  ${c.ids.length}`) / 2) * scale;
+      c.halfW = (chipWidthPx(`${c.label}  ${formatCountBadge(c.ids.length)}`) / 2) * scale;
       c.halfH = (this.summaryMetrics().size / 2) * scale;
     };
 
@@ -5970,7 +6032,7 @@ export class EntityVisuals {
       // is a Map key only (CLAUDE.md), and roomDisplay holds what to print.
       const room = this.roomDisplay.get(key) ?? key;
       const c: RoomChip = {
-        key, keys: [key], room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
+        key, keys: [key], room, label: room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
         ringRed: g.ringRed, unavailable: g.unavailable,
         x: 0, y: 0, halfW: 0, halfH: 0,
       };
@@ -6035,7 +6097,7 @@ export class EntityVisuals {
       // Room name and count render as separate controls (see ensureCluster).
       // A chip that absorbed others says so with a "+N" suffix, so the count
       // pill's total is never mistaken for one room's device count.
-      c.text.text = chipLabelOf(chip);
+      c.text.text = chip.label;
       c.countText.text = formatCountBadge(chip.ids.length);
       // The chip's own ring mirrors the individual badge ring rule exactly
       // (BADGE_RING): red when at least one member is "on" or "alert",

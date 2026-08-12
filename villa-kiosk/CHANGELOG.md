@@ -1,3 +1,62 @@
+## 2.296.0
+
+### Fixed — a room chip and a summary card had no idea how big the screen was
+
+Asked for as a form-factor question: should there be a phone layout and a
+laptop layout? Mostly there already is, and the part that was genuinely missing
+is narrower and more interesting than a second set of constants.
+
+What already existed: badgeMetrics ships two complete geometry tables selected
+by POINTER CLASS — tap pitch 88px against 38.4px, wider gaps, thicker rings,
+bigger icons for a fingertip. Keyed by the pointer rather than the screen on
+purpose, because a fingertip is 8-10mm on any display. And the grouping
+strategy needs no table at all: a phone draws the villa smaller, a badge is a
+fixed size in CSS pixels, so proportionally more badges overlap and
+proportionally more of them merge. The response to a small screen is
+structural, not configured.
+
+What was missing is a different question from either. Two objects are
+COMPOSITE — their size follows their contents rather than the badge — and
+neither had any idea how much screen there was to spend.
+
+A room chip's width follows its TEXT: a character advance times the length of
+the room name, plus the "+N" a merged chip carries. That is unremarkable on a
+laptop and about half the width of a phone, and a chip anchored near the edge
+of the villa then runs off the side of the display — visible in the reported
+screenshot as two chips clipped by the screen edge. Chips now truncate the room
+NAME with an ellipsis to fit their share of the viewport. The count is never
+truncated: a name is recognisable from a fragment and a count cannot be
+inferred from anything, so the budget is spent on the count first. The
+truncation happens in the same place the chip is measured, so the width the
+merge test reserves and the width the renderer paints are the same string
+through the same estimator.
+
+A summary's arrangement of six cells is two 2x2 cards side by side — four badge
+boxes wide whatever a badge measures — which is roughly 45% of a phone's width
+against 15% of a laptop's. The existing cap is stated in badge units and cannot
+see the difference. It is now also capped by the viewport, measured with the
+same function that lays the card out rather than a second width formula. Over
+budget a summary draws its COUNT rather than fewer cells: a card that drops a
+member hides a device with no cell to tap, which is the regression the raw
+membership was introduced to prevent, whereas a count is one badge box, always
+fits, and since 2.294.0 is itself checked for standing where its devices are.
+
+Both caps are fractions of the viewport WIDTH rather than the short edge,
+because both objects are horizontal and width is the dimension they spend. On a
+portrait phone that is the short edge anyway; on a landscape screen it is
+correctly the generous one.
+
+One rule rather than two builds. Each cap binds on a small screen and is inert
+on a large one, which is the argument against a phone profile and a laptop
+profile applied to the two places that genuinely needed to know the screen size.
+
+Deliberately NOT added: any per-device tuning of how eagerly badges merge. An
+earlier suggestion to widen the overlap margin "because the phone needs more"
+was reasoned from a wrong premise — the phone's zoom rung is half the laptop's,
+so the perspective error it covers is SMALLER there in pixels, not larger. The
+cards collide on a phone because they are proportionally huge, which is what
+this release fixes.
+
 ## 2.295.0
 
 ### Changed — a rescued pair prefers a partner of its own category

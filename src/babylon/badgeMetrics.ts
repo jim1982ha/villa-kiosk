@@ -42,6 +42,39 @@
 // pixel. So the painted size, and the clearance that follows from it, are a
 // function of what is pointing at the screen.
 
+/**
+ * ── The one place a VIEWPORT term is legitimate ────────────────────────────
+ * Everything else in this file is a function of the POINTER, not the screen,
+ * and 2.190.0 reverted a viewport term for clearance with reasoning that still
+ * stands: a badge is the same pixel size on a phone, so the clearance a pile
+ * needs there is identical.
+ *
+ * These two are a different question. They do not size a badge; they bound how
+ * much of the SCREEN a single composite object is allowed to consume. A room
+ * chip prints a name, so its width follows the name rather than the badge; a
+ * summary's arrangement of six cells is four badge boxes wide however big a
+ * badge is. Both are ~45–60% of a phone's width and ~15–30% of a laptop's, and
+ * "may I take up most of the screen" is not a question a constant in badge
+ * units can answer.
+ *
+ * Fractions of the viewport WIDTH, not the short edge: both objects are
+ * horizontal, so width is the dimension they actually spend. On a portrait
+ * phone that IS the short edge; on a landscape screen it is correctly the
+ * generous one.
+ *
+ * One rule, not two profiles. The cap binds on a small screen and is inert on
+ * a large one — which is the whole argument against a phone build and a laptop
+ * build, applied to the two places that genuinely needed a screen term.
+ */
+/** Widest a room chip may be drawn, as a fraction of the viewport width. Over
+ *  this the room NAME is truncated with an ellipsis; the count pill never is,
+ *  because the count is the part that cannot be inferred from context. */
+export const CHIP_MAX_VIEWPORT_FRACTION = 0.5;
+/** Widest a summary's card ARRANGEMENT may be drawn, same units. Over this the
+ *  summary draws its count instead — never fewer cells, because a card that
+ *  drops a member hides a device with no cell to tap (see drawnCells). */
+export const CARD_MAX_VIEWPORT_FRACTION = 0.45;
+
 /** Which kind of pointer is PRIMARY on this device. */
 export type PointerClass = "fine" | "coarse";
 

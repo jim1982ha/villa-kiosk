@@ -17,3 +17,37 @@ const CLUSTER_TEXT_PAD_PX = 24;
 export function chipWidthPx(text: string): number {
   return text.length * CLUSTER_CHAR_PX + CLUSTER_TEXT_PAD_PX;
 }
+
+/**
+ * Shorten a room name until the chip that prints it fits `maxPx`.
+ *
+ * A chip's width follows its TEXT — `chipWidthPx` above is length times a
+ * character advance — so a long room name, or a merged chip carrying a "+N"
+ * suffix, produces a chip sized by the name rather than by anything on screen.
+ * On a laptop that is unremarkable; on a phone the same chip is around half
+ * the width of the device, and one anchored near the villa's edge runs off it.
+ *
+ * The COUNT is never truncated. A name can be recognised from a fragment and a
+ * count cannot be inferred from anything, so the budget is spent on the count
+ * first and whatever is left goes to the name.
+ *
+ * Pure and estimate-based, exactly like `chipWidthPx`, and it must be: the
+ * caller measures the chip with the string this returns, so the width the
+ * layout reserves and the width the renderer draws are the same string put
+ * through the same function. Truncating at draw time instead would reserve one
+ * width and paint another, which is this subsystem's oldest rule broken.
+ */
+const CHIP_ELLIPSIS = "…";
+/** Below this a name is no longer recognisable, so the chip keeps it and
+ *  overflows rather than printing a stub nobody can read. */
+const CHIP_MIN_NAME_CHARS = 4;
+export function fitChipLabel(name: string, countText: string, maxPx: number): string {
+  if (!(maxPx > 0)) return name;
+  const fits = (s: string) => chipWidthPx(`${s}  ${countText}`) <= maxPx;
+  if (fits(name)) return name;
+  for (let n = name.length - 1; n >= CHIP_MIN_NAME_CHARS; n--) {
+    const cut = name.slice(0, n).trimEnd() + CHIP_ELLIPSIS;
+    if (fits(cut)) return cut;
+  }
+  return name.slice(0, CHIP_MIN_NAME_CHARS).trimEnd() + CHIP_ELLIPSIS;
+}
