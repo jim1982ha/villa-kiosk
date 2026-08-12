@@ -1,3 +1,69 @@
+## 2.299.0
+
+### Fixed — a room collapsed back to a chip one zoom rung after it expanded
+
+Reported with a screen recording (`sources/files/zoom_in.gif`): zooming in on
+the Living Room, its chip gives way to the room's actual devices — a 2x2
+summary card of four lights plus two individual badges — and then, one rung
+further in, the devices vanish and the chip comes back, before finally
+expanding again. Expanded, collapsed, expanded. The expectation that this is
+wrong is correct: zooming in increases the screen distance between every pair
+of anchors, so anything that was legible at one rung must still be legible at
+the next. `npm run test:placement` even asserts it, as "zooming in never ADDS
+a conflict". That assertion covers the solver. Something outside the solver
+was breaking the guarantee.
+
+`settleChips` — the pass that lets a drawn badge or a placed card overlapping
+a room chip escalate its own room — carries a docstring saying, in terms, that
+chip-vs-chip MERGING is cosmetic and cannot feed back into the solve, while
+chip-vs-badge escalation uses the position-invariant view plane because it
+decides what is drawn. The second half was implemented. The first half was
+not. Escalation did read the chips' positions off the plane, but the CHIPS IT
+WAS HANDED were the merged ones, and merging is a function of screen distance
+in true perspective. Which chips exist, how many boxes there are and where
+each one sits were therefore all decided by where the camera was standing —
+for the one test in this file that decides what gets drawn, and which six
+earlier rewrites of this subsystem were built to keep camera-position-
+invariant.
+
+The failure is not subtle once the merge is understood as a function of zoom.
+A merged pill is one box at the device-count-weighted centroid of several
+rooms. Zoom in and it splits — and the pieces do not stay where the pill was:
+each drops onto its own room's centroid, which can be somewhere the obstacle
+set had nothing at all a moment earlier. A room that had just decluttered into
+a summary card is now sitting under a box that did not exist at the previous
+rung, so it escalates, and its card and badges are replaced by a chip. In the
+recording, `Bedroom 1 +2` splits into `Patio 1F +1` at the same frame the
+Living Room's card disappears and `Living Room` appears as a chip. Panning
+would have produced the identical effect for the identical reason, and would
+have been reported as badges dancing again.
+
+Escalation now collides against the UNMERGED chips: one box per chipped room,
+at that room's own centroid, at its own text width. Merging is applied once,
+at the end, to the set that is actually rendered — where it genuinely is
+cosmetic and genuinely cannot feed back, as its docstring always claimed.
+`deriveChips` takes a `merge` flag rather than being split in two, so the
+bucketing, the label fitting and the width estimate stay written exactly once;
+an obstacle measured by a second copy of that arithmetic would drift from the
+pill the user sees, which is the "layout geometry must equal render geometry"
+rule this file keeps paying for.
+
+The unmerged set is also monotone in zoom, which the merged one could not be.
+Each obstacle is a fixed pixel box at a fixed world point, so a higher rung
+strictly increases every separation, and `roomClustered` only ever shrinks
+between rungs. Once a room has expanded it cannot re-collapse unless the view
+DIRECTION changes — which is the one input this subsystem admits on purpose
+and documents (orbiting regroups, because azimuth decides which axis is
+depth; panning and dollying do not).
+
+Two knock-on effects worth stating plainly. A merged pill is wider than any of
+its parts, so slightly fewer rooms escalate now, and a card may sit closer to
+a merged chip than it did before; that is a cosmetic overlap traded for
+devices no longer disappearing, which is the right way round. And `+N` chips
+now split at exactly the zoom where they stop overlapping ON SCREEN, with no
+effect at all on which badges are drawn — the separation the docstring
+describes.
+
 ## 2.298.0
 
 ### Fixed — press-and-hold on a cell inside a summary card opened the group, not the device

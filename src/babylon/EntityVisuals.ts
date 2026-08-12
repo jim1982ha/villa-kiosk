@@ -544,6 +544,33 @@ const GROUP_OVERLAP_ALLOW_WIDTHS = -0.15;
  * chip-vs-badge/card ESCALATION uses the view plane, because it decides what
  * is drawn and must stay invariant to where the camera is standing.
  *
+ * ⚠️ THAT SENTENCE WAS A LIE FROM 2.290.0 TO 2.298.0, and 2.299.0 is what
+ * makes it true. Escalation did use the plane — for the chips' POSITIONS. But
+ * the chips it was handed were the MERGED ones, and which chips exist, how
+ * many there are and where each sits are all decided by the perspective merge
+ * above. A camera-position-dependent computation therefore chose the obstacle
+ * set for the one test that decides what is drawn, which is the exact property
+ * six rewrites died protecting. Escalation now collides against the UNMERGED
+ * per-room chips — one box per chipped room, at that room's own centroid, at
+ * its own text width — and merging is applied afterwards, to the render set
+ * only, where it genuinely is cosmetic and genuinely cannot feed back.
+ *
+ * The leak was not theoretical. Merging is a function of screen distance, so
+ * zooming in SPLITS a merged pill, and the pieces do not stay where the pill
+ * was: each drops onto its own room's centroid, which may be somewhere the
+ * obstacle set previously had nothing at all. A room that had decluttered into
+ * a summary card then collides with a chip that only just appeared under it,
+ * escalates, and collapses back to a chip — one rung after it expanded. That
+ * is the reported "Living Room goes chip → entities → chip → entities as I
+ * zoom in", captured in sources/files/zoom_in.gif. Panning did the same thing
+ * for the same reason and would have been reported as badges dancing again.
+ *
+ * Unmerged obstacles also restore monotonicity in ZOOM, which the merged set
+ * could not have: each box is a fixed pixel size at a fixed world point, so a
+ * higher rung strictly increases every separation, and `roomClustered` only
+ * shrinks between rungs. Nothing that has expanded can re-collapse without the
+ * view direction itself changing.
+ *
  * `false` restores the pre-2.290.0 behaviour exactly. It is here because this
  * is the tier that spends chips, and how many chips is too many is a judgement
  * only a screenshot can make.
@@ -5875,8 +5902,16 @@ export class EntityVisuals {
     pending: PendingEntityGroup[],
     clearance: { pxPerWorld: number; basis: ViewBasis } | null,
   ): RoomChip[] {
-    let chips = this.deriveChips(shown);
-    if (!CHIP_COLLISION || !clearance || clearance.pxPerWorld <= 0) return chips;
+    // UNMERGED inside the loop — see CHIP_COLLISION. The merge is a function of
+    // where the camera stands, so a merged obstacle set would hand the one test
+    // that decides what is drawn back to the camera's position, and would let a
+    // pill splitting at the next zoom rung drop a brand-new box onto a room
+    // that had just expanded. Merging happens once, at the end, to the set that
+    // is actually rendered.
+    let chips = this.deriveChips(shown, false);
+    if (!CHIP_COLLISION || !clearance || clearance.pxPerWorld <= 0) {
+      return this.deriveChips(shown);
+    }
     const scale = this.effectiveScale();
     const gapPx = this.metrics.minGapPx * scale;
     const focus = this.focusedRoom;
@@ -5929,12 +5964,24 @@ export class EntityVisuals {
       // room just chipped has to take every other room it covered with it or
       // its members are hidden with nothing in their place.
       this.dropEscalatedGroups(pending);
-      chips = this.deriveChips(shown);
+      chips = this.deriveChips(shown, false);
     }
-    return chips;
+    // Only now, and only for the render: the escalation above is settled, so
+    // merging can no longer change which badges are drawn — which is the
+    // property its own docstring has always claimed.
+    return this.deriveChips(shown);
   }
 
-  private deriveChips(shown: ShownLabel[]): RoomChip[] {
+  /**
+   * `merge` is false for the collision pass and true (the default) for the set
+   * that gets drawn — see CHIP_COLLISION. It is a parameter rather than two
+   * functions so the bucketing, the label fitting and the width estimate can
+   * only ever be written once: an obstacle measured by a second copy of that
+   * arithmetic would drift from the pill the user actually sees, which is the
+   * "layout geometry must equal render geometry" rule this file keeps paying
+   * for.
+   */
+  private deriveChips(shown: ShownLabel[], merge = true): RoomChip[] {
     // Bucket by room, accumulating the centroid and worst state as we go —
     // but only for rooms flagged as grouped THIS frame (cullLabels); everyone
     // else keeps their individual badges and gets no chip at all. Off-screen
@@ -6040,7 +6087,7 @@ export class EntityVisuals {
       chips.push(c);
     }
 
-    if (vp && chips.length > 1) {
+    if (merge && vp && chips.length > 1) {
       const gap = CLUSTER_GAP_PX * scale;
       for (;;) {
         let bi = -1, bj = -1, worst = 0;

@@ -1,7 +1,7 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.298.0",
+  "version": "2.299.0",
   "description": "VESTA \u2014 a 3D interactive villa dashboard for Home Assistant",
   "license": "UNLICENSED",
   "type": "module",
