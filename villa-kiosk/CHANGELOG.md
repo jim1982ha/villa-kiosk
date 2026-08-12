@@ -1,3 +1,50 @@
+## 2.294.0
+
+### Fixed — a badge reading "50" in the middle of the villa, standing for fifty devices in a dozen rooms
+
+Reported with a screenshot, and it is the worst thing this subsystem has ever
+drawn: a single count badge sitting over the living room, holding fifty
+devices, none of them near it and none of them visible, with empty space all
+around it that could have shown them. The same view at a smaller icon size
+showed those devices individually — so the count was not reporting crowding,
+it was manufacturing it.
+
+The mechanism, because it is not obvious and nothing in the code was watching
+for it. A PILE is a connected component of "who overlaps whom", built by
+union-find. Connectivity is transitive; overlap is not. A may touch B and B
+touch C while A and C are a screen apart, and all three are one pile. Widen the
+zoom a little — or merely raise the icon size, which is the same thing — and
+the chain closes across the whole floor plan until one pile has swallowed most
+of the villa. A deferral bucket is keyed by pile, so that pile becomes ONE
+summary; a summary of more than six draws a count instead of its devices; and a
+count is drawn at its members' centroid, which for a chain spanning the villa
+is a point in the middle of it that no member is anywhere near.
+
+Every rule that could have caught it asks about the group's MEMBERSHIP — how
+many members, which rooms, is that the whole room — and the one that comes
+closest, the whole-room rule, only fires for a group in a SINGLE room. This
+group was in twelve. None of them asks the question a person asks on seeing it:
+is this number standing anywhere near the things it counts?
+
+That is now the test, and it is asked of counts only. A count badge occupies
+exactly one badge box. A member further from it than that box plus its own plus
+the minimum gap is a device the count is not covering, only pointing at from
+across the room. One such member and this is not a summary of a place, it is
+room-level crowding wearing a summary's clothes — so every room it covers goes
+to its own chip: named, drawn inside the room it names, and opening that room's
+device list on a tap. A dozen named chips instead of one anonymous number is
+both more information and more navigation.
+
+A genuinely co-located pile keeps its count, unchanged. A ceiling fan, its own
+light and the sensor clipped to the same mount have a spread of nearly zero,
+and that is the case the count badge was designed for; this narrows it to that
+case rather than removing it.
+
+Cards of two to six are deliberately not tested. Their members had to overlap
+to be piled at all, so the card is at most a few badge boxes from every one of
+them — and it draws those devices rather than a number, so there is nothing
+hidden for it to be dishonest about.
+
 ## 2.293.0
 
 ### Fixed — hovering a summary card named nothing, so two identical icons were two anonymous devices

@@ -5014,6 +5014,57 @@ export class EntityVisuals {
         g.sx = q.sx; g.sy = q.sy; g.sz = q.sz;
       }
 
+      // ── A COUNT MUST STAND WHERE ITS DEVICES ARE (2.294.0) ───────────
+      // The defect this closes, in full, because it produced the single worst
+      // thing this subsystem has ever drawn: a badge reading "50" in the
+      // middle of the villa, standing for fifty devices in a dozen rooms, none
+      // of them near it and none of them visible.
+      //
+      // A pile is a CONNECTED COMPONENT of "who overlaps whom" (union-find,
+      // badgePlacement). Connectivity is transitive and overlap is not: A may
+      // touch B and B touch C while A and C are a screen apart, and all three
+      // are one pile. At a wide zoom — or merely at a larger icon size, which
+      // is the same thing — the chain closes across the whole floor plan and
+      // one pile swallows most of the villa. A deferral bucket is keyed by
+      // pile, so that becomes ONE summary; a summary of more than six draws a
+      // count; and a count is drawn at its members' CENTROID, which for a
+      // chain spanning the villa is a point in the middle of it that no member
+      // is anywhere near.
+      //
+      // Nothing before this noticed, because every existing rule asks about
+      // the group's MEMBERSHIP — how many, which rooms, is that the whole room
+      // — and none of them asks the question a person asks looking at it:
+      // is this number standing anywhere near the things it counts?
+      //
+      // So that is the test. A count occupies exactly one badge box. A member
+      // further from it than that box plus its own plus the gap is a device
+      // the count is not covering, merely pointing at from a distance. One
+      // such member and this is not a summary of a place, it is room-level
+      // crowding wearing a summary's clothes — so every room it covers goes to
+      // its own chip, which is named, sits inside the room it names, and opens
+      // that room's device list.
+      //
+      // A genuinely CO-LOCATED pile — a ceiling fan, its own light, the sensor
+      // clipped to the same mount, which is what the count badge was designed
+      // for — has a spread of nearly zero and keeps its count exactly as
+      // before. This narrows the count to the case it was built for rather
+      // than removing it.
+      //
+      // Cards of two to six are deliberately NOT tested. Their members
+      // overlapped to be piled at all, so a card is at most a few badge boxes
+      // from every one of them, and it draws those devices rather than a
+      // number — there is nothing hidden to be dishonest about.
+      if (this.drawnCells(g, g.members.length) < 2) {
+        const countY = cardCentreY(g);
+        let strays = false;
+        for (const i of g.members) {
+          const d = this.drawnDistance(
+            g.sx, countY, g.sz, shown[i].sx, shown[i].sy, shown[i].sz);
+          if (d > squareHalf + halfOf(i) + gapPx) { strays = true; break; }
+        }
+        if (strays) for (const k of g.roomKeys) this.roomClustered.set(k, true);
+      }
+
       // ── The whole-room rule, re-checked against the membership we ended up
       // with. The solver applied it (badgePlacement step 7) against a room
       // count taken BEFORE any of this, so absorb can manufacture a group that
