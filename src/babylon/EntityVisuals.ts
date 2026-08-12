@@ -4903,31 +4903,47 @@ export class EntityVisuals {
       if (g.focused) continue;
       for (let round = 0; round <= shown.length; round++) {
         const reach = cardInscribedHalf(g);
+        const inkY = cardCentreY(g);
         const take: number[] = [];
         for (let j = 0; j < shown.length; j++) {
           if (this.entityGrouped.has(shown[j].id)) continue;
           const rk = roomKey(this.roomOf(shown[j].id));
           if (this.roomClustered.get(rk)) continue;
           if (focus !== null && rk === focus) continue;
-          const d = this.drawnDistance(
-            g.sx, cardCentreY(g), g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
-          // ── THE BADGE'S OWN HALF-EXTENT COUNTS ───────────────────────
-          // Burial is a question about the badge's BOX, not its centre. This
-          // compared the centre alone, so a badge straddling the edge of the
-          // ink — centre just outside, half of it inside — was neither
-          // absorbed here nor refused by `fits` (which starts one badge box
-          // plus `gapPx` further out). That annulus is drawn HALF UNDER the
-          // card, and it is what 2.286.0's `BURIED under a summary's ink`
-          // counter kept reporting on both a laptop and a phone, at every
-          // tilt, in a resting view nobody was even moving.
+          // ── BOX vs BOX, ON EACH AXIS ─────────────────────────────────
+          // Burial is a question about two rectangles of ink, and it has to be
+          // tested as one. Two earlier shapes of this were both wrong in the
+          // same direction and each left the counter non-zero:
           //
-          // `cardInscribedHalf`'s own docstring already claimed the annulus
-          // between "absorbed" and "`fits` passes" was exactly `gapPx` wide.
-          // It was `halfOf(j) + gapPx` wide. This makes the sentence true
-          // rather than rewording it, and it does not widen what a summary
-          // eats by one pixel of the card's own ink: the same inscribed
-          // square, grown by the thing being measured against it.
-          if (d < reach + halfOf(j)) take.push(j);
+          //   the badge's CENTRE against a disc (pre-2.289.0) — a badge
+          //   straddling the ink's edge, centre just outside and half of it
+          //   inside, was absorbed by nobody: outside this sweep, and inside
+          //   the ring `fits` starts refusing at;
+          //
+          //   the badge's centre against a disc GROWN by the badge's radius
+          //   (2.289.0) — better, but a disc still cannot reach the corners of
+          //   a square. `cardInk` in assertPlacementInvariants is the square
+          //   INSCRIBED in the card, so its corners stand 41% further out than
+          //   any disc of the same half-side, and a badge sitting in one was
+          //   still drawn half under the ink. That is the 1–4 the counter kept
+          //   reporting on both machines after 2.289.0.
+          //
+          // So: the same axis-aligned test the assertion uses, against the same
+          // square, grown per axis by the badge's own half-extents. Expressible
+          // for the same reason the chip test is (see CHIP_COLLISION): since
+          // 2.287.0 the plane's axes ARE the screen's axes, so "do these two
+          // rectangles overlap" is an exact question here, not one a radius has
+          // to stand in for.
+          //
+          // `sz` is the walk camera's depth residual and is identically 0 under
+          // the orbit camera, so keeping it as a third axis leaves first person
+          // separating down a corridor exactly as it did.
+          const dx = Math.abs(g.sx - shown[j].sx);
+          const dy = Math.abs(inkY - shown[j].sy);
+          const dz = Math.abs(g.sz - shown[j].sz);
+          if (dx < reach + boxes[j].halfW
+            && dy < reach + boxes[j].halfH
+            && dz < reach + halfOf(j)) take.push(j);
         }
         if (take.length === 0) break;
         for (const j of take) {

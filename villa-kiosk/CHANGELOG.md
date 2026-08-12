@@ -1,3 +1,56 @@
+## 2.291.0
+
+### Fixed — a disc cannot reach the corners of a square, and burial happens in the corners
+
+2.289.0 made the absorb sweep account for the badge's own size, and the field
+numbers say that was necessary but not sufficient: `BURIED under a summary's
+ink` still reads 1 to 4 on both a laptop and a phone, at every tilt, in views
+nobody is moving.
+
+The remaining gap is a shape mismatch, and it is the third time this
+subsystem has been caught measuring one thing with the geometry of another.
+The counter asks whether two rectangles of ink overlap: it tests the square
+INSCRIBED in the card against the badge's box, axis by axis. The absorb sweep
+answered with a radial distance. A disc of a given half-side does not contain
+the square of that half-side — the square's corners stand about 41% further
+out — so a badge sitting in one of those corners is drawn half under the ink
+and absorbed by nobody. It is outside the disc, and it is inside the ring
+where `fits` begins refusing badges, which is exactly the annulus 2.289.0
+narrowed but did not close.
+
+Absorb now runs the same axis-aligned test the assertion does, against the
+same square, grown per axis by the badge's own half-extents. That is
+expressible for the same reason the chip test added in 2.290.0 is: since
+2.287.0 put placement on the camera's view plane, the plane's axes ARE the
+screen's axes, so "do these two rectangles overlap" is an exact question here
+rather than one a radius has to approximate. Before that change a disc was the
+only honest answer available, which is why it was the answer everywhere.
+
+Two things left deliberately alone. The inscribed square itself is unchanged —
+absorbing at the card's full width would swallow badges that `fits` accepted
+and that a person can see are clear of the ink, which is deleting devices from
+the map to fix a bug about the opposite, and that reasoning still holds. And
+the walk camera's depth residual stays as a third axis, so first person
+continues to separate two devices down a corridor exactly as it did; under the
+orbit camera that axis is identically zero and the test is the plain
+two-rectangle one.
+
+### Still open, and not guessed at
+
+The same sweep leaves three counters non-zero that this release does not
+touch: one to five overlapping badge pairs, one overlapping summary pair in a
+band of tilt on each machine, and one or two badges or cards overlapping a room
+chip. All three are the stated cost of measuring placement on an orthographic
+plane while the renderer divides every drawn thing by its own depth — two
+objects further from the camera than the zoom rung's reference depth draw
+closer together than the plane predicts. Closing them means a measured margin,
+not a constant chosen to make one screenshot look right, and that is a separate
+piece of work.
+
+On the other hand `CHIP_COLLISION` did not cost what it might have: across the
+whole sweep the chip count stayed where it was — often none at all at close
+zoom, nine to twelve at the far end, which is what the tier is for.
+
 ## 2.290.0
 
 ### Fixed — the room chip was the one thing on the map that collided with nothing
