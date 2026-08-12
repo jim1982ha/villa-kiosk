@@ -21,10 +21,10 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { Ray } from "@babylonjs/core/Culling/ray";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import type { Scene } from "@babylonjs/core/scene";
-import { earClipTriangulate, type Pt2 } from "@/utils/geometry";
+import { clipPolygonToConvex, earClipTriangulate, pointInPolygon, regularPolygon, type Pt2 } from "@/utils/geometry";
+import type { FloorProbe } from "./floorProbe";
 import { roomKey } from "@/config/roomKey";
 import { ALERT_RED } from "./colors";
 
@@ -84,9 +84,19 @@ export class RoomHighlight {
   /** performance.now() of the last glow step — see animate(). */
   private lastTickAt = 0;
 
+  /** The room polygons `setRooms` last received, kept ONLY so a point-room's
+   *  synthetic circle can be clipped to whichever room contains it — same fix,
+   *  same reason, as the light pool's (see setPointRooms). Not a second source
+   *  of truth: it is overwritten wholesale on every re-fit, from the same
+   *  argument the meshes are built from. */
+  private roomShapes: { pts: Pt2[] }[] = [];
+
   constructor(
     scene: Scene,
     requestRender: () => void,
+    /** Shared with EntityVisuals and SceneManager — see floorProbe.ts. Was
+     *  three private raycasts with three predicates before 2.300.0. */
+    private probe: FloorProbe,
     /** Rate-capped re-arm for the glow PULSE specifically — a highlight can
      *  stay up indefinitely (a room flagged for overdue maintenance is the
      *  normal case), so its pulse is a permanent animation, not a transition.
@@ -164,12 +174,9 @@ export class RoomHighlight {
    * surface is too thin/oddly-shaped for a clean projection).
    */
   private buildDecal(key: string, x: number, z: number, floorY: number): RoomEntry | null {
-    const from = new Vector3(x, floorY + DECAL_PROBE_ABOVE, z);
-    const hit = this.scene.pickWithRay(
-      new Ray(from, Vector3.Down(), DECAL_PROBE_ABOVE + DECAL_PROBE_DEPTH),
-      (m) => m.isPickable && m.isVisible && !m.metadata?.isMarker,
-    );
-    if (!hit?.hit || !hit.pickedMesh || !hit.pickedPoint) return null;
+    const hit = this.probe.surfaceUnder(
+      x, z, floorY + DECAL_PROBE_ABOVE, DECAL_PROBE_ABOVE + DECAL_PROBE_DEPTH);
+    if (!hit?.pickedMesh || !hit.pickedPoint) return null;
 
     try {
       const mesh = MeshBuilder.CreateDecal(`roomGlowDecal_${key}`, hit.pickedMesh, {
@@ -209,6 +216,7 @@ export class RoomHighlight {
    */
   setRooms(polys: { name: string; pts: Pt2[]; floorY?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
     this.disposeMap(this.polyRooms);
+    this.roomShapes = polys.filter((p) => p.pts.length >= 3).map((p) => ({ pts: p.pts }));
     for (const room of polys) {
       const key = RoomHighlight.normalise(room.name);
       // A stepped room (staircase) ships a surface-hugging vertex mesh from
@@ -260,16 +268,30 @@ export class RoomHighlight {
       if (this.polyRooms.has(key)) continue; // a real room polygon always wins
       const entry =
         this.buildDecal(key, p.x, p.z, p.floorY) ??
-        this.buildMesh(
-          key,
-          Array.from({ length: POINT_ROOM_SEGMENTS }, (_, i) => {
-            const a = (i / POINT_ROOM_SEGMENTS) * Math.PI * 2;
-            return { x: p.x + Math.cos(a) * POINT_ROOM_RADIUS, z: p.z + Math.sin(a) * POINT_ROOM_RADIUS };
-          }),
-          p.floorY + FLOOR_Y_OFFSET,
-        );
+        this.buildMesh(key, this.pointRoomShape(p.x, p.z), p.floorY + FLOOR_Y_OFFSET);
       if (entry) this.pointRooms.set(key, entry);
     }
+  }
+
+  /**
+   * The flat-circle fallback's outline, clipped to whichever real room contains
+   * it. A horizontal circle passes straight through the base of a vertical
+   * wall, so a landing sitting within POINT_ROOM_RADIUS of one painted its glow
+   * on BOTH sides — the identical defect the light pool had, in the second
+   * place a flat floor marker is drawn (see EntityVisuals.reshapeLightPools).
+   *
+   * Circle = the convex CLIP, room = the possibly-L-shaped SUBJECT; that order
+   * is what makes the clip correct (see clipPolygonToConvex). Unclipped when
+   * the point belongs to no room polygon at all, which is the common case for a
+   * landing added via "Add room here" precisely because nothing was drawn there
+   * — there is then no wall known to cross.
+   */
+  private pointRoomShape(x: number, z: number): Pt2[] {
+    const circle = regularPolygon(x, z, POINT_ROOM_RADIUS, POINT_ROOM_SEGMENTS);
+    const room = this.roomShapes.find((r) => pointInPolygon(x, z, r.pts));
+    if (!room) return circle;
+    const clipped = clipPolygonToConvex(room.pts, circle);
+    return clipped.length >= 3 ? clipped : circle;
   }
 
   /** Turn a room's glow on/off by name (matched against the entity's "Room"

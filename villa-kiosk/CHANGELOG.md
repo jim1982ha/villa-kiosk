@@ -1,3 +1,98 @@
+## 2.300.0
+
+### Fixed — the light pool was on the wrong floor, and it went through walls
+
+Reported with two screenshots of one outdoor walkway. In the overview, a fixture
+that is ON paints its glow INSIDE the room on the other side of the wall rather
+than on the walkway beneath it. In first person, at that same spot, the walkway
+floor shows no pool at all under the lit fixture. Two independent defects that
+happen to land on the same fixture, because both are triggered by the same
+thing: being mounted near a wall.
+
+**The missing pool.** `surfaceBelow` memoises its downward raycast, and it has
+to — each ray is a linear scan over a baked villa's single ~1.4-million-triangle
+structure mesh, and a few hundred of them ran before the villa could be shown
+(~950ms measured, 27% of visible load). The justification for memoising was
+always right: these probes want the FLOOR under a fixture, floors are flat over
+a room, and every probe casts straight down, so two fixtures in one room share
+an answer by construction. What was wrong was the proxy for "one room" — a
+4-metre grid cell, which merges straight THROUGH a wall whenever two fixtures
+fall in the same cell. For a fixture mounted on an exterior wall that is
+routine, not a corner case. The fixture inherited the neighbouring room's floor
+height, the disc was placed at that height plus 2cm, and an interior floor even
+slightly higher buried it under the walkway. The pool was never missing; it was
+underground. The old comment even weighed 8m as "starting to merge genuinely
+separate rooms" without noticing that 4m already did.
+
+The probe is now keyed by ROOM — the stated justification implemented literally
+instead of approximated. It cannot merge across a wall, and it collapses more
+probes than the grid did (one ray per room per storey, against the grid's
+measured 5.6x), so this is faster as well as correct. The grid survives only as
+the fallback for a point inside no polygon at all.
+
+**The pool through the wall.** A pool was `CreateDisc`, laid flat. A horizontal
+disc passes straight through the base of a vertical wall, so any fixture within
+its radius of one painted glow on both sides. That is inherent to the primitive
+rather than a tuning problem: no radius both covers the walkway and stops at its
+edge. A pool is now its ROOM, clipped to its own footprint — so the wall bounds
+it by construction, because the room polygon IS the room.
+
+The piece that makes that affordable is that the radial falloff stays a
+per-FRAGMENT texture lookup rather than something geometry has to carry. Each
+vertex takes a UV of its offset from the fixture over the pool's diameter, and
+the shared gradient is set to CLAMP; a five-vertex clipped polygon then renders
+a mathematically exact circular pool, where the old disc had to spend 32
+segments describing that shape and still could not be clipped to anything. The
+gradient texture itself is untouched, so the WebKit dithering fix it carries
+stands.
+
+Nothing here is on the tap path, which was the explicit constraint. Toggling a
+light still runs `setEnabled` plus two material writes — no geometry, no
+allocation, no raycast, no re-clip. Draw calls are unchanged, one mesh per pool.
+Overdraw goes DOWN: a clipped room fragment is never larger than the disc's own
+footprint, and the wall-adjacent fixture that prompted this now rasterises
+roughly half of what it did. Pools are still built as plain footprints during
+`indexMeshes`, exactly as before, and clipped afterwards in `reshapeLightPools`
+— calibration only produces room polygons after first paint, so all of the new
+work lands off the critical path by construction.
+
+### Changed — one module now answers "what is the floor height here?"
+
+Three places asked that question, three different ways, and one of the three was
+the bug above. They are not the same question and the new module does not
+pretend they are: `EntityVisuals` wants the structure below a fixture,
+`SceneManager` wants a STOREY's floor with hidden storeys temporarily made
+pickable, `RoomHighlight` wants the picked mesh and its normal for a decal. What
+was duplicated is the downward ray, the "structure only, never furniture"
+predicate, the seam-nudge retry and the memoisation — and those now live once,
+in `babylon/floorProbe.ts`, where the room keying above could be fixed in one
+place instead of three.
+
+The persisted probe cache keeps working, but its localStorage prefix is bumped
+to `vk.probe2.`: the old entries are keyed by the 4-metre grid, and reading one
+as though it were room-keyed would silently reinstate exactly the bug this
+release fixes. Old entries are never read and are swept on the next save.
+
+### Fixed — the room-highlight circle crossed walls too
+
+The same defect, in the second place a flat floor marker is drawn.
+`RoomHighlight`'s point-room glow — the synthetic circle for a landing or an
+"Add room here" spot that was never drawn as an enclosed room — is a horizontal
+polygon and went through walls for the identical reason. It is now clipped to
+whichever real room contains it, through the same helper, and left alone when it
+belongs to no room polygon at all (which is the common case for a point room,
+since nothing was drawn there and there is no known wall to cross).
+
+`clipPolygonToConvex` joins `pointInPolygon` and `earClipTriangulate` in
+`utils/geometry.ts`, still with no dependency — Sutherland-Hodgman in about
+thirty lines. Its argument order is the whole correctness argument and is
+documented as such: the algorithm needs the CLIP convex and tolerates any
+SUBJECT, and villa rooms are routinely L-shaped, so the room is always the
+subject and the marker's footprint always the clip. Swapping them compiles and
+passes any test written against a rectangular room, so the new
+`npm run test:geometry` pins it with an L-shaped notch and asserts the two
+orders disagree.
+
 ## 2.299.0
 
 ### Fixed — a room collapsed back to a chip one zoom rung after it expanded

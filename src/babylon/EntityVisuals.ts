@@ -59,7 +59,6 @@ import type { Viewport } from "@babylonjs/core/Maths/math.viewport";
 // Vector3.ProjectToRef. A `import type` adds no runtime import, so it cannot
 // disturb the side-effect import discipline this file depends on elsewhere.
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
-import { Ray } from "@babylonjs/core/Culling/ray";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import { Material } from "@babylonjs/core/Materials/material";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
@@ -106,13 +105,14 @@ import { phantomEntity } from "@/utils/phantomEntity";
 import { tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
 import { beginSpan } from "@/utils/perfSpans";
-import { pointInPolygon } from "@/utils/geometry";
+import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
-import { blocksCameraBeam, isStructureMesh } from "./meshRoles";
+import { blocksCameraBeam } from "./meshRoles";
+import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
-import { LightPool } from "./LightPools";
+import { LightPool, poolFootprint } from "./LightPools";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { badgeText } from "./badgeText";
 import { arrange, gridCells, MAX_TOTAL_CHIPS, type CardArrangement } from "./badgeCard";
@@ -153,6 +153,15 @@ const LIGHT_RANGE = 4;
 // PointLight at all, at any range/intensity — that's the whole reason the
 // pool trick exists).
 const LIGHT_POOL_RADIUS = 1.8;
+/** Floor for the radius of a pool that belongs to NO room polygon and so is
+ *  bounded by the nearest room's edge instead (see reshapeLightPools). Without
+ *  a floor, a fixture standing right on a boundary would shrink to nothing and
+ *  read as an unlit lamp; a small pool is a better answer than none. */
+const POOL_MIN_RADIUS = 0.4;
+/** How far a pool sits above the floor it was probed onto. Enough to clear
+ *  z-fighting with the floor polygon, small enough that it still reads as
+ *  lying ON it rather than hovering. */
+const POOL_FLOOR_LIFT = 0.02;
 /** Clamp a per-light intensity override (Advanced Settings, -100%..+100%,
  *  stored as -1..1) to a safe range — a stale/hand-edited config value
  *  outside that range must not blow the fixture out or invert it. */
@@ -1202,7 +1211,12 @@ export class EntityVisuals {
     this.config = config;
     this.requestRender = requestRender;
     this.requestAnimationRender = requestAnimationRender ?? requestRender;
-    this.roomHighlight = new RoomHighlight(scene, requestRender, this.requestAnimationRender);
+    this.probe = new FloorProbe(scene);
+    // The probe can only key by ROOM once calibration has produced the world
+    // polygons; until then roomContaining returns null and it falls back to the
+    // grid, exactly as every load did before 2.300.0 (see floorProbe.ts).
+    this.probe.setRoomResolver((x, z) => this.roomContaining(x, z));
+    this.roomHighlight = new RoomHighlight(scene, requestRender, this.probe, this.requestAnimationRender);
     this.beams = new CameraBeams(scene);
     scene.registerBeforeRender(() => {
       // Elapsed time measured HERE, not from engine.getDeltaTime().
@@ -1478,154 +1492,43 @@ export class EntityVisuals {
   private stats = { probeMs: 0, probeRays: 0, probeHits: 0, labelsMs: 0 };
   /** Last pass's breakdown; read by SceneManager into the `load` event. */
   indexStats(): Readonly<{ probeMs: number; probeRays: number; probeHits: number; labelsMs: number }> {
-    return this.stats;
-  }
-
-  /** Cache for surfaceBelow(), cleared at the start of every indexMeshes.
-   *  Key is a coarse spatial bucket — see that method for why. */
-  private surfaceBelowCache = new Map<string, number | null>();
-
-  /**
-   * Y of the first surface directly below (x, y, z), or null if nothing is
-   * within reach. Memoised on a coarse grid.
-   *
-   * This exists because it was THE load-time bottleneck. Light placement asks
-   * this question once per fixture — and up to three times per strip, once per
-   * light-pool spot — which on this villa is a few hundred `pickWithRay` calls.
-   * Each one tests the ray against every pickable mesh in the scene, and the
-   * baked villa's structure is a SINGLE mesh of ~1.4 million triangles with no
-   * picking octree, so each call is a linear triangle scan. Hundreds of those
-   * ran synchronously before the villa could be shown, which is where several
-   * seconds of "post-processing" went.
-   *
-   * Bucketing is sound rather than merely convenient: what these probes want is
-   * the FLOOR under a ceiling fixture, floors are flat over a room, and every
-   * probe casts straight down. Two fixtures in the same room at the same
-   * ceiling height therefore have the same answer by construction.
-   *
-   * The grid is ROOM-SCALE in x/z (4 m) and storey-scale in y (1 m). 4 m is the
-   * deliberate trade: measured against this villa's fixture layout it collapses
-   * ~220 probe calls to ~40 real rays (5.6x), where a 2 m grid only reached
-   * 2.6x and an 8 m grid starts merging genuinely separate rooms. The y term is
-   * what keeps storeys apart, and it also separates a lower terrace from an
-   * adjacent room, since those differ in fixture height too.
-   *
-   * `exclude` keeps a fixture from picking itself; it is NOT part of the cache
-   * key, because within one bucket the excluded mesh is the fixture that is
-   * doing the asking and is never the floor being sought.
-   */
-  /** Identifies the geometry the probe answers belong to (the versioned model
-   *  URL). Null disables persistence — every load re-probes, as before. */
-  private probeCacheKey: string | null = null;
-
-  /**
-   * Reuse the previous load's floor probes when the geometry is byte-identical.
-   *
-   * Measured on this villa: the downward raycasts are ~950ms — 72% of
-   * indexMeshes and 27% of the whole visible load — because each one is a
-   * linear scan over a 1.4-million-triangle structure mesh with no octree.
-   * The in-memory bucket cache already collapses ~180 requests to 42 rays;
-   * what it cannot do is survive a reload, and reloads are the common case
-   * here (Android evicts the PWA whenever it is backgrounded, so a phone pays
-   * this on every return to the app).
-   *
-   * The answers are a pure function of the geometry, and the key is the
-   * VERSIONED model URL — it changes the moment a different GLB is uploaded,
-   * so a stale answer cannot outlive the model it describes. Recentring and
-   * scale normalisation run before this and are deterministic, so the same
-   * bytes really do produce the same world positions.
-   *
-   * Deliberately localStorage and not IndexedDB: 42 short strings, needed
-   * synchronously at the start of indexMeshes.
-   */
-  setProbeCacheKey(key: string | null): void {
-    this.probeCacheKey = key ? `vk.probe.${key}` : null;
-  }
-
-  private loadProbeCache(): void {
-    this.surfaceBelowCache.clear();
-    if (!this.probeCacheKey) return;
-    try {
-      const raw = localStorage.getItem(this.probeCacheKey);
-      if (!raw) return;
-      for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, number | null>)) {
-        this.surfaceBelowCache.set(k, v);
-      }
-    } catch { /* unreadable or quota-evicted — just re-probe */ }
-  }
-
-  private saveProbeCache(): void {
-    if (!this.probeCacheKey) return;
-    try {
-      // One model's probes at a time: an older GLB's entries are dead weight
-      // the moment a new one is uploaded, and this runs on devices where
-      // storage pressure is real.
-      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
-        const k = localStorage.key(i);
-        if (k?.startsWith("vk.probe.") && k !== this.probeCacheKey) localStorage.removeItem(k);
-      }
-      localStorage.setItem(
-        this.probeCacheKey, JSON.stringify(Object.fromEntries(this.surfaceBelowCache)));
-    } catch { /* quota / private mode — the cache is an optimisation, not state */ }
-  }
-
-  private surfaceBelow(x: number, y: number, z: number, exclude?: AbstractMesh): number | null {
-    const key = `${Math.round(x / 4)}:${Math.round(y)}:${Math.round(z / 4)}`;
-    const cached = this.surfaceBelowCache.get(key);
-    this.stats.probeHits += 1;
-    if (cached !== undefined) return cached;
-    // Only a cache MISS casts a ray; probeRays vs probeHits is the bucketing's
-    // real-world hit rate, which is the number that says whether a finer grid
-    // would help or is already exhausted.
-    const t0 = performance.now();
-    // Structure only (walls/floors/ceilings) — deliberately NOT "any solid
-    // mesh below", the same restriction blocksCameraBeam already applies to
-    // furniture for the identical reason (see meshRoles.ts). Without it, a
-    // light-pool probe over a table or desk hits the FURNITURE's top surface
-    // instead of the floor beneath it — not a miss at all, just the wrong
-    // answer — and the pool paints a glow patch at tabletop height that reads
-    // as "floating" against the actual floor around it. This is the case a
-    // field report traced to exactly that: a dining table sitting directly
-    // under a ceiling light.
-    const predicate = (candidate: AbstractMesh) =>
-      candidate !== exclude && candidate.getTotalVertices() > 0
-      && !/^(halo_|label_|marker)/i.test(candidate.name)
-      && isStructureMesh(candidate);
-    const cast = (px: number, pz: number): number | null => {
-      this.stats.probeRays += 1;
-      const hit = this.scene.pickWithRay(
-        // 20, not the villa's actual max floor-to-fixture height: a probe
-        // that comes up short here has no better answer than the nudge
-        // retry below — a ray this generous only pays for itself on an
-        // actual miss, and cheaply removes one whole class of those misses
-        // outright.
-        new Ray(new Vector3(px, y, pz), Vector3.Down(), 20), predicate,
-      );
-      return hit?.hit && hit.pickedPoint ? hit.pickedPoint.y : null;
+    // probeMs/Rays/Hits live on the shared FloorProbe now — merged here rather
+    // than mirrored into this.stats so there is exactly one counter per thing
+    // counted, and ?debug's probeRays-vs-probeHits ratio still reads as the
+    // bucketing's real hit rate.
+    return {
+      labelsMs: this.stats.labelsMs,
+      probeMs: Math.round(this.probe.stats.probeMs),
+      probeRays: this.probe.stats.probeRays,
+      probeHits: this.probe.stats.probeHits,
     };
-    let result = cast(x, z);
-    // A miss straight down from the exact probe point CAN still mean it
-    // landed on a hairline seam between two adjacent floor polygons — floor
-    // meshes are exported per ROOM, and adjoining edges don't always weld to
-    // bit-identical coordinates, leaving a gap too thin to see but real
-    // enough for a ray to slip through — most likely for a fixture sitting
-    // right at (or very near) a wall, exactly where two rooms' floors meet.
-    // Nudging a few cm off in each direction and retrying routes around that
-    // gap without needing to know which side of it the room's interior is
-    // on. Giving up outright (see this method's callers) is the last resort
-    // for a spot with genuinely no floor below at all (e.g. an outdoor
-    // fixture over water) once both this and the structure-only predicate
-    // above have had their say.
-    if (result === null) {
-      const NUDGE = 0.12;
-      for (const [dx, dz] of [[NUDGE, 0], [-NUDGE, 0], [0, NUDGE], [0, -NUDGE]]) {
-        result = cast(x + dx, z + dz);
-        if (result !== null) break;
-      }
-    }
-    this.stats.probeMs += performance.now() - t0;
-    this.surfaceBelowCache.set(key, result);
-    return result;
+  }
+
+  /**
+   * The one place that answers "what is the floor height here?" — shared with
+   * SceneManager and RoomHighlight since 2.300.0, and keyed by ROOM rather than
+   * by a 4-metre grid. See floorProbe.ts for why that distinction was a real
+   * field bug and not a tidiness exercise.
+   */
+  private probe!: FloorProbe;
+
+  /** Reuse the previous load's probes when the geometry is byte-identical —
+   *  the key is the VERSIONED model URL, so a stale answer cannot outlive the
+   *  model it describes. Null disables persistence. */
+  setProbeCacheKey(key: string | null): void {
+    this.probe.setCacheKey(key);
+  }
+
+  /** The shared floor probe, for SceneManager's own storey queries — one
+   *  module owns the ray, the predicate and the cache (see floorProbe.ts). */
+  get floorProbe(): FloorProbe { return this.probe; }
+
+  /** Y of the first structure surface below (x, y, z) — see FloorProbe.below.
+   *  Kept as a one-line wrapper rather than inlining the probe at every call
+   *  site so `exclude` (the fixture must not pick itself) stays impossible to
+   *  forget. */
+  private surfaceBelow(x: number, y: number, z: number, exclude?: AbstractMesh): number | null {
+    return this.probe.below(x, y, z, exclude);
   }
 
   /** Build the reverse index entity_id -> meshes from the loaded GLB. */
@@ -1646,7 +1549,8 @@ export class EntityVisuals {
     this.markLayoutDirty();
     // Restore the previous load's probes when they describe THIS geometry
     // (see setProbeCacheKey); otherwise this is a plain clear, as before.
-    this.loadProbeCache();
+    this.probe.load();
+    this.probe.resetStats();
     this.stats = { probeMs: 0, probeRays: 0, probeHits: 0, labelsMs: 0 };
     // Dispose previously created light sources + shadow maps before re-indexing.
     this.disposeLights();
@@ -1896,9 +1800,15 @@ export class EntityVisuals {
                 );
                 return null;
               }
-              const floorPos = new Vector3(fixturePos.x, surfaceY + 0.02, fixturePos.z);
+              const floorPos = new Vector3(fixturePos.x, surfaceY + POOL_FLOOR_LIFT, fixturePos.z);
+              // Built as its plain footprint here, deliberately. Room polygons
+              // do not exist yet — SceneManager calibrates AFTER indexMeshes,
+              // post-first-frame, because the fit's raycasts are too heavy for
+              // the load path — so clipping happens later, in reshapeLightPools,
+              // which keeps all of the new work off the critical path.
               const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}_${i}`, floorPos, LIGHT_POOL_RADIUS);
               pool.intensityScale = scale;
+              pool.probeFromY = fixturePos.y;
               return pool;
             })
             .filter((p): p is LightPool => p !== null);
@@ -1979,8 +1889,7 @@ export class EntityVisuals {
     const tLabels = performance.now();
     this.rebuildLabels(); // labels are always shown
     this.stats.labelsMs = Math.round(performance.now() - tLabels);
-    this.stats.probeMs = Math.round(this.stats.probeMs);
-    this.saveProbeCache();
+    this.probe.save();
   }
 
   /** A rectangular LED cove (e.g. the dining-table or sofa-area perimeter) is
@@ -2295,6 +2204,68 @@ export class EntityVisuals {
     // or their room summarises), so the room's own size no longer takes part
     // in any grouping decision and the cache is gone with the fan.
     this.roomPolys = polys.filter((p) => p.pts.length >= 3).map((p) => ({ name: p.name, pts: p.pts }));
+    // Everything below depends on these polygons and nothing above does, so
+    // this is the earliest moment either half of the 2.300.0 fix can run.
+    this.reshapeLightPools();
+  }
+
+  /**
+   * Give every light pool its room's shape and its room's floor height, once
+   * the plan→world calibration has produced the polygons that make both
+   * answerable. Fixes two reported defects at once, and they were reported
+   * together because they share a cause — a fixture near a wall:
+   *
+   *   - the pool drawn THROUGH the wall into the next room. A horizontal disc
+   *     passes straight through the base of a vertical wall, so a fixture
+   *     within LIGHT_POOL_RADIUS of one painted glow on both sides of it.
+   *     Inherent to the primitive; no radius both covers the walkway and stops
+   *     at its edge. The pool is now its ROOM clipped to its own footprint, so
+   *     the wall bounds it by construction.
+   *   - the pool NOT VISIBLE under a lit fixture. Its floor height came from a
+   *     4-metre-bucketed probe that merged across walls, so the fixture
+   *     inherited the neighbouring room's floor and the disc ended up under the
+   *     one it was meant to sit on. Re-probing here gets a ROOM-keyed answer
+   *     (see floorProbe.ts).
+   *
+   * Runs once per calibration, after first paint — never on a state change.
+   * A tap still costs exactly what it always did: LightPool.setState is
+   * setEnabled plus two material writes, and nothing here is on that path.
+   */
+  private reshapeLightPools(): void {
+    if (this.meshLightPools.size === 0 || this.roomPolys.length === 0) return;
+    // The memoised answers were keyed by grid (no resolver was available during
+    // indexMeshes); the persisted ones are keyed by whatever they were computed
+    // under. Dropping the in-memory map lets the same points be re-asked now
+    // that the resolver can name their room — a few dozen rays, post-reveal.
+    this.probe.clearMemo();
+    for (const pools of this.meshLightPools.values()) {
+      for (const pool of pools) {
+        const x = pool.mesh.position.x, z = pool.mesh.position.z;
+        const room = this.roomPolys.find((r) => pointInPolygon(x, z, r.pts));
+        let radius = LIGHT_POOL_RADIUS;
+        let shape: Pt2[] | undefined;
+        if (room) {
+          // Room = SUBJECT (may be L-shaped), footprint = CLIP (convex). That
+          // order is the correctness argument — see clipPolygonToConvex.
+          const clipped = clipPolygonToConvex(room.pts, poolFootprint(x, z, radius));
+          if (clipped.length >= 3) shape = clipped;
+        } else {
+          // Outside every polygon — open ground, or a fixture whose anchor sits
+          // just past a wall. There is no room to clip to, so bound the radius
+          // by the nearest room boundary instead: still cannot cross a wall,
+          // and a fixture far from everything keeps its full pool.
+          let nearest = Infinity;
+          for (const r of this.roomPolys) {
+            nearest = Math.min(nearest, distanceToPolygonBoundary(x, z, r.pts));
+          }
+          if (Number.isFinite(nearest)) radius = Math.min(radius, Math.max(POOL_MIN_RADIUS, nearest));
+        }
+        const surfaceY = this.surfaceBelow(x, pool.probeFromY, z);
+        pool.reshape(shape, radius, surfaceY === null ? undefined : surfaceY + POOL_FLOOR_LIFT);
+      }
+    }
+    this.probe.save();
+    this.requestRender();
   }
 
   /** Replace the resolved entity->room map (see the field's own docstring) —

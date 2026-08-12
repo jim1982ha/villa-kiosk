@@ -1584,20 +1584,11 @@ export class SceneManager {
    * when nothing is hit.
    */
   private estimateFloorY(x: number, z: number, floor: number): number {
-    const meshes = this.floors.getFloorMeshes(floor);
-    if (!meshes.length) return 0;
-    const saved = meshes.map((m) => [m.isEnabled(false), m.isPickable] as const);
-    for (const m of meshes) { m.setEnabled(true); m.isPickable = true; }
-    // World Y is metres after normalisation; ±1000 comfortably brackets any villa.
-    const hits = this.scene.multiPickWithRay(
-      new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000),
-      (m) => meshes.includes(m),
-    );
-    meshes.forEach((m, i) => { m.setEnabled(saved[i][0]); m.isPickable = saved[i][1]; });
-    if (!hits?.length) return 0;
-    let lowestY = Infinity;
-    for (const h of hits) if (h.pickedPoint && h.pickedPoint.y < lowestY) lowestY = h.pickedPoint.y;
-    return Number.isFinite(lowestY) ? lowestY : 0;
+    // Delegated to the one module that owns floor probing since 2.300.0 —
+    // including the enable/restore dance FloorManager's hidden storeys force,
+    // which is the part of this that is genuinely different from the fixture
+    // probe and therefore the part worth keeping named (see floorProbe.ts).
+    return this.visuals.floorProbe.storeyFloorY(this.floors.getFloorMeshes(floor), x, z);
   }
 
   /**
