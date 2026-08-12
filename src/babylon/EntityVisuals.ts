@@ -85,6 +85,10 @@ import {
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
 import {
+  viewBasis, projectToView, VIEW_BASIS_STEPS,
+  type ViewBasis, type ProjectedPoint, type ProjectionMode,
+} from "./badgeProjection";
+import {
   solvePlacement, markContacts, createPlacementScratch, conflicts,
   type PlacementItem, type PlacementScratch, type PlacementStats,
 } from "./badgePlacement";
@@ -355,12 +359,12 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  * Grouping thresholds. The ONE decision they govern: when a room's own badges
  * give way to that room's cluster chip.
  *
- * ── Why this is measured in WORLD space, not screen space ──────────────────
+ * ── Why this is NOT measured in true perspective screen space ─────────────
  *
- * Every previous version tested whether badges overlapped ON SCREEN. That is
- * the intuitive test, and it is the reason two separate field bugs kept
- * coming back, because a screen-space test is a function of the whole camera
- * pose (position, rotation, tilt, zoom):
+ * Every previous version tested whether badges overlapped in the renderer's
+ * own projection. That is the intuitive test, and it is the reason two
+ * separate field bugs kept coming back, because it is a function of the whole
+ * camera pose — POSITION included:
  *
  *   - Panning/orbiting silently re-grouped rooms, since the projected gap
  *     between two fixed 3D points changes with viewing angle.
@@ -381,11 +385,22 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  * out reproduces precisely the clusters you had before. That is the
  * behaviour being asked for here, arrived at for the same reason.
  *
- * So: badges are grouped by their distance in WORLD SPACE (X/Y/Z), against a
- * radius that converts the badge's on-screen size into world units using the
- * current zoom. Camera rotation, tilt and pan cannot influence it at all;
- * only zoom can, and it does so reversibly. No hysteresis anywhere, so the
- * same view always renders the same way.
+ * So: badges are grouped by their distance ON THE VIEW PLANE — their world
+ * anchors ORTHOGRAPHICALLY projected through the camera's quantised view
+ * direction and quantised zoom, in the same GUI pixels the badge is drawn in
+ * (babylon/badgeProjection). Camera POSITION cannot influence it at all,
+ * because an orthographic projection of a difference vector is invariant to
+ * it: panning and dollying regroup nothing. Zoom and view direction can, and
+ * both do so reversibly. No hysteresis anywhere, so the same view always
+ * renders the same way.
+ *
+ * Between 2.114.0 and 2.286.0 this was a WORLD distance with only the vertical
+ * axis foreshortened, and it was measurably wrong: it credited the depth axis —
+ * horizontal, running along the view — with up to 5.9x the separation the view
+ * actually draws, and could not express the case where depth and height cancel
+ * onto the same screen axis. Measured on hardware in 2.286.0, overlapping drawn
+ * badges went from zero near top-down to 5 on a laptop and 20-30 on a phone as
+ * the camera approached horizontal. badgeProjection has the derivation.
  *
  * Until 2.114.0 this was the GROUND PLANE only (X/Z), on the reasoning that a
  * villa is a floor plan so ground distance proxies on-screen separation. It
@@ -428,56 +443,28 @@ const BADGE_PLACEMENT = "priority" as "priority" | "legacy";
  *  single clean change, and crossing back undoes it exactly. */
 const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
 /**
- * Steps the VERTICAL FORESHORTENING is quantised into, for exactly the reason
- * the zoom above is quantised: so a slow drag of the tilt cannot sit on a
- * threshold and chatter.
+ * ⚠️ VERTICAL_FORESHORTEN_STEPS lived here and is GONE (2.287.0). It quantised
+ * the COSINE of the tilt into 8 steps, and it was only half a correction: it
+ * foreshortened world HEIGHT and left world DEPTH — the horizontal axis running
+ * ALONG the view — credited at full length, which at this camera's shallowest
+ * tilt is 5.9x more separation than the view actually draws. Placement now
+ * projects onto the view plane instead (see babylon/badgeProjection, which
+ * carries the derivation, the hardware measurements that graded the bug by
+ * tilt, and the trap waiting for anyone tempted to reinstate the old constant).
  *
- * ── What this factor is, and why it is not "the camera creeping back in" ───
- * The clearance test converts drawn pixels into world units and then measures
- * world distance — see worldClearance. That conversion is wrong for a VERTICAL
- * offset: a metre of height is drawn as `sin(tilt)` metres of screen, and
- * looking straight down it is drawn as nothing at all. The test was therefore
- * crediting a ceiling fixture and the floor socket beneath it with 2.5 m of
- * separation they do not have on the glass, which is how two summaries came to
- * be drawn overlapping while the test that exists to forbid exactly that
- * called them clear.
+ * The kill switch for that whole change. `"world3d"` restores the pre-2.287.0
+ * geometry — depth at full length on its own axis, height foreshortened, added
+ * in quadrature — everywhere, including the orbit camera.
  *
- * ── AND THIS FACTOR IS ONLY HALF THE CORRECTION. KNOWN, OPEN. ──────────────
- * This block used to claim the conversion "is exact for a HORIZONTAL offset".
- * It is not, and that sentence is why the other half went unwritten for so
- * long. Exactness holds only for a horizontal offset ACROSS the view. Split a
- * world offset into `c` (horizontal, across), `h` (horizontal, ALONG the view)
- * and `dy` (vertical), and with the pitch below horizontal called phi the true
- * screen offset is
+ * BADGE_PLACEMENT does NOT protect against the projection: legacy mode still
+ * calls `conflicts`, and what changed is the space `conflicts` measures in. A
+ * subsystem with six failed rewrites behind it does not land its seventh
+ * without a one-word revert of its own.
  *
- *     ( c ,  sin(phi)*h + cos(phi)*dy ) * pxPerWorld
- *
- * so `h` is foreshortened by exactly the factor `dy` is NOT — the mirror image
- * of the bug this constant fixed, on the axis nobody looked at. The overview
- * camera allows beta up to 1.4 (OverviewController.BETA_MAX), i.e. phi ~ 9.8
- * degrees, where the depth axis is over-credited by 5.9x. Worse, `h` and `dy`
- * land on the SAME screen axis and can CANCEL — a device both higher and
- * further away draws almost where a lower, nearer one does — and a distance
- * that adds them in quadrature, as drawnDistance does, cannot express a
- * cancellation at all.
- *
- * That is a real, reported defect: badges and whole summary cards drawn on top
- * of each other, mildly at a steep camera and catastrophically at a shallow
- * one. The fix is not a third fudge factor on a third axis — it is to project
- * onto the view plane and measure there, which retires this constant entirely.
- * Until then, do not "complete" the correction by deriving the depth
- * coefficient as sqrt(1 - verticalScale()^2): this quantises the COSINE into 8
- * steps, so that expression is EXACTLY ZERO for every tilt in the top ~11
- * degrees of the camera's range, and every badge on every view ray would
- * merge. Quantise the angles, not their trig functions.
- *
- * So this is not a new dependency on the camera; it COMPLETES the one already
- * there. pxPerWorld is a camera quantity too, and it is admitted for precisely
- * this reason — pixels are what "too close to read" means. Pan and orbit stay
- * out: this factor depends only on how far the camera is tilted, never on
- * where it is or which way it faces.
+ * The `as` cast is load-bearing under noUnusedLocals — it keeps the other arm
+ * of the union reachable to the type checker. Do not "clean it up".
  */
-const VERTICAL_FORESHORTEN_STEPS = 8;
+const VIEW_METRIC = "plane" as ProjectionMode;
 /** Reused, because getDirectionToRef takes the local axis by reference. */
 const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
 /**
@@ -582,14 +569,23 @@ interface ShownLabel {
   /** Projected screen position of the anchor, in render pixels. */
   x: number;
   y: number;
-  /** World-space anchor position. THE input to grouping — see groupBadges for
-   *  why the decision is made here and not in screen space. `wy` (mounting
-   *  HEIGHT) counts as much as the ground axes: an anchor sits just above its
-   *  own geometry (buildLabelAnchors), so a ceiling fan's is ~2.7m up while a
-   *  table lamp's is barely off the floor. */
+  /** World-space anchor position. `wy` (mounting HEIGHT) counts as much as the
+   *  ground axes: an anchor sits just above its own geometry
+   *  (buildLabelAnchors), so a ceiling fan's is ~2.7m up while a table lamp's
+   *  is barely off the floor. Kept because two things genuinely need a world
+   *  position — quantisedPixelsPerWorldUnit's distance to the camera, and
+   *  solveRoomZoomRadius's framing — and because it is what the projection
+   *  projects. */
   wx: number;
   wy: number;
   wz: number;
+  /** The anchor projected onto this pass's view plane, in GUI pixels — THE
+   *  input to grouping. Written by placementItems, which is the one place the
+   *  projection happens; see badgeProjection for why the decision is made in
+   *  this plane rather than in world space or in true perspective. */
+  sx: number;
+  sy: number;
+  sz: number;
   /** Anchor is in front of the camera, i.e. has a valid screen position at
    *  all. Purely a RENDER gate — deliberately not an input to grouping. */
   inFront: boolean;
@@ -713,7 +709,15 @@ interface PendingEntityGroup {
    *  because all-or-nothing per room is what makes a chip readable. */
   roomKeys: string[];
   members: number[];
+  /** The members' world centroid — the ONLY stored position. The card RENDERS
+   *  here (linkWithMesh on a node at this point). */
   wx: number; wy: number; wz: number;
+  /** The same point, projected into this pass's plane. DERIVED from wx/wy/wz by
+   *  the same projection every badge uses, never accumulated in parallel: the
+   *  projection is affine, so the plane centroid of the members IS the
+   *  projection of their world centroid, and that identity is what makes "the
+   *  card is measured where it is drawn" a fact rather than a discipline. */
+  sx: number; sy: number; sz: number;
   /**
    * How many device pictograms this group asks to draw, or 0 for a count.
    *
@@ -811,8 +815,11 @@ export class EntityVisuals {
   private boxes: { halfW: number; halfH: number; cy: number }[] = [];
   /** Scratch for Vector3.ProjectToRef — avoids a Vector3 per badge per frame. */
   private projTmp = new Vector3();
-  /** Scratch for verticalScale()'s camera forward direction. */
+  /** Scratch for currentViewBasis()'s camera forward direction. */
   private camForward = new Vector3();
+  /** Scratch for projectToView. Reused because it runs once per badge per
+   *  layout pass and per rung of solveRoomZoomRadius's ~40-rung ladder. */
+  private projPlane: ProjectedPoint = { px: 0, py: 0, pz: 0 };
 
   /** Something that can change WHERE or WHETHER a badge draws has happened —
    *  recompute the layout on the next frame. Cheap and deliberately generous:
@@ -2362,21 +2369,38 @@ export class EntityVisuals {
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
     const gapPx = this.metrics.minGapPx * mScale;
     // The destination's accessibility floor. The zoom cap is 1 where this shot
-    // lands, so only the user's own size preference can shrink it — the same
-    // expression worldClearance uses, for the same reason.
+    // lands, so only the FAR-ZOOM CAP can shrink it — which is to say nothing
+    // does, here. It reads `iconZoomScale` and not `iconUserScale` because
+    // that is what screenClearance reads: this expression used to carry
+    // `Math.min(1, this.iconUserScale)` while its own comment claimed to match
+    // screenClearance, which had dropped that term in 2.232.0. Since the user
+    // scale is at most 1 there, the ladder was demanding LESS separation than
+    // the renderer would, i.e. promising a shot the renderer then declines —
+    // the exact bug this solver exists to prevent.
     const minSepPx = this.metrics.minCentrePitchPx
-      * this.cssToGui() * Math.min(1, this.iconUserScale);
+      * this.cssToGui() * Math.min(1, this.iconZoomScale);
     const n = members.length;
-    // Solver input, built once and re-reached per rung. Anchor positions do
-    // not change with zoom; only `reach` does.
-    // `wy` foreshortened exactly as placementItems does it, because markContacts
-    // below is the SAME test the renderer will run — a rung that predicted a
-    // clean shot under different geometry from the one that draws it is the bug
-    // this whole solver was written to avoid. `fromCentre` above stays in real
-    // world units: framing a room is a 3D question, not a screen-overlap one.
-    const vScale = this.verticalScale();
-    const items: PlacementItem[] = members.map((mm) => ({
-      wx: mm.wx, wy: mm.wy * vScale, wz: mm.wz,
+    // Solver input, built once and re-projected per rung. The loop INVERTED in
+    // 2.287.0: `reach` used to be the rung-dependent term and the anchors fixed.
+    // Now `reach` is a drawn pixel count that no rung can change, and the plane
+    // coordinates scale with that rung's pxPerWorld — so the plane offsets are
+    // precomputed once in world units here and multiplied through below.
+    //
+    // The basis is the DESTINATION's, and it is this pose's: computeRoomOverviewPose
+    // keeps the current alpha/beta, so the shot is framed from the same view
+    // direction that is live now. markContacts below is then the SAME test the
+    // renderer will run — a rung that predicted a clean shot under different
+    // geometry from the one that draws it is the bug this whole solver was
+    // written to avoid. `fromCentre` above stays in real world units: framing a
+    // room is a 3D question, not a screen-overlap one.
+    const basis = this.currentViewBasis();
+    // Its own object per member, not the frame loop's shared scratch: these
+    // have to survive the whole rung walk. This runs once per tap, so the
+    // allocation is not on any hot path.
+    const plane = members.map(
+      (mm) => projectToView(basis, mm.wx, mm.wy, mm.wz, { px: 0, py: 0, pz: 0 }));
+    const items: PlacementItem[] = members.map(() => ({
+      sx: 0, sy: 0, sz: 0,
       // rank/sortKey/room are unused by markContacts (it is a symmetric
       // contact sweep, not the ranked solve) — only the geometry matters here.
       reach: 0, rank: 0, sortKey: "", room: "", exempt: false,
@@ -2430,10 +2454,13 @@ export class EntityVisuals {
       // the renderer then declined is a bug this file has already produced.
       // Its own scratch, because the layout pass may be holding a live result
       // from the shared one (see PlacementResult).
-      for (let i = 0; i < n; i++) items[i].reach = (boxes[i].halfW * allow) / pxPerWorld;
-      const touching = markContacts(
-        items, gapPx / pxPerWorld, minSepPx / pxPerWorld, this.zoomScratch,
-      );
+      for (let i = 0; i < n; i++) {
+        items[i].sx = plane[i].px * pxPerWorld;
+        items[i].sy = plane[i].py * pxPerWorld;
+        items[i].sz = plane[i].pz * pxPerWorld;
+        items[i].reach = boxes[i].halfW * allow;
+      }
+      const touching = markContacts(items, gapPx, minSepPx, this.zoomScratch);
       let clean = true;
       for (const i of mine) if (touching[i]) { clean = false; break; }
       if (clean) return { radius, declutters: true };
@@ -3580,7 +3607,7 @@ export class EntityVisuals {
       // allocates nothing at all.
       let s = this.shownPool[shownCount];
       if (!s) {
-        s = { id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, inFront: false };
+        s = { id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, sx: 0, sy: 0, sz: 0, inFront: false };
         this.shownPool[shownCount] = s;
       }
       s.id = id;
@@ -3636,7 +3663,7 @@ export class EntityVisuals {
     for (const s of shown) {
       s.lbl.valueWrap.isVisible = s.lbl.valueText.text.length > 0;
     }
-    const clearance = this.worldClearance(shown);
+    const clearance = this.screenClearance(shown);
     if (clearance) {
       const withText = this.placementItems(shown, this.labelBoxes(shown), clearance);
       const touching = markContacts(withText, clearance.gap, clearance.minSep, this.placeScratch);
@@ -3831,6 +3858,10 @@ export class EntityVisuals {
           // order the solver hands them over in.
           members: this.sortCardMembers(shown, bucket.members.slice()),
           wx: wx / n, wy: wy / n, wz: wz / n,
+          // Derived from the world centroid just above, by the same projection
+          // every badge went through — never accumulated alongside it. See
+          // PendingEntityGroup.sx.
+          ...this.planeOf(clearance, wx / n, wy / n, wz / n),
           // Every device, always: `gridCells` turns an over-cap ask into the
           // count badge itself, so no producer restates the cap (see there —
           // the one that did not restate it truncated its card and hid a
@@ -3845,7 +3876,7 @@ export class EntityVisuals {
     // Placed only after every bucket is known: a group's clearance is measured
     // against the badges that were ACCEPTED, and which those are is not
     // settled until the solve above has finished.
-    this.placeEntityGroups(shown, boxes, pending);
+    if (clearance) this.placeEntityGroups(shown, boxes, pending, clearance);
 
     for (const s of shown) {
       // ZERO X offset and a FIXED Y lift that centres every badge over its
@@ -3917,71 +3948,70 @@ export class EntityVisuals {
    * Returns each pile as a list of indices into `shown`.
    */
   /**
-   * The pass's world-space clearance numbers, or null if the projection is not
-   * usable this frame.
+   * The camera's view direction, decomposed and snapped — the basis every
+   * placement distance this pass is measured through.
    *
-   * Everything the solver consumes is in WORLD units, converted from drawn
-   * pixels through the quantised zoom — which is the whole trick. Pixels are
-   * what "too close to read" means; world units are what the camera cannot
-   * change by moving. Converting once, here, is what keeps pan, orbit and tilt
-   * out of the placement decision entirely.
+   * Read from the forward VECTOR rather than from any one camera's own angle
+   * property, so it is one rule for the orbit camera and the walk camera. Which
+   * of the two is active decides only the METRIC (see VIEW_METRIC and
+   * projectToView): orthographic is an approximation about the view axis, and
+   * the orbit camera looks AT the villa while the walk camera stands IN it.
    */
-  /**
-   * How much of a world-space VERTICAL offset the current view actually draws,
-   * quantised — 0 looking straight down, 1 looking horizontally.
-   *
-   * Derived from the camera's forward direction rather than from any one
-   * camera's own angle property, so it is the same rule for the orbit camera
-   * and the walk camera: a world "up" of one unit is drawn `sin(theta)` long,
-   * where theta is the angle between the view direction and the vertical, and
-   * `sin(theta) = sqrt(1 - forward.y^2)` for a unit forward.
-   *
-   * See VERTICAL_FORESHORTEN_STEPS for why reading the tilt is legitimate here
-   * when reading the pan or the orbit is not.
-   */
-  private verticalScale(): number {
+  private currentViewBasis(): ViewBasis {
     const cam = this.scene.activeCamera;
-    if (!cam) return 1;
+    if (!cam) return viewBasis(0, 0, 1, VIEW_BASIS_STEPS, VIEW_METRIC);
     cam.getDirectionToRef(CAMERA_LOCAL_FORWARD, this.camForward);
     const f = this.camForward;
     const len = Math.hypot(f.x, f.y, f.z);
-    if (!(len > 0)) return 1;
-    const fy = Math.min(1, Math.abs(f.y) / len);
-    const s = Math.sqrt(Math.max(0, 1 - fy * fy));
-    const q = VERTICAL_FORESHORTEN_STEPS;
-    return Math.round(s * q) / q;
+    if (!(len > 0)) return viewBasis(0, 0, 1, VIEW_BASIS_STEPS, VIEW_METRIC);
+    // Duck-typed for the same reason quantisedPixelsPerWorldUnit is: only
+    // ArcRotateCamera has a `radius`, and this file imports neither concrete
+    // camera class. The walk camera keeps the pre-2.287.0 metric because the
+    // plane one discards its depth axis entirely — projectToView has the
+    // worked case.
+    const orbit = typeof (cam as unknown as { radius?: number }).radius === "number";
+    const mode: ProjectionMode = VIEW_METRIC === "plane" && orbit ? "plane" : "world3d";
+    return viewBasis(f.x / len, f.y / len, f.z / len, VIEW_BASIS_STEPS, mode);
   }
 
   /**
-   * The distance between two world points AS THE VIEW DRAWS IT: the vertical
-   * component foreshortened by `verticalScale`, the horizontal untouched.
+   * The distance between two ALREADY-PROJECTED points — plain pixels, no
+   * conversion, because both sides are on the glass by the time they get here.
    *
    * THE rule, and it is applied in exactly two places. Here, for the
    * comparisons EntityVisuals makes itself (a summary against a badge, a
    * summary against another summary, the absorb sweep); and in
-   * `placementItems`, which pre-scales `PlacementItem.wy` so that every
-   * distance the solver computes — `conflicts`, the spatial hash, the
-   * lone-deferral pull-back — inherits it without a single call site of its own
-   * having to remember. Same factor, one meaning: "how far apart are these two
-   * on the glass".
+   * `placementItems`, which projects once so that every distance the solver
+   * computes — `conflicts`, the spatial hash, the lone-deferral pull-back —
+   * inherits it without a single call site of its own having to remember.
+   * One meaning: "how far apart are these two on the glass".
    */
   private drawnDistance(
     ax: number, ay: number, az: number,
     bx: number, by: number, bz: number,
-    vScale: number,
   ): number {
-    return Math.hypot(ax - bx, (ay - by) * vScale, az - bz);
+    return Math.hypot(ax - bx, ay - by, az - bz);
   }
 
-  private worldClearance(
+  /**
+   * The pass's clearance numbers, or null if the projection is not usable this
+   * frame.
+   *
+   * Everything the solver consumes is in GUI PIXELS, which is what "too close
+   * to read" and "too close to tap" both actually mean. It used to convert them
+   * DOWN into world units and measure there; the projection does that job now
+   * and does it correctly on all three axes, so the conversion is gone and
+   * `reach`, `gap` and `minSep` are simply the numbers badgeMetrics states.
+   * `pxPerWorld` is still returned — the PROJECTION needs it even though none
+   * of the clearances do.
+   */
+  private screenClearance(
     shown: ShownLabel[],
-  ): { pxPerWorld: number; gap: number; minSep: number; allow: number; vScale: number } | null {
+  ): { pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis } | null {
     const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
     if (!(pxPerWorld > 0)) return null;
     const scale = this.effectiveScale();
-    // The accessibility floor is a CSS-pixel quantity, so it converts through
-    // cssToGui like every other metric — and it decays with the FAR-ZOOM CAP
-    // only.
+    // The accessibility floor decays with the FAR-ZOOM CAP only.
     //
     // Not with the user's size preference, which 2.232.0 got wrong. Folding
     // iconUserScale in here meant raising the icon size raised the floor as
@@ -3994,42 +4024,48 @@ export class EntityVisuals {
     const shrink = Math.min(1, this.iconZoomScale);
     return {
       pxPerWorld,
-      gap: (this.metrics.minGapPx * scale) / pxPerWorld,
-      minSep: (this.metrics.minCentrePitchPx * this.cssToGui() * shrink) / pxPerWorld,
+      gap: this.metrics.minGapPx * scale,
+      minSep: this.metrics.minCentrePitchPx * this.cssToGui() * shrink,
       allow: 1 - GROUP_OVERLAP_ALLOW_WIDTHS,
-      vScale: this.verticalScale(),
+      basis: this.currentViewBasis(),
     };
   }
 
   /**
    * Convert this pass's badges into solver input, into a grow-only pool.
    *
-   * `reach` is the badge's own drawn half-width in world units — THE quantity
-   * the whole subsystem turns on. It comes from labelBoxes, which is also what
+   * `reach` is the badge's own drawn half-width, straight from labelBoxes — no
+   * conversion, because the anchors arrive on the glass too. That is the whole
+   * simplification the projection buys: the quantity the subsystem turns on is
+   * now the same number the renderer draws with, and labelBoxes is also where
    * the renderer's geometry comes from, so a layout decision cannot be made
    * about a badge of a different size from the one on screen.
    *
-   * `wy` is FORESHORTENED here, once, and every distance the solver goes on to
-   * compute inherits it — see drawnDistance. `reach` is a radius on the glass
-   * and is isotropic, so it can only be compared against a distance that is
-   * also on the glass.
+   * The PROJECTION happens here, once per badge, and every distance the solver
+   * goes on to compute inherits it — see drawnDistance. The result is also
+   * written back onto the ShownLabel, because placeEntityGroups needs the same
+   * plane coordinates and projecting twice is how two spaces drift apart.
    */
   private placementItems(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-    clearance: { pxPerWorld: number; allow: number; vScale: number },
+    clearance: { pxPerWorld: number; allow: number; basis: ViewBasis },
   ): PlacementItem[] {
     const pool = this.placeItems;
     const focus = this.focusedRoom;
+    const k = clearance.pxPerWorld;
+    const p = this.projPlane;
     for (let i = 0; i < shown.length; i++) {
       const s = shown[i];
       let it = pool[i];
       if (!it) {
-        it = { wx: 0, wy: 0, wz: 0, reach: 0, rank: 0, sortKey: "", room: "", exempt: false };
+        it = { sx: 0, sy: 0, sz: 0, reach: 0, rank: 0, sortKey: "", room: "", exempt: false };
         pool[i] = it;
       }
-      it.wx = s.wx; it.wy = s.wy * clearance.vScale; it.wz = s.wz;
-      it.reach = (boxes[i].halfW * clearance.allow) / clearance.pxPerWorld;
+      projectToView(clearance.basis, s.wx, s.wy, s.wz, p);
+      s.sx = p.px * k; s.sy = p.py * k; s.sz = p.pz * k;
+      it.sx = s.sx; it.sy = s.sy; it.sz = s.sz;
+      it.reach = boxes[i].halfW * clearance.allow;
       it.rank = badgeRank(s.lbl.type, s.lbl.category);
       it.sortKey = s.id;
       it.room = roomKey(this.roomOf(s.id));
@@ -4037,6 +4073,26 @@ export class EntityVisuals {
     }
     pool.length = shown.length;
     return pool;
+  }
+
+  /**
+   * Project a world point into this pass's plane, in GUI pixels, shaped as the
+   * `sx`/`sy`/`sz` a PendingEntityGroup carries.
+   *
+   * The ONE way a world position becomes a group's placement coordinate. A card
+   * is DRAWN at its members' world centroid and MEASURED at the projection of
+   * that same point, and because the projection is affine those are the same
+   * point — the plane centroid of the members IS the projection of their world
+   * centroid. Never accumulate plane coordinates in parallel with the world
+   * ones; that is two computations that can drift where there should be one.
+   */
+  private planeOf(
+    clearance: { pxPerWorld: number; basis: ViewBasis },
+    x: number, y: number, z: number,
+  ): { sx: number; sy: number; sz: number } {
+    const p = projectToView(clearance.basis, x, y, z, this.projPlane);
+    const k = clearance.pxPerWorld;
+    return { sx: p.px * k, sy: p.py * k, sz: p.pz * k };
   }
 
   /**
@@ -4063,7 +4119,9 @@ export class EntityVisuals {
    */
   private logPlacement(
     shown: ShownLabel[],
-    clearance: { pxPerWorld: number; gap: number; minSep: number; vScale: number } | null,
+    clearance: {
+      pxPerWorld: number; gap: number; minSep: number; basis: ViewBasis;
+    } | null,
     stats: PlacementStats | null,
     placed: PendingEntityGroup[],
   ): void {
@@ -4100,8 +4158,10 @@ export class EntityVisuals {
       .map(([n, c]) => `${n}x${c}`).join(",") || "-";
     const line =
       `place rung=${clearance.pxPerWorld.toFixed(3)} icon=${this.iconUserScale.toFixed(2)}x`
-      + ` zoom=${this.iconZoomScale.toFixed(2)} gap=${clearance.gap.toFixed(3)}`
-      + ` minSep=${clearance.minSep.toFixed(3)} vScale=${clearance.vScale.toFixed(3)}`
+      + ` zoom=${this.iconZoomScale.toFixed(2)} gapPx=${clearance.gap.toFixed(1)}`
+      + ` sepPx=${clearance.minSep.toFixed(1)}`
+      + ` sinTilt=${clearance.basis.sinPhi.toFixed(3)} az=${clearance.basis.ax.toFixed(3)}`
+      + ` metric=${clearance.basis.mode}`
       + ` | badges=${this.labels.size} eligible=${shown.length} behind=${behind} drawn=${drawn}`
       + ` | piles=${stats.piles} exempt=${stats.exempt} accepted=${stats.accepted}`
       + ` deferred=${stats.deferred} pulledBack=${stats.pulledBack}`
@@ -4132,7 +4192,9 @@ export class EntityVisuals {
   private assertPlacementInvariants(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-    clearance: { pxPerWorld: number; gap: number; minSep: number; allow: number; vScale: number },
+    clearance: {
+      pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis;
+    },
     /** The summaries that SURVIVED placement — not the ones the solver asked
      *  for. A dropped one still leaves its members marked as covered. */
     groups: readonly PendingEntityGroup[],
@@ -4236,7 +4298,7 @@ export class EntityVisuals {
     // their overlap is DELIBERATE (the exemption stacks them, which is exactly
     // why pairFocusedRoom exists), so mixing them in would poison the number
     // that matters while hiding the one case where the pairing failed.
-    const minSepPx = clearance.minSep * clearance.pxPerWorld;
+    const minSepPx = clearance.minSep;
     let overlaps = 0, tooClose = 0, focusOverlaps = 0;
     for (let i = 0; i < badgeBoxes.length; i++) {
       for (let j = i + 1; j < badgeBoxes.length; j++) {
@@ -4505,9 +4567,13 @@ export class EntityVisuals {
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
     pending: PendingEntityGroup[],
+    /** This pass's own clearance — passed in rather than re-derived, so the
+     *  absorb sweep re-projects a moved centroid through exactly the basis and
+     *  rung the members were projected with. */
+    clearance: { pxPerWorld: number; basis: ViewBasis },
   ): void {
     if (pending.length === 0) return;
-    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
+    const pxPerWorld = clearance.pxPerWorld;
     const scale = this.effectiveScale();
     if (pxPerWorld <= 0) {
       // No usable projection this frame — fall back to the tier that needs
@@ -4518,12 +4584,11 @@ export class EntityVisuals {
     }
     const gapPx = this.metrics.minGapPx * scale;
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
-    // The same foreshortening the solver's items already carry — a summary is
-    // compared against badges and against other summaries, and both of those
-    // comparisons are about what overlaps ON SCREEN. Without it a card at floor
-    // level and a card at ceiling level, at the same plan position, were
-    // credited with the whole storey height and drawn on top of each other.
-    const vScale = this.verticalScale();
+    // Everything below compares PIXELS to PIXELS. Groups and badges alike
+    // arrive already projected onto this pass's view plane (see
+    // badgeProjection), which is the space both of these comparisons — a
+    // summary against a badge, a summary against another summary — are
+    // actually asking about: what overlaps ON SCREEN.
     // The larger of the two half-extents, because a neighbour can lie in any
     // direction and this is a radial test rather than a box overlap.
     const halfOf = (i: number) => Math.max(boxes[i].halfW, boxes[i].halfH);
@@ -4638,8 +4703,7 @@ export class EntityVisuals {
         // focus renegotiating the rest of the map, which is exactly what the
         // exemption exists to prevent.
         if (focus !== null && roomKey(this.roomOf(shown[j].id)) === focus) continue;
-        const d = this.drawnDistance(
-          g.wx, g.wy, g.wz, shown[j].wx, shown[j].wy, shown[j].wz, vScale) * pxPerWorld;
+        const d = this.drawnDistance(g.sx, g.sy, g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
         if (d < vsBadge + halfOf(j) * allow + gapPx) return false;
       }
       for (const o of others) {
@@ -4648,7 +4712,7 @@ export class EntityVisuals {
         // not (see PlacementItem.exempt). The focus is a deliberate, temporary
         // state and it does not get to renegotiate the rest of the map.
         if (o.focused) continue;
-        const d = this.drawnDistance(g.wx, g.wy, g.wz, o.wx, o.wy, o.wz, vScale) * pxPerWorld;
+        const d = this.drawnDistance(g.sx, g.sy, g.sz, o.sx, o.sy, o.sz);
         if (d < mineHalf + groupHalf(o) + gapPx) return false;
       }
       return true;
@@ -4685,15 +4749,15 @@ export class EntityVisuals {
     // highest-ranked one — still drawn, at its own anchor — and defers the
     // rest. The card for those losers is drawn at THEIR centroid, which for a
     // co-located pile is the same world point as the badge still drawn there.
-    // `fits` then measured `d = hypot(worldDelta) * pxPerWorld = 0` against a
-    // requirement in fixed pixels, so `0 < requirement` held at EVERY zoom
-    // rung and the card was always refused, escalating the room to its chip.
+    // `fits` then measured `d = 0` against a requirement in fixed pixels, so
+    // `0 < requirement` held at EVERY zoom rung and the card was always
+    // refused, escalating the room to its chip.
     //
-    // That is why zooming right in on such a room never decluttered it.
-    // Multiplying a world distance of ~0 by any zoom is still 0; no rung could
-    // ever satisfy the test. Every OTHER refusal in `fits` is a real distance
-    // that shrinks as the camera closes in, which is the behaviour people
-    // expect and were not getting.
+    // That is why zooming right in on such a room never decluttered it. Two
+    // points at the same place project to the same place at any zoom; no rung
+    // could ever satisfy the test. Every OTHER refusal in `fits` is a real
+    // separation that grows as the camera closes in, which is the behaviour
+    // people expect and were not getting.
     //
     // So: a summary swallows the drawn badges that lie inside its own ink,
     // and only those (see cardInscribedHalf). It is the same reasoning as the
@@ -4719,8 +4783,7 @@ export class EntityVisuals {
           const rk = roomKey(this.roomOf(shown[j].id));
           if (this.roomClustered.get(rk)) continue;
           if (focus !== null && rk === focus) continue;
-          const d = this.drawnDistance(
-            g.wx, g.wy, g.wz, shown[j].wx, shown[j].wy, shown[j].wz, vScale) * pxPerWorld;
+          const d = this.drawnDistance(g.sx, g.sy, g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
           if (d < reach) take.push(j);
         }
         if (take.length === 0) break;
@@ -4753,6 +4816,11 @@ export class EntityVisuals {
         g.wx = wx / g.members.length;
         g.wy = wy / g.members.length;
         g.wz = wz / g.members.length;
+        // Re-derived, in the same statement as the centroid it comes from.
+        // Accumulating plane coordinates separately here is the drift bug in
+        // embryo, because absorb runs in ROUNDS.
+        const q = this.planeOf(clearance, g.wx, g.wy, g.wz);
+        g.sx = q.sx; g.sy = q.sy; g.sz = q.sz;
       }
 
       // ── The whole-room rule, re-checked against the membership we ended up
@@ -4859,7 +4927,7 @@ export class EntityVisuals {
   private pairFocusedRoom(
     shown: ShownLabel[],
     items: readonly PlacementItem[],
-    clearance: { gap: number; minSep: number },
+    clearance: { gap: number; minSep: number; pxPerWorld: number; basis: ViewBasis },
     pending: PendingEntityGroup[],
   ): void {
     const focus = this.focusedRoom;
@@ -4873,10 +4941,10 @@ export class EntityVisuals {
       const src = items[i];
       let it = sub[idx.length];
       if (!it) {
-        it = { wx: 0, wy: 0, wz: 0, reach: 0, rank: 0, sortKey: "", room: "", exempt: false };
+        it = { sx: 0, sy: 0, sz: 0, reach: 0, rank: 0, sortKey: "", room: "", exempt: false };
         sub[idx.length] = it;
       }
-      it.wx = src.wx; it.wy = src.wy; it.wz = src.wz;
+      it.sx = src.sx; it.sy = src.sy; it.sz = src.sz;
       it.reach = src.reach; it.rank = src.rank;
       it.sortKey = src.sortKey; it.room = src.room;
       it.exempt = false;
@@ -4996,6 +5064,8 @@ export class EntityVisuals {
         roomKeys: [focus],
         members,
         wx: wx / n, wy: wy / n, wz: wz / n,
+        // Derived from the world centroid, by the one projection — see planeOf.
+        ...this.planeOf(clearance, wx / n, wy / n, wz / n),
         // Same rule as the main solve, and it is badgeCard's rule, not a copy
         // of it: `gridCells` is where "more than a card can hold" becomes the
         // count badge.

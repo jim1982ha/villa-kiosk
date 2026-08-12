@@ -1,3 +1,75 @@
+## 2.287.0
+
+### Fixed — badges and summary cards drawn on top of each other
+
+The metric that decides which badges can share the screen was measuring the
+wrong thing, and 2.286.0's new counters pinned it exactly. It took a world
+distance with only the *vertical* axis foreshortened, which credited the **depth**
+axis — the horizontal one running along the view — with its full length. Depth
+is drawn at sin(tilt). At the shallowest angle the overview camera allows that
+is 0.17, so two devices were being told they had 5.9 times the separation the
+view actually gives them. Worse, depth and height land on the *same* screen
+axis and can cancel: a device both higher and further away draws almost exactly
+where a lower, nearer one does, and a distance that adds the two in quadrature
+cannot produce that value at any tilt.
+
+The signature is unmistakable in the field numbers. Same scene, same zoom, only
+the tilt changed: genuinely overlapping drawn badges went 0, 0, 0, 0, 0, 1, 3,
+5 on a laptop as the camera swung from near top-down to near horizontal, and 0
+to 20–30 on a phone, with summary cards — which `fits` promises unconditionally
+will never overlap — going from none to six pairs at once. That gradient is
+1/sin(tilt) and nothing else.
+
+Placement now projects each anchor onto the **view plane** and measures there,
+in the same pixels the badge is drawn in. The projection is orthographic, and
+deliberately not the renderer's own perspective one, for reasons that are each
+load-bearing: orthographic projection of a *difference* vector is invariant to
+where the camera stands, so panning and dollying still regroup nothing — which
+is what six earlier rewrites of this subsystem died of; items behind the camera
+project sanely, so off-screen badges can keep taking part in grouping and
+turning the camera cannot change how a room is presented; and it is **affine**,
+so the plane centroid of a group's members is exactly the projection of their
+world centroid. That last one is why a summary card can be drawn at one point
+and measured at the same point structurally rather than by discipline.
+
+What this newly admits is the camera's azimuth, and it has to: azimuth is what
+decides which horizontal axis is depth. Orbiting at a fixed zoom will now
+regroup where it previously did not. Note precisely what that is not — the ring
+removed in 2.169.0 made badges *move relative to each other* as the camera
+turned. This makes them appear and merge **at their own anchors**, in the
+direction the geometry demands. Everything else is unchanged: the same view
+always renders the same way, returning to a view restores it, and there is
+still no hysteresis and no previous-frame input anywhere.
+
+Two traps were found and are written down where the next person will hit them.
+The walk camera keeps the old three-axis metric on purpose: orthographic is an
+approximation about the view axis, and a camera standing *inside* the badge
+cloud violates it by construction — first-person pitch rests at zero, so the
+plane metric would discard the depth axis entirely and merge every badge down a
+corridor. And the depth coefficient must never be derived from the old
+quantised vertical scale: that quantised a *cosine* into eight steps, so its
+complement is exactly zero across the top eleven degrees of the camera's range.
+The pitch and azimuth are snapped to one lattice of 256 steps instead — fine
+enough that snapping costs under half a badge, which is the bound the test
+suite now pins.
+
+Rejected along the way, with the reasons recorded: flattening every badge to a
+common elevation would make the worst case worse, because height is the axis
+the old metric already handled correctly and the only separation that survives
+at a low camera; grouping badges across room boundaries, which has worked since
+2.250.0; and preferring to group same-category devices, which is not
+expressible — grouping is a partition of who geometrically overlaps whom, so
+there is no partner to prefer.
+
+### Changed — the zoom-to-room ladder demanded less separation than the renderer
+
+Its own comment claimed to use the same expression the layout does. It did not:
+it still carried a term the layout dropped in 2.232.0, and since that term is
+never above 1 the ladder was consistently asking for *less* clearance than the
+renderer would — promising a shot the renderer then declines, which is the one
+failure this solver exists to prevent. Called out separately here so it is not
+read as part of the projection change.
+
 ## 2.286.0
 
 ### Fixed — the badge-overlap assertion could not fail

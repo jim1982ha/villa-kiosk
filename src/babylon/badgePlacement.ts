@@ -4,20 +4,26 @@
 // labelLayout.ts and held to the same discipline.
 //
 // ── The invariant this file exists to protect ──────────────────────────────
-// The output is a pure function of (world anchor positions, the QUANTISED
-// zoom baked into each item's `reach`, and each item's STATIC rank). Nothing
-// about where the camera stands or which way it looks appears anywhere, and
-// no previous frame's result is an input — `solvePlacement` takes no
+// The output is a pure function of (world anchor positions projected through a
+// QUANTISED view direction and a QUANTISED zoom — see babylon/badgeProjection —
+// and each item's STATIC rank). Where the camera STANDS appears nowhere: an
+// orthographic projection of a difference vector is invariant to it. And no
+// previous frame's result is an input — `solvePlacement` takes no
 // previous-frame argument at all, so a "keep last frame's winner" stabiliser
 // is not merely discouraged, it is inexpressible.
 //
 // That is not stylistic. Six rewrites of this subsystem failed by testing
-// overlap in SCREEN space, which made grouping a function of the whole camera
-// pose: panning silently regrouped rooms, and the hysteresis added to damp the
-// resulting flicker made the result depend on the PATH taken rather than the
-// destination — so returning to the exact view you started from did not
-// restore what you started with. EntityVisuals' header has the full account.
-// Hysteresis cannot fix path-dependence; it IS path-dependence.
+// overlap in true PERSPECTIVE screen space, which made grouping a function of
+// the whole camera pose: panning silently regrouped rooms, and the hysteresis
+// added to damp the resulting flicker made the result depend on the PATH taken
+// rather than the destination — so returning to the exact view you started
+// from did not restore what you started with. EntityVisuals' header has the
+// full account. Hysteresis cannot fix path-dependence; it IS path-dependence.
+//
+// 2.287.0 admitted the camera's view DIRECTION (not its position) because no
+// correct measure of "do these two overlap on the glass" can be blind to which
+// way the villa is being looked at — badgeProjection sets out what that buys
+// and what it costs.
 //
 // ── Union-find is kept, but demoted ───────────────────────────────────────
 // The predicate that unions two badges is the SAME predicate that later
@@ -38,19 +44,26 @@
 
 /** One badge offered to the solver. */
 export interface PlacementItem {
-  /** World-space anchor. THE input — see the header.
+  /** The anchor PROJECTED ONTO THE VIEW PLANE, in GUI pixels — see
+   *  babylon/badgeProjection. THE input, and deliberately not a scene
+   *  coordinate: everything measured against it is a distance on the glass,
+   *  and a metre of height, a metre of depth and a metre across the view are
+   *  each drawn at a different length.
    *
-   *  `wy` arrives FORESHORTENED by the view's tilt (EntityVisuals.placementItems
-   *  scales it by `verticalScale()`), because everything measured against it is
-   *  a distance on the glass and a metre of height is not drawn as a metre.
-   *  Nothing in this file needs to know that: it is one multiplication at the
-   *  boundary, and `conflicts`, the spatial hash and the pull-back all inherit
-   *  it. Do NOT use these coordinates to position anything in the scene. */
-  wx: number;
-  wy: number;
-  wz: number;
-  /** How much world space this badge's drawn half-width covers, i.e. its
-   *  on-screen footprint converted through the quantised zoom. */
+   *  `sz` is a RESIDUAL, zero under the orbit camera. It carries the along-view
+   *  axis for the walk camera only, where orthographic's small-angle assumption
+   *  fails because the camera stands inside the badge cloud (projectToView says
+   *  why, with the worked case). Nothing in this file needs to know which mode
+   *  is live: it is one projection at the boundary, and `conflicts`, the
+   *  spatial hash and the pull-back all inherit it.
+   *
+   *  Do NOT use these coordinates to position anything in the scene. */
+  sx: number;
+  sy: number;
+  sz: number;
+  /** The badge's drawn half-width, in the same GUI pixels as `sx`/`sy` — no
+   *  conversion, because both sides of every comparison are already on the
+   *  glass. */
   reach: number;
   /** Static placement rank; LOWER is placed first (see badgePriority). */
   rank: number;
@@ -195,17 +208,20 @@ export function conflicts(
   gap: number,
   minSeparation: number,
 ): boolean {
-  const dx = b.wx - a.wx;
-  const dy = b.wy - a.wy;
-  const dz = b.wz - a.wz;
-  // HEIGHT COUNTS — AS MUCH AS THE VIEW LETS IT. A ceiling fan and the lamp
-  // beneath it share a ground position, so a ground-plane-only test called
-  // them the same point and grouped two badges that were drawn metres apart.
-  // But full 3D distance is the opposite error: looking straight down, that
-  // height is drawn as nothing at all and the two ARE the same point. `wy`
-  // arrives already scaled by the view's tilt (see PlacementItem), so this
-  // measures the separation on the glass at whatever angle the villa is
-  // currently being looked at, and both readings fall out of one expression.
+  const dx = b.sx - a.sx;
+  const dy = b.sy - a.sy;
+  const dz = b.sz - a.sz;
+  // THIS IS A DISTANCE ON THE GLASS, AND THAT IS THE WHOLE POINT. Every axis
+  // arrives already drawn — height at cos(tilt), depth at sin(tilt), and the
+  // two of them SUMMED onto one screen axis rather than added in quadrature,
+  // so a device that is both higher and further away correctly measures as
+  // being where a lower, nearer one is. Getting that wrong is what drew badges
+  // and whole summary cards on top of each other, harmlessly at a steep camera
+  // and 5.9x wrong at a shallow one. See badgeProjection for the derivation and
+  // for the hardware numbers that graded it by tilt.
+  //
+  // `dz` is zero under the orbit camera. Under the walk camera it is the
+  // along-view residual, which is why this stays a three-term sum.
   const d2 = dx * dx + dy * dy + dz * dz;
   const need = Math.max(a.reach + b.reach + gap, minSeparation);
   return d2 < need * need;
@@ -270,7 +286,7 @@ export function markContacts(
     if (items[i].exempt) continue;
     const it = items[i];
     const k = hashCell(
-      Math.floor(it.wx / cell), Math.floor(it.wy / cell), Math.floor(it.wz / cell),
+      Math.floor(it.sx / cell), Math.floor(it.sy / cell), Math.floor(it.sz / cell),
     );
     let bucket = cells.get(k);
     if (!bucket) { bucket = []; cells.set(k, bucket); }
@@ -279,7 +295,7 @@ export function markContacts(
   for (let i = 0; i < n; i++) {
     const a = items[i];
     if (a.exempt) continue;
-    const cx = Math.floor(a.wx / cell), cy = Math.floor(a.wy / cell), cz = Math.floor(a.wz / cell);
+    const cx = Math.floor(a.sx / cell), cy = Math.floor(a.sy / cell), cz = Math.floor(a.sz / cell);
     for (let ox = -1; ox <= 1; ox++) {
       for (let oy = -1; oy <= 1; oy++) {
         for (let oz = -1; oz <= 1; oz++) {
@@ -400,7 +416,7 @@ export function solvePlacement(
   for (let i = 0; i < n; i++) {
     const it = items[i];
     const k = hashCell(
-      Math.floor(it.wx / cell), Math.floor(it.wy / cell), Math.floor(it.wz / cell),
+      Math.floor(it.sx / cell), Math.floor(it.sy / cell), Math.floor(it.sz / cell),
     );
     let bucket = cells.get(k);
     if (!bucket) { bucket = []; cells.set(k, bucket); }
@@ -419,7 +435,7 @@ export function solvePlacement(
     // An exempt badge is drawn whatever happens and blocks nobody, so it takes
     // no part in the graph at all.
     if (a.exempt) continue;
-    const cx = Math.floor(a.wx / cell), cy = Math.floor(a.wy / cell), cz = Math.floor(a.wz / cell);
+    const cx = Math.floor(a.sx / cell), cy = Math.floor(a.sy / cell), cz = Math.floor(a.sz / cell);
     for (let ox = -1; ox <= 1; ox++) {
       for (let oy = -1; oy <= 1; oy++) {
         for (let oz = -1; oz <= 1; oz++) {
@@ -586,7 +602,7 @@ export function solvePlacement(
     let best = -1, bestD2 = Infinity;
     for (const i of piles[pileIdx[lone]]) {
       if (!accepted[i]) continue;
-      const dx = items[i].wx - li.wx, dy = items[i].wy - li.wy, dz = items[i].wz - li.wz;
+      const dx = items[i].sx - li.sx, dy = items[i].sy - li.sy, dz = items[i].sz - li.sz;
       const d2 = dx * dx + dy * dy + dz * dz;
       const bound = PULLBACK_REACH_FACTOR
         * Math.max(li.reach + items[i].reach + gap, minSeparation);
