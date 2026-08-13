@@ -10,10 +10,46 @@ import { categorySurfaceRinged, type DeviceSurfaceState } from "@/config/EntityC
 import { chipProportions } from "@/config/chipProportions";
 import { ICON_NODES, type IconPrimitive } from "./badgeIconNodes";
 
-// Rendered oversized relative to the badge's on-screen size (EntityVisuals'
-// BADGE_DIAMETER_PX) so it stays crisp when the user's label-size stepper or
-// the bird's-eye zoom scales the badge up.
+// The bake's default size, used only when a caller has no idea what size the
+// badge will be drawn at. Every real caller passes one — see BAKE_LADDER.
 const CANVAS_PX = 128;
+
+/**
+ * The sizes a badge may be baked at, and the reason this exists at all.
+ *
+ * This image is composited onto a canvas here and then DRAWN by Babylon GUI
+ * with `ctx.drawImage(img, …, w, h)` into the fullscreen texture's own 2D
+ * canvas. Until 2.301.0 it was always baked at 128px and drawn at whatever the
+ * badge's on-screen size was — routinely 30-48 render px, i.e. a 2.7x to 4.3x
+ * DOWNSCALE on every single badge, every frame the layout rebuilds.
+ *
+ * Chrome absorbs that: Skia mip-filters `drawImage` once the ratio passes ~2.
+ * WebKit does not — it takes a single bilinear tap, which at a 4x reduction
+ * samples roughly one source pixel in sixteen and drops the rest. On a 1.5-unit
+ * lucide stroke that is the difference between a clean line and a staircase,
+ * which is exactly the "glyphs look pixelated in Safari, fine in Chrome"
+ * report. Nothing else in the badge showed it, because GUI TEXT is drawn with
+ * fillText at the texture's own resolution and never resampled at all — which
+ * is also what rules out the resolution valve as the cause.
+ *
+ * So the fix is to stop resampling: bake at (about) the size the badge is
+ * drawn. A ladder rather than the exact pixel count for two reasons — the
+ * cache is keyed by size, and the badge's drawn size moves with the label-size
+ * stepper and the zoomed-out icon cap, so an exact key would thrash. The rungs
+ * are close enough that the residual ratio never exceeds ~1.25x, well inside
+ * what a single bilinear tap handles cleanly.
+ *
+ * Baking smaller is also strictly less work: a 48px canvas is a seventh of
+ * 128px's pixels, and this runs once per (category, glyph, state, theme, size).
+ */
+const BAKE_LADDER = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 256] as const;
+
+function bakeSizeFor(pxHint: number): number {
+  if (!(pxHint > 0)) return CANVAS_PX;
+  const want = Math.ceil(pxHint);
+  for (const rung of BAKE_LADDER) if (rung >= want) return rung;
+  return BAKE_LADDER[BAKE_LADDER.length - 1];
+}
 const ICON_VIEWBOX = 24; // lucide's own viewBox is 0-24
 /**
  * Pictogram size as a fraction of the squircle — read from the SHARED chip
@@ -170,25 +206,36 @@ export function badgeImageDataUrl(
    * same trade in the other direction.
    */
   suppressRing = false,
+  /**
+   * How large this image will actually be DRAWN, in the same render pixels
+   * Babylon GUI sizes controls in. Selects the bake size off BAKE_LADDER so the
+   * GUI's drawImage barely resamples — see that constant for why resampling was
+   * the whole bug. Omit only if the drawn size is genuinely unknown.
+   */
+  pxHint = 0,
 ): string {
   const theme = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") ?? "" : "";
   // ringState is part of the key: two badges alike in every other respect but
   // ringed differently are different pictures, and a cache that conflated them
   // would serve whichever was baked first.
   const ring = ringState ?? state;
-  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}`;
+  // Size is part of the key: the same badge baked for a 48px control and a
+  // 128px one are different pictures, and serving the small one to the large
+  // control is the blur this whole mechanism exists to remove.
+  const px = bakeSizeFor(pxHint);
+  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   const canvas = document.createElement("canvas");
-  canvas.width = CANVAS_PX;
-  canvas.height = CANVAS_PX;
+  canvas.width = px;
+  canvas.height = px;
   const ctx = canvas.getContext("2d");
   let url = "";
   if (ctx) {
     const surface = categorySurfaceRinged(category, state, ring, colorOverride);
-    const m = CANVAS_PX * inset;            // transparent margin
-    const size = CANVAS_PX - 2 * m;         // the squircle itself
+    const m = px * inset;                   // transparent margin
+    const size = px - 2 * m;                // the squircle itself
     const corner = size * BADGE_CORNER_FRACTION;
 
     roundRectPath(ctx, m, m, size, size, corner);
@@ -201,9 +248,16 @@ export function badgeImageDataUrl(
     // resting badge legible against both a bright white ceiling and dark night
     // grass, so there is no separate hardcoded edge any more.
     if (surface.ring && !suppressRing) {
+      // Floors are ONE pixel, not two, and that changed with the bake size in
+      // 2.301.0. The canvas used to be a fixed 128px that the GUI then shrank,
+      // so a floor of 2 there was ~0.7px once drawn and never actually bound —
+      // 128 × 0.035 is 4.5. Now the canvas IS the drawn size, so a floor of 2
+      // would bind on every badge below 57px and thicken every ring in the app
+      // by up to 68%. At 1 the rendered result is identical to what shipped
+      // before: 48 × 0.035 = 1.68px either way.
       const ringPx = surface.ringHairline
         ? Math.max(1, size * HAIRLINE_FRACTION)
-        : Math.max(2, size * (surface.ringBold ? BOLD_RING_FRACTION : RING_FRACTION));
+        : Math.max(1, size * (surface.ringBold ? BOLD_RING_FRACTION : RING_FRACTION));
       ctx.save();
       roundRectPath(ctx, m + ringPx / 2, m + ringPx / 2, size - ringPx, size - ringPx, Math.max(0, corner - ringPx / 2));
       ctx.lineWidth = ringPx;
@@ -215,7 +269,7 @@ export function badgeImageDataUrl(
 
     const iconScale = (size / ICON_VIEWBOX) * iconFraction();
     const iconPx = ICON_VIEWBOX * iconScale;
-    const offset = (CANVAS_PX - iconPx) / 2; // centred in the canvas = in the squircle
+    const offset = (px - iconPx) / 2;       // centred in the canvas = in the squircle
     drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset, surface.glyph);
 
     url = canvas.toDataURL("image/png");

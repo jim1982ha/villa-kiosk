@@ -1,3 +1,78 @@
+## 2.301.0
+
+### Fixed — entity glyphs looked pixelated in Safari and fine in Chrome
+
+Reported with the same view captured in both browsers. The badge squircles are
+composited onto a canvas here and then DRAWN by Babylon GUI with
+`ctx.drawImage(img, ..., w, h)` into the fullscreen texture. That image was
+always baked at 128px and always drawn at whatever the badge's on-screen size
+happened to be — routinely 30 to 48 render pixels, so a 2.7x to 4.3x downscale
+on every badge, every time the layout rebuilt.
+
+Chrome absorbs that: Skia mip-filters `drawImage` once the ratio passes about
+2. WebKit does not — it takes a single bilinear tap, which at a 4x reduction
+samples roughly one source pixel in sixteen and throws the rest away. On a
+1.5-unit lucide stroke that is the difference between a clean line and a
+staircase. Nothing else on the badge showed it, and that is the detail that
+identifies the cause rather than merely fitting it: GUI TEXT is drawn with
+`fillText` at the texture's own resolution and never resampled at all, which is
+why the percentage pills and the room chips stayed sharp in the same
+screenshot — and why the resolution valve, the obvious suspect on WebKit, is
+not the answer here.
+
+So the fix is to stop resampling rather than to resample better: a badge is now
+baked at the size it will be drawn. A ladder of sizes rather than the exact
+pixel count, because the cache is keyed by size and the drawn size moves with
+the label-size stepper and the zoomed-out icon cap — the rungs are close enough
+that the residual ratio never exceeds about 1.25x, well inside what one
+bilinear tap handles cleanly. `EntityVisuals.glyphPxFor()` is the single
+expression both the control's width and the bake read, because those two
+numbers agreeing IS the fix; if they drift apart the blur comes straight back.
+
+Baking smaller is also less work, not more: a 48px canvas is a seventh of
+128px's pixels, and this runs once per category, glyph, state, theme and size.
+
+One knock-on, corrected in the same change: the ring and hairline had pixel
+FLOORS of 2 and 1. On the old fixed 128px canvas a floor of 2 never bound (128
+x 0.035 is 4.5) and shrank to roughly 0.7px once drawn. On a canvas that IS the
+drawn size it would bind on every badge under 57px and thicken every ring in
+the app by up to 68%. Both floors are 1 now, which reproduces exactly what
+shipped before: 48 x 0.035 is 1.68px either way.
+
+### Added — double-tap the map to zoom in one level
+
+Double-tap, or double-click, on empty map and the overview glides in one level:
+the radius halves, which is the doubling of scale every map application means
+by a level, and the view eases halfway toward the point under the finger so the
+thing you tapped stays roughly where you tapped it instead of drifting off the
+edge as the zoom closes in. It uses the same CubicEase and
+`beginDirectAnimation` the first-person teleport does — that is the app's one
+"the camera is moving on its own" idiom, and matching it is what makes the two
+cameras feel like one product.
+
+"Empty" is the whole of the condition and is not a detail. The gesture resolves
+on the second press's DOWN, as double taps do everywhere, by which time the
+first tap has already released and run its own action — so a double tap on a
+light has toggled it once already, and zooming as well would turn a mis-tap
+into a camera move. The point is therefore tested through the same cascade
+`handleTap` resolves — room chip, then summary, then badge, then 3D mesh — but
+asked as a question rather than performed as an action; `PickHandler` gained
+`entityAtScreen` for exactly that, since the only way to ask before was to call
+the acting version and watch what it did to the UI.
+
+The recogniser itself moved into `TapRecognizer`, which is the file whose stated
+purpose is that the tap thresholds live in exactly one place. First-person has
+had double-tap-to-walk since long before this, with its own inline copy of the
+320ms/30px test; both cameras now share the one implementation. What is NOT
+shared is the action — walking and zooming are different answers to the same
+gesture on two different cameras, and that is deliberate.
+
+Two things the animation needs that are easy to miss: it declares its duration
+to the render loop (this scene renders on demand, so an animation that does not
+ask for frames plays to one still image and then snaps), and it declines to
+start while another step is still gliding, so a rapid double-double-tap cannot
+stack two animations onto the same property.
+
 ## 2.300.0
 
 ### Fixed — the light pool was on the wrong floor, and it went through walls

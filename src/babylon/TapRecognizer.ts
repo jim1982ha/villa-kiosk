@@ -15,6 +15,13 @@ export type TapKind = "tap" | "longpress" | null;
 export class TapRecognizer {
   private static readonly MOVE_TOL = 14; // px — generous for fat-finger touch
   private static readonly LONG_MS = 500; // ms — stationary press held this long = long-press
+  /** Second press within this window, this close, is a DOUBLE press. Both
+   *  cameras share these — the first-person one has had double-tap-to-walk
+   *  since long before the overview got double-tap-to-zoom, and two cameras
+   *  disagreeing about how fast a double tap is would be felt as one of them
+   *  being broken. 320ms/30px are the values first-person shipped with. */
+  private static readonly DOUBLE_MS = 320;
+  private static readonly DOUBLE_TOL = 30;
 
   private candidate = false;
   private startX = 0;
@@ -35,6 +42,37 @@ export class TapRecognizer {
    *  earliest moment it possibly could, instead of at release.
    */
   constructor(private readonly onLongPress?: (x: number, y: number) => void) {}
+
+  private lastPressAt = 0;
+  private lastPressX = 0;
+  private lastPressY = 0;
+
+  /**
+   * Is this press the second half of a double press? Call on POINTER DOWN, and
+   * only for a gesture that could be a double tap at all (a mouse press, or the
+   * FIRST touch — a second finger is a pinch, not a double tap).
+   *
+   * Answering on the down rather than the up is deliberate and matches every
+   * platform: the second tap of a double tap should act the instant it lands,
+   * not when the finger leaves. It also means the caller must decide what the
+   * gesture is allowed to do knowing that the FIRST tap has already fired its
+   * own action on its own release.
+   *
+   * Consumes the match, so three rapid taps read as one double and one single
+   * rather than two overlapping doubles.
+   */
+  isDoublePress(x: number, y: number): boolean {
+    const now = performance.now();
+    const near = Math.hypot(x - this.lastPressX, y - this.lastPressY) < TapRecognizer.DOUBLE_TOL;
+    if (near && now - this.lastPressAt < TapRecognizer.DOUBLE_MS) {
+      this.lastPressAt = 0;
+      return true;
+    }
+    this.lastPressAt = now;
+    this.lastPressX = x;
+    this.lastPressY = y;
+    return false;
+  }
 
   private clearTimer(): void {
     if (this.timer !== null) {

@@ -181,9 +181,6 @@ export class CameraController {
 
   // ── Unified pointer look / two-finger walk + pinch-zoom / double-tap ────────
   private pointers = new Map<number, { x: number; y: number; type: string }>();
-  private lastTapTime = 0;
-  private lastTapX = 0;
-  private lastTapY = 0;
   private pinchDist = 0; // current separation between two touch pointers (px)
   private static readonly LOOK_SENS = 0.004; // rad per px
 
@@ -205,17 +202,9 @@ export class CameraController {
     // Double-tap / double-click → walk to the tapped spot. Only on a fresh touch
     // (first finger) or a mouse press, so a two-finger walk doesn't trigger it.
     const touches = this.touchCount();
-    if (e.pointerType !== "touch" || touches === 1) {
-      const now = performance.now();
-      const near = Math.hypot(e.clientX - this.lastTapX, e.clientY - this.lastTapY) < 30;
-      if (now - this.lastTapTime < 320 && near) {
-        this.walkToScreen(e.clientX, e.clientY);
-        this.lastTapTime = 0;
-      } else {
-        this.lastTapTime = now;
-        this.lastTapX = e.clientX;
-        this.lastTapY = e.clientY;
-      }
+    if ((e.pointerType !== "touch" || touches === 1)
+      && this.tap.isDoublePress(e.clientX, e.clientY)) {
+      this.walkToScreen(e.clientX, e.clientY);
     }
     this.cb.onActivity();
   };

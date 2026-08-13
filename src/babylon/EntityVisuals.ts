@@ -1523,6 +1523,29 @@ export class EntityVisuals {
    *  module owns the ray, the predicate and the cache (see floorProbe.ts). */
   get floorProbe(): FloorProbe { return this.probe; }
 
+  /**
+   * The pixel size a badge's baked squircle is DRAWN at, for the two styles.
+   *
+   * One expression, called by both the control that sets `glyph.width` and the
+   * bake that fills it, because those two numbers agreeing IS the fix in
+   * 2.301.0: the image is composited on a canvas and then drawn by Babylon GUI
+   * with `drawImage`, and WebKit resamples that with a single bilinear tap
+   * where Chrome mip-filters. Baked at 128 and drawn at 34 it staircased on
+   * Safari and looked fine on Chrome. Baked at the drawn size it cannot
+   * resample at all. If these two ever drift apart the blur comes straight
+   * back, so they read the same expression rather than the same constant.
+   */
+  private glyphPxFor(card: boolean): number {
+    const m = this.metrics;
+    if (!card) return m.badgeDiameterPx;
+    // The card's WORST-CASE inner box: Babylon insets a Rectangle's children
+    // by its border, heaviest (ringThicknessPx) while the device is active or
+    // alerting. Sizing the icon to anything larger clips it in exactly those
+    // states — see the fuller note at the control's own construction.
+    const cardMaxInnerH = m.cardHeightPx - 2 * m.ringThicknessPx;
+    return Math.min(Math.round(m.cardHeightPx * m.cardIconFraction), cardMaxInnerH);
+  }
+
   /** Y of the first structure surface below (x, y, z) — see FloorProbe.below.
    *  Kept as a one-line wrapper rather than inlining the probe at every call
    *  site so `exclude` (the fixture must not pick itself) stays impossible to
@@ -3178,7 +3201,6 @@ export class EntityVisuals {
       // states. Kept as the CEILING on the glyph rather than as the icon
       // area's height — see glyphPx, which is the one number both the row
       // and the value box are built from now.
-      const cardMaxInnerH = m.cardHeightPx - 2 * m.ringThicknessPx;
       // Sized off the CARD, and DELIBERATELY smaller than its inner box.
       //
       // Two mistakes are encoded here, both reported. Tying the icon to
@@ -3201,9 +3223,7 @@ export class EntityVisuals {
       // heavier ring, or a more generous fraction, would otherwise clip the
       // icon in the active state only — the state nobody screenshots, because
       // the badge looks fine at rest.
-      const glyphPx = card
-        ? Math.min(Math.round(m.cardHeightPx * m.cardIconFraction), cardMaxInnerH)
-        : m.badgeDiameterPx;
+      const glyphPx = this.glyphPxFor(card);
       // Half the card's leftover height: the same clear space on all four
       // sides of the chip, and it makes a bare-icon card square (see below).
       const iconPadX = card ? (m.cardHeightPx - glyphPx) / 2 : 0;
@@ -3334,7 +3354,7 @@ export class EntityVisuals {
           // Card: the Rectangle above strokes the edge, so the chip bakes no
           // ring of its own — see updateLabel for the doubled outline this
           // stops. Classic: the image IS the badge and carries its own.
-          undefined, card));
+          undefined, card, glyphPx));
 
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
@@ -3537,7 +3557,7 @@ export class EntityVisuals {
       lbl.badge.color = surface.ring ?? "transparent";
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
-        dashed ? 0 : BADGE_INSET_CARD, ringState, !dashed);
+        dashed ? 0 : BADGE_INSET_CARD, ringState, !dashed, this.glyphPxFor(true));
       // Neutral ink, on a now-neutral card — the bottom bar's value is
       // `--text-primary` beside a coloured chip, not the chip's own hue. The
       // state is carried by the chip and the ring; the number is just a number.
@@ -3549,7 +3569,8 @@ export class EntityVisuals {
       lbl.badge.background = "transparent";
       lbl.badge.thickness = 0;
       lbl.badge.color = "transparent";
-      lbl.glyph.source = badgeImageDataUrl(lbl.category, iconKey, state, override, 0, ringState);
+      lbl.glyph.source = badgeImageDataUrl(
+        lbl.category, iconKey, state, override, 0, ringState, false, this.glyphPxFor(false));
     }
     lbl.badge.alpha = 1;
     // The value pill is never shown for an unavailable entity anyway
@@ -5620,7 +5641,7 @@ export class EntityVisuals {
               // style's is. The card behind it is the group's own surface, not
               // a second frame — see updateLabel for the doubled ring that
               // insetting inside a bordered card produced.
-              0, ring);
+              0, ring, false, lay.chip);
           }
         }
         // ── A SUMMARY'S RING NEVER REPEATS A MEMBER'S OWN SIGNAL ────────────

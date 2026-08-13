@@ -49,7 +49,7 @@ import "@babylonjs/core/Collisions/collisionCoordinator";
 import { roomKey } from "@/config/roomKey";
 
 import { CameraController } from "./CameraController";
-import { OverviewController } from "./OverviewController";
+import { OverviewController, ZOOM_STEP_FACTOR } from "./OverviewController";
 import { LightingSystem } from "./LightingSystem";
 import { SunController } from "./SunController";
 import { SkyDome } from "./SkyDome";
@@ -467,6 +467,34 @@ export class SceneManager {
       this.pick.pickAtScreen(x, y, true);
     };
 
+    /**
+     * Double-tap / double-click on EMPTY map → zoom in one level, gliding.
+     *
+     * "Empty" is the whole of the condition. This fires on the second press's
+     * DOWN, by which time the first tap has already released and done its own
+     * job — so a double tap on a light has already toggled it once, and zooming
+     * as well would make a mis-tap move the camera. The test is the same
+     * cascade `handleTap` resolves through, in the same order (chip, summary,
+     * badge, 3D mesh), asked as a question instead of as an action: if any of
+     * them would have answered, this was not empty map and there is nothing to
+     * do here.
+     *
+     * Overview only. The first-person camera has had double-tap-to-walk since
+     * long before this, and it means something else there; the shared piece is
+     * the RECOGNISER (TapRecognizer.isDoublePress), not the action.
+     */
+    const handleDoubleTap = (x: number, y: number) => {
+      if (this.viewMode !== "overview") return;
+      if (this.visuals.pickClusterAt(x, y)) return;
+      if (this.visuals.pickEntityGroupAt(x, y)) return;
+      if (this.visuals.pickBadgeAt(x, y)) return;
+      if (this.pick.entityAtScreen(x, y)) return;
+      tapDebug(`DOUBLETAP zoom at (${x.toFixed(0)},${y.toFixed(0)})`);
+      // Pull toward the ground point under the finger, when there is one — the
+      // villa is not a plane, so a tap on the sky simply zooms where it looks.
+      this.overview.zoomStep(ZOOM_STEP_FACTOR, this.groundPointAt(x, y) ?? undefined);
+    };
+
     this.camera = new CameraController(this.scene, canvas, opts.config, {
       onRoomChange: opts.onRoomChange,
       onActivity: () => this.requestRender(),
@@ -513,6 +541,8 @@ export class SceneManager {
       },
       onTap: handleTap,
       onLongPress: handleLongPress,
+      onDoubleTap: handleDoubleTap,
+      onAnimating: (ms) => this.requestAnimationRender(ms),
     });
     this.overview.setNaturalScrolling(opts.config.naturalScrolling ?? true);
     // Badge size holds at the configured "Icon size" (config.entityIconScale) for
@@ -1105,6 +1135,24 @@ export class SceneManager {
     // first time an auto kiosk crossed into night.
     this.visuals.repaintBadges();
   };
+
+  /**
+   * The world point the villa's own geometry shows at these client coords, or
+   * null if the ray leaves the model entirely (the sky, the sea beyond the
+   * plot). Markers are excluded — a badge floating between the camera and the
+   * floor is not the place the user pointed at, it is the thing they pointed
+   * THROUGH, and double-tap zoom only reaches this function once it has
+   * established nothing interactive was hit anyway.
+   */
+  private groundPointAt(clientX: number, clientY: number): Vector3 | null {
+    const canvas = this.scene.getEngine().getRenderingCanvas();
+    const rect = canvas?.getBoundingClientRect();
+    const pick = this.scene.pick(
+      clientX - (rect?.left ?? 0), clientY - (rect?.top ?? 0),
+      (m) => m.isPickable && m.isVisible && !m.metadata?.isMarker,
+    );
+    return pick?.hit && pick.pickedPoint ? pick.pickedPoint : null;
+  }
 
   /**
    * Swap between first-person walking and the bird's-eye overview camera. Only

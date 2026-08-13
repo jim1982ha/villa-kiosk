@@ -34,6 +34,12 @@ import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 import { clamp } from "@/utils/geometry";
+import { Animation } from "@babylonjs/core/Animations/animation";
+// Side-effect only: registers Scene.prototype.beginDirectAnimation, used by
+// zoomStep. "Animations/animation" does NOT carry it — the extension lives in
+// this sibling file, and missing it is invisible to tsc (see CLAUDE.md).
+import "@babylonjs/core/Animations/animatable";
+import { CubicEase, EasingFunction } from "@babylonjs/core/Animations/easing";
 import { TapRecognizer } from "./TapRecognizer";
 
 interface OverviewCallbacks {
@@ -41,6 +47,13 @@ interface OverviewCallbacks {
   onTap?: (clientX: number, clientY: number) => void;
   /** A press-and-hold at the given client coords (opens the full entity panel). */
   onLongPress?: (clientX: number, clientY: number) => void;
+  /** A double press at the given client coords. Fires on the second press's
+   *  DOWN, so the first tap's own action has already run — the handler has to
+   *  decide whether the point is empty enough to zoom (see SceneManager). */
+  onDoubleTap?: (clientX: number, clientY: number) => void;
+  /** Keep drawing for `ms` — a camera animation needs frames, and this scene
+   *  renders on demand. */
+  onAnimating?: (ms: number) => void;
 }
 
 interface Bounds {
@@ -54,6 +67,17 @@ const WHEEL_PAN_SENS  = 0.0009; // per normalised wheel pixel (two-finger slide 
 const ROT_SENS_DRAG   = 0.005;  // radians per pixel (Shift+drag horizontal → heading)
 const TILT_SENS_DRAG  = 0.005;  // radians per pixel (Shift+drag vertical → pitch)
 const ZOOM_SENS_DRAG  = 0.004;  // per pixel × radius (Ctrl+drag vertical → zoom)
+// ── Double-tap zoom step (see zoomStep) ────────────────────────────────────
+/** One "level" = halve the distance = double the scale, the step every map
+ *  application uses for a double tap. */
+export const ZOOM_STEP_FACTOR = 0.5;
+/** How far the view slides toward the tapped point. 1 would centre it exactly,
+ *  which over-travels and feels like being yanked; 0 leaves the thing you
+ *  tapped drifting off the edge as the zoom closes in. Half is the
+ *  conventional compromise and keeps the tapped spot roughly under the finger. */
+const ZOOM_STEP_RECENTRE = 0.5;
+const ZOOM_STEP_FRAMES = 18;   // at 60fps
+const ZOOM_STEP_MS = 300;
 const WHEEL_ZOOM_SENS = 0.006;  // per normalised wheel pixel (wheel / pinch → zoom)
 const TILT_SENS_TOUCH = 0.007;  // radians per px of the two fingers' SHARED vertical drag
 // Fraction of the whole-villa fit radius used as the icon-scaling "1×"
@@ -264,6 +288,9 @@ export class OverviewController {
   // see TapRecognizer's constructor docs for why it no longer waits for release.
   private readonly tap = new TapRecognizer((x, y) => this.cb.onLongPress?.(x, y));
 
+  /** A zoom step is gliding — see zoomStep. */
+  private zooming = false;
+
   private onPointerDown = (e: PointerEvent): void => {
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
     try { this.canvas.setPointerCapture(e.pointerId); } catch { /**/ }
@@ -271,6 +298,12 @@ export class OverviewController {
     if (this.pointers.size === 1) {
       this.tap.begin(e.clientX, e.clientY);
       this.touchBase = null;
+      // Double press → the caller decides (zoom, if the point is empty). Mouse
+      // or FIRST touch only: a second finger is a pinch, and a pinch that also
+      // fired a double tap would zoom twice from one gesture.
+      if (this.tap.isDoublePress(e.clientX, e.clientY)) {
+        this.cb.onDoubleTap?.(e.clientX, e.clientY);
+      }
     } else {
       // Second (or more) finger cancels tap and seeds the two-finger baseline.
       this.tap.cancel();
@@ -528,6 +561,73 @@ export class OverviewController {
     // which is a pure pan with no rotation.
     t.x = clamp(t.x + (-right.x * dx + fwd.x * dy) * k, this.bounds.minX, this.bounds.maxX);
     t.z = clamp(t.z + (-right.z * dx + fwd.z * dy) * k, this.bounds.minZ, this.bounds.maxZ);
+  }
+
+  /**
+   * Zoom in (or out) by one STEP, gliding rather than jumping, optionally
+   * pulling the view toward a ground point.
+   *
+   * `factor` multiplies the radius — 0.5 halves the distance, which is the
+   * doubling of scale every map application means by "one level". `toward`, if
+   * given, is a world point under the pointer: the target is eased HALFWAY to
+   * it, which is the standard double-tap-to-zoom feel (the thing you tapped
+   * stays roughly where you tapped it, instead of the view zooming into the
+   * middle of the screen and leaving it behind).
+   *
+   * Uses the same CubicEase + beginDirectAnimation the first-person teleport
+   * does, for the same reason: it is the app's one "the camera is moving on its
+   * own" idiom, and matching it is what makes the two cameras feel like one
+   * product. No-op while another step is still gliding, so a rapid double-
+   * double-tap cannot stack two animations onto the same property.
+   */
+  zoomStep(factor: number, toward?: Vector3): void {
+    if (this.zooming) return;
+    const lo = this.camera.lowerRadiusLimit ?? 2;
+    const hi = this.camera.upperRadiusLimit ?? 200;
+    const to = clamp(this.camera.radius * factor, lo, hi);
+    // Already against the stop: don't animate a move of nothing, which would
+    // read as a dead control rather than as "there is no more zoom".
+    if (Math.abs(to - this.camera.radius) < 1e-3) return;
+
+    const ease = new CubicEase();
+    ease.setEasingMode(EasingFunction.EASINGMODE_EASEINOUT);
+
+    const anims: Animation[] = [];
+    const radiusAnim = new Animation(
+      "overviewZoomRadius", "radius", 60,
+      Animation.ANIMATIONTYPE_FLOAT, Animation.ANIMATIONLOOPMODE_CONSTANT,
+    );
+    radiusAnim.setKeys([{ frame: 0, value: this.camera.radius }, { frame: ZOOM_STEP_FRAMES, value: to }]);
+    radiusAnim.setEasingFunction(ease);
+    anims.push(radiusAnim);
+
+    if (toward) {
+      const t = this.camera.target;
+      // Clamped to the same pan bounds a drag obeys — a double tap must not be
+      // able to put the camera somewhere dragging could never reach.
+      const dest = new Vector3(
+        clamp(t.x + (toward.x - t.x) * ZOOM_STEP_RECENTRE, this.bounds.minX, this.bounds.maxX),
+        t.y,
+        clamp(t.z + (toward.z - t.z) * ZOOM_STEP_RECENTRE, this.bounds.minZ, this.bounds.maxZ),
+      );
+      const targetAnim = new Animation(
+        "overviewZoomTarget", "target", 60,
+        Animation.ANIMATIONTYPE_VECTOR3, Animation.ANIMATIONLOOPMODE_CONSTANT,
+      );
+      targetAnim.setKeys([{ frame: 0, value: t.clone() }, { frame: ZOOM_STEP_FRAMES, value: dest }]);
+      targetAnim.setEasingFunction(ease);
+      anims.push(targetAnim);
+    }
+
+    this.zooming = true;
+    // This scene renders on demand, so an animation that does not ask for
+    // frames plays to an audience of one still image and then snaps.
+    this.cb.onAnimating?.(ZOOM_STEP_MS + 80);
+    this.cb.onActivity();
+    this.scene.beginDirectAnimation(this.camera, anims, 0, ZOOM_STEP_FRAMES, false, 1, () => {
+      this.zooming = false;
+      this.cb.onActivity();
+    });
   }
 
   private applyZoom(delta: number): void {

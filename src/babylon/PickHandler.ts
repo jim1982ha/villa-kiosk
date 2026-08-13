@@ -114,6 +114,22 @@ export class PickHandler {
   }
 
   /**
+   * Which entity (if any) the 3D geometry at these client coordinates resolves
+   * to — the same question `pickAtScreen` answers, ASKED instead of ACTED on.
+   *
+   * Exists because "is this point empty map?" is a real question with no
+   * side effects (double-tap-to-zoom asks it), and the only way to ask it
+   * before was to call pickAtScreen and watch what it did to the UI.
+   */
+  entityAtScreen(clientX: number, clientY: number): string | null {
+    const canvas = this.scene.getEngine().getRenderingCanvas();
+    const rect = canvas?.getBoundingClientRect();
+    const pick = this.scene.pick(clientX - (rect?.left ?? 0), clientY - (rect?.top ?? 0));
+    if (!pick?.hit || !pick.pickedMesh) return null;
+    return this.resolveMesh(pick.pickedMesh)?.entityId ?? null;
+  }
+
+  /**
    * Resolve a confirmed tap (or long-press) at client coordinates to the
    * entity mapped to the picked mesh. Called by the active camera controller
    * on a clean gesture (mouse or touch). A long-press always routes the
