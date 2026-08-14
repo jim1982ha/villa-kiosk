@@ -1,3 +1,34 @@
+## 2.337.0
+
+### Fixed — Advanced Settings nests over Settings instead of replacing it, which deletes the whole bug class
+
+The instrument settled it. Two Back presses twelve seconds apart, same session,
+recorded **identically**: `depth 1, owned 2` both times. The villa's entry was
+present and correct — that is what `owned 2` means, villa plus Settings — but
+nothing changed between the presses. Had the first one closed the surface, the
+second would have read `depth 0, owned 1`. It did not. So the press was answered
+by a handler belonging to a component that no longer existed, and the entry it
+should have removed stayed on the stack.
+
+The cause is one line, and it is the same line that caused 2.332.0, 2.335.0 and
+2.336.0: `setSettingsOpen(false)` in the handler that opens Advanced. Settings
+left and Advanced arrived in a single commit — a SWAP — and for exactly as long
+as React takes to settle, "what is on top" is ambiguous. Five releases were spent
+teaching the dismissal stack to survive that ambiguity from the outside, each fix
+correct about the mechanism it addressed and none of them addressing the reason
+the ambiguity existed at all.
+
+Settings now STAYS MOUNTED underneath. Advanced is a surface over it, which is
+what the stack was built for and has handled correctly since 2.326.0: two
+entries, innermost dismissed first, no window in which one is leaving while
+another arrives. Closing Advanced also stops deciding anything — there is no
+"return to Settings" branch, because Settings never went away, and none for a
+device panel either, because that path never opened Settings in the first place.
+
+Worth keeping as the lesson: a bug that needs the same subsystem patched three
+times is usually not in that subsystem. The hook was compensating for a caller
+that made a hard problem out of an easy one.
+
 ## 2.336.0
 
 ### Fixed — the villa owns a history entry, so an overlay's Back lands on it and not on the root

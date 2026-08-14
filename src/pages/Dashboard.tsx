@@ -1039,7 +1039,17 @@ export default function Dashboard() {
         <SettingsModal
           manager={manager}
           onClose={() => setSettingsOpen(false)}
-          onOpenConfigEditor={() => { setSettingsOpen(false); setConfigEditorFocus(null); setConfigEditorOpen(true); }}
+          // ── ADVANCED SETTINGS NESTS OVER SETTINGS, IT DOES NOT REPLACE IT ──
+          // Settings STAYS MOUNTED underneath. Until 2.337.0 this closed it in
+          // the same commit that opened Advanced — a SWAP — and that one line
+          // cost five releases of the dismissal stack compensating for it from
+          // the outside: a surface leaving and another arriving at the same
+          // instant makes "what is on top" ambiguous for exactly as long as it
+          // takes React to settle, and every Back press landing in that window
+          // was answered by a handler belonging to a component that no longer
+          // existed. Nesting is what the stack was built for, so the hazard is
+          // deleted rather than worked around.
+          onOpenConfigEditor={() => { setConfigEditorFocus(null); setConfigEditorOpen(true); }}
         />
       )}
 
@@ -1049,10 +1059,10 @@ export default function Dashboard() {
         <ConfigEditorModal
           focusEntityId={configEditorFocus ?? undefined}
           onBack={() => {
+            // Just close this one. Settings is still mounted underneath if it
+            // was the way in, and was never opened if a device panel was — so
+            // there is nothing to restore and nothing to decide.
             setConfigEditorOpen(false);
-            // Opened from Settings → return there; opened from a device panel
-            // (focus set) → just close back to the villa.
-            if (configEditorFocus === null) setSettingsOpen(true);
             setConfigEditorFocus(null);
           }}
           onModelChanged={() => setModelKey((k) => k + 1)}
