@@ -1,3 +1,38 @@
+## 2.324.0
+
+### Added — the camera feed answers the keyboard: arrows step, Escape leaves
+
+Two keys that every other surface in the app already honours, and that this one
+did not.
+
+**Left/Right step between cameras**, the same action as the on-screen prev/next
+arrows and the same direction as the touch swipe, so Right always means "the
+next camera" whichever way you reach for it. Deliberately NOT gated on zoom the
+way the swipe is: that gate exists only because a one-finger drag is also how a
+zoomed feed is panned, and the two would fight over the same pointer events. A
+key press competes with nothing, so it works zoomed or not. The arrows are not
+registered while the camera picker is open — they belong to whatever is on top,
+and stepping the feed behind an open list would change the very thing the list
+is offering to change.
+
+**Escape closes the feed** and returns to the villa. It could not before, and
+the reason is worth recording because it is the shape of the fix: the only
+Escape handler in this file closed the camera PICKER, so the one key that
+dismisses every dialog in the app did nothing at all against a full-screen feed.
+Rather than adding a second listener beside the first, the panel now takes the
+shared `useModalA11y` — the hook that exists precisely so this app stops
+accumulating separate Escape handlers — and Escape unwinds innermost first: with
+the picker open it closes the picker and keeps the feed, otherwise it closes the
+panel. The picker's own listener is gone.
+
+The hook brings its focus contract with it, which this panel was missing
+entirely. That matters more here than on an ordinary dialog: behind the feed
+sits the live Babylon canvas and the whole HUD, so a Tab out of the panel used
+to walk into villa controls the user could not see but could still operate.
+Focus now enters the panel and stays there until it closes. The hook's ref IS
+the panel's existing root ref rather than a second one — one element, one ref,
+so the trap and the chrome/fullscreen logic cannot drift onto two nodes.
+
 ## 2.323.0
 
 ### Fixed — a lost pointer made the camera tilt and the badges deaf, and it can no longer stick

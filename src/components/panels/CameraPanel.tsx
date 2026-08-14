@@ -26,6 +26,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import { devLog } from "@/utils/devLog";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
@@ -111,7 +112,28 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // doesn't change within a session), so the onError guard can rely on it
   // regardless of teardown timing.
   const usingHlsJsRef = useRef(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  // ── Escape, and the focus contract that comes with it ────────────────────
+  // This surface is a dialog like any other and now says so through the shared
+  // hook rather than a keydown listener of its own — Escape closes it, focus
+  // enters it and cannot Tab out into the live villa controls underneath.
+  // Until 2.324.0 it had NEITHER: Escape did nothing (the only Escape handler
+  // here closed the camera picker) so the one key that dismisses every other
+  // surface in the app left the full-screen feed sitting there.
+  //
+  // Escape unwinds INNERMOST FIRST. With the picker open, Escape closes the
+  // picker and the feed stays — anything else would throw away the camera you
+  // were in the middle of choosing. `pickerOpenRef` rather than the state
+  // value because the hook registers its listener once per `onClose` identity,
+  // and a stale closure here would close the whole panel out from under an
+  // open picker.
+  const pickerOpenRef = useRef(false);
+  const onEscape = useCallback(() => {
+    if (pickerOpenRef.current) { setPickerOpen(false); return; }
+    onClose();
+  }, [onClose]);
+  // The hook's ref IS this panel's root — one element, one ref, so the focus
+  // trap and the chrome/fullscreen logic below cannot drift onto two nodes.
+  const rootRef = useModalA11y(onEscape);
   const zoom = useMediaZoom<HTMLDivElement>();
   const [isFs, setIsFs] = useState(false);
   // The status/controls row now OVERLAYS the feed and auto-hides (see
@@ -242,12 +264,36 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     if (pickerLongFired.current) { pickerLongFired.current = false; return; }
     stepCamera(delta);
   };
+  pickerOpenRef.current = pickerOpen;
+
+  // ── Left/Right arrows step cameras — the keyboard's swipe ────────────────
+  // Same action as the on-screen prev/next arrows and the same direction as
+  // the touch gesture, so Right always means "the next camera" whichever way
+  // you reach for it. Deliberately NOT gated on zoom the way the swipe is:
+  // that gate exists because a one-finger drag is also how you pan a zoomed
+  // feed, and a key press competes with nothing.
+  //
+  // Not registered while the picker is open — the arrows belong to whatever is
+  // on top, and stepping the feed behind an open list would change the thing
+  // the list is offering to change.
   useEffect(() => {
-    if (!pickerOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPickerOpen(false); };
+    if (!canCycle || pickerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      // A modifier means the browser's own navigation, and a caret in a field
+      // means the user is editing text, not driving the panel.
+      if (e.altKey || e.ctrlKey || e.metaKey || e.defaultPrevented) return;
+      const el = document.activeElement;
+      if (el instanceof HTMLElement && (el.isContentEditable
+        || el instanceof HTMLInputElement
+        || el instanceof HTMLTextAreaElement
+        || el instanceof HTMLSelectElement)) return;
+      e.preventDefault();
+      stepCameraRef.current(e.key === "ArrowRight" ? 1 : -1);
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [pickerOpen]);
+  }, [canCycle, pickerOpen]);
 
   // Swipe left/right on the feed itself cycles cameras — the touch
   // equivalent of the prev/next buttons. Gated on NOT zoomed: a single-finger
