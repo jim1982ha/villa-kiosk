@@ -849,8 +849,19 @@ button {
 /* Scrollable variant of a .hud-group (the category filter): however many
    buttons the profile/config produces, the pill never wraps and never grows
    past its grid track — extra buttons pan horizontally (touch / trackpad /
-   wheel). Scrollbars are hidden; the JS-toggled fade-left/right masks are the
-   "there's more" affordance instead. */
+   wheel). Scrollbars are hidden.
+
+   ⚠️ NO EDGE FADE, and do not reintroduce one (2.310.0). This carried
+   JS-toggled `mask-image` gradients on .fade-left/.fade-right as a "there's
+   more this way" affordance. A mask applies to the element's OWN rendering,
+   so it dissolved the pill's background, its hairline border and its buttons
+   together — the pill stopped having an edge and bled into the villa behind
+   it. Reported as "a bad-looking gradient/fade/blur on the right of the
+   header", and it is the reason the puzzle icon looked half-erased. The
+   affordance is not worth an edge that dissolves: the row still pans, it
+   simply ends cleanly. The React state that drove the classes went with
+   them — a dead measurement is how the next person concludes the fade is
+   still wanted. */
 .hud-group.hud-group-scroll {
   max-width: 100%;
   overflow-x: auto;
@@ -860,18 +871,6 @@ button {
 }
 .hud-group.hud-group-scroll::-webkit-scrollbar { display: none; }
 .hud-group.hud-group-scroll .icon-btn { flex: 0 0 auto; }
-.hud-group.hud-group-scroll.fade-left {
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 28px);
-  mask-image: linear-gradient(90deg, transparent 0, #000 28px);
-}
-.hud-group.hud-group-scroll.fade-right {
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent 100%);
-}
-.hud-group.hud-group-scroll.fade-left.fade-right {
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
-}
 /* Time sits inside the brand chip, right of the villa name — a hairline
    divider separates it instead of a nested pill-in-pill. */
 .hud-clock {
@@ -968,12 +967,14 @@ button {
      below it, so the two left-edge controls read as one consistent size
      instead of this one looking small next to them. Matched again in the
      ≤640px compact-bar query, where the floor buttons grow to 40x40. */
-  /* Matches .hud-group .icon-btn exactly (40x40) so the app icon is the same
-     height as every other button in the bar — the point of removing the
-     capsule. It was 40x38, sized to the FLOOR buttons below rather than to
-     its own row, which is what made it read as a different size from the
-     category icons beside it. */
-  width: 40px; height: 40px;
+  /* Matches the header SECTION (--hud-pill-h), not the buttons inside it.
+     2.309.0 sized this to .hud-group .icon-btn (40px, and 32px on phones) on
+     the reasoning that the app icon had become "the first button of the top
+     bar". It hadn't: the mark is its own squircle artwork, so next to a 50px
+     pill it read as a small icon floating in a tall row rather than a peer of
+     the section beside it. One value, tracking the pill, so the two cannot
+     drift apart again. */
+  width: var(--hud-pill-h); height: var(--hud-pill-h);
   background: none; border: none;
   border-radius: 10px; cursor: pointer; color: inherit;
 }
@@ -2827,9 +2828,25 @@ label.toggle span { user-select: none; line-height: 1.4; }
      source order is the only thing deciding which wins. */
   .hud-topbar { grid-template-columns: auto minmax(0, 1fr) auto; background: none; }
   .hud-center:has(.hud-group-scroll .icon-btn:nth-of-type(4)) { justify-self: stretch; }
+  /* The section keeps the full row width (justify-self: stretch above, which
+     is what removed the need for the top scrim in 2.303.0) — but the BUTTONS
+     group in its middle rather than being pushed to its two ends. 2.303.0 used
+     space-between, which spread six icons from edge to edge and read as three
+     unrelated controls rather than one filter row. `center` is the whole fix;
+     the gap keeps the spacing even. Once the buttons do overflow, a centred
+     flex row in a scroll container would put its overflow on BOTH sides and
+     strand the first button behind the scroll origin — `margin: auto` on the
+     track is the standard way to say "centre while it fits, pack from the
+     start once it doesn't", and it degrades to flex-start exactly then —
+     auto margins absorb POSITIVE free space only, so with none to absorb they
+     resolve to 0 and every button stays reachable by panning. Plain `center`
+     does not: it splits the overflow across both ends and puts the first
+     button behind the scroll origin, where nothing can scroll to it. */
   .hud-center:has(.icon-btn:nth-of-type(4)) .hud-group-scroll {
-    width: 100%; justify-content: space-between;
+    width: 100%; justify-content: flex-start;
   }
+  .hud-center:has(.icon-btn:nth-of-type(4)) .hud-group-scroll > :first-child { margin-left: auto; }
+  .hud-center:has(.icon-btn:nth-of-type(4)) .hud-group-scroll > :last-child { margin-right: auto; }
 
 /* ── Short but NOT narrow: a phone in landscape ───────────────────────────
    The compact query above fires on `(max-width: 640px), (max-height: 560px)`,
@@ -2869,15 +2886,10 @@ label.toggle span { user-select: none; line-height: 1.4; }
      the two floating icon groups read as the same family of control instead
      of the stack looking undersized next to the summary tiles below it. */
   .hud-stack .icon-btn { width: 40px; height: 40px; }
-  /* ⚠️ Matches the TOP-BAR icons (32px, see .hud-center .icon-btn above), not
-     the 1F/2F floor buttons directly below it. It tracked the floor stack
-     until 2.309.0 — a defensible choice while the icon lived in its own
-     capsule and read as part of the left column, and the wrong one once the
-     capsule went and it became the first button of the top bar. Reported as
-     the app icon being visibly taller than the icons beside it.
-     The 44px touch target is unaffected: it comes from .hud-home-btn::before,
-     which is sized in its own right and does not track the visual box. */
-  .hud-home-btn { width: 32px; height: 32px; }
+  /* No size override at this tier: the base rule already tracks --hud-pill-h,
+     which does not change on phones, so the app icon stays the same height as
+     the category section beside it here too. The 44px touch target is
+     independent either way — it comes from .hud-home-btn::before. */
 
   /* Dialogs fill the small screen and never crop their header/footer. The body
      scrolls between a pinned header and footer; dvh tracks the real visible

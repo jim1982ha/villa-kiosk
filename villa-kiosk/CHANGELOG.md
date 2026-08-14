@@ -1,3 +1,49 @@
+## 2.310.0
+
+### Fixed — the header's right edge dissolved into the villa
+
+Reported as a gradient/fade/blur around the right of the category row, and
+named as the biggest visual problem. The cause was a pair of JS-toggled
+`mask-image` gradients (`.fade-left` / `.fade-right`) on the scrollable
+category pill, added as a "there is more this way" affordance.
+
+A mask applies to the element's **own** rendering, not to an overlay on top of
+it — so it did not fade the buttons over the pill, it dissolved the pill: its
+background, its hairline border and its buttons together, leaving no edge at
+all and bleeding the whole right end into the villa behind it. That is why the
+last category icon looked half-erased rather than merely dimmed. Both rules are
+gone, and so is the React state that drove them — the ref, the
+`ResizeObserver`, the scroll listener and the `catFade` state. A dead
+measurement left behind is how the next person concludes the fade was still
+wanted. The row still pans when it overflows; it simply ends cleanly.
+
+### Changed — the category icons group in the middle instead of spanning the row
+
+2.303.0 gave the pill the full row width and spread its buttons with
+`justify-content: space-between`, which was the right answer to "make the bar
+wider so the top scrim isn't needed" and the wrong shape: six icons pinned from
+edge to edge read as three unrelated controls rather than one filter row. The
+section keeps its full width; the buttons now group in its centre.
+
+Done with **auto margins** on the first and last child rather than
+`justify-content: center`, and the difference matters in exactly one case: this
+is a scroll container. Auto margins absorb positive free space only, so once
+the buttons overflow they resolve to zero and the row packs from the start,
+where panning can still reach every button. `center` splits the overflow across
+both ends and puts the first button behind the scroll origin, which nothing can
+scroll back to.
+
+### Fixed — the app icon was sized to the buttons, not to the section
+
+2.309.0 removed the capsule around the app icon and then sized the icon to
+`.hud-group .icon-btn` (40px, 32px on phones), reasoning it had become "the
+first button of the top bar". It hadn't. The mark is its own squircle artwork,
+so its height *is* the icon's perceived height, and next to a 50px pill it read
+as a small glyph floating in a tall row. Both the button box and the mark now
+track `--hud-pill-h`, so the left icon and the category section are the same
+height and cannot drift apart again. The 44px touch target is unaffected — it
+comes from `.hud-home-btn::before` and never tracked the visual box.
+
 ## 2.309.0
 
 ### Fixed — the app shell sized itself off the initial containing block

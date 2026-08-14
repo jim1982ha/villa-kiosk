@@ -313,28 +313,11 @@ export default function HUD({
     ? CATEGORY_ORDER.filter((c) => isCategoryAllowed(role, c))
     : CATEGORY_ORDER;
 
-  // The category pill scrolls horizontally when its (variable) button count
-  // exceeds the width its grid track got. CSS can't know whether the row
-  // actually overflows, so the edge-fade "more buttons this way" hints are
-  // toggled here from real scroll metrics — re-measured on scroll, on any
-  // resize/rotation (ResizeObserver) and when the category set changes.
-  const catRowRef = useRef<HTMLDivElement | null>(null);
-  const [catFade, setCatFade] = useState({ left: false, right: false });
-  useEffect(() => {
-    const el = catRowRef.current;
-    if (!el) return;
-    const measure = () => {
-      const max = el.scrollWidth - el.clientWidth;
-      const left = max > 1 && el.scrollLeft > 1;
-      const right = max > 1 && el.scrollLeft < max - 1;
-      setCatFade((p) => (p.left === left && p.right === right ? p : { left, right }));
-    };
-    measure();
-    el.addEventListener("scroll", measure, { passive: true });
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => { el.removeEventListener("scroll", measure); ro.disconnect(); };
-  }, [visibleCategories.length]);
+  // The category pill still scrolls horizontally when its (variable) button
+  // count exceeds the width its grid track got — it just no longer announces
+  // it with an edge fade. See .hud-group-scroll for why that affordance was
+  // removed rather than restyled, and do not reintroduce the measurement:
+  // nothing reads it now.
 
   // On narrow screens the right-side controls (view mode, Settings, switch
   // profile) collapse into ONE overflow button with a dropdown — CSS decides
@@ -439,7 +422,13 @@ export default function HUD({
             aria-label="Go to this device's default overview view"
             aria-describedby="home-btn-hint"
           >
-            <VestaAppIcon size={28} />
+            {/* Sized to very nearly fill .hud-home-btn (--hud-pill-h): the
+                mark is its own squircle, so its height IS the app icon's
+                perceived height — a smaller glyph in a correctly-sized box
+                looks exactly like the undersized icon this was reported as.
+                A couple of px shy of the box so the focus ring and the
+                has-hold-action dot still have somewhere to land. */}
+            <VestaAppIcon size={44} />
           </button>
           <span id="home-btn-hint" className="sr-only">Hold Space (or right-click) to save the current view as the default</span>
           <span className="hud-title">{title}</span>
@@ -470,8 +459,7 @@ export default function HUD({
             the map. Lit = category shown. Icon + tooltip only, no text. */}
         <div className="hud-center">
           <div
-            ref={catRowRef}
-            className={`hud-group hud-group-scroll${catFade.left ? " fade-left" : ""}${catFade.right ? " fade-right" : ""}`}
+            className="hud-group hud-group-scroll"
             role="toolbar"
             aria-label="Device category filters"
           >
