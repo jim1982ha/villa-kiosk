@@ -88,6 +88,20 @@ export function report(kind: TelemetryKind, data: Record<string, unknown> = {}):
     // need completely different fixes and look identical in a screenshot.
     scrw: screen.width,
     scrh: screen.height,
+    // The THIRD number, and the one that finally makes the bottom-band report
+    // decidable from the ring instead of from a screenshot (2.309.0). The two
+    // above separate "the host gave the page less than the screen" from "the
+    // page laid out short"; neither can tell whether the app SHELL filled the
+    // page it was given. Three cases, three different fixes:
+    //   shellH < vh  -> the shell is short: a document-side layout bug, ours.
+    //   shellH = vh < scrh -> the page never got the strip: presentation meta
+    //                         / manifest / host, and no CSS can reach it.
+    //   shellH = vh = scrh -> whatever was reported is not this.
+    // Rounded, and null before the shell mounts (a pre-React load record).
+    shellH: (() => {
+      const r = document.querySelector(".app-root")?.getBoundingClientRect();
+      return r ? Math.round(r.height) : undefined;
+    })(),
     dpr: Math.round((window.devicePixelRatio || 1) * 100) / 100,
     standalone: window.matchMedia?.("(display-mode: standalone)").matches === true
       || (navigator as Navigator & { standalone?: boolean }).standalone === true,

@@ -1,3 +1,73 @@
+## 2.309.0
+
+### Fixed — the app shell sized itself off the initial containing block
+
+Reported again as a large empty section below the app on an iPhone PWA, with
+the instruction to find the element responsible rather than nudge CSS at it.
+Tracing the chain found a real one, and it is not where three previous attempts
+looked.
+
+`html`, `body` and `#root` all carry `height: 100dvh`, with a long comment
+explaining that `100%` resolves against the initial containing block and that
+the ICB is documented as unreliable on iOS/WKWebView — it can bake in a stale,
+shorter height that a non-scrolling `overflow: hidden` page never gets a chance
+to correct. That fix was applied to the document elements and never to
+`.app-root`, which is `position: fixed; inset: 0` — and `inset` on a fixed box
+resolves against exactly the same ICB. So the one element that was still
+trusting the unreliable quantity was the shell: the box that contains the
+canvas (whose `height: 100%` resolves against it) and that is the containing
+block the summary bar's `bottom` anchors to. A stale ICB there does not
+letterbox harmlessly; it paints `--bg-base` along the bottom where the villa
+should be, and hangs the bottom bar off the visible area with it. The shell now
+takes its height from `100dvh` like everything above it. Browsers without `dvh`
+drop the declaration and keep today's behaviour exactly, which covers every
+desktop engine and Android Chrome, so neither can regress.
+
+Worth stating plainly: this is the document-side cause, and it is real, but it
+is not proven to be the one in the screenshot. The other candidate — iOS
+handing the web view less than the screen and painting the remainder with the
+manifest's `background_color` — was fixed in 2.297.0 by the `default` status-bar
+style, and that fix cannot reach a device whose home-screen icon has not been
+deleted and re-added, because iOS caches the whole `apple-mobile-web-app-*`
+block at icon-creation time. If the band survives this release, that is the
+proof it is the second cause and not the first.
+
+So telemetry now carries **`shellH`**, the app shell's measured height, beside
+`vw`/`vh`/`scrw`/`scrh`. Three numbers, three distinguishable cases:
+`shellH < vh` is a document-side bug and ours; `shellH = vh < scrh` is space the
+page was never given and no CSS can reach; `shellH = vh = scrh` means the report
+is about something else. The diagnostics dump has computed this for a while, but
+only into a text report someone had to open by hand on the affected handset —
+it was missing from the ring that actually gets collected, which is most of why
+this took five attempts.
+
+### Changed — the top bar hosts its icons instead of hosting containers
+
+The app icon sat in its own bordered capsule and the right-hand controls sat in
+another, so a bar of six flat category icons was bracketed by two plates. Both
+are gone. `.hud-brand` is out of the two shared "section material" lists, and
+`.hud-right-inline`/`.hud-overflow` override the group plate they inherit from
+`.hud-group`.
+
+Losing the plates costs legibility, which is what the plates were for — the
+comment on the brand chip is explicit that the villa name has to read against a
+bright sky or a night render. So contrast moves onto the glyph: a new
+`--hud-icon-halo` token, defined per theme as that theme's own near-opaque
+ground, drives a drop-shadow on the bare icons and a text-shadow on the villa
+name. Because it is a theme variable rather than a fixed colour it lifts a dark
+glyph off a night scene in light mode and a light glyph off a bright sky in dark
+mode, which one hardcoded shadow cannot do. Hover and active states drop the
+filter, since they get a real fill and a filter would smear it rather than
+outline it.
+
+The app icon also changed size. It was 40x38 at desktop and 40x40 on phones,
+both sized to match the 1F/2F floor buttons *below* the bar rather than the
+icons *in* it — defensible while it lived in its own capsule and read as part
+of the left column, wrong once the capsule went. It now matches
+`.hud-group .icon-btn` exactly (40x40), and the phone tier matches
+`.hud-center .icon-btn` (32x32). The 44px touch target is untouched: it comes
+from `.hud-home-btn::before`, which is sized independently of the visual box.
+
 ## 2.308.0
 
 ### Fixed — a count badge is now unreachable, not merely rarer

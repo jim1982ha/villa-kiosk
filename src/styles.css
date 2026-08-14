@@ -254,6 +254,11 @@
   --scrim-strong: rgba(23, 25, 26, 0.48);
   --chip-bg: rgba(255, 253, 248, 0.76);
   --topbar-fade: rgba(255, 253, 249, 0.76);
+  /* Halo behind bare top-bar icons/type that no longer sit on a plate.
+     It is the THEME'S OWN GROUND, near-opaque — so it lifts a dark glyph off
+     a night render in light mode and a light glyph off a bright sky in dark
+     mode, which a single hardcoded shadow colour cannot do. */
+  --hud-icon-halo: rgba(255, 253, 249, 0.95);
   --card-scrim: rgba(23, 25, 26, 0.55);
   --shadow: rgba(23, 25, 26, 0.16);
   --ring: var(--bg-base);
@@ -302,6 +307,11 @@
   --scrim-strong: rgba(4, 6, 5, 0.78);
   --chip-bg: rgba(16, 19, 17, 0.64);
   --topbar-fade: rgba(16, 19, 17, 0.72);
+  /* Halo behind bare top-bar icons/type that no longer sit on a plate.
+     It is the THEME'S OWN GROUND, near-opaque — so it lifts a dark glyph off
+     a night render in light mode and a light glyph off a bright sky in dark
+     mode, which a single hardcoded shadow colour cannot do. */
+  --hud-icon-halo: rgba(16, 19, 17, 0.92);
   --card-scrim: rgba(4, 6, 5, 0.85);
   --shadow: rgba(0, 0, 0, 0.55);
 
@@ -353,6 +363,11 @@
   --scrim-strong: rgba(0, 0, 0, 0.85);
   --chip-bg: rgba(10, 12, 10, 0.70);
   --topbar-fade: rgba(10, 12, 10, 0.78);
+  /* Halo behind bare top-bar icons/type that no longer sit on a plate.
+     It is the THEME'S OWN GROUND, near-opaque — so it lifts a dark glyph off
+     a night render in light mode and a light glyph off a bright sky in dark
+     mode, which a single hardcoded shadow colour cannot do. */
+  --hud-icon-halo: rgba(10, 12, 10, 0.94);
   --card-scrim: rgba(0, 0, 0, 0.85);
   --shadow: rgba(0, 0, 0, 0.7);
 
@@ -463,7 +478,25 @@ button {
 /* --- App shell --- */
 /* The shell is pinned to the viewport, and paints the theme's own background
    so nothing behind it can ever show through. */
-.app-root { position: fixed; inset: 0; background: var(--bg-base); }
+/* ⚠️ HEIGHT COMES FROM THE DYNAMIC VIEWPORT, NOT THE ICB (2.309.0).
+   `position: fixed; inset: 0` resolves against the INITIAL CONTAINING BLOCK —
+   precisely the quantity documented forty lines above as unreliable on
+   iOS/WKWebView, and the whole reason html/body/#root carry `100dvh`. The
+   SHELL never got that treatment, and the shell is the element that actually
+   contains the canvas (`height: 100%` resolves against this box) and is the
+   containing block the summary bar's `bottom` anchors to. So a stale ICB does
+   not letterbox harmlessly — it paints --bg-base where the villa should be
+   along the bottom edge, and hangs the summary bar off the visible area with
+   it. Reported as "a large empty section at the bottom on iPhone".
+   The box is over-constrained vertically, and CSS 2.1 §10.6.4 resolves that
+   by keeping `top` + `height` and dropping `bottom` — so this wins without
+   `bottom: auto` being spelled out. That is a LAYOUT rule, not a source-order
+   one: the minifier reorders these declarations freely and it changes
+   nothing, which is worth knowing before someone "fixes" the order back. A
+   browser with no dvh
+   support drops the declaration and keeps exactly today's inset behaviour —
+   which is every desktop engine and Android Chrome, so neither changes. */
+.app-root { position: fixed; inset: 0; height: 100dvh; background: var(--bg-base); }
 /* EXPLICIT width/height — never `inset: 0` alone.
    2.162.0 changed this to `position: absolute; inset: 0` with no width/height,
    reasoning that the shell is already pinned to four edges so the canvas could
@@ -536,7 +569,7 @@ button {
    definition instead of eight copies of the same two values; each selector
    below still sets its own border (color/width vary: hairline, hairline-strong,
    or the danger color for the service-error toast) and layout separately. */
-.icon-btn, .hud-group, .hud-stack, .hud-brand, .hud-menu,
+.icon-btn, .hud-group, .hud-stack, .hud-menu,
 .room-label, .service-toast, .joystick-base {
   background: var(--bg-panel);
   backdrop-filter: blur(20px) saturate(1.1);
@@ -549,7 +582,10 @@ button {
    material rather than the profile chip looking like a different component.
    Standalone .icon-btn keeps the denser --bg-panel above: a lone button needs
    more backing than a group that's mostly filled by its contents. */
-.hud-brand, .hud-group, .hud-stack, .summary-bar {
+/* .hud-brand is deliberately NOT in this list any more (2.309.0): the app
+   icon sits directly on the bar as a peer of the other top-bar icons, not in
+   a capsule of its own. Everything else keeps the shared section material. */
+.hud-group, .hud-stack, .summary-bar {
   background: var(--chip-bg);
 }
 
@@ -674,7 +710,10 @@ button {
   /* The shared panel radius (see .hud-group) — this chip is a section of
      the top bar, so it takes the panel shape, not the button squircle. It
      used to be a full capsule (999px), the one section that matched nothing. */
-  border: 1px solid var(--hairline); border-radius: var(--panel-radius);
+  /* NO border/radius/background since 2.309.0 — the capsule around the app
+     icon is gone and the icon sits on the bar itself. The height below stays,
+     because it is what keeps the icon optically centred on the same baseline
+     as .hud-group's buttons; only the CHROME was removed, not the metrics. */
   /* Height, not vertical padding: a content-driven height (the old rule was
      `padding: 6px 16px 6px 10px`) came out shorter than .hud-group's own
      48px (its 38px icon-btn + 4px top/bottom padding + border) because this
@@ -691,7 +730,12 @@ button {
      inset (this used to be 10px both sides) actually visible as two
      same-sized squares not lining up, rather than a small icon floating
      inside a taller chip. */
-  padding: 0 16px 0 4px;
+  /* No left inset any more: with the capsule gone there is no plate edge for
+     the icon to be inset FROM, and 4px of it would push the icon out of line
+     with .hud-left-col below, which sits flush at --hud-side-pad. Right side
+     keeps its breathing room so the villa name never touches the category
+     row. */
+  padding: 0 16px 0 0;
   /* Never let the villa name WRAP as its 1fr grid track is squeezed. Without
      this a long name ("The Lys House") broke onto three lines on a narrowed
      desktop window, ballooning the chip vertically until it covered the floor
@@ -700,11 +744,48 @@ button {
      before it can get that tight. */
   white-space: nowrap; min-width: 0; overflow: hidden;
 }
-.hud-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; letter-spacing: var(--tracking-tight); }
-.hud-brand svg { color: var(--accent); flex: 0 0 auto; }
+/* The name used to be legible because it sat on the brand capsule's glass.
+   With the capsule gone it is type directly over the villa render, which can
+   be a bright sky or a night scene, so it carries its own halo — the same
+   trick the right-side icons use (--hud-icon-halo), and the reason that token
+   is a theme variable rather than a colour written here. */
+.hud-title {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+  letter-spacing: var(--tracking-tight);
+  text-shadow: 0 1px 2px var(--hud-icon-halo), 0 0 8px var(--hud-icon-halo);
+}
+.hud-brand svg {
+  color: var(--accent); flex: 0 0 auto;
+  filter: drop-shadow(0 1px 2px var(--hud-icon-halo));
+}
 .hud-center { justify-self: center; display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%; }
 .hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
-.hud-right-inline { display: flex; align-items: center; gap: 12px; }
+/* ── The right side hosts no pill (2.309.0) ───────────────────────────────
+   .hud-right-inline and .hud-overflow are both .hud-group, so they inherited
+   the section plate: background, hairline, 4px padding and the pill height.
+   The icons now sit on the bar directly, as peers of the app icon on the
+   left. `background: none` has to beat the shared section rule above, which
+   it does on source order at equal specificity — the same cascade note that
+   governs the phone/landscape pair far below, so keep these AFTER it.
+   Contrast no longer comes from the plate; it comes from --hud-icon-halo on
+   the glyph itself, which is theme-aware and therefore works in both modes
+   without a container. The gap opens from .hud-group's tight 4px (sized for
+   buttons sharing one plate) to 8px, because free-standing icons need real
+   space between them to stop reading as one blob. */
+.hud-right-inline, .hud-overflow {
+  background: none; border-color: transparent; padding: 0; gap: 8px;
+  backdrop-filter: none; box-shadow: none;
+}
+.hud-right-inline .icon-btn, .hud-overflow .icon-btn {
+  filter: drop-shadow(0 1px 2px var(--hud-icon-halo))
+          drop-shadow(0 0 6px var(--hud-icon-halo));
+}
+/* Hover/active still need a readable plate under them, and an active filter
+   would smear the fill rather than outline it. */
+.hud-right-inline .icon-btn:hover, .hud-overflow .icon-btn:hover,
+.hud-right-inline .icon-btn.active, .hud-overflow .icon-btn.active { filter: none; }
+
+.hud-right-inline { display: flex; align-items: center; gap: 8px; }
 
 /* Overflow menu: on phones the right-side controls (view mode, Settings,
    switch profile) collapse into this single button + dropdown. Hidden on
@@ -887,9 +968,14 @@ button {
      below it, so the two left-edge controls read as one consistent size
      instead of this one looking small next to them. Matched again in the
      ≤640px compact-bar query, where the floor buttons grow to 40x40. */
-  width: 40px; height: 38px;
+  /* Matches .hud-group .icon-btn exactly (40x40) so the app icon is the same
+     height as every other button in the bar — the point of removing the
+     capsule. It was 40x38, sized to the FLOOR buttons below rather than to
+     its own row, which is what made it read as a different size from the
+     category icons beside it. */
+  width: 40px; height: 40px;
   background: none; border: none;
-  border-radius: 8px; cursor: pointer; color: inherit;
+  border-radius: 10px; cursor: pointer; color: inherit;
 }
 .hud-home-btn:hover, .hud-home-btn:focus-visible { background: var(--bg-input); }
 .hud-home-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -2616,7 +2702,9 @@ label.toggle span { user-select: none; line-height: 1.4; }
      button opposite it and the floor stack below — which is what the
      background is for in the first place: the mark has to stay legible over
      a bright sky or a dark night, exactly like every other HUD control. */
-  .hud-brand { padding: 0 4px; gap: 8px; }
+  /* No left inset at this tier either — see the base rule; the capsule that
+     the 4px used to sit inside no longer exists. */
+  .hud-brand { padding: 0; gap: 8px; }
 }
 
 @media (max-width: 640px), (max-height: 560px) {
@@ -2781,8 +2869,15 @@ label.toggle span { user-select: none; line-height: 1.4; }
      the two floating icon groups read as the same family of control instead
      of the stack looking undersized next to the summary tiles below it. */
   .hud-stack .icon-btn { width: 40px; height: 40px; }
-  /* Keep the brand icon matching the floor buttons' size at this tier too. */
-  .hud-home-btn { width: 40px; height: 40px; }
+  /* ⚠️ Matches the TOP-BAR icons (32px, see .hud-center .icon-btn above), not
+     the 1F/2F floor buttons directly below it. It tracked the floor stack
+     until 2.309.0 — a defensible choice while the icon lived in its own
+     capsule and read as part of the left column, and the wrong one once the
+     capsule went and it became the first button of the top bar. Reported as
+     the app icon being visibly taller than the icons beside it.
+     The 44px touch target is unaffected: it comes from .hud-home-btn::before,
+     which is sized in its own right and does not track the visual box. */
+  .hud-home-btn { width: 32px; height: 32px; }
 
   /* Dialogs fill the small screen and never crop their header/footer. The body
      scrolls between a pinned header and footer; dvh tracks the real visible
