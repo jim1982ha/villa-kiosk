@@ -3991,7 +3991,7 @@ export class EntityVisuals {
       const items = this.placementItems(shown, boxes, clearance);
       const result = solvePlacement(
         items, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.placeScratch,
-        MAX_TOTAL_CHIPS,
+        this.drawableMax(),
       );
       solved = result.stats;
       for (const room of result.chipRooms) this.roomClustered.set(room, true);
@@ -4602,13 +4602,13 @@ export class EntityVisuals {
     // purity of a function that does not ship.
     const a = solvePlacement(
       items, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.debugScratchA,
-      MAX_TOTAL_CHIPS,
+      this.drawableMax(),
     );
     const idsA = new Set<string>();
     for (let i = 0; i < items.length; i++) if (a.accepted[i]) idsA.add(items[i].sortKey);
     const b = solvePlacement(
       reversed, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.debugScratchB,
-      MAX_TOTAL_CHIPS,
+      this.drawableMax(),
     );
     const idsB = new Set<string>();
     for (let i = 0; i < reversed.length; i++) if (b.accepted[i]) idsB.add(reversed[i].sortKey);
@@ -5592,6 +5592,27 @@ export class EntityVisuals {
     }
     this.capCells = cells;
     return cells;
+  }
+
+  /**
+   * The largest bucket this renderer can actually draw as a card showing every
+   * one of its devices — what `solvePlacement`'s `drawableMax` asks for, and
+   * what it must be handed.
+   *
+   * It used to be handed a bare MAX_TOTAL_CHIPS, which is the cap in BADGE
+   * units and is blind to the screen. So the solver kept buckets the renderer
+   * then refused at `drawnCells`' viewport cap, and a refused bucket draws a
+   * number. Two caps disagreeing about the same question is how a count badge
+   * survived on a narrow phone even at three members.
+   *
+   * Still a plain integer and still camera-INVARIANT: render width and
+   * `effectiveScale` are properties of the device and the label-size setting,
+   * constant across a frame, and neither is a function of where the camera is
+   * or how far away it stands. That is the property `drawableMax`'s docstring
+   * protects, and this does not spend it.
+   */
+  private drawableMax(): number {
+    return Math.min(MAX_TOTAL_CHIPS, this.cardCellCap());
   }
 
   /** This group's arrangement — see babylon/badgeCard. A count badge is the

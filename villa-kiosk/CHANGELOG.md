@@ -1,3 +1,61 @@
+## 2.308.0
+
+### Fixed — a count badge is now unreachable, not merely rarer
+
+2.307.0 removed the count badge for FOCUSED groups — the summaries that exist
+after you tap a room chip — and that is genuinely all it removed. Reported
+again immediately, with a screenshot of the ordinary overview: an "18" standing
+in the open-plan kitchen among five perfectly good named chips. Nothing had
+regressed; the requirement was "never show a bare number" and only half of it
+had been implemented, because the debug log accompanying the original report
+happened to be a chip tap and the fix was scoped to the screen it came from.
+
+**Why that pile had nowhere to go.** Escalating a bucket to its room's chip
+required the bucket to be exactly one room AND to cover every badge in it AND
+to be bigger than the caller can draw. A pile that is only part of a room, or
+that spans two of them, failed the first two conjuncts however large it grew —
+so it was too big to draw as cards and not "whole" enough to become a chip, and
+the renderer's one remaining move was a bare number. It then stayed a bare
+number at every zoom rung, forever, because nothing about zooming changes which
+room a device is in. Size is now the entire test: a bucket the caller cannot
+draw hands each of its rooms to that room's chip, and the existing chip merge
+renders a cross-room pile as a single "+N" pill — named, tappable, and already
+the designed last tier.
+
+**And the two caps had to stop disagreeing.** The solver was told the largest
+bucket the renderer could draw was `MAX_TOTAL_CHIPS`, which is stated in badge
+units and cannot see the screen. The renderer then refused buckets a second
+time at `cardCellCap`, in screen units — and a refused bucket draws a number.
+So on a narrow phone at a large label size a pile of three could still print a
+"3" even though the solver had been assured six were fine. The renderer now
+passes `min(MAX_TOTAL_CHIPS, cardCellCap())`, so the question is asked once.
+This keeps placement camera-position-invariant, which is the property that
+whole subsystem is built around: screen size is constant across a frame and has
+nothing to do with where the camera stands.
+
+Together these make "no bucket survives above what the caller can draw" a true
+invariant rather than a tendency, and a count badge has no input left. It is
+pinned by a new case in `npm run test:placement` that sweeps a random villa at
+five different caps in both modes.
+
+The trade is deliberate and visible: a room where seven devices collide now
+becomes one named chip instead of a few badges plus a number. Tapping it shows
+all of them, which is what 2.307.0 made work.
+
+### Fixed — the placement suite was testing a configuration that never ships
+
+Found while making the above. `drawableMax` defaulted to zero — "the caller can
+draw nothing" — and the test helper passed that default through, directly
+underneath a comment insisting the value was explicit at every call so the
+suite could not end up exercising something the app never runs. Nine cases took
+the default. The headline invariants, including the cross-room regression from
+2.250.0, were all being verified at a setting no build has used since cards
+existed. The helper now defaults to the shipped value, cases that mean to test
+zero pass it by hand, and `drawableMax` has no default at all any more: a
+parameter whose default silently selects the most destructive behaviour
+available is a trap, and requiring it is the only way that comment becomes
+true.
+
 ## 2.307.0
 
 ### Fixed — the "8" over the Swimming Pool, at the cap that was actually doing it

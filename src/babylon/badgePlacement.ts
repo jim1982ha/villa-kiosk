@@ -172,7 +172,6 @@ export interface PlacementScratch {
   bucketDead: Uint8Array;
   chipRooms: string[];
   chipped: Set<string>;
-  roomCount: Map<string, number>;
   contacts: Uint8Array;
   stats: PlacementStats;
 }
@@ -191,7 +190,6 @@ export function createPlacementScratch(): PlacementScratch {
     bucketDead: new Uint8Array(0),
     chipRooms: [],
     chipped: new Set(),
-    roomCount: new Map(),
     contacts: new Uint8Array(0),
     stats: {
       items: 0, exempt: 0, piles: 0, accepted: 0, deferred: 0,
@@ -382,17 +380,22 @@ export function solvePlacement(
    * The largest bucket the CALLER can still draw as a summary that shows every
    * one of its devices — see the `whole` rule in step 7.
    *
-   * Zero (the default) means "nothing is drawable", which reproduces the
-   * behaviour this module had before the caller could draw a card of
-   * pictograms: any bucket covering its whole room escalates to that room's
-   * chip. The renderer passes its own cap.
+   * Zero means "nothing is drawable", so every bucket of two or more escalates
+   * to its rooms' chips.
+   *
+   * ⚠️ REQUIRED, with no default, since 2.308.0. It defaulted to 0, and a
+   * default that silently selects the most destructive behaviour available is a
+   * trap — the placement suite fell into it, defaulting nine of its own cases
+   * to 0 while carrying a comment insisting the value must be explicit at every
+   * call. Making it required is the only way that comment can be true.
    *
    * It is a plain integer and STAYS one: it must not become a function of
-   * available space, camera distance or anything else this module cannot see,
-   * or the output stops being a pure function of world position, quantised
-   * zoom and static rank.
+   * camera distance or anything else this module cannot see, or the output
+   * stops being a pure function of world position, quantised zoom and static
+   * rank. A cap derived from the VIEWPORT is fine and is what ships — screen
+   * size is constant across a frame and independent of where the camera is.
    */
-  drawableMax = 0,
+  drawableMax: number,
 ): PlacementResult {
   const n = items.length;
   const st = scratch;
@@ -504,14 +507,6 @@ export function solvePlacement(
     pileIdx[i] = p;
   }
   stats.piles = pileCount;
-
-  // How many badges each room is showing — the denominator for "this bucket
-  // covers the whole room, so it IS the room".
-  const roomCount = st.roomCount;
-  roomCount.clear();
-  for (let i = 0; i < n; i++) {
-    roomCount.set(items[i].room, (roomCount.get(items[i].room) ?? 0) + 1);
-  }
 
   // ── 4. Accept greedily inside each pile ──────────────────────────────────
   const deferred = st.deferred;
@@ -715,12 +710,25 @@ export function solvePlacement(
       // twice. It stops being true the moment the caller can draw every one of
       // the bucket's devices as its own pictogram with its own tap target,
       // which is strictly MORE than the chip says rather than a duplicate of
-      // it. `drawableMax` is where the caller states how many it can draw;
-      // above that the bucket is a count again and the rule applies as before.
-      const whole = bucket.rooms.length === 1
-        && bucket.members.length >= (roomCount.get(bucket.room) ?? 0)
-        && bucket.members.length > drawableMax;
-      if (bucket.members.length >= 2 && !whole) continue;
+      // it. `drawableMax` is where the caller states how many it can draw.
+      //
+      // ⚠️ UNDRAWABLE IS THE WHOLE TEST, since 2.308.0. It used to ALSO require
+      // the bucket to be exactly one room and to cover all of it, which left
+      // every bucket that was neither — a pile spanning two rooms, or only part
+      // of one — with no tier to fall to: too many members to draw as cards,
+      // not "whole" enough to escalate. So it drew a bare number, and stayed a
+      // bare number at every zoom rung, forever. That number is precisely the
+      // non-information the paragraph above exists to forbid, minus even a room
+      // name to hang it on. Reported against 2.307.0 with a screenshot of an
+      // "18" standing among five named chips.
+      //
+      // Escalating hands each of the pile's rooms to its own chip, and the chip
+      // merge downstream turns a cross-room pile into a single "Kitchen +2"
+      // pill — named, tappable, and the tier that was already designed to be
+      // the last one. The cost is deliberate and is the point: a room where 7
+      // devices collide becomes one chip rather than some badges plus a number.
+      const undrawable = bucket.members.length > drawableMax;
+      if (bucket.members.length >= 2 && !undrawable) continue;
       dead[b] = 1;
       changed = true;
       // A bucket that cannot stand as a group hands its rooms to their chips.
