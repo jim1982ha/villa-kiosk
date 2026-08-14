@@ -503,9 +503,8 @@ export class SceneManager {
 
     this.camera = new CameraController(this.scene, canvas, opts.config, {
       onRoomChange: opts.onRoomChange,
-      // MOTION — one of the only two callers that may un-sharpen (see
-      // unsharpen). Both camera controllers route every pose change here.
-      onActivity: () => { this.unsharpen(); this.requestRender(); },
+      // MOTION — both camera controllers route every pose change here.
+      onActivity: () => { this.motionPending = true; this.requestRender(); },
       // Tap-to-pick is detected in the camera (sole owner of the pointer
       // pipeline) and dispatched to the picker — reliable on touch & mouse.
       onTap: handleTap,
@@ -573,7 +572,7 @@ export class SceneManager {
     // on-demand render loop so the view stays smooth.
     // The second (and last) motion entry point — a finger on the glass is
     // motion whether or not the camera has decided to move yet.
-    this.scene.onPointerObservable.add(() => { this.unsharpen(); this.requestRender(); });
+    this.scene.onPointerObservable.add(() => { this.motionPending = true; this.requestRender(); });
 
     // Land on the bird's-eye OVERVIEW camera from the very first rendered frame.
     // Before the model finishes loading the active camera used to be the
@@ -741,8 +740,18 @@ export class SceneManager {
         now < this.keepRenderingUntil ||
         !this.config.renderOnDemand
       ) {
+        // ⚠️ MOTION UN-SHARPENS HERE, INSIDE rAF — NEVER IN A POINTER HANDLER.
+        // 2.322.0 called unsharpen() straight from the pointer observable, and
+        // it changes the hardware scaling level, i.e. it resizes the drawing
+        // buffer synchronously during input dispatch on the very element that
+        // has just taken setPointerCapture. Reported on iPad as a badge tap
+        // doing nothing followed by a one-finger drag tilting the camera —
+        // both faces of one lost pointerup (see OverviewController's
+        // dropLostPointers, which makes that state self-healing whatever the
+        // cause). The flag is set by the motion entry points and spent here.
+        if (this.motionPending) { this.motionPending = false; this.unsharpen(); }
         // ── A frame asked for while the image is SHARP is a repaint ─────────
-        // Only the two motion entry points un-sharpen (see unsharpen), so
+        // Only the motion entry points set motionPending (see unsharpen), so
         // reaching here still sharpened means nothing is moving: an HA state
         // push, a sun tick, a floor swap, a return from background. Those need
         // the picture REDRAWN, not down-rezzed — and until 2.322.0 they got the
@@ -1194,6 +1203,8 @@ export class SceneManager {
    */
   private sharpMotionHw = 0;
   private sharpened = false;
+  /** Set by the motion entry points, spent by the render loop — see unsharpen. */
+  private motionPending = false;
   private idleSharpen(): void {
     if (this.sharpened) return;
     const cur = this.engine.getHardwareScalingLevel();
@@ -1214,13 +1225,17 @@ export class SceneManager {
    * Put the motion resolution back. Idempotent; safe to call every frame — the
    * flag check is the whole cost when there is nothing to undo.
    *
-   * ⚠️ THREE CALLERS, AND THE LIST IS THE DESIGN (2.322.0). Two motion entry
-   * points — `onActivity` (both camera controllers) and the canvas pointer
-   * observable — plus the render loop's animation branch. Nothing else may
-   * call it, because "sharpened" is what the interactive branch reads to tell a
-   * repaint from motion: widen this list and every HA state push starts
-   * dropping the settled picture to motion resolution again, which is the
-   * regression it was narrowed to fix.
+   * ⚠️ TWO CALLERS, BOTH INSIDE THE RENDER LOOP, AND THE LIST IS THE DESIGN.
+   * The interactive branch when `motionPending` is set, and the animation
+   * branch. Nothing else may call it, for two independent reasons:
+   *
+   *   * `sharpened` is what the interactive branch reads to tell a repaint
+   *     from motion — widen the list and every HA state push starts dropping
+   *     the settled picture to motion resolution again (2.322.0's fix), and
+   *   * this RESIZES THE DRAWING BUFFER, so calling it from an event handler
+   *     mutates the canvas during input dispatch (2.322.0's regression).
+   *
+   * Motion signals intent by setting `motionPending`; the loop spends it.
    */
   private unsharpen(): void {
     if (!this.sharpened) return;

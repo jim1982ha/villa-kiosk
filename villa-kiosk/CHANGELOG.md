@@ -1,3 +1,45 @@
+## 2.323.0
+
+### Fixed — a lost pointer made the camera tilt and the badges deaf, and it can no longer stick
+
+Two symptoms, reported together and correctly suspected of being connected:
+tapping an aggregated room badge sometimes does nothing at all, and from that
+moment a one-finger drag stops panning and starts tilting the camera, "as if the
+ctrl key were pressed". They are not two bugs. They are two faces of a single
+stale entry in `OverviewController`'s pointer map.
+
+Every gesture decision in that file is a COUNT. One pointer arms the tap and
+pans; two or more rotate and tilt; and `size === 0` is the condition that
+actually fires the tap on release. So one pointer whose `pointerup` never
+arrives poisons all three at once: the count is never 1, so the tap never arms
+and the drag is treated as the second finger of a two-finger gesture, and it is
+never 0, so the tap could not fire even if it had. The causal order is the
+reverse of the one observed — the stuck pointer is what makes the badge deaf,
+not the failed tap that makes the camera strange.
+
+`dropLostPointers` makes the state self-healing. Every tracked pointer is one
+this handler captured, so `hasPointerCapture` is the exact question: a pointer
+that has silently lost capture without an up or a cancel is one the browser
+ended and did not say so, and it is dropped at the start of the next press.
+Only entries we KNOW were captured are eligible — where `setPointerCapture`
+threw, absent capture proves nothing, and pruning on it would collapse a live
+two-finger gesture into a pan mid-stroke.
+
+The trigger was 2.322.0's own. That release moved `unsharpen()` into the canvas
+pointer observable, and un-sharpening changes the hardware scaling level, which
+resizes the drawing buffer — synchronously, during input dispatch, on the
+element that had just taken `setPointerCapture`. `pointercancel` is handled, but
+WebKit does not reliably send one when a touch sequence is disturbed that way.
+Motion now sets a flag and the render loop spends it inside the rAF callback,
+which is where every resolution change lived for the three hundred versions
+before 2.322.0 and where they belong. The rule is written on `unsharpen` itself,
+with both reasons its caller list is short: widening it re-breaks the settled
+picture, and calling it from an event handler mutates the canvas mid-gesture.
+
+Nothing about the 2.322.0 behaviour changes — a state repaint still draws at the
+resolution already on screen, and motion still un-sharpens before the frame is
+measured. Only the moment at which the engine is touched moves.
+
 ## 2.322.0
 
 ### Fixed — a state change is not a camera movement, and stops being treated as one

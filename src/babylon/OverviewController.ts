@@ -269,7 +269,7 @@ export class OverviewController {
   dispose(): void { this.disable(); }
 
   // ── Pointer state ──────────────────────────────────────────────────────────
-  private pointers = new Map<number, { x: number; y: number; type: string }>();
+  private pointers = new Map<number, { x: number; y: number; type: string; captured: boolean }>();
 
   // Two-finger gesture snapshot. `a*/b*` are the two fingers' positions from the
   // PREVIOUS pointermove (for incremental zoom/rotate/tilt deltas); `start*` are
@@ -292,8 +292,10 @@ export class OverviewController {
   private zooming = false;
 
   private onPointerDown = (e: PointerEvent): void => {
-    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
-    try { this.canvas.setPointerCapture(e.pointerId); } catch { /**/ }
+    this.dropLostPointers();
+    let captured = true;
+    try { this.canvas.setPointerCapture(e.pointerId); } catch { captured = false; }
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType, captured });
 
     if (this.pointers.size === 1) {
       this.tap.begin(e.clientX, e.clientY);
@@ -348,6 +350,42 @@ export class OverviewController {
     }
     this.cb.onActivity();
   };
+
+  /**
+   * Forget pointers the browser has stopped telling us about.
+   *
+   * ── Why this has to exist (2.323.0) ──────────────────────────────────────
+   * EVERY gesture decision here is a count: `size === 1` arms the tap and pans,
+   * `size >= 2` rotates and tilts, and `size === 0` is what actually FIRES the
+   * tap. So one entry that never gets its `pointerup` breaks two things at
+   * once, and they were reported together — an aggregated room badge that does
+   * nothing when tapped, and a one-finger drag that tilts the camera "as if
+   * ctrl were held". Both are the same stale entry: the tap never arms and
+   * never fires because the count is never 1 and never 0, and the drag reads as
+   * the second finger of a two-finger gesture.
+   *
+   * A missed `pointerup` is not a hypothetical. `pointercancel` is handled, but
+   * WebKit does not always send one — a drawing-buffer resize during an active
+   * touch is one way to lose the sequence, which is why SceneManager no longer
+   * changes resolution inside a pointer handler.
+   *
+   * `hasPointerCapture` is the exact question to ask, because this handler
+   * captures every pointer it tracks: losing capture without an up or a cancel
+   * means the browser ended that pointer and did not say so. Only entries we
+   * KNOW we captured are eligible — if `setPointerCapture` threw, absent
+   * capture proves nothing, and pruning on it would turn a live two-finger
+   * gesture into a pan mid-stroke.
+   */
+  private dropLostPointers(): void {
+    if (this.pointers.size === 0) return;
+    for (const [id, p] of this.pointers) {
+      if (!p.captured) continue;
+      let live = true;
+      try { live = this.canvas.hasPointerCapture(id); } catch { live = false; }
+      if (!live) this.pointers.delete(id);
+    }
+    if (this.pointers.size === 0) this.touchBase = null;
+  }
 
   private onPointerUp = (e: PointerEvent): void => {
     this.pointers.delete(e.pointerId);
