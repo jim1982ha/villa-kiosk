@@ -173,13 +173,19 @@ const LIGHT_POOL_RADIUS = 1.8;
  * the middle of the pool is the same answer the chip already gave. Both had to
  * go, and the way to have both is a card that can actually draw its members.
  *
- * The real bound is physical and already exists — cardCellCap() shrinks the
- * arrangement until it fits CARD_MAX_VIEWPORT_FRACTION of the screen — so this
- * only has to be high enough that the viewport is what decides. Twelve is
- * three full 2x2 cards, which `arrange` now wraps into a block rather than a
- * strip.
+ * The real bound is physical and already exists — the width budget, which
+ * `arrange` wraps into — so a focused group has NO cell ceiling of its own.
+ *
+ * ⚠️ There WAS one, `FOCUS_MAX_CHIPS = 12`, and it was chosen as "high enough
+ * that the viewport is what decides". It wasn't. A focused pile of nineteen
+ * (a Living Room tap) hit it, `gridCells` refused anything over its max by
+ * returning ZERO cells, and zero cells is a count badge — so the one code path
+ * that must never produce a number produced a "19". A fixed ceiling next to a
+ * physical one is always a second bound that can bind first, and the fix is
+ * not a bigger number: it is no number. `cellMax` returns the group's own
+ * membership for a focused group, so the clamp can never be the thing that
+ * refuses, and the budget stays the only bound.
  */
-const FOCUS_MAX_CHIPS = 12;
 const POOL_MIN_RADIUS = 0.4;
 /** How far a pool sits above the floor it was probed onto. Enough to clear
  *  z-fighting with the floor polygon, small enough that it still reads as
@@ -5360,12 +5366,11 @@ export class EntityVisuals {
         for (const k of pile) { const i = idx[k]; wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz; }
         const n = pile.length;
         const q = this.planeOf(clearance, wx / n, wy / n, wz / n);
-        // FOCUS_MAX_CHIPS, not MAX_TOTAL_CHIPS: these piles are focused, and
-        // measuring them against the ordinary cap would size a card that is
-        // about to be drawn from the larger one.
-        const lay = this.cardOf(
-          gridCells(Math.min(pile.length, FOCUS_MAX_CHIPS), FOCUS_MAX_CHIPS),
-          FOCUS_MAX_CHIPS, this.cardBudget());
+        // The pile's OWN size, not a shared cap: these piles are focused, so
+        // the renderer will draw one cell per member (see cellMax), and
+        // measuring them against any smaller number sizes a box the card is
+        // about to overflow.
+        const lay = this.cardOf(pile.length, pile.length, this.cardBudget());
         const hh = (lay.height / 2) * scale;
         // Anchored bottom-edge-on-anchor exactly as the renderer draws it —
         // this file's oldest rule, and the one 2.288.0 had to restate.
@@ -5636,9 +5641,11 @@ export class EntityVisuals {
       g.focused ? this.cardBudget() : 0);
   }
 
-  /** The cell ceiling this group is entitled to — see FOCUS_MAX_CHIPS. */
+  /** The cell ceiling this group is entitled to. A FOCUSED group has none —
+   *  it is entitled to a cell per member, and the width budget decides the
+   *  shape. See the note where FOCUS_MAX_CHIPS used to be. */
   private cellMax(g: PendingEntityGroup): number {
-    return g.focused ? FOCUS_MAX_CHIPS : MAX_TOTAL_CHIPS;
+    return g.focused ? Math.max(1, g.grid) : MAX_TOTAL_CHIPS;
   }
 
   /**

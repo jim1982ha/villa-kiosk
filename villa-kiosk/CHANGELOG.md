@@ -1,3 +1,40 @@
+## 2.314.0
+
+### Fixed — a "19" after tapping Living Room: the focused ceiling was still a ceiling
+
+2.308.0 made a count badge unreachable for ordinary summaries and 2.307.0 made
+one unreachable for focused ones — or so both claimed. Tapping a room whose pile
+holds nineteen devices still drew a "19".
+
+`FOCUS_MAX_CHIPS = 12` was the last cap a focused group had, and its own
+docstring said what it was for: *"this only has to be high enough that the
+viewport is what decides"*. It wasn't high enough. `gridCells` refuses anything
+over its max by returning **zero** cells, zero cells is the degenerate
+one-card arrangement, and that is a count — so the single code path that must
+never produce a number produced one, at exactly the pile sizes a real villa
+room reaches.
+
+The fix is not a bigger number. A fixed ceiling sitting beside a physical one is
+always a second bound that can bind first, and the next room with thirteen
+devices would have found it again. A focused group now has **no cell ceiling**:
+`cellMax()` returns its own membership, so the clamp can never be the thing
+that refuses, and the width budget — which `arrange` folds into rows — is the
+only bound, which is what the constant's comment described in the first place.
+`pairFocusedRoom`'s collision box measures each pile at its own size for the
+same reason: measuring against a smaller cap sizes a box the card is about to
+overflow.
+
+The trade is the one already accepted for this path: tapping a room with many
+devices draws a tall card. Every device gets its own cell and its own tap
+target, which is what a room tap was asked to mean.
+
+`npm run test:placement` gains the case that was missing. `arrange`'s own
+contract — refuse past your max — was tested and correct; nothing tested the
+CALLER passing a max smaller than the pile. Six new checks sweep pile sizes
+from 7 to 60 at a phone-sized budget and assert that at `max = n` nothing is
+ever refused, the budget is still obeyed, and the reported 19 draws nineteen
+distinct cells wrapped into rows inside its own box.
+
 ## 2.313.0
 
 ### Changed — a collapsed bottom-bar tile is its icon, not a framed icon
