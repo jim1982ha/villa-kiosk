@@ -1,3 +1,40 @@
+## 2.340.0
+
+### Removed — four failed attempts to stop Back closing the app
+
+Back at the villa closes the app on Android. Four releases tried to prevent that
+from inside the page and all four failed in the field: 2.330.0 swallowed the
+press outright, 2.331.0 removed that on a reading of Android 12's root-activity
+behaviour which is correct in general and wrong for the browser this runs in,
+2.338.0 re-armed the spent entry synchronously inside the pop handler, and
+2.339.0 kept first one and then two spare entries beneath the villa so a
+traversal could never land on the root. Every one of them reproduced the same
+closure.
+
+Taken together they say the press is not being decided by history depth, so no
+arrangement of entries can change it, and each attempt cost a behaviour the app
+actually wanted — 2.330.0's version made Back inert at the villa, which is not
+what a phone user expects.
+
+So it is all gone. `rootGuard`, `useBackGuard`, the villa's entries, the
+synchronous re-arm, and the `back-press` instrument that measured them. What
+remains is the part that WORKS and was verified stepping through its counters:
+Back closes the surface on top, innermost first, until the villa is what is left,
+and then the press belongs to the platform. HOME puts the app away with the
+document intact, and that path returns in under a second with nothing rebuilt.
+
+The comments went with the code. Several described mechanisms that turned out not
+to exist, which is worse than no comment at all — a future reader would have
+trusted them. What is left in `onPopState` says only what was measured: what was
+tried, that it failed, and that the one untried avenue is the Navigation API's
+`navigate` event, to be measured before shipping rather than after.
+
+Kept from the same run, because each was verified working: the dismissal stack
+and its reconciler, Back folded into `useModalA11y` so a dialog cannot have
+Escape without it, the five surfaces that had neither, and Advanced Settings
+nesting over Settings instead of replacing it — which removed the swap hazard
+that caused three separate bugs.
+
 ## 2.339.0
 
 ### Fixed — the villa keeps a SPARE history entry, because re-arming cannot beat the platform

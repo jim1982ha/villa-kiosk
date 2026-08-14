@@ -20,7 +20,6 @@ import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
 import { useConfig } from "@/config/ConfigContext";
-import { useBackGuard } from "@/hooks/useBackToClose";
 import { roomKey } from "@/config/roomKey";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
@@ -50,9 +49,6 @@ import type { Category, TeleportPoint } from "@/types/scene.types";
 const MOTION_DEVICE_CLASSES = new Set(["motion", "presence", "occupancy", "moving"]);
 
 export default function Dashboard() {
-  // The villa owns one history entry so an overlay's Back lands on IT and stays
-  // in the app; a press here lands on root and minimises. See useBackGuard.
-  useBackGuard();
   const { config, update, resolvedRooms, setResolvedRooms } = useConfig();
   const { role } = useProfile();
   const { connect, entities, suppressedEntityIds, ws, haConfig, subscribeAll, entityAreaNames } = useHA();

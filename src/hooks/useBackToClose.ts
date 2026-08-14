@@ -42,8 +42,6 @@ interface Entry {
 }
 
 const stack: Entry[] = [];
-/** The villa view is mounted, and owns ONE entry beneath every overlay's. */
-let rootGuard = false;
 /** History entries WE added. Reconciled against `stack.length` — see syncHistory. */
 let pushed = 0;
 /** Programmatic traversals whose `popstate` must be ignored. */
@@ -54,24 +52,7 @@ let queued = false;
 /** Make the history depth match the stack. The ONE place history is written. */
 function syncHistory(): void {
   queued = false;  // a later change re-arms both passes
-  // ── WHY THE VILLA OWNS AN ENTRY ────────────────────────────────────────
-  // So that a press from an overlay lands on the VILLA'S entry rather than on
-  // the root. Android backgrounds the task when a Back traversal reaches the
-  // root entry — it fires `popstate`, we handle it and the overlay closes,
-  // and the app leaves anyway. That is why the field records showed a press
-  // with `depth 1, owned 1` being handled correctly and the app exiting
-  // regardless: nothing was wrong with the handling, the traversal had simply
-  // hit the bottom.
-  //
-  // With this, the depths line up with the rule: an overlay press lands on the
-  // villa's entry and stays in the app, and a villa press lands on root and
-  // minimises, which is exactly "Back leaves only from the villa map". It is
-  // NOT 2.330.0's guard, which swallowed the villa's press so Back did nothing
-  // there; this one is spent normally and re-armed on return (see armRoot).
-  // TWO for the villa, not one — see onPopState. A press must always land on a
-  // real entry; landing on the ROOT is what makes Android finish the activity,
-  // and no amount of re-arming afterwards can undo a decision already taken.
-  const want = stack.length + (rootGuard ? 2 : 0);
+  const want = stack.length;
   if (want > pushed) {
     // Same URL — this app is served under an add-on ingress path that must not
     // change, and there is no route here to reflect anyway. The entries exist
@@ -95,12 +76,10 @@ function syncHistory(): void {
  * that is closing and before the surface replacing it has mounted. The follow-up
  * task runs after that flush and reconciles what the stack ACTUALLY became.
  *
- * The field measurement that forced this: a press inside Advanced Settings was
- * recorded with `depth 1, owned 1, pending 0` — perfectly in sync, handled, and
- * it closed correctly — and the NEXT press produced no `popstate` at all, so
- * Android backgrounded the app. No popstate means no entry existed, i.e. the
- * entry for the re-mounted Settings had never been pushed. Reconciling only once,
- * early, is how that happens.
+ * Found by measurement, not reasoning: a press was recorded perfectly in sync
+ * and handled correctly, and the NEXT one produced no `popstate` at all — no
+ * entry existed, because the one for the re-mounted surface had never been
+ * pushed. Reconciling only once, early, is how that happens.
  *
  * Both passes are idempotent — each compares depth against the stack and does
  * nothing when they already agree — so the extra pass costs a comparison in the
@@ -146,67 +125,26 @@ function onPopState(): void {
   // do. That accounting is what the old `popped` flag was for.
   if (pushed > 0) pushed -= 1;
   const top = stack[stack.length - 1];
-  if (!top && rootGuard) {
-    // ── AT THE VILLA, BACK MINIMISES — IT MUST NEVER CLOSE ────────────────
-    // Re-arm SYNCHRONOUSLY and let the press do nothing else. Android's Back on
-    // a PWA's root FINISHES the activity: the document is destroyed and the next
-    // launch rebuilds the villa from scratch, measured at 6–10s on the phone.
-    // The timing test settled that it is destruction and not eviction — reopening
-    // after FIVE seconds reloaded just as a 72-second wait did, so nothing about
-    // the app's size would change it — and the contrast is Home, which merely
-    // stops the activity and returns the same live document (`lifecycle visible`,
-    // hiddenMs 35194, nothing rebuilt).
-    //
-    // So the villa's entry is replaced the instant it is spent, and Back at the
-    // villa is inert. HOME minimises and keeps the app warm, which is the whole
-    // point: leaving is still one gesture, and coming back is instant.
-    //
-    // Synchronous, and — the part 2.338.0 got wrong — only ever ONE OF TWO.
-    // Re-arming cannot beat the platform, because the platform's decision is
-    // made BY the traversal landing on root, before any handler runs. So the
-    // villa keeps a spare beneath it: a press moves from the second entry to
-    // the first, never to root, Android has no reason to finish anything, and
-    // this push restores the pair for next time.
-    history.pushState({ vkRoot: true }, "");
-    pushed += 1;
-    return;
-  }
   // ── A PRESS WITH NOTHING TO DISMISS IS THE PLATFORM'S ──────────────────
-  // Let it through. On Android 12+ Back on a task's root activity moves the
-  // task to the BACKGROUND — the same as Home — rather than finishing it, so
-  // the document survives and the app resumes where it was. 2.330.0 held a
-  // root entry open to stop Back reaching here, on the mistaken premise that
-  // it would destroy the document; that made Back do nothing at the villa,
-  // which is not what a phone user expects and not what was asked for.
+  // Let it through, and do not try to stop it. On Android a Back press at the
+  // villa CLOSES the app — the document is destroyed and the next launch pays a
+  // full rebuild — and 2.330.0 through 2.339.0 tried four ways to prevent that
+  // from in here: swallowing the press, re-arming the entry synchronously, and
+  // keeping one and then two spare entries beneath the villa so the traversal
+  // could never reach the root. All four failed identically in the field. The
+  // press is not being decided by history depth, so no arrangement of entries
+  // can change it, and every attempt cost a behaviour the app wanted.
+  //
+  // HOME is the gesture that puts the app away with the document intact
+  // (`lifecycle visible`, hiddenMs 35194, websocket reconnecting, nothing
+  // rebuilt). If this is revisited, the only untried avenue is the Navigation
+  // API's `navigate` event — measure before shipping, not after.
   if (!top) return;
   top.close();
   // The close above changes the stack through React, which settles after this
   // handler returns — so ask for a reconciliation explicitly rather than relying
   // on the mutation to arrive in time to schedule its own.
   scheduleSync();
-}
-
-/**
- * Give the villa view its own history entry, so an overlay's press lands on it
- * rather than on the root — see syncHistory for why that is the whole fix.
- *
- * Call ONCE, from the surface that is always mounted. Re-arms when the app comes
- * back, because a villa press spends the entry on the way out.
- */
-export function useBackGuard(): void {
-  useEffect(() => {
-    ensureListening();
-    rootGuard = true;
-    scheduleSync();
-    const rearm = () => scheduleSync();
-    window.addEventListener("pageshow", rearm);
-    document.addEventListener("visibilitychange", rearm);
-    return () => {
-      rootGuard = false;
-      window.removeEventListener("pageshow", rearm);
-      document.removeEventListener("visibilitychange", rearm);
-    };
-  }, []);
 }
 
 /**
