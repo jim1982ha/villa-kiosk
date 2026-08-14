@@ -20,26 +20,59 @@
 // nests correctly for free, because a surface opened over another is pushed
 // over it here too.
 //
-// ── The half that is easy to forget ──────────────────────────────────────
-// Closing by any OTHER route (Escape, the X button, picking something) must
-// also spend the history entry this pushed, or it outlives the surface and the
-// next back press appears to do nothing at all. That is what `unwinding`
-// exists for: the cleanup calls `history.back()` itself, and the resulting
-// popstate has to be swallowed rather than treated as a fresh press, which
-// would otherwise dismiss the surface underneath as well.
+// ── Why history is RECONCILED, not pushed and popped inline ──────────────
+// Because surfaces SWAP, not just nest, and until 2.332.0 only nesting was in
+// the model. "Advanced Settings" closes Settings and opens itself in one React
+// commit, so one cleanup and one effect run back to back — and doing history
+// work directly in each meant calling `history.back()` (ASYNCHRONOUS, it queues
+// a traversal) and `history.pushState` (SYNCHRONOUS) in the same tick. The two
+// race, the entry accounting comes out one short, and the next Back press finds
+// nothing to spend and leaves the app. Reported exactly that way: Back inside
+// Advanced Settings minimised VESTA, while Back inside Settings was correct.
+//
+// So nothing touches history inline. The stack is the truth, and a microtask
+// afterwards makes the history depth match it. A swap is then free: one surface
+// leaves and another arrives, the depth never changed, and no push or pop
+// happens at all — which is both the fix and less work than before.
 
 import { useEffect, useRef } from "react";
 
 interface Entry {
   close: () => void;
-  /** The browser already popped this entry — cleanup must not spend it again. */
-  popped: boolean;
 }
 
 const stack: Entry[] = [];
-/** Programmatic `history.back()` calls whose `popstate` must be ignored. */
+/** History entries WE added. Reconciled against `stack.length` — see syncHistory. */
+let pushed = 0;
+/** Programmatic traversals whose `popstate` must be ignored. */
 let unwinding = 0;
 let listening = false;
+let queued = false;
+
+/** Make the history depth match the stack. The ONE place history is written. */
+function syncHistory(): void {
+  queued = false;
+  const want = stack.length;
+  if (want > pushed) {
+    // Same URL — this app is served under an add-on ingress path that must not
+    // change, and there is no route here to reflect anyway. The entries exist
+    // purely to give Back something to consume.
+    for (let i = pushed; i < want; i++) history.pushState({ vkOverlay: true }, "");
+    pushed = want;
+  } else if (want < pushed) {
+    const drop = pushed - want;
+    pushed = want;
+    unwinding += drop;
+    history.go(-drop);
+  }
+}
+
+/** Coalesce to ONE reconciliation per commit — that is what makes a swap free. */
+function scheduleSync(): void {
+  if (queued) return;
+  queued = true;
+  queueMicrotask(syncHistory);
+}
 
 /**
  * Dismiss the surface on top — THE definition of "what does a dismiss gesture
@@ -69,6 +102,10 @@ function ensureListening(): void {
 
 function onPopState(): void {
   if (unwinding > 0) { unwinding -= 1; return; }
+  // The browser just spent one of ours, so the depth is already correct — the
+  // close below shrinks the stack to match and the reconciler finds nothing to
+  // do. That accounting is what the old `popped` flag was for.
+  if (pushed > 0) pushed -= 1;
   const top = stack[stack.length - 1];
   // ── A PRESS WITH NOTHING TO DISMISS IS THE PLATFORM'S ──────────────────
   // Let it through. On Android 12+ Back on a task's root activity moves the
@@ -78,12 +115,7 @@ function onPopState(): void {
   // it would destroy the document; that made Back do nothing at the villa,
   // which is not what a phone user expects and not what was asked for.
   if (!top) return;
-  // Marked BEFORE closing, and only on THIS path: the browser has already
-  // spent this entry, so cleanup must not spend it again with a second
-  // `history.back()`. A dismiss from Escape or a button leaves it false,
-  // because there the entry is still in history and does have to go.
-  top.popped = true;
-  dismissTop();
+  top.close();
 }
 
 /**
@@ -108,20 +140,13 @@ export function useBackToClose(onClose: () => void, active = true): void {
   useEffect(() => {
     if (!active) return;
     ensureListening();
-    const entry: Entry = { close: () => latest.current(), popped: false };
+    const entry: Entry = { close: () => latest.current() };
     stack.push(entry);
-    // Same URL — this app is served under an add-on ingress path that must not
-    // change, and there is no route here to reflect anyway. The entry exists
-    // purely to give Back something to consume.
-    history.pushState({ vkOverlay: true }, "");
+    scheduleSync();
     return () => {
       const i = stack.lastIndexOf(entry);
       if (i >= 0) stack.splice(i, 1);
-      if (entry.popped) return;
-      // Closed by Escape, a button, or a state change — the entry is still in
-      // history and has to go, or the next Back press is silently eaten.
-      unwinding += 1;
-      history.back();
+      scheduleSync();
     };
   }, [active]);
 }

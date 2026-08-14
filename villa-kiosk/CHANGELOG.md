@@ -1,3 +1,36 @@
+## 2.332.0
+
+### Fixed — Back inside Advanced Settings left the app instead of closing it
+
+Reported precisely: Back inside the **Settings** modal closed Settings, correctly,
+but Back inside **Advanced Settings** minimised VESTA. The difference is not in
+either dialog — both register through `useModalA11y` exactly alike — it is in how
+Advanced Settings is opened. `setSettingsOpen(false)` and `setConfigEditorOpen(true)`
+run together, so one surface leaves and another arrives in a SINGLE React commit.
+That is a SWAP, and the dismissal hook only ever modelled NESTING; its own
+docstring said as much ("a surface opened over another is pushed over it here
+too") without noticing that surfaces also replace each other.
+
+A swap put one cleanup and one effect back to back, and each did history work
+inline: the cleanup called `history.back()`, which is ASYNCHRONOUS — it queues a
+traversal — while the effect called `history.pushState`, which is synchronous.
+Two operations racing over the same entry accounting, in the same tick, and the
+result came out one short. The next Back press found nothing of ours to spend and
+went to the platform, which minimises.
+
+Nothing writes history inline any more. The stack is the truth and a microtask
+afterwards reconciles the history depth to match it, coalesced so a whole commit
+produces one reconciliation. A swap is then genuinely free — one surface out, one
+in, the depth never changed, so no push and no pop happen at all. The race cannot
+occur because the two operations no longer share a tick, and the fix removes code
+rather than adding it: the `popped` flag per entry is gone, replaced by a single
+counter that the pop handler decrements because the browser has already spent
+that entry.
+
+Worth stating for the next person: this class of bug is invisible to review of
+either dialog. Both are correct. It only exists in the seam between them, and
+only because two surfaces changed places at the same instant.
+
 ## 2.331.0
 
 ### Fixed — Back minimises the app again; 2.330.0's root guard was built on a wrong premise
