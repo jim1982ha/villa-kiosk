@@ -1,3 +1,42 @@
+## 2.330.0
+
+### Changed — Back unwinds the app instead of destroying it
+
+The villa was reloading after a Back press, and the telemetry says why in one
+field: the returning load reports `navType: "navigate"`, not `back_forward` and
+not `reload`. That is a COLD START. Nothing failed to restore, because there was
+nothing left to restore — Back at a PWA's root does not minimise it on Android,
+it calls finish() on the activity and the document is gone.
+
+The same dump shows the other half, which is the part that makes this fixable:
+a Home press leaves the document alive. `lifecycle visible` with
+`hiddenMs 35194` is the same page waking up after thirty-five seconds hidden,
+websocket reconnecting, frames resuming, nothing rebuilt. So the app can already
+survive being put away; it was only ever Back that killed it.
+
+Back therefore stops reaching the root. `useBackGuard`, mounted once by the
+villa view, holds a single history entry open, and a press that reaches the
+bottom of the stack is re-armed rather than spent. Overlays sit above it and
+consume their own press first, so the order is exactly what was asked for: the
+camera feed returns to the villa, a dialog closes before the surface under it,
+and a press with nothing left to unwind simply does nothing. HOME is now what
+leaves VESTA, and it leaves it warm.
+
+**Every dialog gets this, from one line.** `useBackToClose` moved inside
+`useModalA11y`, which is already the hook that answers "this is a dialog, give
+it Escape and a focus trap". A phone's Back is that same request in another
+vocabulary, so registering it there means a surface cannot be given one and not
+the other — the ten modals that share the hook were wired by adding nothing.
+Escape now resolves through the same stack (`dismissTop`) with the dialog's own
+handler as the fallback, so the two gestures cannot drift apart, and the camera
+panel drops the second registration it needed when the two were separate.
+
+One thing this cannot do, and it is worth stating rather than leaving to be
+discovered: Back can keep the app OR exit it, never both. Exiting is what
+destroys the document, and a destroyed document is the reload. The request was
+for Back to minimise and still come back instantly; the browser does not offer
+that, and Home does.
+
 ## 2.329.0
 
 ### Fixed — the glyphs could stay soft indefinitely, because sharpening was a branch and not a rule

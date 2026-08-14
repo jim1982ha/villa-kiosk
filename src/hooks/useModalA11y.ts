@@ -17,6 +17,7 @@
 // each without forcing one markup shape onto all of them.
 
 import { useEffect, useRef } from "react";
+import { useBackToClose, dismissTop } from "./useBackToClose";
 
 /** Everything focusable we might need to reach inside a dialog. `:not([inert])`
  *  and the negative-tabindex exclusion keep out things that are present but
@@ -43,6 +44,18 @@ function focusableWithin(root: HTMLElement): HTMLElement[] {
  */
 export function useModalA11y(onClose?: () => void) {
   const ref = useRef<HTMLDivElement>(null);
+  // ── BACK CLOSES A DIALOG, EXACTLY AS ESCAPE DOES ────────────────────────
+  // Registered here rather than per surface, because "this is a dialog" is the
+  // whole of what qualifies something: every caller of this hook already owes
+  // the user Escape, and a phone's Back is that same request in the other
+  // vocabulary. Doing it once means a dialog cannot be given one and not the
+  // other, which is how the two would drift apart.
+  //
+  // `useBackToClose` also puts this surface on the dismissal stack, and that
+  // stack is what makes nesting work: a dialog over a dialog is pushed over it
+  // here too, so Back unwinds innermost-first without anyone writing that rule
+  // down. `dismissTop` below reads the same stack, so Escape agrees for free.
+  useBackToClose(onClose ?? (() => {}), !!onClose);
   // Latest onClose, read by the Escape handler below WITHOUT being a
   // dependency of the mount effect — see that effect's own comment for why
   // that distinction is load-bearing, not stylistic.
@@ -88,7 +101,10 @@ export function useModalA11y(onClose?: () => void) {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && onCloseRef.current) {
         e.stopPropagation();
-        onCloseRef.current();
+        // The STACK decides which surface a dismiss gesture dismisses, so that
+        // Escape and Back can never disagree about the order. Falls back to
+        // this dialog's own handler if nothing is registered.
+        if (!dismissTop()) onCloseRef.current();
         return;
       }
       if (e.key !== "Tab") return;

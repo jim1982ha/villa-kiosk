@@ -20,6 +20,7 @@ import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
 import { useConfig } from "@/config/ConfigContext";
+import { useBackGuard } from "@/hooks/useBackToClose";
 import { roomKey } from "@/config/roomKey";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
@@ -49,6 +50,13 @@ import type { Category, TeleportPoint } from "@/types/scene.types";
 const MOTION_DEVICE_CLASSES = new Set(["motion", "presence", "occupancy", "moving"]);
 
 export default function Dashboard() {
+  // ── THE APP STAYS RESIDENT ──────────────────────────────────────────────
+  // The villa view is the surface that is always mounted, so it holds the one
+  // history entry that stops Back destroying the document. Every dialog and
+  // the camera feed stack on top of it and consume their own press, so Back
+  // unwinds them first and then simply stops. HOME is what leaves the app, and
+  // it leaves it alive — reopening lands on the villa with nothing reloaded.
+  useBackGuard();
   const { config, update, resolvedRooms, setResolvedRooms } = useConfig();
   const { role } = useProfile();
   const { connect, entities, suppressedEntityIds, ws, haConfig, subscribeAll, entityAreaNames } = useHA();

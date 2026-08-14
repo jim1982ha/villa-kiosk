@@ -27,7 +27,7 @@ import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraP
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { useBackToClose, dismissTop } from "@/hooks/useBackToClose";
+import { useBackToClose } from "@/hooks/useBackToClose";
 import { devLog } from "@/utils/devLog";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
@@ -130,8 +130,9 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   const closePicker = useCallback(() => setPickerOpen(false), []);
   // The hook's ref IS this panel's root — one element, one ref, so the focus
   // trap and the chrome/fullscreen logic below cannot drift onto two nodes.
-  const rootRef = useModalA11y(dismissTop);
-  useBackToClose(onClose);
+  // useModalA11y registers the Back entry too (see its docstring), so the feed
+  // is on the dismissal stack from this one call — no second registration.
+  const rootRef = useModalA11y(onClose);
   const zoom = useMediaZoom<HTMLDivElement>();
   const [isFs, setIsFs] = useState(false);
   // The status/controls row now OVERLAYS the feed and auto-hides (see
