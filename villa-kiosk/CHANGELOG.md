@@ -1,3 +1,44 @@
+## 2.307.0
+
+### Fixed — the "8" over the Swimming Pool, at the cap that was actually doing it
+
+Same report as 2.306.0, because 2.306.0 did not fix it. Two things were wrong
+with that release and both are worth naming.
+
+**It changed the wrong cap.** There are two. `MAX_TOTAL_CHIPS` is stated in
+badge units and answers the summary-vs-summary clearance test; `cardCellCap` is
+stated in SCREEN units and answers "does this fit the display". 2.306.0 raised
+the first. The `?debug` line from the report settles which one was firing:
+`icon=2.25x`, and at that icon size the viewport budget is about 84 arrangement
+units while an eight-cell arrangement is about 150 wide — so the cap collapses
+to two cells, eight is over it, and the summary draws its count. The first cap
+was never reached.
+
+**And the edit that would have mattered silently did nothing.** 2.306.0's
+change to `drawnCells` was written against text that no longer matched the
+file, so the substitution replaced nothing and no error was raised. The
+released build therefore carried the new constant, the new wrapping, the new
+tests — and the old `drawnCells`. Every substitution in this release asserts
+that it matched.
+
+The fix is not another cap. A focused group is now handed the width BUDGET and
+its cards WRAP into it: eight cells on a narrow screen become two 2x2 cards
+stacked rather than four cells across, and the arrangement grows downward
+instead of being refused. Adapting the shape always has an answer; refusing
+does not. A budget narrower than a single card still draws that card — a
+device the user asked to see belongs on screen even when it is tight.
+
+So a focused group no longer consults the viewport cap at all, and the promise
+is now structural rather than a large-enough constant: **tapping a room cannot
+produce a count badge.** The ordinary path is untouched — a summary nobody
+asked for may still collapse to a number rather than eat the screen, which is
+what that cap is for.
+
+`npm run test:placement` pins the new behaviour: every cell drawn, the budget
+obeyed, the arrangement growing downward instead of sideways, every cell
+distinct and inside the card box, and a sub-card-width budget still drawing its
+card.
+
 ## 2.306.0
 
 ### Fixed — tapping a room showed an "8", not the room's eight devices

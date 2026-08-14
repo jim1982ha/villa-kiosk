@@ -139,6 +139,13 @@ export function arrange(
    *  and can never escalate its room, so the test the cap answers does not
    *  apply to it (see EntityVisuals.FOCUS_MAX_CHIPS). */
   max = MAX_TOTAL_CHIPS,
+  /**
+   * The widest this arrangement may be, in the same units as `unit`. Given
+   * one, the cards WRAP to fit it instead of running off the side — which is
+   * what lets a focused group show every device on a narrow screen at a large
+   * icon size. Omitted (the ordinary path) the shape is unchanged.
+   */
+  maxWidth = 0,
 ): CardArrangement {
   const cells = gridCells(n, max);
   const chip = Math.max(4, Math.round(unit * iconFraction));
@@ -164,7 +171,15 @@ export function arrange(
   // and the viewport cap would then refuse it and fall back to a count, which
   // is the one outcome a tapped room must never produce. A near-square block
   // keeps the same card objects and just stacks them.
-  const perRow = Math.max(1, Math.ceil(Math.sqrt(shapes.length)));
+  // ── How many cards per row ───────────────────────────────────────────────
+  // With a width budget, as many as fit — that is what makes the arrangement
+  // ADAPT rather than refuse. Without one, a near-square block. Never zero: a
+  // single card that does not fit is still drawn, because a device the user
+  // asked to see must be on screen even if it is tight.
+  const widest = Math.max(...shapes.map((sh) => sh.cols * unit));
+  const perRow = Math.min(shapes.length, Math.max(1, maxWidth > 0
+    ? Math.floor((maxWidth + gap) / (widest + gap))
+    : Math.ceil(Math.sqrt(shapes.length))));
   const rows: typeof shapes[] = [];
   for (let i = 0; i < shapes.length; i += perRow) rows.push(shapes.slice(i, i + perRow));
 

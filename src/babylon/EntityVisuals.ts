@@ -5363,7 +5363,9 @@ export class EntityVisuals {
         // FOCUS_MAX_CHIPS, not MAX_TOTAL_CHIPS: these piles are focused, and
         // measuring them against the ordinary cap would size a card that is
         // about to be drawn from the larger one.
-        const lay = this.cardOf(gridCells(Math.min(pile.length, FOCUS_MAX_CHIPS), FOCUS_MAX_CHIPS), FOCUS_MAX_CHIPS);
+        const lay = this.cardOf(
+          gridCells(Math.min(pile.length, FOCUS_MAX_CHIPS), FOCUS_MAX_CHIPS),
+          FOCUS_MAX_CHIPS, this.cardBudget());
         const hh = (lay.height / 2) * scale;
         // Anchored bottom-edge-on-anchor exactly as the renderer draws it —
         // this file's oldest rule, and the one 2.288.0 had to restate.
@@ -5525,7 +5527,18 @@ export class EntityVisuals {
    * careless producer away from happening.
    */
   private drawnCells(g: PendingEntityGroup, memberCount: number): number {
-    const cells = gridCells(Math.min(g.grid, memberCount));
+    const max = this.cellMax(g);
+    const cells = gridCells(Math.min(g.grid, memberCount), max);
+    // ⚠️ A FOCUSED group is NEVER refused into a count, and this is the line
+    // 2.306.0 was supposed to change and did not — its edit silently matched
+    // nothing, which is why an "8" still stood over the pool. The cap doing the
+    // refusing was never MAX_TOTAL_CHIPS; it is the viewport one below, and at
+    // icon 2.25x it fires at two cells. Tapping a room is a request to SEE the
+    // devices, and "too wide" has an answer that always exists — a card that
+    // wraps (see layoutOf). The ordinary path keeps the cap: a summary nobody
+    // asked for may legitimately collapse to a number rather than eat the
+    // screen.
+    if (g.focused) return cells;
     // ── AND IT MUST FIT THE SCREEN IT IS DRAWN ON (2.296.0) ──────────────
     // Six cells is two 2x2 cards side by side — four badge boxes wide however
     // big a badge happens to be, which is about 45% of a phone's width and
@@ -5537,7 +5550,7 @@ export class EntityVisuals {
     // regression `g.grid` was made to carry the raw membership to prevent —
     // and a count is one badge box, so it always fits and, since 2.294.0, is
     // itself checked for standing where its devices are.
-    return cells > this.cardCellCap() ? 0 : cells;
+    return cells > this.cardCellCap(max) ? 0 : cells;
   }
 
   /**
@@ -5554,6 +5567,15 @@ export class EntityVisuals {
   private capScale = -1;
   private capWidth = -1;
   private capMax = -1;
+  /** How wide a summary may be DRAWN, in the arrangement's own units. The
+   *  render width carries cssToGui and so does `scale`, so the device pixel
+   *  ratio cancels and this is a pure fraction of the screen. */
+  private cardBudget(): number {
+    const width = this.scene.getEngine().getRenderWidth();
+    const scale = this.effectiveScale();
+    return scale > 0 && width > 0 ? (width * CARD_MAX_VIEWPORT_FRACTION) / scale : 0;
+  }
+
   private cardCellCap(max = MAX_TOTAL_CHIPS): number {
     const width = this.scene.getEngine().getRenderWidth();
     const scale = this.effectiveScale();
@@ -5561,7 +5583,7 @@ export class EntityVisuals {
     this.capWidth = width; this.capScale = scale; this.capMax = max;
     let cells = max;
     if (scale > 0 && width > 0) {
-      const budget = (width * CARD_MAX_VIEWPORT_FRACTION) / scale;
+      const budget = this.cardBudget();
       // Down to 2 and no further: a pair card is two badge boxes, which fits
       // any screen this app can run on, and stopping there keeps the "a group
       // of two is ALWAYS the full-size card" promise the one-pass placement
@@ -5575,16 +5597,22 @@ export class EntityVisuals {
   /** This group's arrangement — see babylon/badgeCard. A count badge is the
    *  degenerate one-card, zero-cell case, so every summary goes through one
    *  function and there is no second code path to keep in step. */
-  private cardOf(cells: number, max = MAX_TOTAL_CHIPS): CardArrangement {
+  private cardOf(cells: number, max = MAX_TOTAL_CHIPS, maxWidth = 0): CardArrangement {
     return arrange(
       Math.max(1, cells), this.summaryMetrics().size,
-      this.metrics.cardIconFraction, this.metrics.minGapPx, max);
+      this.metrics.cardIconFraction, this.metrics.minGapPx, max, maxWidth);
   }
 
   /** The arrangement a group actually draws — cells and ceiling in one place,
    *  so no caller can measure a focused card against the ordinary cap. */
   private layoutOf(g: PendingEntityGroup, memberCount: number): CardArrangement {
-    return this.cardOf(this.drawnCells(g, memberCount), this.cellMax(g));
+    // A FOCUSED arrangement is handed the width budget and WRAPS into it; an
+    // ordinary one is not, and the budget instead caps its cell count. That is
+    // the whole difference, and it is why a tapped room can no longer produce a
+    // count: adapting the shape always has an answer, refusing does not.
+    return this.cardOf(
+      this.drawnCells(g, memberCount), this.cellMax(g),
+      g.focused ? this.cardBudget() : 0);
   }
 
   /** The cell ceiling this group is entitled to — see FOCUS_MAX_CHIPS. */
@@ -5690,7 +5718,7 @@ export class EntityVisuals {
         // Same ceiling the placement measured with (layoutOf) — this is the
         // "layout geometry must equal render geometry" rule, and a focused
         // card drawn at the ordinary cap would be a different object.
-        const lay = this.cardOf(drawn, this.cellMax(g));
+        const lay = this.cardOf(drawn, this.cellMax(g), g.focused ? this.cardBudget() : 0);
         c.container.width = `${lay.width}px`;
         // HEIGHT IS PER-PASS, like the width. It used to be written once at
         // construction, which was invisible while every card was one row tall
