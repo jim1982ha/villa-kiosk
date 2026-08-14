@@ -1,3 +1,52 @@
+## 2.320.0
+
+### Fixed — every badge was baking a bitmap at half the size it painted it
+
+Reported on the iPad, with the observation that made it findable: the menu
+buttons look normal and the entity glyphs do not, on the same screen. Those two
+live in different layers — the buttons are DOM SVG the browser draws at native
+resolution, the glyphs are bitmaps composited inside the WebGL canvas — and the
+difference is not only the canvas resolution.
+
+`this.metrics` is UNSCALED base CSS pixels. Every badge control is built from it
+and the whole container is then transform-scaled by `effectiveScale()` (see
+`applyIconScale`), so a control whose `width` reads 44 covers 44·s render
+pixels. 2.301.0 fixed "the badge is baked at 128 and drawn at 34" by making the
+bake read the same expression as the control's width, and called that baked at
+the size it is drawn. That is true of the two NUMBERS and false of the pixels:
+both sit on the unscaled side of a transform. On any retina device `cssToGui()`
+alone makes s≈2 — a fact this file already stated, in `labelBaseOffsetY`'s own
+comment — so every badge has been baking a 44px bitmap and painting it across
+about 88 render pixels, ever since.
+
+A 2x upscale of the artwork, before the canvas is composited, and on WebKit —
+one bilinear tap, no mip chain — that is the entire reported symptom. It is
+worse on the iPad only because the resolution valve has also dropped that
+device's canvas to 1x CSS on a 2x screen, so the two upscales compound. The
+valve is right to do that (67ms a frame at full resolution, of which 67 was an
+empty scene); this was never the valve's fault.
+
+The bake now rides `effectiveScale()`'s two stable factors. It costs nothing at
+runtime — the same number of pixels are drawn, from a bitmap that finally has
+them.
+
+⚠️ **`iconZoomScale` is deliberately excluded.** Re-baking means
+`rebuildLabels`, because a data-URL swap on a live Babylon GUI Image does not
+reliably re-render the texture (`repaintBadges` says so), and the bird's-eye
+zoom factor moves continuously — including it would hitch the map every time the
+bake ladder crossed a rung mid-pinch. It is capped at 1, so leaving it out can
+only ever make the bitmap LARGER than the paint: a mild downscale, which is the
+direction `BAKE_LADDER`'s headroom exists to absorb and the direction WebKit
+handles acceptably. The two factors that remain — the CSS→GUI conversion and the
+label-size stepper — change only when the resolution valve fires or the user
+moves the stepper, and both already repaint.
+
+`notifyRenderScaleChanged` now repaints as well as re-scales, for the same
+reason: `cssToGui()` is a factor of the painted size, so a valve step that
+halves the render resolution would otherwise leave every badge holding a bitmap
+baked for a resolution the engine has stopped rendering at. It fires when the
+valve acts — once or twice a session — not per frame.
+
 ## 2.319.0
 
 ### Fixed — 2.309.0 removed the shell's bottom pin instead of backing it up

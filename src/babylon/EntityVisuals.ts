@@ -1579,6 +1579,38 @@ export class EntityVisuals {
     return Math.min(Math.round(m.cardHeightPx * m.cardIconFraction), cardMaxInnerH);
   }
 
+  /**
+   * The size a glyph is actually PAINTED at, which is what its bitmap must be
+   * baked at — and it is not `glyphPxFor`.
+   *
+   * ⚠️ `this.metrics` is UNSCALED. Every badge control is built in base CSS
+   * pixels and the whole container is then transform-scaled by
+   * `effectiveScale()` (see applyIconScale), so a control whose `width` says 44
+   * covers 44·s render pixels. 2.301.0 made the bake read the same expression
+   * as the control's width and called that "baked at the size it is drawn" —
+   * true of the two NUMBERS, and false of the pixels, because both are on the
+   * unscaled side of a transform. On any retina device cssToGui() alone makes
+   * s≈2 (a fact this file already states, in labelBaseOffsetY), so every badge
+   * has been baking a 44px bitmap and painting it across ~88 render pixels.
+   * That is a 2x upscale of the artwork before the canvas is composited, and
+   * on WebKit — one bilinear tap, no mips — it is the whole reported "the
+   * entity icons are very low resolution", on iPad and iPhone alike.
+   *
+   * ⚠️ It deliberately does NOT include `iconZoomScale`. Re-baking means
+   * rebuildLabels (a data-URL swap on a live Babylon Image does not reliably
+   * re-render the GUI texture — see repaintBadges), and the bird's-eye zoom
+   * factor moves continuously, so including it would hitch the map every time
+   * the ladder crossed a rung mid-pinch. It is capped at 1, so excluding it can
+   * only ever leave the bitmap LARGER than the paint — a mild downscale, which
+   * is the direction BAKE_LADDER's headroom exists to absorb and the direction
+   * WebKit handles acceptably. The two factors that are left change only when
+   * the resolution valve fires or the user moves the size stepper, and both of
+   * those already repaint.
+   */
+  private glyphBakePx(card: boolean): number {
+    return this.glyphPxFor(card) * this.iconUserScale * this.cssToGui();
+  }
+
   /** Y of the first structure surface below (x, y, z) — see FloorProbe.below.
    *  Kept as a one-line wrapper rather than inlining the probe at every call
    *  site so `exclude` (the fixture must not pick itself) stays impossible to
@@ -3108,6 +3140,13 @@ export class EntityVisuals {
    *  badge. Cheap: re-scales the existing controls, no rebuild. */
   notifyRenderScaleChanged(): void {
     this.applyIconScale();
+    // …and RE-BAKE. cssToGui() is a factor of the painted size (glyphBakePx),
+    // so a valve step that halves the render resolution leaves every badge
+    // holding a bitmap baked for the resolution the engine has stopped
+    // rendering at. Rebuilding is the only way a Babylon GUI Image reliably
+    // picks up a new source (repaintBadges says why), and this fires at most
+    // once or twice a session — when the valve acts — not per frame.
+    this.repaintBadges();
   }
 
   private rebuildLabels(): void {
@@ -3590,7 +3629,7 @@ export class EntityVisuals {
       lbl.badge.color = surface.ring ?? "transparent";
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
-        dashed ? 0 : BADGE_INSET_CARD, ringState, !dashed, this.glyphPxFor(true));
+        dashed ? 0 : BADGE_INSET_CARD, ringState, !dashed, this.glyphBakePx(true));
       // Neutral ink, on a now-neutral card — the bottom bar's value is
       // `--text-primary` beside a coloured chip, not the chip's own hue. The
       // state is carried by the chip and the ring; the number is just a number.
@@ -3603,7 +3642,7 @@ export class EntityVisuals {
       lbl.badge.thickness = 0;
       lbl.badge.color = "transparent";
       lbl.glyph.source = badgeImageDataUrl(
-        lbl.category, iconKey, state, override, 0, ringState, false, this.glyphPxFor(false));
+        lbl.category, iconKey, state, override, 0, ringState, false, this.glyphBakePx(false));
     }
     lbl.badge.alpha = 1;
     // The value pill is never shown for an unavailable entity anyway
@@ -5792,7 +5831,12 @@ export class EntityVisuals {
               // style's is. The card behind it is the group's own surface, not
               // a second frame — see updateLabel for the doubled ring that
               // insetting inside a bordered card produced.
-              0, ring, false, lay.chip);
+              // Same correction as the lone badge's: `lay.chip` is in the
+              // arrangement's unscaled units and the group container carries
+              // effectiveScale(), so the bitmap has to be baked at the painted
+              // size. iconZoomScale is excluded for the same reason — see
+              // glyphBakePx.
+              0, ring, false, lay.chip * this.iconUserScale * this.cssToGui());
           }
         }
         // ── A SUMMARY'S RING NEVER REPEATS A MEMBER'S OWN SIGNAL ────────────
