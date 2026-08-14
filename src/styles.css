@@ -758,6 +758,15 @@ button {
   color: var(--accent); flex: 0 0 auto;
   filter: drop-shadow(0 1px 2px var(--hud-icon-halo));
 }
+/* The mark FILLS its button, so the button's box and the artwork's visible
+   edge are the same rectangle. They were not: the button tracked
+   --hud-pill-h (50px) while the SVG was a 44px prop, leaving 3px of slack that
+   inset the mark from the bar's padding edge — so its left edge sat 3px right
+   of .hud-left-col's floor stack, which starts flush at --hud-side-pad.
+   Reported as the left-hand icons not lining up. Sizing it here rather than
+   in the TSX also means --hud-pill-h stays the single source of the number;
+   the `size` prop now only sets the viewBox. */
+.hud-home-btn svg { width: 100%; height: 100%; }
 .hud-center { justify-self: center; display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%; }
 .hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
 /* ── The right side hosts no pill (2.309.0) ───────────────────────────────
@@ -776,9 +785,13 @@ button {
   background: none; border-color: transparent; padding: 0; gap: 8px;
   backdrop-filter: none; box-shadow: none;
 }
+/* ONE tight shadow, not two. 2.309.0 added a second `0 0 6px` glow for
+   legibility on any backdrop, and at 6px around a 32px glyph it rendered as a
+   soft filled rectangle — the user read it as the hosting container still
+   being there, which is exactly what it looks like. A 2px shadow separates the
+   glyph from whatever is behind it without ever reading as a surface. */
 .hud-right-inline .icon-btn, .hud-overflow .icon-btn {
-  filter: drop-shadow(0 1px 2px var(--hud-icon-halo))
-          drop-shadow(0 0 6px var(--hud-icon-halo));
+  filter: drop-shadow(0 1px 2px var(--hud-icon-halo));
 }
 /* Hover/active still need a readable plate under them, and an active filter
    would smear the fill rather than outline it. */
@@ -1214,6 +1227,29 @@ button {
    Home Assistant losing contact. */
 .summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--status-danger)); }
 .summary-tile.tone-off .summary-tile-value { color: var(--text-secondary); }
+
+/* ── Narrow portrait phone: tiles collapse to their icons ────────────────────
+   The row is centred with its own max-width and pans horizontally past it, so
+   on a portrait phone the last tile was always half off the edge ("LIG  4 O")
+   and the live value it exists to show was the part that got cut. Dropping the
+   text is what makes every tile fit at once — six icon chips need about a
+   third of the width the labelled tiles do.
+
+   Width-and-orientation driven, not overflow-driven, because CSS has no "if
+   this box overflows" selector and the alternative is a ResizeObserver whose
+   result feeds back into the width it measured. Portrait is qualified on
+   purpose: the same phone in landscape has room for the labels and keeps them,
+   so this is not a device rule, it is a "there genuinely isn't room" rule.
+
+   The tile keeps its full tap target, its tone ring and its aria-label — only
+   the visible text is dropped, so nothing becomes unreachable or unlabelled
+   for a screen reader. */
+@media (max-width: 640px) and (orientation: portrait) {
+  .summary-tile-text { display: none; }
+  /* With the text gone the tile is a chip: square-ish, no asymmetric right
+     padding that only existed to separate icon from label. */
+  .summary-tile { min-width: 0; padding: 9px; gap: 0; }
+}
 
 /* Scene pop-up picker (portaled to <body>, anchored above the Scene tile). */
 .summary-scene-menu {
@@ -2837,16 +2873,32 @@ label.toggle span { user-select: none; line-height: 1.4; }
      flex row in a scroll container would put its overflow on BOTH sides and
      strand the first button behind the scroll origin — `margin: auto` on the
      track is the standard way to say "centre while it fits, pack from the
-     start once it doesn't", and it degrades to flex-start exactly then —
-     auto margins absorb POSITIVE free space only, so with none to absorb they
-     resolve to 0 and every button stays reachable by panning. Plain `center`
-     does not: it splits the overflow across both ends and puts the first
-     button behind the scroll origin, where nothing can scroll to it. */
+     start once it doesn't".
+
+     ⚠️ `safe center`, and NOT auto margins on :first-child/:last-child, which
+     is what 2.310.0 used and got wrong. This row's last children are the (?)
+     legend, the label-size stepper and their separator, all `display: none` at
+     this tier — and `display: none` removes the BOX, not the child. So
+     `:last-child` still matched a hidden element, its `margin-right: auto` had
+     nothing to apply to, and only the left margin absorbed any space: every
+     icon was pushed to the right of the pill. Reported as "the icons are not
+     centered, they appear slightly aligned on the right".
+
+     The `safe` keyword is the property's own answer to the overflow problem
+     auto margins were reaching for: centre while it fits, fall back to start
+     alignment the moment centring would push content out of reach.
+
+     Plain `center` is declared first as a fallback, and the MINIFIER DROPS IT
+     — it dedupes the pair once browserslist says every target parses `safe`
+     (Chrome 93+, Safari 15.4+), which for this app is true. Keep the fallback
+     in the source anyway: it costs nothing, it documents the intent, and it
+     starts shipping again by itself the day the target set widens. Checked in
+     the built CSS, not assumed. */
   .hud-center:has(.icon-btn:nth-of-type(4)) .hud-group-scroll {
-    width: 100%; justify-content: flex-start;
+    width: 100%;
+    justify-content: center;
+    justify-content: safe center;
   }
-  .hud-center:has(.icon-btn:nth-of-type(4)) .hud-group-scroll > :first-child { margin-left: auto; }
-  .hud-center:has(.icon-btn:nth-of-type(4)) .hud-group-scroll > :last-child { margin-right: auto; }
 
 /* ── Short but NOT narrow: a phone in landscape ───────────────────────────
    The compact query above fires on `(max-width: 640px), (max-height: 560px)`,

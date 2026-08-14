@@ -1,3 +1,59 @@
+## 2.311.0
+
+### Fixed — `display: none` is not the same as "not a child"
+
+2.310.0 centred the category icons with auto margins on `:first-child` and
+`:last-child`. The row's last children at phone width are the (?) legend, the
+label-size stepper and their separator — all `display: none` there. `display:
+none` removes the BOX, not the child, so `:last-child` still matched a hidden
+element and its `margin-right: auto` had nothing to apply to. Only the left
+margin absorbed free space, and every icon was pushed to the right of the pill.
+Reported as the icons still not being centred.
+
+Replaced with `justify-content: safe center`, which is the property's own
+answer to the problem the auto margins were reaching for: centre while the row
+fits, fall back to start alignment the moment centring would push a button
+behind the scroll origin. Worth knowing for next time: the plain `center`
+fallback declared above it does not survive the build — the minifier dedupes
+the pair once browserslist says every target parses `safe`. It is kept in the
+source regardless, and this was confirmed by reading the built CSS rather than
+assuming.
+
+### Fixed — the halo was reading as the container it replaced
+
+2.309.0 gave the bare right-hand icons two stacked drop-shadows for legibility
+on any backdrop. The second, `0 0 6px`, is a soft glow — and at 6px around a
+32px glyph it renders as a filled rounded rectangle, which is indistinguishable
+from the hosting pill that had just been deleted. Reported, reasonably, as the
+Settings icon still sitting inside a section. One tight `0 1px 2px` shadow
+remains: enough to separate the glyph from the villa behind it, never enough to
+read as a surface.
+
+### Fixed — the app mark did not fill its own button
+
+The button tracked `--hud-pill-h` (50px) while the SVG was sized by a 44px
+React prop, leaving 3px of slack that inset the artwork from the bar's padding
+edge. The floor stack below starts flush at `--hud-side-pad`, so the two
+left-hand controls were 3px out of line — reported as the left icons not
+aligning. The mark now fills its button in CSS, which also puts the number back
+in one place: `--hud-pill-h` drives the box and the artwork, and the `size`
+prop only sets the viewBox.
+
+### Added — the bottom bar collapses to icons on a narrow portrait phone
+
+The summary row is centred with its own max-width and pans past it, so on a
+portrait phone the last tile was always half off the edge and the live value it
+exists to show was the part that got cut. Below 640px in portrait the tiles drop
+their text and become icon chips, which fits every tile at once.
+
+Width-and-orientation driven rather than overflow-driven, because CSS has no
+"if this box overflows" selector and the alternative is a ResizeObserver whose
+result feeds back into the width it just measured. Portrait is qualified
+deliberately: the same phone in landscape has room for the labels and keeps
+them, so this is a "there genuinely isn't room" rule and not a device rule.
+Tap targets, tone rings and aria-labels are all untouched — only the visible
+text is dropped, so nothing becomes unreachable or unlabelled.
+
 ## 2.310.0
 
 ### Fixed — the header's right edge dissolved into the villa
