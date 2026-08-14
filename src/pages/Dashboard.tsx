@@ -647,8 +647,8 @@ export default function Dashboard() {
   /** Rooms offered by a merged chip's tap, until one is chosen. */
   const [roomChoices, setRoomChoices] = useState<RoomChoice[] | null>(null);
 
-  const goToRoom = useCallback(
-    (room: string) => {
+  const goToRooms = useCallback(
+    (rooms: string[]) => {
       // ── Tapping a room ALWAYS shows that room's badges ─────────────────
       // One call, no branches, no outcome to inspect. focusRoom exempts the
       // room from grouping (unconditional — see its docstring) and frames it;
@@ -662,17 +662,21 @@ export default function Dashboard() {
       // map is not "showing the room"; it is the answer to a different
       // question (long-press, which still opens it), and reaching it from a
       // plain tap is what the report was about.
-      manager?.focusRoom(room);
+      manager?.focusRooms(rooms);
     },
     [manager],
   );
 
-  const handleClusterTapped = useCallback(
+  /**
+   * Press-and-hold on a room chip. A chip that names ONE room hands its devices
+   * to the summary panel, as it always has. A MERGED chip asks which of its
+   * rooms you meant instead — that question moved here from the plain tap in
+   * 2.304.0, because a tap is the "show me" gesture and answering it with a
+   * modal is the same mistake as answering it with a device list. Hold is where
+   * this app puts every "give me the options" action.
+   */
+  const handleClusterHeld = useCallback(
     (room: string, entityIds: string[], roomNames: string[]) => {
-      // A chip that swallowed other chips stands for several rooms and its
-      // label can only name one of them ("Master Bedroom +1"). Flying to the
-      // one that happened to win the label picks for the user and hides that a
-      // choice was made, so the chip asks instead.
       const merged = [...new Set(roomNames)].filter(Boolean);
       if (merged.length > 1) {
         setRoomChoices(merged.map((r) => ({
@@ -681,9 +685,30 @@ export default function Dashboard() {
         })));
         return;
       }
-      goToRoom(room);
+      setClusterGroup({ room, entityIds });
     },
-    [goToRoom, resolvedRooms],
+    [resolvedRooms],
+  );
+
+  const handleClusterTapped = useCallback(
+    (room: string, _entityIds: string[], roomNames: string[]) => {
+      // A chip that swallowed other chips stands for SEVERAL rooms, and a short
+      // tap now goes to all of them at once: the camera frames their union and
+      // every one of them is exempted from grouping, so what lands on screen is
+      // the devices themselves and not another chip.
+      //
+      // It used to ask "which room did you mean?" in a modal, on the reasoning
+      // that flying to whichever room won the chip's label would pick for the
+      // user. The reasoning was sound and the answer was wrong: a plain tap is
+      // the "show me" gesture, and answering it with a question is the same
+      // mistake as answering it with a device list (see goToRooms). The
+      // chooser is still there for when narrowing to ONE room is what you
+      // want — it moved to press-and-hold, which is where this app puts every
+      // "give me the options" action.
+      const merged = [...new Set(roomNames)].filter(Boolean);
+      goToRooms(merged.length > 0 ? merged : [room]);
+    },
+    [goToRooms],
   );
 
   // ── Hover tooltip: what is this badge? ────────────────────────────────
@@ -741,7 +766,7 @@ export default function Dashboard() {
         onManager={setManager}
         onEntityPicked={onEntityPicked}
         onEntityLongPressed={onEntityLongPressed}
-        onClusterPicked={(r, ids) => setClusterGroup({ room: r, entityIds: ids })}
+        onClusterPicked={handleClusterHeld}
         onClusterTapped={handleClusterTapped}
         onFloorChange={(f) => setCurrentFloor(f)}
         onRoomChange={setRoom}
@@ -939,7 +964,7 @@ export default function Dashboard() {
           onClose={() => setRoomChoices(null)}
           onPick={(room) => {
             setRoomChoices(null);
-            goToRoom(room);
+            goToRooms([room]);
           }}
         />
       )}

@@ -189,7 +189,7 @@ export interface SceneManagerOptions {
    *  long-press (this used to be the tap gesture) so the same "press and
    *  hold to see everything here" pattern the HUD uses elsewhere still opens
    *  it; a plain tap now navigates to the room instead (onClusterTapped). */
-  onClusterPicked?: (room: string, entityIds: string[]) => void;
+  onClusterPicked?: (room: string, entityIds: string[], roomNames: string[]) => void;
   /** A room-cluster chip was tapped (short press) — the same "tap a room →
    *  zoom there" gesture the radial room dial already uses (HUD's
    *  onRadialPick), so pressing whatever currently represents "this room" —
@@ -419,7 +419,7 @@ export class SceneManager {
         const under = this.visuals.pickBadgeAt(x, y, true);
         if (under) { opts.onEntityPicked(under, x, y); return; }
         if (opts.onClusterPicked) {
-          opts.onClusterPicked(eGroup.room, eGroup.entityIds);
+          opts.onClusterPicked(eGroup.room, eGroup.entityIds, []);
           return;
         }
       }
@@ -431,7 +431,7 @@ export class SceneManager {
       tapDebug(`LONGPRESS client(${x.toFixed(0)},${y.toFixed(0)})`);
       const cluster = this.visuals.pickClusterAt(x, y);
       if (cluster && opts.onClusterPicked) {
-        opts.onClusterPicked(cluster.room, cluster.entityIds);
+        opts.onClusterPicked(cluster.room, cluster.entityIds, cluster.roomNames);
         return;
       }
       // Entity groups next, and the CELL ANSWERS FIRST — exactly as it does in
@@ -458,7 +458,7 @@ export class SceneManager {
         const under = this.visuals.pickBadgeAt(x, y, true);
         if (under) { opts.onEntityLongPressed(under, x, y); return; }
         if (opts.onClusterPicked) {
-          opts.onClusterPicked(eGroup.room, eGroup.entityIds);
+          opts.onClusterPicked(eGroup.room, eGroup.entityIds, []);
           return;
         }
       }
@@ -1464,7 +1464,7 @@ export class SceneManager {
     // Remember the target so a later overview → first-person switch lands here.
     this.lastNavigatedRoom = point;
     if (this.viewMode === "overview") {
-      const framed = this.computeRoomOverviewPose(point.name);
+      const framed = this.computeRoomOverviewPose([point.name]);
       if (framed) this.overview.applyPose(framed);
       else this.overview.panTo(point.position.x, point.position.z);
     } else {
@@ -1498,18 +1498,19 @@ export class SceneManager {
    * summarised. Callers that used to choose between those paths were the
    * reason one gesture had three results.
    */
-  focusRoom(roomName: string): void {
+  focusRooms(roomNames: readonly string[]): void {
+    if (roomNames.length === 0) return;
     // First, and unconditionally: the part that is a guarantee.
-    this.visuals.setFocusedRoom(roomName);
+    this.visuals.setFocusedRooms(roomNames);
     if (this.viewMode !== "overview") return;
-    const framed = this.computeRoomOverviewPose(roomName);
+    const framed = this.computeRoomOverviewPose(roomNames);
     // `declutters` is now advisory, not a veto: it says whether the shot also
     // separates the badges or merely frames them. Either way they are drawn.
     if (framed) this.overview.applyPose(framed);
   }
 
   private computeRoomOverviewPose(
-    roomName: string,
+    roomNames: readonly string[],
   ): {
     alpha: number; beta: number; radius: number;
     target: { x: number; y: number; z: number };
@@ -1518,12 +1519,30 @@ export class SceneManager {
      *  limit. The caller shows the device list instead. */
     declutters: boolean;
   } | null {
-    const realBounds = this.camera.getRoomBounds(roomName);
-    const bounds = realBounds ?? this.visuals.getRoomEntityBounds(roomName);
+    // The UNION of every room asked for. A merged chip ("Master Bedroom +1")
+    // stands for several rooms at once, and a short tap on it frames all of
+    // them — so the box to fit is their union, not whichever room happened to
+    // win the chip's label.
+    let bounds: { minX: number; maxX: number; minZ: number; maxZ: number; floorY: number } | null = null;
+    // Real wall polygons where every room has one; the entity-anchor fallback
+    // is per room, so one room without a polygon only loosens ITS contribution.
+    let allReal = true;
+    for (const name of roomNames) {
+      const real = this.camera.getRoomBounds(name);
+      if (!real) allReal = false;
+      const b = real ?? this.visuals.getRoomEntityBounds(name);
+      if (!b) continue;
+      bounds = bounds ? {
+        minX: Math.min(bounds.minX, b.minX), maxX: Math.max(bounds.maxX, b.maxX),
+        minZ: Math.min(bounds.minZ, b.minZ), maxZ: Math.max(bounds.maxZ, b.maxZ),
+        // The lower floor of the two: framing has to clear the deeper one.
+        floorY: Math.min(bounds.floorY, b.floorY),
+      } : { ...b };
+    }
     if (!bounds) return null;
     // Entity anchors mark devices, not walls, so their box under-states the
     // room — give that fallback more headroom than a true polygon needs.
-    const marginFrac = realBounds ? ROOM_FIT_MARGIN : ROOM_FIT_MARGIN_ENTITIES;
+    const marginFrac = allReal ? ROOM_FIT_MARGIN : ROOM_FIT_MARGIN_ENTITIES;
 
     const cx = (bounds.minX + bounds.maxX) / 2;
     const cz = (bounds.minZ + bounds.maxZ) / 2;
@@ -1562,8 +1581,15 @@ export class SceneManager {
     // constant of ours, because that limit is the real one: a room whose
     // badges only separate at maximum zoom should be taken to maximum zoom,
     // not to whatever floor a heuristic thought was reasonable.
+    //
+    // ONE room only. With several, the wall fit IS the answer: any tighter rung
+    // the badge solver could return is by definition a shot that no longer
+    // frames every room, and "show me all of these rooms" is the whole of what
+    // a merged chip's tap asked for. The badges are not left to chance either —
+    // the EXEMPTION above is unconditional and is what guarantees they are
+    // drawn individually, at whatever distance the framing lands on.
     const vpH = this.engine.getRenderHeight();
-    const solved = this.visuals.solveRoomZoomRadius(roomName, {
+    const solved = roomNames.length === 1 ? this.visuals.solveRoomZoomRadius(roomNames[0], {
       vpH,
       vFov,
       halfAngle,
@@ -1573,7 +1599,7 @@ export class SceneManager {
       // longer fills the frame, and nothing about badges improves by backing
       // further away.
       maxRadius: Math.max(radius, this.overview.camera.lowerRadiusLimit ?? 2),
-    });
+    }) : null;
     let declutters = true;
     if (solved) {
       radius = solved.radius;

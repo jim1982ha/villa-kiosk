@@ -653,7 +653,10 @@ interface RoomChip {
 }
 /** A merged chip says so with "+N", so the count pill's total is never
  *  mistaken for one room's device count. */
-const chipLabelOf = (c: RoomChip) => (c.rooms > 1 ? `${c.room} +${c.rooms - 1}` : c.room);
+/** The "+N" a chip carries when it has swallowed other rooms, or "" when it
+ *  names exactly one. Kept SEPARATE from the room name because fitChipLabel
+ *  must never truncate it — see that function. */
+const chipSuffixOf = (c: RoomChip) => (c.rooms > 1 ? `+${c.rooms - 1}` : "");
 /**
  * ── The summaries are ONE family, built from ONE unit ────────────────────
  * A summary is never given a size of its own. Every dimension of the room
@@ -1129,7 +1132,7 @@ export class EntityVisuals {
    * honest presentation of "these two things are in the same place", and it is
    * what was asked for over a chip that hides both.
    */
-  private focusedRoom: string | null = null;
+  private focusedRooms = new Set<string>();
   /** The quantised zoom the focus was granted at. The focus lasts exactly as
    *  long as that zoom does — see cullLabels — so panning around a focused
    *  room keeps it open, and zooming away lets the map behave normally again
@@ -2377,10 +2380,10 @@ export class EntityVisuals {
    * apart from marking the layout dirty, which it must, since the exemption
    * changes what the very next pass will draw.
    */
-  setFocusedRoom(room: string | null): void {
-    const key = room === null ? null : roomKey(room);
-    if (key === this.focusedRoom) return;
-    this.focusedRoom = key;
+  setFocusedRooms(rooms: readonly string[] | null): void {
+    const keys = (rooms ?? []).map(roomKey).filter(Boolean);
+    if (keys.length === this.focusedRooms.size && keys.every((k) => this.focusedRooms.has(k))) return;
+    this.focusedRooms = new Set(keys);
     // Stamped on the NEXT pass, once the camera has actually been moved to the
     // solved pose — reading the zoom here would capture the pre-flight one and
     // clear the focus on arrival.
@@ -2389,9 +2392,9 @@ export class EntityVisuals {
     this.requestRender();
   }
 
-  /** The room currently exempt from grouping, if any (roomKey form). */
-  focusedRoomKey(): string | null {
-    return this.focusedRoom;
+  /** The rooms currently exempt from grouping (roomKey form). */
+  focusedRoomKeys(): string[] {
+    return [...this.focusedRooms];
   }
 
   /**
@@ -3773,10 +3776,10 @@ export class EntityVisuals {
     // that takes it away. The original stamp stays the floor rather than
     // re-stamping on the way in, which is what makes "at least as close as when
     // you asked" the literal rule.
-    if (this.focusedRoom !== null) {
+    if (this.focusedRooms.size > 0) {
       const z = this.quantisedPixelsPerWorldUnit(shown);
       if (this.focusedAtZoom === 0) this.focusedAtZoom = z;
-      else if (z < this.focusedAtZoom) { this.focusedRoom = null; this.focusedAtZoom = 0; }
+      else if (z < this.focusedAtZoom) { this.focusedRooms.clear(); this.focusedAtZoom = 0; }
     }
 
     // ── Layout ───────────────────────────────────────────────────────────
@@ -4208,7 +4211,7 @@ export class EntityVisuals {
     clearance: { pxPerWorld: number; allow: number; basis: ViewBasis },
   ): PlacementItem[] {
     const pool = this.placeItems;
-    const focus = this.focusedRoom;
+    const focus = this.focusedRooms;
     const k = clearance.pxPerWorld;
     const p = this.projPlane;
     for (let i = 0; i < shown.length; i++) {
@@ -4227,7 +4230,7 @@ export class EntityVisuals {
       // Tiebreak only, never a gate — see PlacementItem.category.
       it.category = s.lbl.category;
       it.room = roomKey(this.roomOf(s.id));
-      it.exempt = focus !== null && it.room === focus;
+      it.exempt = focus.has(it.room);
     }
     pool.length = shown.length;
     return pool;
@@ -4400,7 +4403,7 @@ export class EntityVisuals {
       Math.abs(a.cx - b.cx) < a.hw + b.hw && Math.abs(a.cy - b.cy) < a.hh + b.hh;
 
     const scale = this.effectiveScale();
-    const focus = this.focusedRoom;
+    const focus = this.focusedRooms;
     const p = new Vector3();
 
     // `container.isVisible` rather than a reconstruction of the same decision
@@ -4416,7 +4419,7 @@ export class EntityVisuals {
       };
       if (!onScreen(b)) continue; // off-screen overlap is not something anyone sees
       badgeBoxes.push(b);
-      badgeExempt.push(focus !== null && roomKey(this.roomOf(s.id)) === focus);
+      badgeExempt.push(focus.has(roomKey(this.roomOf(s.id))));
     }
 
     // A card is drawn ENTIRELY ABOVE its anchor — updateEntityGroups sets
@@ -4854,7 +4857,7 @@ export class EntityVisuals {
      * `others` is passed rather than closed over because this runs in two
      * passes and they need different sets — see below.
      */
-    const focus = this.focusedRoom;
+    const focus = this.focusedRooms;
     const fits = (g: PendingEntityGroup, others: PendingEntityGroup[]): boolean => {
       const mineHalf = groupHalf(g);
       // ── A SUMMARY MUST CLEAR OTHER SUMMARIES; IT MAY OVERLAP A BADGE ─────
@@ -4901,7 +4904,7 @@ export class EntityVisuals {
         // NEIGHBOURING room's group to its chip while the focus lasted — the
         // focus renegotiating the rest of the map, which is exactly what the
         // exemption exists to prevent.
-        if (focus !== null && roomKey(this.roomOf(shown[j].id)) === focus) continue;
+        if (focus.has(roomKey(this.roomOf(shown[j].id)))) continue;
         const d = this.drawnDistance(
           g.sx, cardCentreY(g), g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
         if (d < vsBadge + halfOf(j) * allow + gapPx) return false;
@@ -4984,7 +4987,7 @@ export class EntityVisuals {
           if (this.entityGrouped.has(shown[j].id)) continue;
           const rk = roomKey(this.roomOf(shown[j].id));
           if (this.roomClustered.get(rk)) continue;
-          if (focus !== null && rk === focus) continue;
+          if (focus.has(rk)) continue;
           // ── BOX vs BOX, ON EACH AXIS ─────────────────────────────────
           // Burial is a question about two rectangles of ink, and it has to be
           // tested as one. Two earlier shapes of this were both wrong in the
@@ -5228,14 +5231,14 @@ export class EntityVisuals {
     clearance: { gap: number; minSep: number; pxPerWorld: number; basis: ViewBasis },
     pending: PendingEntityGroup[],
   ): void {
-    const focus = this.focusedRoom;
-    if (focus === null) return;
+    const focus = this.focusedRooms;
+    if (focus.size === 0) return;
     // Indices into `shown`, so a strip's members map straight back.
     const idx = this.focusIdx;
     idx.length = 0;
     const sub = this.focusItems;
     for (let i = 0; i < items.length; i++) {
-      if (items[i].room !== focus) continue;
+      if (!focus.has(items[i].room)) continue;
       const src = items[i];
       let it = sub[idx.length];
       if (!it) {
@@ -5272,9 +5275,11 @@ export class EntityVisuals {
     //
     // Greedy, in the canonical (rank, entity_id) order every other decision
     // here uses, so the result depends on nothing but geometry and rank. Capped
-    // at what a card can DRAW, which is what guarantees a focused room can
-    // never show a count badge again: a group that cannot show its devices is
-    // not an answer to "show me this room's devices".
+    // at what a card can DRAW, so a clique never becomes a count: a group that
+    // cannot show its devices is not an answer to "show me this room's
+    // devices". ⚠️ That is a property of the CLIQUES only — the card-vs-card
+    // merge below can still take a pile past the cap, deliberately; see it for
+    // the trade.
     //
     // One room's badges, so the plain O(n^2) sweep is cheaper than any index.
     // `sub` is indexed locally; `sortCardMembers` speaks in `shown` indices.
@@ -5302,6 +5307,58 @@ export class EntityVisuals {
         pile.push(cand);
       }
       piles.push(pile);
+    }
+
+    // ── …and then the CARDS must clear each other ─────────────────────────
+    // The cliques above are built from where the BADGES are. What gets drawn
+    // is a CARD, and a card is far bigger than the badge it replaces — a 2x2
+    // is two badge boxes wide and two tall. So two cliques whose badges never
+    // touched can produce two cards that sit right on top of each other, which
+    // is what a tapped room actually looked like: a stack of overlapping white
+    // boxes where the promise was "your devices, side by side".
+    //
+    // Nothing here moves; that rule is absolute in this file. Two cards that
+    // collide become ONE card, which is the same answer every other tier in
+    // this subsystem gives (piles merge, chips merge). Repeated to a fixpoint
+    // because merging grows the survivor and can bring it into contact with a
+    // third — bounded by the pile count, since every round strictly reduces it.
+    //
+    // ⚠️ A merged pile CAN now exceed what a card can draw, and then it draws a
+    // count. The comment above says a focused room can never show one; that was
+    // true while piles were capped, and it is the smaller of the two evils it
+    // was weighed against — but overlapping cards is the LARGER one, and a
+    // count here is honest in a way the "50" of 2.294.0 was not: these devices
+    // are piled by construction, since their own cards could not be told apart.
+    if (piles.length > 1) {
+      const scale = this.effectiveScale();
+      const gapPx = this.metrics.minGapPx * scale;
+      const boxOf = (pile: number[]) => {
+        let wx = 0, wy = 0, wz = 0;
+        for (const k of pile) { const i = idx[k]; wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz; }
+        const n = pile.length;
+        const q = this.planeOf(clearance, wx / n, wy / n, wz / n);
+        const lay = this.cardOf(gridCells(Math.min(pile.length, MAX_TOTAL_CHIPS)));
+        const hh = (lay.height / 2) * scale;
+        // Anchored bottom-edge-on-anchor exactly as the renderer draws it —
+        // this file's oldest rule, and the one 2.288.0 had to restate.
+        return { cx: q.sx, cy: q.sy - hh, hw: (lay.width / 2) * scale + gapPx, hh: hh + gapPx };
+      };
+      for (let round = 0; round < piles.length; round++) {
+        let a = -1, b = -1;
+        const boxes = piles.map(boxOf);
+        outer:
+        for (let i = 0; i < piles.length; i++) {
+          for (let j = i + 1; j < piles.length; j++) {
+            if (Math.abs(boxes[i].cx - boxes[j].cx) < boxes[i].hw + boxes[j].hw
+              && Math.abs(boxes[i].cy - boxes[j].cy) < boxes[i].hh + boxes[j].hh) {
+              a = i; b = j; break outer;
+            }
+          }
+        }
+        if (a < 0) break;
+        piles[a] = piles[a].concat(piles[b]);
+        piles.splice(b, 1);
+      }
     }
 
     for (const pile of piles) {
@@ -5344,6 +5401,7 @@ export class EntityVisuals {
       // The same cell order the main solve's cards use — one comparator, so
       // the two producers cannot drift.
       const members = this.sortCardMembers(shown, pile.map((k) => idx[k]));
+      const pairRooms = [...new Set(members.map((i) => roomKey(this.roomOf(shown[i].id))))];
       let wx = 0, wy = 0, wz = 0;
       let pileKey = shown[members[0]].id;
       for (const i of members) {
@@ -5358,8 +5416,12 @@ export class EntityVisuals {
         // lapses, and giving them one key would reuse a control whose
         // placement rules just changed.
         key: `fgrp|${pileKey}`,
-        room: this.roomDisplay.get(focus) ?? focus,
-        roomKeys: [focus],
+        // Taken from the MEMBERS, not from "the focused room": with several
+        // rooms focused at once (a merged chip's short tap) a pair can straddle
+        // two of them, and naming it after whichever was focused first would
+        // file it under a room half its devices are not in.
+        room: this.roomDisplay.get(pairRooms[0]) ?? pairRooms[0],
+        roomKeys: pairRooms,
         members,
         wx: wx / n, wy: wy / n, wz: wz / n,
         // Derived from the world centroid, by the one projection — see planeOf.
@@ -5917,7 +5979,7 @@ export class EntityVisuals {
     }
     const scale = this.effectiveScale();
     const gapPx = this.metrics.minGapPx * scale;
-    const focus = this.focusedRoom;
+    const focus = this.focusedRooms;
     const half = (this.summaryMetrics().size / 2) * scale;
     // One round per room is the worst case: each has to be able to escalate,
     // and nothing can un-escalate. The `<=` is the belt to that braces.
@@ -5947,7 +6009,7 @@ export class EntityVisuals {
         if (this.entityGrouped.has(s2.id)) continue;
         const rk = roomKey(this.roomOf(s2.id));
         if (this.roomClustered.get(rk)) continue;
-        if (focus !== null && rk === focus) continue;
+        if (focus.has(rk)) continue;
         if (clears(s2.sx, s2.sy, boxes[i].halfW, boxes[i].halfH)) continue;
         this.roomClustered.set(rk, true);
         escalated = true;
@@ -6065,7 +6127,7 @@ export class EntityVisuals {
       ? (eng.getRenderWidth() * CHIP_MAX_VIEWPORT_FRACTION) / scale
       : 0;
     const measure = (c: RoomChip) => {
-      c.label = fitChipLabel(chipLabelOf(c), formatCountBadge(c.ids.length), chipBudget);
+      c.label = fitChipLabel(c.room, chipSuffixOf(c), formatCountBadge(c.ids.length), chipBudget);
       if (vp) {
         const p = Vector3.Project(c.centre, Matrix.IdentityReadOnly, tm, vp);
         c.x = p.x; c.y = p.y;

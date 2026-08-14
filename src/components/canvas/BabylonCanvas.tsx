@@ -60,7 +60,7 @@ interface Props {
   onEntityLongPressed: (entityId: string, clientX: number, clientY: number) => void;
   /** A room-cluster chip was long-pressed (see EntityVisuals' room clustering) —
    *  opens the full entity list, same as before this was tap's job. */
-  onClusterPicked: (room: string, entityIds: string[]) => void;
+  onClusterPicked: (room: string, entityIds: string[], roomNames: string[]) => void;
   /** A room-cluster chip was tapped — navigates to that room. */
   onClusterTapped: (room: string, entityIds: string[], roomNames: string[]) => void;
   onFloorChange: (floor: number) => void;
@@ -219,7 +219,7 @@ export default function BabylonCanvas({
         // here is what put Dashboard's render scope inside the scene graph.
         onEntityPicked: (id, x, y) => cbRef.current.onEntityPicked(id, x, y),
         onEntityLongPressed: (id, x, y) => cbRef.current.onEntityLongPressed(id, x, y),
-        onClusterPicked: (room, ids) => cbRef.current.onClusterPicked(room, ids),
+        onClusterPicked: (room, ids, roomNames) => cbRef.current.onClusterPicked(room, ids, roomNames),
         onClusterTapped: (room, ids, roomNames) => cbRef.current.onClusterTapped(room, ids, roomNames),
         onFloorChange: (floor) => cbRef.current.onFloorChange(floor),
         onRoomChange: (room) => cbRef.current.onRoomChange(room),

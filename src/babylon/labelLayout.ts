@@ -41,13 +41,32 @@ const CHIP_ELLIPSIS = "…";
 /** Below this a name is no longer recognisable, so the chip keeps it and
  *  overflows rather than printing a stub nobody can read. */
 const CHIP_MIN_NAME_CHARS = 4;
-export function fitChipLabel(name: string, countText: string, maxPx: number): string {
-  if (!(maxPx > 0)) return name;
+export function fitChipLabel(
+  name: string,
+  /** The merged-rooms marker ("+2"), or "" for a chip that names one room.
+   *  Passed SEPARATELY and never truncated — see below. */
+  suffix: string,
+  countText: string,
+  maxPx: number,
+): string {
+  const join = (n: string) => (suffix ? `${n} ${suffix}` : n);
+  // ⚠️ THE SUFFIX IS NOT PART OF THE NAME, and folding it in was a real bug.
+  // Until 2.304.0 the caller pre-joined them and handed "Living Room +1" over
+  // as the name, so the truncation loop — which cuts from the END — ate the
+  // "+1" first and printed "Living Room…". A chip that has swallowed other
+  // rooms then looked exactly like one that had not, while its tap did
+  // something entirely different (frame several rooms, not one), and its count
+  // pill silently included devices from rooms it no longer admitted to
+  // covering. The name is the only part a fragment still identifies; "+1" and
+  // the count are not recoverable from anything, so they are spent first and
+  // the name gets what is left. Same rule the count already followed.
+  const whole = join(name);
+  if (!(maxPx > 0)) return whole;
   const fits = (s: string) => chipWidthPx(`${s}  ${countText}`) <= maxPx;
-  if (fits(name)) return name;
+  if (fits(whole)) return whole;
   for (let n = name.length - 1; n >= CHIP_MIN_NAME_CHARS; n--) {
-    const cut = name.slice(0, n).trimEnd() + CHIP_ELLIPSIS;
+    const cut = join(name.slice(0, n).trimEnd() + CHIP_ELLIPSIS);
     if (fits(cut)) return cut;
   }
-  return name.slice(0, CHIP_MIN_NAME_CHARS).trimEnd() + CHIP_ELLIPSIS;
+  return join(name.slice(0, CHIP_MIN_NAME_CHARS).trimEnd() + CHIP_ELLIPSIS);
 }

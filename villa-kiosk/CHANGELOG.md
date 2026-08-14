@@ -1,3 +1,71 @@
+## 2.304.0
+
+### Changed — a merged chip's tap frames ALL its rooms; the chooser moved to hold
+
+A chip that has swallowed others stands for several rooms, and tapping it used
+to open a "which room did you mean?" modal. The reasoning was sound — flying to
+whichever room happened to win the chip's label picks for the user and hides
+that a choice was made — but the answer was wrong. A plain tap is the "show me"
+gesture, and answering it with a question is the same mistake as answering it
+with a device list, which this app already stopped doing for exactly the same
+reason.
+
+A short tap now goes to all of them at once: the camera frames the UNION of
+every room the chip covers, and every one of those rooms is exempted from
+grouping, so what lands on screen is the devices themselves rather than another
+chip. The chooser is still there for when narrowing to one room is what you
+want; it moved to press-and-hold, which is where this app puts every "give me
+the options" action. A chip that names a single room is unchanged in both
+gestures.
+
+Two consequences worth stating. The exemption is now a SET of rooms rather than
+one, which means a focused pair can straddle two of them — it takes its name
+from its members, not from whichever room was focused first. And with several
+rooms framed at once the badge-zoom solver is skipped: any tighter rung it
+could return is by definition a shot that no longer frames every room, and the
+exemption is what guarantees the badges are drawn individually anyway.
+
+### Fixed — tapping a room produced a stack of overlapping cards
+
+Reported with a screenshot of exactly that, and it is the correct complaint: a
+tapped room is supposed to show its devices side by side, not a pile of white
+boxes on top of one another.
+
+The focused-room pass builds CLIQUES of badges that mutually overlap and draws
+each as one card. The cliques are computed from where the BADGES are, and a
+card is far bigger than the badge it replaces — a 2x2 is two badge boxes wide
+and two tall. So two cliques whose badges never touched could produce two cards
+that landed right on top of each other, with nothing checking it: focused
+groups are seated unconditionally, precisely so they can never be refused back
+into the chip the tap was meant to open.
+
+Two colliding cards now become one card, repeated to a fixpoint because merging
+grows the survivor and can bring it into contact with a third. Nothing moves —
+that rule is absolute here — and merging is the same answer every other tier in
+this subsystem already gives.
+
+One deliberate trade comes with it: a merged pile can now exceed what a card
+can draw, and then it draws a count. The clique cap existed so a focused room
+could never show one, and that was the smaller of two evils when weighed
+against a card that could not fit its devices. Overlapping cards is the larger
+evil. A count is also honest here in a way the "50" of 2.294.0 was not: these
+devices are piled by construction, since their own cards could not be told
+apart.
+
+### Fixed — a truncated chip lost its "+N"
+
+`fitChipLabel` was handed "Living Room +1" as the name to fit, so the
+truncation — which cuts from the end — ate the "+1" first and printed "Living
+Room…". A chip that had swallowed other rooms then looked exactly like one that
+had not, while its tap did something entirely different and its count pill
+included devices from rooms it no longer admitted to covering. Reported from a
+screenshot of "Living Room… 20".
+
+The suffix is now passed separately and is never truncated, on the same rule
+the count already followed: the name is the only part a fragment still
+identifies, so "+N" and the count are spent first and the name gets what is
+left.
+
 ## 2.303.0
 
 ### Changed — the phone's category bar fills the row, and the top fade is gone
