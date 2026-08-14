@@ -1,3 +1,46 @@
+## 2.317.0
+
+### Changed — a device that can afford its own screen now gets it
+
+Reported as badge glyphs looking pixelated at close zoom. They were, and not
+because of the bake: the engine starts at `1 / min(devicePixelRatio, 2)`, so on
+a DPR-3 phone — which is every modern phone — the canvas is rendered at two
+thirds of native pixel density and the compositor upscales the finished frame
+by 1.5x on its way to the screen. The comment on that line already said "⅔
+native on DPR 3"; nobody had connected it to the symptom. Icon strokes and
+hairline rings are the highest-frequency thing this app draws, which is why they
+show it while the villa render merely looks slightly soft.
+
+The 2x cap is not arbitrary — resolution is free on ANGLE and IS the frame cost
+on WebKit (empty scene, one draw call: Android Chrome 2.8ms at full resolution
+and 2.8ms at a quarter of it; the iPad 67ms and 19ms). What was missing is that
+the valve is deliberately one-way: "scaling only ever gets coarser, never finer
+again", so a device with enormous headroom stays capped forever.
+
+`raiseResolution` adds exactly one upward step, at most once per session. The
+gate reads no device string — sniffing ANGLE from WebKit would be a heuristic
+and this file has no business owning one. Instead it makes the WORST-CASE
+assumption, that the frame is entirely per-pixel, and requires the measured
+render time multiplied by the exact pixel-count increase to still land inside
+`FRAME_TARGET_MS`. A device where resolution is genuinely free clears that
+easily; one where it is not cannot clear it even in principle. Against the field
+dump, at a DPR-3 phone's 2.25x pixel increase: Android Chrome ~7ms → 15.8
+upgrades, iPhone ~11.5ms → 25.9 refused, iPad ~28ms → 63 refused, and both Macs
+never reach the test because they are already at native.
+
+It cannot hunt, which is what the one-way rule was protecting. This is not a
+controller — it is a single flag-guarded step, and afterwards the ordinary
+downward valve keeps sampling and can back the device off if the prediction was
+wrong. A bad guess costs a few seconds, not the session, and the monotonic
+invariant holds from that point on exactly as before.
+
+⚠️ **The gate reads RENDER time, not the frame gap, and the difference is the
+whole feature.** `p50` is the median gap between frames, which on any device
+holding vsync is the refresh period and nothing else — this phone reports 16.7ms
+at 60Hz and 8.4ms at 120Hz while its render cost is 4-9ms either way. Fed that
+number the gate would refuse to sharpen an idle GPU because its display happened
+to be running at 60Hz, and would read a 120Hz panel as twice the silicon.
+
 ## 2.316.0
 
 ### Fixed — a card was drawn nowhere near the devices it contained

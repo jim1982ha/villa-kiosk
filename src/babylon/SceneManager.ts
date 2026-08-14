@@ -130,6 +130,12 @@ const FRAME_TARGET_MS = 22;
 // 1.0 = one backbuffer pixel per CSS pixel. Never coarser than this — see
 // easeResolution for the rainbow-speckle regression that sets this floor.
 const HW_SCALE_FLOOR = 1;
+// The starting cap: up to 2x CSS, whatever the panel claims. On a DPR-3 phone
+// that is TWO THIRDS of native pixel density, and the compositor upscales the
+// finished frame by 1.5x on its way to the screen. Icon strokes and hairline
+// rings are the highest-frequency thing this app draws, so they are where that
+// shows first — reported as "the glyphs look very pixelised", correctly.
+const HW_START_CAP = 2;
 
 // How far to push the horizon down in OVERVIEW, in the sky dome's own world
 // units (its radius is 500 — see SkyDome.setHorizonDrop for why this is not an
@@ -331,7 +337,7 @@ export class SceneManager {
     // Where that is too much for the device, calibrateResolution measures it
     // shortly after the reveal and the valve backs it off — per device, from
     // its own frame times, with nothing for anyone to configure.
-    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 2));
+    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, HW_START_CAP));
 
     this.scene = new Scene(this.engine);
     // Two clock reads and a counter reset per frame, against frames measured at
@@ -861,7 +867,28 @@ export class SceneManager {
     // Its own minimum is lower because it is answering an easier question than
     // the telemetry is: "is this device comfortably missing frame budget",
     // not "characterise this burst". Still monotonic, still floored at 1x CSS.
-    if (s.length >= VALVE_SAMPLE_MIN) this.easeResolution(at(0.5));
+    if (s.length >= VALVE_SAMPLE_MIN) {
+      // Down first, then up. Their guards are mutually exclusive (one needs a
+      // slow p50, the other a fast one), so the order is documentation rather
+      // than logic — but stating it means a future edit to either guard cannot
+      // quietly make both fire on one sample.
+      this.easeResolution(at(0.5));
+      // ⚠️ The UPWARD step reads RENDER time, not the frame gap. `at(0.5)` is
+      // the median gap BETWEEN frames, and on any device holding vsync that is
+      // the refresh period and nothing else: this phone reports p50 16.7ms at
+      // 60Hz and 8.4ms at 120Hz while its render cost is 4-9ms either way. A
+      // gate fed that number would refuse to sharpen an idle GPU because its
+      // display happened to be running at 60Hz, and would read a 120Hz panel
+      // as twice as capable as the same silicon behind a 60Hz one.
+      // `renderSamples` is the work actually done per frame, which is the only
+      // thing that scales with pixel count.
+      if (r.length >= VALVE_SAMPLE_MIN) {
+        // Sorted in place: the telemetry block below sorts it again anyway, so
+        // this costs a nearly-sorted re-sort and no allocation.
+        r.sort((a, b) => a - b);
+        this.raiseResolution(r[Math.floor(r.length * 0.5)]);
+      }
+    }
 
     if (s.length < FRAME_SAMPLE_MIN || this.frameReportsSent >= FRAME_REPORT_MAX) return;
     this.frameReportsSent += 1;
@@ -947,6 +974,66 @@ export class SceneManager {
    *   the user asked for ("as nice as possible by default") is still the
    *   default, and 7fps is not "nice" by any reading of it.
    */
+  /**
+   * The one chance a device gets to render at its panel's real resolution.
+   *
+   * The engine starts at HW_START_CAP (2x CSS), which is native on a DPR-2
+   * screen and two thirds of native on a DPR-3 one. Every modern phone is
+   * DPR 3, so the default ships a 1.5x upscale to every one of them.
+   *
+   * ── Why this is safe to attempt, and why it is measured rather than
+   *    detected ────────────────────────────────────────────────────────────
+   * Resolution is free on ANGLE and IS the frame cost on WebKit: measured with
+   * an empty scene and one draw call, Android Chrome paid 2.8ms at full
+   * resolution and 2.8ms at a quarter of it, while the iPad paid 67ms and
+   * 19ms. Sniffing which of those a device is would be a heuristic, and this
+   * file has no business owning one.
+   *
+   * So the gate is a WORST-CASE PREDICTION instead: assume the frame is
+   * entirely per-pixel — the WebKit case — and require that the measured
+   * RENDER time, multiplied by the exact pixel-count increase the change would
+   * cause, still lands inside FRAME_TARGET_MS. A device where resolution is
+   * actually free clears that easily and gets sharpened; one where it is not
+   * cannot clear it even in principle. No device string is read.
+   *
+   * Against the four devices in the field dump, at their measured render times
+   * and a DPR-3 phone's 2.25x pixel increase:
+   *
+   *   Android Chrome  ~7ms  -> 15.8  UPGRADES   (ANGLE: resolution is free)
+   *   iPhone Safari  ~11.5ms -> 25.9  refused
+   *   iPad (HA app)    ~28ms -> 63    refused
+   *   Mac (DPR 1.6/2)               never reaches the test — already native
+   *
+   * ── And why it cannot hunt ───────────────────────────────────────────────
+   * easeResolution is deliberately monotonic ("never finer again") because a
+   * two-way controller oscillates around its threshold and the resolution
+   * visibly pulses. This is not a controller: it is ONE step, taken at most
+   * once per session, guarded by a flag. Afterwards the ordinary downward
+   * valve keeps sampling and can back the device off again if the prediction
+   * was wrong — so a bad guess costs a few seconds, not the session, and the
+   * monotonic invariant holds from that point on exactly as before.
+   */
+  private resolutionRaised = false;
+  private raiseResolution(p50: number): void {
+    if (this.resolutionRaised) return;
+    const cur = this.engine.getHardwareScalingLevel();
+    const native = 1 / Math.max(1, window.devicePixelRatio || 1);
+    // Already at (or finer than) the panel — nothing to win. This is every
+    // DPR<=2 device, so they never reach the prediction below at all.
+    if (cur <= native + 1e-6) return;
+    // Pixel count scales with the SQUARE of the linear scaling change.
+    const costRatio = (cur / native) ** 2;
+    if (p50 * costRatio > FRAME_TARGET_MS) return;
+    this.resolutionRaised = true;
+    this.engine.setHardwareScalingLevel(native);
+    // Same obligation easeResolution has: badge geometry is authored in CSS px
+    // and converted through this exact value, so the layer has to be told or
+    // every badge keeps the size it had for a resolution that no longer
+    // exists — and its collision boxes keep measuring it at that size too.
+    this.visuals.notifyRenderScaleChanged();
+    this.requestRender();
+  }
+
   private easeResolution(p50: number): void {
     if (p50 <= FRAME_SLOW_MS) return;
     const cur = this.engine.getHardwareScalingLevel();
