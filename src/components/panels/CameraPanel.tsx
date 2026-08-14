@@ -27,6 +27,7 @@ import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraP
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import { useBackToClose } from "@/hooks/useBackToClose";
 import { devLog } from "@/utils/devLog";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
@@ -127,13 +128,24 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // and a stale closure here would close the whole panel out from under an
   // open picker.
   const pickerOpenRef = useRef(false);
+  const closePicker = useCallback(() => setPickerOpen(false), []);
   const onEscape = useCallback(() => {
-    if (pickerOpenRef.current) { setPickerOpen(false); return; }
+    if (pickerOpenRef.current) { closePicker(); return; }
     onClose();
-  }, [onClose]);
+  }, [onClose, closePicker]);
   // The hook's ref IS this panel's root — one element, one ref, so the focus
   // trap and the chrome/fullscreen logic below cannot drift onto two nodes.
   const rootRef = useModalA11y(onEscape);
+  // A phone's BACK button comes back to the villa instead of leaving VESTA.
+  //
+  // NOT `onEscape`: Escape branches on the picker because it is one listener
+  // for both, but Back gets one history entry per surface, so branching would
+  // spend the PANEL's entry to close the PICKER — leaving the feed on screen
+  // with nothing left for Back to consume, i.e. the next press exits the app,
+  // which is the whole bug. The picker registers its own below, and the stack
+  // then unwinds picker-then-panel by construction rather than by a condition
+  // someone has to keep true.
+  useBackToClose(onClose);
   const zoom = useMediaZoom<HTMLDivElement>();
   const [isFs, setIsFs] = useState(false);
   // The status/controls row now OVERLAYS the feed and auto-hides (see
@@ -265,6 +277,9 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     stepCamera(delta);
   };
   pickerOpenRef.current = pickerOpen;
+  // The picker's own back entry — see useBackToClose(onClose) above for why it
+  // is registered here rather than folded into the panel's handler.
+  useBackToClose(closePicker, pickerOpen);
 
   // ── Left/Right arrows step cameras — the keyboard's swipe ────────────────
   // Same action as the on-screen prev/next arrows and the same direction as

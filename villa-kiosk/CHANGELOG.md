@@ -1,3 +1,46 @@
+## 2.326.0
+
+### Fixed — the phone's back button comes back to the villa, not out of VESTA
+
+Pressing Back on a camera feed left the app. It had to: this is a single page
+with no routes, so nothing anywhere had ever touched history, and a back press
+therefore did the only thing left to it. The complaint landed on the camera feed
+because that is where it is worst — a full-screen video with the villa nowhere
+in sight is exactly the moment Back means "get me out of this" — but the gap was
+general.
+
+`useBackToClose` is the whole of it: one line on a surface and Back dismisses
+that surface instead of the app. It pushes a history entry on mount and spends
+it on unmount, and a module-level STACK decides which surface a press belongs
+to. The obvious alternative — tagging the pushed entry with an id and comparing
+against `history.state` — reads simpler and is wrong: after a pop, `history.state`
+is the entry BENEATH the one that went away, so an instance would be reasoning
+about a value that says nothing about whether it was the one popped. A stack
+answers the real question ("dismiss whatever is on top") directly, and nests for
+free.
+
+Two halves of this are easy to get wrong and both are handled. Closing by any
+other route — Escape, the X, picking a camera — has to spend the pushed entry
+too, or it outlives the surface and the NEXT back press appears to do nothing;
+cleanup calls `history.back()` itself, and the resulting `popstate` is swallowed
+rather than treated as a fresh press, which would otherwise dismiss the surface
+underneath as well. And `onClose` is invoked through a ref: making it an effect
+dependency would push an entry per render, while capturing it once would leave a
+surface closing through a handler from its first render.
+
+The camera panel takes it twice, which is the point of the design. The feed
+registers `onClose`, and the camera picker registers its own entry while it is
+open — deliberately NOT the branching handler Escape uses, because Escape is one
+listener serving both while Back gets one entry per surface: branching would
+spend the PANEL's entry to close the PICKER, leaving the feed on screen with
+nothing left for Back to consume and the next press exiting the app, which is
+the bug being fixed. Stacked, Back unwinds picker → feed → villa by
+construction. The URL never changes; the entry exists only to give Back
+something to eat, which matters under the add-on's ingress path.
+
+Only the camera panel is wired up. Every other modal still lets Back leave the
+app, and each is one line away from not doing so.
+
 ## 2.325.0
 
 ### Changed — tapping a room looks straight down at it
