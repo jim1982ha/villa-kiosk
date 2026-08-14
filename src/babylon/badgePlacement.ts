@@ -768,3 +768,59 @@ export function solvePlacement(
 
   return { accepted, buckets: st.buckets, bucketCount, chipRooms: st.chipRooms, stats };
 }
+
+/** An axis-aligned box on the view plane: centre plus half-extents. */
+export interface PileBox { cx: number; cy: number; hw: number; hh: number; }
+
+/**
+ * Merge piles whose DRAWN boxes overlap, repeatedly, until none do.
+ *
+ * Lives here — a module that imports nothing — rather than inline in the
+ * renderer, because it is a pure fixpoint over boxes and this is the third
+ * fixpoint in this subsystem to ship wrong. It is now testable without a
+ * browser, which is the only reason the bug below could be pinned.
+ *
+ * ⚠️ THE LOOP BOUND IS THE WHOLE POINT. The original was
+ * `for (let round = 0; round < piles.length; round++)`, and `piles.length`
+ * shrinks by one on every merge while `round` grows — so the two walk toward
+ * each other and meet in the middle. It performs at most ceil(N/2) merges; a
+ * full collapse needs N-1. At two or three piles those happen to be the same
+ * number, which is why it looked correct for two releases. From FOUR piles up
+ * it exits early and leaves overlapping cards drawn — reported against
+ * 2.314.0 as a tapped room showing two summary cards on top of each other.
+ *
+ * The comment on the original said "bounded by the pile count, since every
+ * round strictly reduces it". The reasoning was right and the code did not
+ * express it: a strictly-reducing quantity is the TERMINATION argument, not
+ * the iteration bound. Expressed as a while-loop, termination is obvious
+ * (every pass either breaks or removes a pile) and there is no bound to get
+ * wrong.
+ *
+ * Merges the FIRST colliding pair found in index order, which is the canonical
+ * (rank, entity_id) order its caller built the piles in — so the result is a
+ * function of geometry and rank only, like everything else here.
+ *
+ * Mutates `piles` in place and returns it.
+ */
+export function mergeCollidingPiles<T>(
+  piles: T[][],
+  boxOf: (pile: T[]) => PileBox,
+): T[][] {
+  while (piles.length > 1) {
+    const boxes = piles.map(boxOf);
+    let a = -1, b = -1;
+    outer:
+    for (let i = 0; i < piles.length; i++) {
+      for (let j = i + 1; j < piles.length; j++) {
+        if (Math.abs(boxes[i].cx - boxes[j].cx) < boxes[i].hw + boxes[j].hw
+          && Math.abs(boxes[i].cy - boxes[j].cy) < boxes[i].hh + boxes[j].hh) {
+          a = i; b = j; break outer;
+        }
+      }
+    }
+    if (a < 0) break;
+    piles[a] = piles[a].concat(piles[b]);
+    piles.splice(b, 1);
+  }
+  return piles;
+}

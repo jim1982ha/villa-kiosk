@@ -1,3 +1,44 @@
+## 2.315.0
+
+### Fixed — the card-vs-card merge stopped halfway, so two cards still overlapped
+
+The fixpoint that stops a tapped room drawing summary cards on top of each
+other was written as:
+
+    for (let round = 0; round < piles.length; round++) { ...merge one pair... }
+
+`piles.length` shrinks by one on every merge while `round` grows, so the two
+walk toward each other and meet in the middle. The loop performs at most
+ceil(N/2) merges; collapsing N piles needs N-1. At N=2 and N=3 those are the
+same number, which is why it looked correct for two releases — the failure
+begins at **four** piles, and a tapped room reaches four piles easily.
+
+The comment above it said "bounded by the pile count, since every round
+strictly reduces it". The reasoning was right and the code did not express it: a
+strictly-reducing quantity is the TERMINATION argument, not the iteration
+bound. Written as a `while (piles.length > 1)` there is no bound to get wrong,
+and termination is obvious because every pass either breaks or removes a pile.
+
+### Changed — the fixpoint moved into the pure module, and now has a test
+
+This is the third fixpoint in this subsystem to ship wrong, and the reason each
+one survived review is that it lived inside a Babylon-dependent renderer where
+nothing could execute it. `mergeCollidingPiles` is now in `badgePlacement.ts` —
+which imports nothing — taking the piles and a `boxOf` callback. Same code, same
+canonical merge order, but reachable from `npm run test:placement`.
+
+The tests state the promise as the property it actually is: **after merging, no
+two survivors overlap.** "Everything collapses to one" would have been the wrong
+assertion and is worth recording — a merged pile's box sits at its members'
+centroid, so merging two neighbours moves the survivor away from a third, and a
+chain can legitimately settle as several separated piles. The sweep runs 200
+random layouts at each pile count from 2 to 10, with half-extents that grow with
+the pile exactly as a card does when it gains cells, and also checks that no
+member is lost or duplicated.
+
+Verified by reverting the loop bound and re-running: the suite fails, and its
+first failure is at N=4 — the size the arithmetic predicts.
+
 ## 2.314.0
 
 ### Fixed — a "19" after tapping Living Room: the focused ceiling was still a ceiling

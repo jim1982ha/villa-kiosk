@@ -89,6 +89,7 @@ import {
 } from "./badgeProjection";
 import {
   solvePlacement, markContacts, createPlacementScratch, conflicts,
+  mergeCollidingPiles,
   type PlacementItem, type PlacementScratch, type PlacementStats,
 } from "./badgePlacement";
 import { clampIconScale } from "@/config/AppConfig";
@@ -5376,22 +5377,15 @@ export class EntityVisuals {
         // this file's oldest rule, and the one 2.288.0 had to restate.
         return { cx: q.sx, cy: q.sy - hh, hw: (lay.width / 2) * scale + gapPx, hh: hh + gapPx };
       };
-      for (let round = 0; round < piles.length; round++) {
-        let a = -1, b = -1;
-        const boxes = piles.map(boxOf);
-        outer:
-        for (let i = 0; i < piles.length; i++) {
-          for (let j = i + 1; j < piles.length; j++) {
-            if (Math.abs(boxes[i].cx - boxes[j].cx) < boxes[i].hw + boxes[j].hw
-              && Math.abs(boxes[i].cy - boxes[j].cy) < boxes[i].hh + boxes[j].hh) {
-              a = i; b = j; break outer;
-            }
-          }
-        }
-        if (a < 0) break;
-        piles[a] = piles[a].concat(piles[b]);
-        piles.splice(b, 1);
-      }
+      // ⚠️ The fixpoint itself lives in badgePlacement.mergeCollidingPiles, and
+      // it moved there because the loop bound written here was wrong: it read
+      // `round < piles.length`, and `piles.length` shrinks on every merge while
+      // `round` grows, so the two met in the middle after about half the merges
+      // a full collapse needs. Two and three piles happen to need the same
+      // number either way, which is why it survived; from four up it exited
+      // early and drew the overlapping cards this was written to prevent.
+      // Out there it is a pure function over boxes and has a test.
+      mergeCollidingPiles(piles, boxOf);
     }
 
     for (const pile of piles) {
