@@ -78,6 +78,7 @@ function deriveTiles(
   if (locksG) {
     const locks = locksG.entityIds.map((id) => entities[id]).filter((e): e is HassEntity => !!e);
     const lockedN = locks.filter((l) => l.state === "locked").length;
+    const unlockedN = locks.filter((l) => l.state === "unlocked").length;
     const allLocked = lockedN === locks.length;
     const single = locks.length === 1;
     tiles.push({
@@ -91,9 +92,21 @@ function deriveTiles(
       // see the `single` branch below). The MODAL this tile opens still uses
       // the real per-device name (title, further down) — it has the room.
       label: single ? "Door Lock" : "Locks",
+      // Reads as a STATE, not as a score. "2/2 locked" makes you do the
+      // arithmetic before you know whether anything is wrong, and the one
+      // number that matters — how many are open — is the one it never prints.
+      // "All Locked" needs no reading at all, and "1 Unlocked" names the
+      // problem and its size in the same three characters the fraction used.
+      // Same shape as the single-lock branch above and the light tile's "2 On".
       value: single
         ? (locks[0].state === "locked" ? "Locked" : locks[0].state === "unlocked" ? "Unlocked" : locks[0].state)
-        : `${lockedN}/${locks.length} locked`,
+        : allLocked ? "All Locked"
+          : unlockedN > 0 ? `${unlockedN} Unlocked`
+            // Not all locked, yet none actually UNLOCKED: every remainder is
+            // unavailable or jammed. Counting those as unlocked would be a
+            // plain lie about a door, on the tile whose whole job is to be
+            // trusted at a glance — so they are reported as what they are.
+            : `${locks.length - lockedN} Unknown`,
       tone: allLocked ? "neutral" : "warn",
       category: "access_control",
       entityIds: locksG.entityIds,

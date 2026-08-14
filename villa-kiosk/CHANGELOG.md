@@ -1,3 +1,24 @@
+## 2.305.0
+
+### Changed — the Locks tile reads as a state, not as a score
+
+"2/2 locked" makes you do arithmetic before you know whether anything is
+wrong, and the one number that actually matters — how many doors are open — is
+the one it never prints. The tile now says **All Locked** when everything is
+secured, and **1 Unlocked** (or 2, 3…) when it is not: the same three
+characters the fraction used, spent on naming the problem and its size instead
+of on a denominator that never changes.
+
+It also matches the shape the rest of the bar already uses — the single-lock
+tile has always said "Locked"/"Unlocked", and the lights tile says "2 On".
+
+One case gets its own wording rather than being folded into the other two: not
+all locked, yet none actually unlocked, which means every remainder is
+unavailable or jammed. Those are reported as "N Unknown". Counting them as
+unlocked would be a plain lie about a door, on the tile whose whole job is to
+be trusted at a glance. The amber "warn" tone still applies to anything that is
+not fully locked, unchanged.
+
 ## 2.304.0
 
 ### Changed — a merged chip's tap frames ALL its rooms; the chooser moved to hold
