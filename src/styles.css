@@ -669,7 +669,17 @@ button {
    button — only their own size differs (hud-stack's rows are full-width). */
 .hud-group .icon-btn, .hud-stack .icon-btn {
   border-radius: 10px;
-  background: transparent; backdrop-filter: none; border: none;
+  /* ⚠️ box-shadow BELONGS IN THIS RESET and was missing until 2.312.0.
+     .icon-btn's shared glass chrome is four properties — background, blur,
+     border and --elev-2 — and this rule reset three. Inside a group that was
+     invisible: the group's own opaque plate sat over the button's shadow. The
+     moment the right-hand plates were removed (2.309.0) the shadow became the
+     only thing painting there, and a soft dark rounded rectangle behind a
+     32px glyph is indistinguishable from the container that had just been
+     deleted. Reported three releases running as "the Settings icon is still
+     hosted inside a section" — correctly, because that is what it looked
+     like. It was never the pill and never the halo; it was this. */
+  background: transparent; backdrop-filter: none; border: none; box-shadow: none;
   color: var(--text-primary);
 }
 .hud-group .icon-btn { width: 40px; height: 40px; }
@@ -766,7 +776,13 @@ button {
    Reported as the left-hand icons not lining up. Sizing it here rather than
    in the TSX also means --hud-pill-h stays the single source of the number;
    the `size` prop now only sets the viewBox. */
-.hud-home-btn svg { width: 100%; height: 100%; }
+/* Height drives everything and the aspect ratio is left alone. 2.311.0 set
+   BOTH axes to 100%, which squares a mark whose artwork is 100:93 — it
+   stretched the squircle and, because the button was a fixed 50px while the
+   mark's natural width at that height is 54px, it also stopped the two being
+   the same box. Width auto on both means the button IS the mark: one edge, at
+   the bar's padding edge, with nothing to be misaligned against. */
+.hud-home-btn svg { height: 100%; width: auto; }
 .hud-center { justify-self: center; display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%; }
 .hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
 /* ── The right side hosts no pill (2.309.0) ───────────────────────────────
@@ -987,7 +1003,7 @@ button {
      pill it read as a small icon floating in a tall row rather than a peer of
      the section beside it. One value, tracking the pill, so the two cannot
      drift apart again. */
-  width: var(--hud-pill-h); height: var(--hud-pill-h);
+  height: var(--hud-pill-h); width: auto;
   background: none; border: none;
   border-radius: 10px; cursor: pointer; color: inherit;
 }
@@ -1228,28 +1244,7 @@ button {
 .summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--status-danger)); }
 .summary-tile.tone-off .summary-tile-value { color: var(--text-secondary); }
 
-/* ── Narrow portrait phone: tiles collapse to their icons ────────────────────
-   The row is centred with its own max-width and pans horizontally past it, so
-   on a portrait phone the last tile was always half off the edge ("LIG  4 O")
-   and the live value it exists to show was the part that got cut. Dropping the
-   text is what makes every tile fit at once — six icon chips need about a
-   third of the width the labelled tiles do.
 
-   Width-and-orientation driven, not overflow-driven, because CSS has no "if
-   this box overflows" selector and the alternative is a ResizeObserver whose
-   result feeds back into the width it measured. Portrait is qualified on
-   purpose: the same phone in landscape has room for the labels and keeps them,
-   so this is not a device rule, it is a "there genuinely isn't room" rule.
-
-   The tile keeps its full tap target, its tone ring and its aria-label — only
-   the visible text is dropped, so nothing becomes unreachable or unlabelled
-   for a screen reader. */
-@media (max-width: 640px) and (orientation: portrait) {
-  .summary-tile-text { display: none; }
-  /* With the text gone the tile is a chip: square-ish, no asymmetric right
-     padding that only existed to separate icon from label. */
-  .summary-tile { min-width: 0; padding: 9px; gap: 0; }
-}
 
 /* Scene pop-up picker (portaled to <body>, anchored above the Scene tile). */
 .summary-scene-menu {
@@ -1436,6 +1431,30 @@ button {
   .summary-tile-icon svg { width: 21px; height: 21px; }
   .summary-tile-value { font-size: var(--text-md); }
 }
+
+/* ── Narrow portrait phone: tiles collapse to their icons ────────────────────
+   The row is centred with its own max-width and pans horizontally past it, so
+   on a portrait phone the last tile was always half off the edge ("LIG  4 O")
+   and the live value it exists to show was the part that got cut. Dropping the
+   text is what makes every tile fit at once — six icon chips need about a
+   third of the width the labelled tiles do.
+
+   Width-and-orientation driven, not overflow-driven, because CSS has no "if
+   this box overflows" selector and the alternative is a ResizeObserver whose
+   result feeds back into the width it measured. Portrait is qualified on
+   purpose: the same phone in landscape has room for the labels and keeps them,
+   so this is not a device rule, it is a "there genuinely isn't room" rule.
+
+   The tile keeps its full tap target, its tone ring and its aria-label — only
+   the visible text is dropped, so nothing becomes unreachable or unlabelled
+   for a screen reader. */
+@media (max-width: 640px) and (orientation: portrait) {
+  .summary-tile-text { display: none; }
+  /* With the text gone the tile is a chip: square-ish, no asymmetric right
+     padding that only existed to separate icon from label. */
+  .summary-tile { min-width: 0; padding: 9px; gap: 0; }
+}
+
 
 /* --- Virtual joystick --- */
 .joystick-base {
@@ -2724,7 +2743,18 @@ label.toggle span { user-select: none; line-height: 1.4; }
      so the accidental override changed nothing visible). Nothing below this
      breakpoint (the ≤640px query further down) ever redeclared padding-top
      either, so the override stuck all the way down to the smallest phones. */
-  .hud-topbar { padding-left: var(--hud-side-pad); padding-right: var(--hud-side-pad); gap: 8px; }
+  /* BOTH sides carry the safe-area inset. Only padding-right did (see the
+     desktop rule above), so on any device with a left inset the top bar's
+     content started at --hud-side-pad while .hud-left-col — which adds the
+     inset — started further in, and the app icon and the floor stack below it
+     could not line up. Portrait phones have a zero left inset, which is why
+     this survived: it is exactly the class of bug --hud-side-pad's own comment
+     was written to prevent, reintroduced on the other axis. */
+  .hud-topbar {
+    padding-left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
+    padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px));
+    gap: 8px;
+  }
   .hud-center { gap: 8px; }
 }
 @media (max-width: 860px) {

@@ -1,3 +1,47 @@
+## 2.312.0
+
+### Fixed — the "container" around the Settings icon was the button's own shadow
+
+Reported three releases running, and each time I removed something that was not
+it: the hosting pill (2.309.0), then a 6px glow (2.311.0). Neither was the box.
+
+`.icon-btn` carries four properties of shared glass chrome — background, blur,
+border and `--elev-2`. The reset that flattens a button inside a group,
+`.hud-group .icon-btn`, cleared three of them and never the shadow. That was
+invisible for as long as the groups had plates: the group's own opaque surface
+sat over its buttons' shadows. Removing the right-hand plates in 2.309.0 left
+the shadow as the only thing painting there — and a soft dark rounded rectangle
+behind a 32px glyph is indistinguishable from the container that had just been
+deleted. `box-shadow: none` joins the reset, where the other three already
+were.
+
+### Fixed — the app mark was being stretched, and stopped matching its own box
+
+2.311.0 sized the mark with `width: 100%; height: 100%`. The artwork is 100:93,
+so forcing a square stretched it — and since the button was a fixed 50px while
+the mark's natural width at that height is 54px, the button and the artwork
+were no longer the same rectangle, which is the thing that has to be true for
+either to align with anything. Both now size from height alone with width auto,
+so the button *is* the mark: one edge, sitting at the bar's padding edge.
+
+### Fixed — the top bar padded its right edge for the safe-area inset and not its left
+
+`.hud-topbar` added `env(safe-area-inset-right)` to its right padding and used a
+bare `--hud-side-pad` on the left, while `.hud-left-col` below it adds the left
+inset. So on any device with a non-zero left inset the app icon and the floor
+stack could not line up. Portrait phones have a zero left inset, which is why it
+survived this long. It is precisely the class of bug `--hud-side-pad`'s own
+comment was written to prevent, reintroduced on the other axis.
+
+### Fixed — the bottom bar dropped its labels and kept its width
+
+2.311.0's portrait rule was placed *above* the `(max-width: 720px)` block that
+sets `.summary-tile { min-width: 96px }`. Same specificity, so source order
+decided and the floor won: the text hid, every tile kept its 96px minimum, and
+the bar stayed exactly as wide as before with an icon adrift in the middle of
+each tile. Moved below it, with a note on the rule saying why it has to stay
+there.
+
 ## 2.311.0
 
 ### Fixed — `display: none` is not the same as "not a child"
