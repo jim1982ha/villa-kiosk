@@ -1,3 +1,64 @@
+## 2.316.0
+
+### Fixed — a card was drawn nowhere near the devices it contained
+
+Reported with three zoom levels of the same terrace: at mid zoom the card
+holding the two cameras sat to the LEFT of the card holding the sockets, and at
+full zoom the cameras were plainly on the right.
+
+The clique CONDITION — every member overlaps every other — has no freedom in
+it. The order candidates are OFFERED in has plenty, and it decides which of
+several equally valid partitions you get. That order was the canonical
+`(rank, entity_id)` sequence, the same one the card lays its cells out in. It is
+blind to position, and `badgeRank` is largely a function of CATEGORY, so the
+sweep reached every camera in the room consecutively however far apart they
+stood: a seed took both cameras from the far side of the terrace before it took
+the socket beside it, purely because cameras sort earlier. The cliques were
+valid — every pair really did overlap at that zoom — but their members were
+spread, and a card is drawn at its members' CENTROID, which for a spread pile is
+a point none of them is near.
+
+Candidates are now offered NEAREST-FIRST, measured from the pile's running
+centroid, with category as a tiebreak between candidates that are genuinely
+near-equidistant. `order` still decides which badge SEEDS a pile and still
+breaks every remaining tie, so the result stays deterministic, independent of
+input order, and a pure function of quantised position and static rank.
+
+**On "prioritise the same type together": it was not implemented, and it was
+half of the problem.** Category appears in exactly one placement decision — the
+lone-deferral pull-back tiebreak — and nowhere in this clique build. What looked
+like same-type grouping was `badgeRank` sorting by category and the sweep taking
+whatever came next, which is the accident that dragged piles across the room. It
+is a real preference now, and a bounded one: it can choose between two
+candidates that are already about equally close, and it can never pull a pile
+toward a distant device.
+
+The band that defines "about equally close" is a QUARTER of a badge, and the
+first attempt at a full badge-width is worth recording: every candidate in the
+reported terrace — sockets at 35px, cameras at 60px — fell into one bucket, the
+comparison dropped straight through to category and then to rank, and the new
+sweep reproduced the old one exactly. A band wide enough for category to win an
+argument is a band wide enough to lose the one this exists to win.
+
+### Changed — the clique build is pure and tested
+
+`buildCliques` joins `mergeCollidingPiles` in `badgePlacement.ts`, which imports
+nothing. Measured over 2000 random rooms with categories correlated to rank (as
+`badgeRank` makes them) and positions deliberately not: mean distance from a
+member to its own pile's centroid falls **3.8%**, with 782 layouts tighter, 197
+looser and 1021 unchanged. The honest reading is that most layouts have no
+freedom to exploit — the overlap condition is genuinely constraining — and that
+some get worse, because a locally-nearest choice can leave a worse remainder;
+that is inherent to a greedy partition and the alternative is a search this has
+no budget for.
+
+The reported topology is pinned directly rather than only in aggregate: light on
+the left, two cameras on the right, two sockets between, all mutually
+overlapping and more of them than one card can hold. The cameras now group with
+each other and their card is centred exactly on them, where the rank-ordered
+sweep drew it a third of the way toward the light. Clique validity, exhaustive
+membership, determinism and input-order independence are asserted on every case.
+
 ## 2.315.0
 
 ### Fixed — the card-vs-card merge stopped halfway, so two cards still overlapped

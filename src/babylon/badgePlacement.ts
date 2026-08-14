@@ -824,3 +824,106 @@ export function mergeCollidingPiles<T>(
   }
   return piles;
 }
+
+/**
+ * Partition a focused room's badges into CLIQUES — sets where every member
+ * overlaps every other, so a card's claim ("these could not be drawn apart")
+ * is true of every pair, not just of a chain.
+ *
+ * ── Why the candidate order matters, and why it changed in 2.316.0 ─────────
+ * The clique CONDITION has no freedom in it. The order candidates are OFFERED
+ * in has plenty, and it decides which of several valid partitions you get.
+ *
+ * It used to be the canonical (rank, entity_id) order — the same order the
+ * card lays its cells out in. That is blind to position, and `badgeRank` is
+ * largely a function of CATEGORY, so the sweep reached every camera in the
+ * room consecutively regardless of where any of them stood. A seed would take
+ * both cameras from the far side of a terrace before it took the socket beside
+ * it, purely because cameras sort earlier. The resulting cliques were valid —
+ * every pair really did overlap at that zoom — but their members were spread,
+ * so the card, which is drawn at its members' CENTROID, landed nowhere near
+ * the devices it contained. Reported with three zoom levels of the same
+ * terrace: the card holding the cameras was drawn to the LEFT of the card
+ * holding the sockets, while at full zoom the cameras were plainly on the
+ * right.
+ *
+ * Candidates are now offered NEAREST-FIRST, measured from the pile's running
+ * centroid, with category as the tiebreak inside one badge-width. So:
+ *
+ *   * a pile stays spatially tight, and its card is drawn among its members;
+ *   * "same type together" becomes a real preference instead of an accident of
+ *     `badgeRank`, and one that can no longer drag a pile across the room —
+ *     it only chooses between candidates that are already about equally close.
+ *
+ * Distance is on the view plane, in the same quantised GUI pixels as
+ * everything else here, so this stays a pure function of world position,
+ * quantised zoom and static rank. `order` (canonical) still decides which
+ * badge SEEDS a pile and still breaks every remaining tie, so the output is
+ * deterministic and does not depend on input order.
+ */
+export function buildCliques(
+  items: readonly PlacementItem[],
+  order: readonly number[],
+  gap: number,
+  minSep: number,
+  maxSize: number,
+): number[][] {
+  const taken = new Uint8Array(items.length);
+  const piles: number[][] = [];
+  // Rank in the canonical order, for the final tiebreak — O(1) instead of
+  // indexOf inside the inner loop.
+  const seq = new Int32Array(items.length).fill(Number.MAX_SAFE_INTEGER);
+  for (let k = 0; k < order.length; k++) seq[order[k]] = k;
+
+  for (const seed of order) {
+    if (taken[seed]) continue;
+    taken[seed] = 1;
+    const pile = [seed];
+    let cx = items[seed].sx, cy = items[seed].sy;
+    // The "about equally close" band the category preference lives inside.
+    // Taken from the SEED so it cannot drift as the pile grows, and floored at
+    // 1px so a degenerate reach cannot divide by zero.
+    //
+    // ⚠️ A QUARTER of a badge, not a whole one. At a full badge-width the band
+    // swallowed the distance signal outright: in the reported terrace every
+    // candidate — the sockets at 35px and the cameras at 60px — landed in the
+    // same bucket, the comparison fell straight through to category and then
+    // to rank, and the sweep behaved exactly as the rank-ordered one it
+    // replaced. Distance has to DOMINATE and category has to be a tiebreak
+    // between candidates that are genuinely near-equidistant; a band wide
+    // enough for category to win an argument is a band wide enough to lose the
+    // one this function exists to win.
+    const band = Math.max(1, items[seed].reach / 4);
+    const seedCat = items[seed].category;
+
+    while (pile.length < maxSize) {
+      let best = -1, bestBucket = 0, bestCat = 0, bestSeq = 0;
+      for (const cand of order) {
+        if (taken[cand]) continue;
+        let all = true;
+        for (const m of pile) {
+          if (!conflicts(items[cand], items[m], gap, minSep)) { all = false; break; }
+        }
+        if (!all) continue;
+        const dx = items[cand].sx - cx, dy = items[cand].sy - cy;
+        // Quantised to the band so the category tiebreak can actually fire —
+        // raw distances tie only by accident.
+        const bucket = Math.floor(Math.hypot(dx, dy) / band);
+        const cat = items[cand].category === seedCat ? 0 : 1;
+        const s = seq[cand];
+        if (best < 0 || bucket < bestBucket
+          || (bucket === bestBucket && (cat < bestCat
+            || (cat === bestCat && s < bestSeq)))) {
+          best = cand; bestBucket = bucket; bestCat = cat; bestSeq = s;
+        }
+      }
+      if (best < 0) break;
+      taken[best] = 1;
+      cx = (cx * pile.length + items[best].sx) / (pile.length + 1);
+      cy = (cy * pile.length + items[best].sy) / (pile.length + 1);
+      pile.push(best);
+    }
+    piles.push(pile);
+  }
+  return piles;
+}

@@ -88,8 +88,8 @@ import {
   type ViewBasis, type ProjectedPoint, type ProjectionMode,
 } from "./badgeProjection";
 import {
-  solvePlacement, markContacts, createPlacementScratch, conflicts,
-  mergeCollidingPiles,
+  solvePlacement, markContacts, createPlacementScratch,
+  mergeCollidingPiles, buildCliques,
   type PlacementItem, type PlacementScratch, type PlacementStats,
 } from "./badgePlacement";
 import { clampIconScale } from "@/config/AppConfig";
@@ -5319,25 +5319,12 @@ export class EntityVisuals {
     for (let k = 0; k < idx.length; k++) local.set(idx[k], k);
     const order = this.sortCardMembers(shown, idx.slice())
       .map((i) => local.get(i) as number);
-    const taken = new Uint8Array(sub.length);
-    const piles: number[][] = [];
-    for (const seed of order) {
-      if (taken[seed]) continue;
-      taken[seed] = 1;
-      const pile = [seed];
-      for (const cand of order) {
-        if (pile.length >= MAX_TOTAL_CHIPS) break;
-        if (taken[cand]) continue;
-        let all = true;
-        for (const m of pile) {
-          if (!conflicts(sub[cand], sub[m], clearance.gap, clearance.minSep)) { all = false; break; }
-        }
-        if (!all) continue;
-        taken[cand] = 1;
-        pile.push(cand);
-      }
-      piles.push(pile);
-    }
+    // The clique build lives in badgePlacement.buildCliques — pure, and
+    // testable for the property that actually broke here: a clique whose
+    // members are valid but SPREAD draws its card at a centroid none of them
+    // is near. Candidates are offered nearest-first with category as the
+    // tiebreak; `order` still seeds and still breaks every remaining tie.
+    const piles = buildCliques(sub, order, clearance.gap, clearance.minSep, MAX_TOTAL_CHIPS);
 
     // ── …and then the CARDS must clear each other ─────────────────────────
     // The cliques above are built from where the BADGES are. What gets drawn
