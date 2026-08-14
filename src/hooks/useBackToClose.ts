@@ -41,15 +41,36 @@ const stack: Entry[] = [];
 let unwinding = 0;
 let listening = false;
 
+/**
+ * Dismiss the surface on top — THE definition of "what does a dismiss gesture
+ * dismiss", for every gesture that means it.
+ *
+ * Back is one caller. Escape is the other: the two are the same request in two
+ * vocabularies, and before this they each carried their own idea of the order
+ * to unwind in — Escape branching inside a single listener, Back stacking. Two
+ * expressions of one rule is one expression too many, and the one that drifts
+ * is the one nobody is looking at. The stack knows what is on top; neither
+ * caller needs to.
+ *
+ * @returns false when nothing is registered, so a caller can fall through.
+ */
+export function dismissTop(): boolean {
+  const top = stack[stack.length - 1];
+  if (!top) return false;
+  top.close();
+  return true;
+}
+
 function onPopState(): void {
   if (unwinding > 0) { unwinding -= 1; return; }
   const top = stack[stack.length - 1];
   if (!top) return;
-  // Marked BEFORE closing: `close()` typically unmounts the component
-  // synchronously enough that cleanup runs while this frame is still on the
-  // stack, and cleanup must not then push a second `history.back()`.
+  // Marked BEFORE closing, and only on THIS path: the browser has already
+  // spent this entry, so cleanup must not spend it again with a second
+  // `history.back()`. A dismiss from Escape or a button leaves it false,
+  // because there the entry is still in history and does have to go.
   top.popped = true;
-  top.close();
+  dismissTop();
 }
 
 /**

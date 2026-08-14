@@ -27,7 +27,7 @@ import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraP
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { useBackToClose } from "@/hooks/useBackToClose";
+import { useBackToClose, dismissTop } from "@/hooks/useBackToClose";
 import { devLog } from "@/utils/devLog";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
@@ -121,30 +121,16 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // here closed the camera picker) so the one key that dismisses every other
   // surface in the app left the full-screen feed sitting there.
   //
-  // Escape unwinds INNERMOST FIRST. With the picker open, Escape closes the
-  // picker and the feed stays — anything else would throw away the camera you
-  // were in the middle of choosing. `pickerOpenRef` rather than the state
-  // value because the hook registers its listener once per `onClose` identity,
-  // and a stale closure here would close the whole panel out from under an
-  // open picker.
-  const pickerOpenRef = useRef(false);
+  // Escape and Back unwind INNERMOST FIRST — picker, then feed, then villa —
+  // and they agree because they ask the SAME question. Each surface registers
+  // itself with `useBackToClose`; `dismissTop` is what both gestures call, so
+  // the order lives in the stack and not in a condition either handler has to
+  // keep true. Escape used to branch on the picker here while Back stacked,
+  // which was one rule written twice.
   const closePicker = useCallback(() => setPickerOpen(false), []);
-  const onEscape = useCallback(() => {
-    if (pickerOpenRef.current) { closePicker(); return; }
-    onClose();
-  }, [onClose, closePicker]);
   // The hook's ref IS this panel's root — one element, one ref, so the focus
   // trap and the chrome/fullscreen logic below cannot drift onto two nodes.
-  const rootRef = useModalA11y(onEscape);
-  // A phone's BACK button comes back to the villa instead of leaving VESTA.
-  //
-  // NOT `onEscape`: Escape branches on the picker because it is one listener
-  // for both, but Back gets one history entry per surface, so branching would
-  // spend the PANEL's entry to close the PICKER — leaving the feed on screen
-  // with nothing left for Back to consume, i.e. the next press exits the app,
-  // which is the whole bug. The picker registers its own below, and the stack
-  // then unwinds picker-then-panel by construction rather than by a condition
-  // someone has to keep true.
+  const rootRef = useModalA11y(dismissTop);
   useBackToClose(onClose);
   const zoom = useMediaZoom<HTMLDivElement>();
   const [isFs, setIsFs] = useState(false);
@@ -276,9 +262,9 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     if (pickerLongFired.current) { pickerLongFired.current = false; return; }
     stepCamera(delta);
   };
-  pickerOpenRef.current = pickerOpen;
-  // The picker's own back entry — see useBackToClose(onClose) above for why it
-  // is registered here rather than folded into the panel's handler.
+  // The picker is a surface too, so it registers like one — that is what puts
+  // it ABOVE the feed on the stack and makes "innermost first" a fact of the
+  // registration order rather than a rule either gesture has to remember.
   useBackToClose(closePicker, pickerOpen);
 
   // ── Left/Right arrows step cameras — the keyboard's swipe ────────────────

@@ -1,3 +1,27 @@
+## 2.327.0
+
+### Changed — Escape and Back ask the same question, in one place
+
+2.326.0 gave Back its own history stack and left Escape branching on its own:
+`if (pickerOpen) close the picker, else close the panel`. Both unwound
+innermost-first, so both behaved — but the ORDER was stated twice, once as a
+data structure and once as a condition, and the copy nobody is looking at is the
+one that drifts the first time a third surface appears.
+
+There is now one statement of it. `dismissTop()` is exported beside the hook and
+is what BOTH gestures call; a surface earns its place in the order by
+registering, not by being named in a branch. The camera picker registers while
+it is open, which is what puts it above the feed, so "picker, then feed, then
+villa" is a fact of the registration order rather than a rule a handler has to
+remember. `onEscape` and the `pickerOpenRef` that fed it are gone — the panel
+now hands `dismissTop` straight to `useModalA11y`.
+
+The two gestures stay distinct in exactly one respect, and it is not
+duplication: a Back press has already spent its history entry by the time the
+handler runs, while Escape has not, so only the popstate path marks the entry
+consumed and only the other path calls `history.back()` on cleanup. That is one
+difference in bookkeeping, not two ideas about what "dismiss" means.
+
 ## 2.326.0
 
 ### Fixed — the phone's back button comes back to the villa, not out of VESTA
