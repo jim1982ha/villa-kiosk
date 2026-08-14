@@ -1,3 +1,40 @@
+## 2.336.0
+
+### Fixed — the villa owns a history entry, so an overlay's Back lands on it and not on the root
+
+Three observations from the field finally separate this, and the third is the one
+that does the work:
+
+- Settings → Back → **closes Settings.** Correct.
+- Settings → Advanced → Close button → Settings → Back → **exits the app.**
+- Same modal, same press, opposite outcome.
+
+So nothing is wrong with Settings, and nothing is wrong with the handling: the
+record for the failing press reads `depth 1, owned 1, pending 0` — the stack held
+one surface, the reconciler held one entry, nothing was in flight, and the press
+WAS handled. Settings closed. The app left anyway.
+
+That is the fact every previous attempt here was missing, and it is not something
+the reconciler can fix, because the reconciler was right. **Android backgrounds
+the task when a Back traversal reaches the ROOT entry** — `popstate` still fires,
+we still handle it, and the activity still goes to the background. Settings alone
+works because opening it pushed an entry and the press lands on that. After the
+Advanced round-trip the depth is one lower, so the identical press lands on root
+and takes the app with it.
+
+The villa therefore owns an entry of its own, beneath every overlay's. An overlay
+press lands on the villa's entry — in the app, overlay closed — and a villa press
+lands on root and minimises. Which is the rule as stated: Back leaves only from
+the villa map.
+
+This is deliberately NOT 2.330.0's root guard, which re-armed the press so that
+Back at the villa did nothing at all and Home became the only way out. This entry
+is spent normally on the way out, and re-armed when the app comes back.
+
+It also costs nothing structurally: the reconciler already computes a desired
+depth from the stack, so the villa is one added term in that sum rather than a
+second mechanism beside it.
+
 ## 2.335.0
 
 ### Fixed — the entry for a re-mounted surface was never pushed, so the next press left the app

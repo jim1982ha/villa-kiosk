@@ -43,6 +43,8 @@ interface Entry {
 }
 
 const stack: Entry[] = [];
+/** The villa view is mounted, and owns ONE entry beneath every overlay's. */
+let rootGuard = false;
 /** History entries WE added. Reconciled against `stack.length` — see syncHistory. */
 let pushed = 0;
 /** Programmatic traversals whose `popstate` must be ignored. */
@@ -53,7 +55,21 @@ let queued = false;
 /** Make the history depth match the stack. The ONE place history is written. */
 function syncHistory(): void {
   queued = false;  // a later change re-arms both passes
-  const want = stack.length;
+  // ── WHY THE VILLA OWNS AN ENTRY ────────────────────────────────────────
+  // So that a press from an overlay lands on the VILLA'S entry rather than on
+  // the root. Android backgrounds the task when a Back traversal reaches the
+  // root entry — it fires `popstate`, we handle it and the overlay closes,
+  // and the app leaves anyway. That is why the field records showed a press
+  // with `depth 1, owned 1` being handled correctly and the app exiting
+  // regardless: nothing was wrong with the handling, the traversal had simply
+  // hit the bottom.
+  //
+  // With this, the depths line up with the rule: an overlay press lands on the
+  // villa's entry and stays in the app, and a villa press lands on root and
+  // minimises, which is exactly "Back leaves only from the villa map". It is
+  // NOT 2.330.0's guard, which swallowed the villa's press so Back did nothing
+  // there; this one is spent normally and re-armed on return (see armRoot).
+  const want = stack.length + (rootGuard ? 1 : 0);
   if (want > pushed) {
     // Same URL — this app is served under an add-on ingress path that must not
     // change, and there is no route here to reflect anyway. The entries exist
@@ -158,6 +174,29 @@ function onPopState(): void {
   // handler returns — so ask for a reconciliation explicitly rather than relying
   // on the mutation to arrive in time to schedule its own.
   scheduleSync();
+}
+
+/**
+ * Give the villa view its own history entry, so an overlay's press lands on it
+ * rather than on the root — see syncHistory for why that is the whole fix.
+ *
+ * Call ONCE, from the surface that is always mounted. Re-arms when the app comes
+ * back, because a villa press spends the entry on the way out.
+ */
+export function useBackGuard(): void {
+  useEffect(() => {
+    ensureListening();
+    rootGuard = true;
+    scheduleSync();
+    const rearm = () => scheduleSync();
+    window.addEventListener("pageshow", rearm);
+    document.addEventListener("visibilitychange", rearm);
+    return () => {
+      rootGuard = false;
+      window.removeEventListener("pageshow", rearm);
+      document.removeEventListener("visibilitychange", rearm);
+    };
+  }, []);
 }
 
 /**
