@@ -1,3 +1,42 @@
+## 2.338.0
+
+### Changed — Back at the villa minimises the app; it can no longer close it
+
+The timing test settled the question it was built for, and it settled it against
+the theory everything here had been aimed at. Reopening **five seconds** after a
+Back press rebuilt the villa from scratch, exactly as a **72-second** wait did.
+Eviction under memory pressure would have shown the opposite — quick returns
+surviving, long ones not — so the app's ~340MB footprint was never the cause and
+shrinking it would have been wasted work. Android's Back on a PWA's root FINISHES
+the activity. The document is destroyed immediately, and the next launch pays the
+full 6–10 second rebuild.
+
+The contrast is in the same telemetry: HOME merely stops the activity, and the
+document comes back alive — `lifecycle visible`, `hiddenMs 35194`, websocket
+reconnecting, nothing rebuilt.
+
+So Back at the villa is now inert: the entry it spends is replaced synchronously,
+in the pop handler, and the press does nothing else. Not through the reconciler's
+microtask, which would be a race against the platform tearing down the activity —
+and losing that race once costs the whole villa. HOME is what minimises, and it
+minimises with everything intact.
+
+Every other press is unchanged and keeps the rule whole: a surface over the villa
+closes, innermost first, until the villa is what remains, and then Back stops.
+
+This is 2.330.0's guard, restored, after 2.331.0 removed it on a reading of
+Android's behaviour that was correct in general and wrong for the browser this
+actually runs in. The measurement is what settles it, and the measurement now
+exists.
+
+### Removed — the `back-press` instrument
+
+It earned its place twice: it killed a timing theory in one run by reporting a
+press perfectly in sync, and then showed two consecutive presses with identical
+counters, which is what identified the stale entry left behind by a swap and led
+to the fix that closed the whole class. Both halves are gone — the record kind
+and the call — as promised when it went in.
+
 ## 2.337.0
 
 ### Fixed — Advanced Settings nests over Settings instead of replacing it, which deletes the whole bug class

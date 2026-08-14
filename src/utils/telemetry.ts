@@ -26,13 +26,6 @@ export type TelemetryKind =
   | "error"           // uncaught JS error / unhandled rejection
   | "context-lost"    // WebGL context lost (the iOS memory-pressure signal)
   | "context-restored"
-  // TEMPORARY (2.334.0): one record per Android BACK press, carrying what the
-  // dismissal stack and the history reconciler each believed at that instant.
-  // Back closes Advanced Settings and then escapes the app on the next press,
-  // which useBackToClose's own model says is impossible — so the model is
-  // wrong and this is the measurement that says where. Delete with the
-  // instrument in useBackToClose.onPopState once it has answered.
-  | "back-press"
   // A main-thread block long enough for the UI to be visibly unresponsive,
   // AFTER the villa is up. The long-task observer always saw these; only the
   // load snapshot ever reported them. See bootTimeline.reportPostLoadFreeze.

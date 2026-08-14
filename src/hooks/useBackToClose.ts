@@ -36,7 +36,6 @@
 // happens at all — which is both the fix and less work than before.
 
 import { useEffect, useRef } from "react";
-import { report as reportTelemetry } from "@/utils/telemetry";
 
 interface Entry {
   close: () => void;
@@ -138,29 +137,34 @@ function ensureListening(): void {
 }
 
 function onPopState(): void {
-  // ── INSTRUMENT (2.334.0): what did this press actually find? ─────────────
-  // Back closes Advanced Settings correctly and then escapes the app on the
-  // NEXT press, which the reconciler's own model says cannot happen — so the
-  // model is wrong somewhere and the honest way to find out is to look rather
-  // than to reason. `depth` is how many surfaces think they are open, `owned`
-  // is how many history entries we believe we hold; if they disagree at the
-  // moment of a press, that gap IS the bug. `queued` says whether a
-  // reconciliation was still pending, which is the timing theory's fingerprint.
-  //
-  // Remove once it has answered. Cheap: one record per press, no payload
-  // beyond four numbers.
-  reportTelemetry("back-press", {
-    depth: stack.length,
-    owned: pushed,
-    unwinding,
-    pending: queued ? 1 : 0,
-  });
   if (unwinding > 0) { unwinding -= 1; return; }
   // The browser just spent one of ours, so the depth is already correct — the
   // close below shrinks the stack to match and the reconciler finds nothing to
   // do. That accounting is what the old `popped` flag was for.
   if (pushed > 0) pushed -= 1;
   const top = stack[stack.length - 1];
+  if (!top && rootGuard) {
+    // ── AT THE VILLA, BACK MINIMISES — IT MUST NEVER CLOSE ────────────────
+    // Re-arm SYNCHRONOUSLY and let the press do nothing else. Android's Back on
+    // a PWA's root FINISHES the activity: the document is destroyed and the next
+    // launch rebuilds the villa from scratch, measured at 6–10s on the phone.
+    // The timing test settled that it is destruction and not eviction — reopening
+    // after FIVE seconds reloaded just as a 72-second wait did, so nothing about
+    // the app's size would change it — and the contrast is Home, which merely
+    // stops the activity and returns the same live document (`lifecycle visible`,
+    // hiddenMs 35194, nothing rebuilt).
+    //
+    // So the villa's entry is replaced the instant it is spent, and Back at the
+    // villa is inert. HOME minimises and keeps the app warm, which is the whole
+    // point: leaving is still one gesture, and coming back is instant.
+    //
+    // Synchronous on purpose — the reconciler's microtask would be a race
+    // against the platform finishing the activity, and losing it once destroys
+    // the villa.
+    history.pushState({ vkRoot: true }, "");
+    pushed += 1;
+    return;
+  }
   // ── A PRESS WITH NOTHING TO DISMISS IS THE PLATFORM'S ──────────────────
   // Let it through. On Android 12+ Back on a task's root activity moves the
   // task to the BACKGROUND — the same as Home — rather than finishing it, so
