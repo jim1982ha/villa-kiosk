@@ -2706,6 +2706,43 @@ label.toggle span { user-select: none; line-height: 1.4; }
      later. */
   .hud-center .hud-cat-help, .hud-center .hud-labelsize-btn { display: none; }
 
+  /* ── The category pill FILLS the row, and the top scrim goes with it ──────
+     On a phone the pill hugged its six 32px buttons and left ~68px of bare
+     bar beside it (measured at 402px CSS). The top bar covered that gap with
+     a fade — `linear-gradient(180deg, var(--topbar-fade), transparent)` —
+     which over a dark sky reads as a grey haze across the status-bar area
+     rather than as chrome. Reported as exactly that.
+
+     Filling the row removes the thing the fade was hiding, so the fade goes.
+     The pills carry their own panel material (background, blur, hairline), so
+     nothing depends on the scrim for legibility — the floor switch and the
+     bottom bar have always floated on the scene without one.
+
+     Buttons stay 32x32 on purpose. The ≤640px tier shrank them to that to fix
+     a real overflow, and their TOUCH target is already 44px via .icon-btn's
+     ::after overlay — which is what the accessibility guidance actually
+     measures. This widens the BAR, not the controls.
+
+     space-between only bites when the row has slack; once the buttons
+     overflow, .hud-group-scroll pans horizontally exactly as before. That is
+     the "when there is enough space" half of the request, expressed by the
+     layout rather than by another breakpoint.
+
+     :has() guards the case a fixed rule gets wrong — an RBAC-restricted
+     profile (permissions.ts) can see as few as two categories, and two chips
+     pinned to opposite screen edges reads as a broken row, not a filled one.
+     Below four buttons the pill keeps hugging them, centred. A browser without
+     :has() simply keeps today's layout, which is the right fallback.
+
+     MUST stay ABOVE the landscape block below: that one restores the hugging
+     layout for a short-but-WIDE viewport, both carry the same specificity, and
+     source order is the only thing deciding which wins. */
+  .hud-topbar { grid-template-columns: auto minmax(0, 1fr) auto; background: none; }
+  .hud-center:has(.hud-group-scroll .icon-btn:nth-of-type(4)) { justify-self: stretch; }
+  .hud-center:has(.icon-btn:nth-of-type(4)) .hud-group-scroll {
+    width: 100%; justify-content: space-between;
+  }
+
 /* ── Short but NOT narrow: a phone in landscape ───────────────────────────
    The compact query above fires on `(max-width: 640px), (max-height: 560px)`,
    and it does two unrelated kinds of thing. Shrinking the pill height and the
@@ -2726,6 +2763,18 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .hud-center .hud-cat-help { display: block; }
   /* …and with the inline controls back, the overflow duplicate goes away. */
   .hud-overflow { display: none; }
+  /* …and the pill stops filling the row: with the width back, spreading six
+     icons across it would strand them at the screen edges. The fade comes back
+     with it — they shipped together and are one decision. Selectors mirror the
+     phone rules' exactly, so equal specificity plus source order decides. */
+  .hud-topbar {
+    grid-template-columns: 1fr minmax(0, auto) 1fr;
+    background: linear-gradient(180deg, var(--topbar-fade), transparent);
+  }
+  .hud-center:has(.hud-group-scroll .icon-btn:nth-of-type(4)) { justify-self: center; }
+  .hud-center:has(.icon-btn:nth-of-type(4)) .hud-group-scroll {
+    width: auto; justify-content: flex-start;
+  }
 }
   /* Left control stack (1F/2F/rooms): sized to match the bottom bar's own
      icon chips (.summary-tile-icon's mobile size, see its media query) so

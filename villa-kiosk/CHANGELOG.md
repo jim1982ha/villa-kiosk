@@ -1,3 +1,40 @@
+## 2.303.0
+
+### Changed — the phone's category bar fills the row, and the top fade is gone
+
+Reported from a screenshot of the top of a phone screen: a translucent band
+across the status-bar area that, over a dark sky, reads as a grey haze rather
+than as chrome.
+
+That band is the top bar's own scrim, a `linear-gradient(180deg,
+var(--topbar-fade), transparent)` running the full width. What it was covering
+is measurable: on a 402px screen the category pill hugs its six 32px buttons
+and leaves about 68 points of bare bar beside it, and the fade tied that empty
+strip to the controls. Fill the row and there is nothing left for it to tie
+together, so it goes. Nothing depended on it for legibility — every pill
+carries its own panel material, and the floor switch and the bottom bar have
+always floated on the scene without one.
+
+The buttons stay 32x32 deliberately. The compact tier shrank them to that to
+fix a real overflow, and their touch target is already 44px through
+`.icon-btn`'s `::after` overlay, which is what the accessibility guidance
+measures — the pointer area, not the painted pixels. This widens the BAR, not
+the controls.
+
+Two details that keep it from becoming a new bug. `space-between` only bites
+while the row has slack: once the buttons overflow, the pill pans horizontally
+exactly as it did before, so "when there is enough space" is expressed by the
+layout rather than by another breakpoint. And `:has()` guards the case a fixed
+rule would get wrong — an RBAC-restricted profile can see as few as two
+categories, and two chips pinned to opposite screen edges reads as a broken row
+rather than a filled one, so below four buttons the pill keeps hugging them.
+A browser without `:has()` simply keeps the previous layout.
+
+A phone in LANDSCAPE keeps the old hugging layout and the fade with it. That is
+the same split the tier below already makes: spreading is a horizontal-room
+decision, and a landscape phone has the width, where six icons strung across it
+would strand them at the screen edges.
+
 ## 2.302.0
 
 ### Fixed — tapping a room, then zooming IN, collapsed it back to the chip
