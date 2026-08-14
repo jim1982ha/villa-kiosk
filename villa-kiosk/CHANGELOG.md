@@ -1,3 +1,62 @@
+## 2.321.0
+
+### Added — the still image is drawn at the display's real resolution
+
+The telemetry settled what three rounds of reasoning had not. On 2.320.0, in
+Safari: the **iPad** renders 1180px wide on a 2360px panel (`hw 1`) at 22fps,
+and the **MacBook** starts at native (`hw 0.5`) and is eased to `hw 0.87` nine
+seconds in, at 15-30fps. The crisp Mac screenshot was taken inside that
+nine-second window. So the two devices were never being compared at the same
+setting, and the cause was the one the numbers had been pointing at: the canvas
+is short of pixels, and no amount of work on the bake can reach that.
+
+The same dump also confirms 2.317.0 doing its job — the Android sits at
+`hw 0.33`, full native on a DPR-3 screen, holding 98fps. Resolution is free on
+ANGLE and it took it. On WebKit it is the entire frame cost (the same MacBook in
+Chrome renders in 4.7ms where Safari takes 18-38ms), so those devices stay
+eased, and correctly.
+
+But being eased is only right **while the camera is moving**. It is exactly
+wrong the moment it stops, which is when someone is reading a badge. This scene
+renders ON DEMAND, so "nothing is moving" is not a guess — it is the branch the
+loop already takes once the interaction burst has ended and no animation is
+pending. The settled image is now drawn once more there, at the device's native
+scaling. Motion costs precisely what it cost before; the still frame is sharp.
+
+⚠️ **The sharp frame is never sampled, and that is load-bearing.** It is
+deliberately more expensive than an interactive one, so feeding it to the
+resolution valve would have the device conclude it is slow and ease itself
+further — a loop in which improving the picture degrades it. It is drawn from
+the idle branch, which does not sample; `unsharpen()` runs at the top of the
+interactive branch, before anything is measured; and both valve entry points
+refuse outright while the override is in force.
+
+⚠️ **Continuous animation suppresses it.** A spinning fan re-arms the loop every
+frame, and sharpening there would make every capped animation frame a
+full-resolution one — the exact cost the valve exists to avoid.
+
+### Changed — the badge bake targets the best case, so scaling changes are free
+
+2.320.0 baked against the LIVE `cssToGui()`, which was right then and is
+unworkable now: the scaling moves whenever the valve acts, whenever 2.317.0's
+step fires, and now every time the camera stops. A live-valued bake has to be
+re-baked on each of those, and re-baking means `rebuildLabels` — tolerable once
+a session, absurd on every pan.
+
+The bake now targets `devicePixelRatio`, the highest resolution the device will
+ever render at. A scaling change costs a container re-scale and nothing else.
+The bitmap is larger than the paint whenever the device runs below native — a
+downscale, which is the direction `BAKE_LADDER`'s headroom absorbs — and exactly
+1:1 on the sharp frame, which is the one that gets looked at. The repaint in
+`notifyRenderScaleChanged` is gone with it.
+
+⚠️ `notifyRenderScaleChanged(false)` exists to break a LOOP, not to save work.
+`applyIconScale` asks for a frame, which is correct for the valve and fatal for
+the render loop's own idle branch: the request re-arms the interactive branch,
+that un-sharpens, un-sharpening re-scales, re-scaling asks for another frame —
+a device that had gone quiet would render forever, alternating resolutions.
+Callers that are about to draw pass `false`.
+
 ## 2.320.0
 
 ### Fixed — every badge was baking a bitmap at half the size it painted it

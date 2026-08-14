@@ -737,6 +737,10 @@ export class SceneManager {
         now < this.keepRenderingUntil ||
         !this.config.renderOnDemand
       ) {
+        // Back to the motion resolution BEFORE the frame is drawn and before
+        // it is sampled — an interactive frame must be measured at the scaling
+        // the valve chose, never at the sharp idle one.
+        this.unsharpen();
         this.sampleFrame(now);
         this.lastAnimFrameAt = now;
         // Timed, because the split between "the frame cost is inside this call"
@@ -758,10 +762,21 @@ export class SceneManager {
       this.flushFrameSamples();
       // Everything else is a frame asked for purely by a continuous animation
       // (see requestAnimationRender), and is rate-capped.
-      if (now < this.animateUntil && now - this.lastAnimFrameAt >= ANIMATION_FRAME_MS) {
-        this.lastAnimFrameAt = now;
-        this.scene.render();
+      if (now < this.animateUntil) {
+        // A continuous animation is running (a fan, a pulsing alert). Sharpening
+        // here would make EVERY capped frame a full-resolution one, which is the
+        // cost this whole valve exists to avoid — so the scene stays at motion
+        // resolution for as long as anything is moving.
+        this.unsharpen();
+        if (now - this.lastAnimFrameAt >= ANIMATION_FRAME_MS) {
+          this.lastAnimFrameAt = now;
+          this.scene.render();
+        }
+        return;
       }
+      // Nothing is moving and nothing has asked for a frame. Draw the still
+      // image once more, at the display's real resolution.
+      this.idleSharpen();
     });
   }
 
@@ -1016,6 +1031,9 @@ export class SceneManager {
   private resolutionRaised = false;
   private raiseResolution(p50: number): void {
     if (this.resolutionRaised) return;
+    // Never decide from the sharp idle frame's scaling — that is a temporary
+    // override, not this device's measured operating point.
+    if (this.sharpened) return;
     const cur = this.engine.getHardwareScalingLevel();
     const native = 1 / Math.max(1, window.devicePixelRatio || 1);
     // Already at (or finer than) the panel — nothing to win. This is every
@@ -1036,6 +1054,7 @@ export class SceneManager {
 
   private easeResolution(p50: number): void {
     if (p50 <= FRAME_SLOW_MS) return;
+    if (this.sharpened) return;   // see raiseResolution
     const cur = this.engine.getHardwareScalingLevel();
     if (cur >= HW_SCALE_FLOOR) return;
     const next = Math.min(HW_SCALE_FLOOR, cur * Math.sqrt(p50 / FRAME_TARGET_MS));
@@ -1119,6 +1138,68 @@ export class SceneManager {
       setTimeout(check, 250);
     };
     setTimeout(check, 250);
+  }
+
+  /**
+   * Draw the settled image once at the device's NATIVE resolution.
+   *
+   * ── Why this is worth a frame ────────────────────────────────────────────
+   * The resolution valve holds a slow device below its panel's real pixel
+   * density because it cannot shade that many fragments at an interactive
+   * rate — measured, and true: the iPad renders 1180px wide on a 2360px panel
+   * and still only manages 22fps, and Safari on the MacBook is 4-8x Chrome's
+   * render cost on identical hardware. That is the right call WHILE THE CAMERA
+   * IS MOVING, and it is the wrong one the instant it stops, which is when
+   * someone is actually reading a badge. Reported as the entity glyphs looking
+   * low-resolution on iPad, correctly, and chased through the bake twice
+   * before the canvas turned out to be the thing that was short of pixels.
+   *
+   * This scene renders ON DEMAND, so "nothing is moving" is not a guess — it
+   * is the branch the loop already takes when the interaction burst has ended
+   * and no animation is pending. One expensive frame lands there, with nothing
+   * animating to judge it against, and every frame after it is free because
+   * nothing asks for one.
+   *
+   * ⚠️ NOT SAMPLED, and it must never be. The sharp frame is deliberately
+   * more expensive than an interactive one; feeding it to the valve would have
+   * the device conclude it is slow and ease itself down — a loop where making
+   * the picture better makes the picture worse. It is drawn from the idle
+   * branch, which does not sample, and `unsharpen` runs before the interactive
+   * branch measures anything.
+   *
+   * Cheap to leave and cheap to undo: since 2.321.0 the badge bake targets the
+   * best-case resolution, so both directions cost a container re-scale and no
+   * re-bake.
+   */
+  private sharpMotionHw = 0;
+  private sharpened = false;
+  private idleSharpen(): void {
+    if (this.sharpened) return;
+    const cur = this.engine.getHardwareScalingLevel();
+    const native = 1 / Math.max(1, window.devicePixelRatio || 1);
+    // Latch either way: a device already AT its panel's density has nothing to
+    // win, and latching stops this being reconsidered on every idle tick.
+    this.sharpened = true;
+    if (cur <= native + 1e-6) return;
+    this.sharpMotionHw = cur;
+    this.engine.setHardwareScalingLevel(native);
+    // Quiet: this frame IS the redraw, and asking for another would re-arm the
+    // interactive branch and undo the sharpen on the very next tick.
+    this.visuals.notifyRenderScaleChanged(false);
+    this.scene.render();
+  }
+
+  /** Put the motion resolution back. Idempotent; safe to call every frame. */
+  private unsharpen(): void {
+    if (!this.sharpened) return;
+    this.sharpened = false;
+    if (this.sharpMotionHw <= 0) return;
+    const back = this.sharpMotionHw;
+    this.sharpMotionHw = 0;
+    if (this.engine.getHardwareScalingLevel() === back) return;
+    this.engine.setHardwareScalingLevel(back);
+    // Quiet for the same reason: both callers run immediately before a render.
+    this.visuals.notifyRenderScaleChanged(false);
   }
 
   /** Keep rendering for a short window (covers input latency + transitions). */

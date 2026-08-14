@@ -1608,7 +1608,30 @@ export class EntityVisuals {
    * those already repaint.
    */
   private glyphBakePx(card: boolean): number {
-    return this.glyphPxFor(card) * this.iconUserScale * this.cssToGui();
+    return this.glyphPxFor(card) * this.iconUserScale * this.bestCssToGui();
+  }
+
+  /**
+   * The HIGHEST css→GUI conversion this device will ever render at — its own
+   * devicePixelRatio — rather than whatever the resolution valve has settled
+   * on right now.
+   *
+   * ⚠️ It must not be the LIVE value, and 2.320.0's was. The engine's scaling
+   * moves: the valve eases it down on a slow device, 2.317.0's measured step
+   * raises it, and 2.321.0's idle sharpening now toggles it every time the
+   * camera stops. Baking against the live value means every one of those has
+   * to re-bake, and re-baking means rebuildLabels — acceptable once a session,
+   * absurd every time you stop panning.
+   *
+   * Baking for the best case makes a scaling change cost a container re-scale
+   * and nothing else. The bitmap is then larger than the paint whenever the
+   * device is running below native, which is a DOWNSCALE — the direction
+   * BAKE_LADDER's headroom exists to absorb and the direction WebKit handles
+   * acceptably — and exactly 1:1 on the sharp idle frame, which is the frame
+   * anyone actually reads a badge on.
+   */
+  private bestCssToGui(): number {
+    return Math.max(1, window.devicePixelRatio || 1);
   }
 
   /** Y of the first structure surface below (x, y, z) — see FloorProbe.below.
@@ -3124,7 +3147,7 @@ export class EntityVisuals {
   }
 
   /** Scale every badge container by user-size × zoom, around its anchor point. */
-  private applyIconScale(): void {
+  private applyIconScale(requestFrame = true): void {
     // Scale feeds labelBoxes' every dimension.
     this.markLayoutDirty();
     const s = this.effectiveScale();
@@ -3132,21 +3155,28 @@ export class EntityVisuals {
       lbl.container.scaleX = s;
       lbl.container.scaleY = s;
     }
-    if (this.labels.size) this.requestRender();
+    if (requestFrame && this.labels.size) this.requestRender();
   }
 
   /** The engine's hardware scaling changed (easeResolution's quality valve, or
    *  a DPR change on a moved window), so cssToGui() has moved under every
    *  badge. Cheap: re-scales the existing controls, no rebuild. */
-  notifyRenderScaleChanged(): void {
-    this.applyIconScale();
-    // …and RE-BAKE. cssToGui() is a factor of the painted size (glyphBakePx),
-    // so a valve step that halves the render resolution leaves every badge
-    // holding a bitmap baked for the resolution the engine has stopped
-    // rendering at. Rebuilding is the only way a Babylon GUI Image reliably
-    // picks up a new source (repaintBadges says why), and this fires at most
-    // once or twice a session — when the valve acts — not per frame.
-    this.repaintBadges();
+  notifyRenderScaleChanged(requestFrame = true): void {
+    // Re-scale ONLY. No repaint: since 2.321.0 the bake targets the device's
+    // best-case resolution (glyphBakePx / bestCssToGui), so it does not depend
+    // on where the valve currently sits and nothing has to be re-baked when
+    // that moves. 2.320.0 repainted here, which was correct for a live-valued
+    // bake and would now hitch the map on every idle sharpen.
+    //
+    // ⚠️ `requestFrame: false` is not an optimisation, it breaks a LOOP.
+    // applyIconScale asks for a frame, which is right when the caller is the
+    // resolution valve (nothing else is going to redraw). It is fatal when the
+    // caller is the render loop's own idle branch: the request re-arms the
+    // interactive branch, that branch un-sharpens, un-sharpening re-scales,
+    // re-scaling asks for another frame — a device that had gone quiet would
+    // render forever, alternating resolutions. Callers that are ABOUT to draw
+    // pass false and let their own render pick the new scale up.
+    this.applyIconScale(requestFrame);
   }
 
   private rebuildLabels(): void {
@@ -5836,7 +5866,7 @@ export class EntityVisuals {
               // effectiveScale(), so the bitmap has to be baked at the painted
               // size. iconZoomScale is excluded for the same reason — see
               // glyphBakePx.
-              0, ring, false, lay.chip * this.iconUserScale * this.cssToGui());
+              0, ring, false, lay.chip * this.iconUserScale * this.bestCssToGui());
           }
         }
         // ── A SUMMARY'S RING NEVER REPEATS A MEMBER'S OWN SIGNAL ────────────
