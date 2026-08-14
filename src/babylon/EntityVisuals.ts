@@ -3753,19 +3753,30 @@ export class EntityVisuals {
     // shownPool, so refilling next frame reuses them.
     shown.length = shownCount;
 
-    // ── The focus lasts exactly as long as its zoom ───────────────────────
+    // ── The focus lasts as long as you stay at least as close ──────────────
     // Resolved BEFORE any grouping runs, so a single pass cannot group with a
-    // focus it is about to drop. No camera-event plumbing, and nothing that
-    // has to tell "the user zoomed" from "we flew there": the exemption is
-    // stamped with the quantised zoom of the first pass after it was granted
-    // and dropped the moment that zoom changes. Panning keeps it — the zoom is
-    // unchanged, and looking around a room you asked to see should not collapse
-    // it — while zooming out ends it, which is exactly when a summary becomes
-    // the right answer again.
+    // focus it is about to drop. No camera-event plumbing, and nothing that has
+    // to tell "the user zoomed" from "we flew there": the exemption is stamped
+    // with the quantised zoom of the first pass after it was granted, and
+    // dropped once the view gets FARTHER than that. Panning keeps it (the zoom
+    // is unchanged, and looking around a room you asked to see should not
+    // collapse it); zooming out ends it, which is exactly when a summary
+    // becomes the right answer again.
+    //
+    // ⚠️ `z < focusedAtZoom`, NOT `z !== focusedAtZoom`, and the difference is
+    // a reported bug. Tapping the Swimming Pool chip expanded the room; zooming
+    // IN by one rung changed z, dropped the exemption, and the room collapsed
+    // straight back to the very chip that had just been tapped — then expanded
+    // again a rung later, once the badges genuinely separated. Zooming in
+    // strictly increases the distance between anchors: it is the one direction
+    // that can never make a room less legible, so it must never be the thing
+    // that takes it away. The original stamp stays the floor rather than
+    // re-stamping on the way in, which is what makes "at least as close as when
+    // you asked" the literal rule.
     if (this.focusedRoom !== null) {
       const z = this.quantisedPixelsPerWorldUnit(shown);
       if (this.focusedAtZoom === 0) this.focusedAtZoom = z;
-      else if (z !== this.focusedAtZoom) { this.focusedRoom = null; this.focusedAtZoom = 0; }
+      else if (z < this.focusedAtZoom) { this.focusedRoom = null; this.focusedAtZoom = 0; }
     }
 
     // ── Layout ───────────────────────────────────────────────────────────

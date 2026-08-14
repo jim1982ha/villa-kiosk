@@ -1,3 +1,36 @@
+## 2.302.0
+
+### Fixed — tapping a room, then zooming IN, collapsed it back to the chip
+
+Reported with three screenshots in sequence: tap the Swimming Pool chip and the
+room expands into its devices; zoom in one step and the chip is back, exactly
+the chip that was just tapped; zoom in once more and the devices return for
+good. The middle state is the bug, and the expectation behind the report is the
+right one — zooming in strictly increases the distance between anchors, so it
+is the one direction that can never make a room less legible and must never be
+the thing that takes it away.
+
+Tapping a room grants that room an EXEMPTION from grouping: its badges stop
+blocking each other, and a focused pair gets seated unconditionally so it can
+never escalate back to its own chip. The exemption has to end at some point, or
+zooming out to the whole villa would leave one room permanently un-summarised,
+and the mechanism for that is deliberately simple: the exemption is stamped
+with the quantised zoom of the first pass after it was granted, and dropped
+when the zoom changes. No camera-event plumbing, nothing that has to tell "the
+user zoomed" from "we flew there".
+
+The comment above it says "zooming out ends it, which is exactly when a summary
+becomes the right answer again", and that is the correct rule. The code tested
+`z !== focusedAtZoom` — ANY change, in either direction. So the first rung of
+zooming IN dropped the exemption too, the room re-solved without it, and it
+went straight back to the chip until the badges separated on their own merits a
+rung later.
+
+The test is now `z < focusedAtZoom`. The original stamp stays the floor rather
+than re-stamping on the way in, which makes the rule literally "the focus lasts
+while you are at least as close as when you asked for it" — pan freely, zoom in
+as far as you like, and it ends when you pull back out past where you started.
+
 ## 2.301.0
 
 ### Fixed — entity glyphs looked pixelated in Safari and fine in Chrome
