@@ -1453,6 +1453,29 @@ button {
   /* With the text gone the tile is a chip: square-ish, no asymmetric right
      padding that only existed to separate icon from label. */
   .summary-tile { min-width: 0; padding: 9px; gap: 0; }
+
+  /* ONE frame, not two. The BAR is the single floating surface (see
+     .summary-bar) and a tile is a section of it — but the icon chip carries
+     its own fill and hairline so that it stays a legible object when it sits
+     BESIDE a label. With the label gone the chip is the only thing in the
+     tile, so its border draws a box inside a box: five framed icons inside a
+     framed bar. Reported as a redundant frame around each icon.
+
+     ⚠️ State is NOT lost with the fill. The chip's background is
+     categorySurface()'s --tile-fill, but that is the second of three signals,
+     not the only one: the GLYPH keeps --tile-glyph (the same colour the map
+     badge bakes) and the tile keeps its tone underline (.tone-on/.tone-warn's
+     inset box-shadow). Both survive here, so on/off still reads at a glance
+     without the plate. */
+  .summary-tile-icon {
+    background: none; border-color: transparent;
+    width: auto; height: auto;
+  }
+  /* Bigger, now that the glyph IS the tile rather than its decoration — it
+     was 21px inside a 40px chip at this tier, sized to leave room for a
+     surround that no longer exists. The tile's own 9px padding keeps the tap
+     target comfortably past --touch-min (30 + 18 = 48). */
+  .summary-tile-icon svg { width: 30px; height: 30px; }
 }
 
 

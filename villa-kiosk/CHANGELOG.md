@@ -1,3 +1,26 @@
+## 2.313.0
+
+### Changed — a collapsed bottom-bar tile is its icon, not a framed icon
+
+With the labels dropped in portrait (2.311.0/2.312.0) each tile became a single
+icon chip — and that chip carries its own fill and hairline, because it has to
+stay a legible object when it sits *beside* a label on a wider screen. Alone in
+a tile it draws a box inside a box: five framed icons inside a framed bar, when
+the bar is meant to be the one floating surface and a tile just a section of it.
+The chip's plate is dropped in collapsed mode only; everywhere else it is
+untouched.
+
+The fill is one of three state signals, not the only one, so nothing is lost
+with it: the glyph keeps `--tile-glyph` — literally the colour
+`categorySurface()` bakes into that device's badge on the map — and the tile
+keeps its `.tone-on` / `.tone-warn` underline. On, off and warning all still
+read at a glance.
+
+With the surround gone the glyph is the tile rather than its decoration, so it
+grows from 21px to 30px. It had been sized to leave room for a chip that no
+longer exists. The tile's own 9px padding keeps the tap target at 48px, past
+`--touch-min`, without a min-width that would put the empty space back.
+
 ## 2.312.0
 
 ### Fixed — the "container" around the Settings icon was the button's own shadow
