@@ -37,9 +37,6 @@ interface Entry {
 }
 
 const stack: Entry[] = [];
-/** A root surface is mounted, so an unclaimed Back press must be re-armed
- *  rather than allowed to destroy the document — see onPopState. */
-let rootGuard = false;
 /** Programmatic `history.back()` calls whose `popstate` must be ignored. */
 let unwinding = 0;
 let listening = false;
@@ -73,22 +70,14 @@ function ensureListening(): void {
 function onPopState(): void {
   if (unwinding > 0) { unwinding -= 1; return; }
   const top = stack[stack.length - 1];
-  if (!top) {
-    // ── NOTHING LEFT TO DISMISS: KEEP THE APP ALIVE ────────────────────────
-    // Re-arm the root entry rather than letting the press through. Back at a
-    // PWA's root does not "minimise" on Android — it calls finish() on the
-    // activity, the document is destroyed, and the next launch is a cold start
-    // that rebuilds the whole villa (~4s on the phone, ~10s on the iPad). The
-    // telemetry shows both halves of that plainly: a Home press leaves the same
-    // document alive (`lifecycle visible` with hiddenMs of 35s) while a Back
-    // press produces a fresh `navType: "navigate"` load.
-    //
-    // So there is no version of this where Back exits AND the villa survives.
-    // Back keeps the app; HOME is the way out, and that path already returns
-    // instantly because the document was never torn down.
-    if (rootGuard) history.pushState({ vkRoot: true }, "");
-    return;
-  }
+  // ── A PRESS WITH NOTHING TO DISMISS IS THE PLATFORM'S ──────────────────
+  // Let it through. On Android 12+ Back on a task's root activity moves the
+  // task to the BACKGROUND — the same as Home — rather than finishing it, so
+  // the document survives and the app resumes where it was. 2.330.0 held a
+  // root entry open to stop Back reaching here, on the mistaken premise that
+  // it would destroy the document; that made Back do nothing at the villa,
+  // which is not what a phone user expects and not what was asked for.
+  if (!top) return;
   // Marked BEFORE closing, and only on THIS path: the browser has already
   // spent this entry, so cleanup must not spend it again with a second
   // `history.back()`. A dismiss from Escape or a button leaves it false,
@@ -137,22 +126,3 @@ export function useBackToClose(onClose: () => void, active = true): void {
   }, [active]);
 }
 
-/**
- * Keep the app resident: Back never destroys the document.
- *
- * Call ONCE, from the surface that is always mounted (the villa view). It holds
- * one history entry open permanently — overlays stack on top of it and consume
- * their own presses, and a press that reaches the bottom is re-armed rather
- * than spent (see onPopState).
- *
- * The gesture that leaves the app is HOME, which minimises it with the document
- * intact, so reopening lands on the villa immediately with nothing reloaded.
- */
-export function useBackGuard(): void {
-  useEffect(() => {
-    ensureListening();
-    rootGuard = true;
-    history.pushState({ vkRoot: true }, "");
-    return () => { rootGuard = false; };
-  }, []);
-}

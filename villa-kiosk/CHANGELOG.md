@@ -1,3 +1,33 @@
+## 2.331.0
+
+### Fixed — Back minimises the app again; 2.330.0's root guard was built on a wrong premise
+
+2.330.0 held a history entry open at the villa view so that a Back press with
+nothing left to unwind would do nothing at all. The justification written into
+that release was that Back at a PWA's root "calls finish() on the activity and
+the document is gone". That was asserted rather than verified, and it is wrong
+for the platform this actually runs on: since Android 12, Back on a task's ROOT
+activity moves the task to the background — the same as Home — instead of
+finishing it, so the document survives and the app resumes where it was.
+
+So the guard was solving a problem the platform does not have, and it cost the
+behaviour a phone user expects: Back at the top level did nothing, and the only
+way out was Home. Removed. A press that reaches the bottom of the dismissal
+stack is let through to the platform, which minimises.
+
+Everything layered above it stands, and is what was actually wanted: the camera
+feed returns to the villa, a dialog closes before the surface beneath it, nested
+surfaces unwind innermost-first, and only a press with nothing left to dismiss
+reaches the system.
+
+**The reload on return is therefore still open, and is a different question.**
+It is about why a backgrounded document does not survive — eviction under memory
+pressure being the leading suspect on a page holding an 18MB model and a live
+WebGL context — not about which button was pressed. `bfBlocked` (2.328.0) will
+not answer it either: `notRestoredReasons` is populated for back/forward
+navigations, and a PWA relaunch reports `navType: "navigate"`, which is the
+value that was actually observed.
+
 ## 2.330.0
 
 ### Changed — Back unwinds the app instead of destroying it
