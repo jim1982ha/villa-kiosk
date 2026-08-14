@@ -2535,6 +2535,10 @@ export class EntityVisuals {
       cx: number; cy: number; cz: number;
       /** Search bounds, world units. */
       minRadius: number; maxRadius: number;
+      /** The DESTINATION's view direction (unit, world space). The shot forces
+       *  a top-down tilt, so this is not the direction the camera is pointing
+       *  while the ladder runs — see currentViewBasis's parameter. */
+      dir?: { x: number; y: number; z: number };
     },
   ): { radius: number; declutters: boolean } | null {
     if (!(view.vpH > 0) || !(view.vFov > 0) || !(view.halfAngle > 0)) return null;
@@ -2600,14 +2604,16 @@ export class EntityVisuals {
     // coordinates scale with that rung's pxPerWorld — so the plane offsets are
     // precomputed once in world units here and multiplied through below.
     //
-    // The basis is the DESTINATION's, and it is this pose's: computeRoomOverviewPose
-    // keeps the current alpha/beta, so the shot is framed from the same view
-    // direction that is live now. markContacts below is then the SAME test the
+    // The basis is the DESTINATION's, and since 2.325.0 that is no longer the
+    // live one: computeRoomOverviewPose keeps the current alpha but forces beta
+    // to the camera's top-down limit, so the ladder MUST be walked through the
+    // direction the camera will arrive at, not the one it is leaving. It is
+    // handed in for exactly that reason. markContacts below is then the SAME test the
     // renderer will run — a rung that predicted a clean shot under different
     // geometry from the one that draws it is the bug this whole solver was
     // written to avoid. `fromCentre` above stays in real world units: framing a
     // room is a 3D question, not a screen-overlap one.
-    const basis = this.currentViewBasis();
+    const basis = this.currentViewBasis(view.dir);
     // Its own object per member, not the frame loop's shared scratch: these
     // have to survive the whole rung walk. This runs once per tap, so the
     // allocation is not on any hot path.
@@ -4203,11 +4209,20 @@ export class EntityVisuals {
    * projectToView): orthographic is an approximation about the view axis, and
    * the orbit camera looks AT the villa while the walk camera stands IN it.
    */
-  private currentViewBasis(): ViewBasis {
+  private currentViewBasis(
+    /** Measure through a direction the camera has NOT reached yet. Only the
+     *  zoom-to-room solver passes this, and it must: that solver answers "will
+     *  these badges be legible after the camera arrives", so its basis has to
+     *  be the DESTINATION's. Feeding it the live direction while the shot
+     *  changes the tilt is precisely the "predicted a clean shot under
+     *  different geometry from the one that draws it" bug this file's
+     *  docstrings keep warning about. */
+    dir?: { x: number; y: number; z: number },
+  ): ViewBasis {
     const cam = this.scene.activeCamera;
     if (!cam) return viewBasis(0, 0, 1, VIEW_BASIS_STEPS, VIEW_METRIC);
-    cam.getDirectionToRef(CAMERA_LOCAL_FORWARD, this.camForward);
-    const f = this.camForward;
+    if (!dir) cam.getDirectionToRef(CAMERA_LOCAL_FORWARD, this.camForward);
+    const f = dir ?? this.camForward;
     const len = Math.hypot(f.x, f.y, f.z);
     if (!(len > 0)) return viewBasis(0, 0, 1, VIEW_BASIS_STEPS, VIEW_METRIC);
     // Duck-typed for the same reason quantisedPixelsPerWorldUnit is: only

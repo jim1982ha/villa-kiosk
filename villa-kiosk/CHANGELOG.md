@@ -1,3 +1,38 @@
+## 2.325.0
+
+### Changed — tapping a room looks straight down at it
+
+Framing a room already picked the distance by testing the badges rung by rung,
+but it kept whatever tilt the camera happened to be sitting at. So the same room
+gave a different picture depending on where the view had been left a minute
+earlier, and a shallow tilt — where a floor plan is at its least legible and the
+badges are at their most crowded — was as likely as any other.
+
+The shot now forces the tilt to the camera's own top-down limit. Only the TILT:
+alpha is kept, so the room does not spin under the user and the villa keeps the
+orientation they have built their sense of it from. The limit is read from
+`lowerBetaLimit`, which OverviewController writes from BETA_MIN, so "as far over
+as this camera goes" cannot drift from what the camera actually allows.
+
+**The badge ladder had to be told.** `solveRoomZoomRadius` walks the renderer's
+own quantised zoom rungs and asks, at each one, whether the room's badges
+separate — and it asked through the LIVE view basis, which was correct only for
+as long as the shot kept the live tilt. Answering "these badges are legible" for
+a direction the camera then does not arrive at is exactly the class of bug that
+subsystem's docstrings have been warning about for a dozen releases: a rung that
+promises a clean shot the renderer declines. The destination direction is now
+computed from the pose being returned and handed to the solver, which measures
+through it. Since Babylon places an ArcRotateCamera at
+`target + r(cos α sin β, cos β, sin α sin β)`, the direction it looks is the
+negated unit offset, and at the forced beta that is very nearly straight down.
+
+Both callers of the framing get this, which is the point: tapping a room badge
+and choosing the same room from the teleport menu are the same request — "show
+me this room" — and they should not produce two different pictures. Nothing else
+moves: the distance solve, the focus exemption that guarantees the room's badges
+are drawn individually, and the pose snap itself are all unchanged, and
+`applyPose` already clamped beta so the value cannot leave the camera's range.
+
 ## 2.324.0
 
 ### Added — the camera feed answers the keyboard: arrows step, Escape leaves

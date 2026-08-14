@@ -1803,12 +1803,36 @@ export class SceneManager {
     // a merged chip's tap asked for. The badges are not left to chance either —
     // the EXEMPTION above is unconditional and is what guarantees they are
     // drawn individually, at whatever distance the framing lands on.
+    // ── The shot is ZENITHAL, whatever the camera was doing before ──────────
+    // A floor plan seen from straight above is the view that shows a room's
+    // devices best, and it is the same view every time — tapping two rooms in
+    // a row used to give two different pictures purely because of where the
+    // tilt happened to be left. Only the TILT is forced: alpha is kept, so the
+    // room does not also spin under the user, and the villa keeps the
+    // orientation they built their sense of it from.
+    //
+    // The camera's OWN limit rather than a constant of ours (`lowerBetaLimit`
+    // is written from OverviewController.BETA_MIN), so "as far over as this
+    // camera goes" cannot drift from what the camera actually allows.
+    const destBeta = this.overview.camera.lowerBetaLimit ?? 0.05;
+    // Babylon puts an ArcRotateCamera at target + r(cos α sin β, cos β,
+    // sin α sin β), so the direction it LOOKS is the negated unit offset. At
+    // destBeta this is very nearly straight down, which is the whole point —
+    // and it is what the badge ladder below has to measure through.
+    const sb = Math.sin(destBeta);
+    const destDir = {
+      x: -Math.cos(cam.alpha) * sb,
+      y: -Math.cos(destBeta),
+      z: -Math.sin(cam.alpha) * sb,
+    };
+
     const vpH = this.engine.getRenderHeight();
     const solved = roomNames.length === 1 ? this.visuals.solveRoomZoomRadius(roomNames[0], {
       vpH,
       vFov,
       halfAngle,
       cx, cy: bounds.floorY, cz,
+      dir: destDir,
       minRadius: this.overview.camera.lowerRadiusLimit ?? 2,
       // The wall fit is the widest shot worth considering: past it the room no
       // longer fills the frame, and nothing about badges improves by backing
@@ -1824,7 +1848,7 @@ export class SceneManager {
 
     return {
       alpha: cam.alpha,
-      beta: cam.beta,
+      beta: destBeta,
       radius,
       declutters,
       // Orbit about the room's own CENTRE, at the height the room's floor
