@@ -27,6 +27,7 @@ import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
 import { uploadEvidence } from "@/fm/fmApi";
 import NotesField from "./NotesField";
+import { useBackToClose } from "@/hooks/useBackToClose";
 
 export default function GuestReportModal({
   entityId, onClose,
@@ -36,6 +37,9 @@ export default function GuestReportModal({
   onClose: () => void;
 }) {
   const { addTicket } = useFmData();
+  // Back closes this, never the app: only the villa map lets a press through
+  // to the platform. One line per surface, from the shared hook.
+  useBackToClose(onClose);
   const { resolvedRooms } = useConfig();
   const label = useEntityLabel();
   const [title, setTitle] = useState("");

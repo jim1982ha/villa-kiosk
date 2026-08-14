@@ -10,8 +10,12 @@
 
 import { Armchair, Compass, Info } from "lucide-react";
 import { markFirstRunTipsSeen } from "@/utils/storage";
+import { useBackToClose } from "@/hooks/useBackToClose";
 
 export default function FirstRunTips({ onClose }: { onClose: () => void }) {
+  // Back closes this, never the app: only the villa map lets a press through
+  // to the platform. One line per surface, from the shared hook.
+  useBackToClose(() => { markFirstRunTipsSeen(); onClose(); });
   const dismiss = () => { markFirstRunTipsSeen(); onClose(); };
   return (
     // panel-modal-backdrop/panel-modal: this is short content, so on mobile it

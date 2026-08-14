@@ -7,6 +7,7 @@
 
 import { useEffect } from "react";
 import { RotateCcw } from "lucide-react";
+import { useBackToClose } from "@/hooks/useBackToClose";
 
 // A spread of distinct, pleasant badge colours. Identity swatches (not a data
 // scale), so no ramp/validator needed — just visibly different from each other.
@@ -29,6 +30,9 @@ interface Props {
 }
 
 export default function BadgeColorModal({ current, categoryColor, onChange, onClose }: Props) {
+  // Back closes this, never the app: only the villa map lets a press through
+  // to the platform. One line per surface, from the shared hook.
+  useBackToClose(onClose);
   // Swatches are a decision → apply and dismiss. The custom picker and "default"
   // reset apply live but leave the modal open for further tweaking.
   const pickAndClose = (hex: string | null) => { onChange(hex); onClose(); };

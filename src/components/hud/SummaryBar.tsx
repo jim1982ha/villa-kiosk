@@ -35,6 +35,7 @@ import { isOn, onOffSummary, OFF_STATES } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
+import { useBackToClose } from "@/hooks/useBackToClose";
 
 type IconType = ComponentType<{ size?: number | string }>;
 
@@ -289,6 +290,11 @@ function SceneMenu({ scenes, canRun, apply }: {
   apply: (s: HaSceneInfo) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Back closes the scene list, never the app: only the villa map lets a press
+  // through to the platform. Registered only WHILE open, which is what the
+  // hook's `active` argument is for — a mounted-but-closed popover must not
+  // hold a history entry, or Back on the villa would appear to do nothing.
+  useBackToClose(() => setOpen(false), open);
   useResolvedTheme(); // its tile chip is composited in JS too — see Tile
   // The pop-up is PORTALED to <body>: the summary-bar has a transform +
   // overflow, so a menu nested inside it would be clipped and mis-positioned.

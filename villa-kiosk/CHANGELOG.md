@@ -1,3 +1,32 @@
+## 2.333.0
+
+### Fixed — five more surfaces where Back left the app
+
+**The rule, stated once so it stops being re-derived: BACK LEAVES THE APP ONLY
+FROM THE VILLA MAP.** Anywhere else it closes the surface on top, and keeps
+closing them one at a time until the villa is what is left. A surface that can
+appear over the villa and does not consume its own press is a bug, whatever else
+it does correctly.
+
+2.332.0 fixed the mechanism; this fixes the coverage. Auditing by what the rule
+APPLIES to rather than by who already calls the hook — the shared dialog shell
+minus the surfaces that register, `grep -L` rather than `grep -l` — found five
+that never registered anything, so Back inside each of them did exactly what it
+did inside Advanced Settings: minimised VESTA. The guest report, the fault stage
+dialog, the badge colour picker, the first-run tips, and the scene list.
+
+Each is one line from the shared hook; none needed its own idea of anything. The
+scene list passes `active` as well, because a popover that is mounted but closed
+must not hold a history entry — otherwise Back on the villa map would appear to
+do nothing at all, which is the opposite failure and just as wrong.
+
+`RoomChoiceSheet` looked like a sixth and is not: it names the shell class only
+in a comment explaining that it stopped using it, and delegates to `BasePanel`,
+which registers. Wiring it would have registered twice and demanded two presses.
+Worth recording, because the same grep will surface it again next time.
+
+The audit now returns that file and nothing else.
+
 ## 2.332.0
 
 ### Fixed — Back inside Advanced Settings left the app instead of closing it
