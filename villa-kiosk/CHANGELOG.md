@@ -1,3 +1,40 @@
+## 2.335.0
+
+### Fixed — the entry for a re-mounted surface was never pushed, so the next press left the app
+
+The instrument from 2.334.0 answered in one run, and it answered against the
+theory it was built to test.
+
+The press inside Advanced Settings recorded `depth 1, owned 1, unwinding 0,
+pending 0`. Perfectly in sync — the stack held one surface, the reconciler held
+one history entry, nothing was mid-flight — and it closed correctly, returning to
+Settings. So the timing theory was wrong: there was no gap between the stack and
+the reconciler at the moment of the press.
+
+The finding was in what came NEXT, and specifically in what did not: the second
+press produced **no `back-press` record at all**, followed a second later by
+`pagehide`. No record means no `popstate`, and no `popstate` means there was
+nothing in history to traverse. Android found the root and backgrounded the app.
+The entry for the RE-MOUNTED Settings had never been pushed.
+
+Why: reconciliation ran once, on a microtask, and a microtask runs before React
+has flushed its passive effects. Scheduled from inside a `popstate` handler it
+therefore settles at a moment when the stack still holds the surface that is
+closing and does not yet hold the one replacing it — the depth looks correct, the
+reconciler does nothing, and the push that the replacement needed never happens.
+The 2.332.0 swap fix was right about swaps and wrong about WHEN it is safe to
+look at the stack.
+
+So there are now two passes, the microtask and a following task, plus an explicit
+request for one at the end of the pop handler rather than trusting the stack
+mutation to arrive in time to schedule its own. Both passes compare depth against
+the stack and do nothing when they agree, so the second costs a comparison in the
+ordinary case and cannot double-push.
+
+The `back-press` instrument stays for one more release — it is four integers, it
+has already earned its keep once, and it is the thing that will show this is
+actually closed rather than moved.
+
 ## 2.334.0
 
 ### Added — one record per Back press, because the model says this cannot happen

@@ -52,7 +52,7 @@ let queued = false;
 
 /** Make the history depth match the stack. The ONE place history is written. */
 function syncHistory(): void {
-  queued = false;
+  queued = false;  // a later change re-arms both passes
   const want = stack.length;
   if (want > pushed) {
     // Same URL — this app is served under an add-on ingress path that must not
@@ -68,11 +68,31 @@ function syncHistory(): void {
   }
 }
 
-/** Coalesce to ONE reconciliation per commit — that is what makes a swap free. */
+/**
+ * Coalesce to ONE reconciliation per commit — that is what makes a swap free.
+ *
+ * ⚠️ TWO passes, and the second is not belt-and-braces: a microtask runs before
+ * React has flushed its passive effects, so a reconciliation scheduled from
+ * inside a `popstate` handler can settle while the stack still holds the surface
+ * that is closing and before the surface replacing it has mounted. The follow-up
+ * task runs after that flush and reconciles what the stack ACTUALLY became.
+ *
+ * The field measurement that forced this: a press inside Advanced Settings was
+ * recorded with `depth 1, owned 1, pending 0` — perfectly in sync, handled, and
+ * it closed correctly — and the NEXT press produced no `popstate` at all, so
+ * Android backgrounded the app. No popstate means no entry existed, i.e. the
+ * entry for the re-mounted Settings had never been pushed. Reconciling only once,
+ * early, is how that happens.
+ *
+ * Both passes are idempotent — each compares depth against the stack and does
+ * nothing when they already agree — so the extra pass costs a comparison in the
+ * common case and cannot double-push.
+ */
 function scheduleSync(): void {
   if (queued) return;
   queued = true;
   queueMicrotask(syncHistory);
+  setTimeout(syncHistory, 0);
 }
 
 /**
@@ -134,6 +154,10 @@ function onPopState(): void {
   // which is not what a phone user expects and not what was asked for.
   if (!top) return;
   top.close();
+  // The close above changes the stack through React, which settles after this
+  // handler returns — so ask for a reconciliation explicitly rather than relying
+  // on the mutation to arrive in time to schedule its own.
+  scheduleSync();
 }
 
 /**
