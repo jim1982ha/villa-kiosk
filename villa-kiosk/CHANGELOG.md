@@ -1,3 +1,32 @@
+## 2.318.0
+
+### Changed — the top bar's middle section is as wide as its buttons again
+
+2.303.0 answered "make the bar wider so the top fade isn't needed" by switching
+the phone grid to `auto minmax(0,1fr) auto` and stretching the centre section to
+fill the row. That was right at the time and became wrong the moment the fade
+was removed for good: the pill was left as a full-width surface with six icons
+floating in the middle of it and a hand's width of empty glass either side.
+2.310.0 and 2.311.0 both worked on how the buttons sat INSIDE that surface —
+`space-between`, then auto margins, then `safe center` — without ever asking why
+the surface was full width.
+
+The stretch is gone, along with the `width: 100%` and centring override it
+needed, and the phone tier no longer overrides the grid at all. The desktop
+layout — equal `1fr` side tracks with a `minmax(0, auto)` centre — makes the
+section exactly as wide as its buttons and centres it on the SCREEN rather than
+on whatever is left between the app icon and the overflow button, which are
+different widths. One layout at every width is also one layout to reason about.
+
+The landscape block that used to undo all of this now restores only the scrim,
+because that is the only thing the phone tier still changes. Dead restores are
+worse than none: they read as a live pairing and the next person keeps both
+halves in step for no reason.
+
+Nothing was needed to keep an overflowing row scrollable — `.hud-group-scroll`
+already carries `max-width: 100%` and `overflow-x: auto`, so a profile with more
+categories than fit still pans exactly as before.
+
 ## 2.317.0
 
 ### Changed — a device that can afford its own screen now gets it

@@ -2915,8 +2915,19 @@ label.toggle span { user-select: none; line-height: 1.4; }
      MUST stay ABOVE the landscape block below: that one restores the hugging
      layout for a short-but-WIDE viewport, both carry the same specificity, and
      source order is the only thing deciding which wins. */
-  .hud-topbar { grid-template-columns: auto minmax(0, 1fr) auto; background: none; }
-  .hud-center:has(.hud-group-scroll .icon-btn:nth-of-type(4)) { justify-self: stretch; }
+  /* ⚠️ ONLY the scrim is dropped at this tier now. 2.303.0 also switched the
+     grid to `auto minmax(0,1fr) auto` and stretched the centre section to fill
+     the row, which was the right answer to "make the bar wider so the top fade
+     isn't needed" and the wrong shape once the fade was gone for good: the pill
+     became a full-width surface with six icons floating in the middle of it and
+     a hand's width of empty glass either side. Reported as the middle section
+     being too wide for what it holds.
+     The desktop grid — equal 1fr side tracks, `minmax(0, auto)` centre — is
+     what makes the section exactly as wide as its buttons and centred on the
+     SCREEN rather than on whatever is left between the app icon and the
+     overflow button, which are different widths. One layout for every width is
+     also one layout to reason about. */
+  .hud-topbar { background: none; }
   /* The section keeps the full row width (justify-self: stretch above, which
      is what removed the need for the top scrim in 2.303.0) — but the BUTTONS
      group in its middle rather than being pushed to its two ends. 2.303.0 used
@@ -2947,11 +2958,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
      in the source anyway: it costs nothing, it documents the intent, and it
      starts shipping again by itself the day the target set widens. Checked in
      the built CSS, not assumed. */
-  .hud-center:has(.icon-btn:nth-of-type(4)) .hud-group-scroll {
-    width: 100%;
-    justify-content: center;
-    justify-content: safe center;
-  }
 
 /* ── Short but NOT narrow: a phone in landscape ───────────────────────────
    The compact query above fires on `(max-width: 640px), (max-height: 560px)`,
@@ -2973,18 +2979,12 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .hud-center .hud-cat-help { display: block; }
   /* …and with the inline controls back, the overflow duplicate goes away. */
   .hud-overflow { display: none; }
-  /* …and the pill stops filling the row: with the width back, spreading six
-     icons across it would strand them at the screen edges. The fade comes back
-     with it — they shipped together and are one decision. Selectors mirror the
-     phone rules' exactly, so equal specificity plus source order decides. */
-  .hud-topbar {
-    grid-template-columns: 1fr minmax(0, auto) 1fr;
-    background: linear-gradient(180deg, var(--topbar-fade), transparent);
-  }
-  .hud-center:has(.hud-group-scroll .icon-btn:nth-of-type(4)) { justify-self: center; }
-  .hud-center:has(.icon-btn:nth-of-type(4)) .hud-group-scroll {
-    width: auto; justify-content: flex-start;
-  }
+  /* …and the scrim comes back. That is ALL that is left here: this block used
+     to also restore the grid and un-stretch the centre section, and since the
+     phone tier stopped changing either there is nothing to restore. Dead
+     restores are worse than none — they read as a live pairing and the next
+     person keeps both halves in step for no reason. */
+  .hud-topbar { background: linear-gradient(180deg, var(--topbar-fade), transparent); }
 }
   /* Left control stack (1F/2F/rooms): sized to match the bottom bar's own
      icon chips (.summary-tile-icon's mobile size, see its media query) so
