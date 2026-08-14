@@ -329,7 +329,7 @@ function SceneMenu({ scenes, canRun, apply }: {
       <button
         ref={btnRef}
         type="button"
-        className="summary-tile tone-neutral"
+        className="summary-tile summary-tile-iconly tone-neutral"
         style={{
           // Same reason as Tile above: composited in JS, so re-theming needs
           // a re-render rather than the cascade.
@@ -343,14 +343,17 @@ function SceneMenu({ scenes, canRun, apply }: {
         disabled={!canRun}
         aria-haspopup="menu"
         aria-expanded={open}
+        // ⚠️ The tile draws NO text (see .summary-tile-iconly), so the
+        // accessible name has to be stated — a glyph-only button with neither
+        // a label nor an aria-label announces as "button" and nothing else.
+        // The count belongs in the tooltip, not on the bar: the menu this
+        // opens IS the list, so printing its length beside it said the same
+        // thing twice, which is what was reported as clutter.
+        aria-label={`Scenes (${scenes.length})`}
         title={`${scenes.length} scene${scenes.length === 1 ? "" : "s"} from Home Assistant — tap to run one`}
         onClick={toggle}
       >
         <span className="summary-tile-icon"><Sparkles size={20} /></span>
-        <span className="summary-tile-text">
-          <span className="summary-tile-label">Scene</span>
-          <span className="summary-tile-value">{scenes.length} scene{scenes.length === 1 ? "" : "s"}</span>
-        </span>
       </button>
       {open && pos && createPortal(
         <div

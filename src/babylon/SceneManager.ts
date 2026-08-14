@@ -503,7 +503,9 @@ export class SceneManager {
 
     this.camera = new CameraController(this.scene, canvas, opts.config, {
       onRoomChange: opts.onRoomChange,
-      onActivity: () => this.requestRender(),
+      // MOTION — one of the only two callers that may un-sharpen (see
+      // unsharpen). Both camera controllers route every pose change here.
+      onActivity: () => { this.unsharpen(); this.requestRender(); },
       // Tap-to-pick is detected in the camera (sole owner of the pointer
       // pipeline) and dispatched to the picker — reliable on touch & mouse.
       onTap: handleTap,
@@ -569,7 +571,9 @@ export class SceneManager {
 
     // Any pointer activity on the canvas (look-around drag, wheel, tap) wakes the
     // on-demand render loop so the view stays smooth.
-    this.scene.onPointerObservable.add(() => this.requestRender());
+    // The second (and last) motion entry point — a finger on the glass is
+    // motion whether or not the camera has decided to move yet.
+    this.scene.onPointerObservable.add(() => { this.unsharpen(); this.requestRender(); });
 
     // Land on the bird's-eye OVERVIEW camera from the very first rendered frame.
     // Before the model finishes loading the active camera used to be the
@@ -737,10 +741,27 @@ export class SceneManager {
         now < this.keepRenderingUntil ||
         !this.config.renderOnDemand
       ) {
-        // Back to the motion resolution BEFORE the frame is drawn and before
-        // it is sampled — an interactive frame must be measured at the scaling
-        // the valve chose, never at the sharp idle one.
-        this.unsharpen();
+        // ── A frame asked for while the image is SHARP is a repaint ─────────
+        // Only the two motion entry points un-sharpen (see unsharpen), so
+        // reaching here still sharpened means nothing is moving: an HA state
+        // push, a sun tick, a floor swap, a return from background. Those need
+        // the picture REDRAWN, not down-rezzed — and until 2.322.0 they got the
+        // full interactive treatment, so every state change on a live villa
+        // dropped the settled image back to motion resolution for 350ms and let
+        // it re-sharpen afterwards. Reported as the glyphs "updating again" a
+        // second or two after the camera had already settled.
+        //
+        // Never sampled, for the same reason idleSharpen isn't: the sharp frame
+        // is deliberately the expensive one and feeding it to the valve would
+        // have the device ease itself down for having drawn a better picture.
+        // Rate-capped for that same expense, exactly as the animation branch is.
+        if (this.sharpened) {
+          if (now - this.lastAnimFrameAt >= ANIMATION_FRAME_MS) {
+            this.lastAnimFrameAt = now;
+            this.scene.render();
+          }
+          return;
+        }
         this.sampleFrame(now);
         this.lastAnimFrameAt = now;
         // Timed, because the split between "the frame cost is inside this call"
@@ -1189,7 +1210,18 @@ export class SceneManager {
     this.scene.render();
   }
 
-  /** Put the motion resolution back. Idempotent; safe to call every frame. */
+  /**
+   * Put the motion resolution back. Idempotent; safe to call every frame — the
+   * flag check is the whole cost when there is nothing to undo.
+   *
+   * ⚠️ THREE CALLERS, AND THE LIST IS THE DESIGN (2.322.0). Two motion entry
+   * points — `onActivity` (both camera controllers) and the canvas pointer
+   * observable — plus the render loop's animation branch. Nothing else may
+   * call it, because "sharpened" is what the interactive branch reads to tell a
+   * repaint from motion: widen this list and every HA state push starts
+   * dropping the settled picture to motion resolution again, which is the
+   * regression it was narrowed to fix.
+   */
   private unsharpen(): void {
     if (!this.sharpened) return;
     this.sharpened = false;

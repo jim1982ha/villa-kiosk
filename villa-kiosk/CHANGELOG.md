@@ -1,3 +1,61 @@
+## 2.322.0
+
+### Fixed — a state change is not a camera movement, and stops being treated as one
+
+2.321.0's idle sharpening worked, and the report back was precise: after a
+camera move the glyphs sharpen at roughly the 350ms the design predicts, and
+then **a second pass one or two seconds later** softens and re-settles them.
+Asked whether that second pass was expected or useful, and it was neither.
+
+It was not the resolution valve, which is worth stating because that was the
+obvious suspect and it is innocent on both paths. `easeResolution` short-circuits
+at `HW_SCALE_FLOOR` and the iPad in the dump is already sitting on that floor
+(`hw 1`), so it cannot move; `raiseResolution` is one-shot behind its own flag
+and refuses anyway, since 25ms of measured render time times the 4x pixel
+increase is 100ms against a 22ms target.
+
+The cause was structural. `unsharpen()` was called at the top of the render
+loop's interactive branch, so **any** caller that woke the loop dropped the
+settled picture back to motion resolution for a full 350ms window and let it
+re-sharpen afterwards — and on a live villa the overwhelming majority of those
+callers are not motion at all. An HA `state_changed` push (this install pushes
+into a store of 1088 entities), a sun tick, a floor swap, a return from
+background: each one needs the picture REDRAWN, and each one was being served a
+resolution change it had no use for.
+
+The fix narrows the list rather than adding a mechanism. Only the two genuine
+motion entry points un-sharpen now — `onActivity`, which both camera
+controllers route every pose change through, and the canvas pointer observable
+— plus the animation branch, which already did. `sharpened` therefore becomes
+the loop's own answer to "is this a repaint or is this motion", and a frame that
+arrives while the image is sharp is drawn at the resolution already on screen,
+rate-capped at `ANIMATION_FRAME_MS` for the same reason the animation branch is,
+and never sampled: feeding the deliberately-expensive sharp frame to the valve
+would have a device ease itself down for having drawn a better picture.
+
+Net, this is less machinery than before and less work at runtime. A state
+repaint used to cost 350ms of low-resolution frames followed by a sharpening
+frame; it now costs one sharp frame at the resolution that was already there.
+Nothing about the tap path, the valve's own thresholds, or the badge bake moves.
+The one-line invariant is written on `unsharpen` itself, because widening its
+caller list is exactly how this regression comes back.
+
+### Changed — the Scene button is a button
+
+The bottom bar's Scene tile printed an eyebrow reading "Scene" over a value
+reading "N scenes", beside a glyph that already says scene and above a menu
+that IS the list of them. Reported as redundant and cluttering, which it was:
+three statements of one fact competing for the narrowest part of the UI.
+
+It is now the glyph alone, at every width, and tapping it opens the same
+contextual menu it always did. The count moves to the tooltip, where it costs
+nothing. Because a glyph-only button with no text has no accessible name at all,
+the tile states one explicitly rather than inheriting one from a label that no
+longer exists. It keeps its icon chip at desktop widths so it still matches the
+plated tiles beside it, and the existing phone-portrait rule — which strips text
+from every tile and flattens every chip because there genuinely isn't room —
+continues to win there, unchanged.
+
 ## 2.321.0
 
 ### Added — the still image is drawn at the display's real resolution

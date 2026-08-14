@@ -1203,6 +1203,18 @@ button {
 .summary-tile.is-info, .summary-tile:disabled { cursor: default; }
 .summary-tile:disabled { opacity: 0.9; }
 
+/* A tile that is ONLY its glyph (the Scene button). It carries no label and no
+   value, so the asymmetric right padding — which exists purely to separate the
+   icon chip from the text beside it — would leave dead space on one side and
+   read as a mis-aligned tile. Vertical padding is deliberately the base tile's
+   6px so the two sit at exactly the same height in the bar.
+
+   Not merged with the phone-portrait rule below that strips text from EVERY
+   tile: that one is a "there genuinely isn't room" rule and it also flattens
+   the icon chip, while this is a permanent property of one button that keeps
+   its chip at every width so it still matches the plated tiles beside it. */
+.summary-tile-iconly { min-width: 0; padding: 6px 10px; gap: 0; }
+
 .summary-tile-icon {
   display: flex; align-items: center; justify-content: center;
   width: var(--chip-size); height: var(--chip-size); flex: 0 0 auto;
