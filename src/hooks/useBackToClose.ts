@@ -36,6 +36,7 @@
 // happens at all — which is both the fix and less work than before.
 
 import { useEffect, useRef } from "react";
+import { report as reportTelemetry } from "@/utils/telemetry";
 
 interface Entry {
   close: () => void;
@@ -101,6 +102,23 @@ function ensureListening(): void {
 }
 
 function onPopState(): void {
+  // ── INSTRUMENT (2.334.0): what did this press actually find? ─────────────
+  // Back closes Advanced Settings correctly and then escapes the app on the
+  // NEXT press, which the reconciler's own model says cannot happen — so the
+  // model is wrong somewhere and the honest way to find out is to look rather
+  // than to reason. `depth` is how many surfaces think they are open, `owned`
+  // is how many history entries we believe we hold; if they disagree at the
+  // moment of a press, that gap IS the bug. `queued` says whether a
+  // reconciliation was still pending, which is the timing theory's fingerprint.
+  //
+  // Remove once it has answered. Cheap: one record per press, no payload
+  // beyond four numbers.
+  reportTelemetry("back-press", {
+    depth: stack.length,
+    owned: pushed,
+    unwinding,
+    pending: queued ? 1 : 0,
+  });
   if (unwinding > 0) { unwinding -= 1; return; }
   // The browser just spent one of ours, so the depth is already correct — the
   // close below shrinks the stack to match and the reconciler finds nothing to

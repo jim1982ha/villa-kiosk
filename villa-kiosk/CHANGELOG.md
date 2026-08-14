@@ -1,3 +1,33 @@
+## 2.334.0
+
+### Added — one record per Back press, because the model says this cannot happen
+
+Back now closes Advanced Settings and returns to Settings, correctly. Pressing it
+again minimises the app instead of returning to the villa. Tracing 2.332.0's
+reconciler says that is impossible: opening Advanced is a swap so the depth stays
+one, the first press spends that entry, Settings remounting pushes a fresh one,
+and the second press should spend THAT and close Settings.
+
+It doesn't. So the model is wrong somewhere, and the useful thing to do with a
+wrong model is measure it rather than reason harder at it — two rounds of
+confident diagnosis have already been paid for in this area (a bfcache theory and
+a claim about what Android's Back does to a root activity), both asserted and
+both wrong, and a third guess costs another manual test round on a real phone.
+
+A `back-press` record now carries four numbers at the instant of every press:
+`depth` (how many surfaces believe they are open), `owned` (how many history
+entries the reconciler believes it holds), `unwinding`, and `pending` (whether a
+reconciliation was still queued). If depth and owned disagree when the escaping
+press arrives, that gap is the bug and its sign says which way. If `pending` is 1
+it is the timing theory — the stack changes in React's passive-effect flush while
+the reconciler runs on a microtask, so a press landing between them sees a depth
+that is briefly neither the old one nor the new one. If they agree and the press
+still escapes, the fault is elsewhere entirely and the theory dies cheaply.
+
+Temporary by construction: four integers, no payload, no behaviour change, and
+both halves — the record kind and the call — are marked for deletion together
+once they have answered.
+
 ## 2.333.0
 
 ### Fixed — five more surfaces where Back left the app
