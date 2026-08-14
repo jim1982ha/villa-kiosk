@@ -1,3 +1,49 @@
+## 2.329.0
+
+### Fixed — the glyphs could stay soft indefinitely, because sharpening was a branch and not a rule
+
+Reported on the iPad: sometimes the entity glyphs simply do not come back to
+full resolution, and then after a few dozen seconds they do. The telemetry
+carries the fingerprint — that iPad reports frame bursts of **418** and **264**
+consecutive frames. The render loop was running continuously and never reaching
+the one branch that could sharpen anything.
+
+Sharpening lived in the IDLE branch and nowhere else, and there are two ordinary
+states in which the loop never gets there. A single continuous animation parks
+it in the ANIMATION branch: one fan left on is enough, and
+`requestAnimationRender`'s own docstring already called that "the single most
+common state a kiosk is in". `renderOnDemand: false` parks it in the INTERACTIVE
+branch for the whole session. In both, the picture was permanently at motion
+resolution on any device the valve had eased down, and it recovered only when
+the animation happened to stop — which is exactly the "few dozen seconds" that
+was observed.
+
+The fix is a deletion of special cases rather than another one. Sharpness is a
+property of the CAMERA, so it is now computed once, at the top of the loop, as
+"has the camera been still for longer than the tail `requestRender` arms
+anyway", and all three branches obey that same value. An ordinary orbit
+therefore sharpens at precisely the moment it always did, and the two states
+that could never sharpen now do.
+
+The animation branch obeying it is a real trade and worth stating plainly: a
+turning fan is not a moving camera, but a native-resolution frame does cost
+more, so on the slowest device the capped 30fps animation becomes nearer 10
+while nobody is touching the screen. A decorative animation being choppier is
+worth less than every glyph on the screen being legible, and the instant a
+finger lands the camera un-sharpens and the animation is back at full rate.
+
+**A second bug fell out of writing this down.** `sharpened` is supposed to mean
+"the scaling is currently overridden", and it was being latched even when the
+device was already at its panel's density and there was nothing to override —
+which quietly disabled the resolution valve on every DPR<=2 machine, because
+both `easeResolution` and `raiseResolution` bail while sharpened. A flag set on
+the first idle tick and never cleared meant the valve could not act again for
+the rest of the session. It now latches only on a real change, which costs two
+float comparisons per idle tick and keeps the flag honest. `sharpen` also no
+longer draws: every caller is about to render anyway, and the idle branch draws
+its one extra frame on the `true` return, so there is exactly one place that
+decides and one place that paints.
+
 ## 2.328.0
 
 ### Added — the load record now says why the back-forward cache didn't restore us

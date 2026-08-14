@@ -91,6 +91,11 @@ import { entityMapDelta } from "./entityMapDiff";
 // bought nothing and cost a villa's GPU continuously for as long as a fan is
 // left on. Interaction is never subject to this — see requestRender.
 const ANIMATION_FRAME_MS = 33;
+/** How long the CAMERA must have been still before the picture is drawn at the
+ *  panel's own resolution. The same tail `requestRender` arms by default, so an
+ *  ordinary orbit sharpens at exactly the moment it always has — this is the
+ *  one input to that decision, and every branch of the render loop reads it. */
+const SHARPEN_STILL_MS = 350;
 
 /** Round a derived world coordinate to millimetres. Used where a computed
  *  position is about to be STORED rather than only drawn — see the teleport
@@ -733,6 +738,36 @@ export class SceneManager {
       // side monitor for weeks never pays for frames nobody can see.
       if (document.hidden) return;
       const now = performance.now();
+
+      // ── ONE RULE DECIDES RESOLUTION: HOW LONG SINCE THE CAMERA MOVED ──────
+      // Not "which branch of the loop are we in", which is what it was until
+      // 2.329.0 and is why the glyphs could sit blurred indefinitely: sharpening
+      // only ever happened in the IDLE branch, and there are two ordinary states
+      // in which the loop never reaches it. A single animation anywhere — one
+      // fan left on, which requestAnimationRender's own docstring calls "the
+      // single most common state a kiosk is in" — parks it in the animation
+      // branch forever, and `renderOnDemand: false` parks it in the interactive
+      // one. Both were permanently soft on the iPad, and the picture came back
+      // only when the fan happened to stop, which is the "few dozen seconds"
+      // that was reported. Sharpness is a property of the CAMERA, so it is
+      // computed once here and every branch obeys it.
+      //
+      // ⚠️ MOTION IS SPENT HERE, INSIDE rAF — NEVER IN A POINTER HANDLER.
+      // 2.322.0 called unsharpen() straight from the pointer observable, and it
+      // changes the hardware scaling level, i.e. it resizes the drawing buffer
+      // synchronously during input dispatch on the very element that has just
+      // taken setPointerCapture. Reported on iPad as a badge tap doing nothing
+      // followed by a one-finger drag tilting the camera — both faces of one
+      // lost pointerup (see OverviewController's dropLostPointers).
+      if (this.motionPending) {
+        this.motionPending = false;
+        this.lastMotionAt = now;
+        this.unsharpen();
+      }
+      // The same tail requestRender() uses by default, so a plain orbit
+      // sharpens at exactly the moment it always has.
+      const still = now - this.lastMotionAt >= SHARPEN_STILL_MS;
+
       // Interaction, transitions and real state changes always render at the
       // display's own rate — responsiveness is never throttled.
       if (
@@ -740,30 +775,20 @@ export class SceneManager {
         now < this.keepRenderingUntil ||
         !this.config.renderOnDemand
       ) {
-        // ⚠️ MOTION UN-SHARPENS HERE, INSIDE rAF — NEVER IN A POINTER HANDLER.
-        // 2.322.0 called unsharpen() straight from the pointer observable, and
-        // it changes the hardware scaling level, i.e. it resizes the drawing
-        // buffer synchronously during input dispatch on the very element that
-        // has just taken setPointerCapture. Reported on iPad as a badge tap
-        // doing nothing followed by a one-finger drag tilting the camera —
-        // both faces of one lost pointerup (see OverviewController's
-        // dropLostPointers, which makes that state self-healing whatever the
-        // cause). The flag is set by the motion entry points and spent here.
-        if (this.motionPending) { this.motionPending = false; this.unsharpen(); }
-        // ── A frame asked for while the image is SHARP is a repaint ─────────
-        // Only the motion entry points set motionPending (see unsharpen), so
-        // reaching here still sharpened means nothing is moving: an HA state
-        // push, a sun tick, a floor swap, a return from background. Those need
-        // the picture REDRAWN, not down-rezzed — and until 2.322.0 they got the
-        // full interactive treatment, so every state change on a live villa
-        // dropped the settled image back to motion resolution for 350ms and let
-        // it re-sharpen afterwards. Reported as the glyphs "updating again" a
+        if (still) this.sharpen();
+        // ── A frame drawn while the image is SHARP is a repaint ─────────────
+        // The camera is still, so this frame is an HA state push, a sun tick, a
+        // floor swap, a return from background. Those need the picture
+        // REDRAWN, not down-rezzed — until 2.322.0 they got the full
+        // interactive treatment, so every state change on a live villa dropped
+        // the settled image back to motion resolution for 350ms and let it
+        // re-sharpen afterwards, reported as the glyphs "updating again" a
         // second or two after the camera had already settled.
         //
-        // Never sampled, for the same reason idleSharpen isn't: the sharp frame
-        // is deliberately the expensive one and feeding it to the valve would
-        // have the device ease itself down for having drawn a better picture.
-        // Rate-capped for that same expense, exactly as the animation branch is.
+        // Never sampled: the sharp frame is deliberately the expensive one and
+        // feeding it to the valve would have the device ease itself down for
+        // having drawn a better picture. Rate-capped for that same expense,
+        // exactly as the animation branch is.
         if (this.sharpened) {
           if (now - this.lastAnimFrameAt >= ANIMATION_FRAME_MS) {
             this.lastAnimFrameAt = now;
@@ -793,20 +818,27 @@ export class SceneManager {
       // Everything else is a frame asked for purely by a continuous animation
       // (see requestAnimationRender), and is rate-capped.
       if (now < this.animateUntil) {
-        // A continuous animation is running (a fan, a pulsing alert). Sharpening
-        // here would make EVERY capped frame a full-resolution one, which is the
-        // cost this whole valve exists to avoid — so the scene stays at motion
-        // resolution for as long as anything is moving.
-        this.unsharpen();
+        // A continuous animation is running (a fan, a pulsing alert). It obeys
+        // the SAME rule: a turning fan is not a moving camera, and a villa with
+        // one fan on is not a villa whose badges may be unreadable. The frame
+        // costs more at native resolution — on the slowest device the capped
+        // 30fps becomes nearer 10 — and that is the honest trade, because a
+        // decorative animation being choppier while nobody is touching the
+        // screen is worth less than every glyph on the screen being legible.
+        // The instant a finger lands, motionPending un-sharpens and the
+        // animation is back at full rate.
+        if (still) this.sharpen();
         if (now - this.lastAnimFrameAt >= ANIMATION_FRAME_MS) {
           this.lastAnimFrameAt = now;
           this.scene.render();
         }
         return;
       }
-      // Nothing is moving and nothing has asked for a frame. Draw the still
-      // image once more, at the display's real resolution.
-      this.idleSharpen();
+      // Nothing is moving and nothing has asked for a frame. `sharpen` reports
+      // whether it actually changed anything, so the one extra frame is drawn
+      // exactly when there is a sharper picture to draw and never on the idle
+      // ticks that follow.
+      if (this.sharpen()) this.scene.render();
     });
   }
 
@@ -1205,33 +1237,48 @@ export class SceneManager {
   private sharpened = false;
   /** Set by the motion entry points, spent by the render loop — see unsharpen. */
   private motionPending = false;
-  private idleSharpen(): void {
-    if (this.sharpened) return;
+  /** When the camera last moved. THE input to the sharpness rule. */
+  private lastMotionAt = 0;
+  /**
+   * Raise to the panel's own resolution. Draws NOTHING — every caller is about
+   * to render anyway, and the idle branch renders on the `true` return.
+   *
+   * ⚠️ `sharpened` means "we are currently OVERRIDING the scaling", and only
+   * that. Until 2.329.0 it latched even when the device was already at native
+   * and there was nothing to override, which quietly disabled the whole
+   * resolution valve on every DPR<=2 machine: `easeResolution` and
+   * `raiseResolution` both bail while sharpened, so a flag set on the first
+   * idle tick and never cleared meant the valve could not act for the rest of
+   * the session. Latching only on a real change keeps the flag honest and costs
+   * two float comparisons per idle tick.
+   */
+  private sharpen(): boolean {
+    if (this.sharpened) return false;
     const cur = this.engine.getHardwareScalingLevel();
     const native = 1 / Math.max(1, window.devicePixelRatio || 1);
-    // Latch either way: a device already AT its panel's density has nothing to
-    // win, and latching stops this being reconsidered on every idle tick.
-    this.sharpened = true;
-    if (cur <= native + 1e-6) return;
+    if (cur <= native + 1e-6) return false;
     this.sharpMotionHw = cur;
+    this.sharpened = true;
     this.engine.setHardwareScalingLevel(native);
-    // Quiet: this frame IS the redraw, and asking for another would re-arm the
-    // interactive branch and undo the sharpen on the very next tick.
+    // Quiet: the caller's render IS the redraw, and asking for another would
+    // re-arm the interactive branch for no reason.
     this.visuals.notifyRenderScaleChanged(false);
-    this.scene.render();
+    return true;
   }
 
   /**
    * Put the motion resolution back. Idempotent; safe to call every frame — the
    * flag check is the whole cost when there is nothing to undo.
    *
-   * ⚠️ TWO CALLERS, BOTH INSIDE THE RENDER LOOP, AND THE LIST IS THE DESIGN.
-   * The interactive branch when `motionPending` is set, and the animation
-   * branch. Nothing else may call it, for two independent reasons:
+   * ⚠️ ONE CALLER, AT THE TOP OF THE RENDER LOOP, AND THAT IS THE DESIGN.
+   * Since 2.329.0 the only thing that un-sharpens is the camera moving, so
+   * this is called in exactly one place — where `motionPending` is spent —
+   * and never again. Two independent reasons it must stay there:
    *
-   *   * `sharpened` is what the interactive branch reads to tell a repaint
-   *     from motion — widen the list and every HA state push starts dropping
-   *     the settled picture to motion resolution again (2.322.0's fix), and
+   *   * `sharpened` means "the scaling is currently overridden", and the
+   *     interactive branch reads it to tell a repaint from motion. Widen the
+   *     caller list and every HA state push starts dropping the settled
+   *     picture back to motion resolution (2.322.0's fix), and
    *   * this RESIZES THE DRAWING BUFFER, so calling it from an event handler
    *     mutates the canvas during input dispatch (2.322.0's regression).
    *
