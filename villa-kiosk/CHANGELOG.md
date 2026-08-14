@@ -1,3 +1,29 @@
+## 2.339.0
+
+### Fixed — the villa keeps a SPARE history entry, because re-arming cannot beat the platform
+
+2.338.0 re-armed the villa's history entry the instant a Back press spent it,
+synchronously, inside the pop handler — and the app still closed. The reason is
+an ordering that no handler can win: Android finishes the activity **because the
+traversal landed on the root entry**, and that decision is taken before any
+JavaScript runs. Pushing a replacement afterwards restores the depth for a
+document that is already being destroyed.
+
+So the entry is not replaced after the fact; there is simply always another one
+underneath. The villa holds TWO, and a press at the villa moves from the second
+to the first — a real entry, not the root — so the platform has no reason to
+finish anything, and the push in the handler restores the pair for next time.
+
+The same measurement that made this necessary also confirms it is the last piece:
+2.336.0 established that an overlay's press stops leaving the app once it lands on
+the villa's entry instead of the root, and that has held since. This is the same
+rule applied one level down, to the villa's own press.
+
+Everything else is unchanged. A surface over the villa closes, innermost first,
+until the villa remains; then Back does nothing, and HOME minimises with the
+document intact — which the field records show returning in under a second with
+nothing rebuilt.
+
 ## 2.338.0
 
 ### Changed — Back at the villa minimises the app; it can no longer close it

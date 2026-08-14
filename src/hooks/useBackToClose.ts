@@ -68,7 +68,10 @@ function syncHistory(): void {
   // minimises, which is exactly "Back leaves only from the villa map". It is
   // NOT 2.330.0's guard, which swallowed the villa's press so Back did nothing
   // there; this one is spent normally and re-armed on return (see armRoot).
-  const want = stack.length + (rootGuard ? 1 : 0);
+  // TWO for the villa, not one — see onPopState. A press must always land on a
+  // real entry; landing on the ROOT is what makes Android finish the activity,
+  // and no amount of re-arming afterwards can undo a decision already taken.
+  const want = stack.length + (rootGuard ? 2 : 0);
   if (want > pushed) {
     // Same URL — this app is served under an add-on ingress path that must not
     // change, and there is no route here to reflect anyway. The entries exist
@@ -158,9 +161,12 @@ function onPopState(): void {
     // villa is inert. HOME minimises and keeps the app warm, which is the whole
     // point: leaving is still one gesture, and coming back is instant.
     //
-    // Synchronous on purpose — the reconciler's microtask would be a race
-    // against the platform finishing the activity, and losing it once destroys
-    // the villa.
+    // Synchronous, and — the part 2.338.0 got wrong — only ever ONE OF TWO.
+    // Re-arming cannot beat the platform, because the platform's decision is
+    // made BY the traversal landing on root, before any handler runs. So the
+    // villa keeps a spare beneath it: a press moves from the second entry to
+    // the first, never to root, Android has no reason to finish anything, and
+    // this push restores the pair for next time.
     history.pushState({ vkRoot: true }, "");
     pushed += 1;
     return;
