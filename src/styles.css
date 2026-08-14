@@ -488,15 +488,27 @@ button {
    not letterbox harmlessly — it paints --bg-base where the villa should be
    along the bottom edge, and hangs the summary bar off the visible area with
    it. Reported as "a large empty section at the bottom on iPhone".
-   The box is over-constrained vertically, and CSS 2.1 §10.6.4 resolves that
-   by keeping `top` + `height` and dropping `bottom` — so this wins without
-   `bottom: auto` being spelled out. That is a LAYOUT rule, not a source-order
-   one: the minifier reorders these declarations freely and it changes
-   nothing, which is worth knowing before someone "fixes" the order back. A
-   browser with no dvh
+   ⚠️ MIN-height, not height, since 2.319.0 — and the difference is the whole
+   safety of this rule. `height: 100dvh` OVER-CONSTRAINS the box, and CSS 2.1
+   §10.6.4 resolves that by keeping `top` + `height` and dropping `bottom`. So
+   2.309.0 did not add a safety net to `inset: 0`; it REPLACED the bottom pin
+   with a computed number, and handed the whole question to whether `100dvh`
+   reports correctly on the device. If it ever under-reports — the same class
+   of iOS quirk this rule exists to survive — the shell is SHORTER than the
+   viewport and `--bg-base` paints the difference: a pale band along the
+   bottom, which is the exact symptom, in the exact colour, that the change
+   was made to remove.
+
+   `min-height` composes instead of replacing. The insets still pin top AND
+   bottom, so the box can never be shorter than the viewport they describe;
+   dvh can only ever grow it, which is all that was wanted when the ICB comes
+   back stale and short. Both failure directions are covered, neither trusts
+   the other, and nothing has to be right for the shell to fill the screen.
+
+   ⚠️ Do not "simplify" this back to `height`. A browser with no dvh
    support drops the declaration and keeps exactly today's inset behaviour —
    which is every desktop engine and Android Chrome, so neither changes. */
-.app-root { position: fixed; inset: 0; height: 100dvh; background: var(--bg-base); }
+.app-root { position: fixed; inset: 0; min-height: 100dvh; background: var(--bg-base); }
 /* EXPLICIT width/height — never `inset: 0` alone.
    2.162.0 changed this to `position: absolute; inset: 0` with no width/height,
    reasoning that the shell is already pinned to four edges so the canvas could

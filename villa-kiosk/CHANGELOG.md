@@ -1,3 +1,42 @@
+## 2.319.0
+
+### Fixed — 2.309.0 removed the shell's bottom pin instead of backing it up
+
+`.app-root` was `position: fixed; inset: 0`, and 2.309.0 added `height: 100dvh`
+to survive iOS returning a stale initial containing block. That was the right
+diagnosis and the wrong mechanism: `height` OVER-CONSTRAINS the box, and CSS 2.1
+§10.6.4 resolves that by keeping `top` + `height` and **dropping `bottom`**. So
+the change did not add a net under the insets — it replaced the bottom pin with
+a computed number and made the whole question depend on `100dvh` reporting
+correctly.
+
+If `100dvh` ever under-reports, which is the same class of quirk the rule exists
+to survive, the shell is shorter than the viewport and `--bg-base` paints the
+difference: a pale band along the bottom edge. That is the exact symptom, in the
+exact colour, that the change was made to remove.
+
+`min-height: 100dvh` composes rather than replaces. The insets still pin top and
+bottom, so the box can never be shorter than the viewport they describe, and dvh
+can only ever grow it — which is all that was ever wanted for the stale-ICB
+case. Both failure directions are covered and neither relies on the other being
+right.
+
+### Noted — the band's colour proves nothing, and had been read as if it did
+
+The manifest's `background_color` is `#F7F4EE`. `--bg-base` in light theme is
+`#F7F4EE`. They are the same value, so "the band is cream" is equally consistent
+with iOS painting space the page never got and with the page painting its own
+background inside a shell that came up short. Several rounds of this
+investigation leaned on that colour as if it discriminated. It does not.
+
+The discriminator this project already found, and then forgot, is in the
+changelog for 2.135.0: **the theme**. `--bg-base` is `#101311` in dark and
+`#F7F4EE` in light; the manifest colour is static. So switching the app to dark
+theme and looking at the band answers it outright — dark means the page is
+painting it and it is ours, cream means it is space outside the document and no
+CSS can reach it. `shellH` (2.309.0) answers the same question from telemetry:
+`shellH < vh` is ours, `shellH = vh < scrh` is not.
+
 ## 2.318.0
 
 ### Changed — the top bar's middle section is as wide as its buttons again
