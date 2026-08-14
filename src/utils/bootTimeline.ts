@@ -365,6 +365,14 @@ function scriptWeight(): { jsKb?: number; jsNetKb?: number } {
  *  and describes nothing — it is exactly what made a healthy 2.5s load look
  *  like a 35s regression. `reloadMs` replaces them: this load's own span, the
  *  only figure that is true for both cases. */
+/** The shape of `PerformanceNavigationTiming.notRestoredReasons` — a tree, one
+ *  node per frame. Declared here because this TS lib's DOM types predate it,
+ *  and only the parts actually read are described. */
+interface NotRestoredLike {
+  reasons?: { reason?: string }[];
+  children?: NotRestoredLike[];
+}
+
 export function bootTimeline(total: number): Record<string, number | string | boolean> {
   const out: Record<string, number | string | boolean> = {};
   const put = (k: string, v: number | undefined) => {
@@ -386,6 +394,30 @@ export function bootTimeline(total: number): Record<string, number | string | bo
   // ── Navigation: what the browser did before any of our code existed ──────
   if (nav) {
     out.navType = nav.type;
+    // ── WHY THE BACK-FORWARD CACHE DIDN'T RESTORE US ────────────────────────
+    // Backgrounding the app and returning to it re-runs this whole load, ~10s
+    // on the phone and ~16s on the iPad, when a bfcache restore would have been
+    // instant. Guessing at the cause is exactly the trap this file exists to
+    // avoid, and the browser will simply say: `notRestoredReasons` (Chrome 123+)
+    // reports the blocking reasons for the CURRENT navigation, and reports null
+    // when the page WAS restored.
+    //
+    // Only the reason codes, flattened and deduped — the tree also carries frame
+    // URLs, which are not ours to ship. A capped, sorted, comma-joined string so
+    // two records with the same causes compare equal.
+    const nrr = (nav as PerformanceNavigationTiming & {
+      notRestoredReasons?: NotRestoredLike | null;
+    }).notRestoredReasons;
+    if (nrr) {
+      const seen = new Set<string>();
+      const walk = (n: NotRestoredLike | null | undefined): void => {
+        if (!n || seen.size > 24) return;
+        for (const r of n.reasons ?? []) if (r?.reason) seen.add(r.reason);
+        for (const c of n.children ?? []) walk(c);
+      };
+      walk(nrr);
+      if (seen.size) out.bfBlocked = [...seen].sort().join(",");
+    }
     // A prerendered document starts its clock earlier than it became visible;
     // without this the phases below look impossibly fast. Not in every browser
     // (and not in this TS lib's DOM types), so it is read defensively.

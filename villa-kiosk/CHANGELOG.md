@@ -1,3 +1,37 @@
+## 2.328.0
+
+### Added — the load record now says why the back-forward cache didn't restore us
+
+Backgrounding the app and coming straight back re-runs the entire load: ~10s on
+the phone, ~16s on the iPad, for a page that was on screen seconds earlier. It
+should not have to. A browser can keep a backgrounded page whole in its
+BACK-FORWARD CACHE and restore it instantly, and every `pageshow` this app has
+ever reported carries `persisted: false` — so that never happens here, and the
+question is why.
+
+Two of the three usual answers are already ruled out by inspection, which is
+worth recording so nobody re-checks them. There is no `unload` or `beforeunload`
+handler anywhere in the app — the single most common blocker, and the one most
+codebases trip over. And the document is served `Cache-Control: no-cache`, which
+forces revalidation but does NOT block bfcache; only `no-store` does, and that
+appears solely on API responses, where it belongs.
+
+What is left is not something to guess at. Chrome answers it directly:
+`PerformanceNavigationTiming.notRestoredReasons` names the blocking reasons for
+the current navigation, and is null when the page WAS restored. The load record
+now carries them as `bfBlocked` — reason codes only, flattened, deduped, sorted
+and capped, because the tree also carries frame URLs and those are not ours to
+ship. Sorted so that two loads with the same causes produce byte-identical
+strings and a change in cause is visible at a glance.
+
+The leading suspect is memory rather than any single API: this app reports
+around 340MB resident on the phone and holds a live WebGL context and an 18MB
+model, and a bfcache entry that size is the first thing evicted under pressure —
+Android will also simply kill a backgrounded renderer. If that is what the field
+says, the fix is a smaller resident footprint, not a flag. But the next dump
+will name it instead of me, which is the whole point of adding this rather than
+changing something and hoping.
+
 ## 2.327.0
 
 ### Changed — Escape and Back ask the same question, in one place
