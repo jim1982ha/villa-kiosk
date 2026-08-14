@@ -95,12 +95,14 @@ function deriveTiles(
       // Reads as a STATE, not as a score. "2/2 locked" makes you do the
       // arithmetic before you know whether anything is wrong, and the one
       // number that matters — how many are open — is the one it never prints.
-      // "All Locked" needs no reading at all, and "1 Unlocked" names the
-      // problem and its size in the same three characters the fraction used.
+      // "Locked" needs no reading at all, and "1 Unlocked" names the problem
+      // and its size in fewer characters than the fraction used — which is the
+      // point: the bar's real constraint is horizontal space, so the all-good
+      // case says the same word the single-lock tile says and no more.
       // Same shape as the single-lock branch above and the light tile's "2 On".
       value: single
         ? (locks[0].state === "locked" ? "Locked" : locks[0].state === "unlocked" ? "Unlocked" : locks[0].state)
-        : allLocked ? "All Locked"
+        : allLocked ? "Locked"
           : unlockedN > 0 ? `${unlockedN} Unlocked`
             // Not all locked, yet none actually UNLOCKED: every remainder is
             // unavailable or jammed. Counting those as unlocked would be a

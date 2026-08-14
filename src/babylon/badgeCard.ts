@@ -69,10 +69,10 @@ export const MAX_TOTAL_CHIPS = 6;
  * grows a group's membership after the fact — did not, which is exactly how a
  * cap a caller has to remember gets forgotten.
  */
-export function gridCells(n: number): number {
+export function gridCells(n: number, max = MAX_TOTAL_CHIPS): number {
   if (!Number.isFinite(n)) return 0;
   const cells = Math.max(0, Math.floor(n));
-  return cells > MAX_TOTAL_CHIPS ? 0 : cells;
+  return cells > max ? 0 : cells;
 }
 
 export interface SubCard {
@@ -85,6 +85,10 @@ export interface SubCard {
   /** Global index of this card's first cell. */
   first: number;
   cells: number;
+  /** Row offset from the arrangement's centre, in units. 0 for every
+   *  arrangement up to MAX_TOTAL_CHIPS — those are one row wide — and non-zero
+   *  only for the larger FOCUSED arrangements, which wrap (see `arrange`). */
+  top: number;
 }
 
 export interface CardArrangement {
@@ -129,8 +133,14 @@ export interface CardArrangement {
  */
 export function arrange(
   n: number, unit: number, iconFraction: number, gap: number,
+  /** The cell ceiling to clamp against. Defaults to MAX_TOTAL_CHIPS, which is
+   *  set by the summary-vs-summary clearance test — see that constant. A
+   *  FOCUSED group passes a larger one, because it is seated unconditionally
+   *  and can never escalate its room, so the test the cap answers does not
+   *  apply to it (see EntityVisuals.FOCUS_MAX_CHIPS). */
+  max = MAX_TOTAL_CHIPS,
 ): CardArrangement {
-  const cells = gridCells(n);
+  const cells = gridCells(n, max);
   const chip = Math.max(4, Math.round(unit * iconFraction));
   const cards: SubCard[] = [];
 
@@ -146,24 +156,42 @@ export function arrange(
     remaining -= take;
   }
 
-  const totalW = shapes.reduce((acc, sh) => acc + sh.cols * unit, 0)
-    + gap * (shapes.length - 1);
-  const height = Math.max(...shapes.map((sh) => sh.rows * unit));
+  // ── Cards WRAP once there are more than two of them ──────────────────────
+  // Up to MAX_TOTAL_CHIPS a fill produces at most two cards, so this is a
+  // single row and every arrangement the ordinary solve can ask for is
+  // byte-identical to what shipped before. Above it — only reachable by a
+  // focused group — a single row would become a strip several screens wide,
+  // and the viewport cap would then refuse it and fall back to a count, which
+  // is the one outcome a tapped room must never produce. A near-square block
+  // keeps the same card objects and just stacks them.
+  const perRow = Math.max(1, Math.ceil(Math.sqrt(shapes.length)));
+  const rows: typeof shapes[] = [];
+  for (let i = 0; i < shapes.length; i += perRow) rows.push(shapes.slice(i, i + perRow));
 
-  let cursor = -totalW / 2;
-  for (const sh of shapes) {
-    const w = sh.cols * unit;
-    cards.push({
-      left: cursor + w / 2,
-      width: w,
-      height: sh.rows * unit,
-      cols: sh.cols,
-      rows: sh.rows,
-      first: sh.first,
-      cells: sh.cells,
-    });
-    cursor += w + gap;
-  }
+  const rowW = rows.map((r) => r.reduce((acc, sh) => acc + sh.cols * unit, 0) + gap * (r.length - 1));
+  const rowH = rows.map((r) => Math.max(...r.map((sh) => sh.rows * unit)));
+  const totalW = Math.max(...rowW);
+  const height = rowH.reduce((a, b) => a + b, 0) + gap * (rows.length - 1);
+
+  let rowTop = -height / 2;
+  rows.forEach((row, ri) => {
+    let cursor = -rowW[ri] / 2;
+    for (const sh of row) {
+      const w = sh.cols * unit;
+      cards.push({
+        left: cursor + w / 2,
+        top: rowTop + rowH[ri] / 2,
+        width: w,
+        height: sh.rows * unit,
+        cols: sh.cols,
+        rows: sh.rows,
+        first: sh.first,
+        cells: sh.cells,
+      });
+      cursor += w + gap;
+    }
+    rowTop += rowH[ri] + gap;
+  });
 
   const cardOfCell = (k: number): SubCard => {
     for (let i = cards.length - 1; i >= 0; i--) if (k >= cards[i].first) return cards[i];
@@ -185,7 +213,7 @@ export function arrange(
     cellTop: (k) => {
       const c = cardOfCell(k);
       const i = k - c.first;
-      return (Math.floor(i / c.cols) - (c.rows - 1) / 2) * unit;
+      return c.top + (Math.floor(i / c.cols) - (c.rows - 1) / 2) * unit;
     },
     zoneW: unit,
     zoneH: unit,

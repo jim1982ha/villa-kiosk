@@ -157,6 +157,29 @@ const LIGHT_POOL_RADIUS = 1.8;
  *  bounded by the nearest room's edge instead (see reshapeLightPools). Without
  *  a floor, a fixture standing right on a boundary would shrink to nothing and
  *  read as an unlit lamp; a small pool is a better answer than none. */
+/**
+ * The cell ceiling for a FOCUSED group's card — the one a room chip's tap
+ * produces.
+ *
+ * MAX_TOTAL_CHIPS (6) is set by the summary-vs-summary clearance test: a wide
+ * arrangement claims a wide disc and starts escalating rooms to their chip. A
+ * focused group is seated UNCONDITIONALLY and can never escalate its room, so
+ * that test — the entire reason for the cap — does not apply to it.
+ *
+ * ⚠️ 2.304.0 let a focused pile exceed the cap and fall through to a COUNT
+ * badge, and wrote it up as a deliberate trade against overlapping cards. It
+ * was neither deliberate nor a trade the user had left open: tapping a room
+ * must show that room's DEVICES, which had been stated twice, and an "8" in
+ * the middle of the pool is the same answer the chip already gave. Both had to
+ * go, and the way to have both is a card that can actually draw its members.
+ *
+ * The real bound is physical and already exists — cardCellCap() shrinks the
+ * arrangement until it fits CARD_MAX_VIEWPORT_FRACTION of the screen — so this
+ * only has to be high enough that the viewport is what decides. Twelve is
+ * three full 2x2 cards, which `arrange` now wraps into a block rather than a
+ * strip.
+ */
+const FOCUS_MAX_CHIPS = 12;
 const POOL_MIN_RADIUS = 0.4;
 /** How far a pool sits above the floor it was probed onto. Enough to clear
  *  z-fighting with the floor polygon, small enough that it still reads as
@@ -4433,7 +4456,7 @@ export class EntityVisuals {
     const cardInk: ScreenBox[] = [];
     const cardFocused: boolean[] = [];
     for (const g of groups) {
-      const lay = this.cardOf(this.drawnCells(g, g.members.length));
+      const lay = this.layoutOf(g, g.members.length);
       p.set(g.wx, g.wy, g.wz);
       Vector3.ProjectToRef(p, Matrix.IdentityReadOnly, tm, vp, p);
       if (!(p.z >= 0 && p.z <= 1)) continue;
@@ -4800,7 +4823,7 @@ export class EntityVisuals {
     // promises absolutely (see `fits`), so it is the one place that cannot be
     // approximated downward.
     const cardHalfOf = (g: PendingEntityGroup) => {
-      const lay = this.cardOf(this.drawnCells(g, g.members.length));
+      const lay = this.layoutOf(g, g.members.length);
       return (Math.hypot(lay.width, lay.height) / 2) * scale * allow;
     };
     /**
@@ -4818,7 +4841,7 @@ export class EntityVisuals {
      * where it is drawn.
      */
     const cardCentreY = (g: PendingEntityGroup) => {
-      const lay = this.cardOf(this.drawnCells(g, g.members.length));
+      const lay = this.layoutOf(g, g.members.length);
       return g.sy - (lay.height / 2) * scale;
     };
     /**
@@ -4835,7 +4858,7 @@ export class EntityVisuals {
      * nothing.
      */
     const cardInscribedHalf = (g: PendingEntityGroup) => {
-      const lay = this.cardOf(this.drawnCells(g, g.members.length));
+      const lay = this.layoutOf(g, g.members.length);
       return (Math.min(lay.width, lay.height) / 2) * scale * allow;
     };
     // A group is measured against OTHER GROUPS at the width it is actually
@@ -5337,7 +5360,10 @@ export class EntityVisuals {
         for (const k of pile) { const i = idx[k]; wx += shown[i].wx; wy += shown[i].wy; wz += shown[i].wz; }
         const n = pile.length;
         const q = this.planeOf(clearance, wx / n, wy / n, wz / n);
-        const lay = this.cardOf(gridCells(Math.min(pile.length, MAX_TOTAL_CHIPS)));
+        // FOCUS_MAX_CHIPS, not MAX_TOTAL_CHIPS: these piles are focused, and
+        // measuring them against the ordinary cap would size a card that is
+        // about to be drawn from the larger one.
+        const lay = this.cardOf(gridCells(Math.min(pile.length, FOCUS_MAX_CHIPS), FOCUS_MAX_CHIPS), FOCUS_MAX_CHIPS);
         const hh = (lay.height / 2) * scale;
         // Anchored bottom-edge-on-anchor exactly as the renderer draws it —
         // this file's oldest rule, and the one 2.288.0 had to restate.
@@ -5527,19 +5553,20 @@ export class EntityVisuals {
   private capCells = MAX_TOTAL_CHIPS;
   private capScale = -1;
   private capWidth = -1;
-  private cardCellCap(): number {
+  private capMax = -1;
+  private cardCellCap(max = MAX_TOTAL_CHIPS): number {
     const width = this.scene.getEngine().getRenderWidth();
     const scale = this.effectiveScale();
-    if (width === this.capWidth && scale === this.capScale) return this.capCells;
-    this.capWidth = width; this.capScale = scale;
-    let cells = MAX_TOTAL_CHIPS;
+    if (width === this.capWidth && scale === this.capScale && max === this.capMax) return this.capCells;
+    this.capWidth = width; this.capScale = scale; this.capMax = max;
+    let cells = max;
     if (scale > 0 && width > 0) {
       const budget = (width * CARD_MAX_VIEWPORT_FRACTION) / scale;
       // Down to 2 and no further: a pair card is two badge boxes, which fits
       // any screen this app can run on, and stopping there keeps the "a group
       // of two is ALWAYS the full-size card" promise the one-pass placement
       // rests on.
-      while (cells > 2 && this.cardOf(cells).width > budget) cells--;
+      while (cells > 2 && this.cardOf(cells, max).width > budget) cells--;
     }
     this.capCells = cells;
     return cells;
@@ -5548,10 +5575,21 @@ export class EntityVisuals {
   /** This group's arrangement — see babylon/badgeCard. A count badge is the
    *  degenerate one-card, zero-cell case, so every summary goes through one
    *  function and there is no second code path to keep in step. */
-  private cardOf(cells: number): CardArrangement {
+  private cardOf(cells: number, max = MAX_TOTAL_CHIPS): CardArrangement {
     return arrange(
       Math.max(1, cells), this.summaryMetrics().size,
-      this.metrics.cardIconFraction, this.metrics.minGapPx);
+      this.metrics.cardIconFraction, this.metrics.minGapPx, max);
+  }
+
+  /** The arrangement a group actually draws — cells and ceiling in one place,
+   *  so no caller can measure a focused card against the ordinary cap. */
+  private layoutOf(g: PendingEntityGroup, memberCount: number): CardArrangement {
+    return this.cardOf(this.drawnCells(g, memberCount), this.cellMax(g));
+  }
+
+  /** The cell ceiling this group is entitled to — see FOCUS_MAX_CHIPS. */
+  private cellMax(g: PendingEntityGroup): number {
+    return g.focused ? FOCUS_MAX_CHIPS : MAX_TOTAL_CHIPS;
   }
 
   /**
@@ -5649,7 +5687,10 @@ export class EntityVisuals {
         // ONE unit, always: a card is an integer number of badge boxes on both
         // axes, and a count badge is the degenerate 1x1 — so every summary,
         // whatever it draws, is laid out by one function.
-        const lay = this.cardOf(drawn);
+        // Same ceiling the placement measured with (layoutOf) — this is the
+        // "layout geometry must equal render geometry" rule, and a focused
+        // card drawn at the ordinary cap would be a different object.
+        const lay = this.cardOf(drawn, this.cellMax(g));
         c.container.width = `${lay.width}px`;
         // HEIGHT IS PER-PASS, like the width. It used to be written once at
         // construction, which was invisible while every card was one row tall
@@ -5676,7 +5717,7 @@ export class EntityVisuals {
           sub.width = `${src.width}px`;
           sub.height = `${src.height}px`;
           sub.left = `${src.left}px`;
-          sub.top = "0px";
+          sub.top = `${src.top}px`;
           sub.cornerRadius = sm.size * BADGE_CORNER_FRACTION;
           sub.shadowColor = "rgba(0,0,0,0.4)";
           sub.shadowBlur = 6;
@@ -6018,7 +6059,7 @@ export class EntityVisuals {
       for (const g of pending) {
         if (g.focused) continue;
         if (g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
-        const lay = this.cardOf(this.drawnCells(g, g.members.length));
+        const lay = this.layoutOf(g, g.members.length);
         const hh = (lay.height / 2) * scale;
         if (clears(g.sx, g.sy - hh, (lay.width / 2) * scale, hh)) continue;
         for (const k of g.roomKeys) this.roomClustered.set(k, true);

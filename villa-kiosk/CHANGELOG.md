@@ -1,3 +1,55 @@
+## 2.306.0
+
+### Fixed — tapping a room showed an "8", not the room's eight devices
+
+Reported with a screenshot of the Swimming Pool: tap its chip and the camera
+frames the pool, but where the devices should be there is a single count badge
+reading 8. That is the same answer the chip already gave, so the tap achieved
+nothing.
+
+This is 2.304.0's doing and it should not have shipped. That release fixed a
+real defect — focused cards drawn on top of one another — by merging colliding
+cards into one, and merging can push a pile past what a card may draw, at which
+point it falls through to a count. It was written up as a deliberate trade
+against the overlap. It was not a trade that was available: "tapping a room
+shows that room's devices" had been stated twice, and swapping one wrong answer
+for another is not a fix.
+
+The cap that turns a card into a count is `MAX_TOTAL_CHIPS`, and its reason is
+specific: a wide arrangement claims a wide clearance disc, so past six cells
+groups start failing to place and escalating their room to a chip. **That
+reason does not apply to a focused group at all** — a focused group is seated
+unconditionally and can never escalate its room, which is the guarantee tapping
+a room makes in the first place. So the cap was answering a question the
+focused case does not ask, and it is now a parameter: `FOCUS_MAX_CHIPS`, twelve
+cells, which is three full 2x2 cards.
+
+Twelve is not the real bound. The real bound is physical and already existed —
+`cardCellCap` shrinks an arrangement until it fits its share of the viewport —
+so the ceiling only has to be high enough that the SCREEN is what decides
+rather than a constant.
+
+For that to work, `arrange` had to stop laying its cards out in a single row.
+Up to six cells a fill produces at most two cards and the layout is unchanged,
+byte for byte, which the placement suite now asserts for every count from one
+to six. Above it a single row would be a strip several screens wide, the
+viewport cap would refuse it, and it would fall straight back to the count this
+change exists to remove — so the cards wrap into a near-square block instead.
+`SubCard` gained a row offset and the renderer reads it; every cell of a
+wrapped arrangement is asserted distinct and inside the card box.
+
+One correctness detail worth naming, because it is this file's oldest bug
+class: the ceiling has to reach the RENDERER too. A focused card measured
+against twelve and drawn against six is a different object from the one the
+placement solved for. Cells and ceiling now resolve in one place (`layoutOf`),
+and the render path asks it for the same number.
+
+### Changed — the Locks tile says "Locked", not "All Locked"
+
+Same information, one word, and the bottom bar's real constraint is horizontal
+space. It also matches the single-lock tile, which has always just said
+"Locked". The unlocked and unknown cases are unchanged.
+
 ## 2.305.0
 
 ### Changed — the Locks tile reads as a state, not as a score
