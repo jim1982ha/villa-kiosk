@@ -1,3 +1,30 @@
+## 2.341.0
+
+### Fixed — the room menu and the room badge now show the same room
+
+Picking a room from the radial menu arrived at a different picture from tapping
+that room's aggregate badge, and the reason is that "show me this room" existed
+twice with only one copy finished.
+
+Both already framed the shot through the same solver, `computeRoomOverviewPose`,
+so the camera agreed — same tilt, same zoom, same centre. But showing a room is
+two halves, not one, and the menu only ever did the first. The second is
+`setFocusedRooms`, which exempts that room's badges from grouping entirely, and
+it is the half that decides whether you arrive to individual devices or to a
+chip and a summary card. The menu never called it, so it arrived to the
+clustered view; the badge tap did, so it arrived to the devices.
+
+`navigateTo` now delegates to `focusRooms` outright rather than repeating the
+half it knew about. The duplicated framing branch is gone with it, and the two
+gestures cannot diverge again because there is only one description of what they
+do. `focusRooms` takes an optional fallback position for the one case the menu
+had that the badge tap does not — a room with neither a polygon nor a registered
+entity cannot be measured, so there is nothing to frame, but the menu carries a
+position and can still take you there.
+
+The first-person branch is untouched: there, a teleport point still means walk to
+that spot, which is a different thing and always has been.
+
 ## 2.340.0
 
 ### Removed — four failed attempts to stop Back closing the app

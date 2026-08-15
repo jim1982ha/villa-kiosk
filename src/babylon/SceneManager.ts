@@ -1716,22 +1716,23 @@ export class SceneManager {
   }
 
   /**
-   * Navigate to a teleport point correctly for whichever mode is active:
-   * first-person → animated camera teleport; overview → the room's ACTUAL
-   * dimensions (real polygon, or its entities' spread as a fallback) frame
-   * the shot dynamically. Only a room that has neither a polygon nor any
-   * registered entity to measure falls back to simply panning to it.
+   * Navigate to a teleport point: first-person → animated camera teleport;
+   * overview → EXACTLY what tapping the room's badge does, via focusRooms.
+   *
+   * The two used to share only half the work. Both framed the shot through
+   * `computeRoomOverviewPose`, so the camera agreed — but only the badge tap
+   * called `setFocusedRooms`, and that is the half that exempts the room's
+   * badges from grouping. Same camera, different picture: the menu arrived to
+   * chips and summary cards where the badge tap arrived to individual devices.
+   * Reported as the two showing different views of the same room, which they
+   * were, because "show me this room" was written twice and only one copy was
+   * finished.
    */
   navigateTo(point: TeleportPoint): void {
     // Remember the target so a later overview → first-person switch lands here.
     this.lastNavigatedRoom = point;
-    if (this.viewMode === "overview") {
-      const framed = this.computeRoomOverviewPose([point.name]);
-      if (framed) this.overview.applyPose(framed);
-      else this.overview.panTo(point.position.x, point.position.z);
-    } else {
-      this.camera.teleport(point);
-    }
+    if (this.viewMode === "overview") this.focusRooms([point.name], point.position);
+    else this.camera.teleport(point);
   }
 
   /**
@@ -1760,7 +1761,7 @@ export class SceneManager {
    * summarised. Callers that used to choose between those paths were the
    * reason one gesture had three results.
    */
-  focusRooms(roomNames: readonly string[]): void {
+  focusRooms(roomNames: readonly string[], fallback?: { x: number; z: number }): void {
     if (roomNames.length === 0) return;
     // First, and unconditionally: the part that is a guarantee.
     this.visuals.setFocusedRooms(roomNames);
@@ -1769,6 +1770,10 @@ export class SceneManager {
     // `declutters` is now advisory, not a veto: it says whether the shot also
     // separates the badges or merely frames them. Either way they are drawn.
     if (framed) this.overview.applyPose(framed);
+    // A room with neither a polygon nor a registered entity cannot be measured,
+    // so there is nothing to frame — a caller that knows where it is anyway (the
+    // teleport menu carries a position) can still be taken there.
+    else if (fallback) this.overview.panTo(fallback.x, fallback.z);
   }
 
   private computeRoomOverviewPose(
