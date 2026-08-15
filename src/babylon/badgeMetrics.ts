@@ -75,6 +75,37 @@ export const CHIP_MAX_VIEWPORT_FRACTION = 0.5;
  *  drops a member hides a device with no cell to tap (see drawnCells). */
 export const CARD_MAX_VIEWPORT_FRACTION = 0.45;
 
+/**
+ * Widest CSS viewport that counts as a PHONE for badge layout.
+ *
+ * 720 because that is the breakpoint `styles.css` already uses for its phone
+ * rules — one number for "this is a phone", not two that can drift. It sits
+ * clear of every tablet posture (iPad portrait starts at 810), so the wall
+ * tablet this app is built for keeps the full-size arrangements.
+ *
+ * CSS pixels, and that is load-bearing: the render width moves with the
+ * resolution valve every time the camera starts and stops, so a threshold in
+ * render pixels would make a phone stop being a phone mid-gesture. Same rule
+ * as the focus-retention zoom — see quantisedPixelsPerWorldUnit.
+ */
+export const PHONE_MAX_CSS_WIDTH = 720;
+
+/**
+ * The most device pictograms one summary may show ON A PHONE.
+ *
+ * A 2×2 card is legible on a tablet held at arm's length and simply is not on
+ * a phone: the cells are ~44 CSS px each on a 402 px-wide screen, so four of
+ * them plus the card's own padding is most of the width, and each cell's tap
+ * zone is right at the touch minimum with nothing between neighbours. Reported
+ * from an iPhone as "the 4-group badges are not usable".
+ *
+ * Over this a summary draws its COUNT, not fewer cells — a card that drops a
+ * member hides a device with no cell to tap, which is the regression `g.grid`
+ * exists to prevent. So on a phone a pair is a card and anything larger is a
+ * number that opens the room.
+ */
+export const PHONE_MAX_TOTAL_CHIPS = 2;
+
 /** Which kind of pointer is PRIMARY on this device. */
 export type PointerClass = "fine" | "coarse";
 

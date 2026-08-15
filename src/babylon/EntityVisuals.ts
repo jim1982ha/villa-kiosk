@@ -81,6 +81,7 @@ import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { chipProportions } from "@/config/chipProportions";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
+  PHONE_MAX_CSS_WIDTH, PHONE_MAX_TOTAL_CHIPS,
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
 import {
@@ -5760,12 +5761,31 @@ export class EntityVisuals {
     return scale > 0 && width > 0 ? (width * CARD_MAX_VIEWPORT_FRACTION) / scale : 0;
   }
 
+  /**
+   * The phone ceiling, in CSS pixels — see PHONE_MAX_TOTAL_CHIPS.
+   *
+   * Read in CSS px, never render px: the resolution valve moves the render
+   * width whenever the camera starts and stops, and a device that stopped
+   * being a phone mid-gesture would regroup its badges for no reason. That is
+   * the same trap the focus-retention rule fell into in 2.354.0.
+   */
+  private phoneCellCap(): number {
+    const engine = this.scene.getEngine();
+    const cssWidth = engine.getRenderWidth() * engine.getHardwareScalingLevel();
+    return cssWidth > 0 && cssWidth <= PHONE_MAX_CSS_WIDTH ? PHONE_MAX_TOTAL_CHIPS : MAX_TOTAL_CHIPS;
+  }
+
   private cardCellCap(max = MAX_TOTAL_CHIPS): number {
     const width = this.scene.getEngine().getRenderWidth();
     const scale = this.effectiveScale();
     if (width === this.capWidth && scale === this.capScale && max === this.capMax) return this.capCells;
     this.capWidth = width; this.capScale = scale; this.capMax = max;
-    let cells = max;
+    // ⚠️ The phone ceiling belongs HERE and nowhere else. `drawnCells` and
+    // `drawableMax` both come through this function, and the comment on
+    // drawableMax records what happens when two caps answer the same question
+    // separately: the solver keeps a bucket the renderer then refuses, and a
+    // count badge survives on a narrow phone at three members.
+    let cells = Math.min(max, this.phoneCellCap());
     if (scale > 0 && width > 0) {
       const budget = this.cardBudget();
       // Down to 2 and no further: a pair card is two badge boxes, which fits

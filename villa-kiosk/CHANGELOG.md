@@ -1,3 +1,21 @@
+## 2.358.0
+
+### Changed — a phone summarises at two devices, not four
+
+A 2×2 card is legible on a tablet at arm's length and is not on a phone: four
+~44px cells plus the card's padding is most of a 402px screen, and each tap zone
+sits at the touch minimum with nothing between neighbours. Reported from an
+iPhone as unusable.
+
+Below 720 CSS px (the breakpoint `styles.css` already uses for phones, clear of
+every tablet posture) a summary shows at most two devices; anything larger draws
+its count, which opens the room. It does NOT draw fewer cells — a card that
+drops a member hides a device with no cell to tap.
+
+Measured in CSS pixels on purpose: the render width moves with the resolution
+valve whenever the camera starts and stops, so a render-pixel threshold would
+make a device stop being a phone mid-gesture.
+
 ## 2.357.0
 
 ### Confirmed — the beam cache works
