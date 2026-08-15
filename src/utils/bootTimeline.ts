@@ -70,12 +70,17 @@ export function currentLoadSeq(): number {
 
 /** How long after the load record to take the span census.
  *
- *  Long enough to include the work that runs AFTER the reveal — the deferred
- *  calibration pass fires on the next rendered frame, and the second one, if
- *  there is a second one, waits on a shared-config pull landing over the
- *  network. Short enough that it is still describing the load rather than the
- *  session: nothing here re-runs on its own once the villa is idle. */
-const CENSUS_DELAY_MS = 12_000;
+ *  Long enough to include the work that runs AFTER the reveal — the calibration
+ *  pass fires on the next rendered frame, and its cosmetic tail then spends a
+ *  frame per stair room and per camera beam, which lands inside two seconds.
+ *
+ *  Was 12s, which is well past that and turned out to have a practical cost:
+ *  four separate field dumps in a row were exported before the row existed, so
+ *  the census read as missing when it had simply not fired yet. An instrument
+ *  nobody can capture answers nothing — the same lesson as reporting on every
+ *  branch, one step earlier. 6s clears the tail with room to spare and lands
+ *  before a normal reload-and-export cycle. */
+const CENSUS_DELAY_MS = 6_000;
 
 /**
  * Report, once, how many times each instrumented block ran during this load.

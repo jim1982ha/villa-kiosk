@@ -1956,7 +1956,7 @@ export class SceneManager {
     // including the enable/restore dance FloorManager's hidden storeys force,
     // which is the part of this that is genuinely different from the fixture
     // probe and therefore the part worth keeping named (see floorProbe.ts).
-    return this.visuals.floorProbe.storeyFloorY(this.floors.getFloorMeshes(floor), x, z);
+    return this.visuals.floorProbe.storeyFloorY(this.floors.getFloorMeshes(floor), x, z, floor);
   }
 
   /**

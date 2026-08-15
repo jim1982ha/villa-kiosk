@@ -273,12 +273,26 @@ export class FloorProbe {
    * the first, because a room's ceiling belongs to the same storey mesh as its
    * floor.
    *
-   * Not memoised: it is called a few dozen times per calibration, from above
-   * the villa, and the enable/restore dance makes a shared cache key
-   * meaningless across different `meshes` sets.
+   * MEMOISED since 2.352.0, and persisted with everything else here. It was
+   * not, on the grounds that the enable/restore dance makes a shared key
+   * meaningless across different `meshes` sets — true of the MESHES, but the
+   * answer only ever depends on (storey, x, z), and `storey` is now passed in
+   * precisely so it can be part of the key. It was measured at 387-423ms over
+   * 24 calls, which after the rest of this session's work is essentially the
+   * whole of what `calibrateRooms` still costs.
+   *
+   * Quantised to millimetres for the same reason the teleport points are (see
+   * TeleportPoint's mm() note): these coordinates are room centroids through a
+   * re-solved affine fit, so they reproduce to within a ULP on the same
+   * geometry but not bit-identically. A millimetre is far below anything a
+   * floor height can express and far above that noise.
    */
-  storeyFloorY(meshes: AbstractMesh[], x: number, z: number): number {
+  storeyFloorY(meshes: AbstractMesh[], x: number, z: number, storey: number): number {
     if (!meshes.length) return 0;
+    const key = `s:${storey}:${Math.round(x * 1000)}:${Math.round(z * 1000)}`;
+    const cached = this.cache.get(key);
+    if (cached !== undefined && cached !== null) return cached;
+    const t0 = performance.now();
     const saved = meshes.map((m) => [m.isEnabled(false), m.isPickable] as const);
     for (const m of meshes) { m.setEnabled(true); m.isPickable = true; }
     // A SET, not `meshes.includes(m)`. The predicate is called once per mesh in
@@ -294,10 +308,19 @@ export class FloorProbe {
       (m) => wanted.has(m),
     );
     meshes.forEach((m, i) => { m.setEnabled(saved[i][0]); m.isPickable = saved[i][1]; });
-    if (!hits?.length) return 0;
+    // Counted alongside the `below()` rays: this is the same ~21ms pick against
+    // the same unoctree'd structure, and splitting it into a second statistic
+    // would only hide that.
+    this.stats.probeMs += performance.now() - t0;
+    this.stats.probeRays += 1;
     let lowestY = Infinity;
-    for (const h of hits) if (h.pickedPoint && h.pickedPoint.y < lowestY) lowestY = h.pickedPoint.y;
-    return Number.isFinite(lowestY) ? lowestY : 0;
+    if (hits) for (const h of hits) if (h.pickedPoint && h.pickedPoint.y < lowestY) lowestY = h.pickedPoint.y;
+    const result = Number.isFinite(lowestY) ? lowestY : 0;
+    // A storey with no geometry at (x,z) legitimately answers 0, and caching
+    // that is correct — it is an answer, not a miss.
+    this.cache.set(key, result);
+    this.persisted.set(key, result);
+    return result;
   }
 
   /**

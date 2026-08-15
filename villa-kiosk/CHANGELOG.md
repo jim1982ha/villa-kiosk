@@ -1,3 +1,30 @@
+## 2.352.0
+
+### Fixed — the last raycasts left on the load path are now cached too
+
+`storeyFloorY` was the only floor query still un-memoised, and after everything
+else in this run it was essentially the whole of what `calibrateRooms` still
+cost (387–423ms over 24 calls). It was left out on the grounds that its
+enable/restore dance made a shared key meaningless — true of the meshes, but the
+answer only depends on (storey, x, z). The storey is now passed in so it can be
+part of the key, and the answers persist with the rest.
+
+### Changed — the span census fires at 6s instead of 12s
+
+Four field dumps in a row were exported before the row existed, so a census that
+was working read as missing. The deferred tail finishes inside two seconds now,
+so 12s bought nothing and cost a measurement round each time.
+
+### Where the load ended up
+
+```
+                  session start (2.345.0)   now
+laptop  visibleMs           6592            2924   (−56%)
+        paintMs             2887             755   (−74%)
+Android visibleMs           7167            3934   (−45%)
+        paintMs             2805            1099   (−61%)
+```
+
 ## 2.351.0
 
 ### Confirmed — 2.350.0 put the villa on screen a second and a half sooner
