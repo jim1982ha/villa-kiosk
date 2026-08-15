@@ -1,3 +1,29 @@
+## 2.348.0
+
+### Answered — `calibrateRooms` runs ONCE, and it is now the app's largest block
+
+```
+laptop   calibrateRooms:1:2877  indexMeshes:1:220  indexScan:1:120
+Android  calibrateRooms:1:2575  indexMeshes:1:361  indexScan:1:191
+```
+
+One run, not two, so the "a config sync makes it run twice" theory is dead. At
+~10× `indexMeshes` and running after first paint, this is the villa appearing
+and then ignoring taps for two and a half seconds — which is why it never showed
+in `stallMaxSpans`, taken at the load record before it runs.
+
+### Fixed — a quadratic in the per-room floor probe
+
+`storeyFloorY`'s pick predicate scanned an array for every mesh in the scene.
+A `Set` instead; identical result, and it cannot change which floor is found.
+
+### Added — the split inside `calibrateRooms`
+
+`calibWorld` / `calibFit` / `calibFloorY` / `calibConform`, plus an explicit
+`calibRest` residual so a split that loses time says so. Accumulators folded
+into the existing census row rather than per-call spans, which would evict the
+ring freeze attribution needs. Temporary; marked for deletion.
+
 ## 2.347.0
 
 ### Confirmed — 2.346.0 was the largest load win of the series

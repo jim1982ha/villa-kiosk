@@ -63,7 +63,7 @@ import { resetLightPoolTextureCache } from "./LightPools";
 import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
 import { isIOS as detectIOS } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
-import { beginSpan } from "@/utils/perfSpans";
+import { beginSpan, addSpanTotal } from "@/utils/perfSpans";
 import { runPerfProbe, type ProbeRow } from "./perfProbe";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
@@ -2298,6 +2298,20 @@ export class SceneManager {
   }
 
   private calibrateRoomsInner(meshes: AbstractMesh[]): void {
+    // ── TEMPORARY (2.348.0): where calibrateRooms' 2.6-2.9s actually goes ────
+    // The span census settled the run count at ONE, which retires the "it runs
+    // twice" theory and makes this the app's single largest block by an order
+    // of magnitude — 2877ms on an M1 and 2575ms on an Adreno 750 against an
+    // indexMeshes of 220/361. It runs AFTER first paint, so it is the villa
+    // appearing and then ignoring taps, which is why it never showed up in
+    // stallMaxSpans (that snapshot is taken at the load record).
+    //
+    // Accumulators folded into the census via addSpanTotal, NOT per-call spans:
+    // one call per room would evict the ring. See addSpanTotal's docstring.
+    // Delete all of this once it has answered.
+    let fitMs = 0, worldMs = 0, floorYMs = 0, conformMs = 0;
+    let floorYCalls = 0, conformCalls = 0;
+    const tCalibStart = performance.now();
     // Prefer plan data parsed from an uploaded .sh3d (works for ANY villa);
     // otherwise fall back to the built-in reference data.
     const entityCalib: Record<string, { x: number; y: number }> = this.config.sh3dEntities?.length
@@ -2318,6 +2332,7 @@ export class SceneManager {
     // Only the calibration entities matter, and only their meshes need a world
     // matrix, so both the resolve and the recompute now touch a hundred-odd
     // meshes rather than all of them.
+    const tWorld = performance.now();
     const world = new Map<string, { x: number; z: number; n: number }>();
     for (const [entityId, list] of this.visuals.meshesByEntity()) {
       if (!(entityId in entityCalib)) continue;
@@ -2344,6 +2359,9 @@ export class SceneManager {
     // order of accuracy). A manual flipX/flipZ override (Settings) is applied
     // on top of whichever runs. The solver only needs one scene query — the
     // no-entity fallback's "does a downward ray hit a floor here?" probe.
+    worldMs = performance.now() - tWorld;
+
+    const tFit = performance.now();
     const ext = this.worldExtends(meshes);
     const solution = solvePlanToWorld({
       pairs,
@@ -2363,6 +2381,8 @@ export class SceneManager {
       },
     });
 
+    fitMs = performance.now() - tFit;
+
     if (!solution) {
       console.warn("[Villa] room calibration skipped — no rooms and no entity meshes");
       this.calibratedPoints = null;
@@ -2381,7 +2401,10 @@ export class SceneManager {
       const floor: 1 | 2 = (room.floor ?? 1) >= 2 ? 2 : 1;
       const c = polygonCentroid(room.points);
       const wc = planToWorld(c.x, c.y);
+      const tFloorY = performance.now();
       const floorY = this.estimateFloorY(wc.x, wc.z, floor);
+      floorYMs += performance.now() - tFloorY;
+      floorYCalls += 1;
       // Surface-hug the glow ONLY for staircase rooms (matched by name). The
       // grid-probe raycasts the whole fused structure, so running it on every
       // room — especially the big outdoor/terrain polygons, which vary in height
@@ -2391,8 +2414,11 @@ export class SceneManager {
       const isStairRoom = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i.test(room.name);
       let conform: { positions: number[]; indices: number[] } | undefined;
       if (isStairRoom) {
+        const tConform = performance.now();
         try { conform = this.buildRoomConform(pts, floor) ?? undefined; }
         catch (err) { console.warn("[Villa] stair glow conform failed; using flat patch", err); }
+        conformMs += performance.now() - tConform;
+        conformCalls += 1;
       }
       worldPolys.push({ name: room.name, pts, floorY, conform });
       // QUANTISED TO MILLIMETRES, and that is not cosmetic — it is what stops
@@ -2504,6 +2530,18 @@ export class SceneManager {
     // Notify listeners (Dashboard) so the teleport grid + room labels re-adopt
     // these freshly-fitted points — e.g. right after a manual mirror toggle.
     this.calibrateCallbacks.forEach((cb) => cb());
+
+    // TEMPORARY (2.348.0) — the split of this method's 2.6-2.9s, into the same
+    // census row as the real spans. `calibRest` is the residual, and it is
+    // reported deliberately: if the four measured parts do not add up, the
+    // remainder is where to look next, and a split that quietly loses time is
+    // how a measurement round gets wasted. See the accumulator note at the top.
+    const totalMs = performance.now() - tCalibStart;
+    addSpanTotal("calibWorld", worldMs);
+    addSpanTotal("calibFit", fitMs);
+    addSpanTotal("calibFloorY", floorYMs, floorYCalls);
+    addSpanTotal("calibConform", conformMs, conformCalls);
+    addSpanTotal("calibRest", Math.max(0, totalMs - worldMs - fitMs - floorYMs - conformMs));
   }
 
   /** Push RoomHighlight's point-only "rooms": named TeleportMenu viewpoints

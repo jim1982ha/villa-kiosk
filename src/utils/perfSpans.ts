@@ -114,6 +114,25 @@ export function beginSpan(name: string): () => void {
 }
 
 /**
+ * Fold an externally-accumulated total into the census WITHOUT touching the
+ * ring.
+ *
+ * For work that happens in many small pieces: spanning each piece would report
+ * a per-piece figure nobody can act on AND evict the 64-entry ring that freeze
+ * attribution depends on (856 `beginSpan` calls inside `indexScan` is the case
+ * that made that a rule). A plain accumulator at the call site, folded in here
+ * once at the end, gets the total and the call count into the same census row
+ * as a real span while leaving the ring alone.
+ *
+ * `calls` is the real number of invocations, so `name:runs:ms` still reads as
+ * "ran N times, cost M in total" whichever way it was measured.
+ */
+export function addSpanTotal(name: string, ms: number, calls = 1): void {
+  runs.set(name, (runs.get(name) ?? 0) + calls);
+  totals.set(name, (totals.get(name) ?? 0) + ms);
+}
+
+/**
  * Every span name entered since the last reset, as `name:runs:totalMs`,
  * costliest first — e.g. `indexMeshes:2:2650,calibrateRooms:2:2475`.
  *

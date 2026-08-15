@@ -267,10 +267,17 @@ export class FloorProbe {
     if (!meshes.length) return 0;
     const saved = meshes.map((m) => [m.isEnabled(false), m.isPickable] as const);
     for (const m of meshes) { m.setEnabled(true); m.isPickable = true; }
+    // A SET, not `meshes.includes(m)`. The predicate is called once per mesh in
+    // the scene and the array scan inside it made the whole test quadratic in
+    // the storey's mesh count — on a villa whose structure is one fused mesh
+    // per storey that is invisible, but on a furnished storey it is hundreds
+    // squared, per room, per calibration. Identical semantics, so this cannot
+    // change which floor is found; only what it costs to find it.
+    const wanted = new Set(meshes);
     // World Y is metres after normalisation; ±1000 comfortably brackets any villa.
     const hits = this.scene.multiPickWithRay(
       new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000),
-      (m) => meshes.includes(m),
+      (m) => wanted.has(m),
     );
     meshes.forEach((m, i) => { m.setEnabled(saved[i][0]); m.isPickable = saved[i][1]; });
     if (!hits?.length) return 0;
