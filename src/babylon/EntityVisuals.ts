@@ -5415,7 +5415,32 @@ export class EntityVisuals {
     }
     this.absorbed = absorbed;
 
-    for (const g of pending) {
+    // ── SEATING ORDER IS A CHOICE, AND IT WAS BEING MADE AT RANDOM ─────────
+    // This is a greedy fill: a card seated early occupies space a later card
+    // then cannot have, so which cards survive depends on the order they are
+    // tried. That order used to be `pending`'s, which is bucket order, which
+    // 2.366.0 established is inherited from the caller's item order — i.e. it
+    // carried no meaning at all.
+    //
+    // It is worth getting right because a refusal is not cheap: a card that
+    // cannot be seated hands EVERY room it covers to that room's chip, which
+    // hides those rooms' badges too, including ones the solver had already
+    // accepted and which were nowhere near the crowding. A `?debug` capture at
+    // one zoom rung showed 14 cards built, 4 seated, and 7 rooms chipped as a
+    // result — 30 badges accepted by the solver, 9 actually drawn.
+    //
+    // So the cost of refusing a card is measured in DEVICES, and the biggest
+    // groups are the ones worth seating first. Focused groups go ahead of
+    // everything (they are seated unconditionally anyway, and their space has
+    // to be reserved before anyone else claims it), then member count
+    // descending, then `key` — which is `grp|<pileKey>`, already unique and
+    // stable, so this is a total order and introduces no new order dependence
+    // of the kind 2.366.0 removed.
+    const seating = pending.slice().sort((a, b) =>
+      (a.focused === b.focused ? 0 : a.focused ? -1 : 1)
+      || b.members.length - a.members.length
+      || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+    for (const g of seating) {
       // A FOCUSED pair is seated unconditionally. It stands in for two badges
       // that the room exemption was already drawing on top of each other, so a
       // refusal would restore the exact overlap it exists to remove — and it

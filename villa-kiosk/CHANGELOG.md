@@ -1,3 +1,22 @@
+## 2.367.0
+
+### Fixed — devices vanishing at one zoom and reappearing a pinch closer
+
+Seating summary cards is a greedy fill: a card placed early takes space a later
+one then cannot have. The order they were tried in was bucket order, which is
+inherited from the caller's item order and carries no meaning — so which cards
+survived was effectively arbitrary.
+
+That matters because refusing a card is expensive. A card that cannot be seated
+hands every room it covers to that room's chip, which then hides all of those
+rooms' badges — including ones the solver had already accepted and which were
+nowhere near the crowding. A capture at one zoom rung showed 14 cards built, 4
+seated, 7 rooms chipped, and 30 badges accepted but only 9 drawn; the rooms'
+chips sit at their centroids, off screen when zoomed into a corner, so those
+devices simply disappeared.
+
+Cards are now seated focused-first, then most members first, so the groups
+standing for the most devices get space before the ones standing for two.
 ## 2.366.0
 
 ### Fixed — which devices were drawn depended on the order they were handed in
