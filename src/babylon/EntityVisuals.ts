@@ -3259,6 +3259,18 @@ export class EntityVisuals {
   }
 
   private rebuildLabels(): void {
+    // Spanned because `labelsMs` on the load record only covers the call made
+    // from indexMeshes, and this method has half a dozen other callers
+    // (repaintBadges, setBadgeStyle, the entityMap delta, a re-bake). The
+    // census reports runs AND total, so "60-250ms" resolves into either one
+    // expensive pass or several cheap ones repeated — which need different
+    // fixes, and that is the distinction this whole line of work has been
+    // about. Two or three entries per load cannot thrash the ring.
+    const endSpan = beginSpan("rebuildLabels");
+    try { this.rebuildLabelsInner(); } finally { endSpan(); }
+  }
+
+  private rebuildLabelsInner(): void {
     // The label SET itself is about to change — every pooled slot below is
     // re-derived from scratch on the next pass.
     this.markLayoutDirty();

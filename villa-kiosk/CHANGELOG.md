@@ -1,3 +1,27 @@
+## 2.355.0
+
+### Fixed — the stair glow no longer freezes the villa, and never needed to
+
+`buildRoomConform` and `storeyFloorY` both force-showed a hidden storey for the
+duration of their raycasts and put it back afterwards, on the grounds that
+Babylon's picking skips disabled meshes. That is true only of the DEFAULT
+predicate: `InternalPick`/`InternalMultiPick` read `if (predicate) {...} else if
+(!mesh.isEnabled() || ...)`, so a custom predicate — which both of these pass —
+replaces the visibility filter outright. The juggling never affected an answer;
+it only mutated hundreds of meshes twice per call and left a window in which a
+rendered frame would have drawn the wrong storey.
+
+Removing it also removed the one reason the stair conform could not be chunked,
+so it now samples one grid ROW per task. Two rooms of ~400ms each become a few
+dozen short tasks, with no change to the glow itself — no coarser grid, no
+deferral to first highlight, no cache to invalidate.
+
+### Added — a span on `rebuildLabels`
+
+`labelsMs` only ever covered the call made from `indexMeshes`, and there are
+several other callers. The census now reports how many times it runs per load
+and what it costs in total, before anything in it is optimised.
+
 ## 2.354.0
 
 ### Fixed — a focused room collapsed back to its chip as soon as you zoomed IN

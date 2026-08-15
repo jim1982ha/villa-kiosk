@@ -9,12 +9,20 @@
 //   RoomHighlight.buildDecal     the surface a point-room glow drapes over
 //
 // They are not the same question and this module does not pretend they are —
-// the first wants the structure below a fixture, the second wants a STOREY's
-// floor with hidden storeys temporarily made pickable, the third wants the
+// the first wants the structure below a fixture, the second wants ONE STOREY's
+// floor whether or not that storey is currently shown, the third wants the
 // picked mesh and its normal, not a height. What they share, and what was
 // duplicated three ways, is the downward ray, the "structure only, never
 // furniture" predicate, the seam-nudge retry, and the memoisation. That is
 // what lives here.
+//
+// All three scope themselves with a PICK PREDICATE, and that is load-bearing in
+// a way that is easy to miss: a custom predicate replaces Babylon's
+// enabled/visible/pickable filter rather than adding to it, so a hidden storey
+// is picked exactly as well as a shown one. Until 2.355.0 `storeyFloorY` and
+// the stair conform both force-showed their storey and put it back, believing
+// the opposite — dead work, and a window in which a rendered frame would have
+// drawn the wrong storey.
 //
 // ── The bucketing, and why it is keyed by ROOM ────────────────────────────
 // These probes were THE load-time bottleneck: each ray is tested against every
@@ -265,13 +273,11 @@ export class FloorProbe {
    * geometry there.
    *
    * A different question from `below()` and it keeps its own implementation on
-   * purpose. Babylon's picking skips `setEnabled(false)` meshes and
-   * FloorManager hides every storey except the one being viewed, so this has to
-   * make the requested storey pickable for the duration and put it back
-   * afterwards — otherwise the answer depends on whatever floor happened to be
-   * active when it was asked. It also takes the LOWEST of all hits rather than
-   * the first, because a room's ceiling belongs to the same storey mesh as its
-   * floor.
+   * purpose: it is scoped to ONE storey's meshes (FloorManager hides all the
+   * others, and the answer must not depend on which happened to be showing),
+   * and it takes the LOWEST of all hits rather than the first, because a room's
+   * ceiling belongs to the same storey mesh as its floor. Both come from the
+   * predicate, which is also why no visibility juggling is needed — see below.
    *
    * MEMOISED since 2.352.0, and persisted with everything else here. It was
    * not, on the grounds that the enable/restore dance makes a shared key
@@ -293,8 +299,24 @@ export class FloorProbe {
     const cached = this.cache.get(key);
     if (cached !== undefined && cached !== null) return cached;
     const t0 = performance.now();
-    const saved = meshes.map((m) => [m.isEnabled(false), m.isPickable] as const);
-    for (const m of meshes) { m.setEnabled(true); m.isPickable = true; }
+    // ⚠️ NO enable/restore dance, and its removal is a correction, not a risk.
+    //
+    // This used to force-show every mesh of the requested storey and put them
+    // back afterwards, on the stated grounds that "Babylon's picking skips
+    // setEnabled(false) meshes and FloorManager hides every storey except the
+    // one being viewed". That is true only of the DEFAULT predicate. Both
+    // `InternalPick` and `InternalMultiPick` read:
+    //
+    //     if (predicate) { if (!predicate(mesh, -1)) continue; }
+    //     else if (!mesh.isEnabled() || !mesh.isVisible || !mesh.isPickable) continue;
+    //
+    // — an `else if`. A custom predicate REPLACES that filter outright, and
+    // every caller here passes one, so the visibility of the storey never
+    // entered into the answer. The dance mutated a few hundred meshes twice per
+    // call for nothing, and left a window in which any rendered frame would
+    // have drawn hidden storeys. That window is also what made the stair-glow
+    // conform "impossible to chunk" — removing this is what unblocked it.
+    //
     // A SET, not `meshes.includes(m)`. The predicate is called once per mesh in
     // the scene and the array scan inside it made the whole test quadratic in
     // the storey's mesh count — on a villa whose structure is one fused mesh
@@ -307,7 +329,6 @@ export class FloorProbe {
       new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000),
       (m) => wanted.has(m),
     );
-    meshes.forEach((m, i) => { m.setEnabled(saved[i][0]); m.isPickable = saved[i][1]; });
     // Counted alongside the `below()` rays: this is the same ~21ms pick against
     // the same unoctree'd structure, and splitting it into a second statistic
     // would only hide that.

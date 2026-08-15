@@ -1972,7 +1972,14 @@ export class SceneManager {
    * (not the first/highest) so a beam or overhead structure above a tread
    * can't be mistaken for the tread itself.
    */
-  private buildRoomConform(pts: Pt2[], floor: number): { positions: number[]; indices: number[] } | null {
+  private async buildRoomConform(
+    pts: Pt2[], floor: number,
+    /** Called between grid ROWS so a stair room is many short tasks instead of
+     *  one ~400ms block. Safe only because the enable/restore dance is gone —
+     *  see the note by the probe below. */
+    breathe: () => Promise<void>,
+    stale: () => boolean,
+  ): Promise<{ positions: number[]; indices: number[] } | null> {
     const meshes = this.floors.getFloorMeshes(floor);
     if (meshes.length === 0) return null;
 
@@ -1986,10 +1993,10 @@ export class SceneManager {
     const nz = Math.max(2, Math.ceil((maxZ - minZ) / STEP) + 1);
     if (nx * nz > 6000) return null; // safety cap → fall back to flat patch
 
-    const saved = meshes.map((m) => [m.isEnabled(false), m.isPickable] as const);
-    for (const m of meshes) { m.setEnabled(true); m.isPickable = true; }
-    const restore = () => meshes.forEach((m, i) => { m.setEnabled(saved[i][0]); m.isPickable = saved[i][1]; });
-
+    // NO enable/restore dance — see floorProbe.storeyFloorY. A custom pick
+    // predicate REPLACES Babylon's enabled/visible/pickable filter (it is an
+    // `else if` in InternalMultiPick), so force-showing the storey never
+    // affected the result and only ever risked a frame drawing it.
     const xAt = (c: number) => Math.min(minX + c * STEP, maxX);
     const zAt = (r: number) => Math.min(minZ + r * STEP, maxZ);
     // A SET, for the reason spelled out in floorProbe.storeyFloorY: the
@@ -2013,15 +2020,24 @@ export class SceneManager {
       const y = probe(minX + (maxX - minX) * i / 4, minZ + (maxZ - minZ) * j / 4);
       if (y !== null) quick.push(y);
     }
-    if (quick.length < 3 || Math.max(...quick) - Math.min(...quick) < 0.35) { restore(); return null; }
+    if (quick.length < 3 || Math.max(...quick) - Math.min(...quick) < 0.35) return null;
 
-    // Stepped → sample the full grid at the real surface height.
+    // Stepped → sample the full grid at the real surface height, ONE ROW PER
+    // TASK. A row is a few dozen rays, which keeps each task in the tens of
+    // milliseconds instead of the ~400ms the whole grid took.
     const H = new Array<number | null>(nx * nz).fill(null);
-    for (let r = 0; r < nz; r++) for (let c = 0; c < nx; c++) {
-      const x = xAt(c), z = zAt(r);
-      if (pointInPolygon(x, z, pts)) H[r * nx + c] = probe(x, z);
+    for (let r = 0; r < nz; r++) {
+      if (r > 0) {
+        await breathe();
+        // A newer calibration (or a teardown) while we were yielding: this
+        // geometry describes a fit that no longer applies.
+        if (stale()) return null;
+      }
+      for (let c = 0; c < nx; c++) {
+        const x = xAt(c), z = zAt(r);
+        if (pointInPolygon(x, z, pts)) H[r * nx + c] = probe(x, z);
+      }
     }
-    restore();
 
     const OFFSET = 0.03; // lift off the treads so the glow doesn't z-fight
     const positions: number[] = [];
@@ -2566,19 +2582,29 @@ export class SceneManager {
         // time bypassed the ring. There are only ever a handful of stair rooms,
         // so this cannot thrash it.
         //
-        // NOT chunked internally, on purpose: buildRoomConform force-enables
-        // every hidden storey for the duration of its grid and restores them
-        // afterwards, so yielding mid-grid would let a frame render with the
-        // wrong storeys visible. Atomic per room is the correct granularity.
+        // CHUNKED internally since 2.355.0, one grid row per task. It used to
+        // be atomic because it force-enabled every hidden storey for the
+        // duration, making a mid-grid yield a frame that could draw the wrong
+        // storeys — but that dance turned out to be unnecessary (a custom pick
+        // predicate replaces Babylon's enabled/visible filter), so the reason
+        // not to chunk went away with it.
+        //
+        // The span therefore covers several tasks and the waiting between them.
+        // That is the right shape HERE and wrong for `lateBeam`: what matters
+        // for this one is the total cost of a room, and no single task inside
+        // it is long enough to be a freeze worth attributing.
         const end = beginSpan("lateConform");
         try {
-          const conform = this.buildRoomConform(job.pts, job.floor) ?? undefined;
+          const conform = await this.buildRoomConform(
+            job.pts, job.floor, () => this.yieldFrame(), stale,
+          ) ?? undefined;
           if (conform) { worldPolys[job.index].conform = conform; built += 1; }
         } catch (err) {
           console.warn("[Villa] stair glow conform failed; keeping flat patch", err);
         } finally {
           end();
         }
+        if (stale()) return;
       }
       // Re-publish so RoomHighlight picks the hugging geometry up. Cheap now
       // that the pools it also triggers hit a warm probe memo (`calibPools`
