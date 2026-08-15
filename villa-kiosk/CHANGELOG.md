@@ -1,3 +1,16 @@
+## 2.359.0
+
+### Fixed — the bottom bar spanned the whole width of a phone
+
+It is a floating surface and should be the size of what it holds, which is what
+every other viewport already did. The phone rule pinned both `left` and `right`
+with `width: auto`, which overrides max-content sizing outright — so on a
+portrait phone, where the tiles collapse to six icon chips, the bar was mostly
+empty glass with a huddle of icons centred in it.
+
+The phone rule no longer positions the bar at all; it only says how wide it may
+grow before scrolling (the viewport less 14px a side and the notch insets).
+
 ## 2.358.0
 
 ### Changed — a phone summarises at two devices, not four

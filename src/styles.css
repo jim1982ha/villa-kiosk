@@ -1412,17 +1412,27 @@ button {
 }
 
 @media (max-width: 720px) {
-  /* This USED TO anchor flush against the view-controls corner button that
-     lived in the bottom-left back then — reserving 80px on the left and
-     letting the bar grow rightward from there, which read as "hugging/
-     shifted toward the right" once that button moved into the left column's
-     own dedicated section (see hud-left-col/ViewControls) and left this
-     corner empty. Nothing sits in either bottom corner on a phone now (the
-     joystick only appears in first-person mode, and even then wasn't given
-     its own dedicated gutter here) — span the full width with small
-     matching side margins instead, and centre the tiles within it so a
-     short list (e.g. just "Door Lock" + "Pool") doesn't look anchored to
-     one edge inside the now much wider bar. */
+  /* THE BAR HUGS ITS TILES. It is a floating surface like every other one in
+     the HUD, and a floating surface is the size of what it contains.
+
+     Two earlier anchorings are worth not repeating. It first reserved 80px on
+     the LEFT for a view-controls button that used to sit in the bottom-left,
+     and read as shifted right once that button moved into hud-left-col. The
+     fix for that stretched it edge-to-edge (left AND right set, width:auto)
+     and centred the tiles inside — which trades a lopsided bar for an
+     oversized one: on a portrait phone the tiles collapse to six icon chips
+     (see the 640px rule below), so a full-width bar is mostly empty glass with
+     a huddle of icons in the middle. Reported from a 412px Android as exactly
+     that.
+
+     So this no longer positions the bar at all — the base rule's
+     `left: 50%` + `translateX(-50%)` + `width: max-content` already centres it
+     AND sizes it to its content, which is the behaviour every other viewport
+     has always had. ⚠️ Do not re-introduce `left` + `right` + `width: auto`
+     here: setting both insets on an absolutely-positioned box overrides
+     max-content sizing outright, which is what made it full-width. Only the
+     max-width needs a phone value, because the base one reserves a 160px
+     gutter for bottom-corner controls that a phone does not have. */
   .summary-bar {
     /* max(), not a flat 14px and not `14px + inset` — the home-indicator
        gesture area still has to be cleared on a phone that has one (a bare
@@ -1432,11 +1442,12 @@ button {
        left the bar sitting visibly higher on an iPhone than the same build
        does on Android — see --safe-bottom. */
     bottom: max(14px, var(--safe-bottom-float)); gap: 8px; padding: 7px;
-    left: calc(14px + env(safe-area-inset-left, 0px));
-    right: calc(14px + env(safe-area-inset-right, 0px));
-    transform: none;
-    width: auto;
-    max-width: none;
+    /* The only thing a phone needs to say about width: how far it may grow
+       before it starts scrolling. 14px of breathing room each side, plus the
+       notch insets so a landscape phone's rounded corner never clips it. */
+    max-width: calc(
+      100vw - 28px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)
+    );
     /* Plain "center" on an overflowing SCROLLABLE flex row is a well-known
        trap: the browser computes centred scroll bounds, which happily let you
        scroll right to reach the last tile but clip/refuse to scroll left far
