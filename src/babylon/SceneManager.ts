@@ -63,7 +63,7 @@ import { resetLightPoolTextureCache } from "./LightPools";
 import { resolveMeshToMapping, inferTypeFromEntityId } from "@/config/EntityMap";
 import { isIOS as detectIOS } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
-import { beginSpan, addSpanTotal } from "@/utils/perfSpans";
+import { beginSpan } from "@/utils/perfSpans";
 import { runPerfProbe, type ProbeRow } from "./perfProbe";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
@@ -2306,19 +2306,6 @@ export class SceneManager {
   }
 
   private calibrateRoomsInner(meshes: AbstractMesh[]): void {
-    // ── TEMPORARY (2.348.0): where calibrateRooms' 2.6-2.9s actually goes ────
-    // The span census settled the run count at ONE, which retires the "it runs
-    // twice" theory and makes this the app's single largest block by an order
-    // of magnitude — 2877ms on an M1 and 2575ms on an Adreno 750 against an
-    // indexMeshes of 220/361. It runs AFTER first paint, so it is the villa
-    // appearing and then ignoring taps, which is why it never showed up in
-    // stallMaxSpans (that snapshot is taken at the load record).
-    //
-    // Accumulators folded into the census via addSpanTotal, NOT per-call spans:
-    // one call per room would evict the ring. See addSpanTotal's docstring.
-    // Delete all of this once it has answered.
-    let fitMs = 0, worldMs = 0, floorYMs = 0, floorYCalls = 0;
-    const tCalibStart = performance.now();
     // Supersedes any cosmetic tail still in flight from an earlier call.
     const gen = ++this.calibGeneration;
     // Prefer plan data parsed from an uploaded .sh3d (works for ANY villa);
@@ -2341,7 +2328,6 @@ export class SceneManager {
     // Only the calibration entities matter, and only their meshes need a world
     // matrix, so both the resolve and the recompute now touch a hundred-odd
     // meshes rather than all of them.
-    const tWorld = performance.now();
     const world = new Map<string, { x: number; z: number; n: number }>();
     for (const [entityId, list] of this.visuals.meshesByEntity()) {
       if (!(entityId in entityCalib)) continue;
@@ -2368,9 +2354,6 @@ export class SceneManager {
     // order of accuracy). A manual flipX/flipZ override (Settings) is applied
     // on top of whichever runs. The solver only needs one scene query — the
     // no-entity fallback's "does a downward ray hit a floor here?" probe.
-    worldMs = performance.now() - tWorld;
-
-    const tFit = performance.now();
     const ext = this.worldExtends(meshes);
     const solution = solvePlanToWorld({
       pairs,
@@ -2390,8 +2373,6 @@ export class SceneManager {
       },
     });
 
-    fitMs = performance.now() - tFit;
-
     if (!solution) {
       console.warn("[Villa] room calibration skipped — no rooms and no entity meshes");
       this.calibratedPoints = null;
@@ -2405,7 +2386,6 @@ export class SceneManager {
     const points: TeleportPoint[] = [];
     /** Stair rooms whose surface-hugging glow is built after the block ends. */
     const stairJobs: Array<{ index: number; pts: Pt2[]; floor: number }> = [];
-    const tRoomLoop = performance.now();
     for (const room of rooms) {
       const pts = room.points.map((p) => planToWorld(p.x, p.y));
       // TeleportPoint.floor (and the rest of the app) only models two
@@ -2413,10 +2393,7 @@ export class SceneManager {
       const floor: 1 | 2 = (room.floor ?? 1) >= 2 ? 2 : 1;
       const c = polygonCentroid(room.points);
       const wc = planToWorld(c.x, c.y);
-      const tFloorY = performance.now();
       const floorY = this.estimateFloorY(wc.x, wc.z, floor);
-      floorYMs += performance.now() - tFloorY;
-      floorYCalls += 1;
       // Surface-hug the glow ONLY for staircase rooms (matched by name). The
       // grid-probe raycasts the whole fused structure, so running it on every
       // room — especially the big outdoor/terrain polygons, which vary in height
@@ -2457,20 +2434,13 @@ export class SceneManager {
       });
     }
 
-    // The per-room loop above, minus the floor probes already accounted for.
-    addSpanTotal("calibLoop", Math.max(0, performance.now() - tRoomLoop - floorYMs));
-
     this.calibratedPoints = points;
-    const tCamPolys = performance.now();
     this.camera.setTeleportPoints(points);
     this.camera.setRoomPolygons(worldPolys);
-    addSpanTotal("calibCamPolys", performance.now() - tCamPolys);
     // Synchronously runs roomHighlight.setRooms AND reshapeLightPools — the
     // top suspect for the residual, since the latter re-probes every light
     // pool's floor. reshapeLightPools reports itself as `calibPools`.
-    const tVisPolys = performance.now();
     this.visuals.setRoomPolygons(worldPolys);
-    addSpanTotal("calibVisPolys", performance.now() - tVisPolys);
     devLog(`[Villa] ${worldPolys.length} room polygons registered`);
 
     // Point-only "rooms" (named TeleportMenu viewpoints with no real polygon,
@@ -2478,11 +2448,8 @@ export class SceneManager {
     // config.teleportPoints currently holds; re-synced properly a moment
     // later once Dashboard's onCalibrated handler adopts the freshly-fitted
     // points (see updateConfig's teleportPoints diff below).
-    const tSyncPoints = performance.now();
     this.lastRoomPolyNames = new Set(worldPolys.map((r) => roomKey(r.name)));
     this.syncRoomPoints();
-    addSpanTotal("calibSyncPts", performance.now() - tSyncPoints);
-    const tBeams = performance.now();
 
     // Camera motion-beam directions: each camera's sh3d plan `angle` (yaw)
     // rotated into world space by the SAME planToWorld fit (translation
@@ -2554,30 +2521,10 @@ export class SceneManager {
     // villa's cameras). DEFERRED for the same reason as the stair conform: a
     // camera's FOV cone is decoration on a villa that should already be
     // answering taps. See finishCalibrationCosmetics.
-    addSpanTotal("calibBeams", performance.now() - tBeams);
 
     // Notify listeners (Dashboard) so the teleport grid + room labels re-adopt
     // these freshly-fitted points — e.g. right after a manual mirror toggle.
-    // Reaches React, so this is where a re-render and any config write lands
-    // (the census already shows saveConfig running 3-5 times per load).
-    const tCallbacks = performance.now();
     this.calibrateCallbacks.forEach((cb) => cb());
-    addSpanTotal("calibCbs", performance.now() - tCallbacks);
-
-    // TEMPORARY (2.348.0) — the split of this method's 2.6-2.9s, into the same
-    // census row as the real spans. `calibRest` is the residual, and it is
-    // reported deliberately: if the four measured parts do not add up, the
-    // remainder is where to look next, and a split that quietly loses time is
-    // how a measurement round gets wasted. See the accumulator note at the top.
-    const totalMs = performance.now() - tCalibStart;
-    addSpanTotal("calibWorld", worldMs);
-    addSpanTotal("calibFit", fitMs);
-    addSpanTotal("calibFloorY", floorYMs, floorYCalls);
-    // Still reported, and still the number to read first. 2.348.0's split put
-    // 50-58% of the method in here, which is why the rest of the steps are now
-    // named individually — a residual that large means the split was aimed at
-    // the wrong place, and only reporting it makes that visible.
-    addSpanTotal("calibRest", Math.max(0, totalMs - worldMs - fitMs - floorYMs));
 
     // Everything COSMETIC, off the block. Not awaited: the villa is already
     // correct and interactive without any of it.
@@ -2613,12 +2560,11 @@ export class SceneManager {
       for (const job of stairJobs) {
         await this.yieldFrame();
         if (stale()) return;
-        // A REAL span, not an accumulator: there are only ever a handful of
-        // stair rooms, so this cannot thrash the ring — and a freeze inside it
-        // must be attributable. 2.350.0 reported exactly one `freeze` of
-        // 1025ms with `cover: 0`, which read as "not our code" when it was
-        // almost certainly this, invisible only because addSpanTotal
-        // deliberately bypasses the ring.
+        // A real span, and it has to be: 2.350.0 reported a `freeze` of 1025ms
+        // with `cover: 0` — "not in any instrumented code" — when this was
+        // almost certainly it, invisible only because the counter used at the
+        // time bypassed the ring. There are only ever a handful of stair rooms,
+        // so this cannot thrash it.
         //
         // NOT chunked internally, on purpose: buildRoomConform force-enables
         // every hidden storey for the duration of its grid and restores them

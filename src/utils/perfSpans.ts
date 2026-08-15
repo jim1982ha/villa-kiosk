@@ -56,25 +56,25 @@ interface Span {
 const ring: Span[] = [];
 
 // ── The census: how many times, and for how long in total ──────────────────
-// The ring answers "what was running across THIS block". It cannot answer "did
-// that block run once or twice", which is the question the load now turns on:
-// `calibrateRooms` is called from two places (after import, and again from
-// updateConfig when a structural config change lands), its cost across three
-// versions went 2660ms -> under 1126ms -> 2475ms with nothing in it changing,
-// and both expensive runs coincided with a `sync … changed:true` arriving
-// mid-load. Two runs and one slow run need opposite fixes — stop repeating it,
-// versus chunk it — so guessing between them is exactly the mistake the header
-// above documents.
+// The ring answers "what was running across THIS block". It cannot answer "how
+// many times did that block run, and what did it cost in total" — and the ring
+// cannot be made to, because at 64 entries with a 30s freeze cooldown a repeat
+// arriving seconds later has no report of its own and its predecessor may
+// already be evicted. So counts and totals live OUTSIDE the ring, unbounded in
+// time and bounded in size by the number of distinct span names, and are
+// reported once per load by scheduleSpanCensus().
 //
-// The ring cannot be made to answer it either: at 64 entries and a 30s freeze
-// cooldown, a repeat arriving seconds later has no report of its own and its
-// predecessor may already be evicted. So counts and totals live OUTSIDE the
-// ring, unbounded in time and bounded in size by the number of distinct span
-// names (four), and are reported once per load by scheduleSpanCensus().
+// It has already earned this: `calibrateRooms` cost 2660ms, then under 1126ms,
+// then 2475ms across three versions that changed nothing inside it, and the
+// two candidate causes — running twice, versus running once slowly — needed
+// opposite fixes. The census answered "once" on the first capture, which sent
+// the work to chunking rather than to de-duplication and ended with that method
+// at 20ms. It also reports the two passes that now run after first paint
+// (`lateConform`, `lateBeam`), which is what it is still here for.
 //
-// Delete this — the maps, spanCensus, the `spans` telemetry kind and its
-// caller — once the count is known. It is a diagnostic, not a permanent
-// boundary; the `back-press` record was removed this way after it had answered.
+// Still a diagnostic, not a permanent boundary: delete the maps, spanCensus,
+// the `spans` telemetry kind and its caller once the post-paint passes are
+// settled too. The `back-press` record was removed this way after it answered.
 const runs = new Map<string, number>();
 const totals = new Map<string, number>();
 
@@ -111,25 +111,6 @@ export function beginSpan(name: string): () => void {
     if (ring.length >= RING) ring.shift();
     ring.push({ name, t0, t1 });
   };
-}
-
-/**
- * Fold an externally-accumulated total into the census WITHOUT touching the
- * ring.
- *
- * For work that happens in many small pieces: spanning each piece would report
- * a per-piece figure nobody can act on AND evict the 64-entry ring that freeze
- * attribution depends on (856 `beginSpan` calls inside `indexScan` is the case
- * that made that a rule). A plain accumulator at the call site, folded in here
- * once at the end, gets the total and the call count into the same census row
- * as a real span while leaving the ring alone.
- *
- * `calls` is the real number of invocations, so `name:runs:ms` still reads as
- * "ran N times, cost M in total" whichever way it was measured.
- */
-export function addSpanTotal(name: string, ms: number, calls = 1): void {
-  runs.set(name, (runs.get(name) ?? 0) + calls);
-  totals.set(name, (totals.get(name) ?? 0) + ms);
 }
 
 /**

@@ -1,3 +1,33 @@
+## 2.353.0
+
+### Confirmed — `calibrateRooms` is done, and the instruments come out
+
+```
+              cold    warm
+Android  calibFloorY 466 → 0    calibrateRooms 491 → 22
+laptop   calibFloorY 370 → 0    calibrateRooms 398 → 20
+```
+
+From 2877ms at the start of this work. `stallMaxSpans` names `indexMeshes`
+again — the block this run began with, now 226 rather than 1442.
+
+### Removed — every counter that has answered
+
+`resolveMs`, `lightMs`, `lightMeshes` and the whole `calib*` set, plus the
+`addSpanTotal` helper they were the only users of. Kept: `probeMs`/`probeRays`
+(the regression test for the probe caches), the `indexScan` span, and the
+`spans` census, which still reports the two passes that run after first paint.
+
+### Where the load ended up
+
+```
+                  session start (2.345.0)   now
+laptop  visibleMs           6592            2887   (−56%)
+        paintMs             2887             439   (−85%)
+Android visibleMs           7167            3598   (−50%)
+        paintMs             2805             802   (−71%)
+```
+
 ## 2.352.0
 
 ### Fixed — the last raycasts left on the load path are now cached too
