@@ -1,3 +1,35 @@
+## 2.342.0
+
+### Added — the worst block of the load now says what was running
+
+The load record has always reported `stallMaxMs`, and on the phone it has been
+reporting something worth explaining: nine blocks totalling 7.6s, one of them a
+single uninterrupted **4.55 seconds**. More than half the visible wait is one
+task, and the record said only how long it lasted.
+
+The machinery to explain it was already here and only half wired. `attributeFreeze`
+walks the span ring and answers "what was running during this interval", and the
+post-load `freeze` record has used it since it was written; the LOAD half never
+called it. So `stallMaxSpans` and `stallMaxCover` now ride on the load record,
+the same two fields under a prefix, attributed at the moment the block is seen
+rather than when the record is built — the ring holds 64 entries and the spans
+explaining an early stall are long gone by then.
+
+This is deliberately a measurement and not a fix, and it is aimed at a specific
+fork in the road. `glTexCompressed: 0` on every device says 373 textures and 26
+megapixels ship uncompressed, decoded and uploaded on the main thread, which is
+exactly the shape that produces one multi-second unyielding task — and the app
+side of KTX2 has been ready since it was wired offline, waiting only on the
+Blender pipeline to bake it. The other candidate is ours: `indexMeshes` at
+2170ms, second-largest single cost in that run.
+
+Those two want different work in different repositories, and the Draco note in
+`ModelLoader.ts` is the standing record of what choosing wrong costs — 2.102.0
+doubled the worker pool on a plausible theory and the field moved 1431ms to
+1430ms. `cover` near 0 would be an answer too: it would say the time is in code
+this app does not instrument at all, which points at Babylon's own parse and
+rules both candidates out.
+
 ## 2.341.0
 
 ### Fixed — the room menu and the room badge now show the same room

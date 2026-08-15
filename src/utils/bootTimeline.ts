@@ -26,7 +26,7 @@
 // of the JS the device actually executed.
 
 import { report } from "./telemetry";
-import { attributeFreeze, resetSpans } from "./perfSpans";
+import { attributeFreeze, resetSpans, type FreezeAttribution } from "./perfSpans";
 
 /** Milestones, in the order they happen. */
 export type BootMark =
@@ -79,7 +79,12 @@ export function currentLoadSeq(): number {
 // about it. Counters live alongside the per-load marks and reset with them, so
 // what is reported spans the whole cycle a user experiences: the previous scene
 // tearing down, the gate, the passcode, and the villa rebuilding.
-const stalls = { count: 0, totalMs: 0, maxMs: 0, maxAt: 0, preCount: 0, preMs: 0 };
+const stalls: {
+  count: number; totalMs: number; maxMs: number; maxAt: number;
+  preCount: number; preMs: number;
+  /** Attribution for the LONGEST block — see the observer. */
+  maxWhat?: FreezeAttribution;
+} = { count: 0, totalMs: 0, maxMs: 0, maxAt: 0, preCount: 0, preMs: 0 };
 
 // ── Post-load freeze reporting ─────────────────────────────────────────────
 // The long-task observer below has been running continuously since startup,
@@ -175,6 +180,17 @@ export function installStallObserver(): void {
         if (e.duration > stalls.maxMs) {
           stalls.maxMs = e.duration;
           stalls.maxAt = Math.round(e.startTime);
+          // WHAT WAS RUNNING during the worst block of the load. Attributed
+          // with the same span ring the post-load `freeze` record has used all
+          // along — the machinery was already here, and only the load half was
+          // reporting a duration with no explanation. Without it `stallMaxMs`
+          // restates the symptom, which is the state that let one wrong cause
+          // be argued from a correlation once already.
+          //
+          // Read NOW rather than at report time: the ring holds 64 entries and
+          // the spans that explain an early stall are long evicted by the time
+          // the load record is built.
+          stalls.maxWhat = attributeFreeze(e.startTime, e.duration);
         }
         reportPostLoadFreeze(e.duration, "longtask", e.startTime);
       }
@@ -281,6 +297,13 @@ function stallSummary(): Record<string, number> {
     stallMs: Math.round(stalls.totalMs),
     stallMaxMs: Math.round(stalls.maxMs),
     stallMaxAt: stalls.maxAt,
+    // Prefixed so the worst LOAD block reads apart from the post-load `freeze`
+    // record's own attribution while carrying exactly the same fields.
+    ...(stalls.maxWhat
+      ? Object.fromEntries(
+          Object.entries(stalls.maxWhat).map(([k, v]) => [`stallMax${k[0].toUpperCase()}${k.slice(1)}`, v]),
+        )
+      : {}),
     // The subset the user hits with no spinner on screen to explain it.
     stallPreCount: stalls.preCount,
     stallPreMs: Math.round(stalls.preMs),
