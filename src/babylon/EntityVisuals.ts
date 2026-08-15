@@ -2787,6 +2787,14 @@ export class EntityVisuals {
    *  beam, rather than guessing a direction. This class decides WHICH cameras
    *  qualify; CameraBeams owns the cone geometry and wall clipping. */
   private buildCameraBeams(): void {
+    const { sources, occluders } = this.collectBeamSources();
+    this.beams.rebuild(sources, occluders);
+    this.replayBeamMotion();
+  }
+
+  /** WHICH cameras qualify, and what may block their cones — the decision half,
+   *  shared by the synchronous build and the chunked one. */
+  private collectBeamSources(): { sources: BeamSource[]; occluders: Set<AbstractMesh> } {
     const sources: BeamSource[] = [];
     // Visible, production-safe diagnostic (tapDebug, not devLog — this needs
     // to be readable on the actual kiosk tablet via ?debug, not just in a dev
@@ -2831,7 +2839,46 @@ export class EntityVisuals {
     // deliberately widened). Restrict to real structure, classified from the
     // mesh's own pipeline metadata rather than its name — see meshRoles.ts.
     const beamOccluders = new Set(this.shadowCasters.filter(blocksCameraBeam));
-    this.beams.rebuild(sources, beamOccluders);
+    return { sources, occluders: beamOccluders };
+  }
+
+  /**
+   * The same build, one camera per yield.
+   *
+   * Called from SceneManager's post-calibration tail. 13 cameras × 9 clipping
+   * raycasts measured at ~1000ms in a single task — off the load block since
+   * 2.350.0, but still a second-long freeze on a villa that is already up,
+   * which is the same complaint one step later. Beams simply appear over a
+   * few frames instead.
+   */
+  async buildCameraBeamsChunked(
+    yieldFrame: () => Promise<void>,
+    stale: () => boolean,
+  ): Promise<void> {
+    const collected = this.collectBeamSources();
+    this.beams.dispose();
+    for (const source of collected.sources) {
+      await yieldFrame();
+      if (stale()) return;
+      // Spanned PER BEAM, around the work only. A single span across the whole
+      // loop would include the waiting between frames — the same error
+      // `yieldAndDiscount` exists to correct — and would then falsely "cover"
+      // any freeze landing in that window, which is worse than not measuring
+      // it. A dozen-odd entries cannot thrash the 64-entry ring.
+      const end = beginSpan("lateBeam");
+      try { this.beams.addBeam(source, collected.occluders); }
+      finally { end(); }
+    }
+    this.replayBeamMotion();
+  }
+
+  /** Set the directions without building, for a caller that will drive the
+   *  chunked build itself. */
+  setCameraDirectionsOnly(dirs: Map<string, { x: number; y: number; z: number }>): void {
+    this.cameraDirections = dirs;
+  }
+
+  private replayBeamMotion(): void {
     // Re-assert current motion state onto the freshly-built beams. Beams are
     // (re)built by setCameraDirections, which runs AFTER the first batch of HA
     // states has already been applied — so a camera whose motion sensor was

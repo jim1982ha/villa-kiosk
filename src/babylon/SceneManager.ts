@@ -1992,9 +1992,14 @@ export class SceneManager {
 
     const xAt = (c: number) => Math.min(minX + c * STEP, maxX);
     const zAt = (r: number) => Math.min(minZ + r * STEP, maxZ);
+    // A SET, for the reason spelled out in floorProbe.storeyFloorY: the
+    // predicate runs once per mesh in the scene, so an array scan inside it is
+    // quadratic — and here that is paid once per GRID CELL, hundreds of times
+    // per stair room. Identical semantics; only the cost changes.
+    const wanted = new Set(meshes);
     const probe = (x: number, z: number): number | null => {
       const hits = this.scene.multiPickWithRay(
-        new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000), (m) => meshes.includes(m));
+        new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000), (m) => wanted.has(m));
       if (!hits?.length) return null;
       let lowestY: number | null = null;
       for (const h of hits) if (h.pickedPoint && (lowestY === null || h.pickedPoint.y < lowestY)) lowestY = h.pickedPoint.y;
@@ -2604,19 +2609,31 @@ export class SceneManager {
     const stale = () => this.disposed || gen !== this.calibGeneration;
 
     if (stairJobs.length) {
-      const t0 = performance.now();
       let built = 0;
       for (const job of stairJobs) {
         await this.yieldFrame();
         if (stale()) return;
+        // A REAL span, not an accumulator: there are only ever a handful of
+        // stair rooms, so this cannot thrash the ring — and a freeze inside it
+        // must be attributable. 2.350.0 reported exactly one `freeze` of
+        // 1025ms with `cover: 0`, which read as "not our code" when it was
+        // almost certainly this, invisible only because addSpanTotal
+        // deliberately bypasses the ring.
+        //
+        // NOT chunked internally, on purpose: buildRoomConform force-enables
+        // every hidden storey for the duration of its grid and restores them
+        // afterwards, so yielding mid-grid would let a frame render with the
+        // wrong storeys visible. Atomic per room is the correct granularity.
+        const end = beginSpan("lateConform");
         try {
           const conform = this.buildRoomConform(job.pts, job.floor) ?? undefined;
           if (conform) { worldPolys[job.index].conform = conform; built += 1; }
         } catch (err) {
           console.warn("[Villa] stair glow conform failed; keeping flat patch", err);
+        } finally {
+          end();
         }
       }
-      addSpanTotal("lateConform", performance.now() - t0, stairJobs.length);
       // Re-publish so RoomHighlight picks the hugging geometry up. Cheap now
       // that the pools it also triggers hit a warm probe memo (`calibPools`
       // measured 6ms for 108 pools once 2.349.0 stopped discarding it).
@@ -2628,11 +2645,11 @@ export class SceneManager {
       }
     }
 
-    await this.yieldFrame();
+    // One camera per frame. Nothing here toggles visibility, so unlike the
+    // conform above it is safe to yield between beams — see addBeam.
+    this.visuals.setCameraDirectionsOnly(cameraDirections);
+    await this.visuals.buildCameraBeamsChunked(() => this.yieldFrame(), stale);
     if (stale()) return;
-    const t1 = performance.now();
-    this.visuals.setCameraDirections(cameraDirections);
-    addSpanTotal("lateBeams", performance.now() - t1, cameraDirections.size);
     this.requestRender();
   }
 

@@ -185,8 +185,21 @@ export class CameraBeams {
    *  small room. */
   rebuild(sources: BeamSource[], occluders: ReadonlySet<AbstractMesh>): void {
     this.dispose();
+    for (const source of sources) this.addBeam(source, occluders);
+  }
 
-    for (const { entityId, origin, direction } of sources) {
+  /**
+   * Build ONE beam, so a caller can spread the set across frames.
+   *
+   * Each beam costs 9 raycasts against the fused structure mesh (~1000ms for
+   * this villa's 13 cameras, measured), and doing them in one task is a
+   * second-long freeze on a villa that is already on screen. Unlike the floor
+   * probes and the stair conform, nothing here toggles mesh visibility, so
+   * there is no enable/restore window that a yield could expose to a render —
+   * which is exactly why THIS is the one safe to chunk.
+   */
+  addBeam({ entityId, origin, direction }: BeamSource, occluders: ReadonlySet<AbstractMesh>): void {
+    {
       const length = this.clippedLength(origin, direction, occluders);
       const maxRadius = length * Math.tan(BEAM_HALF_ANGLE);
 

@@ -1,3 +1,34 @@
+## 2.351.0
+
+### Confirmed — 2.350.0 put the villa on screen a second and a half sooner
+
+```
+                laptop            Android
+calibrateRooms  2302 → 435/466    2175 → 461
+paintMs         2429 → 960        2540 → 1014
+visibleMs       4500 → 3662       5686 → 4334
+```
+
+### Fixed — the same quadratic, in the stair-glow probe
+
+`buildRoomConform` scanned an array in its pick predicate, once per grid cell —
+the identical defect 2.348.0 fixed in `storeyFloorY`, and the reason a two-room
+conform cost 1.3s.
+
+### Changed — camera beams build one per frame
+
+13 cameras × 9 clipping raycasts was ~1s in a single task. Off the load block
+since 2.350.0, but still a second-long freeze on a villa already on screen.
+Beams now appear over a few frames. The stair conform stays atomic per room on
+purpose: it force-enables hidden storeys for the duration, so yielding mid-grid
+would let a frame render with the wrong ones visible.
+
+### Fixed — a 1025ms freeze reported as `cover: 0`
+
+Both deferred passes are real spans now. They were accumulator-only, and
+accumulators bypass the span ring, so a freeze inside them read as "no
+instrumented code was running".
+
 ## 2.350.0
 
 ### Fixed — the villa appeared and then ignored taps for two seconds
