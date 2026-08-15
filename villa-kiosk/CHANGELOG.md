@@ -1,3 +1,17 @@
+## 2.360.0
+
+### Fixed — a tapped room still drew 4-icon cards on a phone
+
+2.358.0 capped phone summaries at two devices, but only the ordinary path. A
+room you TAP produces focused groups, and those are deliberately exempt: instead
+of refusing to a count they are handed the width budget and wrap. On a phone
+that wrap was a 2×2 of ~30px pictograms with every tap zone at the touch
+minimum — the thing the cap was added to remove.
+
+Focused groups now obey the same ceiling below 720 CSS px. Over it they draw
+their count, which opens the group panel and lists the devices at full size.
+Tablets and desktops keep the wrap unchanged.
+
 ## 2.359.0
 
 ### Fixed — the bottom bar spanned the whole width of a phone

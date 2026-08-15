@@ -5723,7 +5723,29 @@ export class EntityVisuals {
     // wraps (see layoutOf). The ordinary path keeps the cap: a summary nobody
     // asked for may legitimately collapse to a number rather than eat the
     // screen.
-    if (g.focused) return cells;
+    // ── ON A PHONE, EVEN A FOCUSED GROUP OBEYS THE CEILING (2.360.0) ──────
+    // Everything above this line is the desktop/tablet rule and is unchanged.
+    //
+    // This deliberately re-opens something 2.306.0 closed, and the trade is
+    // worth stating. A focused group is normally never refused into a count,
+    // because tapping a room is a request to SEE its devices and "too wide"
+    // has a better answer than a number: `layoutOf` hands a focused
+    // arrangement the width budget and lets it WRAP. That is exactly what a
+    // phone was doing — wrapping four devices into a 2x2 — and it was reported
+    // from an iPhone as unusable: four ~30px pictograms in one card, each tap
+    // zone at the touch minimum with no gap to its neighbour.
+    //
+    // A count is not a dead end here: `pickEntityGroupAt` returns the whole
+    // member list for a count badge, so tapping it opens the group panel and
+    // the devices are listed at full size. On a 402px screen that IS the
+    // legible way to show four devices; the 2x2 only looked like showing them.
+    //
+    // Tablets and desktops keep the wrap — phoneCellCap returns MAX_TOTAL_CHIPS
+    // above 720 CSS px, so this line is a no-op there.
+    if (g.focused) {
+      const phoneCap = this.phoneCellCap();
+      return cells > phoneCap ? 0 : cells;
+    }
     // ── AND IT MUST FIT THE SCREEN IT IS DRAWN ON (2.296.0) ──────────────
     // Six cells is two 2x2 cards side by side — four badge boxes wide however
     // big a badge happens to be, which is about 45% of a phone's width and
