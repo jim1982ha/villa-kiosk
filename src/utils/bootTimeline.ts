@@ -91,12 +91,27 @@ const CENSUS_DELAY_MS = 12_000;
 export function scheduleSpanCensus(): void {
   const seq = loadSeq;
   setTimeout(() => {
-    // A teardown/reload since then has reset the ring, so anything still in it
-    // describes a DIFFERENT load. Reporting it under this one's timing would
-    // be the same mistake `reloadMs` exists to correct.
-    if (seq !== loadSeq) return;
-    const census = spanCensus();
-    if (census) report("spans", { at: CENSUS_DELAY_MS, seq, census });
+    // ⚠️ REPORTS UNCONDITIONALLY, and that is the whole lesson of 2.345.0.
+    //
+    // The first cut of this skipped on two conditions — the load sequence
+    // having moved on, and the census coming back empty. Four field dumps then
+    // arrived with no `spans` row at all, which could equally have meant the
+    // timer never fired, the seq guard tripped, the counters were reset under
+    // us, or the export was simply taken too early. A diagnostic with three
+    // silent failure modes answers nothing, and cost a whole measurement round
+    // to discover — the same trap `cover: 0` was written to avoid, where the
+    // NEGATIVE reading is the one that has to be reportable.
+    //
+    // So every branch now produces a record, and the two things a skip used to
+    // hide are fields instead: `nowSeq` differing from `seq` says another load
+    // began underneath this timer (so the counters describe that one), and an
+    // "(empty)" census says the counters were cleared rather than never filled.
+    report("spans", {
+      at: CENSUS_DELAY_MS,
+      seq,
+      nowSeq: loadSeq,
+      census: spanCensus() || "(empty)",
+    });
   }, CENSUS_DELAY_MS);
 }
 

@@ -1,3 +1,27 @@
+## 2.347.0
+
+### Confirmed — 2.346.0 was the largest load win of the series
+
+A cold start followed by a second start of the same GLB, on the Android handset:
+
+```
+probeRays    41 → 0        indexScan   1127 → 176   (−84%)
+probeMs     914 → 0        indexMeshes 1442 → 486   (−66%)
+lightMs    1085 → 135      stallMs     2240 → 1003  (−55%)
+                           activeMs    4713 → 2862  (−39%)
+```
+
+`probeHits` stays 167 with zero rays cast — every probe served from the restored
+cache, which is the mechanism that had never once worked.
+
+### Fixed — the span census reported nothing, silently
+
+It skipped when the load counter had moved on and again when the counters came
+back empty, so an absent row meant any of four different things and four dumps
+in a row carried no answer. It now always reports: `nowSeq` says whether another
+load began underneath it, and an explicit "(empty)" distinguishes cleared
+counters from a timer that never fired.
+
 ## 2.346.0
 
 ### Fixed — the floor-probe cache had never once survived a reload
