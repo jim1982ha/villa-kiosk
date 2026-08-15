@@ -1,3 +1,18 @@
+## 2.362.0
+
+### Changed — a phone draws pairs side by side, never a 2x2
+
+A card holds two cells on a phone instead of four, so a pile of four is two
+pair-cards beside each other rather than one 2x2. Nothing is hidden, nothing
+overlaps, and every device keeps a full-size tap zone.
+
+### Reverted — the count badge 2.360.0 introduced
+
+2.360.0 made a phone refuse a tapped room's pile into a count. That was the
+wrong answer: a count is a number standing where devices should be. "Too wide"
+is answered by changing the SHAPE, which always has an answer — and on a phone
+that shape is now pairs.
+
 ## 2.361.0
 
 ### Added — one row per "show me this room", to settle why the shot is wide

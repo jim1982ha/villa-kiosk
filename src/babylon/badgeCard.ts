@@ -37,6 +37,17 @@
 export const MAX_GRID_CHIPS = 4;
 
 /**
+ * The same ceiling ON A PHONE, where a 2x2 is not a legible object.
+ *
+ * Reported from an iPhone: four ~30px pictograms in one card, every tap zone at
+ * the touch minimum with no gap to its neighbour. At two the card is a single
+ * ROW of two — `cols = take <= 2 ? take : 2` below gives rows = 1 — so a pile
+ * of four becomes two pair-cards side by side rather than one 2x2, and nothing
+ * is hidden and no number is drawn.
+ */
+export const PHONE_MAX_GRID_CHIPS = 2;
+
+/**
  * The most pictograms an ARRANGEMENT may show across all its cards.
  *
  * Six — a 2x2 beside a 1x2 — and the number is set by the collision test, not
@@ -146,6 +157,11 @@ export function arrange(
    * icon size. Omitted (the ordinary path) the shape is unchanged.
    */
   maxWidth = 0,
+  /** Cells per CARD. `PHONE_MAX_GRID_CHIPS` on a phone, so a pile draws pairs
+   *  side by side instead of one 2x2 — see that constant. LAST on purpose:
+   *  every existing caller passes positionally, and slotting a parameter in
+   *  ahead of `maxWidth` would have silently handed the width budget to this. */
+  perCard = MAX_GRID_CHIPS,
 ): CardArrangement {
   const cells = gridCells(n, max);
   const chip = Math.max(4, Math.round(unit * iconFraction));
@@ -156,7 +172,7 @@ export function arrange(
   let first = 0;
   const shapes: { cols: number; rows: number; cells: number; first: number }[] = [];
   while (remaining > 0) {
-    const take = Math.min(remaining, MAX_GRID_CHIPS);
+    const take = Math.min(remaining, Math.max(1, perCard));
     const cols = take <= 2 ? Math.max(1, take) : 2;
     shapes.push({ cols, rows: Math.max(1, Math.ceil(take / cols)), cells: take, first });
     first += take;

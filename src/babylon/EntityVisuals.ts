@@ -117,7 +117,10 @@ import { axisWorldScale } from "./meshUnits";
 import { LightPool, poolFootprint } from "./LightPools";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { badgeText } from "./badgeText";
-import { arrange, gridCells, MAX_TOTAL_CHIPS, type CardArrangement } from "./badgeCard";
+import {
+  arrange, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
+  type CardArrangement,
+} from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
 import { COSMETIC_MAPPING_FIELDS } from "./entityMapDiff";
@@ -5723,29 +5726,12 @@ export class EntityVisuals {
     // wraps (see layoutOf). The ordinary path keeps the cap: a summary nobody
     // asked for may legitimately collapse to a number rather than eat the
     // screen.
-    // ── ON A PHONE, EVEN A FOCUSED GROUP OBEYS THE CEILING (2.360.0) ──────
-    // Everything above this line is the desktop/tablet rule and is unchanged.
-    //
-    // This deliberately re-opens something 2.306.0 closed, and the trade is
-    // worth stating. A focused group is normally never refused into a count,
-    // because tapping a room is a request to SEE its devices and "too wide"
-    // has a better answer than a number: `layoutOf` hands a focused
-    // arrangement the width budget and lets it WRAP. That is exactly what a
-    // phone was doing — wrapping four devices into a 2x2 — and it was reported
-    // from an iPhone as unusable: four ~30px pictograms in one card, each tap
-    // zone at the touch minimum with no gap to its neighbour.
-    //
-    // A count is not a dead end here: `pickEntityGroupAt` returns the whole
-    // member list for a count badge, so tapping it opens the group panel and
-    // the devices are listed at full size. On a 402px screen that IS the
-    // legible way to show four devices; the 2x2 only looked like showing them.
-    //
-    // Tablets and desktops keep the wrap — phoneCellCap returns MAX_TOTAL_CHIPS
-    // above 720 CSS px, so this line is a no-op there.
-    if (g.focused) {
-      const phoneCap = this.phoneCellCap();
-      return cells > phoneCap ? 0 : cells;
-    }
+    // ⚠️ A FOCUSED group is NEVER refused into a count. 2.360.0 briefly made a
+    // phone do exactly that and it was wrong on the user's own terms: a count
+    // badge is a number standing where devices should be, and the answer to
+    // "too wide" is to CHANGE THE SHAPE, which always has an answer. On a phone
+    // the shape is now pairs side by side rather than a 2x2 — see perCardCap.
+    if (g.focused) return cells;
     // ── AND IT MUST FIT THE SCREEN IT IS DRAWN ON (2.296.0) ──────────────
     // Six cells is two 2x2 cards side by side — four badge boxes wide however
     // big a badge happens to be, which is about 45% of a phone's width and
@@ -5847,7 +5833,16 @@ export class EntityVisuals {
   private cardOf(cells: number, max = MAX_TOTAL_CHIPS, maxWidth = 0): CardArrangement {
     return arrange(
       Math.max(1, cells), this.summaryMetrics().size,
-      this.metrics.cardIconFraction, this.metrics.minGapPx, max, maxWidth);
+      this.metrics.cardIconFraction, this.metrics.minGapPx, max, maxWidth,
+      this.perCardCap());
+  }
+
+  /** Cells per CARD on this screen. A phone gets pairs — see
+   *  PHONE_MAX_GRID_CHIPS — so a pile of four is two pair-cards side by side
+   *  rather than one 2x2, with nothing hidden and no number drawn. */
+  private perCardCap(): number {
+    return this.phoneCellCap() === PHONE_MAX_TOTAL_CHIPS
+      ? PHONE_MAX_GRID_CHIPS : MAX_GRID_CHIPS;
   }
 
   /** The arrangement a group actually draws — cells and ceiling in one place,
