@@ -1,3 +1,37 @@
+## 2.344.0
+
+### Confirmed — 2.343.0 worked, and the next block is now instrumented
+
+Three cold starts on 2.343.0 say the duplicate index is gone: `calibrateRooms`
+appears in none of them, where it had been the worst block in two of the three
+runs before.
+
+```
+Android  stallMaxMs 2879 → 1510 / 1404      stallMs 4928 → 2058 / 1759
+Mac      stallMaxMs 2792 → 1126             stallMs 4064 → 1247   (−69%)
+```
+
+`stallMaxSpans` now names `indexMeshes` on every device, which is the shape that
+says a fix worked rather than moved: the block that was there is gone, and what
+remains was always second.
+
+### Added — a sub-span inside `indexMeshes`
+
+At 1057ms on an M1 and ~1350ms on the phone, `indexMeshes` is now the longest
+block of the load — and, exactly like the duplicate resolve before it, it barely
+moves between two very different machines. Single-threaded work again.
+
+But `indexMeshes` names a whole function, and the fix depends on which half. The
+per-mesh pass resolves and buckets 856 meshes and builds a PointLight per
+fixture; everything after it is badge and light-pool construction. Those want
+completely different treatment, and choosing between them by reading the code is
+precisely what the Draco note in `ModelLoader.ts` stands as a warning against —
+a plausible theory there moved the field from 1431ms to 1430ms.
+
+So `indexScan` now wraps the loop alone. One dump will say whether the time is in
+the scan or in what follows. The span is a diagnostic and is marked for deletion
+once it has answered, like the `back-press` record before it.
+
 ## 2.343.0
 
 ### Fixed — the longest block of the whole load was an index being built twice

@@ -1711,6 +1711,7 @@ export class EntityVisuals {
     const scene = this.scene;
     scene.blockMaterialDirtyMechanism = true;
 
+    const endScan = beginSpan("indexScan");
     for (const m of meshes) {
       const map = resolveMeshToMapping(
         m.name, this.config.entityMap, this.config.meshBindings, this.config.deniedTypes,
@@ -1940,6 +1941,18 @@ export class EntityVisuals {
         }
       }
     }
+    endScan();
+    // ── SUB-SPAN: the per-mesh pass, apart from what follows it ────────────
+    // `indexMeshes` is now the longest block of the load (1057ms on an M1,
+    // ~1350ms on the phone) and, like the duplicate resolve before it, barely
+    // moves between the two — single-threaded work again. But "indexMeshes"
+    // names a whole function, and the fix depends on WHICH half: this loop
+    // resolves and buckets 856 meshes and builds a PointLight per fixture,
+    // while everything after it is badge and pool construction. Guessing
+    // between them is what the Draco note in ModelLoader warns about.
+    //
+    // Delete this span once it has answered — it is a diagnostic, not a
+    // permanent boundary.
 
     this.extendStripJoints();
     this.mergeStripEntityLights();
