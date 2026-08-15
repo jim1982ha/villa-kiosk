@@ -2562,11 +2562,15 @@ export class EntityVisuals {
     view: {
       /** Render-target height in px — the units quantisedPixelsPerWorldUnit uses. */
       vpH: number;
+      /** Render-target width in px — the other half of the frame test. */
+      vpW: number;
       /** Vertical field of view in radians (Babylon's FOVMODE_VERTICAL_FIXED). */
       vFov: number;
-      /** Half-angle of the TIGHTER of the two FOV axes — what actually limits
-       *  what fits, and on a portrait phone that is the horizontal one. */
-      halfAngle: number;
+      /** The DESTINATION's view plane, UNQUANTISED. "Is this badge on screen"
+       *  is a per-axis question about a pose that is already known exactly, so
+       *  it is asked through the exact basis — the quantised one exists to keep
+       *  GROUPING stable and is still what `dir` below builds for that. */
+      frame: ViewBasis;
       /** The shot's orbit centre, i.e. what the badges are measured against. */
       cx: number; cy: number; cz: number;
       /** Search bounds, world units. */
@@ -2577,7 +2581,7 @@ export class EntityVisuals {
       dir?: { x: number; y: number; z: number };
     },
   ): { radius: number; declutters: boolean } | null {
-    if (!(view.vpH > 0) || !(view.vFov > 0) || !(view.halfAngle > 0)) return null;
+    if (!(view.vpH > 0) || !(view.vpW > 0) || !(view.vFov > 0)) return null;
     // ── EVERY eligible badge, not just this room's ────────────────────────
     // groupBadges runs over the whole shown set and is deliberately NOT
     // filtered by what is currently framed, so a pile can span rooms — and a
@@ -2662,22 +2666,30 @@ export class EntityVisuals {
       // pull-back) — only the geometry matters here.
       reach: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false,
     }));
-    // How far each badge is DRAWN from its own anchor: it hangs above it (|cy|)
-    // and has its own extent, so framing the anchors frames the wrong thing —
-    // the topmost badge clips while its anchor sits comfortably inside.
-    const reachPx = boxes.map((b) => Math.abs(b.cy) + Math.max(b.halfW, b.halfH));
-    // Distance of each anchor from the shot's centre. Only THIS room's badges
-    // have to be in frame — a neighbour's badge sitting off screen is fine and
-    // expected, and demanding it be visible would push every shot out to frame
-    // the whole villa.
-    const fromCentre = members.map((m) =>
-      Math.hypot(m.wx - view.cx, m.wy - view.cy, m.wz - view.cz));
+    // Each anchor's offset from the shot's centre, ON THE DESTINATION'S VIEW
+    // PLANE, in world units — one coordinate per SCREEN axis. Only THIS room's
+    // badges have to be in frame: a neighbour's badge sitting off screen is
+    // fine and expected, and demanding it be visible would push every shot out
+    // to frame the whole villa.
+    //
+    // This was a single radial `hypot` against one half-extent until 2.364.0,
+    // which is a circle inscribed in the frame — it asks a badge near the top
+    // of a tall portrait screen to be as close to centre as one near the side,
+    // and so held the camera at the same distance the isotropic wall fit did.
+    // A screen has two axes and a badge box has two half-extents; both are
+    // tested separately here.
+    const framePlane = members.map((m) =>
+      projectToView(view.frame, m.wx - view.cx, m.wy - view.cy, m.wz - view.cz,
+        { px: 0, py: 0, pz: 0 }));
     const mine: number[] = [];
     for (let i = 0; i < n; i++) if (members[i].mine) mine.push(i);
 
     const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
     const tanV = Math.tan(view.vFov / 2);
-    const tanHalf = Math.tan(view.halfAngle);
+    // The frame's own half-extents, in the same drawn pixels the badge boxes
+    // are measured in — so the test is literally "is this box on the glass".
+    const halfWpx = view.vpW / 2;
+    const halfHpx = view.vpH / 2;
     // Walk the rungs from CLOSEST outward and take the first that works, so the
     // answer is the tightest shot rather than merely a valid one.
     const lo = Math.max(view.minRadius, 0.1);
@@ -2693,11 +2705,16 @@ export class EntityVisuals {
       if (!(raw > 0)) continue;
       const pxPerWorld = Math.pow(2, Math.round(Math.log2(raw) * q) / q);
 
-      // Every badge fully inside the frame?
-      const halfExtent = radius * tanHalf;
+      // Every badge fully inside the frame? Per screen axis, in drawn pixels,
+      // against the box the renderer will actually paint — including the `cy`
+      // by which it hangs above its anchor, which is asymmetric and so cannot
+      // be folded into a single radial reach.
       let fits = true;
       for (const i of mine) {
-        if (fromCentre[i] + reachPx[i] / pxPerWorld > halfExtent) { fits = false; break; }
+        const sx = framePlane[i].px * pxPerWorld;
+        const sy = framePlane[i].py * pxPerWorld + boxes[i].cy;
+        if (Math.abs(sx) + boxes[i].halfW > halfWpx
+          || Math.abs(sy) + boxes[i].halfH > halfHpx) { fits = false; break; }
       }
       if (!fits) continue;
       if (firstFitting === null) firstFitting = radius;

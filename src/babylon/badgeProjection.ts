@@ -191,6 +191,29 @@ export function viewBasis(
 }
 
 /**
+ * The same basis with the angle lattice switched OFF.
+ *
+ * Quantisation exists so that GROUPING is stable under a moving camera: a
+ * lattice is what stops a badge pair regrouping on every pixel of drag. FRAMING
+ * is the opposite problem. It runs once, against a destination pose that is
+ * already known exactly, and a snapped azimuth there does not stabilise
+ * anything — it just aims the frame up to half a lattice step away from where
+ * the camera will actually be, which crops the room it was asked to fit.
+ *
+ * So: quantised for "do these two overlap", exact for "does this fit on
+ * screen". Both call the same builder, because they must agree about which way
+ * is across and which is along.
+ */
+export function exactViewBasis(
+  fx: number,
+  fy: number,
+  fz: number,
+  mode: ProjectionMode,
+): ViewBasis {
+  return viewBasis(fx, fy, fz, 0, mode);
+}
+
+/**
  * Project a world offset (or position — the map is linear, so either works)
  * onto the view plane. Writes into `out` rather than allocating: this runs once
  * per badge per layout pass.

@@ -1,3 +1,25 @@
+## 2.364.0
+
+### Fixed — tapping a room zoomed nowhere near it, worst on a phone
+
+The shot framed the room's bounding SPHERE inside the TIGHTER of the two
+field-of-view angles. Both halves of that are rotation-invariant, and on a tall
+narrow screen they compound: the horizontal angle is the tight one, so the room
+was pushed back until its diagonal fitted the screen's SHORT axis and the long
+axis — most of the glass — was left empty. Telemetry pinned it: the same Living
+Room measures 7.157 m across three devices, while Swimming Pool asked for radius
+36.05 at aspect 0.719 and 51.13 at 0.495. Identical room, 42% further out on the
+iPhone, entirely from the formula.
+
+The destination pose is known exactly by then, so there is nothing to be
+invariant to. The footprint's four corners are now projected onto that view
+plane and each screen axis fitted against its own half-angle. The badge solver's
+"is every badge on screen" test had the same isotropic shape — a circle
+inscribed in the frame — and now asks per axis too, against the box the renderer
+paints. Rooms land 1.0x–2.3x tighter depending on how the room's long axis lies
+across the screen; the camera's heading is still left alone, so a room lying the
+wrong way across a portrait phone gains least.
+
 ## 2.363.0
 
 ### Removed — the count badge, everywhere

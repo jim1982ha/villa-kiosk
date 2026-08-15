@@ -79,6 +79,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { entityMapDelta } from "./entityMapDiff";
 import { ModelKeyedStore } from "./modelStore";
+import { exactViewBasis, projectToView, type ProjectedPoint } from "./badgeProjection";
 
 // Cosmetic-vs-structural entityMap diffing lives in its own pure module (no
 // Babylon, no scene state) — see entityMapDiff.ts for the full reasoning about
@@ -281,6 +282,10 @@ export class SceneManager {
   /** Bumped by every calibration, so a cosmetic tail still yielding between
    *  frames can tell that a newer fit has superseded the geometry it holds. */
   private calibGeneration = 0;
+  /** Scratch for computeRoomOverviewPose's four-corner footprint projection.
+   *  Runs once per room tap, but projectToView writes into a caller-owned
+   *  point by contract and this keeps that contract honest. */
+  private fitScratch: ProjectedPoint = { px: 0, py: 0, pz: 0 };
 
   /**
    * The stair rooms' surface-hugging glow, carried across loads.
@@ -1880,21 +1885,82 @@ export class SceneManager {
 
     const cx = (bounds.minX + bounds.maxX) / 2;
     const cz = (bounds.minZ + bounds.maxZ) / 2;
-    const width = Math.max(bounds.maxX - bounds.minX, 0);
-    const depth = Math.max(bounds.maxZ - bounds.minZ, 0);
-    // Bounding-sphere radius of the room's footprint (half its diagonal), so
-    // no corner can fall outside the frame whichever way the camera faces.
-    const sphere = Math.max(Math.hypot(width, depth) / 2, MIN_ROOM_FIT_RADIUS);
 
     const cam = this.overview.camera;
     const vFov = cam.fov;
     const aspect = this.engine.getAspectRatio(cam);
     // Babylon's default FOVMODE_VERTICAL_FIXED keeps `fov` as the VERTICAL
-    // angle and derives the horizontal one from the aspect ratio; the TIGHTER
-    // of the two is what actually limits how much fits on screen.
+    // angle and derives the horizontal one from the aspect ratio.
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
-    const halfAngle = Math.min(vFov, hFov) / 2;
-    let radius = (sphere / Math.sin(halfAngle)) * (1 + marginFrac);
+
+    // ── The shot is ZENITHAL, whatever the camera was doing before ──────────
+    // A floor plan seen from straight above is the view that shows a room's
+    // devices best, and it is the same view every time — tapping two rooms in
+    // a row used to give two different pictures purely because of where the
+    // tilt happened to be left. Only the TILT is forced: alpha is kept, so the
+    // room does not also spin under the user, and the villa keeps the
+    // orientation they built their sense of it from.
+    //
+    // The camera's OWN limit rather than a constant of ours (`lowerBetaLimit`
+    // is written from OverviewController.BETA_MIN), so "as far over as this
+    // camera goes" cannot drift from what the camera actually allows.
+    //
+    // It is computed HERE, above the fit, because the fit is measured through
+    // it — see the anisotropy note below.
+    const destBeta = this.overview.camera.lowerBetaLimit ?? 0.05;
+    // Babylon puts an ArcRotateCamera at target + r(cos α sin β, cos β,
+    // sin α sin β), so the direction it LOOKS is the negated unit offset. At
+    // destBeta this is very nearly straight down, which is the whole point —
+    // and it is what the badge ladder below has to measure through.
+    const sb = Math.sin(destBeta);
+    const destDir = {
+      x: -Math.cos(cam.alpha) * sb,
+      y: -Math.cos(destBeta),
+      z: -Math.sin(cam.alpha) * sb,
+    };
+
+    // ── Fit the room's footprint AS PROJECTED, per screen axis ─────────────
+    // This used to fit a bounding SPHERE (half the footprint diagonal) inside
+    // the TIGHTER of the two field-of-view angles. Both halves of that are
+    // rotation-invariant, and on a portrait phone they compound into a shot
+    // that is dramatically too far out: the horizontal FOV is the tight one, so
+    // the room was pushed back until its DIAGONAL fitted the screen's SHORT
+    // axis, and the tall axis — most of the glass — was left empty.
+    //
+    // Measured, not argued (v2.362.0 telemetry): the same Living Room reports a
+    // bounding sphere of 7.157 m on a 704x845 tablet, 7.151 m on a 932x616
+    // tablet and 7.157 m on a 475x661 phone — the room is identical, and every
+    // difference in the resulting shot was the formula. Swimming Pool wanted
+    // radius 36.05 at aspect 0.719 and 51.13 at aspect 0.495: 42% further out
+    // on the iPhone for the same room, which is the "zoom level is too low"
+    // that was reported from it.
+    //
+    // The destination pose is known exactly by this point, so there is nothing
+    // to be invariant to. Project the footprint's four corners onto the view
+    // plane and fit each screen axis against its OWN half-angle. `tan`, not
+    // `sin`: a floor seen from above is a plane facing the camera, and the
+    // distance at which a plane's half-extent subtends a half-angle is
+    // extent/tan. `sin` is the tangent-sphere form, and is the more
+    // conservative of the two by 1/cos — small next to the anisotropy, but it
+    // was wrong in the same direction.
+    const frame = exactViewBasis(destDir.x, destDir.y, destDir.z, "plane");
+    let halfW = 0;
+    let halfH = 0;
+    for (const px of [bounds.minX, bounds.maxX]) {
+      for (const pz of [bounds.minZ, bounds.maxZ]) {
+        // Relative to the orbit centre, which is what the frame is centred on.
+        // The projection is linear, so the projected corners bound the whole
+        // footprint exactly — no corner can escape a frame that holds all four.
+        const p = projectToView(frame, px - cx, 0, pz - cz, this.fitScratch);
+        halfW = Math.max(halfW, Math.abs(p.px));
+        halfH = Math.max(halfH, Math.abs(p.py));
+      }
+    }
+    let radius = Math.max(
+      halfW / Math.tan(hFov / 2),
+      halfH / Math.tan(vFov / 2),
+      MIN_ROOM_FIT_RADIUS,
+    ) * (1 + marginFrac);
 
     // ── Now ask the badges, by TESTING rather than deriving ───────────────
     // The wall fit above frames the ROOM. It says nothing about whether the
@@ -1922,34 +1988,12 @@ export class SceneManager {
     // a merged chip's tap asked for. The badges are not left to chance either —
     // the EXEMPTION above is unconditional and is what guarantees they are
     // drawn individually, at whatever distance the framing lands on.
-    // ── The shot is ZENITHAL, whatever the camera was doing before ──────────
-    // A floor plan seen from straight above is the view that shows a room's
-    // devices best, and it is the same view every time — tapping two rooms in
-    // a row used to give two different pictures purely because of where the
-    // tilt happened to be left. Only the TILT is forced: alpha is kept, so the
-    // room does not also spin under the user, and the villa keeps the
-    // orientation they built their sense of it from.
-    //
-    // The camera's OWN limit rather than a constant of ours (`lowerBetaLimit`
-    // is written from OverviewController.BETA_MIN), so "as far over as this
-    // camera goes" cannot drift from what the camera actually allows.
-    const destBeta = this.overview.camera.lowerBetaLimit ?? 0.05;
-    // Babylon puts an ArcRotateCamera at target + r(cos α sin β, cos β,
-    // sin α sin β), so the direction it LOOKS is the negated unit offset. At
-    // destBeta this is very nearly straight down, which is the whole point —
-    // and it is what the badge ladder below has to measure through.
-    const sb = Math.sin(destBeta);
-    const destDir = {
-      x: -Math.cos(cam.alpha) * sb,
-      y: -Math.cos(destBeta),
-      z: -Math.sin(cam.alpha) * sb,
-    };
-
     const vpH = this.engine.getRenderHeight();
     const solved = roomNames.length === 1 ? this.visuals.solveRoomZoomRadius(roomNames[0], {
       vpH,
+      vpW: this.engine.getRenderWidth(),
       vFov,
-      halfAngle,
+      frame,
       cx, cy: bounds.floorY, cz,
       dir: destDir,
       minRadius: this.overview.camera.lowerRadiusLimit ?? 2,
