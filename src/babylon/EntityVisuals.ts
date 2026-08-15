@@ -105,7 +105,7 @@ import { isUnavailable } from "@/utils/stateColors";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
-import { beginSpan } from "@/utils/perfSpans";
+import { beginSpan, addSpanTotal } from "@/utils/perfSpans";
 import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
@@ -2408,6 +2408,12 @@ export class EntityVisuals {
    */
   private reshapeLightPools(): void {
     if (this.meshLightPools.size === 0 || this.roomPolys.length === 0) return;
+    // TEMPORARY (2.349.0) — runs synchronously inside calibrateRooms via
+    // setRoomPolygons, and is the top suspect for that method's residual: one
+    // surfaceBelow per pool, all of them missing the memo until 2.349.0 taught
+    // clearMemo to re-seed. Reports into the same census row. Delete with the
+    // rest of the calib* set.
+    const tPools = performance.now();
     // The memoised answers were keyed by grid (no resolver was available during
     // indexMeshes); the persisted ones are keyed by whatever they were computed
     // under. Dropping the in-memory map lets the same points be re-asked now
@@ -2440,6 +2446,7 @@ export class EntityVisuals {
       }
     }
     this.probe.save();
+    addSpanTotal("calibPools", performance.now() - tPools, this.meshLightPools.size);
     this.requestRender();
   }
 

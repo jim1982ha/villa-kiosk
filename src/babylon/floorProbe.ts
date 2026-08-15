@@ -181,11 +181,25 @@ export class FloorProbe {
     } catch { /* quota / private mode — the cache is an optimisation, not state */ }
   }
 
-  /** Drop memoised answers without dropping the persisted ones — used when the
-   *  room resolver arrives and the same points deserve room-keyed answers.
-   *  The second half of that sentence only became true in 2.346.0. */
+  /**
+   * Drop this pass's memo and re-seed it from what previous loads learned —
+   * used when the room resolver arrives and the same points deserve room-keyed
+   * answers.
+   *
+   * The RE-SEED is the point, and its absence was the second half of the same
+   * bug 2.346.0 fixed. Clearing alone left every lookup missing even for keys
+   * `persisted` already held, so `reshapeLightPools` re-cast its whole set of
+   * room-keyed rays on every load — ~21ms each against the unoctree'd structure
+   * mesh, inside `calibrateRooms`, after first paint.
+   *
+   * Grid entries surviving the re-seed cost nothing and cannot mislead: once a
+   * resolver exists, a point inside a room is asked under an `r:` key and never
+   * touches its old `g:` one, and a point inside NO polygon still resolves to
+   * the grid, which is the documented fallback and the same answer it would
+   * recompute. Only a ray is skipped.
+   */
   clearMemo(): void {
-    this.cache.clear();
+    this.cache = new Map(this.persisted);
   }
 
   private bucket(x: number, y: number, z: number): string {

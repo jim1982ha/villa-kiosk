@@ -1,3 +1,26 @@
+## 2.349.0
+
+### Fixed — the probe memo was thrown away mid-load, so every pool re-raycast
+
+`clearMemo()` emptied the lookup map without re-seeding it from what previous
+loads had already learned, so `reshapeLightPools` — which runs synchronously
+inside `calibrateRooms`, after first paint — re-cast its whole set of floor rays
+on every load, at ~21ms each. It now re-seeds. This is the same defect 2.346.0
+fixed one layer up, and 2.346.0 is what made the fix expressible.
+
+### Measured — where `calibrateRooms` actually goes
+
+```
+calibrateRooms 2571-2941   calibRest 1399-1633 (50-58%)
+calibConform    746-830 (2 calls)   calibFloorY 378-676 (24 calls)
+calibFit 3-5   calibWorld 1
+```
+
+The residual dominated, meaning 2.348.0's split was aimed at the wrong steps. So
+the remaining ones are now named individually — `calibLoop`, `calibCamPolys`,
+`calibVisPolys`, `calibPools`, `calibSyncPts`, `calibBeams`, `calibCbs` — with
+`calibRest` still reported as the residual of the residual. Temporary.
+
 ## 2.348.0
 
 ### Answered — `calibrateRooms` runs ONCE, and it is now the app's largest block

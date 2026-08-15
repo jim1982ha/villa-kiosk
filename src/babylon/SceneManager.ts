@@ -2394,6 +2394,7 @@ export class SceneManager {
     // Transform each room polygon to model space; centroid → teleport point.
     const worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number; conform?: { positions: number[]; indices: number[] } }> = [];
     const points: TeleportPoint[] = [];
+    const tRoomLoop = performance.now();
     for (const room of rooms) {
       const pts = room.points.map((p) => planToWorld(p.x, p.y));
       // TeleportPoint.floor (and the rest of the app) only models two
@@ -2447,10 +2448,20 @@ export class SceneManager {
       });
     }
 
+    // The per-room loop above, minus the two parts already accounted for.
+    addSpanTotal("calibLoop", Math.max(0, performance.now() - tRoomLoop - floorYMs - conformMs));
+
     this.calibratedPoints = points;
+    const tCamPolys = performance.now();
     this.camera.setTeleportPoints(points);
     this.camera.setRoomPolygons(worldPolys);
+    addSpanTotal("calibCamPolys", performance.now() - tCamPolys);
+    // Synchronously runs roomHighlight.setRooms AND reshapeLightPools — the
+    // top suspect for the residual, since the latter re-probes every light
+    // pool's floor. reshapeLightPools reports itself as `calibPools`.
+    const tVisPolys = performance.now();
     this.visuals.setRoomPolygons(worldPolys);
+    addSpanTotal("calibVisPolys", performance.now() - tVisPolys);
     devLog(`[Villa] ${worldPolys.length} room polygons registered`);
 
     // Point-only "rooms" (named TeleportMenu viewpoints with no real polygon,
@@ -2458,8 +2469,11 @@ export class SceneManager {
     // config.teleportPoints currently holds; re-synced properly a moment
     // later once Dashboard's onCalibrated handler adopts the freshly-fitted
     // points (see updateConfig's teleportPoints diff below).
+    const tSyncPoints = performance.now();
     this.lastRoomPolyNames = new Set(worldPolys.map((r) => roomKey(r.name)));
     this.syncRoomPoints();
+    addSpanTotal("calibSyncPts", performance.now() - tSyncPoints);
+    const tBeams = performance.now();
 
     // Camera motion-beam directions: each camera's sh3d plan `angle` (yaw)
     // rotated into world space by the SAME planToWorld fit (translation
@@ -2526,10 +2540,15 @@ export class SceneManager {
       }
     }
     this.visuals.setCameraDirections(cameraDirections);
+    addSpanTotal("calibBeams", performance.now() - tBeams);
 
     // Notify listeners (Dashboard) so the teleport grid + room labels re-adopt
     // these freshly-fitted points — e.g. right after a manual mirror toggle.
+    // Reaches React, so this is where a re-render and any config write lands
+    // (the census already shows saveConfig running 3-5 times per load).
+    const tCallbacks = performance.now();
     this.calibrateCallbacks.forEach((cb) => cb());
+    addSpanTotal("calibCbs", performance.now() - tCallbacks);
 
     // TEMPORARY (2.348.0) — the split of this method's 2.6-2.9s, into the same
     // census row as the real spans. `calibRest` is the residual, and it is
@@ -2541,6 +2560,10 @@ export class SceneManager {
     addSpanTotal("calibFit", fitMs);
     addSpanTotal("calibFloorY", floorYMs, floorYCalls);
     addSpanTotal("calibConform", conformMs, conformCalls);
+    // Still reported, and still the number to read first. 2.348.0's split put
+    // 50-58% of the method in here, which is why the rest of the steps above
+    // are now named individually — a residual that large means the split was
+    // aimed at the wrong place, and only reporting it makes that visible.
     addSpanTotal("calibRest", Math.max(0, totalMs - worldMs - fitMs - floorYMs - conformMs));
   }
 
