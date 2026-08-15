@@ -4213,6 +4213,34 @@ export class EntityVisuals {
       if (seen === undefined || raw < seen) this.roomDisplay.set(k, raw);
     }
 
+    // ── A FOCUSED ROOM GETS THE SCREEN TO ITSELF (2.368.0) ─────────────────
+    // Tapping a room chip or picking a room from the radial menu means "show me
+    // THIS room". Until now the solver still ran over the whole villa, so the
+    // rooms around the one you asked for kept drawing their own badges and
+    // summary cards into the same frame — and, worse, a pile could straddle a
+    // wall and produce a card labelled "Living Room +1" that is half yours and
+    // half the neighbour's.
+    //
+    // Every room except the focused one(s) is therefore chipped up front, which
+    // is the ONE thing that has to happen and everything else follows from the
+    // existing tiers rather than from a new code path (writing a second
+    // escalation path is how the orphan bug was made — see dropEscalatedGroups):
+    //   * the focused room's badges are `exempt`, so they never enter a pile
+    //     and are drawn individually — a cross-room group involving them is now
+    //     not expressible at all;
+    //   * every other badge's room is clustered, so the visibility rule at the
+    //     end of this pass hides it;
+    //   * any group made of those badges is dropped by dropEscalatedGroups,
+    //     because all of its rooms are clustered;
+    //   * and each of those rooms still draws its CHIP, so nothing is lost —
+    //     the neighbours remain named, counted and tappable, which is the whole
+    //     reason this is a chip and not a delete.
+    if (this.focusedRooms.size > 0) {
+      for (const k of this.roomDisplay.keys()) {
+        if (!this.focusedRooms.has(k)) this.roomClustered.set(k, true);
+      }
+    }
+
     const pending: PendingEntityGroup[] = this.pendingGroups;
     pending.length = 0;
     this.focusPairs = 0;

@@ -1,3 +1,16 @@
+## 2.368.0
+
+### Changed — a focused room now gets the screen to itself
+
+Tapping a room chip, or picking a room from the radial menu, means "show me this
+room". The layout still ran over the whole villa, so neighbouring rooms kept
+drawing their own badges and summary cards into the same frame — and a pile that
+straddled a wall produced cards like "Living Room +1", half the room you asked
+for and half the one next door.
+
+Every room except the focused one is now chipped for the duration of the focus.
+Its own devices draw individually as before; the neighbours collapse to their
+named, counted, tappable room chips instead of competing for the same space.
 ## 2.367.0
 
 ### Fixed — devices vanishing at one zoom and reappearing a pinch closer
