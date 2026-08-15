@@ -1535,9 +1535,15 @@ export class EntityVisuals {
    *  months to stabilise on iOS, on a guess about which pass dominates, is how
    *  a working villa becomes a broken one — so the split gets measured on real
    *  devices first. Plain counters, no timers left running. */
-  private stats = { probeMs: 0, probeRays: 0, probeHits: 0, labelsMs: 0 };
+  private stats = {
+    probeMs: 0, probeRays: 0, probeHits: 0, labelsMs: 0,
+    resolveMs: 0, lightMs: 0, lightMeshes: 0,
+  };
   /** Last pass's breakdown; read by SceneManager into the `load` event. */
-  indexStats(): Readonly<{ probeMs: number; probeRays: number; probeHits: number; labelsMs: number }> {
+  indexStats(): Readonly<{
+    probeMs: number; probeRays: number; probeHits: number; labelsMs: number;
+    resolveMs: number; lightMs: number; lightMeshes: number;
+  }> {
     // probeMs/Rays/Hits live on the shared FloorProbe now — merged here rather
     // than mirrored into this.stats so there is exactly one counter per thing
     // counted, and ?debug's probeRays-vs-probeHits ratio still reads as the
@@ -1547,6 +1553,26 @@ export class EntityVisuals {
       probeMs: Math.round(this.probe.stats.probeMs),
       probeRays: this.probe.stats.probeRays,
       probeHits: this.probe.stats.probeHits,
+      // ── TEMPORARY (2.345.0): the split INSIDE the per-mesh scan ───────────
+      // `indexScan` measured at 79-81% of `indexMeshes` (~1050-1112ms of
+      // ~1325-1377), reproducibly, so the scan is the load's longest block.
+      // But it does two unrelated things in one loop — ~750 futile
+      // resolveMeshToMapping calls over meshes that are not entities at all,
+      // and the construction of ~98 PointLights with their materials and floor
+      // pools — and the fixes point in opposite directions (a cheap pre-filter
+      // on the mesh name, versus deferring light construction off the critical
+      // path). Choosing between them by eye is what the Draco note warns about.
+      //
+      // ACCUMULATORS, not spans, on purpose: 856 beginSpan calls would thrash
+      // the 64-entry ring that attributeFreeze depends on, and would report a
+      // per-mesh figure nobody can act on. `lightMs` includes the floor probes
+      // already reported as `probeMs`, so subtract to get the construction cost
+      // on its own.
+      //
+      // Delete all three once they have answered.
+      resolveMs: Math.round(this.stats.resolveMs),
+      lightMs: Math.round(this.stats.lightMs),
+      lightMeshes: this.stats.lightMeshes,
     };
   }
 
@@ -1675,7 +1701,10 @@ export class EntityVisuals {
     // (see setProbeCacheKey); otherwise this is a plain clear, as before.
     this.probe.load();
     this.probe.resetStats();
-    this.stats = { probeMs: 0, probeRays: 0, probeHits: 0, labelsMs: 0 };
+    this.stats = {
+      probeMs: 0, probeRays: 0, probeHits: 0, labelsMs: 0,
+      resolveMs: 0, lightMs: 0, lightMeshes: 0,
+    };
     // Dispose previously created light sources + shadow maps before re-indexing.
     this.disposeLights();
     this.disposeLabelAnchors();
@@ -1713,9 +1742,15 @@ export class EntityVisuals {
 
     const endScan = beginSpan("indexScan");
     for (const m of meshes) {
+      // Accumulated, not spanned — see indexStats() for why, and for the
+      // instruction to delete this once it has answered. Two clock reads per
+      // mesh over ~856 meshes is well under a millisecond in total, so the
+      // instrument cannot meaningfully bias the figure it reports.
+      const tResolve = performance.now();
       const map = resolveMeshToMapping(
         m.name, this.config.entityMap, this.config.meshBindings, this.config.deniedTypes,
       );
+      this.stats.resolveMs += performance.now() - tResolve;
       if (!map) {
         // Everything that isn't a bound entity is villa shell / furniture: it can
         // block a lamp's light, so keep it as a potential shadow caster. Skip the
@@ -1782,6 +1817,8 @@ export class EntityVisuals {
       // For lights, create a real (initially off) PointLight at EACH fixture mesh
       // — one per lamp, so two bedside lamps under one entity both illuminate.
       if (map.type === "light") {
+        this.stats.lightMeshes++;
+        const tLight = performance.now();
         // Geometry-less SweetHome "virtual light" markers (e.g. ceiling spots,
         // LED strips) are exported by blender_pipeline as small placeholder
         // spheres. Newer GLBs carry a baked VillaLightMarker material (cloned
@@ -1939,6 +1976,7 @@ export class EntityVisuals {
             .filter((p): p is LightPool => p !== null);
           this.meshLightPools.set(m.uniqueId, pools);
         }
+        this.stats.lightMs += performance.now() - tLight;
       }
     }
     endScan();

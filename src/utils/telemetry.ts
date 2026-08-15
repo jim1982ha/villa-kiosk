@@ -52,7 +52,13 @@ export type TelemetryKind =
   // run by hand from `?debug`. Reported as well as logged so a run on the iPad
   // — the device that matters, and the hardest to attach devtools to — is
   // readable afterwards instead of needing a console at the moment it ran.
-  | "probe";
+  | "probe"
+  // TEMPORARY (2.345.0): how many times each instrumented block ran during a
+  // load, and for how long in total. `freeze`/`stallMax*` say what was running
+  // across one block; they cannot say whether that block ran twice, which is
+  // the open question about `calibrateRooms`. See perfSpans' census notes —
+  // this kind goes away with them.
+  | "spans";
 
 let disabled = false;
 

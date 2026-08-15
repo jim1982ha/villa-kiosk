@@ -55,6 +55,29 @@ interface Span {
 
 const ring: Span[] = [];
 
+// ── The census: how many times, and for how long in total ──────────────────
+// The ring answers "what was running across THIS block". It cannot answer "did
+// that block run once or twice", which is the question the load now turns on:
+// `calibrateRooms` is called from two places (after import, and again from
+// updateConfig when a structural config change lands), its cost across three
+// versions went 2660ms -> under 1126ms -> 2475ms with nothing in it changing,
+// and both expensive runs coincided with a `sync … changed:true` arriving
+// mid-load. Two runs and one slow run need opposite fixes — stop repeating it,
+// versus chunk it — so guessing between them is exactly the mistake the header
+// above documents.
+//
+// The ring cannot be made to answer it either: at 64 entries and a 30s freeze
+// cooldown, a repeat arriving seconds later has no report of its own and its
+// predecessor may already be evicted. So counts and totals live OUTSIDE the
+// ring, unbounded in time and bounded in size by the number of distinct span
+// names (four), and are reported once per load by scheduleSpanCensus().
+//
+// Delete this — the maps, spanCensus, the `spans` telemetry kind and its
+// caller — once the count is known. It is a diagnostic, not a permanent
+// boundary; the `back-press` record was removed this way after it had answered.
+const runs = new Map<string, number>();
+const totals = new Map<string, number>();
+
 /**
  * Time a named stretch of work. Returns the function that ends it.
  *
@@ -70,15 +93,39 @@ const ring: Span[] = [];
  */
 export function beginSpan(name: string): () => void {
   const t0 = performance.now();
+  // Counted on ENTRY, so a run that never ends (an exception past a missing
+  // finally, a teardown mid-pass) still shows up as having started. That is
+  // the honest reading for "how many times was this attempted".
+  runs.set(name, (runs.get(name) ?? 0) + 1);
   let ended = false;
   return () => {
     if (ended) return;
     ended = true;
     const t1 = performance.now();
+    // Totalled BEFORE the ring's 8ms floor: the floor exists to keep the ring
+    // free of noise a freeze report would have to page past, and a per-name
+    // sum has no such pressure. A pass that is fast because it had nothing to
+    // do is part of the truth about how often it runs.
+    totals.set(name, (totals.get(name) ?? 0) + (t1 - t0));
     if (t1 - t0 < SPAN_MIN_MS) return;
     if (ring.length >= RING) ring.shift();
     ring.push({ name, t0, t1 });
   };
+}
+
+/**
+ * Every span name entered since the last reset, as `name:runs:totalMs`,
+ * costliest first — e.g. `indexMeshes:2:2650,calibrateRooms:2:2475`.
+ *
+ * A compact string for the same reason `spans` is one: it rides on a telemetry
+ * event whose size the server caps. Empty when nothing has been spanned.
+ */
+export function spanCensus(): string {
+  return [...runs.entries()]
+    .map(([name, n]) => [name, n, Math.round(totals.get(name) ?? 0)] as const)
+    .sort((a, b) => b[2] - a[2])
+    .map(([name, n, ms]) => `${name}:${n}:${ms}`)
+    .join(",");
 }
 
 /** Wrap a synchronous call. The ender runs even if `fn` throws — an exception
@@ -158,4 +205,6 @@ export function attributeFreeze(startedAt: number, durationMs: number): FreezeAt
  *  freezes are never explained by the previous villa's work. */
 export function resetSpans(): void {
   ring.length = 0;
+  runs.clear();
+  totals.clear();
 }

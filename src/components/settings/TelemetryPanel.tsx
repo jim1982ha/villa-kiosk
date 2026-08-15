@@ -220,6 +220,19 @@ function summarise(e: TelemetryEvent): string {
         + cost
         + ` · ${load} · ${passes}`;
     }
+    case "spans": {
+      // TEMPORARY — see perfSpans' census notes. The verdict is the RUN COUNT,
+      // so it is spelled out rather than left as the raw `name:runs:ms`: a "×2"
+      // buried in a comma-separated string is exactly the kind of detail that
+      // gets read past, and it is the whole reason the record exists.
+      const rows = String(e.census ?? "").split(",").filter(Boolean).map((part) => {
+        const [name, runs, totalMs] = part.split(":");
+        const n = Number(runs);
+        return `${name} ${ms(Number(totalMs))}${n > 1 ? ` over ${n} RUNS` : ""}`;
+      });
+      if (!rows.length) return "nothing instrumented ran this load";
+      return `${ms(e.at)} into load — ${rows.join(" · ")}`;
+    }
     case "context-lost":
       return `WebGL context lost (${e.total ?? "?"} this session)`;
     case "context-restored":

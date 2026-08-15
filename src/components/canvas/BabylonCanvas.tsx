@@ -15,7 +15,7 @@ import { fetchModelWithRetry } from "@/utils/fetchProgress";
 import { setLoadedModelInfo, sha256Hex } from "@/utils/modelInfo";
 import { parseRoomData } from "@/utils/sh3dParser";
 import { report as reportTelemetry } from "@/utils/telemetry";
-import { markBoot, beginLoad, endLoad, bootTimeline, hiddenMsTotal } from "@/utils/bootTimeline";
+import { markBoot, beginLoad, endLoad, bootTimeline, hiddenMsTotal, scheduleSpanCensus } from "@/utils/bootTimeline";
 import { saveMeshCatalog } from "@/utils/meshCatalog";
 import { debugFlagEnabled } from "@/utils/devLog";
 import { watchDisposed, staleDisposed } from "@/utils/leakWatch";
@@ -779,6 +779,13 @@ export default function BabylonCanvas({
               ...(loadSeq === 1 ? { visibleMs: Math.round(tPaint) } : {}),
               paintTimedOut: painted ? 0 : 1,
             });
+            // TEMPORARY (2.345.0) — a second, later record saying how many
+            // times each instrumented block RAN. It cannot be a field on the
+            // load record above: the two blocks in question (the deferred
+            // calibration, and the re-index a mid-load config sync triggers)
+            // both run after this point, so counting them here would report
+            // "once" whatever the truth is. See perfSpans' census notes.
+            scheduleSpanCensus();
           };
           const timer = window.setTimeout(() => finish(false), 15000);
           manager.scene.onAfterRenderObservable.addOnce(() => {

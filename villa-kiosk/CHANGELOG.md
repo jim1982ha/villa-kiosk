@@ -1,3 +1,25 @@
+## 2.345.0
+
+### Added — a load now reports how many times each block RAN
+
+`calibrateRooms` cost 2660ms, then under 1126ms, then 2475ms across three
+versions that changed nothing inside it, and both slow runs coincided with a
+config sync landing mid-load. "Ran twice" and "ran once, slowly" need opposite
+fixes, and no existing record could tell them apart — the freeze attribution
+describes one block, and its 30s cooldown suppresses a repeat arriving seconds
+later. A new `spans` telemetry row, taken 12s into the load, lists every
+instrumented block with its run count and total time.
+
+### Added — the split inside `indexScan`
+
+`indexScan` is 79–81% of `indexMeshes`, the load's longest block, but it does two
+unrelated things in one loop: ~750 futile mesh→entity resolves, and the
+construction of ~98 PointLights with their materials and floor pools. `resolveMs`
+/ `lightMs` / `lightMeshes` on the load record now say which one dominates.
+
+Both are temporary diagnostics, marked in the code for deletion once they have
+answered.
+
 ## 2.344.0
 
 ### Confirmed — 2.343.0 worked, and the next block is now instrumented

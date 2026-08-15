@@ -26,7 +26,7 @@
 // of the JS the device actually executed.
 
 import { report } from "./telemetry";
-import { attributeFreeze, resetSpans, type FreezeAttribution } from "./perfSpans";
+import { attributeFreeze, resetSpans, spanCensus, type FreezeAttribution } from "./perfSpans";
 
 /** Milestones, in the order they happen. */
 export type BootMark =
@@ -66,6 +66,38 @@ export function beginLoad(): number {
  *  grace period is counted in exactly this. */
 export function currentLoadSeq(): number {
   return loadSeq;
+}
+
+/** How long after the load record to take the span census.
+ *
+ *  Long enough to include the work that runs AFTER the reveal — the deferred
+ *  calibration pass fires on the next rendered frame, and the second one, if
+ *  there is a second one, waits on a shared-config pull landing over the
+ *  network. Short enough that it is still describing the load rather than the
+ *  session: nothing here re-runs on its own once the villa is idle. */
+const CENSUS_DELAY_MS = 12_000;
+
+/**
+ * Report, once, how many times each instrumented block ran during this load.
+ *
+ * Call right after the `load` record. See perfSpans' census notes for the
+ * question this exists to settle and for the instruction to delete it — this
+ * is temporary instrumentation, not a permanent event.
+ *
+ * Deliberately NOT reported inside the load record: the blocks worth counting
+ * include ones that run after the villa is already visible, so a count taken
+ * at reveal time would answer "once" no matter what the truth was.
+ */
+export function scheduleSpanCensus(): void {
+  const seq = loadSeq;
+  setTimeout(() => {
+    // A teardown/reload since then has reset the ring, so anything still in it
+    // describes a DIFFERENT load. Reporting it under this one's timing would
+    // be the same mistake `reloadMs` exists to correct.
+    if (seq !== loadSeq) return;
+    const census = spanCensus();
+    if (census) report("spans", { at: CENSUS_DELAY_MS, seq, census });
+  }, CENSUS_DELAY_MS);
 }
 
 // ── Main-thread stalls ─────────────────────────────────────────────────────
