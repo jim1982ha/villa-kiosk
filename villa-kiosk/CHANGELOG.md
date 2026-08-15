@@ -1,3 +1,26 @@
+## 2.346.0
+
+### Fixed — the floor-probe cache had never once survived a reload
+
+The load's longest block turned out to be 41 downward raycasts costing ~21ms
+each, and the cache built to skip them on a reload was storing the wrong half of
+its own contents. The load path runs before calibration, so it keys probes by
+grid; `reshapeLightPools` then re-keys the same points by room and the save that
+followed wrote only the room-keyed entries — so every load asked for grid keys
+and missed all of them. Cold start and reload both reported `probeRays: 41`,
+`probeMs: 889`, which is what gave it away. The persisted set is now kept apart
+from the per-pass lookup map.
+
+Unchanged on a first-ever load of a new GLB; on every load after that the ~890ms
+should go to roughly zero. `indexScan` was 79% of `indexMeshes`, this was 63% of
+`indexScan`.
+
+### Measured — the other half of the scan is not worth optimising
+
+The ~750 mesh→entity resolves the scan was suspected of wasting time on cost
+**1ms** in total, on all three devices. Light construction proper is 162ms for
+108 fixtures. Neither is worth touching; the raycasts were the whole story.
+
 ## 2.345.0
 
 ### Added — a load now reports how many times each block RAN

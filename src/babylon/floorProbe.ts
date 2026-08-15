@@ -83,7 +83,35 @@ export interface FloorProbeStats {
 
 export class FloorProbe {
   readonly stats: FloorProbeStats = { probeMs: 0, probeRays: 0, probeHits: 0 };
+  /** The lookup map for THIS pass. `clearMemo` empties it so the same points
+   *  can be re-asked under room keys once a resolver exists. */
   private cache = new Map<string, number | null>();
+  /**
+   * Every answer computed this session, under whichever key it was computed —
+   * and the ONLY thing `save()` writes.
+   *
+   * These were one map until 2.346.0, and that is why the persistence had never
+   * once worked. The load path runs before calibration, so `roomAt` is null and
+   * every key it asks for is a GRID key; `reshapeLightPools` then calls
+   * `clearMemo()` and re-probes the same points under ROOM keys. With one map,
+   * the clear emptied it and the save that follows serialised only the room
+   * keys — so the stored blob contained exclusively `r:` entries, while the
+   * next load's `indexMeshes` asked exclusively for `g:` ones. A 100% miss
+   * rate, by construction, on every load forever.
+   *
+   * The telemetry showed it as `probeRays: 41` and `probeMs: 889` identical on
+   * a cold start and on a reload of the same GLB — 41 rays at ~21.7ms each,
+   * which is 85% of `lightMs` and 63% of the whole `indexScan` block.
+   *
+   * Splitting the two makes `clearMemo`'s existing contract ("without dropping
+   * the persisted ones") true for the first time. Reusing a stored GRID answer
+   * on the load path is exactly as correct as computing one there — the load
+   * path is grid-keyed today, the bytes are identical (that is what `storeKey`
+   * asserts), and `reshapeLightPools` still re-probes room-keyed afterwards, so
+   * the provisional answer is corrected on precisely the same schedule as
+   * before. What changes is only whether a ray is cast to re-derive it.
+   */
+  private persisted = new Map<string, number | null>();
   private storeKey: string | null = null;
   /** Injected rather than imported: only EntityVisuals holds the calibrated
    *  world-space room polygons, and it receives them AFTER the load path has
@@ -122,12 +150,16 @@ export class FloorProbe {
 
   load(): void {
     this.cache.clear();
+    this.persisted.clear();
     if (!this.storeKey) return;
     try {
       const raw = localStorage.getItem(this.storeKey);
       if (!raw) return;
       for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, number | null>)) {
+        // Into BOTH: `cache` so this pass can hit them, `persisted` so a save
+        // later in this same load cannot drop what a previous load learned.
         this.cache.set(k, v);
+        this.persisted.set(k, v);
       }
     } catch { /* unreadable or quota-evicted — just re-probe */ }
   }
@@ -142,12 +174,16 @@ export class FloorProbe {
         const k = localStorage.key(i);
         if (k && /^vk\.probe2?\./.test(k) && k !== this.storeKey) localStorage.removeItem(k);
       }
-      localStorage.setItem(this.storeKey, JSON.stringify(Object.fromEntries(this.cache)));
+      // `persisted`, never `cache` — see that field for why writing the lookup
+      // map here silently disabled this whole mechanism for as long as it
+      // existed.
+      localStorage.setItem(this.storeKey, JSON.stringify(Object.fromEntries(this.persisted)));
     } catch { /* quota / private mode — the cache is an optimisation, not state */ }
   }
 
   /** Drop memoised answers without dropping the persisted ones — used when the
-   *  room resolver arrives and the same points deserve room-keyed answers. */
+   *  room resolver arrives and the same points deserve room-keyed answers.
+   *  The second half of that sentence only became true in 2.346.0. */
   clearMemo(): void {
     this.cache.clear();
   }
@@ -206,6 +242,7 @@ export class FloorProbe {
     }
     this.stats.probeMs += performance.now() - t0;
     this.cache.set(key, result);
+    this.persisted.set(key, result);
     return result;
   }
 
