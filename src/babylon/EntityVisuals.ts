@@ -842,10 +842,13 @@ interface ClusterControls {
 /** One entity group: several of a room's badges drawn as a single badge,
  *  because no ring inside the travel budget could separate them. Distinct
  *  from ClusterControls above — that one covers a WHOLE room and carries its
- *  name; this covers a SUBSET and carries only a count. */
+ *  name; this covers a SUBSET and draws one cell per device.
+ *
+ *  It used to be able to carry a COUNT instead of cells, and that field is
+ *  gone (2.363.0) rather than merely unused: a control that exists is one a
+ *  later edit can make visible again. */
 interface EntityGroupControls {
   container: Rectangle;
-  countText: TextBlock;
   node: TransformNode;
   entityIds: string[];
   room: string;
@@ -5731,19 +5734,19 @@ export class EntityVisuals {
     // badge is a number standing where devices should be, and the answer to
     // "too wide" is to CHANGE THE SHAPE, which always has an answer. On a phone
     // the shape is now pairs side by side rather than a 2x2 — see perCardCap.
-    if (g.focused) return cells;
-    // ── AND IT MUST FIT THE SCREEN IT IS DRAWN ON (2.296.0) ──────────────
-    // Six cells is two 2x2 cards side by side — four badge boxes wide however
-    // big a badge happens to be, which is about 45% of a phone's width and
-    // about 15% of a laptop's. The cap above is stated in badge units and
-    // cannot see that difference.
+    // ── NO SUMMARY IS EVER REFUSED INTO A NUMBER (2.363.0) ───────────────
+    // This used to return 0 — "draw your count" — for a group over the
+    // viewport cap. The cap itself is not gone and is not weakened: it is
+    // `drawableMax`, and the SOLVER uses it, so a bucket too big to draw
+    // escalates to its ROOM CHIP before it ever gets here. What is gone is the
+    // renderer's fallback of standing a digit where the devices should be.
     //
-    // Over budget the summary draws its COUNT, never fewer cells. A card that
-    // drops a member hides a device with no cell to tap, which is the exact
-    // regression `g.grid` was made to carry the raw membership to prevent —
-    // and a count is one badge box, so it always fits and, since 2.294.0, is
-    // itself checked for standing where its devices are.
-    return cells > this.cardCellCap(max) ? 0 : cells;
+    // The one path that can still arrive over the cap is the absorb phase,
+    // which grows a group's membership after the solve. That group now draws
+    // every member and WRAPS into the width budget (see layoutOf) rather than
+    // collapsing to a number — wider than ideal, but honest, tappable, and
+    // rare, where the digit was none of those.
+    return cells;
   }
 
   /**
@@ -5848,13 +5851,12 @@ export class EntityVisuals {
   /** The arrangement a group actually draws — cells and ceiling in one place,
    *  so no caller can measure a focused card against the ordinary cap. */
   private layoutOf(g: PendingEntityGroup, memberCount: number): CardArrangement {
-    // A FOCUSED arrangement is handed the width budget and WRAPS into it; an
-    // ordinary one is not, and the budget instead caps its cell count. That is
-    // the whole difference, and it is why a tapped room can no longer produce a
-    // count: adapting the shape always has an answer, refusing does not.
-    return this.cardOf(
-      this.drawnCells(g, memberCount), this.cellMax(g),
-      g.focused ? this.cardBudget() : 0);
+    // EVERY arrangement is handed the width budget now, not just a focused one.
+    // The budget used to cap an ordinary group's cell count instead — and
+    // "capped" meant refused into a count. With the digit gone, wrapping is the
+    // only remaining answer to "too wide", so both kinds get it. Adapting the
+    // shape always has an answer; refusing does not.
+    return this.cardOf(this.drawnCells(g, memberCount), this.cellMax(g), this.cardBudget());
   }
 
   /** The cell ceiling this group is entitled to. A FOCUSED group has none —
@@ -5962,7 +5964,7 @@ export class EntityVisuals {
         // Same ceiling the placement measured with (layoutOf) — this is the
         // "layout geometry must equal render geometry" rule, and a focused
         // card drawn at the ordinary cap would be a different object.
-        const lay = this.cardOf(drawn, this.cellMax(g), g.focused ? this.cardBudget() : 0);
+        const lay = this.cardOf(drawn, this.cellMax(g), this.cardBudget());
         c.container.width = `${lay.width}px`;
         // HEIGHT IS PER-PASS, like the width. It used to be written once at
         // construction, which was invisible while every card was one row tall
@@ -5970,8 +5972,6 @@ export class EntityVisuals {
         // from four members to two — and a group's membership changing under a
         // stable key is the common path, not an exotic one.
         c.container.height = `${lay.height}px`;
-        c.countText.isVisible = drawn < 2;
-        c.countText.text = formatCountBadge(n);
         this.growGrid(c, drawn, lay.cards.length);
         for (let k = 0; k < c.chips.length; k++) {
           c.chips[k].isVisible = k < drawn;
@@ -6057,7 +6057,6 @@ export class EntityVisuals {
         // connected classifies as "on" (see classifyDeviceActivity), so three
         // idle cameras drew three purple-ringed chips inside a red-ringed card
         // that was claiming motion nobody had detected.
-        let unavailable = false;
         let ringRed = drawn >= 2;
         for (const i of g.members) {
           const st = this.lastState.get(shown[i].id);
@@ -6070,7 +6069,6 @@ export class EntityVisuals {
             const kind = this.badgeKind(shown[i].lbl.type, st);
             if (kind === "on" || kind === "alert") ringRed = true;
           }
-          if (this.badgeKind(shown[i].lbl.type, st) === "unavailable") unavailable = true;
         }
         // A badge is never ringless — even at rest it carries the hairline
         // the brand guidelines give the idle state, which is what keeps it a
@@ -6087,21 +6085,6 @@ export class EntityVisuals {
           sub.color = strokeColor;
           sub.background = surface;
         }
-        // Reporting status rides on the COUNT, exactly as the room chip puts
-        // it on its count pill — red when at least one member is unavailable.
-        // Independent of the ring above, so "something is on" and "something
-        // is unreachable" stay separately readable, and no new colour or
-        // signal is invented for a control that already has a sibling with
-        // this exact problem solved. (The individual badge's genuinely dashed
-        // unavailable ring is baked pixels; a Babylon GUI Rectangle has no
-        // dashed border — the same limitation the "card" badge style already
-        // degrades around, see badgeMetrics' ringThicknessPx.)
-        // The badge's own ink, NOT white: 2.233.0 moved the group onto the
-        // neutral resting surface and left this white, so every AVAILABLE
-        // group rendered white-on-white — a blank squircle — while only the
-        // unavailable ones (red) stayed legible. Reported as "empty full-white
-        // badges", and the screenshot's mix of blank and red is the tell.
-        c.countText.color = unavailable ? ALERT_RED_HEX : rest.ink;
         c.container.scaleX = scale;
         c.container.scaleY = scale;
         // Zero X offset and a fixed centring lift, exactly like the room chip:
@@ -6156,33 +6139,6 @@ export class EntityVisuals {
     container.background = "";
     container.isPointerBlocker = false; // taps resolve via pickEntityGroupAt
 
-    // The count IS the content — no icon. A group covers several categories,
-    // and borrowing one member's glyph would claim the group is that kind of
-    // device (CLAUDE.md: category hues/icons mean the category). A number
-    // claims only what is true: this many devices are here.
-    // The colour is a placeholder only — updateEntityGroups repaints it from
-    // the same neutral surface the container takes, on the same pass that
-    // creates it. It must not be white: the container is the badges' own light
-    // resting fill, and white here is an invisible count.
-    const countText = badgeText(`egroupCount_${key}`, {
-      fontPx: sm.font,
-      color: categorySurface("others", "off").ink,
-      weight: "700",
-      metrics: this.metrics,
-    });
-    // ── ABOVE THE CARDS, EXPLICITLY ──────────────────────────────────────
-    // 2 because the cards are 0 and the chips are 1. The count is created HERE,
-    // with the host, while a card is created lazily by growGrid on the first
-    // pass that draws one — and `Container.addControl` APPENDS within a zIndex
-    // tie, so at the default 0 the card is added after the count and paints
-    // straight over it. Every count badge on the map rendered as an empty
-    // squircle, which reads as a rendering failure rather than as a number
-    // nobody can see. (The count and the chips are mutually exclusive, so 2 vs
-    // 1 never actually competes; it is stated so the ordering is a rule rather
-    // than an accident of creation order.)
-    countText.zIndex = 2;
-    container.addControl(countText);
-
     layer.addControl(container);
     container.linkWithMesh(node);
     container.linkOffsetYInPixels = -sm.size / 2;
@@ -6190,7 +6146,7 @@ export class EntityVisuals {
     // Chips and zones are grown on demand by `strip()` — see it for why they
     // are not created here.
     const c: EntityGroupControls = {
-      container, countText, node, entityIds: [], room: "",
+      container, node, entityIds: [], room: "",
       cards: [], chips: [], zones: [], gridN: 0,
     };
     this.entityGroups.set(key, c);

@@ -1,3 +1,22 @@
+## 2.363.0
+
+### Removed — the count badge, everywhere
+
+A summary no longer draws a digit where its devices should be. The control that
+drew it is deleted, not hidden: `gridCells` no longer returns 0 over the cap,
+`drawnCells` no longer refuses, and `EntityGroupControls` no longer has a
+`countText` at all — a control that still exists is one a later edit can bring
+back.
+
+Nothing is hidden as a result. Every member gets a cell and the arrangement
+wraps into the width it is given; a pile too large even for that escalates to
+its room chip, which is the tier that already means "too many to show one by
+one". The ceiling itself is unchanged — it lives in `drawableMax`, which is the
+solver's input, so an undrawable bucket escalates before the renderer sees it.
+
+The placement suite's five tests that pinned the old behaviour now pin the new
+one.
+
 ## 2.362.0
 
 ### Changed — a phone draws pairs side by side, never a 2x2

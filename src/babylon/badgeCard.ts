@@ -67,23 +67,30 @@ export const MAX_TOTAL_CHIPS = 6;
  * measured at one size and drawn at another, which is this subsystem's oldest
  * bug.
  *
- * ── Over the cap is ZERO, not the cap ─────────────────────────────────────
- * A summary hides every device it stands for. Returning `MAX_TOTAL_CHIPS` for
- * a pile of seven would therefore draw six of them and leave the seventh
- * hidden AND with no cell to tap — invisible and unreachable, the one outcome
- * this whole subsystem exists to prevent, and silent because six chips look
- * perfectly correct. Zero cells is the count badge, which stands honestly for
- * all seven. (`arrange` then lays the count out as its degenerate 1x1 card.)
+ * ── There is no longer such a thing as a COUNT BADGE (2.363.0) ────────────
+ * This used to return ZERO over the cap, and zero meant "draw a number
+ * instead". The number is gone by request, and the reasoning that justified it
+ * has been inverted rather than ignored:
  *
- * The producers used to spell this rule out themselves as
- * `n <= MAX_TOTAL_CHIPS ? n : 0`, and the third one — the absorb phase, which
- * grows a group's membership after the fact — did not, which is exactly how a
- * cap a caller has to remember gets forgotten.
+ * The old note argued that returning the cap for a pile of seven would draw six
+ * and leave the seventh hidden AND untappable, so zero — a count standing
+ * honestly for all seven — was safer. That is still true of returning the cap,
+ * and this does not do that. It returns `n`. Every member gets a cell, the
+ * arrangement WRAPS into the width it is given (see `arrange`'s maxWidth), and
+ * a pile too large for that never reaches here at all: `drawableMax` tells the
+ * solver what can be drawn, and a bucket over it escalates to its ROOM CHIP,
+ * which is the tier that already exists for "too many to show individually".
+ *
+ * So the three outcomes are now: cells, or a room chip, or — for a focused room
+ * only — a wrapped arrangement however wide it needs to be. None is a digit.
  */
 export function gridCells(n: number, max = MAX_TOTAL_CHIPS): number {
   if (!Number.isFinite(n)) return 0;
-  const cells = Math.max(0, Math.floor(n));
-  return cells > max ? 0 : cells;
+  // `max` is kept in the signature because callers still pass it and it still
+  // documents the ceiling the SOLVER works to (drawableMax). It no longer
+  // refuses here: refusing is what produced the digit.
+  void max;
+  return Math.max(0, Math.floor(n));
 }
 
 export interface SubCard {
