@@ -1,3 +1,23 @@
+## 2.354.0
+
+### Fixed — a focused room collapsed back to its chip as soon as you zoomed IN
+
+Tapping a room in the menu showed its devices; starting to pinch in collapsed
+them to the very chip that had just expanded, and they only returned a rung or
+two later. Entities, chip, entities — going one direction, which the placement
+rules say cannot happen.
+
+The focus lasts "as long as you stay at least as close", and closeness was
+measured in RENDER pixels. The resolution valve changes the render height every
+time the camera starts moving, so on a device whose devicePixelRatio exceeds the
+2x start cap the same camera pose measures 1.5x more pixels while idle than
+while being dragged (a phone at dpr 3 sharpens to 1/3, moves at 1/2). The stamp
+was taken sharpened, the first frame of the pinch was not, and that drop read as
+"zoomed out". Measured in CSS pixels now. Grouping still uses render pixels
+deliberately — it compares within one frame against boxes in the same units.
+
+Only reproduced where dpr > 2, which is why a 1.6-dpr laptop never showed it.
+
 ## 2.353.0
 
 ### Confirmed — `calibrateRooms` is done, and the instruments come out

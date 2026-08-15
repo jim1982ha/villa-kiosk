@@ -3954,8 +3954,15 @@ export class EntityVisuals {
     // that takes it away. The original stamp stays the floor rather than
     // re-stamping on the way in, which is what makes "at least as close as when
     // you asked" the literal rule.
+    //
+    // ⚠️ CSS PIXELS, and that is the second half of the same rule. This is the
+    // only place the measure is compared BETWEEN frames, so it is the only
+    // place the resolution valve can forge a zoom change — see
+    // quantisedPixelsPerWorldUnit for the full symptom. Grouping keeps render
+    // pixels because it compares within one frame against boxes in the same
+    // units; this must not.
     if (this.focusedRooms.size > 0) {
-      const z = this.quantisedPixelsPerWorldUnit(shown);
+      const z = this.quantisedPixelsPerWorldUnit(shown, true);
       if (this.focusedAtZoom === 0) this.focusedAtZoom = z;
       else if (z < this.focusedAtZoom) { this.focusedRooms.clear(); this.focusedAtZoom = 0; }
     }
@@ -4801,10 +4808,35 @@ export class EntityVisuals {
    * to a group of devices SHOULD separate them, the same way zooming does.
    * Median rather than mean so one far-off badge can't skew the whole scale.
    */
-  private quantisedPixelsPerWorldUnit(shown: ShownLabel[]): number {
+  private quantisedPixelsPerWorldUnit(shown: ShownLabel[], cssPixels = false): number {
     const cam = this.scene.activeCamera;
     if (!cam) return 0;
-    const vpH = this.scene.getEngine().getRenderHeight();
+    const engine = this.scene.getEngine();
+    // ⚠️ RENDER pixels by default, CSS pixels for any caller that compares this
+    // ACROSS FRAMES — and that distinction is a reported bug.
+    //
+    // The render height is not a property of the camera. The resolution valve
+    // moves it every time the camera starts and stops moving (SceneManager's
+    // sharpen/unsharpen), so on a device whose devicePixelRatio exceeds
+    // HW_START_CAP the same pose measures 1.5x more pixels-per-world-unit while
+    // idle than while being dragged — a phone at dpr 3 sharpens to 1/3 and
+    // moves at 1/2.
+    //
+    // Within ONE frame that is harmless and must stay: the badge boxes it is
+    // compared against are render pixels too, so both sides scale together and
+    // `fits` is unaffected. It is fatal ACROSS frames. The focus retention rule
+    // stamps this value when a room is focused and drops the focus once the
+    // view gets farther — so the stamp was taken sharpened, the first frame of
+    // the pinch that followed was un-sharpened, and the 1.5x drop read as
+    // "zoomed out" and destroyed the exemption before any zoom-in could offset
+    // it. Symptom: tapping a room in the menu showed its devices, starting to
+    // zoom IN collapsed them to the very chip that had just been expanded, and
+    // they only came back a rung or two later once the badges genuinely fitted
+    // — entities, chip, entities, going one direction. Reproduces only where
+    // dpr > HW_START_CAP, which is why a dpr-1.6 laptop never showed it.
+    const vpH = cssPixels
+      ? engine.getRenderHeight() * engine.getHardwareScalingLevel()
+      : engine.getRenderHeight();
     const fov = cam.fov || 0.8;
     // Duck-typed rather than instanceof-checked so this file needs no import
     // of the concrete camera classes: only ArcRotateCamera exposes `radius`.
