@@ -78,6 +78,7 @@ import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { entityMapDelta } from "./entityMapDiff";
+import { ModelKeyedStore } from "./modelStore";
 
 // Cosmetic-vs-structural entityMap diffing lives in its own pure module (no
 // Babylon, no scene state) — see entityMapDiff.ts for the full reasoning about
@@ -213,6 +214,24 @@ export interface SceneManagerOptions {
   onRoomChange: (room: string | null) => void;
 }
 
+/** The stair-glow mesh data RoomHighlight drapes over treads. */
+interface ConformData { positions: number[]; indices: number[] }
+
+/** FNV-1a over the polygon, quantised to millimetres. A hash rather than the
+ *  raw point list because this becomes a localStorage key and a 40-vertex
+ *  outdoor polygon would otherwise write a kilobyte of key per entry. */
+function polygonKey(pts: Pt2[], floor: number): string {
+  let h = 0x811c9dc5;
+  for (const p of pts) {
+    const s = `${Math.round(p.x * 1000)},${Math.round(p.z * 1000)};`;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+  }
+  return `f${floor}:${(h >>> 0).toString(36)}:${pts.length}`;
+}
+
 export class SceneManager {
   readonly engine: Engine;
   readonly scene: Scene;
@@ -262,6 +281,26 @@ export class SceneManager {
   /** Bumped by every calibration, so a cosmetic tail still yielding between
    *  frames can tell that a newer fit has superseded the geometry it holds. */
   private calibGeneration = 0;
+
+  /**
+   * The stair rooms' surface-hugging glow, carried across loads.
+   *
+   * The LAST of the raycast-bound passes to get this treatment, and the one
+   * with the most rays behind it: a 0.25m grid over a stair room, measured at
+   * 904ms for two rooms on an M1 and ~1800-2000ms on an iPhone. Chunking
+   * (2.355.0) stopped it blocking, but the work is still done in full on every
+   * load for geometry that cannot have changed.
+   *
+   * Keyed by the polygon itself (quantised, hashed) plus the storey, NOT by the
+   * room's name: the name is not what the answer depends on, and a room that is
+   * renamed should keep its glow while a room whose shape is edited must lose
+   * it. A `null` entry is cached too — "this room is flat, use the patch" is an
+   * answer, and re-deriving it costs nine probes.
+   */
+  private conformCache = new Map<string, ConformData | null>();
+  private conformStore = new ModelKeyedStore<ConformData | null>(
+    "vk.conform1.", /^vk\.conform\d*\./,
+  );
   // The room the user last navigated to while in overview. Cleared on entering
   // overview; set by navigateTo. When they then switch to first-person we drop
   // them INTO that room (not back at the staircase) — otherwise a fresh/default
@@ -1979,9 +2018,15 @@ export class SceneManager {
      *  see the note by the probe below. */
     breathe: () => Promise<void>,
     stale: () => boolean,
-  ): Promise<{ positions: number[]; indices: number[] } | null> {
+  ): Promise<ConformData | null> {
     const meshes = this.floors.getFloorMeshes(floor);
     if (meshes.length === 0) return null;
+
+    // Cached from a previous load of THIS model — see conformCache. `null` is
+    // a real cached answer ("flat, use the patch"), so test presence, not
+    // truthiness.
+    const cacheKey = polygonKey(pts, floor);
+    if (this.conformCache.has(cacheKey)) return this.conformCache.get(cacheKey) ?? null;
 
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const p of pts) {
@@ -2020,7 +2065,10 @@ export class SceneManager {
       const y = probe(minX + (maxX - minX) * i / 4, minZ + (maxZ - minZ) * j / 4);
       if (y !== null) quick.push(y);
     }
-    if (quick.length < 3 || Math.max(...quick) - Math.min(...quick) < 0.35) return null;
+    if (quick.length < 3 || Math.max(...quick) - Math.min(...quick) < 0.35) {
+      this.conformCache.set(cacheKey, null);
+      return null;
+    }
 
     // Stepped → sample the full grid at the real surface height, ONE ROW PER
     // TASK. A row is a few dozen rays, which keeps each task in the tens of
@@ -2059,7 +2107,14 @@ export class SceneManager {
       // Two triangles, wound both ways so the glow reads from above and at a graze.
       indices.push(va, vb, ve, va, ve, vd, ve, vb, va, vd, ve, va);
     }
-    return indices.length ? { positions, indices } : null;
+    // Rounded to a tenth of a millimetre before storing: this is a glow draped
+    // over stair treads, and full double precision would triple the size of
+    // something that has to fit in localStorage next to the probe cache.
+    const built = indices.length
+      ? { positions: positions.map((n) => Math.round(n * 10000) / 10000), indices }
+      : null;
+    this.conformCache.set(cacheKey, built);
+    return built;
   }
 
   private entityCalibration(): Record<string, { x: number; y: number }> {
@@ -2199,6 +2254,9 @@ export class SceneManager {
     // Lets indexMeshes reuse the previous load's floor probes when the model
     // is byte-identical — see EntityVisuals.setProbeCacheKey.
     this.visuals.setProbeCacheKey(modelKey ?? null);
+    // Same premise, same key, for the stair rooms' surface-hugging glow.
+    this.conformStore.setModel(modelKey ?? null);
+    this.conformCache = this.conformStore.load();
     const result = await loadModelInto(this.scene, data, this.config.extraGlassHints ?? []);
     if (this.disposed) return { importMs: result.importMs, postMs: 0 }; // unmounted mid-load
     const tPostStart = performance.now();
@@ -2606,6 +2664,9 @@ export class SceneManager {
         }
         if (stale()) return;
       }
+      // Persist what this load computed (including the `null`s), so the next
+      // one costs nothing. A handful of entries; the store evicts other models.
+      this.conformStore.save(this.conformCache);
       // Re-publish so RoomHighlight picks the hugging geometry up. Cheap now
       // that the pools it also triggers hit a warm probe memo (`calibPools`
       // measured 6ms for 108 pools once 2.349.0 stopped discarding it).

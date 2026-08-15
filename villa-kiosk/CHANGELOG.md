@@ -1,3 +1,26 @@
+## 2.357.0
+
+### Confirmed — the beam cache works
+
+Two loads of 2.356.0 on the same laptop, four minutes apart:
+
+```
+lateBeam:13:1012   ← first load, writing the cache
+lateBeam:13:18     ← second load, reading it        (−98%)
+```
+
+### Fixed — the stair glow re-raycasts its whole grid on every load
+
+The last of the raycast-bound passes, and the one with the most rays behind it:
+a 0.25 m grid per stair room, 904ms for two rooms on an M1 and ~1800–2000ms on
+an iPhone. It now persists on the same model key as the floor probes and the
+beams.
+
+Keyed by the polygon itself — quantised and hashed — plus the storey, not by the
+room's name: renaming a room keeps its glow, reshaping one correctly loses it,
+and because the points are world-space a changed plan→world fit invalidates it
+too. A `null` ("this room is flat") is cached as the real answer it is.
+
 ## 2.356.0
 
 ### Fixed — camera beams re-raycast their wall clipping on every load
