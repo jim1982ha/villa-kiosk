@@ -1,3 +1,28 @@
+## 2.350.0
+
+### Fixed — the villa appeared and then ignored taps for two seconds
+
+`calibrateRooms` runs after first paint, and the named split showed ~80% of it
+was decoration:
+
+```
+calibBeams  1000-1051   (9 clipping raycasts per camera FOV cone)
+calibConform 736-834    (2 stair rooms, a 0.25m grid of raycasts each)
+calibFloorY  363-415 (24)   everything else  < 50
+```
+
+Every one of those is the same ~21ms ray against the fused structure mesh.
+Neither the stair glow nor the camera cones affect navigation, room framing,
+teleport points or badges, so both now run after the block, yielding a frame
+between pieces. Rooms ship with their flat patch and are upgraded a few frames
+later; a generation counter stops an older fit publishing over a newer one.
+
+### Confirmed — 2.349.0's memo fix
+
+`calibPools` is 6ms for 108 pools on Android (35ms on the M1), where the same
+work sat inside a 1400-1633ms residual before. `calibrateRooms` overall went
+2941 → 2302 (M1) and 2571 → 2175 (Android) on that fix alone.
+
 ## 2.349.0
 
 ### Fixed — the probe memo was thrown away mid-load, so every pool re-raycast

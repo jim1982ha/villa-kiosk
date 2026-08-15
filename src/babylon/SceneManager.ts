@@ -259,6 +259,9 @@ export class SceneManager {
   private contextLostAt = 0;
   private loadedMeshes: AbstractMesh[] = [];
   private calibratedPoints: TeleportPoint[] | null = null;
+  /** Bumped by every calibration, so a cosmetic tail still yielding between
+   *  frames can tell that a newer fit has superseded the geometry it holds. */
+  private calibGeneration = 0;
   // The room the user last navigated to while in overview. Cleared on entering
   // overview; set by navigateTo. When they then switch to first-person we drop
   // them INTO that room (not back at the staircase) — otherwise a fresh/default
@@ -2309,9 +2312,10 @@ export class SceneManager {
     // Accumulators folded into the census via addSpanTotal, NOT per-call spans:
     // one call per room would evict the ring. See addSpanTotal's docstring.
     // Delete all of this once it has answered.
-    let fitMs = 0, worldMs = 0, floorYMs = 0, conformMs = 0;
-    let floorYCalls = 0, conformCalls = 0;
+    let fitMs = 0, worldMs = 0, floorYMs = 0, floorYCalls = 0;
     const tCalibStart = performance.now();
+    // Supersedes any cosmetic tail still in flight from an earlier call.
+    const gen = ++this.calibGeneration;
     // Prefer plan data parsed from an uploaded .sh3d (works for ANY villa);
     // otherwise fall back to the built-in reference data.
     const entityCalib: Record<string, { x: number; y: number }> = this.config.sh3dEntities?.length
@@ -2394,6 +2398,8 @@ export class SceneManager {
     // Transform each room polygon to model space; centroid → teleport point.
     const worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number; conform?: { positions: number[]; indices: number[] } }> = [];
     const points: TeleportPoint[] = [];
+    /** Stair rooms whose surface-hugging glow is built after the block ends. */
+    const stairJobs: Array<{ index: number; pts: Pt2[]; floor: number }> = [];
     const tRoomLoop = performance.now();
     for (const room of rooms) {
       const pts = room.points.map((p) => planToWorld(p.x, p.y));
@@ -2412,16 +2418,14 @@ export class SceneManager {
       // and so false-positive as "stepped" — flooded load with tens of thousands
       // of raycasts and hung "Loading the villa". Stairs are the only case a flat
       // patch reads wrong, so scope it to them.
+      //
+      // DEFERRED since 2.350.0. It was measured at 736-834ms for this villa's
+      // TWO stair rooms — a third of a block that runs after first paint, for a
+      // glow that is only ever seen once a stair room is highlighted. The room
+      // ships with its flat patch now and is upgraded a few frames later.
       const isStairRoom = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i.test(room.name);
-      let conform: { positions: number[]; indices: number[] } | undefined;
-      if (isStairRoom) {
-        const tConform = performance.now();
-        try { conform = this.buildRoomConform(pts, floor) ?? undefined; }
-        catch (err) { console.warn("[Villa] stair glow conform failed; using flat patch", err); }
-        conformMs += performance.now() - tConform;
-        conformCalls += 1;
-      }
-      worldPolys.push({ name: room.name, pts, floorY, conform });
+      if (isStairRoom) stairJobs.push({ index: worldPolys.length, pts, floor });
+      worldPolys.push({ name: room.name, pts, floorY });
       // QUANTISED TO MILLIMETRES, and that is not cosmetic — it is what stops
       // this data pushing itself to the server on every single boot.
       //
@@ -2448,8 +2452,8 @@ export class SceneManager {
       });
     }
 
-    // The per-room loop above, minus the two parts already accounted for.
-    addSpanTotal("calibLoop", Math.max(0, performance.now() - tRoomLoop - floorYMs - conformMs));
+    // The per-room loop above, minus the floor probes already accounted for.
+    addSpanTotal("calibLoop", Math.max(0, performance.now() - tRoomLoop - floorYMs));
 
     this.calibratedPoints = points;
     const tCamPolys = performance.now();
@@ -2539,7 +2543,12 @@ export class SceneManager {
         cameraDirections.set(e.entityId, { x: wx * horizScale, y: vy, z: wz * horizScale });
       }
     }
-    this.visuals.setCameraDirections(cameraDirections);
+    // The direction MATHS above is microseconds; `setCameraDirections` is what
+    // costs, because it rebuilds every beam and each beam clips itself with 9
+    // raycasts against the fused structure (measured at 1000-1051ms for this
+    // villa's cameras). DEFERRED for the same reason as the stair conform: a
+    // camera's FOV cone is decoration on a villa that should already be
+    // answering taps. See finishCalibrationCosmetics.
     addSpanTotal("calibBeams", performance.now() - tBeams);
 
     // Notify listeners (Dashboard) so the teleport grid + room labels re-adopt
@@ -2559,12 +2568,72 @@ export class SceneManager {
     addSpanTotal("calibWorld", worldMs);
     addSpanTotal("calibFit", fitMs);
     addSpanTotal("calibFloorY", floorYMs, floorYCalls);
-    addSpanTotal("calibConform", conformMs, conformCalls);
     // Still reported, and still the number to read first. 2.348.0's split put
-    // 50-58% of the method in here, which is why the rest of the steps above
-    // are now named individually — a residual that large means the split was
-    // aimed at the wrong place, and only reporting it makes that visible.
-    addSpanTotal("calibRest", Math.max(0, totalMs - worldMs - fitMs - floorYMs - conformMs));
+    // 50-58% of the method in here, which is why the rest of the steps are now
+    // named individually — a residual that large means the split was aimed at
+    // the wrong place, and only reporting it makes that visible.
+    addSpanTotal("calibRest", Math.max(0, totalMs - worldMs - fitMs - floorYMs));
+
+    // Everything COSMETIC, off the block. Not awaited: the villa is already
+    // correct and interactive without any of it.
+    void this.finishCalibrationCosmetics(gen, worldPolys, stairJobs, cameraDirections);
+  }
+
+  /**
+   * The two decorative passes calibrateRooms used to run inline: the stair
+   * rooms' surface-hugging glow, and the camera FOV beams.
+   *
+   * Both are raycast-bound against the fused structure mesh at ~21ms a ray, and
+   * between them they were ~80% of a 2.2-2.3s block that runs AFTER first paint
+   * — the villa appearing and then ignoring taps, which reads worse than a
+   * spinner because it looks ready. Neither affects navigation, room framing,
+   * teleport points or badges, so neither belongs on that block.
+   *
+   * Yields a frame between pieces so each stair room is its own short task
+   * rather than one long one. `gen` guards against a newer calibration having
+   * started meanwhile — this can be in flight across several frames, and
+   * publishing an older fit's geometry over a newer one is exactly the class of
+   * bug the config sync's baseline rules exist to prevent.
+   */
+  private async finishCalibrationCosmetics(
+    gen: number,
+    worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number; conform?: { positions: number[]; indices: number[] } }>,
+    stairJobs: Array<{ index: number; pts: Pt2[]; floor: number }>,
+    cameraDirections: Map<string, { x: number; y: number; z: number }>,
+  ): Promise<void> {
+    const stale = () => this.disposed || gen !== this.calibGeneration;
+
+    if (stairJobs.length) {
+      const t0 = performance.now();
+      let built = 0;
+      for (const job of stairJobs) {
+        await this.yieldFrame();
+        if (stale()) return;
+        try {
+          const conform = this.buildRoomConform(job.pts, job.floor) ?? undefined;
+          if (conform) { worldPolys[job.index].conform = conform; built += 1; }
+        } catch (err) {
+          console.warn("[Villa] stair glow conform failed; keeping flat patch", err);
+        }
+      }
+      addSpanTotal("lateConform", performance.now() - t0, stairJobs.length);
+      // Re-publish so RoomHighlight picks the hugging geometry up. Cheap now
+      // that the pools it also triggers hit a warm probe memo (`calibPools`
+      // measured 6ms for 108 pools once 2.349.0 stopped discarding it).
+      if (built) {
+        await this.yieldFrame();
+        if (stale()) return;
+        this.camera.setRoomPolygons(worldPolys);
+        this.visuals.setRoomPolygons(worldPolys);
+      }
+    }
+
+    await this.yieldFrame();
+    if (stale()) return;
+    const t1 = performance.now();
+    this.visuals.setCameraDirections(cameraDirections);
+    addSpanTotal("lateBeams", performance.now() - t1, cameraDirections.size);
+    this.requestRender();
   }
 
   /** Push RoomHighlight's point-only "rooms": named TeleportMenu viewpoints
