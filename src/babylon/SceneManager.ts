@@ -1809,6 +1809,24 @@ export class SceneManager {
     this.visuals.setFocusedRooms(roomNames);
     if (this.viewMode !== "overview") return;
     const framed = this.computeRoomOverviewPose(roomNames);
+    // TEMPORARY (2.361.0) — one row per room tap, answering "is the shot the
+    // WALL fit or the badge spread". Reported rather than logged because the
+    // complaint ("the zoom is too low") comes from a phone nobody can attach a
+    // console to, and the two causes need opposite fixes. Delete once read.
+    if (framed) {
+      reportTelemetry("roomzoom", {
+        room: roomNames.join("+"),
+        rooms: roomNames.length,
+        // Equal to `radius` ⇒ the badge solver never tightened the shot.
+        wallFit: Math.round(framed.wallFit * 100) / 100,
+        radius: Math.round(framed.radius * 100) / 100,
+        solved: framed.solved,
+        declutters: framed.declutters,
+        // The floor the camera itself imposes: a shot sitting ON this is as
+        // tight as this camera can go, and no framing change can help.
+        minRadius: Math.round((this.overview.camera.lowerRadiusLimit ?? 0) * 100) / 100,
+      });
+    }
     // `declutters` is now advisory, not a veto: it says whether the shot also
     // separates the badges or merely frames them. Either way they are drawn.
     if (framed) this.overview.applyPose(framed);
@@ -1822,6 +1840,13 @@ export class SceneManager {
     roomNames: readonly string[],
   ): {
     alpha: number; beta: number; radius: number;
+    /** TEMPORARY (2.361.0) — the WALL fit before the badge solver walked in,
+     *  and whether the solver returned at all. The question this answers is
+     *  which of the two decides the shot: if `wallFit` and `radius` are equal
+     *  the solver never tightened (look at the fit), and if they differ the
+     *  shot IS the badge spread (look at the badges, or accept it). Guessing
+     *  between those two is what three earlier releases did wrong. */
+    wallFit: number; solved: boolean;
     target: { x: number; y: number; z: number };
     /** False when NO zoom this camera allows can separate the room's badges —
      *  two devices on one 3D point, or a pair that only clears past the zoom
@@ -1933,6 +1958,7 @@ export class SceneManager {
       // further away.
       maxRadius: Math.max(radius, this.overview.camera.lowerRadiusLimit ?? 2),
     }) : null;
+    const wallFit = radius;
     let declutters = true;
     if (solved) {
       radius = solved.radius;
@@ -1944,6 +1970,8 @@ export class SceneManager {
       alpha: cam.alpha,
       beta: destBeta,
       radius,
+      wallFit,
+      solved: !!solved,
       declutters,
       // Orbit about the room's own CENTRE, at the height the room's floor
       // actually sits at — a teleport point stores the first-person EYE

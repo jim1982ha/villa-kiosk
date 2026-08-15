@@ -1,3 +1,16 @@
+## 2.361.0
+
+### Added — one row per "show me this room", to settle why the shot is wide
+
+"Tapping a room zooms out too far" has two possible causes that need opposite
+fixes: the WALL fit (the room's bounding sphere against the tighter field-of-view
+angle, which wastes the tall axis of a portrait phone), or the badge solver
+having already walked in as far as it can while keeping every device on screen.
+
+A `roomzoom` telemetry row now reports both radii plus whether the solver
+returned at all and whether the shot is sitting on the camera's own zoom-in
+limit. Temporary; it goes away with the answer.
+
 ## 2.360.0
 
 ### Fixed — a tapped room still drew 4-icon cards on a phone

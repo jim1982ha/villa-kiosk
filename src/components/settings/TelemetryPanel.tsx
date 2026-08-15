@@ -239,6 +239,16 @@ function summarise(e: TelemetryEvent): string {
       });
       return `${ms(e.at)} into load — ${rows.join(" · ")}${stale}`;
     }
+    case "roomzoom": {
+      // TEMPORARY — the verdict is whether wallFit and radius DIFFER.
+      const tightened = e.wallFit !== e.radius;
+      const floored = e.radius === e.minRadius;
+      return `zoom to ${e.room} → radius ${e.radius} (wall fit ${e.wallFit})`
+        + (e.solved ? "" : " · solver returned NOTHING")
+        + (tightened ? " · badge solver tightened it" : " · WALL FIT UNCHANGED")
+        + (floored ? " · AT the camera's zoom-in limit" : "")
+        + (e.declutters === false ? " · does not declutter" : "");
+    }
     case "context-lost":
       return `WebGL context lost (${e.total ?? "?"} this session)`;
     case "context-restored":
