@@ -1,3 +1,25 @@
+## 2.366.0
+
+### Fixed — which devices were drawn depended on the order they were handed in
+
+A `?debug` capture from a phone reported `PLACEMENT: ORDER DEPENDENT — 12 vs 4
+accepted on a reversed input` on most layout passes. That is the placement
+solver's own purity guard, and it was right: the same badges in a different
+order produced a different set of visible devices.
+
+The chip cascade added rooms to the chipped set *while* sweeping the buckets, so
+a bucket judged later in a round saw rooms a bucket judged earlier had just
+chipped — and bucket order comes from the caller's input order. Monotone
+chipping is not enough to make that safe, because the two halves of the kill
+test pull opposite ways as members are pruned: too-few-to-group gets easier,
+too-many-to-draw gets harder. A bucket of 8 died as undrawable, while the same
+bucket judged after two of its members' rooms chipped was a drawable 6 and
+lived.
+
+Each round now judges every bucket against the state that round began with, so
+sweep order cannot matter. Where the two answers used to disagree, the settled
+one is the more conservative of the two, so some piles that previously survived
+by luck of ordering now escalate to their room chip.
 ## 2.365.0
 
 ### Fixed — tapping a room still landed a zoom short of readable

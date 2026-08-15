@@ -682,8 +682,32 @@ export function solvePlacement(
   const dead = st.bucketDead;
   dead.fill(0, 0, bucketCount);
 
+  // ── ⚠️ A ROUND DECIDES FROM THE STATE IT STARTED WITH ────────────────────
+  // `chipped` used to be added to IN the sweep below, so a bucket judged later
+  // in a round saw rooms that a bucket judged earlier had just chipped — which
+  // made the outcome a function of BUCKET INDEX ORDER, and bucket indices come
+  // from the order deferrals are encountered, i.e. from the caller's input
+  // order. `?debug`'s purity guard reported it from a phone as
+  // `ORDER DEPENDENT — 12 vs 4 accepted on a reversed input`, on most passes.
+  //
+  // It is not enough that chipping is monotone. Pruning chipped members only
+  // ever SHRINKS a bucket, and the two halves of the kill test pull opposite
+  // ways under that: `< 2` gets easier to satisfy as members are removed, but
+  // `> drawableMax` gets HARDER — a bucket of 8 with drawableMax 6 dies as
+  // undrawable, yet the same bucket, judged after two of its members' rooms
+  // chipped, is a drawable 6 and lives. So "who is looked at first" genuinely
+  // changed which rooms collapsed, and a solver that accepts 4 or 12 badges
+  // depending on argument order is not computing anything meaningful.
+  //
+  // The fix is to make each round a pure function of the previous round's
+  // state: rooms chipped during a round are collected here and applied only
+  // once every bucket has been judged against the same `chipped` set. Sweep
+  // order within a round then cannot matter. Termination is unchanged — both
+  // `chipped` and `dead` still only ever grow.
+  const pendingRooms: string[] = [];
   for (let round = 0; round <= bucketCount + 1; round++) {
     let changed = false;
+    pendingRooms.length = 0;
     for (let b = 0; b < bucketCount; b++) {
       if (dead[b]) continue;
       const bucket = st.buckets[b];
@@ -734,7 +758,14 @@ export function solvePlacement(
       // A bucket that cannot stand as a group hands its rooms to their chips.
       // With the pile-wide pull-back above, "stuck at one member" is only
       // reachable by the drop just performed, not by a failed partner search.
-      for (const r of bucket.rooms) chipped.add(r);
+      //
+      // Staged, not applied: see the note above the round loop. Every bucket in
+      // this round is judged against the `chipped` set the round began with.
+      for (const r of bucket.rooms) pendingRooms.push(r);
+    }
+    // Now the round is over, every bucket having seen the same state.
+    for (const r of pendingRooms) {
+      if (!chipped.has(r)) { chipped.add(r); changed = true; }
     }
     if (!changed) break;
   }
