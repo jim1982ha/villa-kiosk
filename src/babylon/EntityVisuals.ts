@@ -940,6 +940,19 @@ export class EntityVisuals {
 
   /** entity_id -> meshes (one entity can drive several meshes, e.g. curtains). */
   private byEntity = new Map<string, AbstractMesh[]>();
+
+  /**
+   * The mesh→entity index `indexMeshes` already built, read-only.
+   *
+   * Exposed for `SceneManager.calibrateRooms`, which was resolving all ~856
+   * meshes a SECOND time through `resolveMeshToMapping` moments after this map
+   * was filled — the measured cost of that duplicate pass was the single
+   * longest block of the whole load (2.4s on the phone, 2.7s on an M1, which is
+   * how it was identified: work that does not care about the hardware).
+   */
+  meshesByEntity(): ReadonlyMap<string, AbstractMesh[]> {
+    return this.byEntity;
+  }
   private mapping = new Map<string, EntityMapping>();
   /** entity_id -> variant word -> its mesh(es) — see desiredVariantWord/
    *  applyMeshVariant. ONLY meshes with a recognised "__<word>" pose suffix are

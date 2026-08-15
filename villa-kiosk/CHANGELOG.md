@@ -1,3 +1,50 @@
+## 2.343.0
+
+### Fixed — the longest block of the whole load was an index being built twice
+
+2.342.0's attribution answered on the first try, across three cold starts:
+
+```
+Android  stallMax 3109ms  calibrateRooms:2412   cover 78
+Android  stallMax 1489ms  indexMeshes:1350      cover 91
+Mac      stallMax 2792ms  calibrateRooms:2660   cover 95
+```
+
+`cover` between 78 and 95 says the time is inside code this app instruments —
+which kills the hypothesis that sent us looking. It is **not** texture decode:
+`glTexCompressed: 0` is real, 26 megapixels do ship uncompressed, and none of it
+is what anyone was waiting for. The KTX2 bake the Blender pipeline would have
+needed is not worth doing for load time, and that is the most valuable thing this
+measurement bought.
+
+What it is: `calibrateRooms` resolving every one of the ~856 meshes through
+`resolveMeshToMapping` a SECOND time, moments after `indexMeshes` had done
+precisely that and kept the answer in `byEntity`. A duplicated index, paid for at
+full price.
+
+The cross-device reading is what identifies it beyond argument: **2412ms on an
+Adreno 750 and 2660ms on an M1** — the laptop slower than the phone, on hardware
+a category apart. Nothing GPU-bound, memory-bound or bandwidth-bound behaves like
+that. It is single-threaded work whose only cure is doing less of it.
+
+So it reads the index instead of rebuilding it. Only entities in the calibration
+set matter, and only their meshes need a world matrix, so both the resolve and
+the `computeWorldMatrix` pass now touch a hundred-odd meshes instead of all of
+them. The mesh→entity map is exposed read-only from `EntityVisuals` rather than
+copied, so there remains exactly one place that decides which mesh is which
+device.
+
+It also ran AFTER first paint, deliberately, because it is too heavy for the load
+path — meaning the villa appeared and then sat frozen for two and a half seconds.
+That reads worse than a spinner: it looks ready and ignores a tap.
+
+`indexMeshes` at 1350ms is now the largest remaining block and is a separate
+question — that one is doing work, not repeating it.
+
+The stall attribution stays in. A follow-up cold start should show `stallMaxMs`
+fall and `stallMaxSpans` name something else, and that is the confirmation this
+worked rather than moved.
+
 ## 2.342.0
 
 ### Added — the worst block of the load now says what was running

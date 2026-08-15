@@ -2305,20 +2305,32 @@ export class SceneManager {
       : ENTITY_CALIBRATION_CM;
     const rooms = this.config.sh3dRooms?.length ? this.config.sh3dRooms : ROOM_POLYGONS_CM;
 
+    // ⚠️ READ the index, do not rebuild it. This loop used to resolve every one
+    // of the ~856 meshes through `resolveMeshToMapping` — a second full pass
+    // moments after `indexMeshes` had just done exactly that and kept the
+    // answer. Attribution of the worst load stall found it: 2412ms on an
+    // Adreno 750 and 2660ms on an M1, in ONE unyielding task. Near-identical on
+    // hardware three years and a category apart, which is the signature of
+    // single-threaded work that no device can help with — and it ran AFTER first
+    // paint, so the villa appeared and then sat frozen, which reads worse than a
+    // spinner because it looks ready and ignores a tap.
+    //
+    // Only the calibration entities matter, and only their meshes need a world
+    // matrix, so both the resolve and the recompute now touch a hundred-odd
+    // meshes rather than all of them.
     const world = new Map<string, { x: number; z: number; n: number }>();
-    for (const m of meshes) {
-      const map = resolveMeshToMapping(
-        m.name, this.config.entityMap, this.config.meshBindings, this.config.deniedTypes,
-      );
-      if (!map || !(map.entityId in entityCalib)) continue;
-      // Use bounding-box centre (same reason as in normalizeScale above).
-      m.computeWorldMatrix(true);
-      const c = m.getBoundingInfo().boundingBox.centerWorld;
-      const acc = world.get(map.entityId) ?? { x: 0, z: 0, n: 0 };
-      acc.x += c.x;
-      acc.z += c.z;
-      acc.n += 1;
-      world.set(map.entityId, acc);
+    for (const [entityId, list] of this.visuals.meshesByEntity()) {
+      if (!(entityId in entityCalib)) continue;
+      const acc = { x: 0, z: 0, n: 0 };
+      for (const m of list) {
+        // Bounding-box centre (same reason as in normalizeScale above).
+        m.computeWorldMatrix(true);
+        const c = m.getBoundingInfo().boundingBox.centerWorld;
+        acc.x += c.x;
+        acc.z += c.z;
+        acc.n += 1;
+      }
+      if (acc.n > 0) world.set(entityId, acc);
     }
 
     const pairs: PlanWorldPair[] = [];
