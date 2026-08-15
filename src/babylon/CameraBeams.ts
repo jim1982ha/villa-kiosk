@@ -16,6 +16,7 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
+import { ModelKeyedStore } from "./modelStore";
 
 const BEAM_COLOR = new Color3(0.95, 0.15, 0.12);
 // A wide "spotlight" cone at ROOM scale. Two rounds of feedback shaped this:
@@ -78,6 +79,24 @@ export class CameraBeams {
   private beams = new Map<string, { mesh: Mesh; material: StandardMaterial }>();
   /** Camera entity_ids whose beam is currently pulsing (motion detected). */
   private active = new Set<string>();
+
+  /**
+   * Clipped beam lengths carried across loads — see modelStore.
+   *
+   * Every beam costs 9 raycasts against the fused structure mesh, and that
+   * measured 1009ms for this villa's 13 cameras on an M1 and **2250ms on an
+   * iPhone** — 173ms per beam. Chunking (2.351.0) stopped it being one long
+   * freeze, but 173ms is still ~10 dropped frames, thirteen times over, on the
+   * platform the app is actually mounted on a wall to run.
+   *
+   * The length is a pure function of the beam's origin, its direction and the
+   * structure's geometry. Origin and geometry are fixed by the GLB, which the
+   * store's key already pins; the DIRECTION is not — it moves with the
+   * `cameraBeamOffsetDeg`/`cameraBeamPitchDeg` settings — so it goes in the
+   * entry key, and changing either setting simply misses and re-probes.
+   */
+  private clips = new Map<string, number>();
+  private clipStore = new ModelKeyedStore<number>("vk.beamclip1.", /^vk\.beamclip\d*\./);
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -200,7 +219,15 @@ export class CameraBeams {
    */
   addBeam({ entityId, origin, direction }: BeamSource, occluders: ReadonlySet<AbstractMesh>): void {
     {
-      const length = this.clippedLength(origin, direction, occluders);
+      // Millimetre/milliradian quantisation, for the reason the teleport points
+      // are quantised: these come out of an affine fit re-solved every load, so
+      // they reproduce to within a ULP on identical geometry but not
+      // bit-identically, and an unrounded key would miss every time.
+      const q = (n: number) => Math.round(n * 1000);
+      const clipKey = `${entityId}|${q(direction.x)},${q(direction.y)},${q(direction.z)}`;
+      const cached = this.clips.get(clipKey);
+      const length = cached ?? this.clippedLength(origin, direction, occluders);
+      if (cached === undefined) this.clips.set(clipKey, length);
       const maxRadius = length * Math.tan(BEAM_HALF_ANGLE);
 
       const mesh = MeshBuilder.CreateLathe(`beam_${entityId}`, {
@@ -226,6 +253,18 @@ export class CameraBeams {
 
       this.beams.set(entityId, { mesh, material });
     }
+  }
+
+  /** Point the clip cache at a model (the versioned GLB URL) and restore what
+   *  previous loads learned. Null disables persistence. */
+  setCacheKey(key: string | null): void {
+    this.clipStore.setModel(key);
+    this.clips = this.clipStore.load();
+  }
+
+  /** Persist what this load computed. Cheap — a few dozen numbers. */
+  saveCache(): void {
+    this.clipStore.save(this.clips);
   }
 
   has(entityId: string): boolean {

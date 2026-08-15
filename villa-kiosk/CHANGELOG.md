@@ -1,3 +1,30 @@
+## 2.356.0
+
+### Fixed — camera beams re-raycast their wall clipping on every load
+
+Nine raycasts per beam, thirteen cameras: 1009ms on an M1 and **2250ms on an
+iPhone**, or 173ms per beam. Chunking (2.351.0) stopped that being one long
+freeze but 173ms is still ~10 dropped frames, thirteen times, right after the
+villa appears — on the platform the app is mounted on a wall to run.
+
+A beam's clipped length is a pure function of the GLB's geometry and the beam's
+direction, so it now persists across loads exactly as the floor probes do. The
+direction is part of the entry key, so changing `cameraBeamOffsetDeg` or
+`cameraBeamPitchDeg` re-probes rather than serving a stale cone.
+
+### Changed — one model-keyed store, not two
+
+`floorProbe` and the beam cache want the same thing (answers about this GLB,
+evicted when a new one is uploaded), so the localStorage half now lives once in
+`babylon/modelStore.ts`. The probe prefix is unchanged, so existing caches
+survive the move.
+
+### Measured — `rebuildLabels` is not worth optimising, and the span is removed
+
+`rebuildLabels:2:65` — two runs per load, 65ms total, of which the `indexMeshes`
+call was 63. No expensive repetition to fix, inside a load whose largest term is
+a 1.7s GLB parse.
+
 ## 2.355.0
 
 ### Fixed — the stair glow no longer freezes the villa, and never needed to

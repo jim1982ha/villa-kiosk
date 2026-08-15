@@ -1563,6 +1563,9 @@ export class EntityVisuals {
    *  model it describes. Null disables persistence. */
   setProbeCacheKey(key: string | null): void {
     this.probe.setCacheKey(key);
+    // The camera beams' clip lengths ride the same model key — same premise
+    // (a pure function of this GLB's geometry), same ~21ms raycasts.
+    this.beams.setCacheKey(key);
   }
 
   /** The shared floor probe, for SceneManager's own storey queries — one
@@ -2824,6 +2827,7 @@ export class EntityVisuals {
       try { this.beams.addBeam(source, collected.occluders); }
       finally { end(); }
     }
+    this.beams.saveCache();
     this.replayBeamMotion();
   }
 
@@ -3258,19 +3262,12 @@ export class EntityVisuals {
     this.applyIconScale(requestFrame);
   }
 
+  // ANSWERED and de-instrumented (2.356.0). The census read
+  // `rebuildLabels:2:65` on an M1: two runs per load, 65ms TOTAL, of which the
+  // indexMeshes call was 63 — so the second run has essentially nothing to do
+  // and there is no expensive repetition here to fix. Against a ~2.9s load
+  // whose largest term is a 1.7s GLB parse, this is not where the time is.
   private rebuildLabels(): void {
-    // Spanned because `labelsMs` on the load record only covers the call made
-    // from indexMeshes, and this method has half a dozen other callers
-    // (repaintBadges, setBadgeStyle, the entityMap delta, a re-bake). The
-    // census reports runs AND total, so "60-250ms" resolves into either one
-    // expensive pass or several cheap ones repeated — which need different
-    // fixes, and that is the distinction this whole line of work has been
-    // about. Two or three entries per load cannot thrash the ring.
-    const endSpan = beginSpan("rebuildLabels");
-    try { this.rebuildLabelsInner(); } finally { endSpan(); }
-  }
-
-  private rebuildLabelsInner(): void {
     // The label SET itself is about to change — every pooled slot below is
     // re-derived from scratch on the next pass.
     this.markLayoutDirty();

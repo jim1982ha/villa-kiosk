@@ -60,6 +60,7 @@ import type { Scene } from "@babylonjs/core/scene";
 
 import { roomKey } from "@/config/roomKey";
 import { isStructureMesh } from "./meshRoles";
+import { ModelKeyedStore } from "./modelStore";
 
 /** Fallback bucket size for a point that belongs to no room polygon. Only the
  *  fallback — see this file's header for why a grid is the wrong primary key. */
@@ -120,7 +121,10 @@ export class FloorProbe {
    * before. What changes is only whether a ray is cast to re-derive it.
    */
   private persisted = new Map<string, number | null>();
-  private storeKey: string | null = null;
+  /** The localStorage half, shared with the camera beams — see modelStore.
+   *  Prefix UNCHANGED at `vk.probe2.` so existing caches survive this move;
+   *  the sweep still also retires the pre-2.300.0 `vk.probe.` keys. */
+  private store = new ModelKeyedStore<number | null>(STORE_PREFIX, /^vk\.probe2?\./);
   /** Injected rather than imported: only EntityVisuals holds the calibrated
    *  world-space room polygons, and it receives them AFTER the load path has
    *  already run (SceneManager calibrates post-first-frame). Returning null —
@@ -147,7 +151,7 @@ export class FloorProbe {
    * pays this cost on every return to the app.
    */
   setCacheKey(key: string | null): void {
-    this.storeKey = key ? `${STORE_PREFIX}${key}` : null;
+    this.store.setModel(key);
   }
 
   resetStats(): void {
@@ -159,34 +163,19 @@ export class FloorProbe {
   load(): void {
     this.cache.clear();
     this.persisted.clear();
-    if (!this.storeKey) return;
-    try {
-      const raw = localStorage.getItem(this.storeKey);
-      if (!raw) return;
-      for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, number | null>)) {
-        // Into BOTH: `cache` so this pass can hit them, `persisted` so a save
-        // later in this same load cannot drop what a previous load learned.
-        this.cache.set(k, v);
-        this.persisted.set(k, v);
-      }
-    } catch { /* unreadable or quota-evicted — just re-probe */ }
+    for (const [k, v] of this.store.load()) {
+      // Into BOTH: `cache` so this pass can hit them, `persisted` so a save
+      // later in this same load cannot drop what a previous load learned.
+      this.cache.set(k, v);
+      this.persisted.set(k, v);
+    }
   }
 
   save(): void {
-    if (!this.storeKey) return;
-    try {
-      // One model's probes at a time: an older GLB's entries are dead weight
-      // the moment a new one is uploaded, and this runs on devices where
-      // storage pressure is real. Sweeps the retired `vk.probe.` prefix too.
-      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
-        const k = localStorage.key(i);
-        if (k && /^vk\.probe2?\./.test(k) && k !== this.storeKey) localStorage.removeItem(k);
-      }
-      // `persisted`, never `cache` — see that field for why writing the lookup
-      // map here silently disabled this whole mechanism for as long as it
-      // existed.
-      localStorage.setItem(this.storeKey, JSON.stringify(Object.fromEntries(this.persisted)));
-    } catch { /* quota / private mode — the cache is an optimisation, not state */ }
+    // `persisted`, never `cache` — see that field for why writing the lookup
+    // map here silently disabled this whole mechanism for as long as it
+    // existed.
+    this.store.save(this.persisted);
   }
 
   /**
