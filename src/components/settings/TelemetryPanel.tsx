@@ -247,7 +247,9 @@ function summarise(e: TelemetryEvent): string {
         + (e.solved ? "" : " · solver returned NOTHING")
         + (tightened ? " · badge solver tightened it" : " · WALL FIT UNCHANGED")
         + (floored ? " · AT the camera's zoom-in limit" : "")
-        + (e.declutters === false ? " · does not declutter" : "");
+        + (e.declutters === false ? " · does not declutter" : "")
+        + (e.real === false ? " · NO WALL POLYGON (entity-bounds margin)" : "")
+        + (e.halfW !== undefined ? ` · footprint ${e.halfW}x${e.halfH} half-extent` : "");
     }
     case "context-lost":
       return `WebGL context lost (${e.total ?? "?"} this session)`;

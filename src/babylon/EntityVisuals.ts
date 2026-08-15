@@ -2697,6 +2697,34 @@ export class EntityVisuals {
     const kLo = Math.floor(Math.log2(lo) * q);
     const kHi = Math.ceil(Math.log2(hi) * q);
     let firstFitting: number | null = null;
+    // ── The two conditions pull in OPPOSITE directions, and that is the whole
+    //    shape of this problem ────────────────────────────────────────────
+    // `fits` (every badge on screen) gets easier as the camera backs off: the
+    // world-space frame grows while a badge stays the same pixel size. `clean`
+    // (no badge touching another) gets easier as it comes in: separations are
+    // world-space and scale with pxPerWorld while the clearance is fixed
+    // pixels. So each holds on one side of a threshold, and there are two
+    // cases — they overlap, or they do not.
+    //
+    // Until 2.365.0 a rung that failed `fits` was skipped before `clean` was
+    // ever evaluated, which silently made framing the hard constraint and
+    // decluttering a hope. When the two did not overlap the shot landed on the
+    // closest rung that framed every badge — reported as "I click the room and
+    // then have to zoom in a little more myself", with the badges arriving as
+    // a cluster of grouped cards and separating into readable ones a rung or
+    // two closer. That is the opposite of this solver's stated purpose, and of
+    // the comment in computeRoomOverviewPose promising that a room whose badges
+    // only separate at maximum zoom is taken to maximum zoom.
+    //
+    // So `clean` is now evaluated at EVERY rung, and framing is the preference
+    // it was written to be:
+    //   * both hold somewhere → the TIGHTEST such rung (unchanged, and still
+    //     the common case);
+    //   * they never overlap → the WIDEST clean rung, i.e. the readable shot
+    //     that crops least. A device at the room's edge may hang off the frame;
+    //     that beats every device in the room being illegible;
+    //   * nothing is clean at any zoom → the old framing fallback, unchanged.
+    let widestClean: number | null = null;
     for (let k = kLo; k <= kHi; k++) {
       const radius = Math.pow(2, k / q);
       if (radius < lo || radius > hi) continue;
@@ -2716,8 +2744,7 @@ export class EntityVisuals {
         if (Math.abs(sx) + boxes[i].halfW > halfWpx
           || Math.abs(sy) + boxes[i].halfH > halfHpx) { fits = false; break; }
       }
-      if (!fits) continue;
-      if (firstFitting === null) firstFitting = radius;
+      if (fits && firstFitting === null) firstFitting = radius;
 
       // Is every badge of THIS room drawn on its own here? "Clear of every
       // other eligible badge" is the exact test — against neighbours from
@@ -2740,8 +2767,17 @@ export class EntityVisuals {
       const touching = markContacts(items, gapPx, minSepPx, this.zoomScratch);
       let clean = true;
       for (const i of mine) if (touching[i]) { clean = false; break; }
-      if (clean) return { radius, declutters: true };
+      // The rungs ascend, so the last write is the widest clean one. Recorded
+      // rather than derived from a threshold: `clean` is very nearly monotone
+      // in radius but not exactly, because pxPerWorld is quantised onto the
+      // renderer's ladder, and taking the widest rung that actually tested
+      // clean is correct either way.
+      if (clean) widestClean = radius;
+      // Tightest rung that both frames and declutters — the happy case, and
+      // the first one reached because the walk starts from the closest.
+      if (clean && fits) return { radius, declutters: true };
     }
+    if (widestClean !== null) return { radius: widestClean, declutters: true };
     return firstFitting === null ? null : { radius: firstFitting, declutters: false };
   }
 

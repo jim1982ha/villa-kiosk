@@ -1827,6 +1827,17 @@ export class SceneManager {
         radius: Math.round(framed.radius * 100) / 100,
         solved: framed.solved,
         declutters: framed.declutters,
+        // Which INPUT the fit was measured from. False ⇒ at least one room had
+        // no wall polygon and fell back to its entity anchors, which carries
+        // the far looser ROOM_FIT_MARGIN_ENTITIES (0.45 vs 0.18) — a shot 23%
+        // wider than the same room with a polygon, for a reason that has
+        // nothing to do with the formula.
+        real: framed.real,
+        // The room's own half-extents ON THE VIEW PLANE, world units. With
+        // wallFit these say which SCREEN AXIS bound the fit: recompute
+        // halfW/tan(hFov/2) against halfH/tan(vFov/2) and the larger one won.
+        halfW: Math.round(framed.halfW * 100) / 100,
+        halfH: Math.round(framed.halfH * 100) / 100,
         // The floor the camera itself imposes: a shot sitting ON this is as
         // tight as this camera can go, and no framing change can help.
         minRadius: Math.round((this.overview.camera.lowerRadiusLimit ?? 0) * 100) / 100,
@@ -1852,6 +1863,11 @@ export class SceneManager {
      *  shot IS the badge spread (look at the badges, or accept it). Guessing
      *  between those two is what three earlier releases did wrong. */
     wallFit: number; solved: boolean;
+    /** TEMPORARY (2.365.0) — the fit's INPUTS, so a shot that still reads wrong
+     *  can be attributed without another measurement round: whether every room
+     *  had a real wall polygon (false ⇒ the 0.45 entity margin, not the 0.18
+     *  one), and the footprint's half-extents on the view plane. */
+    real: boolean; halfW: number; halfH: number;
     target: { x: number; y: number; z: number };
     /** False when NO zoom this camera allows can separate the room's badges —
      *  two devices on one 3D point, or a pair that only clears past the zoom
@@ -2017,6 +2033,9 @@ export class SceneManager {
       wallFit,
       solved: !!solved,
       declutters,
+      real: allReal,
+      halfW,
+      halfH,
       // Orbit about the room's own CENTRE, at the height the room's floor
       // actually sits at — a teleport point stores the first-person EYE
       // position, so reusing its y tilted the framing up by eye height.

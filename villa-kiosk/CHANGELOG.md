@@ -1,3 +1,23 @@
+## 2.365.0
+
+### Fixed — tapping a room still landed a zoom short of readable
+
+The shot arrived with the room's devices as a cluster of grouped cards, and one
+more pinch separated them into readable badges. The zoom solver walks the
+renderer's own zoom rungs asking two questions — is every badge on screen, and
+is every badge clear of its neighbours — but it skipped the second question at
+any rung that failed the first. Those two pull in opposite directions: badges
+fit as the camera backs off and separate as it comes in. So whenever no single
+rung could do both, framing won by default and the room arrived cluttered.
+
+Decluttering is now asked at every rung. Where both hold the shot is unchanged;
+where they never overlap it takes the widest rung that still separates the
+badges, so a device at the room's edge may hang off the frame rather than every
+device in the room being illegible.
+
+The `roomzoom` diagnostic row also now carries whether the room had a real wall
+polygon and the footprint's on-screen half-extents.
+
 ## 2.364.0
 
 ### Fixed — tapping a room zoomed nowhere near it, worst on a phone
