@@ -302,13 +302,12 @@ const CLIMATE_OUTLINE_WORLD_WIDTH = 0.04; // metres, matches the blue outline's 
 // geometry instead of sitting flush on it.
 const LABEL_ANCHOR_MARGIN = 0.12;
 
-/** How far a room chip's world centre may move BETWEEN FRAMES, with its member
- *  set unchanged, before watchChipJump calls it a teleport. Metres, and
- *  deliberately generous: a real centroid holds still to the millimetre when
- *  its members do, while the reported flick moved it by roughly a villa's
- *  width. Anything in between is not a false positive worth silencing — it is
- *  the same defect, smaller. */
-const CHIP_JUMP_WORLD_UNITS = 0.5;
+/** How far a room chip may move ON SCREEN between frames before watchChipJump
+ *  calls it a teleport. GUI pixels, and well above anything the camera drifting
+ *  produces per frame while comfortably under the ~1385px the report showed —
+ *  a chip that genuinely follows its room never travels this far in one frame
+ *  unless the camera is being flung, which is not what is being debugged. */
+const CHIP_JUMP_SCREEN_PX = 120;
 // Every badge DIMENSION now lives in badgeMetrics.ts, in CSS pixels, chosen by
 // pointer class — including the container height, the value pill, the badge
 // diameter and the card block that used to sit below. They were literals here
@@ -1298,6 +1297,12 @@ export class EntityVisuals {
       this.animateFans(dtMs);
       this.cullLabels();
     });
+    // AFTER render, not before: Babylon reprojects every linkWithMesh control
+    // during the frame, so the drawn `leftInPixels` this reads is only the
+    // real one once the frame is done. Reading it in beforeRender would report
+    // the PREVIOUS frame's projection and could never see the jump at all —
+    // the same class of mistake as watching the world centre.
+    scene.onAfterRenderObservable.add(() => this.watchChipJump());
     // A mouse plugged into a tablet, or a 2-in-1 folded over, changes which
     // badge geometry is correct. Unlike a hardware-scaling change (which only
     // needs applyIconScale) this one needs a full REBUILD: the painted sizes
@@ -6681,29 +6686,61 @@ export class EntityVisuals {
    * Passive and self-triggering: the event lasts one frame and cannot be
    * reproduced on demand, so a counter that has to be read at the right moment
    * is no use — this only speaks when the anomaly actually happens.
+   *
+   * ⚠️ v2.401.0's version WATCHED THE WRONG THING AND SAID NOTHING. It compared
+   * `chip.centre` between calls and gated on the member count being unchanged,
+   * so it could only ever report a chip whose world centre moved — and the
+   * field capture proved the world centre does NOT move: the user cleared the
+   * panel, reproduced the jump, and got no line at all, not even a `place`
+   * (which dedupes on outcome, so an unchanged solve is silent). Two lessons,
+   * both already paid for once today: a field that covers one half of a
+   * two-sided question reads as a complete answer, and a guard written from
+   * what a video seemed to show can suppress exactly the case that fires.
+   *
+   * So it now watches what the user actually sees — the DRAWN position — and
+   * reports the world position beside it, which turns the two remaining
+   * possibilities into one glance:
+   *
+   *   screen moved, world ~0  → the PROJECTION moved: the GUI texture size,
+   *                             the camera viewport or the hardware scaling.
+   *                             `adt`/`render`/`hw` on the line say which.
+   *   screen moved, world too → the DATA moved: member anchors or membership,
+   *                             and `n=a->b` says whether membership changed.
+   *
+   * It also no longer gates on the member count, because a count change is a
+   * finding rather than a reason to stay quiet.
    */
-  private watchChipJump(chip: RoomChip): void {
-    const prev = this.lastChipCentre.get(chip.key);
-    this.lastChipCentre.set(chip.key, { x: chip.centre.x, z: chip.centre.z, n: chip.ids.length });
-    if (!prev || prev.n !== chip.ids.length) return; // membership changed — a real move
-    const moved = Math.hypot(chip.centre.x - prev.x, chip.centre.z - prev.z);
-    if (moved < CHIP_JUMP_WORLD_UNITS) return;
-    tapDebug(
-      `chipjump ${chip.key} n=${chip.ids.length} moved=${moved.toFixed(2)}m`
-      + ` from=(${prev.x.toFixed(2)},${prev.z.toFixed(2)})`
-      + ` to=(${chip.centre.x.toFixed(2)},${chip.centre.z.toFixed(2)})`
-      + ` anchors=[${chip.ids.slice(0, 4).map((id) => {
-        const a = this.labels.get(id)?.anchor;
-        if (!a) return `${id}:MISSING`;
-        const p = a.getAbsolutePosition();
-        return `${id}:(${p.x.toFixed(1)},${p.z.toFixed(1)})`;
-      }).join(" ")}]`,
-      "chip",
-    );
+  private watchChipJump(): void {
+    if (!debugFlagEnabled()) return; // per-frame loop — pay nothing when off
+    for (const [key, c] of this.clusters) {
+      if (!c.container.isVisible) continue;
+      const w = c.node.position;
+      const left = c.container.leftInPixels, top = c.container.topInPixels;
+      const n = c.entityIds.length;
+      const prev = this.lastChipDraw.get(key);
+      this.lastChipDraw.set(key, { wx: w.x, wz: w.z, left, top, n });
+      if (!prev) continue;
+      const screen = Math.hypot(left - prev.left, top - prev.top);
+      if (screen < CHIP_JUMP_SCREEN_PX) continue;
+      const world = Math.hypot(w.x - prev.wx, w.z - prev.wz);
+      const eng = this.scene.getEngine();
+      const adt = this.labelLayer?.getSize();
+      tapDebug(
+        `chipjump ${key} n=${prev.n}->${n}`
+        + ` screen=${screen.toFixed(0)}px (${prev.left.toFixed(0)},${prev.top.toFixed(0)}`
+        + `->${left.toFixed(0)},${top.toFixed(0)})`
+        + ` world=${world.toFixed(2)}m`
+        + ` adt=${adt ? `${adt.width}x${adt.height}` : "?"}`
+        + ` render=${eng.getRenderWidth()}x${eng.getRenderHeight()}`
+        + ` hw=${eng.getHardwareScalingLevel().toFixed(3)}`,
+        "chip",
+      );
+    }
   }
 
-  /** Previous frame's chip centre per room key, for watchChipJump. */
-  private lastChipCentre = new Map<string, { x: number; z: number; n: number }>();
+  /** Previous frame's DRAWN chip position per room key, for watchChipJump. */
+  private lastChipDraw = new Map<
+    string, { wx: number; wz: number; left: number; top: number; n: number }>();
 
   private renderChips(chips: RoomChip[]): void {
     const layer = this.labelLayer;
@@ -6716,7 +6753,6 @@ export class EntityVisuals {
       c.entityIds = chip.ids;
       c.displayName = chip.room;
       c.roomNames = chip.roomNames;
-      this.watchChipJump(chip);
       c.node.position.copyFrom(chip.centre);
       // Room name and count render as separate controls (see ensureCluster).
       // A chip that absorbed others says so with a "+N" suffix, so the count

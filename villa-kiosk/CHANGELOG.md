@@ -1,3 +1,13 @@
+## 2.401.1
+
+### Fixed — the chip-jump instrument watched the wrong thing and stayed silent
+
+2.401.0 compared each chip's world centre and skipped any chip whose member
+count changed. The capture showed the world centre never moves, so it could
+never fire. It now watches the DRAWN position — what the jump actually is —
+and reports the world position, the GUI size and the hardware scaling beside
+it, which separates a projection fault from a data one in one line.
+
 ## 2.401.0
 
 ### Added — an instrument for the room chips flicking sideways on refocus
