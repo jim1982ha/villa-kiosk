@@ -4390,6 +4390,31 @@ export class EntityVisuals {
       solved = result.stats;
       // The solver states its own two reasons (undrawable/degenerate) in
       // `stats`; they are re-counted here so every chip has ONE accounting.
+      // ── Every PAIR the solver formed, with the numbers behind it ─────────
+      // A group of TWO is the case a person can check by eye ("those two are
+      // not touching"), so it is the case the log has to be able to answer.
+      // Prints the ids, the actual separation on each axis, the requirement,
+      // and the half-extents each requirement came from — which is where a
+      // requirement can be larger than the ink. Same buffer as the seat lines,
+      // so it rides the `place` line's outcome dedupe.
+      if (debugFlagEnabled()) {
+        for (let b = 0; b < result.bucketCount; b++) {
+          const bk = result.buckets[b];
+          if (bk.members.length !== 2) continue;
+          const [ia, ib] = bk.members;
+          const A = items[ia], B = items[ib];
+          const dx = Math.hypot(B.sx - A.sx, B.sz - A.sz), dy = Math.abs(B.sy - A.sy);
+          const needX = Math.max(A.reach + B.reach + clearance.gap, clearance.minSep);
+          const needY = Math.max(A.reachY + B.reachY + clearance.gap, clearance.minSep);
+          this.seatLog.push(
+            `pair ${shown[ia].id} + ${shown[ib].id}`
+            + ` dx=${dx.toFixed(0)}/${needX.toFixed(0)} dy=${dy.toFixed(0)}/${needY.toFixed(0)}`
+            + ` halfW=${A.reach.toFixed(0)},${B.reach.toFixed(0)}`
+            + ` halfH=${A.reachY.toFixed(0)},${B.reachY.toFixed(0)}`
+            + ` pill=${shown[ia].lbl.valueWrap.isVisible ? "y" : "n"}`
+            + `${shown[ib].lbl.valueWrap.isVisible ? "y" : "n"}`);
+        }
+      }
       for (const room of result.chipRooms) this.chipRoom(room, "solver");
       for (let b = 0; b < result.bucketCount; b++) {
         const bucket = result.buckets[b];

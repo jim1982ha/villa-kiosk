@@ -1,3 +1,12 @@
+## 2.411.0
+
+### Added — `?debug` prints the numbers behind every pair that groups
+
+A pair of badges is the case anyone can check by eye, so it is the case the log
+has to answer. Each group of two now reports the two devices, how far apart they
+actually are on each axis, how far apart the rule wanted them, and the
+half-extents that requirement came from.
+
 ## 2.410.1
 
 ### Fixed — a tapped room could build a card too big to draw on a phone
