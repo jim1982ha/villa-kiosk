@@ -1,3 +1,14 @@
+## 2.372.0
+
+### Fixed — the phone's Settings button sits in a section again
+
+It was a bare glyph beside the filled category pill, so the one control that
+opens Settings read as barely there. It is back in its own `.hud-group` pill.
+The plate-stripping rule that removed it was written for the desktop right-hand
+icons, and `.hud-overflow` is phone-only — so it only ever affected the one
+place it was wrong. Pill and icon now take their size from the same
+declarations as the category section, so the two cannot drift apart.
+
 ## 2.371.0
 
 ### Added — a Clear button in the `?debug` panel

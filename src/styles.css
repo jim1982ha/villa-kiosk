@@ -797,19 +797,28 @@ button {
 .hud-home-btn svg { height: 100%; width: auto; }
 .hud-center { justify-self: center; display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%; }
 .hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
-/* ── The right side hosts no pill (2.309.0) ───────────────────────────────
-   .hud-right-inline and .hud-overflow are both .hud-group, so they inherited
-   the section plate: background, hairline, 4px padding and the pill height.
-   The icons now sit on the bar directly, as peers of the app icon on the
-   left. `background: none` has to beat the shared section rule above, which
-   it does on source order at equal specificity — the same cascade note that
-   governs the phone/landscape pair far below, so keep these AFTER it.
-   Contrast no longer comes from the plate; it comes from --hud-icon-halo on
-   the glyph itself, which is theme-aware and therefore works in both modes
-   without a container. The gap opens from .hud-group's tight 4px (sized for
-   buttons sharing one plate) to 8px, because free-standing icons need real
-   space between them to stop reading as one blob. */
-.hud-right-inline, .hud-overflow {
+/* ── The DESKTOP right side hosts no pill (2.309.0) ───────────────────────
+   .hud-right-inline is a .hud-group, so it inherited the section plate:
+   background, hairline, 4px padding and the pill height. Its icons sit on the
+   bar directly instead, as peers of the app icon on the left. `background:
+   none` has to beat the shared section rule above, which it does on source
+   order at equal specificity — the same cascade note that governs the
+   phone/landscape pair far below, so keep these AFTER it. Contrast no longer
+   comes from the plate; it comes from --hud-icon-halo on the glyph itself,
+   which is theme-aware and therefore works in both modes without a container.
+   The gap opens from .hud-group's tight 4px (sized for buttons sharing one
+   plate) to 8px, because free-standing icons need real space between them to
+   stop reading as one blob.
+
+   ⚠️ .hud-overflow is NOT in this rule, and that is the whole of the phone
+   fix. It used to be, but .hud-overflow is display:none everywhere except the
+   phone tier — so stripping its plate only ever changed the phone, where it
+   left ONE bare glyph beside a filled category pill and read as a control
+   that had not finished loading. It keeps the plain .hud-group plate, which
+   means it also tracks --hud-pill-h and the pill's radius/padding with no
+   values restated here. Two icons standing free (desktop) is a composition;
+   one is an oversight. */
+.hud-right-inline {
   background: none; border-color: transparent; padding: 0; gap: 8px;
   backdrop-filter: none; box-shadow: none;
 }
@@ -817,14 +826,15 @@ button {
    legibility on any backdrop, and at 6px around a 32px glyph it rendered as a
    soft filled rectangle — the user read it as the hosting container still
    being there, which is exactly what it looks like. A 2px shadow separates the
-   glyph from whatever is behind it without ever reading as a surface. */
-.hud-right-inline .icon-btn, .hud-overflow .icon-btn {
+   glyph from whatever is behind it without ever reading as a surface. Only for
+   glyphs with no plate under them: inside a pill it would be a smudge. */
+.hud-right-inline .icon-btn {
   filter: drop-shadow(0 1px 2px var(--hud-icon-halo));
 }
 /* Hover/active still need a readable plate under them, and an active filter
    would smear the fill rather than outline it. */
-.hud-right-inline .icon-btn:hover, .hud-overflow .icon-btn:hover,
-.hud-right-inline .icon-btn.active, .hud-overflow .icon-btn.active { filter: none; }
+.hud-right-inline .icon-btn:hover,
+.hud-right-inline .icon-btn.active { filter: none; }
 
 .hud-right-inline { display: flex; align-items: center; gap: 8px; }
 
@@ -2859,7 +2869,11 @@ label.toggle span { user-select: none; line-height: 1.4; }
      category row, not just a tight-but-fitting layout. */
   .hud-center { gap: 4px; }
   .hud-right { gap: 6px; }
-  .hud-center .icon-btn { width: 32px; height: 32px; }
+  /* ONE declaration for every top-bar section icon at this tier — the centred
+     category row and the right-edge Settings pill are peers and must never be
+     two different sizes (they were, at 32 vs 40, which is what made the lone
+     button read as lopsided). --hud-pill-h above is derived from this number. */
+  .hud-center .icon-btn, .hud-overflow .icon-btn { width: 32px; height: 32px; }
   /* These shrink to 32px because the centred category row genuinely runs out
      of width on a phone (the comments around this block record real overflow
      bugs fixed by exactly that) — but 32px is below both this codebase's own
@@ -2895,14 +2909,16 @@ label.toggle span { user-select: none; line-height: 1.4; }
      .hud-right (see JSX) — not inside the centered category group — so the
      grid's third (justify-self: end) track pins it to the true right edge of
      the bar while .hud-center's two equal side tracks keep the category row
-     centred, instead of both drifting toward the middle together. Sized to
-     match .hud-center's own icons above rather than falling back to
-     .hud-group .icon-btn's wider 38px default — a real HUD read as visibly
-     lopsided (a noticeably bigger, rounder single button off to one side)
-     with every OTHER icon at 32px and only this one left at 38. */
+     centred, instead of both drifting toward the middle together. Its icon is
+     sized by the SAME declaration as .hud-center's (see the 32px rule above,
+     which names both) rather than falling back to .hud-group .icon-btn's
+     wider 40px default — a real HUD read as visibly lopsided (a noticeably
+     bigger, rounder single button off to one side) with every OTHER icon at
+     32px. Everything else about the pill — plate, hairline, blur, 4px
+     padding, --hud-pill-h, --panel-radius — comes from .hud-group untouched,
+     so it cannot drift from the category section beside it. */
   .hud-right-inline { display: none; }
   .hud-overflow { display: flex; }
-  .hud-overflow .icon-btn { width: 32px; height: 32px; }
   /* The label-size stepper's whole pill (not just its two now-hidden
      buttons) — an empty .hud-group still renders its own padding/border/
      background, which read as a stray blank rounded box sitting between the
