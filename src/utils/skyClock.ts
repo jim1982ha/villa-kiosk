@@ -38,7 +38,14 @@ function parse(): SkySim | null {
   if (typeof window === "undefined") return null;
   let q: URLSearchParams;
   try {
-    q = new URLSearchParams(window.location.search);
+    // ⚠️ Forgive a second "?" where an "&" was meant. `?debug?skyTime=12:00`
+    // is the natural thing to type when adding a parameter to a URL that
+    // already has one, and URLSearchParams reads it as a SINGLE key literally
+    // named "debug?skyTime" — so skyTime is absent, the simulation silently
+    // does not start, and the reader is left looking at the real sky wondering
+    // why noon looks like dusk. Reported exactly that way. A stray "?" cannot
+    // legally appear inside a query string, so rewriting it is unambiguous.
+    q = new URLSearchParams(window.location.search.replace(/\?/g, "&"));
   } catch {
     return null;
   }

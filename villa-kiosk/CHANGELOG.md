@@ -1,3 +1,12 @@
+## 2.390.0
+
+### Fixed — `?debug?skyTime=12:00` silently did nothing
+
+Typing a second `?` instead of `&` when adding a parameter makes the browser
+read one key literally named `debug?skyTime`, so the sky simulation never
+started and the real sky was shown with no hint why. A stray `?` is now treated
+as the `&` it was meant to be.
+
 ## 2.389.0
 
 ### Fixed — the moon was off-frame in the overview, like the sun before it
