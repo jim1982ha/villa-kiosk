@@ -1,3 +1,12 @@
+## 2.395.0
+
+### Changed — `?debug` can be narrowed to the signals you want
+
+Four emitters produced most of a capture, burying the line being looked for.
+`?debug=sky,place` now shows only those channels (`sky`, `place`, `beam`,
+`mesh`, `variant`); plain `?debug` still shows everything. The `place` line
+also stops repeating on every frame of a camera drag.
+
 ## 2.394.1
 
 ### Fixed — 2.394.0 turned the daytime sky black

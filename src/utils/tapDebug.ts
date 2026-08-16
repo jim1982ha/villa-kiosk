@@ -19,6 +19,28 @@ import { debugFlagEnabled } from "@/utils/devLog";
 // 40) so a whole model-load-to-toggle debugging session survives even though
 // only the tail is visible at once; a kiosk session that somehow produced
 // tens of thousands of lines would be a bug in its own right.
+/**
+ * Channels the reader asked for, via `?debug=sky,place`. Empty = everything.
+ *
+ * The panel is only useful if the line you need is visible in it, and four
+ * emitters (per-camera beams, per-entity mapping warnings, mesh variants, and
+ * the placement line re-firing on every degree of camera drag) between them
+ * produce ~90% of a session's output. A capture of the sky arriving as forty
+ * screens of curtain toggles is a capture nobody reads.
+ *
+ * Channels are additive and free-form: an untagged tapDebug() is always shown,
+ * so nothing that exists today can be silently lost by asking for a channel
+ * that does not match it.
+ */
+const wanted: Set<string> = (() => {
+  try {
+    const raw = new URLSearchParams(
+      (typeof window === "undefined" ? "" : window.location.search).replace(/\?/g, "&"),
+    ).get("debug") ?? "";
+    return new Set(raw.split(",").map((c) => c.trim().toLowerCase()).filter(Boolean));
+  } catch { return new Set<string>(); }
+})();
+
 const MAX_HISTORY = 5000;
 const VISIBLE_LINES = 40;
 let history: string[] = [];
@@ -244,8 +266,11 @@ function ensureBox(): HTMLDivElement {
  *  available (e.g. testing from a desktop browser) — plain console.log is
  *  ordinary JS, not stripped in production like devLog.ts's calls are, so
  *  this works in the deployed build same as the on-screen box does. */
-export function tapDebug(msg: string): void {
+export function tapDebug(msg: string, channel?: string): void {
   if (!debugFlagEnabled()) return;
+  // Untagged lines always pass — see `wanted`. A tagged line passes when no
+  // filter was asked for, or when its channel was named.
+  if (channel && wanted.size > 0 && !wanted.has(channel)) return;
   const stamp = new Date().toISOString().slice(11, 23);
   const line = `${stamp} ${msg}`;
   console.log(`[tapDebug] ${line}`);

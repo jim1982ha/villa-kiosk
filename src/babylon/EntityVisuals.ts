@@ -2913,7 +2913,10 @@ export class EntityVisuals {
    *  applyMotionRouting's fallback for why callers need to know that. */
   private setBeamActive(entityId: string, on: boolean): boolean {
     if (!this.beams.has(entityId)) {
-      tapDebug(`beam ${entityId}: motion ${on ? "ON" : "off"} but NO BEAM MESH exists for this camera`);
+      // Channel "beam": the `camera beams: N built | skipped: …` summary below
+      // already names every camera without a beam, so this per-camera line is
+      // the same fact once per camera per state change. Opt in with ?debug=beam.
+      tapDebug(`beam ${entityId}: motion ${on ? "ON" : "off"} but NO BEAM MESH exists for this camera`, "beam");
       return false;
     }
     this.beams.setActive(entityId, on);
@@ -2959,7 +2962,7 @@ export class EntityVisuals {
     const map = this.mapping.get(entity.entity_id);
     if (!meshes || !map) {
       if (entity.entity_id.startsWith("cover.") || entity.entity_id.startsWith("lock.")) {
-        tapDebug(`apply(${entity.entity_id}): NO MESH/MAPPING — meshes=${!!meshes} map=${!!map}. This entity's live state changed but nothing in the model resolves to it, so no variant could ever be shown for it.`);
+        tapDebug(`apply(${entity.entity_id}): NO MESH/MAPPING — meshes=${!!meshes} map=${!!map}. This entity's live state changed but nothing in the model resolves to it, so no variant could ever be shown for it.`, "mesh");
       }
       return;
     }
@@ -3042,11 +3045,11 @@ export class EntityVisuals {
   private applyMeshVariant(entityId: string, order: string[], active: string): boolean {
     const byWord = this.meshVariants.get(entityId);
     if (!byWord || byWord.size < 2) {
-      tapDebug(`applyMeshVariant(${entityId}): SKIPPED — only ${byWord?.size ?? 0} variant group(s) registered (need 2+); requested="${active}"`);
+      tapDebug(`applyMeshVariant(${entityId}): SKIPPED — only ${byWord?.size ?? 0} variant group(s) registered (need 2+); requested="${active}"`, "variant");
       return false;
     }
     const chosen = pickNearestVariant(order, active, byWord.keys());
-    tapDebug(`applyMeshVariant(${entityId}): requested="${active}" -> chosen="${chosen}" from {${Array.from(byWord.keys()).join(",")}}`);
+    tapDebug(`applyMeshVariant(${entityId}): requested="${active}" -> chosen="${chosen}" from {${Array.from(byWord.keys()).join(",")}}`, "variant");
     // Exclusivity is driven by `isVisible`, NOT `setEnabled` — deliberately.
     // FloorManager owns `setEnabled` on every mesh to hide/show whole storeys,
     // AND estimateFloorY/buildRoomConform (room calibration) SAVE, force-
@@ -3086,7 +3089,7 @@ export class EntityVisuals {
     const postState = Array.from(byWord, ([word, meshes]) =>
       `${word}:[${meshes.map((m) => `${m.isVisible ? "V" : "-"}${m.isEnabled() ? "E" : "-"}`).join(",")}]`
     ).join(" ");
-    tapDebug(`applyMeshVariant(${entityId}): after toggle (V=visible E=enabled, need BOTH to render) -> ${postState}`);
+    tapDebug(`applyMeshVariant(${entityId}): after toggle (V=visible E=enabled, need BOTH to render) -> ${postState}`, "variant");
     // buildLabelAnchors parents the badge anchor to meshes[0] — arbitrarily
     // whichever pose indexMeshes saw first. Re-anchor it to the chosen
     // (visible) pose so the badge tracks that pose's exact position; its
@@ -4657,9 +4660,16 @@ export class EntityVisuals {
       + ` | chipWhy: undrawable=${stats.chipUndrawable}`
       + ` degenerate=${stats.chipDegenerate} focus=${this.focusChipped}`
       + ` [${groups}] chips=${chips.length} [${chips.join(", ")}]`;
-    if (line === this.lastPlaceLog) return;
-    this.lastPlaceLog = line;
-    tapDebug(line);
+    // ⚠️ Dedupe on the OUTCOME, not the whole line. rung/sinTilt/az change on
+    // every frame of a drag, so the old whole-line compare emitted a `place`
+    // per pointer move — a capture of one orbit was 30 near-identical lines and
+    // the one that mattered scrolled away. These fields are what a placement
+    // report is actually about; when none of them moved, the layout did not.
+    const outcome = `${drawn}|${stats.accepted}|${placed.length}/${stats.buckets}`
+      + `|${chips.length}|${stats.chipUndrawable}|${stats.chipDegenerate}|${this.focusChipped}`;
+    if (outcome === this.lastPlaceLog) return;
+    this.lastPlaceLog = outcome;
+    tapDebug(line, "place");
   }
 
   /**

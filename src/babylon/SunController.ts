@@ -59,7 +59,7 @@ export class SunController {
     // Announce it, so a simulated sky is never mistaken for a broken one in a
     // capture — a sun in the wrong place with no explanation is exactly the
     // kind of report that costs a measurement round.
-    if (skySimActive()) tapDebug(`sky: ${skySimLabel()}`);
+    if (skySimActive()) tapDebug(`sky: ${skySimLabel()}`, "sky");
   }
 
   /**
