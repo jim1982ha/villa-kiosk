@@ -3282,7 +3282,7 @@ export class EntityVisuals {
     size: number; font: number; countSize: number; countFont: number;
   } {
     const m = this.metrics;
-    const card = this.config.badgeStyle === "card";
+    const card = this.isCardStyle();
     const size = card ? m.cardHeightPx : m.badgeDiameterPx;
     const font = card ? m.cardValueFontPx : m.pillValueFontPx;
     return {
@@ -3409,7 +3409,7 @@ export class EntityVisuals {
       // and the value pill only appears for entities with a meaningful
       // reading (%, °, sensor value). Children are top-aligned in a
       // fixed-height panel so the badge never shifts when the pill shows/hides.
-      const card = this.config.badgeStyle === "card";
+      const card = this.isCardStyle();
       const m = this.metrics;
       // ── THE CONTAINER IS THE CARD (2.253.0) ──────────────────────────
       // In card mode the value lives INSIDE the card, so the container holds
@@ -3763,7 +3763,7 @@ export class EntityVisuals {
     // reporting" some other way.
     lbl.glyph.alpha = 1; // never set elsewhere now — no cascading ambiguity
 
-    if (this.config.badgeStyle === "card") {
+    if (this.isCardStyle()) {
       // ── NEUTRAL CARD, COLOURED CHIP ──────────────────────────────────
       // The bottom bar's tiles are the same arrangement drawn in the DOM, and
       // they invert what this used to do: `.summary-tile` is transparent while
@@ -4383,7 +4383,7 @@ export class EntityVisuals {
    * badge path was the one that disagreed.
    */
   private labelBaseOffsetY(): number {
-    const card = this.config.badgeStyle === "card";
+    const card = this.isCardStyle();
     const h = card ? this.metrics.cardHeightPx : this.metrics.labelHeightPx;
     return -(h / 2) * this.effectiveScale();
   }
@@ -5021,7 +5021,7 @@ export class EntityVisuals {
     scaleOverride?: number,
   ): { halfW: number; halfH: number; cy: number }[] {
     const scale = scaleOverride ?? this.effectiveScale();
-    const card = this.config.badgeStyle === "card";
+    const card = this.isCardStyle();
     const m = this.metrics;
 
     // Classic layout (unscaled, anchor at 0, y grows downward, hangs ABOVE):
@@ -5974,6 +5974,14 @@ export class EntityVisuals {
    * or how far away it stands. That is the property `drawableMax`'s docstring
    * protects, and this does not spend it.
    */
+  /** The one reading of the badge-style setting. Five sites asked
+   *  `config.badgeStyle === "card"` independently, which is fine until a sixth
+   *  has to agree with them — the summary card's own cells, which is exactly
+   *  the site that got missed. */
+  private isCardStyle(): boolean {
+    return this.config.badgeStyle === "card";
+  }
+
   private drawableMax(): number {
     return Math.min(MAX_TOTAL_CHIPS, this.cardCellCap());
   }
@@ -6180,7 +6188,14 @@ export class EntityVisuals {
               // effectiveScale(), so the bitmap has to be baked at the painted
               // size. iconZoomScale is excluded for the same reason — see
               // glyphBakePx.
-              0, ring, false, lay.chip * this.iconUserScale * this.bestCssToGui());
+              0, ring, false, lay.chip * this.iconUserScale * this.bestCssToGui(),
+              // A summary card's cells are Card-style badges by definition —
+              // they ARE the card. They bake through this call rather than
+              // updateLabel's, which is why the Card style's heavier glyph did
+              // not reach them in 2.375.0 and the change looked like a no-op on
+              // a screen showing a two-cell card. Gated on the setting so the
+              // Icon style stays a clean control to compare against.
+              this.isCardStyle());
           }
         }
         // ── A SUMMARY'S RING NEVER REPEATS A MEMBER'S OWN SIGNAL ────────────

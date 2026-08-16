@@ -1,3 +1,12 @@
+## 2.376.0
+
+### Fixed — the heavier Card glyph now reaches a summary card's cells
+
+2.375.0 bolded the lone Card-style badge but not the chips inside a summary
+card, which bake through a different call — so on a screen showing a two-cell
+card the change looked like it had done nothing. Both go through the setting
+now, read in one place instead of five. The weight also goes 2.25 → 2.5.
+
 ## 2.375.0
 
 ### Changed — Card-style entity glyphs are drawn at a heavier weight

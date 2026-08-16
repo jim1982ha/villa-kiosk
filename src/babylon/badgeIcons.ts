@@ -90,7 +90,7 @@ const ICON_STROKE_VIEWBOX = 1.5;
  * left at ICON_STROKE_VIEWBOX for now: two styles at two weights makes the
  * delta measurable side by side.
  */
-const ICON_STROKE_VIEWBOX_BOLD = 2.25;
+const ICON_STROKE_VIEWBOX_BOLD = 2.5;
 /** Squircle corner radius as a fraction of the badge's size — exported so
  *  EntityVisuals' outline Rectangle can match this canvas's rounding exactly.
  *  Approximates --radius-badge (12px) at the classic badge's typical ~40-44px
