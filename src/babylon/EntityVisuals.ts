@@ -5276,6 +5276,17 @@ export class EntityVisuals {
     // badgeProjection), which is the space both of these comparisons — a
     // summary against a badge, a summary against another summary — are
     // actually asking about: what overlaps ON SCREEN.
+    // ── DELIBERATELY NOT CONVERGED with the other box tests ────────────────
+    // `|dx| < needX && |dy| < needY` also appears in badgePlacement's
+    // `conflicts` and `mergeCollidingPiles`, in settleChips' `clears`, and in
+    // the placement guard's `hits`. A /dry-audit weighed folding them into one
+    // helper and the answer is no: the shared part is ONE line, while
+    // everything that can actually drift — which half-extents, whose gap,
+    // whether the tap-pitch floor applies, whether the along-view residual
+    // folds in — is per tier and cannot be shared. `hits` must stay separate
+    // outright: it is the GUARD, and measures ink on ink in true perspective
+    // with no gap and no tolerance, the opposite of every other instance by
+    // design. Recorded so the next audit re-reads this rather than re-deciding.
     // The larger of the two half-extents, because a neighbour can lie in any
     // direction and this is a radial test rather than a box overlap.
     const halfOf = (i: number) => Math.max(boxes[i].halfW, boxes[i].halfH);
@@ -5975,7 +5986,15 @@ export class EntityVisuals {
     // members are valid but SPREAD draws its card at a centroid none of them
     // is near. Candidates are offered nearest-first with category as the
     // tiebreak; `order` still seeds and still breaks every remaining tie.
-    const piles = buildCliques(sub, order, clearance.gap, clearance.minSep, MAX_TOTAL_CHIPS);
+    // ⚠️ cardCellCap(), NOT the raw MAX_TOTAL_CHIPS. Its own docstring says the
+    // phone ceiling "belongs HERE and nowhere else", and records what a second
+    // answer costs: the solver keeps a bucket the renderer then refuses. This
+    // was the third answer — on a narrow phone it built cliques of 6 while
+    // cardCellCap allows PHONE_MAX_TOTAL_CHIPS, so a tapped room could produce
+    // a card the renderer could not draw in full. Found by /dry-audit against
+    // the solver's own `drawableMax`, which has always come through this cap.
+    const piles = buildCliques(
+      sub, order, clearance.gap, clearance.minSep, this.cardCellCap());
 
     // ── …and then the CARDS must clear each other ─────────────────────────
     // The cliques above are built from where the BADGES are. What gets drawn

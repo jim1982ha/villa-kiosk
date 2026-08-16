@@ -1,3 +1,11 @@
+## 2.410.1
+
+### Fixed — a tapped room could build a card too big to draw on a phone
+
+The focused-room grouping used the desktop cell ceiling directly instead of the
+one function that knows about narrow screens, so on a phone it could pack six
+devices into a card the renderer only draws four of.
+
 ## 2.410.0
 
 ### Fixed — one crowded room took four uncrowded ones with it
