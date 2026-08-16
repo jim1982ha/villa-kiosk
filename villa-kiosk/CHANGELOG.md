@@ -1,3 +1,12 @@
+## 2.392.0
+
+### Fixed — the sun now arcs over the villa instead of hiding overhead
+
+A camera looking down cannot contain a noon sun 85° up, so it was visible at
+dawn and dusk and missing exactly when a sun is most expected. In the overview
+the whole 0–90° range is now drawn compressed into a band above the villa —
+low at sunrise, highest at noon, low at sunset. First person is unchanged.
+
 ## 2.391.0
 
 ### Fixed — the overview could keep its first-person horizon

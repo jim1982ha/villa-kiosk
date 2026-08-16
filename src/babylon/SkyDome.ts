@@ -70,17 +70,60 @@ export class SkyDome {
    * differently from each other, which is the kind of wrongness nobody can name
    * but everybody sees.
    */
-  static lift(x: number, y: number, z: number, radians: number): Vector3 {
+  static lift(x: number, y: number, z: number, strength: number): Vector3 {
     const horiz = Math.hypot(x, z);
-    if (horiz < 1e-6 || radians === 0) return new Vector3(x, y, z);
-    const alt = Math.atan2(y, horiz) + radians;
+    if (horiz < 1e-6 || strength === 0) return new Vector3(x, y, z);
+    const alt = SkyDome.displayAltitude(Math.atan2(y, horiz), strength);
     const c = Math.cos(alt);
     return new Vector3((x / horiz) * c, Math.sin(alt), (z / horiz) * c);
   }
 
-  /** The angle a horizon drop of `units` corresponds to — see setHorizonDrop. */
+  /**
+   * Map a body's TRUE altitude onto one the overview camera can actually show.
+   *
+   * ⚠️ This is a diagram, not a photograph, and only in overview. A camera
+   * looking DOWN at a villa cannot contain an overhead sun: at local noon the
+   * real altitude is ~85°, which is behind the viewer, and the fixed 54° lift
+   * 2.388.0 used only pushed it further behind. The whole 0-90° range has to be
+   * squeezed into a band that sits in the upper part of the frame, or the sun
+   * is visible at dawn and dusk and missing in the middle of the day — which is
+   * precisely when a sun is most expected.
+   *
+   * AZIMUTH IS NOT TOUCHED, here or anywhere else. East at dawn, west at dusk
+   * and the live arc between them are the whole point of 2.385.0's revert; only
+   * how HIGH the body is drawn is rescaled, so the path still reads as the time
+   * of day and still validates the villa's north offset.
+   *
+   * Below the horizon the compression FADES OUT over the twilight band, so a
+   * setting body sinks to its true position and genuinely disappears. Without
+   * that fade the lift would hold it up all night: a sun at -40° would still be
+   * drawn above the horizon, which is worse than never showing it at all.
+   */
+  private static displayAltitude(alt: number, strength: number): number {
+    if (alt <= 0) return alt;
+    // Ease the lift in over the first few degrees so sunrise and sunset are
+    // continuous — a body popping from the horizon to BASE the instant it
+    // crosses zero would read as a glitch, not a dawn.
+    const ease = Math.min(1, alt / SkyDome.FADE);
+    const base = SkyDome.BAND_MIN * ease * strength;
+    return base + alt * (SkyDome.BAND_SPAN / (Math.PI / 2)) * strength;
+  }
+
+  /** Lowest a body is drawn once fully risen — clear of the villa's roofline
+   *  at the default overview tilt. */
+  private static readonly BAND_MIN = (14 * Math.PI) / 180;
+  /** How much higher the zenith is drawn than the horizon. BAND_MIN + this is
+   *  where a noon sun lands; both together are the tunable pair if the arc
+   *  wants to sit higher or flatter. */
+  private static readonly BAND_SPAN = (26 * Math.PI) / 180;
+  /** Altitude over which the lift eases in, so dawn and dusk are continuous. */
+  private static readonly FADE = (6 * Math.PI) / 180;
+
+  /** How strongly to compress, for a given horizon drop: 1 in the overview,
+   *  0 in first person, where the true sky is what the viewer is standing
+   *  under and must not be redrawn. */
   static liftFor(units: number): number {
-    return Math.atan(units / SkyDome.RADIUS);
+    return units > 0 ? 1 : 0;
   }
 
   /** The dome's radius, and the denominator setHorizonDrop's angle is measured
