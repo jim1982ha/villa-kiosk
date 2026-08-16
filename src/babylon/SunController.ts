@@ -17,14 +17,6 @@ export class SunController {
   private lighting: LightingSystem;
   private hemi: HemisphericLight;
   private sky: SkyDome | null;
-  /** Last values handed to the sky dome, so a camera move can re-aim the sun
-   *  disc without waiting for the next astronomical tick (which is minutes
-   *  away). See aimSkySunAtCamera. */
-  private lastSkyDir: Vector3 | null = null;
-  private lastSkyIsDay = true;
-  /** Overview only — see SceneManager's two onActivity hooks and
-   *  aimSkySunAtCamera. In first person the sun keeps its true bearing. */
-  private aimSkyAtCamera = false;
   private config: AppConfig;
   private requestRender: () => void = () => {};
   // When set (overview mode), this fixed backdrop wins over the day/night sky
@@ -315,74 +307,13 @@ export class SunController {
     // applyHaSunState for why this must not be the same floored `dir` used
     // for scene lighting. clearColor is kept as a fallback for when the sky
     // dome is absent.
-    this.lastSkyDir = skyDir;
-    this.lastSkyIsDay = isDay;
-    this.sky?.update(this.aimSkySunAtCamera(skyDir), isDay);
+    this.sky?.update(skyDir, isDay);
     // In overview mode bgOverride pins a calm dark backdrop; otherwise the empty
     // space tracks the day/night sky colour.
     this.scene.clearColor = this.bgOverride ?? (isDay
       ? new Color4(0.53, 0.67, 0.84, 1)
       : new Color4(0.03, 0.03, 0.05, 1));
     this.requestRender();
-  }
-
-  /**
-   * Re-aim the sky dome's sun for the CURRENT camera heading.
-   *
-   * The disc's screen position is a function of the camera's own direction, so
-   * it goes stale the moment the view orbits — and the astronomical update that
-   * would refresh it is minutes away. SceneManager calls this on camera
-   * activity. Cheap: one vector rotation and a material write, no re-lighting.
-   */
-  /** Overview aims the sun disc at the camera; first person does not. */
-  setAimSkyAtCamera(on: boolean): void {
-    if (this.aimSkyAtCamera === on) return;
-    this.aimSkyAtCamera = on;
-    this.reframeSky();
-  }
-
-  reframeSky(): void {
-    if (!this.sky || !this.lastSkyDir) return;
-    this.sky.update(this.aimSkySunAtCamera(this.lastSkyDir), this.lastSkyIsDay);
-  }
-
-  /**
-   * Rotate the sun about Y so it sits in front of the camera — VISUAL ONLY.
-   *
-   * ⚠️ This is deliberately a lie, and it is confined to one consumer. The sun
-   * is placed from the villa's real latitude/longitude and the real time
-   * (getSunPosition), and that direction is what `dir` carries to the lighting
-   * rig — shadows, sun colour, the twilight ramp and the night crossfade are
-   * all still physically honest and are NOT touched here. Only the sky dome's
-   * disc moves, because the request was "I want to see the sun from this
-   * viewpoint" and at an evening azimuth the true sun is simply behind you.
-   *
-   * ALTITUDE IS PRESERVED EXACTLY: only the horizontal component is re-aimed,
-   * so a low evening sun still sits low, still reddens the sky through
-   * SkyMaterial's scattering, and still sinks below the horizon at night (the
-   * whole reason skyDir is unclamped). Rotating altitude too would have made
-   * every hour of the day look like noon.
-   *
-   * Nothing villa-specific: the target heading is the camera's own, never a
-   * baked compass direction, so this behaves identically on any install
-   * whatever its floor plan's orientation.
-   */
-  private aimSkySunAtCamera(skyDir: Vector3): Vector3 {
-    if (!this.aimSkyAtCamera) return skyDir;
-    const cam = this.scene.activeCamera;
-    if (!cam) return skyDir;
-    const fwd = cam.getForwardRay().direction;
-    const fLen = Math.hypot(fwd.x, fwd.z);
-    if (fLen < 1e-4) return skyDir;            // camera looking straight down
-    // `skyDir` travels SUN → SCENE, so the sun itself is at -skyDir. Putting the
-    // sun in front of the camera therefore means pointing skyDir's horizontal
-    // part AGAINST the camera's forward direction, at its existing length.
-    const hLen = Math.hypot(skyDir.x, skyDir.z);
-    return new Vector3(
-      (-fwd.x / fLen) * hLen,
-      skyDir.y,
-      (-fwd.z / fLen) * hLen,
-    ).normalize();
   }
 
 }

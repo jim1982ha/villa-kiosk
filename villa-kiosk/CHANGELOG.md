@@ -1,3 +1,13 @@
+## 2.385.0
+
+### Changed — the sun rises in the east and sets in the west again
+
+2.383.0 aimed the overview's sun disc at the camera so it stayed in frame; the
+side effect was that it slid as you orbited and told you nothing about time of
+day. That is reverted. The sun now tracks its real path all day, with the sky
+colour following it — use Settings' Model north offset to line east and west up
+with the villa.
+
 ## 2.384.0
 
 ### Added — Model north offset, so the sun rises over the right wall
