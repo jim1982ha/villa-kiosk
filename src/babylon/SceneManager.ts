@@ -638,8 +638,23 @@ export class SceneManager {
     this.camera.detachInput();          // avoid a two-controller pointer-capture race
     this.overview.enable();
     this.scene.activeCamera = this.overview.camera;
-    this.sky.setEnabled(false);
-    // ⚠️ The horizon drop is stated HERE as well as in setViewMode, because
+    // ⚠️ STARTUP IS OVERVIEW, AND SAYS SO. This block switches to the overview
+    // camera while the model loads, but used to leave `viewMode` at its
+    // declared "first-person" default and disable the dome "while we wait".
+    // setViewMode early-returns when the mode it is handed already matches, so
+    // any path reaching overview without a mode CHANGE left the sky switched
+    // off for the rest of the session: no gradient, no sun, no moon, no stars,
+    // just overviewBackdropColor behind the villa. Reported three times, and
+    // 2.391.0 only fixed the horizon drop — it set the tilt of a dome that was
+    // never turned on.
+    //
+    // Recording the mode here is what makes the later setViewMode("overview")
+    // a correct no-op instead of the only thing holding the sky up. The dome
+    // costs nothing to render during load (it is infiniteDistance, one draw
+    // call) and a sky behind a loading villa beats a flat slab of colour.
+    this.viewMode = "overview";
+    this.sky.setEnabled(true);
+    // The horizon drop is stated HERE as well as in setViewMode, because
     // this block puts the app in overview VISUALLY while leaving `viewMode` at
     // its "first-person" default — and setViewMode early-returns when the mode
     // it is handed already matches. Any path that reaches overview without a
@@ -650,7 +665,11 @@ export class SceneManager {
     // that works for both.
     this.sky.setHorizonDrop(OVERVIEW_HORIZON_DROP);
     this.nightSky?.setHorizonDrop(OVERVIEW_HORIZON_DROP);
-    this.sun.setBackgroundOverride(this.overviewBackdropColor());
+    // null, exactly as setViewMode's overview branch does — the dome covers the
+    // frame (infiniteDistance), so pinning a flat backdrop only mattered while
+    // the dome was off, and that was the bug. clearColor now shows only where
+    // the dome does not, which is nowhere.
+    this.sun.setBackgroundOverride(null);
 
     this.startRenderLoop();
     window.addEventListener("resize", this.handleResize);

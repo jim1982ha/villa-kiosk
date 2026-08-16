@@ -1,3 +1,13 @@
+## 2.393.0
+
+### Fixed — the sky was switched off for the whole session
+
+Startup disabled the sky dome while the model loaded and left the view mode at
+its first-person default; `setViewMode` early-returns on a matching mode, so
+nothing ever switched it back on. No gradient, no sun, no moon, no stars — just
+the flat loading backdrop. Startup now records that it is overview and turns
+the sky on.
+
 ## 2.392.0
 
 ### Fixed — the sun now arcs over the villa instead of hiding overhead
