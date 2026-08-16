@@ -15,6 +15,7 @@
 
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import { SkyDome } from "./SkyDome";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -56,6 +57,8 @@ export class NightSky {
   private moon: Mesh;
   private moonMat: StandardMaterial;
   private moonTex: DynamicTexture;
+  /** Radians the moon is raised by, mirroring the sky's horizon drop. */
+  private lift = 0;
   private starLayers: { mesh: Mesh; mat: StandardMaterial; peak: number }[] = [];
   /** Last phase the texture was drawn for, so a per-minute update does not
    *  redraw an identical disc. The moon's lit fraction moves ~3% per hour, so
@@ -120,6 +123,16 @@ export class NightSky {
    * Called from SunController on the same beat as the sun, so an unattended
    * kiosk walks the moon across the sky and through its phases on its own.
    */
+  /**
+   * Match the overview's horizon drop, so the moon is lifted by exactly the
+   * angle the sun and the sky gradient are — see SkyDome.setHorizonDrop. A moon
+   * left at its true elevation while everything around it rises is the same
+   * empty-sky bug 2.388.0 fixed for the sun, one body over.
+   */
+  setHorizonDrop(units: number): void {
+    this.lift = SkyDome.liftFor(units);
+  }
+
   update(look: MoonLook): void {
     const night = Math.max(0, Math.min(1, look.nightT));
     for (const l of this.starLayers) {
@@ -128,14 +141,15 @@ export class NightSky {
     }
     // Below the horizon the moon is simply not visible — no need to fade it,
     // and fading would leave a disc hanging in the ground half of the dome.
-    const up = look.dir.y;
+    const dir = SkyDome.lift(look.dir.x, look.dir.y, look.dir.z, this.lift);
+    const up = dir.y;
     const visible = night > 0 && up > -0.02;
     // Ease the last few degrees so it does not pop in/out at the horizon.
     this.moonMat.alpha = visible ? night * Math.min(1, (up + 0.02) / 0.08) : 0;
     this.moon.setEnabled(visible);
     if (!visible) return;
 
-    this.moon.position = look.dir.scale(MOON_DIST);
+    this.moon.position = dir.scale(MOON_DIST);
 
     // Redraw only when the disc would actually look different.
     const key = `${look.fraction.toFixed(2)}:${look.angle < 0 ? "w" : "n"}`

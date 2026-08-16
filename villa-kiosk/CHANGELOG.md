@@ -1,3 +1,11 @@
+## 2.389.0
+
+### Fixed — the moon was off-frame in the overview, like the sun before it
+
+2.388.0 lifted the sun by the overview's horizon drop but left the moon at its
+true elevation, so it sat outside the view for the same reason. All three — sun,
+moon and sky gradient — now share one lift, from one expression.
+
 ## 2.388.0
 
 ### Fixed — the sun was never in frame in the overview

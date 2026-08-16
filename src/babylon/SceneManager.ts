@@ -1519,6 +1519,9 @@ export class SceneManager {
       // dialled in deliberately. See SkyDome.setHorizonDrop for why this is the
       // only lever that exists (moving or scaling the dome provably cannot).
       this.sky.setHorizonDrop(OVERVIEW_HORIZON_DROP);
+      // The moon rides the same drop as the sun and the gradient — one number,
+      // three bodies, so they cannot end up in skies tilted differently.
+      this.nightSky?.setHorizonDrop(OVERVIEW_HORIZON_DROP);
     } else {
       this.overview.disable();
       this.scene.activeCamera = this.camera.camera;
@@ -1542,6 +1545,7 @@ export class SceneManager {
       // belongs at eye level, which is what 0 means. Applying the overview's
       // drop here would put the sea's edge below the terrace floor.
       this.sky.setHorizonDrop(0);
+      this.nightSky?.setHorizonDrop(0);
       this.visuals.setIconZoomScale(1); // fixed screen size when walking
     }
     this.requestRender(600);

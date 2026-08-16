@@ -62,9 +62,30 @@ export class SkyDome {
     this.box = box;
   }
 
+  /**
+   * Lift a direction's ELEVATION by `radians`, leaving its azimuth alone.
+   *
+   * Shared with NightSky so the sun and the moon are raised by one expression:
+   * two copies of this drifting apart would put the two bodies in skies tilted
+   * differently from each other, which is the kind of wrongness nobody can name
+   * but everybody sees.
+   */
+  static lift(x: number, y: number, z: number, radians: number): Vector3 {
+    const horiz = Math.hypot(x, z);
+    if (horiz < 1e-6 || radians === 0) return new Vector3(x, y, z);
+    const alt = Math.atan2(y, horiz) + radians;
+    const c = Math.cos(alt);
+    return new Vector3((x / horiz) * c, Math.sin(alt), (z / horiz) * c);
+  }
+
+  /** The angle a horizon drop of `units` corresponds to — see setHorizonDrop. */
+  static liftFor(units: number): number {
+    return Math.atan(units / SkyDome.RADIUS);
+  }
+
   /** The dome's radius, and the denominator setHorizonDrop's angle is measured
    *  against — one constant so the two cannot drift apart. */
-  private static readonly RADIUS = 500;
+  static readonly RADIUS = 500;
   /** Last direction handed to update(), so a horizon-drop change can re-place
    *  the sun without waiting for the next astronomical tick. */
   private readonly sunDir = new Vector3(0, -1, 0);
@@ -145,17 +166,9 @@ export class SkyDome {
    */
   private placeSun(): void {
     // The sun is opposite the direction its light travels.
-    const x = -this.sunDir.x, y = -this.sunDir.y, z = -this.sunDir.z;
-    const horiz = Math.hypot(x, z);
-    const lift = Math.atan(this.dropUnits / SkyDome.RADIUS);
-    if (horiz < 1e-6 || lift === 0) {
-      this.mat.sunPosition = new Vector3(x, y, z).scale(300);
-      return;
-    }
-    const alt = Math.atan2(y, horiz) + lift;
-    const c = Math.cos(alt);
-    this.mat.sunPosition = new Vector3(
-      (x / horiz) * c, Math.sin(alt), (z / horiz) * c,
+    this.mat.sunPosition = SkyDome.lift(
+      -this.sunDir.x, -this.sunDir.y, -this.sunDir.z,
+      SkyDome.liftFor(this.dropUnits),
     ).scale(300);
   }
 
