@@ -1,3 +1,13 @@
+## 2.403.0
+
+### Fixed — `chipWhy` blamed the solver for chips the solver never made
+
+It named three reasons while ten places could send a room to its chip, so a
+capture read `undrawable=0 degenerate=0 focus=0` beside `chips=8` — a zero
+meaning "not measured". Every room now becomes a chip through one writer that
+states its reason, and the `place` line lists them all with a total that
+reconciles against the chips actually drawn.
+
 ## 2.402.0
 
 ### Added — an unconditional trace of the frames after the tab wakes

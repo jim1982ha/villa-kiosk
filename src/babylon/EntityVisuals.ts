@@ -1098,7 +1098,33 @@ export class EntityVisuals {
   /** Rooms chipped THIS pass purely because another room holds the focus —
    *  the third way a chip can appear, and the only one the solver never sees.
    *  Reported in the `place` line beside the solver's own two. */
-  private focusChipped = 0;
+
+  /**
+   * Why each room became a chip, keyed by reason.
+   *
+   * ⚠️ `chipWhy` reported THREE reasons while TEN call sites could chip a room,
+   * so a field capture read `undrawable=0 degenerate=0 focus=0` beside
+   * `chips=8` — a zero that meant "not measured", not "did not happen", and it
+   * pointed every reader at the solver when the solver had chipped nothing.
+   * That is this project's own instruments-never-skip rule broken in its own
+   * telemetry. Every write to `roomClustered` now goes through `chipRoom` and
+   * states a reason, so the totals reconcile with `chips=` by construction.
+   *
+   * Counted on the FALSE→TRUE transition only: a room chipped by one rule and
+   * re-set by a later one is one chip, not two, and the point of these numbers
+   * is to add up to the chips actually drawn.
+   */
+  private chipWhyCount = new Map<string, number>();
+
+  /**
+   * THE one writer for `roomClustered` — a room may not become a chip without
+   * saying which rule did it. See chipWhyCount for what that is worth.
+   */
+  private chipRoom(key: string, why: string): void {
+    if (this.roomClustered.get(key)) return;
+    this.roomClustered.set(key, true);
+    this.chipWhyCount.set(why, (this.chipWhyCount.get(why) ?? 0) + 1);
+  }
   private iconUserScale = 1;
   private iconZoomScale = 1;
   /** Every badge dimension, in CSS px, for the pointer currently driving this
@@ -4252,6 +4278,7 @@ export class EntityVisuals {
     // be read, and drawing one on top of the other hides a device without
     // saying so.
     this.roomClustered.clear();
+    this.chipWhyCount.clear();
     this.roomDisplay.clear();
     this.entityGrouped.clear();
     for (const s2 of shown) {
@@ -4287,12 +4314,10 @@ export class EntityVisuals {
     //     reason this is a chip and not a delete.
     // Only while the camera is still at the zoom the focus was granted at — see
     // `suppressOthers`. Past that the neighbours are on their own merits again.
-    this.focusChipped = 0;
     if (suppressOthers) {
       for (const k of this.roomDisplay.keys()) {
         if (!this.focusedRooms.has(k)) {
-          this.roomClustered.set(k, true);
-          this.focusChipped++;
+          this.chipRoom(k, "focus");
         }
       }
     }
@@ -4309,7 +4334,9 @@ export class EntityVisuals {
         this.drawableMax(),
       );
       solved = result.stats;
-      for (const room of result.chipRooms) this.roomClustered.set(room, true);
+      // The solver states its own two reasons (undrawable/degenerate) in
+      // `stats`; they are re-counted here so every chip has ONE accounting.
+      for (const room of result.chipRooms) this.chipRoom(room, "solver");
       for (let b = 0; b < result.bucketCount; b++) {
         const bucket = result.buckets[b];
         let wx = 0, wy = 0, wz = 0;
@@ -4678,21 +4705,36 @@ export class EntityVisuals {
       + (this.absorbed ? ` absorbed=${this.absorbed}` : "")
       + (this.focusPairs ? ` focusGroups=${this.focusPairs}` : "")
       // WHY the chips exist, not just how many. A "the whole villa chipped at
-      // one zoom" report is unanswerable from a count: three different rules
+      // one zoom" report is unanswerable from a count: several different rules
       // produce a chip and they fail in opposite directions under zoom.
-      // Always printed, including the zeroes — a diagnostic that omits its
-      // own null result reads as a missing measurement (see the `place` line's
-      // other always-on fields).
-      + ` | chipWhy: undrawable=${stats.chipUndrawable}`
-      + ` degenerate=${stats.chipDegenerate} focus=${this.focusChipped}`
+      //
+      // ⚠️ This used to name only the solver's two reasons plus focus, while
+      // TEN sites could chip a room — so a capture read `undrawable=0
+      // degenerate=0 focus=0` next to `chips=8` and sent the reader to the
+      // solver, which had chipped nothing. Every reason is now listed, from
+      // the one writer (chipRoom), and `solver=` is split by the stats it
+      // already carried. The totals reconcile with `chips=` before merging.
+      // Always printed, including the zeroes — a diagnostic that omits its own
+      // null result reads as a missing measurement.
+      + ` | chipWhy: solver=${stats.chipUndrawable}u/${stats.chipDegenerate}d`
+      + [...this.chipWhyCount.entries()]
+        .filter(([k]) => k !== "solver")
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => ` ${k}=${v}`).join("")
+      + ` total=${[...this.chipWhyCount.values()].reduce((a, b) => a + b, 0)}`
       + ` [${groups}] chips=${chips.length} [${chips.join(", ")}]`;
     // ⚠️ Dedupe on the OUTCOME, not the whole line. rung/sinTilt/az change on
     // every frame of a drag, so the old whole-line compare emitted a `place`
     // per pointer move — a capture of one orbit was 30 near-identical lines and
     // the one that mattered scrolled away. These fields are what a placement
     // report is actually about; when none of them moved, the layout did not.
+    // The chip REASONS are part of the outcome, not just their total: the same
+    // eight rooms chipping for a different rule is a different answer, and
+    // deduping it away would hide exactly the transition a zoom report is about.
     const outcome = `${drawn}|${stats.accepted}|${placed.length}/${stats.buckets}`
-      + `|${chips.length}|${stats.chipUndrawable}|${stats.chipDegenerate}|${this.focusChipped}`;
+      + `|${chips.length}|${stats.chipUndrawable}|${stats.chipDegenerate}`
+      + `|${[...this.chipWhyCount.entries()].sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => `${k}:${v}`).join(",")}`;
     if (outcome === this.lastPlaceLog) return;
     this.lastPlaceLog = outcome;
     tapDebug(line, "place");
@@ -5152,7 +5194,7 @@ export class EntityVisuals {
     if (pxPerWorld <= 0) {
       // No usable projection this frame — fall back to the tier that needs
       // none rather than drawing groups at unverified positions.
-      for (const g of pending) for (const k of g.roomKeys) this.roomClustered.set(k, true);
+      for (const g of pending) for (const k of g.roomKeys) this.chipRoom(k, "noproj");
       pending.length = 0;
       return;
     }
@@ -5498,7 +5540,7 @@ export class EntityVisuals {
             g.sx, countY, g.sz, shown[i].sx, shown[i].sy, shown[i].sz);
           if (d > squareHalf + halfOf(i) + gapPx) { strays = true; break; }
         }
-        if (strays) for (const k of g.roomKeys) this.roomClustered.set(k, true);
+        if (strays) for (const k of g.roomKeys) this.chipRoom(k, "strays");
       }
 
       // ── The whole-room rule, re-checked against the membership we ended up
@@ -5512,7 +5554,7 @@ export class EntityVisuals {
       if (g.roomKeys.length === 1 && this.drawnCells(g, g.members.length) < 2) {
         let inRoom = 0;
         for (const s2 of shown) if (roomKey(this.roomOf(s2.id)) === g.roomKeys[0]) inRoom++;
-        if (g.members.length >= inRoom) this.roomClustered.set(g.roomKeys[0], true);
+        if (g.members.length >= inRoom) this.chipRoom(g.roomKeys[0], "wholeroom");
       }
     }
     this.absorbed = absorbed;
@@ -5554,7 +5596,7 @@ export class EntityVisuals {
         // the group covered escalates, not just its primary one — a group that
         // straddles a boundary and then fails to place cannot leave half its
         // members behind a chip and half loose.
-        for (const k of g.roomKeys) this.roomClustered.set(k, true);
+        for (const k of g.roomKeys) this.chipRoom(k, "noseat");
         continue;
       }
       placed.push(g);
@@ -5601,7 +5643,7 @@ export class EntityVisuals {
         if (g.focused) continue;
         if (!g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
         placed.splice(i, 1);
-        for (const k of g.roomKeys) this.roomClustered.set(k, true);
+        for (const k of g.roomKeys) this.chipRoom(k, "cascade");
         dropped = true;
       }
       if (!dropped) break;
@@ -6480,7 +6522,7 @@ export class EntityVisuals {
         if (this.roomClustered.get(rk)) continue;
         if (focus.has(rk)) continue;
         if (clears(s2.sx, s2.sy, boxes[i].halfW, boxes[i].halfH)) continue;
-        this.roomClustered.set(rk, true);
+        this.chipRoom(rk, "chip-v-badge");
         escalated = true;
       }
       // Placed summaries, measured at the card they actually draw.
@@ -6490,7 +6532,7 @@ export class EntityVisuals {
         const lay = this.layoutOf(g, g.members.length);
         const hh = (lay.height / 2) * scale;
         if (clears(g.sx, g.sy - hh, (lay.width / 2) * scale, hh)) continue;
-        for (const k of g.roomKeys) this.roomClustered.set(k, true);
+        for (const k of g.roomKeys) this.chipRoom(k, "chip-v-card");
         escalated = true;
       }
       if (!escalated) break;
