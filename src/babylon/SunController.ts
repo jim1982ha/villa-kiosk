@@ -8,6 +8,8 @@ import type { Scene } from "@babylonjs/core/scene";
 import type { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import type { LightingSystem } from "./LightingSystem";
 import type { SkyDome } from "./SkyDome";
+import { skyNow, skyTickMs, skySimActive, skySimLabel } from "@/utils/skyClock";
+import { tapDebug } from "@/utils/tapDebug";
 import { type AppConfig, DEFAULT_RENDER } from "@/config/AppConfig";
 import { getSunPosition, getMoonPosition, getMoonIllumination } from "@/utils/sunCalc";
 import type { NightSky } from "./NightSky";
@@ -17,6 +19,8 @@ export class SunController {
   private lighting: LightingSystem;
   private hemi: HemisphericLight;
   private sky: SkyDome | null;
+  /** Only set when `?skySpeed` is running the sky fast — see startSkySim. */
+  private simTimer: ReturnType<typeof setInterval> | null = null;
   private config: AppConfig;
   private requestRender: () => void = () => {};
   // When set (overview mode), this fixed backdrop wins over the day/night sky
@@ -51,6 +55,39 @@ export class SunController {
     this.sky = sky;
     this.config = config;
     this.applyRealSun();
+    this.startSkySim();
+    // Announce it, so a simulated sky is never mistaken for a broken one in a
+    // capture — a sun in the wrong place with no explanation is exactly the
+    // kind of report that costs a measurement round.
+    if (skySimActive()) tapDebug(`sky: ${skySimLabel()}`);
+  }
+
+  /**
+   * Drive the sky from the simulated clock when `?skySpeed` asks for it.
+   *
+   * ⚠️ Guarded so a frozen `?skyTime` schedules NOTHING: at speed 1 the sky
+   * does not move, and a timer that recomputes an unchanged answer would still
+   * request a frame every tick — on a scene that renders on demand, that is a
+   * permanently-awake kiosk with a warm battery and no visible reason for it.
+   *
+   * The tick asks for a frame the same way every other change does rather than
+   * running a loop of its own, so it composes with the resolution valve and
+   * the idle sharpening instead of fighting them.
+   */
+  private startSkySim(): void {
+    const every = skyTickMs();
+    if (every <= 0) return;
+    this.simTimer = setInterval(() => {
+      this.applyRealSun();
+      this.requestRender?.();
+    }, every);
+  }
+
+  /** Stop the simulated-sky timer. Idempotent — SceneManager.dispose is the
+   *  only caller and is itself guarded, but a stray interval outliving the
+   *  scene would keep re-lighting a disposed one. */
+  dispose(): void {
+    if (this.simTimer !== null) { clearInterval(this.simTimer); this.simTimer = null; }
   }
 
   setRenderHook(fn: () => void): void {
@@ -112,7 +149,7 @@ export class SunController {
   }
 
   /** Compute lighting from the computed sun altitude/azimuth right now. */
-  applyRealSun(date = new Date()): void {
+  applyRealSun(date = skyNow()): void {
     const { latitude, longitude } = this.config;
     const { azimuth: trueAzimuth, altitude: realAltitude } =
       getSunPosition(date, latitude, longitude);
@@ -208,6 +245,11 @@ export class SunController {
     // geometry. That keeps HA's promptness at the horizon crossing (no waiting
     // out the remainder of a 15-minute tick) and, as a bonus, moves the sky to
     // roughly per-minute updates, which is what a wall kiosk wants anyway.
+    // A simulated sky owns the clock outright. HA's sun.sun reports the REAL
+    // horizon, so letting it through would drag the synthetic midnight back to
+    // the actual afternoon roughly once a minute — the same two-writers race
+    // the comment above describes, in a new costume.
+    if (skySimActive()) { this.applyRealSun(); return; }
     const { latitude, longitude } = this.config;
     if (Number.isFinite(latitude) && Number.isFinite(longitude)
       && (latitude !== 0 || longitude !== 0)) {

@@ -3406,6 +3406,7 @@ export class SceneManager {
     // a freshly-created NEXT scene if calls interleave.
     if (this.disposed) return;
     this.disposed = true;
+    this.sun.dispose();   // stops the ?skySpeed timer, if one is running
 
     window.removeEventListener("resize", this.handleResize);
     this.resizeObserver?.disconnect();

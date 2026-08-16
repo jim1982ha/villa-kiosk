@@ -1,3 +1,12 @@
+## 2.386.0
+
+### Added — simulate a time of day with `?skyTime` / `?skySpeed`
+
+Judging the Model north offset meant waiting for dawn. `?skyTime=06:30` freezes
+the sky at a stated local time, `?skySpeed=600` runs it fast, and the two
+combine. Sun, moon, phase, sky colour and shadows all follow. URL-only and
+never persisted, so removing the parameter is the whole revert.
+
 ## 2.385.0
 
 ### Changed — the sun rises in the east and sets in the west again
