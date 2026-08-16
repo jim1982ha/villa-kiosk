@@ -2,70 +2,55 @@
 
 ### Fixed — a single Card badge's glyph is as bold as a grouped one's
 
-A glyph stroke stated in viewBox units rendered at a weight that depended on
-the badge's inset, because the scale it rides is derived from the squircle and
-the inset shrinks the squircle. A lone Card badge insets its chip 10% a side
-and a summary card's cell does not, so one style drew two weights 20% apart.
-The stroke is now inset-independent; uninset badges are unchanged.
+The stroke weight silently depended on the badge's inset, so a lone Card badge
+drew 20% thinner than a grouped one. It is now inset-independent; uninset
+badges are unchanged.
 
 ## 2.376.0
 
 ### Fixed — the heavier Card glyph now reaches a summary card's cells
 
-2.375.0 bolded the lone Card-style badge but not the chips inside a summary
-card, which bake through a different call — so on a screen showing a two-cell
-card the change looked like it had done nothing. Both go through the setting
-now, read in one place instead of five. The weight also goes 2.25 → 2.5.
+A summary card's cells bake through a different call, which 2.375.0 missed, so
+the change looked like a no-op. The badge-style flag is now read in one place
+instead of five. Weight also raised 2.25 → 2.5.
 
 ## 2.375.0
 
 ### Changed — Card-style entity glyphs are drawn at a heavier weight
 
-At 1.5 viewBox units the lucide strokes almost disappeared on a pale chip
-inside a bordered card, unlike the classic badge where the same glyph is the
-only ink on a saturated fill. Card badges now bake at 2.25 (past lucide's own
-2.0, because the competing ink there is the card border). The classic Icon
-style is deliberately untouched so the two can be compared side by side.
+At 1.5 units the strokes almost vanished on a pale chip inside a bordered card.
+Card now bakes at 2.25; the Icon style stays at 1.5 so the two can be compared.
 
 ## 2.374.0
 
 ### Changed — the mouse wheel zooms, and by exactly as much as ⌘+drag
 
-The wheel guessed whether it was talking to a mouse or a trackpad from the
-delta size, sent one to zoom and the other to pan, and guessed wrong on any
-mouse with smooth scrolling — so scrolling panned the view instead of zooming
-it. The vertical axis is now always zoom, for every device, through the same
-call Ctrl/⌘+drag makes and at the same rate; sideways still pans. The
-device-guessing heuristic and the second sensitivity constant are gone.
+The wheel guessed mouse-vs-trackpad from the delta size and got it wrong on any
+mouse with smooth scrolling, so scrolling panned instead of zooming. Vertical is
+now always zoom, through the same call and rate as Ctrl/⌘+drag; sideways pans.
 
 ## 2.373.0
 
 ### Added — the `place` debug line says WHY each room chipped
 
-Three unrelated rules can turn a room into a chip and they fail in opposite
-directions as you zoom, so a bare `chips=` count cannot tell a "the whole villa
-chipped at one zoom level" report which one fired. The line now carries
-`chipWhy: undrawable=N degenerate=N focus=N`, always including the zeroes.
+Three unrelated rules can chip a room and a bare `chips=` count distinguishes
+none of them. The line now carries `chipWhy: undrawable=N degenerate=N focus=N`.
 
 ## 2.372.0
 
 ### Fixed — the phone's Settings button sits in a section again
 
-It was a bare glyph beside the filled category pill, so the one control that
-opens Settings read as barely there. It is back in its own `.hud-group` pill.
-The plate-stripping rule that removed it was written for the desktop right-hand
-icons, and `.hud-overflow` is phone-only — so it only ever affected the one
-place it was wrong. Pill and icon now take their size from the same
-declarations as the category section, so the two cannot drift apart.
+It was a bare glyph beside the filled category pill and read as barely there.
+The rule that stripped its plate was written for the desktop right-hand icons;
+`.hud-overflow` is phone-only. It is back in its `.hud-group` pill, sized by the
+same declarations as the category section.
 
 ## 2.371.0
 
 ### Added — a Clear button in the `?debug` panel
 
-Sharing a diagnostic meant re-sending the whole page load every time, because
-"Copy all" is all-or-nothing by design. Clear drops the history so the next
-interaction can be captured on its own. Both header buttons now come from one
-factory so a second control cannot drift out of style with the first.
+"Copy all" is all-or-nothing by design, so sharing one interaction meant
+re-sending the whole page load. Clear drops the history first.
 
 ## 2.370.0
 
