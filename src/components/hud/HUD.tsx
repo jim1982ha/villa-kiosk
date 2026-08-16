@@ -206,6 +206,10 @@ export default function HUD({
       if (stepRad > 0) needed = Math.max(ROOM_R, ROOM_MIN_ARC_PX / stepRad);
     }
     const maxForViewport = window.innerHeight / 2 - ROOM_VIEWPORT_PAD;
+    // ⚠️ NOT clamp(needed, ROOM_R_FLOOR, maxForViewport), which it looks like.
+    // The FLOOR wins here: on a short viewport maxForViewport can fall below
+    // ROOM_R_FLOOR, and clamp() would let the ceiling win and collapse the fan
+    // to something unreadable. Written this way on purpose — do not converge.
     return Math.max(ROOM_R_FLOOR, Math.min(needed, maxForViewport));
   };
 

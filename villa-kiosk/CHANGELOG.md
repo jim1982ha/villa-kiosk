@@ -1,3 +1,12 @@
+## 2.400.0
+
+### Fixed — a scene could show its raw slug instead of its name
+
+Some integrations default an entity's friendly_name to the bare object_id, so a
+scene HA calls `movie_night` reached the kiosk as "movie_night". The scene list
+had reimplemented the label fallback without the guard that catches exactly
+that, and now calls `displayLabelFor` like every other label site does.
+
 ## 2.399.0
 
 ### Changed — one reader for the camera's field of view

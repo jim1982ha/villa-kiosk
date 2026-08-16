@@ -38,8 +38,12 @@ export function kelvinToRgb(kelvin: number): RGB {
   if (t >= 66) b = 255;
   else if (t <= 19) b = 0;
   else b = 138.52 * Math.log(t - 10) - 305.04;
-  const clamp = (v: number) => Math.min(Math.max(v, 0), 255) / 255;
-  return { r: clamp(r), g: clamp(g), b: clamp(b) };
+  // NOT named `clamp`: that name belongs to utils/geometry's shared helper, and
+  // this does something else — it clamps to a byte AND normalises to 0-1. A
+  // local shadow with different semantics is how a reader comes to believe the
+  // shared rule is being applied when it is not.
+  const channel = (v: number) => Math.min(Math.max(v, 0), 255) / 255;
+  return { r: channel(r), g: channel(g), b: channel(b) };
 }
 
 /** brightness 0-255 -> 0-100 % */

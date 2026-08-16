@@ -252,6 +252,9 @@ export class LightPool {
     this.mesh.setEnabled(on);
     if (!on) return;
     this.material.emissiveColor = colour;
+    // ⚠️ Not a clamp, though it reads as one: the floor applies to
+    // intensityFrac BEFORE the scale, and the ceiling to the product. Flooring
+    // the result instead would let a zeroed intensityScale still paint a pool.
     this.material.alpha = Math.min(2, Math.max(0.15, intensityFrac) * this.intensityScale);
   }
 

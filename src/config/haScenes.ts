@@ -13,7 +13,7 @@
 // in sync — every read reflects whatever HA currently has, including a scene
 // added, edited or deleted in HA's own editor a moment ago.
 
-import { prettifyEntitySlug } from "./EntityMap";
+import { displayLabelFor } from "./EntityMap";
 import { roomKey } from "@/config/roomKey";
 import type { HassEntity } from "@/types/ha.types";
 
@@ -52,7 +52,16 @@ export function deriveHaScenes(
     }
     out.push({
       entityId,
-      name: e.attributes.friendly_name || prettifyEntitySlug(entityId),
+      // displayLabelFor, not `friendly_name || prettify` — the two are NOT the
+      // same. Some integrations default friendly_name to the bare object_id
+      // verbatim, and the raw `||` accepts that string as a name, so a scene HA
+      // calls `movie_night` reached the kiosk as "movie_night" instead of
+      // "Movie Night". `looksLikeRawSlug` is the guard that exists for exactly
+      // that, and this site had reimplemented the fallback without it.
+      //
+      // No stored label to pass: a scene is read live from HA and never
+      // authored here (see this file's header), so it has no entityMap entry.
+      name: displayLabelFor(entityId, undefined, e.attributes.friendly_name),
       memberEntityIds,
       rooms,
     });
