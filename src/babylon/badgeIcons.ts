@@ -120,6 +120,19 @@ function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
 function drawIcon(
   ctx: CanvasRenderingContext2D, primitives: readonly IconPrimitive[], scale: number, offset: number, strokeStyle: string,
   bold = false,
+  /**
+   * Cancels the INSET's effect on stroke weight — pass canvas size ÷ squircle
+   * size, which is 1 whenever there is no inset.
+   *
+   * ⚠️ Without it a stroke stated in viewBox units renders at a weight that
+   * depends on how much transparent margin the caller asked for, because
+   * `scale` is derived from the squircle and the squircle is what the inset
+   * shrinks. A lone Card badge insets its chip by 10% a side and a summary
+   * card's cell does not, so THE SAME STYLE drew its glyphs at two weights 20%
+   * apart — reported as the bold weight working on grouped badges and not on
+   * single ones. One style, one weight: that is the whole job of this factor.
+   */
+  strokeScale = 1,
 ): void {
   ctx.save();
   ctx.translate(offset, offset);
@@ -129,7 +142,7 @@ function drawIcon(
   // proportionally to the icon — see ICON_STROKE_VIEWBOX. That is also why the
   // bold weight is a viewBox constant and not a pixel one: it has to survive
   // the label-size stepper and the zoom cap without being re-derived.
-  ctx.lineWidth = bold ? ICON_STROKE_VIEWBOX_BOLD : ICON_STROKE_VIEWBOX;
+  ctx.lineWidth = (bold ? ICON_STROKE_VIEWBOX_BOLD : ICON_STROKE_VIEWBOX) * strokeScale;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   for (const [tag, attrs] of primitives) {
@@ -302,7 +315,11 @@ export function badgeImageDataUrl(
     const iconScale = (size / ICON_VIEWBOX) * iconFraction();
     const iconPx = ICON_VIEWBOX * iconScale;
     const offset = (px - iconPx) / 2;       // centred in the canvas = in the squircle
-    drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset, surface.glyph, boldGlyph);
+    // `px / size` is 1 for every uninset caller, so this changes nothing for
+    // them and makes the inset ones agree with them — see drawIcon's
+    // strokeScale.
+    drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset, surface.glyph,
+      boldGlyph, size > 0 ? px / size : 1);
 
     url = canvas.toDataURL("image/png");
   }

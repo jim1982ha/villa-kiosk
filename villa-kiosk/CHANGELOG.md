@@ -1,3 +1,13 @@
+## 2.377.0
+
+### Fixed — a single Card badge's glyph is as bold as a grouped one's
+
+A glyph stroke stated in viewBox units rendered at a weight that depended on
+the badge's inset, because the scale it rides is derived from the squircle and
+the inset shrinks the squircle. A lone Card badge insets its chip 10% a side
+and a summary card's cell does not, so one style drew two weights 20% apart.
+The stroke is now inset-independent; uninset badges are unchanged.
+
 ## 2.376.0
 
 ### Fixed — the heavier Card glyph now reaches a summary card's cells
