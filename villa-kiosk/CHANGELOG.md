@@ -1,3 +1,13 @@
+## 2.401.0
+
+### Added — an instrument for the room chips flicking sideways on refocus
+
+Returning to the tab makes every room chip jump sideways for one frame. The
+recording rules out the camera, a resize and the badge scale — a summary card
+at screen centre does not move while the chips shift — so a chip's world centre
+came out wrong with its members unchanged. `?debug` now logs `chipjump` with
+both centres and the member anchors whenever that happens.
+
 ## 2.400.1
 
 ### Changed — hold a room key still while counting against it

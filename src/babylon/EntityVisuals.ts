@@ -301,6 +301,14 @@ const CLIMATE_OUTLINE_WORLD_WIDTH = 0.04; // metres, matches the blue outline's 
 // placing its state-label anchor, so the badge floats just clear of the
 // geometry instead of sitting flush on it.
 const LABEL_ANCHOR_MARGIN = 0.12;
+
+/** How far a room chip's world centre may move BETWEEN FRAMES, with its member
+ *  set unchanged, before watchChipJump calls it a teleport. Metres, and
+ *  deliberately generous: a real centroid holds still to the millimetre when
+ *  its members do, while the reported flick moved it by roughly a villa's
+ *  width. Anything in between is not a false positive worth silencing — it is
+ *  the same defect, smaller. */
+const CHIP_JUMP_WORLD_UNITS = 0.5;
 // Every badge DIMENSION now lives in badgeMetrics.ts, in CSS pixels, chosen by
 // pointer class — including the container height, the value pill, the badge
 // diameter and the card block that used to sit below. They were literals here
@@ -6643,6 +6651,60 @@ export class EntityVisuals {
    * derivation can run repeatedly inside one pass (see CHIP_COLLISION) without
    * repainting the GUI on every round.
    */
+  /**
+   * Catch a chip TELEPORTING, and say which half of the pipeline did it.
+   *
+   * The report: on returning focus to the tab, every room chip jumps sideways
+   * for ONE frame and snaps back. Measured off the recording rather than
+   * guessed — `flick.mov`, the frame at ~1.23s, 0.7s after the tab regains
+   * focus. What that measurement establishes, and therefore what NOT to go
+   * looking at again:
+   *
+   *   • the 3D never moves (badge-free crops are identical to within codec
+   *     noise), so it is not the camera and not a resize;
+   *   • chip SIZES are unchanged, so it is not the resolution valve and not
+   *     effectiveScale();
+   *   • a summary CARD sitting at screen centre does not move at all while the
+   *     chips shift ~1385px, so it is not a global transform, not the GUI
+   *     viewport and not the plan→world calibration — those would move every
+   *     linked control together;
+   *   • the labels and counts are identical either side of the jump ("Kitchen
+   *     2", "Swimming Pool 9"), so the member SETS did not change and neither
+   *     did the merge outcome.
+   *
+   * Same room, same members, same count — so `chip.centre` is a pure function
+   * of the member anchors' world positions, and it MUST have come out the same.
+   * It did not. That leaves exactly one suspect: an anchor's absolute position
+   * was momentarily wrong. This says so out loud, with both centres, so the
+   * next capture names it instead of costing another measurement round.
+   *
+   * Passive and self-triggering: the event lasts one frame and cannot be
+   * reproduced on demand, so a counter that has to be read at the right moment
+   * is no use — this only speaks when the anomaly actually happens.
+   */
+  private watchChipJump(chip: RoomChip): void {
+    const prev = this.lastChipCentre.get(chip.key);
+    this.lastChipCentre.set(chip.key, { x: chip.centre.x, z: chip.centre.z, n: chip.ids.length });
+    if (!prev || prev.n !== chip.ids.length) return; // membership changed — a real move
+    const moved = Math.hypot(chip.centre.x - prev.x, chip.centre.z - prev.z);
+    if (moved < CHIP_JUMP_WORLD_UNITS) return;
+    tapDebug(
+      `chipjump ${chip.key} n=${chip.ids.length} moved=${moved.toFixed(2)}m`
+      + ` from=(${prev.x.toFixed(2)},${prev.z.toFixed(2)})`
+      + ` to=(${chip.centre.x.toFixed(2)},${chip.centre.z.toFixed(2)})`
+      + ` anchors=[${chip.ids.slice(0, 4).map((id) => {
+        const a = this.labels.get(id)?.anchor;
+        if (!a) return `${id}:MISSING`;
+        const p = a.getAbsolutePosition();
+        return `${id}:(${p.x.toFixed(1)},${p.z.toFixed(1)})`;
+      }).join(" ")}]`,
+      "chip",
+    );
+  }
+
+  /** Previous frame's chip centre per room key, for watchChipJump. */
+  private lastChipCentre = new Map<string, { x: number; z: number; n: number }>();
+
   private renderChips(chips: RoomChip[]): void {
     const layer = this.labelLayer;
     if (!layer) return; // no GUI layer yet — nothing to attach chips to
@@ -6654,6 +6716,7 @@ export class EntityVisuals {
       c.entityIds = chip.ids;
       c.displayName = chip.room;
       c.roomNames = chip.roomNames;
+      this.watchChipJump(chip);
       c.node.position.copyFrom(chip.centre);
       // Room name and count render as separate controls (see ensureCluster).
       // A chip that absorbed others says so with a "+N" suffix, so the count
