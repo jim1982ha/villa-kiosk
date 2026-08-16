@@ -134,6 +134,17 @@ export interface PlacementStats {
    *  be impossible and used to cost a whole room its badges. */
   crossRoom: number;
   chipRooms: number;
+  /** Of the buckets killed in step 7, how many died because pruning left them
+   *  with fewer than two members — the DEGENERATE half of the kill test, and
+   *  the monotone one. */
+  chipDegenerate: number;
+  /** …and how many died because they held more devices than the renderer can
+   *  draw as cells. The NON-monotone half: pruning makes this half easier to
+   *  survive while making the other half easier to fail, which is why the
+   *  cascade has no unique answer and needs its rounds staged. Splitting the
+   *  two is what tells a "the whole villa chipped at one zoom" report which
+   *  rule actually fired. */
+  chipUndrawable: number;
 }
 
 /**
@@ -194,6 +205,7 @@ export function createPlacementScratch(): PlacementScratch {
     stats: {
       items: 0, exempt: 0, piles: 0, accepted: 0, deferred: 0,
       pulledBack: 0, buckets: 0, crossRoom: 0, chipRooms: 0,
+      chipDegenerate: 0, chipUndrawable: 0,
     },
   };
 }
@@ -414,6 +426,7 @@ export function solvePlacement(
   stats.items = n; stats.exempt = 0; stats.piles = 0; stats.accepted = 0;
   stats.deferred = 0; stats.pulledBack = 0; stats.buckets = 0;
   stats.crossRoom = 0; stats.chipRooms = 0;
+  stats.chipDegenerate = 0; stats.chipUndrawable = 0;
 
   if (n === 0) {
     return { accepted, buckets: st.buckets, bucketCount: 0, chipRooms: st.chipRooms, stats };
@@ -753,6 +766,8 @@ export function solvePlacement(
       // devices collide becomes one chip rather than some badges plus a number.
       const undrawable = bucket.members.length > drawableMax;
       if (bucket.members.length >= 2 && !undrawable) continue;
+      // Attributed, not just counted: see PlacementStats.chipUndrawable.
+      if (undrawable) stats.chipUndrawable++; else stats.chipDegenerate++;
       dead[b] = 1;
       changed = true;
       // A bucket that cannot stand as a group hands its rooms to their chips.

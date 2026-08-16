@@ -1,3 +1,12 @@
+## 2.373.0
+
+### Added — the `place` debug line says WHY each room chipped
+
+Three unrelated rules can turn a room into a chip and they fail in opposite
+directions as you zoom, so a bare `chips=` count cannot tell a "the whole villa
+chipped at one zoom level" report which one fired. The line now carries
+`chipWhy: undrawable=N degenerate=N focus=N`, always including the zeroes.
+
 ## 2.372.0
 
 ### Fixed — the phone's Settings button sits in a section again

@@ -1089,6 +1089,10 @@ export class EntityVisuals {
    *  focused room had", which is the number worth watching: it should be small
    *  after the zoom solver has framed the room. */
   private focusPairs = 0;
+  /** Rooms chipped THIS pass purely because another room holds the focus —
+   *  the third way a chip can appear, and the only one the solver never sees.
+   *  Reported in the `place` line beside the solver's own two. */
+  private focusChipped = 0;
   private iconUserScale = 1;
   private iconZoomScale = 1;
   /** Every badge dimension, in CSS px, for the pointer currently driving this
@@ -4257,9 +4261,13 @@ export class EntityVisuals {
     //     reason this is a chip and not a delete.
     // Only while the camera is still at the zoom the focus was granted at — see
     // `suppressOthers`. Past that the neighbours are on their own merits again.
+    this.focusChipped = 0;
     if (suppressOthers) {
       for (const k of this.roomDisplay.keys()) {
-        if (!this.focusedRooms.has(k)) this.roomClustered.set(k, true);
+        if (!this.focusedRooms.has(k)) {
+          this.roomClustered.set(k, true);
+          this.focusChipped++;
+        }
       }
     }
 
@@ -4643,6 +4651,14 @@ export class EntityVisuals {
       + ` cards=${cardSizes} counts=${counts}${split ? `/${split}split` : ""}`
       + (this.absorbed ? ` absorbed=${this.absorbed}` : "")
       + (this.focusPairs ? ` focusGroups=${this.focusPairs}` : "")
+      // WHY the chips exist, not just how many. A "the whole villa chipped at
+      // one zoom" report is unanswerable from a count: three different rules
+      // produce a chip and they fail in opposite directions under zoom.
+      // Always printed, including the zeroes — a diagnostic that omits its
+      // own null result reads as a missing measurement (see the `place` line's
+      // other always-on fields).
+      + ` | chipWhy: undrawable=${stats.chipUndrawable}`
+      + ` degenerate=${stats.chipDegenerate} focus=${this.focusChipped}`
       + ` [${groups}] chips=${chips.length} [${chips.join(", ")}]`;
     if (line === this.lastPlaceLog) return;
     this.lastPlaceLog = line;
