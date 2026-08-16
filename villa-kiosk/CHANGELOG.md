@@ -1,3 +1,14 @@
+## 2.398.0
+
+### Changed — the sun and moon arc over the villa instead of off the sides
+
+Their bearing was untouched, so orbiting to the sun's side of the villa put it
+behind the camera, and a true 208° sweep landed sunrise and sunset on opposite
+sides. The bearing is now pulled toward the view: proportional in front, easing
+to the frame edge behind, so the day reads as a dome and the body stays in shot
+from nearly every angle. It dims briefly when directly behind you. Settings:
+"Set North" moved onto the slider's own row.
+
 ## 2.397.0
 
 ### Fixed — the sun sat below the villa once the view was tilted

@@ -165,7 +165,10 @@ export class NightSky {
     // drawn at all. SkyDome.horizonFade owns the rule for both bodies.
     const dir = SkyDome.lift(look.dir.x, look.dir.y, look.dir.z, this.lift);
     const fade = SkyDome.horizonFade(
-      Math.atan2(look.dir.y, Math.hypot(look.dir.x, look.dir.z)));
+      Math.atan2(look.dir.y, Math.hypot(look.dir.x, look.dir.z)))
+      // The same cover for the azimuth cut the sun gets — the moon rides the
+      // identical dome, so it meets the identical seam directly behind you.
+      * SkyDome.azimuthFade(look.dir.x, look.dir.z, this.lift);
     const visible = night > 0 && fade > 0;
     this.moonMat.alpha = visible ? night * fade : 0;
     this.moon.setEnabled(visible);

@@ -9,6 +9,7 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Constants } from "@babylonjs/core/Engines/constants";
+import { Camera } from "@babylonjs/core/Cameras/camera";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
@@ -40,6 +41,11 @@ export class SkyDome {
   /** Where the disc was last DRAWN, in radians. Reported on the `sky` debug
    *  channel: it is the one field that answers "why can't I see the sun". */
   private drawnAlt = 0;
+  /** The drawn BEARING, or null when the disc is not drawn at all. Null rather
+   *  than a stale number because `drawn=` used to keep reporting the true
+   *  altitude all night, which reads as a placement and is not one — an
+   *  instrument must not answer a question it did not measure. */
+  private drawn: number | null = null;
 
   private scene: Scene;
 
@@ -193,9 +199,71 @@ export class SkyDome {
     const horiz = Math.hypot(x, z);
     if (horiz < 1e-6 || drop <= 0) return new Vector3(x, y, z);
     const alt = SkyDome.displayAltitude(Math.atan2(y, horiz), drop);
+    const az = SkyDome.displayAzimuth(Math.atan2(x, z));
     const c = Math.cos(alt);
-    return new Vector3((x / horiz) * c, Math.sin(alt), (z / horiz) * c);
+    return new Vector3(Math.sin(az) * c, Math.sin(alt), Math.cos(az) * c);
   }
+
+  /** Signed difference between two bearings, in -π..π. */
+  private static wrapPi(a: number): number {
+    return a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
+  }
+
+  /**
+   * Pull a body's BEARING toward the direction the camera is facing.
+   *
+   * Two reports, one lever. A body's azimuth was untouched by every release
+   * before this one, which is honest and has two consequences the recordings
+   * caught: orbit to the sun's side of the villa and it is simply behind you
+   * (`sun_moon_2.mov` — `frameY=0.21 discAlpha=1.00` and nothing on screen,
+   * because frameY cannot see the horizontal axis); and the true sweep from
+   * `az=71°` at sunrise to `az=279°` at sunset is 208° wide, so the arc's ends
+   * land on opposite sides of the villa rather than reading as a dome.
+   *
+   * `tanh` rather than a straight scale, because the two ends of the range want
+   * opposite things. Near the FRONT the slope is AZ_WORLD, so a real change of
+   * bearing is drawn as a proportional one and the body still moves through the
+   * world as the camera orbits. Toward the BACK it saturates to AZ_REACH of the
+   * frame's half-width, so a body anywhere in the sky is still on screen — no
+   * clamp, so there is no corner where it parks against an edge.
+   *
+   * ⚠️ A circle cannot be mapped onto a segment without one cut, and the cut is
+   * at "directly behind you", where the drawn bearing must swap edges. That is
+   * what azimuthFade covers: the body dims out at one edge and back in at the
+   * other over a few degrees, instead of teleporting across the frame.
+   *
+   * Measured in the frame's own half-width, exactly as displayAltitude is, so a
+   * portrait phone gets a narrower dome rather than an arc running off both
+   * sides of it.
+   */
+  private static displayAzimuth(az: number): number {
+    const reach = SkyDome.hHalf * SkyDome.AZ_REACH;
+    if (!(reach > 0)) return az;
+    const rel = SkyDome.wrapPi(az - SkyDome.camAz);
+    return SkyDome.camAz + reach * Math.tanh((SkyDome.AZ_WORLD * rel) / reach);
+  }
+
+  /**
+   * Cover the cut. 1 everywhere except within AZ_FADE of directly behind the
+   * camera, where it falls to 0 — see displayAzimuth. Costs a sliver of the
+   * headings in exchange for never showing the body jump.
+   */
+  static azimuthFade(x: number, z: number, drop: number): number {
+    if (drop <= 0) return 1;
+    const rel = Math.abs(SkyDome.wrapPi(Math.atan2(x, z) - SkyDome.camAz));
+    return Math.max(0, Math.min(1, (Math.PI - rel) / SkyDome.AZ_FADE));
+  }
+
+  /** How much of a real change in bearing is drawn as one, in front of the
+   *  camera. Below 1 the daily arc narrows into a dome; at 1 there would be no
+   *  dome and no guarantee of being on screen. */
+  private static readonly AZ_WORLD = 0.45;
+  /** How far out the saturation reaches, as a fraction of the frame's half
+   *  width. Under 1 so a body directly behind still lands inside the frame
+   *  rather than exactly on its edge. */
+  private static readonly AZ_REACH = 0.88;
+  /** Width of the fade at the cut. */
+  private static readonly AZ_FADE = (9 * Math.PI) / 180;
 
   /**
    * How opaque a body at TRUE altitude `alt` should be, so it sets and rises
@@ -249,6 +317,11 @@ export class SkyDome {
    *  half the vertical field of view, the unit the band is expressed in. */
   private static pitch = 0;
   private static halfFov = 0.4;
+  /** The camera's own bearing, and half the HORIZONTAL field of view — the unit
+   *  displayAzimuth measures the dome in, so it has to follow the aspect ratio
+   *  and not just the fov constant. */
+  private static camAz = 0;
+  private static hHalf = 0.7;
 
   /**
    * Follow the camera, because the arc is drawn in the FRAME and not in the sky.
@@ -262,12 +335,25 @@ export class SkyDome {
     if (!cam || this.dropUnits <= 0) return;
     cam.getDirectionToRef(SkyDome.FORWARD, this.fwd);
     const pitch = Math.atan2(-this.fwd.y, Math.hypot(this.fwd.x, this.fwd.z));
-    const halfFov = cam.fov / 2;
-    // ~0.3°: below that the disc has not moved a pixel, and re-placing it would
-    // repaint nothing while defeating the on-demand render.
-    if (Math.abs(pitch - SkyDome.pitch) < 0.005 && halfFov === SkyDome.halfFov) return;
+    const camAz = Math.atan2(this.fwd.x, this.fwd.z);
+    // The two half-angles, derived from whichever one the camera holds fixed.
+    // Reading `fov` as vertical unconditionally would make the dome the wrong
+    // width on any camera set to FOVMODE_HORIZONTAL_FIXED, silently.
+    const aspect = this.scene.getEngine().getAspectRatio(cam) || 1;
+    const horizontalFixed = cam.fovMode === Camera.FOVMODE_HORIZONTAL_FIXED;
+    const halfFov = horizontalFixed
+      ? Math.atan(Math.tan(cam.fov / 2) / aspect) : cam.fov / 2;
+    const hHalf = horizontalFixed
+      ? cam.fov / 2 : Math.atan(Math.tan(halfFov) * aspect);
+    // ~0.3°: below that nothing has moved a pixel, and re-placing would repaint
+    // nothing while defeating the on-demand render.
+    if (Math.abs(pitch - SkyDome.pitch) < 0.005
+      && Math.abs(SkyDome.wrapPi(camAz - SkyDome.camAz)) < 0.005
+      && halfFov === SkyDome.halfFov && hHalf === SkyDome.hHalf) return;
     SkyDome.pitch = pitch;
+    SkyDome.camAz = camAz;
     SkyDome.halfFov = halfFov;
+    SkyDome.hHalf = hHalf;
     this.placeSun();
     this.onFraming?.();
   }
@@ -424,17 +510,18 @@ export class SkyDome {
     const alt = Math.atan2(y, Math.hypot(x, z));
     // Fade on the TRUE altitude — see horizonFade. Below the horizon the sun is
     // simply gone, and the night sky takes over.
-    const fade = SkyDome.horizonFade(alt);
+    const fade = SkyDome.horizonFade(alt) * SkyDome.azimuthFade(x, z, drop);
     // First person shows the material's own disc in a sky the viewer is
     // genuinely standing under, so the billboard would only ever be a second
     // sun beside the real one.
     const visible = drop > 0 && fade > 0;
     this.sunMat.alpha = fade;
     this.sunDisc.setEnabled(this.enabled && visible);
-    this.drawnAlt = alt;
+    this.drawn = null;
     if (!visible) return;
 
     this.drawnAlt = SkyDome.displayAltitude(alt, drop);
+    this.drawn = SkyDome.displayAzimuth(Math.atan2(x, z));
     this.sunDisc.position = SkyDome.lift(x, y, z, drop).scale(SUN_DIST);
 
     // Warm the disc as it nears the horizon, over the last 25° — the same
@@ -447,20 +534,29 @@ export class SkyDome {
   /** Where the disc is DRAWN, in degrees, and the true altitude it came from —
    *  for the `sky` debug channel. A sun that cannot be seen is answered by
    *  comparing the drawn figure against the camera's own `sinTilt`. */
-  sunReport(): { trueDeg: number; drawnDeg: number; alpha: number; frameY: number } {
+  sunReport(): {
+    trueDeg: number; drawnDeg: number | null;
+    alpha: number; frameX: number | null; frameY: number | null;
+  } {
     const deg = (r: number) => (r * 180) / Math.PI;
-    // Where the disc lands DOWN the frame: 0 the top edge, 1 the bottom, 0.5
-    // dead centre (which is where the camera's target — the villa — sits). This
-    // is the field that answers "the sun is in the wrong place" without anyone
-    // re-deriving the projection: outside 0..1 it is off screen, and near 1 it
-    // is under the villa, which is exactly what 2.396.0 was reported for.
+    const trueDeg = deg(
+      Math.atan2(-this.sunDir.y, Math.hypot(this.sunDir.x, this.sunDir.z)));
+    // ⚠️ BOTH axes, because reporting only one is how a whole round was spent
+    // on a disc that was perfectly placed vertically and off the side of the
+    // screen: `frameY=0.21 discAlpha=1.00` with an empty sky in the recording.
+    // 0 is the left/top edge, 1 the right/bottom, 0.5 dead centre — which is
+    // where the camera's target, the villa, sits. Outside 0..1 is off screen.
+    if (this.drawn === null) {
+      return { trueDeg, drawnDeg: null, alpha: this.sunMat.alpha, frameX: null, frameY: null };
+    }
     const above = this.drawnAlt + SkyDome.pitch;
-    const frameY = 0.5 - 0.5 * (Math.tan(above) / Math.tan(SkyDome.halfFov));
+    const side = SkyDome.wrapPi(this.drawn - SkyDome.camAz);
     return {
-      trueDeg: deg(Math.atan2(-this.sunDir.y, Math.hypot(this.sunDir.x, this.sunDir.z))),
+      trueDeg,
       drawnDeg: deg(this.drawnAlt),
       alpha: this.sunMat.alpha,
-      frameY,
+      frameX: 0.5 + 0.5 * (Math.tan(side) / Math.tan(SkyDome.hHalf)),
+      frameY: 0.5 - 0.5 * (Math.tan(above) / Math.tan(SkyDome.halfFov)),
     };
   }
 
