@@ -565,14 +565,38 @@ const CAMERA_LOCAL_FORWARD = new Vector3(0, 0, 1);
  * overlap that nothing needed. Reported, correctly, as badges sitting on top
  * of each other.
  */
-const GROUP_OVERLAP_ALLOW_WIDTHS = -0.15;
+const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
 /*
- * ── WHY IT IS NEGATIVE (2.292.0), AND WHY THAT IS NOT THE 2.168.0 MISTAKE ──
+ * ── ZERO BY EXPLICIT DECISION (2.413.0), NOT BY OVERSIGHT ──────────────────
+ * The owner was shown the trade in numbers and chose pure contact: nothing
+ * groups until the ink actually meets. Do NOT restore the margin because a
+ * `PLACEMENT: … OVERLAP` counter fires — that counter firing is the ACCEPTED
+ * COST of this setting, not evidence of a regression, and the whole point of
+ * the paragraphs below is that the cost was known before the choice was made.
+ *
+ * What it means in practice, measured from the capture that prompted it: the
+ * rule now fires when the visible gap drops under ~9% of a badge height (the
+ * 2px legibility gap alone) instead of ~24%. The pair that triggered the
+ * report — a corridor light and a bedroom curtain at `dy=85` against a need of
+ * `89` — stays apart, because ink-to-ink they do not touch until 72.
+ *
+ * ── What the 15% was for, kept so nobody re-derives it ─────────────────────
  * Read as written, this is "how much of its own width a badge may overlap a
- * neighbour". A NEGATIVE value is the opposite request: every clearance test
- * must reserve 15% MORE than the ink it is protecting. It is the same dial,
- * turned the other way, and the paragraph above — which says the tolerance
- * should stay at zero — is a warning about raising it, not about lowering it.
+ * neighbour". A NEGATIVE value was the opposite request: reserve that much
+ * MORE than the ink. It paid for the one approximation 2.287.0 bought its
+ * correctness with, and the residual it covered was measured, not guessed:
+ * one to five overlapping badge pairs out of twenty to thirty-four drawn, one
+ * summary pair inside a narrow band of tilt, and one or two things over a room
+ * chip. Those are the pairs that may now reappear, always in the direction of
+ * the plane over-estimating separation, and always for objects further from
+ * the camera than the zoom rung's reference depth.
+ *
+ * ⚠️ The honest mitigation if they become a nuisance is NOT to reinstate a
+ * blanket margin — it is that a badge drawn under another is still reachable,
+ * because SceneManager's tap and long-press both ask `pickBadgeAt` before
+ * answering. Set this to -0.075 for half the old margin if the overlaps are
+ * worse in practice than the early grouping was; that is the dial, and it is
+ * one number.
  *
  * It pays for the one thing 2.287.0 bought its correctness with. Placement is
  * measured on an orthographic view plane at ONE pixels-per-world for the whole
@@ -5004,7 +5028,17 @@ export class EntityVisuals {
         if (hits(cardBoxes[i], cardBoxes[j])) summaryOverlaps++;
       }
     }
-    if (summaryOverlaps) tapDebug(`PLACEMENT: ${summaryOverlaps} summary pair(s) OVERLAP on screen — fits() promises this cannot happen`);
+    if (summaryOverlaps) {
+      tapDebug(`PLACEMENT: ${summaryOverlaps} summary pair(s) OVERLAP on screen`
+        + (GROUP_OVERLAP_ALLOW_WIDTHS === 0
+          // Saying "fits() promises this cannot happen" was true while a margin
+          // covered the plane-vs-perspective residual. At zero it is not, and a
+          // guard that cries regression at an accepted cost teaches its reader
+          // to ignore it.
+          ? " — expected: GROUP_OVERLAP_ALLOW_WIDTHS is 0, so nothing covers the"
+            + " orthographic/perspective depth residual"
+          : " — fits() promises this cannot happen"));
+    }
 
     // (d) Room chip vs everything the chip outranks. A chip is the tier of
     // last resort and nothing used to test it against anything but another

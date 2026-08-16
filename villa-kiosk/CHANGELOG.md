@@ -1,3 +1,13 @@
+## 2.413.0
+
+### Changed — badges now group only when they actually touch
+
+The last safety margin that made grouping fire early is off, by choice: two
+badges merge when their ink meets, not before. The margin existed to hide a
+small perspective error, so an occasional overlapping pair can now appear at the
+far end of a tilted view — a covered badge is still tappable, and the trade was
+made deliberately in favour of never grouping early.
+
 ## 2.412.0
 
 ### Changed — badges group when they nearly touch, not when a third of a badge still separates them
