@@ -1,3 +1,11 @@
+## 2.400.1
+
+### Changed — hold a room key still while counting against it
+
+Long-pressing a merged room chip re-normalised the room name it was comparing
+against once per device, per room, instead of once. Same answer, more work, and
+it was the only site breaking the convention roomKey.ts documents.
+
 ## 2.400.0
 
 ### Fixed — a scene could show its raw slug instead of its name

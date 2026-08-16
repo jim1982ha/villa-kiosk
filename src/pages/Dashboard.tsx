@@ -679,10 +679,18 @@ export default function Dashboard() {
     (room: string, entityIds: string[], roomNames: string[]) => {
       const merged = [...new Set(roomNames)].filter(Boolean);
       if (merged.length > 1) {
-        setRoomChoices(merged.map((r) => ({
-          room: r,
-          count: entityIds.filter((id) => roomKey(resolvedRooms[id] ?? "") === roomKey(r)).length,
-        })));
+        setRoomChoices(merged.map((r) => {
+          // The FIXED side, normalised ONCE outside the filter — the convention
+          // roomKey.ts documents, and the reason a two-argument `sameRoom(a, b)`
+          // was deleted rather than kept: it would re-normalise the fixed side
+          // on every iteration, which is exactly what this site was doing (once
+          // per entity, per room, inside a map over rooms).
+          const key = roomKey(r);
+          return {
+            room: r,
+            count: entityIds.filter((id) => roomKey(resolvedRooms[id] ?? "") === key).length,
+          };
+        }));
         return;
       }
       setClusterGroup({ room, entityIds });
