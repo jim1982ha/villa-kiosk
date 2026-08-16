@@ -5367,6 +5367,17 @@ export class EntityVisuals {
      * passes and they need different sets — see below.
      */
     const focus = this.focusedRooms;
+    // ── WHY a seat was refused, in pixels (the `seat` debug channel) ───────
+    // `fits` is a boolean, and a boolean cannot answer "they are not even
+    // touching". This records the blocker and the per-axis SHORTFALL — how
+    // many pixels short of the required clearance the pair actually was — so a
+    // refusal can be read as a measurement instead of a verdict. Written only
+    // on the refusing comparison, so it costs one string per refusal and
+    // nothing at all when nothing is refused.
+    let why = "";
+    const shortfall = (dx: number, needX: number, dy: number, needY: number) =>
+      `dx=${dx.toFixed(0)}/${needX.toFixed(0)}(-${(needX - dx).toFixed(0)})`
+      + ` dy=${dy.toFixed(0)}/${needY.toFixed(0)}(-${(needY - dy).toFixed(0)})`;
     const fits = (g: PendingEntityGroup, others: PendingEntityGroup[]): boolean => {
       const mineHalf = groupHalf(g);
       // ── A SUMMARY MUST CLEAR OTHER SUMMARIES; IT MAY OVERLAP A BADGE ─────
@@ -5420,8 +5431,12 @@ export class EntityVisuals {
         // its width. Plane metric only; the walk camera keeps the 3-axis
         // distance, as it does in the summary-vs-summary loop below.
         if (planar) {
-          if (Math.abs(g.sx - shown[j].sx) < vsBadge + boxes[j].halfW * allow + gapPx
-            && Math.abs(cardCentreY(g) - shown[j].sy) < vsBadge + boxes[j].halfH * allow + gapPx) {
+          const dx = Math.abs(g.sx - shown[j].sx);
+          const dy = Math.abs(cardCentreY(g) - shown[j].sy);
+          const needX = vsBadge + boxes[j].halfW * allow + gapPx;
+          const needY = vsBadge + boxes[j].halfH * allow + gapPx;
+          if (dx < needX && dy < needY) {
+            why = `badge ${shown[j].id} ${shortfall(dx, needX, dy, needY)}`;
             return false;
           }
           continue;
@@ -5466,8 +5481,12 @@ export class EntityVisuals {
         // for the same reason it keeps its own metric (see VIEW_METRIC).
         if (planar) {
           const mine = groupBox(g), theirs = groupBox(o);
-          if (Math.abs(g.sx - o.sx) < mine.hw + theirs.hw + gapPx
-            && Math.abs(cardCentreY(g) - cardCentreY(o)) < mine.hh + theirs.hh + gapPx) {
+          const dx = Math.abs(g.sx - o.sx);
+          const dy = Math.abs(cardCentreY(g) - cardCentreY(o));
+          const needX = mine.hw + theirs.hw + gapPx;
+          const needY = mine.hh + theirs.hh + gapPx;
+          if (dx < needX && dy < needY) {
+            why = `card ${o.key}(${o.members.length}) ${shortfall(dx, needX, dy, needY)}`;
             return false;
           }
           continue;
@@ -5721,6 +5740,35 @@ export class EntityVisuals {
         // the group covered escalates, not just its primary one — a group that
         // straddles a boundary and then fails to place cannot leave half its
         // members behind a chip and half loose.
+        //
+        // ⚠️ THIS IS THE AMPLIFIER, and the `seat` channel exists to size it.
+        // A field capture showed three refusals here turning into seven chipped
+        // rooms and thirteen lost cards across ONE 5.9% zoom step, while the
+        // solver's own verdict barely moved (25 accepted -> 23). So the number
+        // that matters is not whether a refusal is correct but how far it
+        // travels: each line names the blocker and the per-axis shortfall, and
+        // the CASCADE lines below name every room dragged along after it.
+        if (debugFlagEnabled()) {
+          // `box` vs `wasSpread` is the question the user actually asked: the
+          // MEMBERS were grouped because their badge boxes collided, but what
+          // gets seated is a CARD, and a card can be LARGER than the cluster it
+          // stands for (a 4-cell card is 2x2 badge boxes; four badges that
+          // merely touched occupied far less). If box >> wasSpread, the card
+          // manufactured the collision that refused it.
+          const bx = groupBox(g);
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          for (const m of g.members) {
+            minX = Math.min(minX, shown[m].sx); maxX = Math.max(maxX, shown[m].sx);
+            minY = Math.min(minY, shown[m].sy); maxY = Math.max(maxY, shown[m].sy);
+          }
+          tapDebug(
+            `seat REFUSED ${g.key} n=${g.members.length}`
+            + ` card=${(bx.hw * 2).toFixed(0)}x${(bx.hh * 2).toFixed(0)}`
+            + ` members spanned ${(maxX - minX).toFixed(0)}x${(maxY - minY).toFixed(0)}`
+            + ` rooms=[${g.roomKeys.join("|")}] -> chips those rooms; blocked by ${why}`,
+            "seat",
+          );
+        }
         for (const k of g.roomKeys) this.chipRoom(k, "noseat");
         continue;
       }
@@ -5767,7 +5815,20 @@ export class EntityVisuals {
         // room's escalation must not take its card down either.
         if (g.focused) continue;
         if (!g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
-        placed.splice(i, 1);
+        // The contagion, made countable: this group is dropped because ONE of
+        // its rooms chipped, and it then chips the OTHERS. A cross-room group
+        // is therefore a bridge along which a single refusal walks the villa —
+        // `cross=N` on the place line is how many bridges exist.
+        if (debugFlagEnabled()) {
+          const trigger = g.roomKeys.filter((k) => this.roomClustered.get(k));
+          const spreads = g.roomKeys.filter((k) => !this.roomClustered.get(k));
+          tapDebug(
+            `seat CASCADE drop ${g.key} n=${g.members.length}`
+            + ` (room ${trigger.join("|")} already chipped)`
+            + (spreads.length ? ` -> ALSO chips [${spreads.join("|")}]` : " -> spreads to nothing"),
+            "seat",
+          );
+        }
         for (const k of g.roomKeys) this.chipRoom(k, "cascade");
         dropped = true;
       }

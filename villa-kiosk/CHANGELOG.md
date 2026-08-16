@@ -1,3 +1,13 @@
+## 2.408.0
+
+### Added — `?debug=seat`, the pixels behind a room collapsing
+
+A capture showed three summary cards failing to find space turning into seven
+chipped rooms in one zoom step, while the badge solver's own verdict barely
+moved. Each refusal now logs what blocked it and by how many pixels, the card's
+size against the area its members actually occupied, and every room the
+cascade drags along after it.
+
 ## 2.407.0
 
 ### Fixed — grouping fired while there was still visible space between badges
