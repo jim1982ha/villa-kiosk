@@ -1,3 +1,14 @@
+## 2.406.0
+
+### Changed — one collision rule everywhere, and crowds split instead of chipping
+
+Grouping now follows a single sentence: things merge exactly when their drawn
+boxes would touch. The badge test was still a circle, judging a wide badge's
+vertical clearance by its width; it is now the same box test chips and cards
+use. And a pile too big for one card splits into several cards along its real
+geometry instead of sending every room it touched to a chip — which is what
+made one zoom step collapse the whole villa at once.
+
 ## 2.405.0
 
 ### Fixed — rooms collapsed into chips while their badges still had space

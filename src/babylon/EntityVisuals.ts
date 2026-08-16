@@ -2740,7 +2740,7 @@ export class EntityVisuals {
       // rank/sortKey/category/room are unused by markContacts (it is a
       // symmetric contact sweep, not the ranked solve, and it never runs the
       // pull-back) — only the geometry matters here.
-      reach: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false,
+      reach: 0, reachY: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false,
     }));
     // Each anchor's offset from the shot's centre, ON THE DESTINATION'S VIEW
     // PLANE, in world units — one coordinate per SCREEN axis. Only THIS room's
@@ -2839,6 +2839,7 @@ export class EntityVisuals {
         items[i].sy = plane[i].py * pxPerWorld + boxes[i].cy;
         items[i].sz = plane[i].pz * pxPerWorld;
         items[i].reach = boxes[i].halfW * allow;
+        items[i].reachY = boxes[i].halfH * allow;
       }
       const touching = markContacts(items, gapPx, minSepPx, this.zoomScratch);
       let clean = true;
@@ -4619,13 +4620,14 @@ export class EntityVisuals {
       const s = shown[i];
       let it = pool[i];
       if (!it) {
-        it = { sx: 0, sy: 0, sz: 0, reach: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
+        it = { sx: 0, sy: 0, sz: 0, reach: 0, reachY: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
         pool[i] = it;
       }
       projectToView(clearance.basis, s.wx, s.wy, s.wz, p);
       s.sx = p.px * k; s.sy = p.py * k + boxes[i].cy; s.sz = p.pz * k;
       it.sx = s.sx; it.sy = s.sy; it.sz = s.sz;
       it.reach = boxes[i].halfW * clearance.allow;
+      it.reachY = boxes[i].halfH * clearance.allow;
       it.rank = badgeRank(s.lbl.type, s.lbl.category);
       it.sortKey = s.id;
       // Tiebreak only, never a gate — see PlacementItem.category.
@@ -5377,6 +5379,18 @@ export class EntityVisuals {
         // focus renegotiating the rest of the map, which is exactly what the
         // exemption exists to prevent.
         if (focus.has(roomKey(this.roomOf(shown[j].id)))) continue;
+        // The SAME rule as everywhere else on the glass since 2.406.0: boxes,
+        // per axis, not a radius against a scalar distance — `halfOf(j)` is
+        // max(halfW, halfH), which judged a wide badge's vertical clearance by
+        // its width. Plane metric only; the walk camera keeps the 3-axis
+        // distance, as it does in the summary-vs-summary loop below.
+        if (planar) {
+          if (Math.abs(g.sx - shown[j].sx) < vsBadge + boxes[j].halfW * allow + gapPx
+            && Math.abs(cardCentreY(g) - shown[j].sy) < vsBadge + boxes[j].halfH * allow + gapPx) {
+            return false;
+          }
+          continue;
+        }
         const d = this.drawnDistance(
           g.sx, cardCentreY(g), g.sz, shown[j].sx, shown[j].sy, shown[j].sz);
         if (d < vsBadge + halfOf(j) * allow + gapPx) return false;
@@ -5775,7 +5789,7 @@ export class EntityVisuals {
       const src = items[i];
       let it = sub[idx.length];
       if (!it) {
-        it = { sx: 0, sy: 0, sz: 0, reach: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
+        it = { sx: 0, sy: 0, sz: 0, reach: 0, reachY: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
         sub[idx.length] = it;
       }
       it.sx = src.sx; it.sy = src.sy; it.sz = src.sz;

@@ -61,10 +61,17 @@ export interface PlacementItem {
   sx: number;
   sy: number;
   sz: number;
-  /** The badge's drawn half-width, in the same GUI pixels as `sx`/`sy` — no
+  /** The badge's drawn half-WIDTH, in the same GUI pixels as `sx`/`sy` — no
    *  conversion, because both sides of every comparison are already on the
    *  glass. */
   reach: number;
+  /** The badge's drawn half-HEIGHT, same units. Separate from `reach` since
+   *  2.406.0, because collapsing a rectangle to one radius is exactly how the
+   *  card tier (2.405.0) and the chip tier (2.287.0) each over-grouped before
+   *  their own box fixes — a badge with a value readout is far wider than
+   *  tall, and judging its VERTICAL clearance by its WIDTH grouped stacked
+   *  neighbours that visibly did not touch. */
+  reachY: number;
   /** Static placement rank; LOWER is placed first (see badgePriority). */
   rank: number;
   /** Total, locale-independent tiebreak — the entity_id. */
@@ -139,11 +146,10 @@ export interface PlacementStats {
    *  the monotone one. */
   chipDegenerate: number;
   /** …and how many died because they held more devices than the renderer can
-   *  draw as cells. The NON-monotone half: pruning makes this half easier to
-   *  survive while making the other half easier to fail, which is why the
-   *  cascade has no unique answer and needs its rounds staged. Splitting the
-   *  two is what tells a "the whole villa chipped at one zoom" report which
-   *  rule actually fired. */
+   *  draw as cells. Since 2.406.0 an oversized bucket SPLITS into cliques
+   *  (step 6b) instead of dying, so this is only reachable when drawableMax
+   *  is below 2 — a live value here on an ordinary pass means the split was
+   *  bypassed, which is itself the finding. */
   chipUndrawable: number;
 }
 
@@ -229,24 +235,35 @@ export function conflicts(
   b: PlacementItem,
   gap: number,
   minSeparation: number,
+  /** Inflates both requirements uniformly. 1 asks "do they collide"; the
+   *  lone-deferral pull-back asks with PULLBACK_REACH_FACTOR to mean "close
+   *  enough to summarise with". One predicate, one knob — not two copies. */
+  scale = 1,
 ): boolean {
-  const dx = b.sx - a.sx;
-  const dy = b.sy - a.sy;
-  const dz = b.sz - a.sz;
-  // THIS IS A DISTANCE ON THE GLASS, AND THAT IS THE WHOLE POINT. Every axis
-  // arrives already drawn — height at cos(tilt), depth at sin(tilt), and the
-  // two of them SUMMED onto one screen axis rather than added in quadrature,
-  // so a device that is both higher and further away correctly measures as
-  // being where a lower, nearer one is. Getting that wrong is what drew badges
-  // and whole summary cards on top of each other, harmlessly at a steep camera
-  // and 5.9x wrong at a shallow one. See badgeProjection for the derivation and
-  // for the hardware numbers that graded it by tilt.
+  // ── THE RULE, and the only one: TWO THINGS COLLIDE WHEN THEIR DRAWN BOXES,
+  // INFLATED BY THE GAP AND FLOORED BY THE TAP PITCH, INTERSECT ON THE GLASS.
+  // Axis-aligned, against each thing's own drawn extents — the same test the
+  // chip tier has used since 2.287.0 and the card tier since 2.405.0. This
+  // tier was the last one still collapsing the rectangle to a single radius
+  // (`reach`, the half-WIDTH) and comparing a scalar distance against it:
+  // a disc test, over-grouping every vertical stack by width-over-height and
+  // every diagonal by up to √2. At icon 2.00x that margin is ~a full zoom
+  // rung, reported as "entities group while there is clearly space left"
+  // (sources/files/move.mov: one lattice step flips drawn=25 to drawn=1).
   //
-  // `dz` is zero under the orbit camera. Under the walk camera it is the
-  // along-view residual, which is why this stays a three-term sum.
-  const d2 = dx * dx + dy * dy + dz * dz;
-  const need = Math.max(a.reach + b.reach + gap, minSeparation);
-  return d2 < need * need;
+  // Every axis arrives already drawn — height at cos(tilt), depth at
+  // sin(tilt), SUMMED onto the screen's vertical rather than added in
+  // quadrature (see badgeProjection). `sz` is zero under the orbit camera; on
+  // the walk camera it is the along-view residual, folded into the HORIZONTAL
+  // term because there it is a ground-plane axis exactly as `sx` is — so the
+  // orbit camera gets the exact box test and the walk camera gets ground
+  // distance against width plus height against height, which is the same
+  // sentence with its axes named honestly.
+  const dh2 = (b.sx - a.sx) * (b.sx - a.sx) + (b.sz - a.sz) * (b.sz - a.sz);
+  const needX = scale * Math.max(a.reach + b.reach + gap, minSeparation);
+  if (dh2 >= needX * needX) return false;
+  const needY = scale * Math.max(a.reachY + b.reachY + gap, minSeparation);
+  return Math.abs(b.sy - a.sy) < needY;
 }
 
 /**
@@ -310,7 +327,12 @@ export function markContacts(
   if (n < 2) return out;
 
   let maxReach = 0;
-  for (let i = 0; i < n; i++) if (items[i].reach > maxReach) maxReach = items[i].reach;
+  for (let i = 0; i < n; i++) {
+    // Both extents: the cell edge must cover the largest possible conflict
+    // distance on EITHER axis, or the 27-cell query stops being exhaustive.
+    if (items[i].reach > maxReach) maxReach = items[i].reach;
+    if (items[i].reachY > maxReach) maxReach = items[i].reachY;
+  }
   const cell = Math.max(2 * maxReach + gap, minSeparation);
   if (!(cell > 0) || !Number.isFinite(cell)) return out;
 
@@ -439,7 +461,12 @@ export function solvePlacement(
   // which any pair can possibly conflict, so a conflicting pair always shares
   // a cell or an immediate neighbour and the 27-cell query is exhaustive.
   let maxReach = 0;
-  for (let i = 0; i < n; i++) if (items[i].reach > maxReach) maxReach = items[i].reach;
+  for (let i = 0; i < n; i++) {
+    // Both extents: the cell edge must cover the largest possible conflict
+    // distance on EITHER axis, or the 27-cell query stops being exhaustive.
+    if (items[i].reach > maxReach) maxReach = items[i].reach;
+    if (items[i].reachY > maxReach) maxReach = items[i].reachY;
+  }
   const cell = Math.max(2 * maxReach + gap, minSeparation);
   if (!(cell > 0) || !Number.isFinite(cell)) {
     // No usable geometry this frame (zoom unresolved, degenerate projection).
@@ -650,11 +677,15 @@ export function solvePlacement(
     let same = -1, sameD2 = Infinity;
     for (const i of piles[pileIdx[lone]]) {
       if (!accepted[i]) continue;
+      // Eligibility is THE collision predicate at PULLBACK_REACH_FACTOR —
+      // the same box, inflated — so "close enough to summarise with" can
+      // never disagree in shape with "close enough to have collided".
+      // NEAREST among the eligible is still ranked by straight distance:
+      // that is a ranking, not an overlap test, and the centroid the pair
+      // will be drawn at cares about distance, not about box axes.
+      if (!conflicts(li, items[i], gap, minSeparation, PULLBACK_REACH_FACTOR)) continue;
       const dx = items[i].sx - li.sx, dy = items[i].sy - li.sy, dz = items[i].sz - li.sz;
       const d2 = dx * dx + dy * dy + dz * dz;
-      const bound = PULLBACK_REACH_FACTOR
-        * Math.max(li.reach + items[i].reach + gap, minSeparation);
-      if (d2 > bound * bound) continue;
       // Deterministic on ties, so two equidistant pile-mates cannot alternate.
       if (d2 < bestD2 || (d2 === bestD2 && best >= 0 && byteLess(items[i].sortKey, items[best].sortKey))) {
         best = i; bestD2 = d2;
@@ -669,6 +700,100 @@ export function solvePlacement(
     accepted[best] = 0;
     bucket.members.push(best);
     stats.pulledBack++;
+  }
+
+  // ── 6b. AN OVERSIZED BUCKET SPLITS; IT DOES NOT DIE (2.406.0) ────────────
+  // Until now a bucket holding more members than one card can draw was KILLED
+  // — every room it touched went to its chip, the all-or-nothing contract hid
+  // every badge in those rooms, and the cascade in step 7 took the neighbours.
+  // One boundary pair fusing two rooms' piles was enough: bedroom (6) plus
+  // bathroom (4) made a bucket of 10, "undrawable", and BOTH rooms chipped in
+  // the same frame — the villa-wide cliff recorded in sources/files/move.mov,
+  // where one zoom rung flips drawn=25 to drawn=1.
+  //
+  // But "more than one card can draw" was never a reason to draw NOTHING: the
+  // clique machinery below (buildCliques — pure, pinned by the suite, already
+  // used by the focused-room path) splits exactly such a pile into mutually-
+  // overlapping clusters of at most drawableMax, each an honest card at its
+  // own local centroid. A fused bedroom+bathroom pile splits along its real
+  // geometry, because mutual overlap is spatially local. So the tiering
+  // becomes the one sentence the whole subsystem is supposed to mean:
+  //
+  //   A BADGE DRAWS ALONE UNTIL ITS BOX COLLIDES; COLLIDING BADGES GROUP INTO
+  //   AS MANY CARDS AS THEIR GEOMETRY NEEDS; A ROOM FALLS TO ITS CHIP ONLY
+  //   WHEN EVEN THE CARDS CANNOT BE PLACED (the caller's seating test), NOT
+  //   BECAUSE A COUNTING CEILING SAID SO.
+  //
+  // A singleton clique — a member that mutually overlaps no other, possible
+  // because bucket-mates shared a PILE, not necessarily each other's boxes —
+  // folds into the nearest clique that still has room, exactly the reasoning
+  // of the lone-deferral pull-back one tier up. If every clique is full it
+  // stays a bucket of one and step 7's degenerate rule sends it to the chip,
+  // which is honest: that floor is genuinely crowded.
+  //
+  // drawableMax < 2 keeps the old kill (step 7's `undrawable` branch): "the
+  // caller can draw nothing" cannot be answered by splitting.
+  if (drawableMax >= 2) {
+    const originalCount = bucketCount;
+    for (let b = 0; b < originalCount; b++) {
+      const bucket = st.buckets[b];
+      if (bucket.members.length <= drawableMax) continue;
+      // The canonical order every other decision uses: rank, then entity_id.
+      const order = bucket.members.slice().sort((x, y) => {
+        const rx = items[x].rank, ry = items[y].rank;
+        if (rx !== ry) return rx - ry;
+        return byteLess(items[x].sortKey, items[y].sortKey) ? -1
+          : items[x].sortKey === items[y].sortKey ? 0 : 1;
+      });
+      const cliques = buildCliques(items, order, gap, minSeparation, drawableMax);
+      // Fold singletons nearest-first, in canonical order so the outcome is a
+      // function of geometry and rank like everything else here.
+      const cent = cliques.map((c) => {
+        let cx = 0, cy = 0;
+        for (const i of c) { cx += items[i].sx; cy += items[i].sy; }
+        return { cx: cx / c.length, cy: cy / c.length };
+      });
+      for (let si = 0; si < cliques.length; si++) {
+        if (cliques[si].length !== 1) continue;
+        const lone = cliques[si][0];
+        let best = -1, bestD2 = Infinity;
+        for (let ci = 0; ci < cliques.length; ci++) {
+          if (ci === si || cliques[ci].length === 0) continue;
+          if (cliques[ci].length >= drawableMax) continue;
+          const dx = items[lone].sx - cent[ci].cx, dy = items[lone].sy - cent[ci].cy;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < bestD2) { best = ci; bestD2 = d2; }
+        }
+        if (best < 0) continue; // stays a singleton — step 7's degenerate rule
+        const c = cliques[best];
+        cent[best].cx = (cent[best].cx * c.length + items[lone].sx) / (c.length + 1);
+        cent[best].cy = (cent[best].cy * c.length + items[lone].sy) / (c.length + 1);
+        c.push(lone);
+        cliques[si].length = 0;
+      }
+      // Emit: the first surviving clique replaces the bucket in place, the
+      // rest append. pileKey is each clique's own lowest sortKey — the same
+      // stable-identity rule step 5 uses, one level down.
+      let first = true;
+      for (const c of cliques) {
+        if (c.length === 0) continue;
+        let k = items[c[0]].sortKey;
+        for (let m = 1; m < c.length; m++) {
+          if (byteLess(items[c[m]].sortKey, k)) k = items[c[m]].sortKey;
+        }
+        let target: DeferralBucket;
+        if (first) { target = bucket; first = false; }
+        else {
+          const bi = bucketCount++;
+          if (!st.buckets[bi]) st.buckets[bi] = { room: "", rooms: [], pileKey: "", members: [] };
+          target = st.buckets[bi];
+        }
+        target.pileKey = k;
+        target.members.length = 0;
+        for (const i of c) target.members.push(i);
+        target.rooms.length = 0; // recomputed at the top of every round below
+      }
+    }
   }
 
   // ── 7. Buckets that are really the room, and the chip cascade ────────────
@@ -759,11 +884,11 @@ export function solvePlacement(
       // name to hang it on. Reported against 2.307.0 with a screenshot of an
       // "18" standing among five named chips.
       //
-      // Escalating hands each of the pile's rooms to its own chip, and the chip
-      // merge downstream turns a cross-room pile into a single "Kitchen +2"
-      // pill — named, tappable, and the tier that was already designed to be
-      // the last one. The cost is deliberate and is the point: a room where 7
-      // devices collide becomes one chip rather than some badges plus a number.
+      // ⚠️ Since 2.406.0 this branch is only REACHABLE when drawableMax < 2:
+      // step 6b splits every larger bucket into cliques of at most drawableMax
+      // before this loop runs, so crowding yields several cards rather than a
+      // room-wide kill. What survives here is the genuine "the caller can draw
+      // nothing" configuration, where escalating is the only honest move.
       const undrawable = bucket.members.length > drawableMax;
       if (bucket.members.length >= 2 && !undrawable) continue;
       // Attributed, not just counted: see PlacementStats.chipUndrawable.
