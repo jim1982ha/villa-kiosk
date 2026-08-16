@@ -1,3 +1,13 @@
+## 2.402.0
+
+### Added — an unconditional trace of the frames after the tab wakes
+
+Two thresholded instruments stayed silent through a live reproduction of the
+chip jump, and the second would have caught any chip moving between rendered
+frames. So either nothing renders while the jump is on screen, or the thing
+that moves is not a chip. `?debug` now logs one line per rendered frame for a
+short window after waking; the frame count answers the first case by itself.
+
 ## 2.401.1
 
 ### Fixed — the chip-jump instrument watched the wrong thing and stayed silent

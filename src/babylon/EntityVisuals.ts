@@ -308,6 +308,11 @@ const LABEL_ANCHOR_MARGIN = 0.12;
  *  a chip that genuinely follows its room never travels this far in one frame
  *  unless the camera is being flung, which is not what is being debugged. */
 const CHIP_JUMP_SCREEN_PX = 120;
+
+/** How many RENDERED frames traceWake reports after the tab wakes. Enough to
+ *  cover the second or so the reported jump is visible for, and small enough
+ *  that the trace cannot bury the rest of a capture. */
+const WAKE_TRACE_FRAMES = 40;
 // Every badge DIMENSION now lives in badgeMetrics.ts, in CSS pixels, chosen by
 // pointer class — including the container height, the value pill, the badge
 // diameter and the card block that used to sit below. They were literals here
@@ -1302,7 +1307,11 @@ export class EntityVisuals {
     // real one once the frame is done. Reading it in beforeRender would report
     // the PREVIOUS frame's projection and could never see the jump at all —
     // the same class of mistake as watching the world centre.
-    scene.onAfterRenderObservable.add(() => this.watchChipJump());
+    scene.onAfterRenderObservable.add(() => {
+      this.watchChipJump();
+      if (this.wakeTrace > 0) { this.wakeTrace--; this.traceWake(); }
+    });
+    document.addEventListener("visibilitychange", this.onWake);
     // A mouse plugged into a tablet, or a 2-in-1 folded over, changes which
     // badge geometry is correct. Unlike a hardware-scaling change (which only
     // needs applyIconScale) this one needs a full REBUILD: the painted sizes
@@ -2332,6 +2341,7 @@ export class EntityVisuals {
    *  (beams, roomHighlight) have their own dispose(). Called by
    *  SceneManager.dispose(); safe to run before scene.dispose(). */
   dispose(): void {
+    document.removeEventListener("visibilitychange", this.onWake);
     this.offPointerClass?.();
     this.offPointerClass = null;
     this.disposeLights();
@@ -6741,6 +6751,66 @@ export class EntityVisuals {
   /** Previous frame's DRAWN chip position per room key, for watchChipJump. */
   private lastChipDraw = new Map<
     string, { wx: number; wz: number; left: number; top: number; n: number }>();
+
+  /** Rendered frames still to trace after the tab woke — see traceWake. */
+  private wakeTrace = 0;
+  private wakeAt = 0;
+
+  private onWake = (): void => {
+    if (document.visibilityState !== "visible" || !debugFlagEnabled()) return;
+    this.wakeTrace = WAKE_TRACE_FRAMES;
+    this.wakeAt = performance.now();
+    tapDebug(`wake: visible — tracing the next ${WAKE_TRACE_FRAMES} RENDERED frames`, "chip");
+  };
+
+  /**
+   * An UNCONDITIONAL trace of the frames after the tab wakes.
+   *
+   * Two thresholded instruments (v2.401.0, v2.401.1) both stayed silent through
+   * a live reproduction of the chip jump, and the second one watched the drawn
+   * position on `onAfterRenderObservable` — so it would have caught any chip
+   * that moved more than 120px between two RENDERED frames. It did not fire.
+   * That is not "nothing happened"; it is one of two things, and a threshold
+   * cannot tell them apart:
+   *
+   *   • no frame was rendered while the jump was on screen — in which case the
+   *     jump is what the COMPOSITOR showed, not what Babylon drew, and no
+   *     amount of watching draw calls will ever see it;
+   *   • or frames rendered and the chips were where they belonged, meaning the
+   *     thing that moves is not a chip control at all.
+   *
+   * So this stops thresholding. It logs one line per rendered frame for a short
+   * window after `visibilitychange`, and the FRAME COUNT is as much the answer
+   * as the contents: a handful of lines spread over the seconds the jump is
+   * visible settles the first case on its own. Everything that could plausibly
+   * shift a linked control is on the line — render size, GUI texture size,
+   * hardware scaling, the camera pose — beside where the chips actually landed.
+   *
+   * Costs nothing when `?debug` is off (onWake returns before arming) and stops
+   * by itself after WAKE_TRACE_FRAMES.
+   */
+  private traceWake(): void {
+    const eng = this.scene.getEngine();
+    const adt = this.labelLayer?.getSize();
+    const cam = this.scene.activeCamera as unknown as
+      { alpha?: number; beta?: number; radius?: number } | null;
+    const chips = [...this.clusters.entries()]
+      .filter(([, c]) => c.container.isVisible)
+      .slice(0, 3)
+      .map(([k, c]) =>
+        `${k}@${c.container.leftInPixels.toFixed(0)},${c.container.topInPixels.toFixed(0)}`)
+      .join(" ");
+    tapDebug(
+      `wake+${Math.round(performance.now() - this.wakeAt)}ms`
+      + ` render=${eng.getRenderWidth()}x${eng.getRenderHeight()}`
+      + ` adt=${adt ? `${adt.width}x${adt.height}` : "?"}`
+      + ` hw=${eng.getHardwareScalingLevel().toFixed(3)}`
+      + (cam?.alpha != null
+        ? ` cam=${cam.alpha.toFixed(3)}/${cam.beta?.toFixed(3)}/${cam.radius?.toFixed(1)}` : "")
+      + ` chips[${chips}]`,
+      "chip",
+    );
+  }
 
   private renderChips(chips: RoomChip[]): void {
     const layer = this.labelLayer;
