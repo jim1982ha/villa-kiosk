@@ -1,3 +1,13 @@
+## 2.396.0
+
+### Fixed — the sun is finally visible in the overview
+
+Seven releases moved one value that drives both the disc's position and the
+sky's colour, so every position that was in frame rendered night. The sun is
+now its own billboard, like the moon: the material keeps the true direction
+and the disc goes where this camera can see it. The moon gets the same arc —
+it had been out of frame too. Settings: "Set North" now sits on the offset row.
+
 ## 2.395.0
 
 ### Changed — `?debug` can be narrowed to the signals you want

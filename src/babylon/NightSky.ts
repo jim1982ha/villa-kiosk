@@ -57,7 +57,7 @@ export class NightSky {
   private moon: Mesh;
   private moonMat: StandardMaterial;
   private moonTex: DynamicTexture;
-  /** Radians the moon is raised by, mirroring the sky's horizon drop. */
+  /** The sky's horizon drop as an angle, mirrored onto the moon. */
   private lift = 0;
   private starLayers: { mesh: Mesh; mat: StandardMaterial; peak: number }[] = [];
   /** Last phase the texture was drawn for, so a per-minute update does not
@@ -112,6 +112,10 @@ export class NightSky {
     moon.isPickable = false;
     moon.applyFog = false;
     moon.checkCollisions = false;
+    // Same reason the star layers set this: the bounding box sits at the moon's
+    // position, not at the camera it actually follows, so frustum culling would
+    // drop it once the camera moved far enough from the origin.
+    moon.alwaysSelectAsActiveMesh = true;
     this.moon = moon;
 
     this.setEnabled(false);
@@ -141,11 +145,17 @@ export class NightSky {
     }
     // Below the horizon the moon is simply not visible — no need to fade it,
     // and fading would leave a disc hanging in the ground half of the dome.
+    //
+    // ⚠️ "Has it set?" is asked of the TRUE altitude, never of the lifted one
+    // this same line computes. The overview's band is negative (see
+    // SkyDome.BAND_MIN), so every DRAWN altitude is below the horizon: the old
+    // test on `dir.y` would now be false always and the moon would never be
+    // drawn at all. SkyDome.horizonFade owns the rule for both bodies.
     const dir = SkyDome.lift(look.dir.x, look.dir.y, look.dir.z, this.lift);
-    const up = dir.y;
-    const visible = night > 0 && up > -0.02;
-    // Ease the last few degrees so it does not pop in/out at the horizon.
-    this.moonMat.alpha = visible ? night * Math.min(1, (up + 0.02) / 0.08) : 0;
+    const fade = SkyDome.horizonFade(
+      Math.atan2(look.dir.y, Math.hypot(look.dir.x, look.dir.z)));
+    const visible = night > 0 && fade > 0;
+    this.moonMat.alpha = visible ? night * fade : 0;
     this.moon.setEnabled(visible);
     if (!visible) return;
 

@@ -197,6 +197,16 @@ export class SunController {
 
     this.applyDayNight(isDay, dir, nightT, skyDir);
 
+    // ── The `sky` channel, reporting on EVERY pass ──────────────────────────
+    // It used to emit one line at startup and only when a simulation was
+    // running, so `?debug=sky` could not answer the two questions actually
+    // asked of it — "why is it daytime at 04:00" (it was `preview=day`, a
+    // Settings pin silently outranking ?skyTime) and "why can't I see the sun"
+    // (compare `drawn` against the camera's own `sinTilt` on the `place` line).
+    // A diagnostic that reports on one branch reports a blank that means "not
+    // measured" rather than "did not happen".
+    this.reportSky(date, realAltitude, altitude, azimuth, preview, nightT);
+
     // The moon rides the same beat as the sun, so an unattended kiosk walks it
     // across the sky and through its phases on its own. Computed here from the
     // same date/lat/lng — never from HA, whose sensor.moon_phase is an enum
@@ -219,6 +229,35 @@ export class SunController {
         nightT,
       });
     }
+  }
+
+  /** Last line emitted, so a per-minute sun.sun event does not fill the panel
+   *  with an unchanged sky. Rounded to whole degrees for the same reason. */
+  private lastSkyLine = "";
+
+  /**
+   * One line naming everything that decides how the sky looks right now.
+   *
+   * `real` vs `alt` is the day/night PREVIEW pin: they differ only when
+   * Settings is forcing a side of the horizon, which is what made a simulated
+   * 04:00 render as bright noon with no stars and no moon.
+   * `drawn` is where the sun DISC lands (SkyDome.displayAltitude); read it
+   * against `sinTilt` on the `place` line to say whether it is in frame.
+   */
+  private reportSky(
+    date: Date, real: number, alt: number, azimuth: number,
+    preview: string, nightT: number,
+  ): void {
+    const deg = (r: number) => Math.round((r * 180) / Math.PI);
+    const s = this.sky?.sunReport();
+    const clock = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const line = `sky: ${clock}${skySimActive() ? " (sim)" : ""}`
+      + ` alt=${deg(alt)}° real=${deg(real)}° az=${deg(azimuth)}°`
+      + ` day=${alt > 0 ? "y" : "n"} nightT=${nightT.toFixed(2)} preview=${preview}`
+      + (s ? ` drawn=${Math.round(s.drawnDeg)}° discAlpha=${s.alpha.toFixed(2)}` : " sky=off");
+    if (line === this.lastSkyLine) return;
+    this.lastSkyLine = line;
+    tapDebug(line, "sky");
   }
 
   /** Optional — the scene works without it, and so does every install that
@@ -266,6 +305,12 @@ export class SunController {
     // night, same reasoning as the unclamped skyDir above.
     const skyDir = isDay ? dir : new Vector3(-0.2, 1, -0.2);
     this.applyDayNight(isDay, dir.normalize(), isDay ? 0 : 1, skyDir.normalize());
+    // Report from here too — this branch never reaches applyRealSun, and a
+    // channel that goes quiet on one path reads as "nothing happened" when it
+    // means "not measured". `real` is the synthetic altitude, which is the
+    // point: it says the position is made up because lat/lng are unset.
+    const synth = Math.asin(Math.max(-1, Math.min(1, skyDir.normalize().y)));
+    this.reportSky(skyNow(), synth, synth, 0, `${preview}/ha-only`, isDay ? 0 : 1);
   }
 
   private applyDayNight(

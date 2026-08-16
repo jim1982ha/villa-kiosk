@@ -6,15 +6,40 @@
 // blue at night. No texture assets required (SweetHome's sky never exports to GLB).
 
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { Constants } from "@babylonjs/core/Engines/constants";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { SkyMaterial } from "@babylonjs/materials/sky/skyMaterial";
+
+/** Distance from the camera, in world units. THE SAME AS NightSky's MOON_DIST
+ *  on purpose — two bodies at two radii read as two different skies. */
+const SUN_DIST = 380;
+/** The billboard's full extent at SUN_DIST, halo included; the bright core is
+ *  about a third of it (see drawSun). ~7° across, against the real sun's 0.5°,
+ *  for the same reason the moon is oversized: a physically-sized disc is a dot
+ *  on a phone and reads as a dead pixel rather than as the sun. */
+const SUN_PLANE = 46;
+const SUN_TEX = 256;
 
 export class SkyDome {
   private box: Mesh;
   private mat: SkyMaterial;
+  private sunDisc: Mesh;
+  private sunMat: StandardMaterial;
+  private sunTex: DynamicTexture;
+  /** Last warmth the disc was painted for, so a per-minute sun update does not
+   *  repaint an identical gradient. */
+  private sunKey = "";
+  /** Whether the sky as a whole is on — the disc is a part of it and must not
+   *  come back on its own when the dome is off. */
+  private enabled = true;
+  /** Where the disc was last DRAWN, in radians. Reported on the `sky` debug
+   *  channel: it is the one field that answers "why can't I see the sun". */
+  private drawnAlt = 0;
 
   constructor(scene: Scene) {
     const mat = new SkyMaterial("skyMaterial", scene);
@@ -60,6 +85,91 @@ export class SkyDome {
     box.checkCollisions = false;
     box.ignoreCameraMaxZ = true;     // never clipped by the camera far plane
     this.box = box;
+
+    // ── The sun disc, and why it is a MESH and not the material's own sun ────
+    //
+    // SkyMaterial draws a sun, but `sunPosition` is ONE input with TWO outputs:
+    // where that disc lands AND what colour the whole sky is. The overview
+    // camera's visible cone is entirely below the horizon (see BAND_MIN), so
+    // inside SkyMaterial the two outputs are in direct conflict — an
+    // above-horizon sun is out of frame (2.388.0, 2.392.0) and a below-horizon
+    // one renders night at noon (2.394.0, reverted the same evening). Seven
+    // releases were spent proving there is no third option.
+    //
+    // Splitting them dissolves the conflict rather than trading one wrong for
+    // the other: `mat.sunPosition` keeps the TRUE direction, so the sky's
+    // colour, gradient and twilight are physically honest, and the disc is a
+    // separate billboard placed wherever the camera can actually see it —
+    // exactly how NightSky has always drawn the moon.
+    this.sunTex = new DynamicTexture(
+      "sunTex", { width: SUN_TEX, height: SUN_TEX }, scene, true);
+    this.sunTex.hasAlpha = true;
+
+    const sunMat = new StandardMaterial("sunMat", scene);
+    sunMat.emissiveTexture = this.sunTex;
+    // Set so needAlphaBlending() is true and alphaMode below is honoured at
+    // all; it is also what `alpha` scales for the sunrise/sunset fade.
+    sunMat.opacityTexture = this.sunTex;
+    sunMat.disableLighting = true;
+    sunMat.diffuseColor = Color3.Black();
+    sunMat.specularColor = Color3.Black();
+    sunMat.backFaceCulling = false;
+    // ADDITIVE, unlike the moon's ordinary blend, because a sun is a light
+    // source: it must blow the sky out toward white rather than paint a warm
+    // film over it. Alpha-blending a semi-transparent halo over a sky BRIGHTER
+    // than the halo would darken it into a visible grey ring.
+    sunMat.alphaMode = Constants.ALPHA_ADD;
+    sunMat.alpha = 0;
+    this.sunMat = sunMat;
+
+    const sun = MeshBuilder.CreatePlane("sunDisc", { size: SUN_PLANE }, scene);
+    sun.material = sunMat;
+    sun.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    sun.infiniteDistance = true;     // position is read as a camera offset
+    sun.isPickable = false;
+    sun.applyFog = false;
+    sun.checkCollisions = false;
+    // Its bounding box sits at the position, not at the camera it actually
+    // follows, so frustum culling would drop it as soon as the camera moved far
+    // enough from the origin — an invisible sun, which is the exact bug this
+    // whole mesh exists to fix.
+    sun.alwaysSelectAsActiveMesh = true;
+    sun.setEnabled(false);
+    this.sunDisc = sun;
+  }
+
+  /**
+   * Paint the disc: a hot core in a soft halo, warming toward the horizon.
+   *
+   * PROCEDURAL, like the moon and the stars, because the add-on's target is an
+   * iPad on a villa wall with no internet — a sun PNG would work on a
+   * developer's desk and simply be missing on the wall.
+   *
+   * `warmth` runs 0 (high sun: white core, pale gold halo) to 1 (on the
+   * horizon: orange core, deep amber halo). Redrawn only when it actually
+   * changes — see sunKey.
+   */
+  private drawSun(warmth: number): void {
+    const ctx = this.sunTex.getContext() as CanvasRenderingContext2D;
+    const S = SUN_TEX;
+    const c = S / 2;
+    const w = Math.max(0, Math.min(1, warmth));
+    // Channel ramps, not named colours, so the horizon shift is continuous.
+    const g1 = Math.round(244 - 54 * w), b1 = Math.round(206 - 146 * w);
+    const g2 = Math.round(208 - 58 * w), b2 = Math.round(126 - 66 * w);
+    const g3 = Math.round(176 - 46 * w), b3 = Math.round(94 - 44 * w);
+
+    ctx.clearRect(0, 0, S, S);
+    const g = ctx.createRadialGradient(c, c, 0, c, c, c);
+    g.addColorStop(0, "rgba(255,255,252,1)");
+    g.addColorStop(0.17, `rgba(255,${g1},${b1},1)`);      // edge of the core
+    g.addColorStop(0.32, `rgba(255,${g2},${b2},0.5)`);
+    g.addColorStop(0.62, `rgba(255,${g3},${b3},0.14)`);
+    g.addColorStop(1, `rgba(255,${g3},${b3},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, S, S);
+
+    this.sunTex.update();
   }
 
   /**
@@ -70,13 +180,32 @@ export class SkyDome {
    * differently from each other, which is the kind of wrongness nobody can name
    * but everybody sees.
    */
-  static lift(x: number, y: number, z: number, strength: number): Vector3 {
+  static lift(x: number, y: number, z: number, drop: number): Vector3 {
     const horiz = Math.hypot(x, z);
-    if (horiz < 1e-6 || strength === 0) return new Vector3(x, y, z);
-    const alt = SkyDome.displayAltitude(Math.atan2(y, horiz), strength);
+    if (horiz < 1e-6 || drop <= 0) return new Vector3(x, y, z);
+    const alt = SkyDome.displayAltitude(Math.atan2(y, horiz), drop);
     const c = Math.cos(alt);
     return new Vector3((x / horiz) * c, Math.sin(alt), (z / horiz) * c);
   }
+
+  /**
+   * How opaque a body at TRUE altitude `alt` should be, so it sets and rises
+   * rather than blinking out.
+   *
+   * ⚠️ TRUE altitude, never the drawn one. Until this existed NightSky tested
+   * its own LIFTED `dir.y > -0.02`, which was survivable while the band was
+   * positive and is fatal now that it is negative: every drawn altitude is
+   * below the horizon, so the test would fail always and the moon would never
+   * be drawn at all. The two questions are genuinely different — "has it set?"
+   * is about the real sky, "where do I paint it?" is about this camera.
+   */
+  static horizonFade(alt: number): number {
+    const t = (alt - SkyDome.SET_LOW) / (SkyDome.SET_HIGH - SkyDome.SET_LOW);
+    return Math.max(0, Math.min(1, t));
+  }
+
+  private static readonly SET_LOW = (-1 * Math.PI) / 180;
+  private static readonly SET_HIGH = (3 * Math.PI) / 180;
 
   /**
    * Map a body's TRUE altitude onto one the overview camera can actually show.
@@ -99,55 +228,58 @@ export class SkyDome {
    * that fade the lift would hold it up all night: a sun at -40° would still be
    * drawn above the horizon, which is worse than never showing it at all.
    */
-  private static displayAltitude(alt: number, strength: number): number {
-    if (alt <= 0) return alt;
-    // NOTE the band is negative (see BAND_MIN): `base` moves the body DOWN into
-    // the visible cone rather than up out of it, and the eased term still grows
-    // with altitude, so noon is the highest point of the arc as it should be.
-    // Ease the lift in over the first few degrees so sunrise and sunset are
-    // continuous — a body popping from the horizon to BASE the instant it
-    // crosses zero would read as a glitch, not a dawn.
-    const ease = Math.min(1, alt / SkyDome.FADE);
-    const base = SkyDome.BAND_MIN * ease * strength;
-    return base + alt * (SkyDome.BAND_SPAN / (Math.PI / 2)) * strength;
+  private static displayAltitude(alt: number, drop: number): number {
+    if (drop <= 0) return alt;
+    return -drop + SkyDome.BAND_MIN + alt * (SkyDome.BAND_SPAN / (Math.PI / 2));
   }
 
   /**
-   * Where a just-risen body is DRAWN, and it is NEGATIVE on purpose.
+   * Where the arc sits RELATIVE TO THE DROPPED HORIZON, and the offsets are
+   * small because `-drop` above already did the heavy lifting.
    *
-   * ⚠️ Measured, not guessed. A `?debug` capture of the overview reports
-   * `sinTilt=0.882` — the camera is pitched about 62° BELOW horizontal, and
-   * with a ~45° vertical field of view the visible cone runs roughly -84° to
-   * -40°. The horizon is off the top of the screen, so NOTHING at a positive
-   * elevation can be in frame at all. 2.392.0's band of +14°..+40° put the sun
-   * some 78° above the top edge, which is why six releases of sky work were
-   * invisible.
+   * ⚠️ Measured, not guessed, and the numbers are worth keeping written down.
+   * The overview camera's tilt is `beta` (OverviewController), clamped to
+   * 0.05..1.4 rad and defaulting to 0.5 — so it looks between 10° and 87° below
+   * horizontal, 61.4° by default, which a `?debug` capture confirms as
+   * `sinTilt=0.882` (= cos beta). Its vertical field of view is 0.8 rad, ±22.9°.
+   * The DEFAULT pose therefore sees elevations -84.3° to -38.5°, and the
+   * horizon is off the TOP of the screen. Nothing at a positive elevation can
+   * be in frame at all — which is why 2.392.0's +14°..+40° band was invisible.
    *
-   * ⚠️ 2.394.0 pushed this NEGATIVE (-58°) to put the disc inside that cone,
-   * and it turned the sky pitch black. `mat.sunPosition` is ONE input driving
-   * TWO outputs: where the disc is drawn AND what colour the sky is. A sun
-   * below the horizon tells SkyMaterial it is night, so the villa sat under a
-   * black sky with a sunset-red disc beside it at local noon. Reverted here.
+   * The drop of 700 units is a rotation of atan(700/500) = 54.5°, so `-drop`
+   * puts a body on the horizon at -54.5°; BAND_MIN then lowers it to -69.5° and
+   * BAND_SPAN carries it back up to -51.6° at a noon altitude of 85°. Both ends
+   * clear the default cone by more than 12°, and the arc still reads the way a
+   * day does: low to either side, highest in the middle.
    *
-   * The consequence, stated so nobody re-derives it: WITHIN SkyMaterial there
-   * is no position that is both visible to this camera and lit like day. Making
-   * the sun visible in the overview needs a SEPARATE billboard mesh, placed
-   * independently of the material's sun — exactly how NightSky already draws
-   * the moon. That is the real fix and it is not a constant.
+   * Tying the band to the drop rather than restating it as an absolute angle is
+   * what keeps the sun in the sky it belongs to: retune OVERVIEW_HORIZON_DROP
+   * and the bodies follow it instead of being left behind, which is precisely
+   * the 2.388.0 bug ("the gradient came into view and the sun was left behind
+   * it") one level up.
+   *
+   * The arc leaves the frame at shallow tilts, and that is honest rather than
+   * broken: at beta 1.4 the visible cone is -32°..+13° and NO fixed band is in
+   * both it and the default one — they do not intersect. A real sun goes out of
+   * shot when you look away from it too.
    */
-  private static readonly BAND_MIN = (14 * Math.PI) / 180;
-  /** How much higher noon is drawn than sunrise. BAND_MIN + this is where a
-   *  noon sun lands (-42°), comfortably inside the visible cone. These two are
-   *  the whole tuning surface if the arc wants to sit higher or flatter. */
-  private static readonly BAND_SPAN = (26 * Math.PI) / 180;
-  /** Altitude over which the lift eases in, so dawn and dusk are continuous. */
-  private static readonly FADE = (6 * Math.PI) / 180;
+  private static readonly BAND_MIN = (-15 * Math.PI) / 180;
+  /** How much higher noon is drawn than sunrise. These two are the whole tuning
+   *  surface if the arc wants to sit higher or flatter. */
+  private static readonly BAND_SPAN = (19 * Math.PI) / 180;
 
-  /** How strongly to compress, for a given horizon drop: 1 in the overview,
-   *  0 in first person, where the true sky is what the viewer is standing
-   *  under and must not be redrawn. */
+  /**
+   * The angle, in radians, that a given horizon drop rotated the sky by — and
+   * therefore the angle bodies must be moved DOWN by to stay in it. 0 in first
+   * person, where the true sky is what the viewer is standing under and must
+   * not be redrawn at all.
+   *
+   * The name survives from when this returned a 0/1 strength; it is now the
+   * drop itself, so `displayAltitude` cannot disagree with `setHorizonDrop`
+   * about how far the horizon moved.
+   */
   static liftFor(units: number): number {
-    return units > 0 ? 1 : 0;
+    return units > 0 ? Math.atan(units / SkyDome.RADIUS) : 0;
   }
 
   /** The dome's radius, and the denominator setHorizonDrop's angle is measured
@@ -233,19 +365,66 @@ export class SkyDome {
    */
   private placeSun(): void {
     // The sun is opposite the direction its light travels.
-    this.mat.sunPosition = SkyDome.lift(
-      -this.sunDir.x, -this.sunDir.y, -this.sunDir.z,
-      SkyDome.liftFor(this.dropUnits),
-    ).scale(300);
+    const x = -this.sunDir.x, y = -this.sunDir.y, z = -this.sunDir.z;
+
+    // ⚠️ THE MATERIAL GETS THE TRUE DIRECTION, always, in every view. It is
+    // what tells SkyMaterial whether it is day, so any adjustment here is a
+    // lie about the hour — a below-horizon value renders night at noon
+    // (2.394.0). Where the disc is DRAWN is the billboard's business now, and
+    // the two questions stopped being one input the moment it existed.
+    this.mat.sunPosition = new Vector3(x, y, z).scale(300);
+
+    const drop = SkyDome.liftFor(this.dropUnits);
+    const alt = Math.atan2(y, Math.hypot(x, z));
+    // Fade on the TRUE altitude — see horizonFade. Below the horizon the sun is
+    // simply gone, and the night sky takes over.
+    const fade = SkyDome.horizonFade(alt);
+    // First person shows the material's own disc in a sky the viewer is
+    // genuinely standing under, so the billboard would only ever be a second
+    // sun beside the real one.
+    const visible = drop > 0 && fade > 0;
+    this.sunMat.alpha = fade;
+    this.sunDisc.setEnabled(this.enabled && visible);
+    this.drawnAlt = alt;
+    if (!visible) return;
+
+    this.drawnAlt = SkyDome.displayAltitude(alt, drop);
+    this.sunDisc.position = SkyDome.lift(x, y, z, drop).scale(SUN_DIST);
+
+    // Warm the disc as it nears the horizon, over the last 25° — the same
+    // reddening the sky itself is doing behind it, so the two agree.
+    const warmth = Math.max(0, 1 - alt / ((25 * Math.PI) / 180));
+    const key = warmth.toFixed(2);
+    if (key !== this.sunKey) { this.sunKey = key; this.drawSun(warmth); }
+  }
+
+  /** Where the disc is DRAWN, in degrees, and the true altitude it came from —
+   *  for the `sky` debug channel. A sun that cannot be seen is answered by
+   *  comparing the drawn figure against the camera's own `sinTilt`. */
+  sunReport(): { trueDeg: number; drawnDeg: number; alpha: number } {
+    const deg = (r: number) => (r * 180) / Math.PI;
+    return {
+      trueDeg: deg(Math.atan2(-this.sunDir.y, Math.hypot(this.sunDir.x, this.sunDir.z))),
+      drawnDeg: deg(this.drawnAlt),
+      alpha: this.sunMat.alpha,
+    };
   }
 
   setEnabled(on: boolean): void {
+    this.enabled = on;
     this.box.setEnabled(on);
+    // Never turned on FROM here — placeSun owns whether the sun is up at all,
+    // and re-enabling a set sun would hang a disc in the night sky.
+    if (!on) this.sunDisc.setEnabled(false);
+    else this.placeSun();
   }
 
   dispose(): void {
     this.box.dispose();
     this.mat.dispose();
+    this.sunDisc.dispose();
+    this.sunMat.dispose();
+    this.sunTex.dispose();
   }
 
   // Kept for callers that want a quick neutral tint reference (unused internally).

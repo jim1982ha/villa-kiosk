@@ -311,34 +311,49 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             north — and a GLB's heading is whatever its floor-plan export
             produced. This turns the whole sky to match. Ships at 0 rather than
             a seeded guess, which would be right for one villa only. */}
-        <label style={{ marginTop: 14 }}>
-          Model north offset · {(config.northOffsetDeg ?? 0)}°
-        </label>
+        {/* Label and button share a row: they are one control in two forms —
+            the slider states the offset, the button MEASURES it — so putting
+            them together says that, and buys back the vertical space the old
+            stacked button and four-line paragraph took in a modal that already
+            scrolls on a phone. `gap` plus wrap keeps them legible if the label
+            grows (it carries a live value) rather than crushing the button
+            below --touch-min. */}
+        <div style={{
+          marginTop: 14, display: "flex", alignItems: "center",
+          justifyContent: "space-between", gap: 10, flexWrap: "wrap",
+        }}>
+          <label style={{ marginTop: 0 }}>
+            Model north offset · {(config.northOffsetDeg ?? 0)}°
+          </label>
+          {/* The one-tap path, and the reason the slider is not the only one:
+              the operator knows which way their villa faces, not what the
+              offset is in degrees. Turn the view toward the real north side,
+              press this, and the heading becomes the answer — viewHeadingDeg. */}
+          <button
+            className="btn"
+            // Flex shrinks items within a line BEFORE it wraps them, so without
+            // this the phone tier would squeeze `.btn`'s 18px padding out and
+            // break the label rather than moving the button to its own line —
+            // a sub-44px target, which is the one thing --touch-min exists to
+            // prevent.
+            style={{ flexShrink: 0, whiteSpace: "nowrap" }}
+            disabled={!manager}
+            onClick={() => {
+              const deg = manager?.viewHeadingDeg();
+              if (deg != null) update({ northOffsetDeg: Math.round(deg) });
+            }}
+          >
+            Set North
+          </button>
+        </div>
         <input
           type="range" min={0} max={359} step={1} value={config.northOffsetDeg ?? 0}
           onChange={(e) => update({ northOffsetDeg: Number(e.target.value) })}
         />
-        {/* The one-tap path, and the reason the slider is not the only one: the
-            operator knows which way their villa faces, not what the offset is
-            in degrees. Turn the view toward the real north side, press this,
-            and the heading becomes the answer — see viewHeadingDeg. */}
-        <button
-          className="btn"
-          style={{ marginTop: 8, alignSelf: "flex-start" }}
-          disabled={!manager}
-          onClick={() => {
-            const deg = manager?.viewHeadingDeg();
-            if (deg != null) update({ northOffsetDeg: Math.round(deg) });
-          }}
-        >
-          North is the way I'm facing
-        </button>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
-          Turn the map until you are looking toward the villa's real north side,
-          then press the button — or drag the slider until the shadows fall the
-          way they do outside. Sunrise and sunset times are already right; this
-          only fixes which wall the light comes from. Add <code>?skySpeed=900</code>
-          to the address to watch a whole day pass in about a minute and check it.
+          Face the villa's real north side and press Set North, or drag the
+          slider until the shadows match. Only fixes which wall the light comes
+          from — sunrise and sunset times are already right.
         </p>
 
         <p className="muted body-text" style={{ marginTop: 10, fontSize: "var(--text-2xs)" }}>
