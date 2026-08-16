@@ -9,7 +9,7 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Constants } from "@babylonjs/core/Engines/constants";
-import { Camera } from "@babylonjs/core/Cameras/camera";
+import { cameraFrame } from "./cameraFrame";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
@@ -336,15 +336,9 @@ export class SkyDome {
     cam.getDirectionToRef(SkyDome.FORWARD, this.fwd);
     const pitch = Math.atan2(-this.fwd.y, Math.hypot(this.fwd.x, this.fwd.z));
     const camAz = Math.atan2(this.fwd.x, this.fwd.z);
-    // The two half-angles, derived from whichever one the camera holds fixed.
-    // Reading `fov` as vertical unconditionally would make the dome the wrong
-    // width on any camera set to FOVMODE_HORIZONTAL_FIXED, silently.
-    const aspect = this.scene.getEngine().getAspectRatio(cam) || 1;
-    const horizontalFixed = cam.fovMode === Camera.FOVMODE_HORIZONTAL_FIXED;
-    const halfFov = horizontalFixed
-      ? Math.atan(Math.tan(cam.fov / 2) / aspect) : cam.fov / 2;
-    const hHalf = horizontalFixed
-      ? cam.fov / 2 : Math.atan(Math.tan(halfFov) * aspect);
+    // Both half-angles, from the one place that knows which of them this
+    // camera holds fixed — see cameraFrame.ts.
+    const { vHalf: halfFov, hHalf } = cameraFrame(this.scene, cam);
     // ~0.3°: below that nothing has moved a pixel, and re-placing would repaint
     // nothing while defeating the on-demand render.
     if (Math.abs(pitch - SkyDome.pitch) < 0.005

@@ -117,6 +117,7 @@ import { axisWorldScale } from "./meshUnits";
 import { LightPool, poolFootprint } from "./LightPools";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { badgeText } from "./badgeText";
+import { cameraFrame } from "./cameraFrame";
 import {
   arrange, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
   type CardArrangement,
@@ -2561,7 +2562,9 @@ export class EntityVisuals {
       vpH: number;
       /** Render-target width in px — the other half of the frame test. */
       vpW: number;
-      /** Vertical field of view in radians (Babylon's FOVMODE_VERTICAL_FIXED). */
+      /** Vertical field of view in radians. Comes from `cameraFrame()`, which
+       *  is the one place that knows whether `camera.fov` is the vertical or
+       *  the horizontal angle — do not read `cam.fov` here instead. */
       vFov: number;
       /** The DESTINATION's view plane, UNQUANTISED. "Is this badge on screen"
        *  is a per-axis question about a pose that is already known exactly, so
@@ -4979,7 +4982,10 @@ export class EntityVisuals {
     const vpH = cssPixels
       ? engine.getRenderHeight() * engine.getHardwareScalingLevel()
       : engine.getRenderHeight();
-    const fov = cam.fov || 0.8;
+    // Not `cam.fov` directly: whether that is the vertical or the horizontal
+    // angle is cameraFrame.ts's question, and this reader was one of four that
+    // each answered it separately. Its `|| 0.8` fallback lived on there too.
+    const fov = 2 * cameraFrame(this.scene, cam).vHalf;
     // Duck-typed rather than instanceof-checked so this file needs no import
     // of the concrete camera classes: only ArcRotateCamera exposes `radius`.
     const orbitRadius = (cam as unknown as { radius?: number }).radius;

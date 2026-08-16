@@ -80,6 +80,7 @@ import type { TeleportPoint } from "@/types/scene.types";
 import { entityMapDelta } from "./entityMapDiff";
 import { ModelKeyedStore } from "./modelStore";
 import { exactViewBasis, projectToView, type ProjectedPoint } from "./badgeProjection";
+import { cameraFrame } from "./cameraFrame";
 
 // Cosmetic-vs-structural entityMap diffing lives in its own pure module (no
 // Babylon, no scene state) — see entityMapDiff.ts for the full reasoning about
@@ -1941,11 +1942,12 @@ export class SceneManager {
     const cz = (bounds.minZ + bounds.maxZ) / 2;
 
     const cam = this.overview.camera;
-    const vFov = cam.fov;
-    const aspect = this.engine.getAspectRatio(cam);
-    // Babylon's default FOVMODE_VERTICAL_FIXED keeps `fov` as the VERTICAL
-    // angle and derives the horizontal one from the aspect ratio.
-    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+    // Which of the two angles `fov` actually is belongs to cameraFrame.ts —
+    // this file used to assume it was the vertical one, as three other readers
+    // separately did.
+    const { vHalf, hHalf } = cameraFrame(this.scene, cam);
+    const vFov = 2 * vHalf;
+    const hFov = 2 * hHalf;
 
     // ── The shot is ZENITHAL, whatever the camera was doing before ──────────
     // A floor plan seen from straight above is the view that shows a room's

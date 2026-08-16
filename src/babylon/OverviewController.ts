@@ -42,6 +42,7 @@ import { Animation } from "@babylonjs/core/Animations/animation";
 import "@babylonjs/core/Animations/animatable";
 import { CubicEase, EasingFunction } from "@babylonjs/core/Animations/easing";
 import { TapRecognizer } from "./TapRecognizer";
+import { cameraFrame } from "./cameraFrame";
 
 interface OverviewCallbacks {
   onActivity: () => void;
@@ -178,20 +179,22 @@ export class OverviewController {
       minX: ext.min.x - span * 0.25, maxX: ext.max.x + span * 0.25,
       minZ: ext.min.z - span * 0.25, maxZ: ext.max.z + span * 0.25,
     };
-    // Babylon's default FOVMODE_VERTICAL_FIXED keeps `camera.fov` as the
-    // VERTICAL angle and derives the horizontal one from the aspect ratio
-    // (tan(hFov/2) = tan(vFov/2) * aspect) — so at a fixed radius, a portrait
-    // phone (aspect < 1) sees proportionally LESS width than a landscape
-    // desktop window does, cropping most of a villa that's wider than it is
-    // deep. `span * 1.05` alone was tuned against a landscape aspect, so it
-    // undershoots on portrait. Scaling by 1/aspect (only below aspect 1, so
-    // desktop — always ≥1 — is untouched) restores the same visible width a
-    // square viewport would give, which is what the flat multiplier assumed.
-    // Applied to upperRadiusLimit too, or the camera's own per-frame clamp
-    // would just clip the corrected radius straight back down on narrow
-    // phones (aspect ~0.46 alone needs more headroom than the old 2.2× cap).
-    const aspect = this.scene.getEngine().getAspectRatio(this.camera);
-    const aspectCorrection = aspect < 1 ? 1 / aspect : 1;
+    // A camera sees proportionally LESS WIDTH the narrower its viewport, so at
+    // a fixed radius a portrait phone crops most of a villa that is wider than
+    // it is deep. `span * 1.05` alone was tuned against a landscape aspect and
+    // undershoots there. Widening the span by the ratio of the two half-angles
+    // restores the visible width a square viewport would give, which is what
+    // the flat multiplier assumed. Applied to upperRadiusLimit too, or the
+    // camera's own per-frame clamp would clip the corrected radius straight
+    // back down on narrow phones (aspect ~0.46 alone needs more headroom than
+    // the old 2.2× cap).
+    //
+    // tan(vHalf)/tan(hHalf) is exactly 1/aspect while `fov` is the vertical
+    // angle, so this is the identical number the hand-rolled version produced —
+    // but WHICH angle `fov` is belongs to cameraFrame.ts, not to a fourth
+    // separate assumption here. Capped at 1 so landscape stays untouched.
+    const { vHalf, hHalf } = cameraFrame(this.scene, this.camera);
+    const aspectCorrection = Math.max(1, Math.tan(vHalf) / Math.tan(hHalf));
     const correctedSpan = span * aspectCorrection;
 
     this.camera.lowerRadiusLimit = Math.max(2, span * 0.08);

@@ -1,3 +1,12 @@
+## 2.399.0
+
+### Changed — one reader for the camera's field of view
+
+Nothing visible changes. Four places converted `camera.fov` into an on-screen
+angle and each independently assumed it was the vertical one — true today only
+because nothing sets `fovMode`. `cameraFrame()` now answers it once, so the sky,
+the room fit, the radius limits and the zoom rung cannot come to disagree.
+
 ## 2.398.0
 
 ### Changed — the sun and moon arc over the villa instead of off the sides
