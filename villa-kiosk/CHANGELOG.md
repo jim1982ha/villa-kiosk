@@ -1,3 +1,15 @@
+## 2.369.0
+
+### Fixed — after focusing a room, other rooms stayed chips at every zoom
+
+2.368.0 holds every room but the focused one at its chip so the room you tapped
+gets the frame. That suppression shared a lifetime with the focused room's own
+exemption, which deliberately survives zooming in — so panning across to another
+room left it stuck as a chip no matter how far you zoomed.
+
+The two now expire separately. The exemption is unchanged. The suppression holds
+only while the camera is at or wider than the zoom the focus was granted at;
+zoom in from there and every room declutters by zoom exactly as before.
 ## 2.368.0
 
 ### Changed — a focused room now gets the screen to itself

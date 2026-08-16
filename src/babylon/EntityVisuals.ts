@@ -4030,10 +4030,30 @@ export class EntityVisuals {
     // quantisedPixelsPerWorldUnit for the full symptom. Grouping keeps render
     // pixels because it compares within one frame against boxes in the same
     // units; this must not.
+    // ── The focus has TWO consequences and they expire differently ─────────
+    // The EXEMPTION — the focused room's own badges drawn individually — keeps
+    // the rule above: it survives zooming in, because coming closer can never
+    // make a room less legible.
+    //
+    // The SUPPRESSION added in 2.368.0 — every OTHER room held at its chip —
+    // must not. It exists to stop the neighbours competing for the frame at the
+    // moment you ask for a room, and that is all it is for. Left to share the
+    // exemption's lifetime it became sticky: focus a room, pan across to
+    // another, and that one stayed a chip at every zoom, because the pass was
+    // still forcing it clustered. Reported as "the other room badge never
+    // declutters into entity icons".
+    //
+    // So it holds only while the camera is AT OR WIDER THAN the zoom the focus
+    // was granted at. Zoom in from there and every room is back under the
+    // ordinary rules, decluttering by zoom exactly as it did before — which is
+    // the property being asked for, expressed as the one condition that already
+    // means "you have not yet earned the space to draw these".
+    let suppressOthers = false;
     if (this.focusedRooms.size > 0) {
       const z = this.quantisedPixelsPerWorldUnit(shown, true);
       if (this.focusedAtZoom === 0) this.focusedAtZoom = z;
       else if (z < this.focusedAtZoom) { this.focusedRooms.clear(); this.focusedAtZoom = 0; }
+      suppressOthers = this.focusedRooms.size > 0 && z <= this.focusedAtZoom;
     }
 
     // ── Layout ───────────────────────────────────────────────────────────
@@ -4235,7 +4255,9 @@ export class EntityVisuals {
     //   * and each of those rooms still draws its CHIP, so nothing is lost —
     //     the neighbours remain named, counted and tappable, which is the whole
     //     reason this is a chip and not a delete.
-    if (this.focusedRooms.size > 0) {
+    // Only while the camera is still at the zoom the focus was granted at — see
+    // `suppressOthers`. Past that the neighbours are on their own merits again.
+    if (suppressOthers) {
       for (const k of this.roomDisplay.keys()) {
         if (!this.focusedRooms.has(k)) this.roomClustered.set(k, true);
       }
