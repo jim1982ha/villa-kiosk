@@ -27,7 +27,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
 import { useFmData, useFacilityLiveView } from "@/fm/FmDataContext";
 import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
-import { unavailableDeviceIds } from "@/config/deviceGroups";
+import { unavailableDeviceIds, selectableDeviceIds } from "@/config/deviceGroups";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
 import CockpitModal from "@/components/cockpit/CockpitModal";
@@ -111,6 +111,21 @@ export default function FacilityModal({
       entities, config.entityMap, mappedEntityIds, data, config.deviceGroups,
       config.dismissedEntityIds),
     [entities, config.entityMap, mappedEntityIds, data, config.deviceGroups, config.dismissedEntityIds],
+  );
+
+  // The report's DENOMINATOR, and it has to come from the same rule its
+  // numerator does. `offlineDeviceCount` below is derived from
+  // unavailableDeviceIds, which filters through selectableDeviceIds — disabled
+  // mappings dropped, dismissed entities dropped, entities HA does not have
+  // dropped, device groups folded to one primary. This used to be
+  // `mappedEntityIds.size || Object.keys(config.entityMap).length`, which
+  // applies none of those, so the report divided a strictly-filtered numerator
+  // by an unfiltered total and understated the offline share. deviceGroups.ts
+  // already records this drift happening once before, to the fault picker.
+  const totalDeviceCount = useMemo(
+    () => selectableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds,
+                              entities, config.dismissedEntityIds).length,
+    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
   );
 
   // Same list the HUD's own unavailable-devices badge shows (see
@@ -200,7 +215,7 @@ export default function FacilityModal({
               <ReportTab
                 readiness={readiness}
                 offlineDeviceCount={readiness.checks.find((c) => c.id === "devices-online")?.entityIds?.length ?? 0}
-                totalDeviceCount={mappedEntityIds.size || Object.keys(config.entityMap).length}
+                totalDeviceCount={totalDeviceCount}
               />
             )}
           </div>

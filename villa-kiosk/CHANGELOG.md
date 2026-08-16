@@ -1,3 +1,12 @@
+## 2.382.0
+
+### Fixed — the readiness report understated how many devices were offline
+
+Its offline count came from the filtered device list, but the total it was
+divided by was the raw entity map: disabled mappings, dismissed entities and
+grouped-away members all inflated the denominator. Both now come from
+`selectableDeviceIds`.
+
 ## 2.381.0
 
 ### Fixed — Enter on the camera's Next button did both things at once
