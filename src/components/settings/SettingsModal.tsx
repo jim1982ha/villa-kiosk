@@ -318,10 +318,27 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           type="range" min={0} max={359} step={1} value={config.northOffsetDeg ?? 0}
           onChange={(e) => update({ northOffsetDeg: Number(e.target.value) })}
         />
+        {/* The one-tap path, and the reason the slider is not the only one: the
+            operator knows which way their villa faces, not what the offset is
+            in degrees. Turn the view toward the real north side, press this,
+            and the heading becomes the answer — see viewHeadingDeg. */}
+        <button
+          className="btn"
+          style={{ marginTop: 8, alignSelf: "flex-start" }}
+          disabled={!manager}
+          onClick={() => {
+            const deg = manager?.viewHeadingDeg();
+            if (deg != null) update({ northOffsetDeg: Math.round(deg) });
+          }}
+        >
+          North is the way I'm facing
+        </button>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
-          Rotate until the shadows fall the way they really do outside. Sunrise
-          and sunset times are already correct — this only fixes which wall the
-          light comes from.
+          Turn the map until you are looking toward the villa's real north side,
+          then press the button — or drag the slider until the shadows fall the
+          way they do outside. Sunrise and sunset times are already right; this
+          only fixes which wall the light comes from. Add <code>?skySpeed=900</code>
+          to the address to watch a whole day pass in about a minute and check it.
         </p>
 
         <p className="muted body-text" style={{ marginTop: 10, fontSize: "var(--text-2xs)" }}>

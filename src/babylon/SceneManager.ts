@@ -3399,6 +3399,26 @@ export class SceneManager {
   /** One-shot guard so handlePageShow's reload can never loop. */
   private reloadedAfterDispose = false;
 
+  /**
+   * The heading the camera is currently looking along, as a MODEL bearing in
+   * degrees — 0 = +Z, increasing toward +X, matching the convention
+   * SunController builds its direction vectors with.
+   *
+   * Exists so "north is the way I am facing" can be one tap instead of a number
+   * the operator has to guess. The villa's own orientation is the one fact they
+   * reliably know ("the pool is on the south side"); the offset in degrees is
+   * not. Returns null when there is no camera to ask, or when it is looking
+   * straight down and has no heading to report.
+   */
+  viewHeadingDeg(): number | null {
+    const cam = this.scene.activeCamera;
+    if (!cam) return null;
+    const fwd = cam.getForwardRay().direction;
+    if (Math.hypot(fwd.x, fwd.z) < 1e-4) return null;
+    const deg = (Math.atan2(fwd.x, fwd.z) * 180) / Math.PI;
+    return (deg + 360) % 360;
+  }
+
   dispose(): void {
     // Idempotent: both React unmount AND the pagehide safety net can call
     // this, and pagehide can even fire mid-unmount — a double dispose()

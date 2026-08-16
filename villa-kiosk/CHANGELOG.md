@@ -1,3 +1,11 @@
+## 2.387.0
+
+### Added — "North is the way I'm facing", beside the north-offset slider
+
+Setting north meant guessing a number in degrees. Turn the map until you are
+looking toward the villa's real north side and press the button instead — the
+camera's heading becomes the offset. The slider stays for fine adjustment.
+
 ## 2.386.0
 
 ### Added — simulate a time of day with `?skyTime` / `?skySpeed`
