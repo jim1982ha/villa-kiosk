@@ -306,6 +306,24 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           onChange={(e) => applyRender({ lightPoolIntensity: Number(e.target.value) })}
         />
 
+        {/* The sun and moon are computed from the villa's real coordinates and
+            clock, but the direction vector assumes the MODEL's +Z axis points
+            north — and a GLB's heading is whatever its floor-plan export
+            produced. This turns the whole sky to match. Ships at 0 rather than
+            a seeded guess, which would be right for one villa only. */}
+        <label style={{ marginTop: 14 }}>
+          Model north offset · {(config.northOffsetDeg ?? 0)}°
+        </label>
+        <input
+          type="range" min={0} max={359} step={1} value={config.northOffsetDeg ?? 0}
+          onChange={(e) => update({ northOffsetDeg: Number(e.target.value) })}
+        />
+        <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
+          Rotate until the shadows fall the way they really do outside. Sunrise
+          and sunset times are already correct — this only fixes which wall the
+          light comes from.
+        </p>
+
         <p className="muted body-text" style={{ marginTop: 10, fontSize: "var(--text-2xs)" }}>
           Badge size — {(config.entityIconScale ?? 1.0).toFixed(2)}× — is set with
           the +/- buttons next to the category filters in the top bar.

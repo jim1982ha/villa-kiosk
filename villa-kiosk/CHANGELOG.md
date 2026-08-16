@@ -1,3 +1,12 @@
+## 2.384.0
+
+### Added — Model north offset, so the sun rises over the right wall
+
+The sun and moon are computed from the villa's real coordinates and clock, but
+the direction built from that bearing assumed the model's +Z axis points north
+— and a GLB's heading is whatever its floor-plan export produced. A slider in
+Settings rotates the whole sky to match. Defaults to 0.
+
 ## 2.383.0
 
 ### Changed — the sun stays in frame in the overview

@@ -107,10 +107,24 @@ export class SunController {
     this.applyRealSun();
   }
 
+  /**
+   * A true compass bearing, turned into a bearing in THIS model's axes.
+   *
+   * ONE reader for the whole file, and it has to be: the sun and the moon are
+   * computed independently and would otherwise need the correction applied
+   * twice, which is how they would come to disagree about which way is north.
+   * See AppConfig.northOffsetDeg for why the correction exists at all.
+   */
+  private modelAzimuth(azimuth: number): number {
+    return azimuth + ((this.config.northOffsetDeg ?? 0) * Math.PI) / 180;
+  }
+
   /** Compute lighting from the computed sun altitude/azimuth right now. */
   applyRealSun(date = new Date()): void {
     const { latitude, longitude } = this.config;
-    const { azimuth, altitude: realAltitude } = getSunPosition(date, latitude, longitude);
+    const { azimuth: trueAzimuth, altitude: realAltitude } =
+      getSunPosition(date, latitude, longitude);
+    const azimuth = this.modelAzimuth(trueAzimuth);
     // Settings' day/night preview (baked villas): "day"/"night" PIN the sun
     // to the matching side of the horizon regardless of the real altitude —
     // everything downstream (isDay, light dir, sky dir, the twilight nightT
@@ -161,13 +175,14 @@ export class SunController {
     // can never be a prerequisite for this running.
     if (this.nightSky) {
       const m = getMoonPosition(date, latitude, longitude);
+      const mAz = this.modelAzimuth(m.azimuth);
       const ill = getMoonIllumination(date);
       // Same convention as skyDir above: a unit vector pointing AT the body.
       this.nightSky.update({
         dir: new Vector3(
-          -Math.sin(m.azimuth) * Math.cos(m.altitude),
+          -Math.sin(mAz) * Math.cos(m.altitude),
           Math.sin(m.altitude),
-          -Math.cos(m.azimuth) * Math.cos(m.altitude),
+          -Math.cos(mAz) * Math.cos(m.altitude),
         ).normalize(),
         fraction: ill.fraction,
         angle: ill.angle,

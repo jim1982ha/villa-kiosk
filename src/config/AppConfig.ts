@@ -130,6 +130,22 @@ export interface AppConfig {
   siteTitle: string;
   latitude: number;
   longitude: number;
+  /**
+   * Degrees to add to every celestial AZIMUTH, so the computed sun and moon
+   * land on the right walls of THIS model.
+   *
+   * getSunPosition returns a true compass bearing (0 = North, clockwise), and
+   * the direction vector built from it assumes the scene's +Z axis is North.
+   * Nothing guarantees that: a GLB's heading is whatever the floor-plan export
+   * happened to produce, and it differs per villa. Without this the astronomy
+   * is correct and the ORIENTATION is arbitrary — the sun rises over whichever
+   * wall the exporter chose.
+   *
+   * 0 by default, i.e. "+Z is North", which is the only honest assumption to
+   * ship: a seeded value would be right for one villa and wrong for every
+   * other install.
+   */
+  northOffsetDeg: number;
   theme: "dark" | "light" | "auto" | "night";
   currentFloor: 1 | 2;
   /** entity_id -> metadata (panel type, label, room). Editable at runtime. */
@@ -277,6 +293,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   siteTitle: "",
   latitude: env.VITE_LAT ? Number(env.VITE_LAT) : 0,
   longitude: env.VITE_LNG ? Number(env.VITE_LNG) : 0,
+  northOffsetDeg: 0,
   theme: "auto",
   currentFloor: 1,
   entityMap: ENTITY_MAP,
