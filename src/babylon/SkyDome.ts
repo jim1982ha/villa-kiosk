@@ -41,7 +41,10 @@ export class SkyDome {
    *  channel: it is the one field that answers "why can't I see the sun". */
   private drawnAlt = 0;
 
+  private scene: Scene;
+
   constructor(scene: Scene) {
+    this.scene = scene;
     const mat = new SkyMaterial("skyMaterial", scene);
     mat.backFaceCulling = false;     // we view it from the inside
     mat.useSunPosition = true;       // drive the sun from SunController, not inclination
@@ -136,6 +139,12 @@ export class SkyDome {
     sun.alwaysSelectAsActiveMesh = true;
     sun.setEnabled(false);
     this.sunDisc = sun;
+
+    // The arc is framed against the camera, so it has to see the camera move.
+    // onBeforeRenderObservable and not a timer: it fires exactly on the frames
+    // that are actually drawn, which on an on-demand scene is precisely the set
+    // of frames where the answer could have changed.
+    scene.onBeforeRenderObservable.add(() => this.trackCamera());
   }
 
   /**
@@ -230,43 +239,80 @@ export class SkyDome {
    */
   private static displayAltitude(alt: number, drop: number): number {
     if (drop <= 0) return alt;
-    return -drop + SkyDome.BAND_MIN + alt * (SkyDome.BAND_SPAN / (Math.PI / 2));
+    const t = Math.max(0, Math.min(1, alt / (Math.PI / 2)));
+    const frac = SkyDome.BAND_LOW + (SkyDome.BAND_HIGH - SkyDome.BAND_LOW) * t;
+    return -SkyDome.pitch + SkyDome.halfFov * frac;
+  }
+
+  /** Where the camera is looking, refreshed once per rendered frame — see
+   *  trackCamera. `pitch` is radians BELOW horizontal (positive); `halfFov` is
+   *  half the vertical field of view, the unit the band is expressed in. */
+  private static pitch = 0;
+  private static halfFov = 0.4;
+
+  /**
+   * Follow the camera, because the arc is drawn in the FRAME and not in the sky.
+   *
+   * Cheap enough to run per rendered frame — two trig calls and an early-out on
+   * a pitch that has not moved — and this scene renders on demand, so it costs
+   * nothing at all while the camera is still.
+   */
+  private trackCamera(): void {
+    const cam = this.scene.activeCamera;
+    if (!cam || this.dropUnits <= 0) return;
+    cam.getDirectionToRef(SkyDome.FORWARD, this.fwd);
+    const pitch = Math.atan2(-this.fwd.y, Math.hypot(this.fwd.x, this.fwd.z));
+    const halfFov = cam.fov / 2;
+    // ~0.3°: below that the disc has not moved a pixel, and re-placing it would
+    // repaint nothing while defeating the on-demand render.
+    if (Math.abs(pitch - SkyDome.pitch) < 0.005 && halfFov === SkyDome.halfFov) return;
+    SkyDome.pitch = pitch;
+    SkyDome.halfFov = halfFov;
+    this.placeSun();
+    this.onFraming?.();
+  }
+
+  private readonly fwd = new Vector3(0, 0, 1);
+  private static readonly FORWARD = new Vector3(0, 0, 1);
+  private onFraming: (() => void) | null = null;
+
+  /** Called after the framing moved, so the moon can be re-placed by the same
+   *  rule in the same frame. Wired by SceneManager rather than by a second
+   *  observer inside NightSky, which would race this one for ordering. */
+  setFramingHook(fn: () => void): void {
+    this.onFraming = fn;
   }
 
   /**
-   * Where the arc sits RELATIVE TO THE DROPPED HORIZON, and the offsets are
-   * small because `-drop` above already did the heavy lifting.
+   * Where the arc sits IN THE FRAME, as a fraction of the half field of view
+   * above the camera's own forward ray: 0 is dead centre, 1 the top edge.
    *
-   * ⚠️ Measured, not guessed, and the numbers are worth keeping written down.
-   * The overview camera's tilt is `beta` (OverviewController), clamped to
-   * 0.05..1.4 rad and defaulting to 0.5 — so it looks between 10° and 87° below
-   * horizontal, 61.4° by default, which a `?debug` capture confirms as
-   * `sinTilt=0.882` (= cos beta). Its vertical field of view is 0.8 rad, ±22.9°.
-   * The DEFAULT pose therefore sees elevations -84.3° to -38.5°, and the
-   * horizon is off the TOP of the screen. Nothing at a positive elevation can
-   * be in frame at all — which is why 2.392.0's +14°..+40° band was invisible.
+   * ⚠️ THE UNIT IS THE FRAME, NOT THE SKY, and 2.396.0 is why. That release put
+   * the arc at a fixed WORLD elevation, computed against the overview's DEFAULT
+   * pitch of 61.4° — correct there, and wrong everywhere else, because the pitch
+   * is a control the user holds. `beta` clamps to 0.05..1.4 rad, so the camera
+   * looks anywhere between 10° and 87° below horizontal, and with a vertical fov
+   * of 0.8 rad (±22.9°) the visible cone travels with it: -84°..-38° at the
+   * default, -62°..-16° at the pitch the sun was reported low from
+   * (`sinTilt=0.634`), -33°..+13° at the shallow limit. Those do not intersect.
+   * NO fixed elevation can be well framed at every tilt, so a fixed one always
+   * had a range of poses where it sat on the villa or fell off an edge —
+   * reported as "the sun appears but below the villa".
    *
-   * The drop of 700 units is a rotation of atan(700/500) = 54.5°, so `-drop`
-   * puts a body on the horizon at -54.5°; BAND_MIN then lowers it to -69.5° and
-   * BAND_SPAN carries it back up to -51.6° at a noon altitude of 85°. Both ends
-   * clear the default cone by more than 12°, and the arc still reads the way a
-   * day does: low to either side, highest in the middle.
+   * Measuring from the camera's forward ray removes the whole problem by
+   * construction: 0.35 and 0.85 land the disc between 33% and 15% of the way
+   * down the frame at EVERY tilt, always above the villa (which the camera
+   * targets, so it sits at the centre), and the sun climbs across the day as it
+   * should. Azimuth is still untouched, so east/west and the live arc are what
+   * they always were and still validate northOffsetDeg.
    *
-   * Tying the band to the drop rather than restating it as an absolute angle is
-   * what keeps the sun in the sky it belongs to: retune OVERVIEW_HORIZON_DROP
-   * and the bodies follow it instead of being left behind, which is precisely
-   * the 2.388.0 bug ("the gradient came into view and the sun was left behind
-   * it") one level up.
-   *
-   * The arc leaves the frame at shallow tilts, and that is honest rather than
-   * broken: at beta 1.4 the visible cone is -32°..+13° and NO fixed band is in
-   * both it and the default one — they do not intersect. A real sun goes out of
-   * shot when you look away from it too.
+   * This is openly a diagram — the same licence displayAltitude has always had,
+   * now spent on the axis that was actually causing trouble.
    */
-  private static readonly BAND_MIN = (-15 * Math.PI) / 180;
-  /** How much higher noon is drawn than sunrise. These two are the whole tuning
-   *  surface if the arc wants to sit higher or flatter. */
-  private static readonly BAND_SPAN = (19 * Math.PI) / 180;
+  private static readonly BAND_LOW = 0.35;
+  /** Where a sun directly overhead is drawn. BAND_LOW and this are the whole
+   *  tuning surface if the arc wants to sit higher or flatter. */
+  private static readonly BAND_HIGH = 0.85;
 
   /**
    * The angle, in radians, that a given horizon drop rotated the sky by — and
@@ -401,12 +447,20 @@ export class SkyDome {
   /** Where the disc is DRAWN, in degrees, and the true altitude it came from —
    *  for the `sky` debug channel. A sun that cannot be seen is answered by
    *  comparing the drawn figure against the camera's own `sinTilt`. */
-  sunReport(): { trueDeg: number; drawnDeg: number; alpha: number } {
+  sunReport(): { trueDeg: number; drawnDeg: number; alpha: number; frameY: number } {
     const deg = (r: number) => (r * 180) / Math.PI;
+    // Where the disc lands DOWN the frame: 0 the top edge, 1 the bottom, 0.5
+    // dead centre (which is where the camera's target — the villa — sits). This
+    // is the field that answers "the sun is in the wrong place" without anyone
+    // re-deriving the projection: outside 0..1 it is off screen, and near 1 it
+    // is under the villa, which is exactly what 2.396.0 was reported for.
+    const above = this.drawnAlt + SkyDome.pitch;
+    const frameY = 0.5 - 0.5 * (Math.tan(above) / Math.tan(SkyDome.halfFov));
     return {
       trueDeg: deg(Math.atan2(-this.sunDir.y, Math.hypot(this.sunDir.x, this.sunDir.z))),
       drawnDeg: deg(this.drawnAlt),
       alpha: this.sunMat.alpha,
+      frameY,
     };
   }
 

@@ -254,7 +254,8 @@ export class SunController {
     const line = `sky: ${clock}${skySimActive() ? " (sim)" : ""}`
       + ` alt=${deg(alt)}° real=${deg(real)}° az=${deg(azimuth)}°`
       + ` day=${alt > 0 ? "y" : "n"} nightT=${nightT.toFixed(2)} preview=${preview}`
-      + (s ? ` drawn=${Math.round(s.drawnDeg)}° discAlpha=${s.alpha.toFixed(2)}` : " sky=off");
+      + (s ? ` drawn=${Math.round(s.drawnDeg)}° frameY=${s.frameY.toFixed(2)}`
+        + ` discAlpha=${s.alpha.toFixed(2)}` : " sky=off");
     if (line === this.lastSkyLine) return;
     this.lastSkyLine = line;
     tapDebug(line, "sky");

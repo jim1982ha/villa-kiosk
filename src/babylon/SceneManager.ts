@@ -424,6 +424,10 @@ export class SceneManager {
     // exactly the same night sky, which is the requirement.
     this.nightSky = new NightSky(this.scene);
     this.sun.setNightSky(this.nightSky);
+    // Sun and moon are framed against the camera, so a tilt re-places both —
+    // through ONE observer (SkyDome's), because two would race for ordering and
+    // leave the moon a frame behind the sun in a sky they are meant to share.
+    this.sky.setFramingHook(() => this.nightSky?.reframe());
 
     this.sun.setRenderHook(() => this.requestRender());
     this.visuals = new EntityVisuals(

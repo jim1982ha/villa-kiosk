@@ -1,3 +1,13 @@
+## 2.397.0
+
+### Fixed — the sun sat below the villa once the view was tilted
+
+2.396.0 placed the arc at a fixed sky elevation, chosen against the overview's
+default pitch. The pitch is a control the user holds, and the visible cone
+travels with it, so at a shallower tilt the same elevation fell to the bottom of
+the frame. The arc is now measured from the camera's own forward ray, which
+keeps it in the top third at every tilt. The moon rides it too.
+
 ## 2.396.0
 
 ### Fixed — the sun is finally visible in the overview

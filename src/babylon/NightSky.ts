@@ -137,7 +137,19 @@ export class NightSky {
     this.lift = SkyDome.liftFor(units);
   }
 
+  /** The last look handed to update(), so the moon can be re-placed when the
+   *  CAMERA moves rather than only when the sky clock ticks. The arc is framed
+   *  against the camera now (SkyDome.BAND_LOW), so a tilt changes the answer. */
+  private lastLook: MoonLook | null = null;
+
+  /** Re-place from the stored look. Called by SkyDome's framing hook, so sun
+   *  and moon are re-framed in the same frame by the same rule. */
+  reframe(): void {
+    if (this.lastLook) this.update(this.lastLook);
+  }
+
   update(look: MoonLook): void {
+    this.lastLook = look;
     const night = Math.max(0, Math.min(1, look.nightT));
     for (const l of this.starLayers) {
       l.mat.alpha = night * l.peak;
