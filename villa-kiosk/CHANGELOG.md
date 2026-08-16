@@ -1,3 +1,13 @@
+## 2.409.0
+
+### Fixed — summaries that stood for devices nowhere near them
+
+Splitting a crowd into cards let a device join the nearest card even when it
+touched nothing in it, so a summary could point at floor between devices it
+claimed to represent. A device now only joins a card it actually collides with,
+and one left over pairs with the badge it lost to, as every other lone device
+already did. The `?debug=seat` trace also stops repeating itself every frame.
+
 ## 2.408.0
 
 ### Added — `?debug=seat`, the pixels behind a room collapsing

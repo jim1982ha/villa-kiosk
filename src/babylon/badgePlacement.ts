@@ -628,6 +628,125 @@ export function solvePlacement(
     st.buckets[bi].members.push(i);
   }
 
+  // ── 5b. AN OVERSIZED BUCKET SPLITS; IT DOES NOT DIE (2.406.0) ────────────
+  // Until now a bucket holding more members than one card can draw was KILLED
+  // — every room it touched went to its chip, the all-or-nothing contract hid
+  // every badge in those rooms, and the cascade in step 7 took the neighbours.
+  // One boundary pair fusing two rooms' piles was enough: bedroom (6) plus
+  // bathroom (4) made a bucket of 10, "undrawable", and BOTH rooms chipped in
+  // the same frame — the villa-wide cliff recorded in sources/files/move.mov,
+  // where one zoom rung flips drawn=25 to drawn=1.
+  //
+  // But "more than one card can draw" was never a reason to draw NOTHING: the
+  // clique machinery below (buildCliques — pure, pinned by the suite, already
+  // used by the focused-room path) splits exactly such a pile into mutually-
+  // overlapping clusters of at most drawableMax, each an honest card at its
+  // own local centroid. A fused bedroom+bathroom pile splits along its real
+  // geometry, because mutual overlap is spatially local. So the tiering
+  // becomes the one sentence the whole subsystem is supposed to mean:
+  //
+  //   A BADGE DRAWS ALONE UNTIL ITS BOX COLLIDES; COLLIDING BADGES GROUP INTO
+  //   AS MANY CARDS AS THEIR GEOMETRY NEEDS; A ROOM FALLS TO ITS CHIP ONLY
+  //   WHEN EVEN THE CARDS CANNOT BE PLACED (the caller's seating test), NOT
+  //   BECAUSE A COUNTING CEILING SAID SO.
+  //
+  // A singleton clique — a member that mutually overlaps no other, possible
+  // because bucket-mates shared a PILE, not necessarily each other's boxes —
+  // folds into the nearest clique that still has room, exactly the reasoning
+  // of the lone-deferral pull-back one tier up. If every clique is full it
+  // stays a bucket of one and STEP 6 BELOW pulls an accepted pile-mate down
+  // to partner it — the same rule, and the reason this runs BEFORE step 6
+  // rather than after it (2.409.0). Splitting after the pull-back left every
+  // new singleton with nothing to pair with, so it fell to step 7 and chipped
+  // its room: the suite's 120-badge cloud went to accepted=0. One ordering
+  // change, and every bucket of one — however it arose — is answered by the
+  // one rule that already existed for buckets of one.
+  //
+  // drawableMax < 2 keeps the old kill (step 7's `undrawable` branch): "the
+  // caller can draw nothing" cannot be answered by splitting.
+  if (drawableMax >= 2) {
+    const originalCount = bucketCount;
+    for (let b = 0; b < originalCount; b++) {
+      const bucket = st.buckets[b];
+      if (bucket.members.length <= drawableMax) continue;
+      // The canonical order every other decision uses: rank, then entity_id.
+      const order = bucket.members.slice().sort((x, y) => {
+        const rx = items[x].rank, ry = items[y].rank;
+        if (rx !== ry) return rx - ry;
+        return byteLess(items[x].sortKey, items[y].sortKey) ? -1
+          : items[x].sortKey === items[y].sortKey ? 0 : 1;
+      });
+      const cliques = buildCliques(items, order, gap, minSeparation, drawableMax);
+      // Fold singletons nearest-first, in canonical order so the outcome is a
+      // function of geometry and rank like everything else here.
+      const cent = cliques.map((c) => {
+        let cx = 0, cy = 0;
+        for (const i of c) { cx += items[i].sx; cy += items[i].sy; }
+        return { cx: cx / c.length, cy: cy / c.length };
+      });
+      for (let si = 0; si < cliques.length; si++) {
+        if (cliques[si].length !== 1) continue;
+        const lone = cliques[si][0];
+        let best = -1, bestD2 = Infinity;
+        for (let ci = 0; ci < cliques.length; ci++) {
+          if (ci === si || cliques[ci].length === 0) continue;
+          if (cliques[ci].length >= drawableMax) continue;
+          // ⚠️ IT MUST ACTUALLY TOUCH THE CLIQUE IT JOINS. Nearest-centroid
+          // alone was wrong and shipped wrong: a bucket's members share a PILE
+          // (transitively connected), not a box overlap, so "nearest clique
+          // with room" happily swallowed a device that touched none of it —
+          // producing a card standing for devices that are not together, drawn
+          // at a centroid pulled away from all of them. That is the one thing
+          // a summary may never be, and it is what "weird entity configuration
+          // and a lot of overlapping badges" looked like on the glass.
+          //
+          // Requiring a real conflict keeps the fold to what the pull-back one
+          // tier up already means: you join the thing you actually collided
+          // with. A singleton that touches no clique stays one, and step 7's
+          // degenerate rule sends it to its chip — the pre-2.406.0 outcome for
+          // that member, so this can only ever be better than before, never
+          // worse.
+          let touches = false;
+          for (const m of cliques[ci]) {
+            if (conflicts(items[lone], items[m], gap, minSeparation)) { touches = true; break; }
+          }
+          if (!touches) continue;
+          const dx = items[lone].sx - cent[ci].cx, dy = items[lone].sy - cent[ci].cy;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < bestD2) { best = ci; bestD2 = d2; }
+        }
+        if (best < 0) continue; // stays a singleton — step 7's degenerate rule
+        const c = cliques[best];
+        cent[best].cx = (cent[best].cx * c.length + items[lone].sx) / (c.length + 1);
+        cent[best].cy = (cent[best].cy * c.length + items[lone].sy) / (c.length + 1);
+        c.push(lone);
+        cliques[si].length = 0;
+      }
+      // Emit: the first surviving clique replaces the bucket in place, the
+      // rest append. pileKey is each clique's own lowest sortKey — the same
+      // stable-identity rule step 5 uses, one level down.
+      let first = true;
+      for (const c of cliques) {
+        if (c.length === 0) continue;
+        let k = items[c[0]].sortKey;
+        for (let m = 1; m < c.length; m++) {
+          if (byteLess(items[c[m]].sortKey, k)) k = items[c[m]].sortKey;
+        }
+        let target: DeferralBucket;
+        if (first) { target = bucket; first = false; }
+        else {
+          const bi = bucketCount++;
+          if (!st.buckets[bi]) st.buckets[bi] = { room: "", rooms: [], pileKey: "", members: [] };
+          target = st.buckets[bi];
+        }
+        target.pileKey = k;
+        target.members.length = 0;
+        for (const i of c) target.members.push(i);
+        target.rooms.length = 0; // recomputed at the top of every round below
+      }
+    }
+  }
+
   // ── 6. A bucket of one is not a group ────────────────────────────────────
   // A summary badge showing "1" is a worse drawing of a badge. So a lone
   // deferral pulls its nearest accepted PILE-MATE down with it, making an
@@ -700,100 +819,6 @@ export function solvePlacement(
     accepted[best] = 0;
     bucket.members.push(best);
     stats.pulledBack++;
-  }
-
-  // ── 6b. AN OVERSIZED BUCKET SPLITS; IT DOES NOT DIE (2.406.0) ────────────
-  // Until now a bucket holding more members than one card can draw was KILLED
-  // — every room it touched went to its chip, the all-or-nothing contract hid
-  // every badge in those rooms, and the cascade in step 7 took the neighbours.
-  // One boundary pair fusing two rooms' piles was enough: bedroom (6) plus
-  // bathroom (4) made a bucket of 10, "undrawable", and BOTH rooms chipped in
-  // the same frame — the villa-wide cliff recorded in sources/files/move.mov,
-  // where one zoom rung flips drawn=25 to drawn=1.
-  //
-  // But "more than one card can draw" was never a reason to draw NOTHING: the
-  // clique machinery below (buildCliques — pure, pinned by the suite, already
-  // used by the focused-room path) splits exactly such a pile into mutually-
-  // overlapping clusters of at most drawableMax, each an honest card at its
-  // own local centroid. A fused bedroom+bathroom pile splits along its real
-  // geometry, because mutual overlap is spatially local. So the tiering
-  // becomes the one sentence the whole subsystem is supposed to mean:
-  //
-  //   A BADGE DRAWS ALONE UNTIL ITS BOX COLLIDES; COLLIDING BADGES GROUP INTO
-  //   AS MANY CARDS AS THEIR GEOMETRY NEEDS; A ROOM FALLS TO ITS CHIP ONLY
-  //   WHEN EVEN THE CARDS CANNOT BE PLACED (the caller's seating test), NOT
-  //   BECAUSE A COUNTING CEILING SAID SO.
-  //
-  // A singleton clique — a member that mutually overlaps no other, possible
-  // because bucket-mates shared a PILE, not necessarily each other's boxes —
-  // folds into the nearest clique that still has room, exactly the reasoning
-  // of the lone-deferral pull-back one tier up. If every clique is full it
-  // stays a bucket of one and step 7's degenerate rule sends it to the chip,
-  // which is honest: that floor is genuinely crowded.
-  //
-  // drawableMax < 2 keeps the old kill (step 7's `undrawable` branch): "the
-  // caller can draw nothing" cannot be answered by splitting.
-  if (drawableMax >= 2) {
-    const originalCount = bucketCount;
-    for (let b = 0; b < originalCount; b++) {
-      const bucket = st.buckets[b];
-      if (bucket.members.length <= drawableMax) continue;
-      // The canonical order every other decision uses: rank, then entity_id.
-      const order = bucket.members.slice().sort((x, y) => {
-        const rx = items[x].rank, ry = items[y].rank;
-        if (rx !== ry) return rx - ry;
-        return byteLess(items[x].sortKey, items[y].sortKey) ? -1
-          : items[x].sortKey === items[y].sortKey ? 0 : 1;
-      });
-      const cliques = buildCliques(items, order, gap, minSeparation, drawableMax);
-      // Fold singletons nearest-first, in canonical order so the outcome is a
-      // function of geometry and rank like everything else here.
-      const cent = cliques.map((c) => {
-        let cx = 0, cy = 0;
-        for (const i of c) { cx += items[i].sx; cy += items[i].sy; }
-        return { cx: cx / c.length, cy: cy / c.length };
-      });
-      for (let si = 0; si < cliques.length; si++) {
-        if (cliques[si].length !== 1) continue;
-        const lone = cliques[si][0];
-        let best = -1, bestD2 = Infinity;
-        for (let ci = 0; ci < cliques.length; ci++) {
-          if (ci === si || cliques[ci].length === 0) continue;
-          if (cliques[ci].length >= drawableMax) continue;
-          const dx = items[lone].sx - cent[ci].cx, dy = items[lone].sy - cent[ci].cy;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < bestD2) { best = ci; bestD2 = d2; }
-        }
-        if (best < 0) continue; // stays a singleton — step 7's degenerate rule
-        const c = cliques[best];
-        cent[best].cx = (cent[best].cx * c.length + items[lone].sx) / (c.length + 1);
-        cent[best].cy = (cent[best].cy * c.length + items[lone].sy) / (c.length + 1);
-        c.push(lone);
-        cliques[si].length = 0;
-      }
-      // Emit: the first surviving clique replaces the bucket in place, the
-      // rest append. pileKey is each clique's own lowest sortKey — the same
-      // stable-identity rule step 5 uses, one level down.
-      let first = true;
-      for (const c of cliques) {
-        if (c.length === 0) continue;
-        let k = items[c[0]].sortKey;
-        for (let m = 1; m < c.length; m++) {
-          if (byteLess(items[c[m]].sortKey, k)) k = items[c[m]].sortKey;
-        }
-        let target: DeferralBucket;
-        if (first) { target = bucket; first = false; }
-        else {
-          const bi = bucketCount++;
-          if (!st.buckets[bi]) st.buckets[bi] = { room: "", rooms: [], pileKey: "", members: [] };
-          target = st.buckets[bi];
-        }
-        target.pileKey = k;
-        target.members.length = 0;
-        for (const i of c) target.members.push(i);
-        target.rooms.length = 0; // recomputed at the top of every round below
-      }
-    }
   }
 
   // ── 7. Buckets that are really the room, and the chip cascade ────────────

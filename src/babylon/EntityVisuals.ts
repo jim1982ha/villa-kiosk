@@ -4793,6 +4793,12 @@ export class EntityVisuals {
     if (outcome === this.lastPlaceLog) return;
     this.lastPlaceLog = outcome;
     tapDebug(line, "place");
+    // Flushed HERE and nowhere else, so the `seat` detail rides the `place`
+    // line's outcome dedupe: it prints once per genuine layout CHANGE instead
+    // of once per frame. A field capture of the unbuffered version was dozens
+    // of identical lines per frame with the informative ones scrolled away —
+    // an instrument nobody can read is not an instrument.
+    for (const l of this.seatLog) tapDebug(l, "seat");
   }
 
   /**
@@ -5252,6 +5258,7 @@ export class EntityVisuals {
      *  rung the members were projected with. */
     clearance: { pxPerWorld: number; basis: ViewBasis },
   ): void {
+    this.seatLog.length = 0;
     if (pending.length === 0) return;
     const pxPerWorld = clearance.pxPerWorld;
     const scale = this.effectiveScale();
@@ -5761,13 +5768,11 @@ export class EntityVisuals {
             minX = Math.min(minX, shown[m].sx); maxX = Math.max(maxX, shown[m].sx);
             minY = Math.min(minY, shown[m].sy); maxY = Math.max(maxY, shown[m].sy);
           }
-          tapDebug(
+          this.seatLog.push(
             `seat REFUSED ${g.key} n=${g.members.length}`
             + ` card=${(bx.hw * 2).toFixed(0)}x${(bx.hh * 2).toFixed(0)}`
             + ` members spanned ${(maxX - minX).toFixed(0)}x${(maxY - minY).toFixed(0)}`
-            + ` rooms=[${g.roomKeys.join("|")}] -> chips those rooms; blocked by ${why}`,
-            "seat",
-          );
+            + ` rooms=[${g.roomKeys.join("|")}] -> chips those rooms; blocked by ${why}`);
         }
         for (const k of g.roomKeys) this.chipRoom(k, "noseat");
         continue;
@@ -5822,12 +5827,16 @@ export class EntityVisuals {
         if (debugFlagEnabled()) {
           const trigger = g.roomKeys.filter((k) => this.roomClustered.get(k));
           const spreads = g.roomKeys.filter((k) => !this.roomClustered.get(k));
-          tapDebug(
-            `seat CASCADE drop ${g.key} n=${g.members.length}`
-            + ` (room ${trigger.join("|")} already chipped)`
-            + (spreads.length ? ` -> ALSO chips [${spreads.join("|")}]` : " -> spreads to nothing"),
-            "seat",
-          );
+          // Only a spreading drop is news. "Spreads to nothing" was the whole
+          // of a field capture — dozens of identical lines a frame, drowning
+          // the REFUSED lines that carry the measurement — and it says only
+          // that a group in an already-chipped room was tidied away, which is
+          // the cascade working, not the cascade amplifying.
+          if (spreads.length) {
+            this.seatLog.push(
+              `seat CASCADE drop ${g.key} n=${g.members.length}`
+              + ` (room ${trigger.join("|")} already chipped) -> ALSO chips [${spreads.join("|")}]`);
+          }
         }
         for (const k of g.roomKeys) this.chipRoom(k, "cascade");
         dropped = true;
@@ -6975,6 +6984,9 @@ export class EntityVisuals {
       );
     }
   }
+
+  /** This pass's `seat` detail, flushed by logPlacement on a real change. */
+  private seatLog: string[] = [];
 
   /** Previous frame's DRAWN chip position per room key, for watchChipJump. */
   private lastChipDraw = new Map<
