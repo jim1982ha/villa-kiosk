@@ -279,7 +279,25 @@ const COARSE: BadgeMetrics = {
   // a transparent tile rather than inside a card.
   cardIconFraction: 22 / 28,
   ringThicknessPx: 3,
-  minGapPx: 6,
+  // ⚠️ THIS IS THE "STILL ROOM BETWEEN THEM" DIAL, and it was 6 (2.412.0).
+  // Measured from a field capture rather than argued: a Card badge's ink is
+  // 30 CSS px tall, so a 6px demand is 20% of a badge height of EMPTY SPACE
+  // required before two badges are called colliding. With the 15% depth
+  // over-reserve (GROUP_OVERLAP_ALLOW_WIDTHS) on top, the pair in the report
+  // grouped with 42% of a badge height still visibly between them —
+  // `pair light.corridor… + cover.bedroom3_curtain dy=102/102`, where the ink
+  // does not touch until 72. The 15% is a CORRECTNESS margin (placement is
+  // orthographic at one pixels-per-world while the renderer divides by each
+  // object's own depth) and stays; this one is legibility, and legibility is
+  // what "not before they collide" trades against. At 2 the same pair needs
+  // ~22% instead of 42%, which is the difference between "there is obviously
+  // room" and "those are touching".
+  //
+  // It does NOT scale with badge size (see scaleGeometry), so it is a fixed
+  // clear-space demand in CSS px — which is exactly why it dominates at the
+  // small drawn sizes a zoomed-out villa uses. Raise it back toward 6 if
+  // badges start reading as cramped rather than as separate.
+  minGapPx: 2,
   chipGapPx: 6,
   tapSlopMinPx: 10,
   // Apple's 44pt hit region, which is also this app's --touch-min and exactly

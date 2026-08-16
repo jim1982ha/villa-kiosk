@@ -1,3 +1,12 @@
+## 2.412.0
+
+### Changed — badges group when they nearly touch, not when a third of a badge still separates them
+
+The clear space demanded between two badges was a fixed 6px while a badge is
+only 30px tall, so grouping fired with 42% of a badge height still visibly
+between them. It is now 2px, which brings that to 22%. Measured from the pair
+in the report, not estimated.
+
 ## 2.411.1
 
 ### Fixed — the new pair diagnostic printed nothing
