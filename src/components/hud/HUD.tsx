@@ -24,7 +24,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, LogOut, Map as MapIcon, PersonStanding,
-  EllipsisVertical, Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
+  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -640,7 +640,11 @@ export default function HUD({
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
-              <EllipsisVertical size={24} />
+              {/* The SAME gear as the desktop bar's Settings button above, on
+                  purpose: this button is where Settings lives on a phone, so
+                  swapping it for an overflow glyph made one control look like
+                  two different things depending on the width of the screen. */}
+              <Settings size={24} />
             </button>
             {menuOpen && (
               <div className="hud-menu" role="menu" aria-label="Settings and profile">

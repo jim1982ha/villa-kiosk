@@ -1,3 +1,11 @@
+## 2.370.0
+
+### Changed — the phone's top-bar button is the same gear as the desktop's
+
+It was drawn as a vertical-ellipsis overflow glyph, so the one control that
+opens Settings looked like two different things depending on the width of the
+screen. It is now the same gear icon at both widths; the dropdown it opens is
+unchanged. The `EllipsisVertical` import is gone with it.
 ## 2.369.0
 
 ### Fixed — after focusing a room, other rooms stayed chips at every zoom
