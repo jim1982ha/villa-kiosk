@@ -489,12 +489,38 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  */
 const BADGE_PLACEMENT = "priority" as "priority" | "legacy";
 
-/** Zoom is quantised to steps of 1/N of a doubling before it feeds the
- *  grouping radius — the direct equivalent of a map engine clustering per
- *  discrete zoom level. Inside a step nothing re-groups at all, so a slow
- *  pinch can't sit exactly on a threshold and chatter; crossing one is a
- *  single clean change, and crossing back undoes it exactly. */
-const GROUP_ZOOM_STEPS_PER_DOUBLING = 3;
+/**
+ * Zoom is quantised to steps of 1/N of a doubling before it feeds the grouping
+ * radius — the direct equivalent of a map engine clustering per discrete zoom
+ * level. Inside a step nothing re-groups at all, so a slow pinch can't sit
+ * exactly on a threshold and chatter; crossing one is a single clean change,
+ * and crossing back undoes it exactly.
+ *
+ * ⚠️ 3 WAS THE "GROUPS TOO SOON" BUG, AND IT WAS ARITHMETIC, NOT GEOMETRY.
+ * The solver measures separations at the QUANTISED rung (`s.sx = p.px * k`)
+ * while badge boxes are the REAL drawn pixels, so any rung below the true zoom
+ * compares shrunken distances against full-size boxes — it groups while
+ * visible space remains. At N=3 a rung is a 26% step, so `Math.round` sat up
+ * to HALF a step low: every distance measured up to 10.9% shorter than drawn.
+ * A pair needing 89px of clearance grouped while 100px was on the glass.
+ * Worse, one rung crossing shrank every measured distance by 26% at once,
+ * flipping the whole villa in a single frame — the cliff in move2.mov, where
+ * rung 101.594 draws badges with space and rung 80.635 is all room chips.
+ *
+ * 12 makes a step 5.9%. Combined with the ceil in quantisedPixelsPerWorldUnit
+ * the residual error is one-sided and small: the solver now measures distances
+ * at most 5.9% LONGER than drawn, never shorter, so grouping can only ever be
+ * a touch LATE — which is the side the rule has to err on ("as soon as they
+ * collide, and not before").
+ *
+ * Nothing the lattice exists for is weakened: 5.9% of zoom is a deliberate
+ * gesture, not jitter, so a pinch still cannot chatter; the value is still
+ * quantised, so placement is still a pure function of the rung; and rung
+ * ordering is untouched, so monotone-in-zoom still holds. The only cost is
+ * `solveRoomZoomRadius` walking ~4x the rungs, once per tap, over one room's
+ * badges.
+ */
+const GROUP_ZOOM_STEPS_PER_DOUBLING = 12;
 /**
  * ⚠️ VERTICAL_FORESHORTEN_STEPS lived here and is GONE (2.287.0). It quantised
  * the COSINE of the tilt into 8 steps, and it was only half a correction: it
@@ -5102,7 +5128,16 @@ export class EntityVisuals {
     const raw = vpH / (2 * dist * Math.tan(fov / 2));
     if (!(raw > 0)) return 0;
     const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
-    return Math.pow(2, Math.round(Math.log2(raw) * q) / q);
+    // ⚠️ CEIL, NOT ROUND — the rung must never sit BELOW the drawn zoom.
+    // `k` scales every separation the solver measures (`s.sx = p.px * k`)
+    // while the badge boxes it compares them against are real drawn pixels
+    // that no rung can shrink. So a rung under the true zoom hands the solver
+    // shortened distances and full-size boxes, and it groups while space is
+    // still visible on the glass — exactly the report. Rounding UP makes the
+    // error one-sided: measured separations are always ≥ drawn, so grouping
+    // can only ever be late, never early. See GROUP_ZOOM_STEPS_PER_DOUBLING
+    // for why the step is small enough that "late" is imperceptible.
+    return Math.pow(2, Math.ceil(Math.log2(raw) * q) / q);
   }
 
   /** Each label's collision box in screen px, relative to its anchor point —

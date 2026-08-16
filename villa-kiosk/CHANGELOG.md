@@ -1,3 +1,14 @@
+## 2.407.0
+
+### Fixed — grouping fired while there was still visible space between badges
+
+The grouping test measures distances at a quantised zoom step but sizes badges
+in real pixels, so any step below the true zoom compared shrunken distances
+against full-size badges. Steps were 26% apart and rounded to nearest, so
+separations read up to 11% shorter than drawn — and one step took the whole
+villa at once. Steps are now 6% apart and round upward, so grouping happens
+when badges meet and never before.
+
 ## 2.406.0
 
 ### Changed — one collision rule everywhere, and crowds split instead of chipping
