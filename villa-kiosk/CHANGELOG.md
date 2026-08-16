@@ -1,3 +1,13 @@
+## 2.404.0
+
+### Fixed — room chips flicked sideways whenever the window regained focus
+
+The shared-config pull runs on every focus and returns freshly parsed objects,
+so a `!==` check on `deviceGroups`/`entityMap` was true even when nothing had
+changed — rebuilding every badge and chip from scratch. A newly built chip has
+no measured width for one frame, so Babylon drew it half a screen to the left
+before snapping back. Both are now compared by content.
+
 ## 2.403.0
 
 ### Fixed — `chipWhy` blamed the solver for chips the solver never made

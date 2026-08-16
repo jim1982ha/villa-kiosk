@@ -124,7 +124,7 @@ import {
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
-import { COSMETIC_MAPPING_FIELDS } from "./entityMapDiff";
+import { COSMETIC_MAPPING_FIELDS, entityMapDelta } from "./entityMapDiff";
 // Pose-word resolution (which "__<word>" mesh variant a live state asks for)
 // — pure logic, extracted to keep this file to the things that actually touch
 // the scene. See meshVariants.ts for the vocabulary rules themselves.
@@ -1436,7 +1436,27 @@ export class EntityVisuals {
     // cheaper than a re-index, so doing it on any entityMap change is fine.
     let needsRepaint = false;
     let relight: string[] = [];
-    if (config.entityMap !== prevEntityMap) {
+    // ⚠️ SAME-CONTENT, NOT SAME-REFERENCE, and this file was the last place it
+    // was still missing. DeviceConfigSync pulls the shared store on every
+    // window focus and visibilitychange, and hands back freshly JSON-parsed
+    // objects — never `===` the ones already held, even when nothing changed.
+    // SceneManager learned this twice (entityMapDelta, then the meshBindings
+    // stringify guard); here the bare `!==` meant a no-op focus pull set
+    // needsRepaint and ran rebuildLabels(), which DISPOSES AND RECREATES every
+    // GUI control. That is what produced the reported flicker: a recreated
+    // room chip has `adaptWidthToChildren`, whose setter parks `width` at
+    // "100%" until the LAYOUT pass resolves it, while Babylon's
+    // `_moveToProjectedPosition` runs BEFORE that pass and computes
+    // `left = projectedX − _currentMeasure.width / 2`. For one frame that
+    // width is the fullscreen root's, so every chip drew ~1439px to the left
+    // and snapped back on the next frame. Measured: the five chips' implied
+    // widths reconstructed from the jump distances came back as their real
+    // label widths, and `top` never moved because `height` is set in explicit
+    // pixels and needs no children.
+    // Reuses the shared classifier rather than a third stringify idiom.
+    const mapDelta = config.entityMap === prevEntityMap
+      ? "identical" : entityMapDelta(prevEntityMap, config.entityMap);
+    if (mapDelta !== "identical") {
       // The per-entity mappings cached here are built ONLY by indexMeshes()
       // — the structural pass a cosmetic edit deliberately skips — so every
       // consumer of this.mapping kept reading the values from the last
@@ -1476,7 +1496,14 @@ export class EntityVisuals {
     // re-index — see rebuildLabels' hiddenMembers), OR when entityMap itself
     // changed (see needsRepaint above). One call covers both rather than two
     // separate rebuildLabels() passes when both happen to change together.
-    if (needsRepaint || config.deviceGroups !== prevGroups || config.badgeStyle !== prevBadgeStyle) {
+    // deviceGroups gets the SAME same-content guard, for the same reason and
+    // from the same pull — it is a SHARED_CONFIG_KEY too, so it also arrives
+    // freshly parsed on every focus. badgeStyle is a per-device string and
+    // compares by value already.
+    const groupsChanged =
+      config.deviceGroups !== prevGroups
+      && JSON.stringify(config.deviceGroups) !== JSON.stringify(prevGroups);
+    if (needsRepaint || groupsChanged || config.badgeStyle !== prevBadgeStyle) {
       this.rebuildLabels();
     }
     // A per-light override changed. Nothing will emit a state_changed for
