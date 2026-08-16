@@ -1,3 +1,12 @@
+## 2.378.0
+
+### Fixed — four dialogs had no focus trap, and two had no Escape
+
+Report a problem, the fault-stage form, the badge-colour picker and the photo
+lightbox each wired their own dismissal instead of using `useModalA11y`, so
+Tab escaped the dialog, closing dropped focus to the top of the document, and
+Back did not unwind them in order. All four now use the shared hook.
+
 ## 2.377.0
 
 ### Fixed — a single Card badge's glyph is as bold as a grouped one's

@@ -5,9 +5,8 @@
 // default" reset. Commits on choice (one config write / re-index per pick — the
 // same cost as a label edit), so there's no live-drag re-index storm.
 
-import { useEffect } from "react";
 import { RotateCcw } from "lucide-react";
-import { useBackToClose } from "@/hooks/useBackToClose";
+import { useModalA11y } from "@/hooks/useModalA11y";
 
 // A spread of distinct, pleasant badge colours. Identity swatches (not a data
 // scale), so no ramp/validator needed — just visibly different from each other.
@@ -30,17 +29,15 @@ interface Props {
 }
 
 export default function BadgeColorModal({ current, categoryColor, onChange, onClose }: Props) {
-  // Back closes this, never the app: only the villa map lets a press through
-  // to the platform. One line per surface, from the shared hook.
-  useBackToClose(onClose);
+  // Escape + Back + focus trap + focus restore, from ONE hook. This used to
+  // be useBackToClose plus a hand-rolled keydown listener, which is how the
+  // app reached 13 separate Escape handlers — and it still had no focus trap
+  // and no focus restore, so a keyboard user could Tab out of the picker and
+  // landed at the top of the document on close.
+  const dialogRef = useModalA11y(onClose);
   // Swatches are a decision → apply and dismiss. The custom picker and "default"
   // reset apply live but leave the modal open for further tweaking.
   const pickAndClose = (hex: string | null) => { onChange(hex); onClose(); };
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   return (
     // Same panel-modal-backdrop/panel-modal treatment as the device panel
@@ -50,7 +47,14 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
     // This is a short picker, same category as the device panel itself, so it
     // should get the same small centered rounded card on phones.
     <div className="modal-backdrop panel-modal-backdrop" onClick={onClose} style={{ zIndex: 80 }}>
-      <div className="modal panel-modal badge-color-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="modal panel-modal badge-color-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Badge colour"
+      >
         <div className="panel-header">
           <div className="title"><h2>Icon colour</h2></div>
         </div>

@@ -27,7 +27,7 @@ import { formatIdr } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
-import { useBackToClose } from "@/hooks/useBackToClose";
+import { useModalA11y } from "@/hooks/useModalA11y";
 
 const STAGE_COPY: Record<FmTicketStatus, { title: string; cta: string; note: string }> = {
   open: { title: "Reopen fault", cta: "Reopen", note: "Why it's being reopened (optional)" },
@@ -50,9 +50,10 @@ export default function FaultStageModal({
   onClose: () => void;
 }) {
   const { advanceTicket } = useFmData();
-  // Back closes this, never the app: only the villa map lets a press through
-  // to the platform. One line per surface, from the shared hook.
-  useBackToClose(onClose);
+  // Escape + Back + focus trap + focus restore, from ONE hook — see
+  // useModalA11y. It registers useBackToClose itself, so calling both would
+  // push this surface onto the dismissal stack twice.
+  const dialogRef = useModalA11y(onClose);
   const [by, setBy] = useState("");
   const [note, setNote] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
@@ -87,7 +88,15 @@ export default function FaultStageModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+      <div
+        ref={dialogRef}
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 520 }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={copy.title}
+      >
         <div className="modal-header">
           <h2>{copy.title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>

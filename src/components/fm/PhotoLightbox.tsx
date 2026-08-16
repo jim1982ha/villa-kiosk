@@ -15,6 +15,7 @@
 import { useCallback, useEffect } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { evidenceUrl } from "@/fm/fmApi";
+import { useModalA11y } from "@/hooks/useModalA11y";
 
 export default function PhotoLightbox({
   photoIds, index, onIndexChange, onClose,
@@ -24,6 +25,10 @@ export default function PhotoLightbox({
   onIndexChange: (next: number) => void;
   onClose: () => void;
 }) {
+  // Escape + Back + focus trap + focus restore. Only the ARROW keys stay in
+  // this file's own listener below: they are this surface's navigation, not a
+  // dismissal, and the shared hook has no opinion about them.
+  const dialogRef = useModalA11y(onClose);
   const count = photoIds.length;
   // Wraps, so holding the arrow key never dead-ends on a set of two or three.
   const step = useCallback((delta: number) => {
@@ -32,19 +37,18 @@ export default function PhotoLightbox({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      else if (e.key === "ArrowLeft") step(-1);
+      if (e.key === "ArrowLeft") step(-1);
       else if (e.key === "ArrowRight") step(1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [step, onClose]);
+  }, [step]);
 
   if (count === 0) return null;
   const id = photoIds[Math.min(index, count - 1)];
 
   return (
-    <div className="fm-lightbox" onClick={onClose} role="dialog" aria-modal="true"
+    <div ref={dialogRef} className="fm-lightbox" onClick={onClose} role="dialog" aria-modal="true"
       aria-label={`Photo ${index + 1} of ${count}`}>
       <button className="fm-lightbox-close" onClick={onClose} aria-label="Close photo">
         <X size={20} />

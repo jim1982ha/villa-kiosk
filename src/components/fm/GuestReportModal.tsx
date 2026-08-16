@@ -27,7 +27,7 @@ import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
 import { uploadEvidence } from "@/fm/fmApi";
 import NotesField from "./NotesField";
-import { useBackToClose } from "@/hooks/useBackToClose";
+import { useModalA11y } from "@/hooks/useModalA11y";
 
 export default function GuestReportModal({
   entityId, onClose,
@@ -37,9 +37,10 @@ export default function GuestReportModal({
   onClose: () => void;
 }) {
   const { addTicket } = useFmData();
-  // Back closes this, never the app: only the villa map lets a press through
-  // to the platform. One line per surface, from the shared hook.
-  useBackToClose(onClose);
+  // Escape + Back + focus trap + focus restore, from ONE hook — see
+  // useModalA11y. It registers useBackToClose itself, so calling both would
+  // push this surface onto the dismissal stack twice.
+  const dialogRef = useModalA11y(onClose);
   const { resolvedRooms } = useConfig();
   const label = useEntityLabel();
   const [title, setTitle] = useState("");
@@ -83,7 +84,14 @@ export default function GuestReportModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal guest-report" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="modal guest-report"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Report a problem"
+      >
         <div className="modal-header">
           <h2><Wrench size={18} /> Report a problem</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
