@@ -426,6 +426,10 @@ export class SceneManager {
     this.sun.setNightSky(this.nightSky);
 
     this.sun.setRenderHook(() => this.requestRender());
+    // setViewMode early-returns when the mode has not changed, so the initial
+    // state has to be stated here or a session that starts in overview (the
+    // default) would never aim the sun until the user toggled to walk and back.
+    this.sun.setAimSkyAtCamera(this.viewMode === "overview");
     this.visuals = new EntityVisuals(
       this.scene, opts.config,
       () => this.requestRender(),
@@ -556,6 +560,12 @@ export class SceneManager {
     this.camera = new CameraController(this.scene, canvas, opts.config, {
       onRoomChange: opts.onRoomChange,
       // MOTION — both camera controllers route every pose change here.
+      // NOT reframeSky() here, deliberately: this is the WALK camera. A sun
+      // that swung to stay in front of you every time you turned your head
+      // would be unmissable from inside the villa, where the light through a
+      // window is the whole point. The disc is aimed at the camera only in
+      // overview, where the villa is a model being looked at rather than a
+      // place being stood in — see SunController.aimSkySunAtCamera.
       onActivity: () => { this.motionPending = true; this.requestRender(); },
       // Tap-to-pick is detected in the camera (sole owner of the pointer
       // pipeline) and dispatched to the picker — reliable on touch & mouse.
@@ -596,6 +606,11 @@ export class SceneManager {
         if (this.viewMode === "overview") {
           this.visuals.setIconZoomScale(this.overview.getIconZoomCap());
         }
+        // The sky's sun disc is aimed at the camera (SunController.reframeSky),
+        // so orbiting has to re-aim it — the astronomical tick that would
+        // otherwise refresh it is minutes away. Two floats and a material
+        // write; nothing is re-lit.
+        this.sun.reframeSky();
         this.requestRender();
       },
       onTap: handleTap,
@@ -1471,6 +1486,10 @@ export class SceneManager {
   setViewMode(mode: "first-person" | "overview"): void {
     if (mode === this.viewMode) return;
     this.viewMode = mode;
+    // Overview looks AT the villa, so the sky's sun disc is aimed at the
+    // camera to stay in frame; first person stands inside it, where the sun's
+    // true bearing is what makes the light through a window read as real.
+    this.sun.setAimSkyAtCamera(mode === "overview");
     if (mode === "overview") {
       this.camera.setMovement(0, 0); // stop any in-flight walk
       this.camera.detachInput();

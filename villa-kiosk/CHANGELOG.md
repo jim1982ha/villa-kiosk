@@ -1,3 +1,13 @@
+## 2.383.0
+
+### Changed — the sun stays in frame in the overview
+
+It is placed from the villa's real latitude, longitude and clock, so at an
+evening bearing it simply sat behind the camera. The sky dome's sun disc is now
+aimed at the camera in overview, keeping its true ALTITUDE so a low sun still
+reddens the sky and still sets. Lighting and shadows are untouched and still
+physically correct, and first person keeps the sun's true bearing.
+
 ## 2.382.0
 
 ### Fixed — the readiness report understated how many devices were offline
