@@ -1,3 +1,13 @@
+## 2.414.0
+
+### Fixed — zooming out could un-group badges it had already grouped
+
+Badges shrank faster than the distances between them once past the whole-villa
+fit, so zooming out made the map LESS crowded and rooms reverted from their
+badge back to individual icons. Badge size now recedes no faster than the villa,
+and it steps on the same zoom lattice as everything else, so a given zoom level
+always draws the same thing.
+
 ## 2.413.0
 
 ### Changed — badges now group only when they actually touch

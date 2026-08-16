@@ -3354,8 +3354,29 @@ export class EntityVisuals {
   /** Live bird's-eye zoom factor (1 = default fit). Driven per-frame by
    *  SceneManager from the overview camera; ignored (reset to 1) elsewhere. */
   setIconZoomScale(z: number): void {
-    if (Math.abs(z - this.iconZoomScale) < 0.02) return; // skip imperceptible jitter
-    this.iconZoomScale = z;
+    // ── QUANTISED ONTO THE ZOOM LATTICE, AND NOT DEADBANDED ────────────────
+    // This is the SECOND quantity that scales badge layout with zoom — the
+    // rung scales the positions, this scales the sizes — and until 2.414.0 it
+    // was continuous while the rung was quantised. So two frames at the SAME
+    // rung produced different layouts, which the field capture caught outright:
+    //
+    //   place rung=53.817 zoom=0.98 … drawn=1 chips=9
+    //   place rung=53.817 zoom=0.95 … drawn=6 chips=3
+    //
+    // Same rung, different answer — the purity violation `rung` exists to make
+    // visible. Snapping it to the same lattice makes the pair (rung, size) hold
+    // still together, which is what "inside a step nothing re-groups" was always
+    // supposed to mean.
+    //
+    // The 0.02 deadband it replaces was worse than merely imprecise: whether it
+    // updated depended on the PREVIOUS value, so the drawn size — and therefore
+    // the layout — became a function of the path taken rather than the zoom
+    // arrived at. That is hysteresis, the first of the five things this
+    // subsystem's rules forbid outright, hiding in a size setter.
+    const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
+    const snapped = z > 0 ? Math.pow(2, Math.ceil(Math.log2(z) * q) / q) : z;
+    if (snapped === this.iconZoomScale) return;
+    this.iconZoomScale = snapped;
     this.applyIconScale();
   }
 

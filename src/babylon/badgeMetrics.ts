@@ -70,6 +70,52 @@
  *  this the room NAME is truncated with an ellipsis; the count pill never is,
  *  because the count is the part that cannot be inferred from context. */
 export const CHIP_MAX_VIEWPORT_FRACTION = 0.5;
+
+/**
+ * How fast a badge shrinks once the camera is zoomed OUT past the whole-villa
+ * fit, as an exponent on (fitRadius / radius).
+ *
+ * ⚠️ IT MUST NEVER EXCEED 1, AND THAT IS ARITHMETIC RATHER THAN TASTE.
+ * Two quantities decide whether two badges collide, and they move in opposite
+ * directions with the camera radius `r`:
+ *
+ *     separation on the glass  ∝ pixelsPerWorldUnit ∝ 1/r
+ *     badge size               ∝ (fitRadius / r)^e
+ *
+ * so the ratio that actually decides grouping is
+ *
+ *     badge / separation ∝ r^(1 − e)
+ *
+ * Zooming OUT grows `r`. "Once grouped, zooming out may never un-group" is
+ * therefore exactly the requirement that r^(1−e) be non-decreasing, i.e.
+ * **e ≤ 1**. At e = 1 badges track the villa and grouping is driven purely by
+ * the zoom rung, which is monotone by construction; below 1 they recede more
+ * slowly than the world and grouping only ever increases.
+ *
+ * This shipped at 1.8 and the field log shows precisely what that predicts:
+ * `chips=1` at rung 152 falling to `chips=0` at rung 80 — DE-clustering while
+ * zooming out — then chips again below rung 76, once ICON_ZOOM_MIN_SCALE binds
+ * and the shrinking stops. Reported as "icons, then the room badge, then the
+ * entity icons again". The old comment justified 1.8 as making badges "visibly
+ * recede"; receding is what any e < 1 already does, and no amount of it is
+ * worth inverting the one rule the whole tier exists to state.
+ *
+ * Lives here, and not beside the camera that applies it, so the suite can pin
+ * the inequality without importing Babylon.
+ */
+export const ICON_ZOOM_EXPONENT = 1;
+
+/**
+ * How far the zoom-out shrink may take badges below their configured size.
+ *
+ * Moved here from OverviewController with ICON_ZOOM_EXPONENT (2.414.0): it is a
+ * badge DIMENSION rule, and the two are one decision — how big a badge is at a
+ * given zoom — which is exactly the kind of pair that drifts when it lives in
+ * two files. Floored rather than unbounded because a badge that shrinks as fast
+ * as the villa never starts overlapping, so clustering would never engage and a
+ * far zoom-out would be an unreadable field of tiny icons.
+ */
+export const ICON_ZOOM_MIN_SCALE = 0.7;
 /** Widest a summary's card ARRANGEMENT may be drawn, same units. Over this the
  *  summary draws its count instead — never fewer cells, because a card that
  *  drops a member hides a device with no cell to tap (see drawnCells). */

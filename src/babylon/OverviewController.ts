@@ -42,6 +42,7 @@ import { Animation } from "@babylonjs/core/Animations/animation";
 import "@babylonjs/core/Animations/animatable";
 import { CubicEase, EasingFunction } from "@babylonjs/core/Animations/easing";
 import { TapRecognizer } from "./TapRecognizer";
+import { ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE } from "./badgeMetrics";
 import { cameraFrame } from "./cameraFrame";
 
 interface OverviewCallbacks {
@@ -90,25 +91,11 @@ const TILT_SENS_TOUCH = 0.007;  // radians per px of the two fingers' SHARED ver
 // reference (see fitTo). <1 so the default overview starts with shrunk
 // badges instead of full-size ones.
 const ICON_REF_FRACTION = 0.55;
-/**
- * How far the zoom-out shrink may take badges below their configured size.
- *
- * This used to be 0.22, which let badges keep shrinking indefinitely — and
- * that quietly DEFEATED the badge clustering in EntityVisuals. The two are
- * tools for the same job (keeping a zoomed-out view readable) and they were
- * fighting: clustering engages when badges can no longer be laid out without
- * overlapping, but a badge that shrinks as fast as the villa does never
- * starts overlapping, so the trigger never fired. The result was reported
- * from the field as an unreadable, jittering blob of tiny icons that never
- * grouped no matter how far out you zoomed.
- *
- * Floored at a still-legible fraction instead, the two hand off cleanly:
- * badges recede while that remains useful, and once the view really is too
- * dense they genuinely overlap, so clustering takes over and replaces them
- * with room chips. A fraction of the user's own chosen size, so it carries
- * no assumption about villa size, device count or screen.
- */
-const ICON_ZOOM_MIN_SCALE = 0.7;
+/** Badge sizing under zoom lives in badgeMetrics with every other badge
+ *  dimension — see ICON_ZOOM_EXPONENT there for why the exponent may never
+ *  exceed 1, and ICON_ZOOM_MIN_SCALE for why the shrink is floored. Both were
+ *  local constants here until 2.414.0; one decision in two files is how the
+ *  exponent came to invert the grouping rule without the suite noticing. */
 
 export class OverviewController {
   readonly camera: ArcRotateCamera;
@@ -164,10 +151,11 @@ export class OverviewController {
   getIconZoomCap(): number {
     const r = this.camera.radius || this.fitRadius;
     if (r <= this.fitRadius) return 1;
-    // Shrink FASTER than the villa does (exponent > 1) once zoomed out past the
-    // fit, so badges visibly recede instead of just tracking the villa's size —
-    // a plain fitRadius/r left them looking huge over a tiny far-zoom villa.
-    return clamp(Math.pow(this.fitRadius / r, 1.8), ICON_ZOOM_MIN_SCALE, 1);
+    // ⚠️ The exponent may NEVER exceed 1 — see ICON_ZOOM_EXPONENT. "Shrink
+    // faster than the villa so badges visibly recede" is what this used to say
+    // at 1.8, and it inverted the whole tier: badges shrank faster than the
+    // distances between them, so zooming OUT de-clustered.
+    return clamp(Math.pow(this.fitRadius / r, ICON_ZOOM_EXPONENT), ICON_ZOOM_MIN_SCALE, 1);
   }
 
   fitTo(ext: { min: Vector3; max: Vector3 }): void {
