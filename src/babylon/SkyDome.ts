@@ -101,6 +101,9 @@ export class SkyDome {
    */
   private static displayAltitude(alt: number, strength: number): number {
     if (alt <= 0) return alt;
+    // NOTE the band is negative (see BAND_MIN): `base` moves the body DOWN into
+    // the visible cone rather than up out of it, and the eased term still grows
+    // with altitude, so noon is the highest point of the arc as it should be.
     // Ease the lift in over the first few degrees so sunrise and sunset are
     // continuous — a body popping from the horizon to BASE the instant it
     // crosses zero would read as a glitch, not a dawn.
@@ -109,13 +112,25 @@ export class SkyDome {
     return base + alt * (SkyDome.BAND_SPAN / (Math.PI / 2)) * strength;
   }
 
-  /** Lowest a body is drawn once fully risen — clear of the villa's roofline
-   *  at the default overview tilt. */
-  private static readonly BAND_MIN = (14 * Math.PI) / 180;
-  /** How much higher the zenith is drawn than the horizon. BAND_MIN + this is
-   *  where a noon sun lands; both together are the tunable pair if the arc
-   *  wants to sit higher or flatter. */
-  private static readonly BAND_SPAN = (26 * Math.PI) / 180;
+  /**
+   * Where a just-risen body is DRAWN, and it is NEGATIVE on purpose.
+   *
+   * ⚠️ Measured, not guessed. A `?debug` capture of the overview reports
+   * `sinTilt=0.882` — the camera is pitched about 62° BELOW horizontal, and
+   * with a ~45° vertical field of view the visible cone runs roughly -84° to
+   * -40°. The horizon is off the top of the screen, so NOTHING at a positive
+   * elevation can be in frame at all. 2.392.0's band of +14°..+40° put the sun
+   * some 78° above the top edge, which is why six releases of sky work were
+   * invisible.
+   *
+   * Drawing the sun below the horizon is only strange if the horizon is
+   * visible; here it is not, and the alternative is a sky nobody ever sees.
+   */
+  private static readonly BAND_MIN = (-58 * Math.PI) / 180;
+  /** How much higher noon is drawn than sunrise. BAND_MIN + this is where a
+   *  noon sun lands (-42°), comfortably inside the visible cone. These two are
+   *  the whole tuning surface if the arc wants to sit higher or flatter. */
+  private static readonly BAND_SPAN = (16 * Math.PI) / 180;
   /** Altitude over which the lift eases in, so dawn and dusk are continuous. */
   private static readonly FADE = (6 * Math.PI) / 180;
 

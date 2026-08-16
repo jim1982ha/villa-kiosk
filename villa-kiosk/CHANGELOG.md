@@ -1,3 +1,12 @@
+## 2.394.0
+
+### Fixed — the sun is drawn where the overview camera can actually see
+
+A capture gave the missing number: the overview is pitched ~62° below
+horizontal, so its whole visible cone is BELOW the horizon and nothing at a
+positive elevation can ever be in frame. The arc is now drawn inside that cone
+— low at sunrise, highest at noon, low at sunset, over the villa.
+
 ## 2.393.1
 
 ### Fixed — 2.393.0 did not compile
