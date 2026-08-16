@@ -5303,6 +5303,19 @@ export class EntityVisuals {
     const groupHalf = (g: PendingEntityGroup) =>
       (this.drawnCells(g, g.members.length) >= 2 ? cardHalfOf(g) : squareHalf);
 
+    /** The same extent as `groupHalf`, kept as SEPARATE half-width and
+     *  half-height instead of collapsed into a circumscribed radius — see the
+     *  boxes-not-discs block in `fits`. A group drawn as a single count badge
+     *  is a square, so both halves are `squareHalf` and the two tests agree. */
+    const groupBox = (g: PendingEntityGroup): { hw: number; hh: number } => {
+      if (this.drawnCells(g, g.members.length) < 2) return { hw: squareHalf, hh: squareHalf };
+      const lay = this.layoutOf(g, g.members.length);
+      return { hw: (lay.width / 2) * scale * allow, hh: (lay.height / 2) * scale * allow };
+    };
+    /** Only the plane metric puts both card axes on the screen's own axes;
+     *  see projectToView, which zeroes `pz` there and not in world3d. */
+    const planar = clearance.basis.mode === "plane";
+
     // Fixed order (the key is stable and total), so which of two conflicting
     // groups survives never depends on the order the solver emitted them in.
     // Byte order, not localeCompare: collation is environment-dependent, and
@@ -5374,6 +5387,42 @@ export class EntityVisuals {
         // not (see PlacementItem.exempt). The focus is a deliberate, temporary
         // state and it does not get to renegotiate the rest of the map.
         if (o.focused) continue;
+        // ── BOXES, NOT DISCS — the correction the CHIP tier already made ────
+        // `cardHalfOf` is `hypot(width, height) / 2`: the CIRCUMSCRIBED radius
+        // of the card. Comparing two of those against a scalar distance is a
+        // disc test, and CLAUDE.md already records why that is wrong one tier
+        // down — "a chip is a wide short pill, so a circumscribed disc would
+        // chip half the villa, and since 2.287.0 the plane's axes ARE the
+        // screen's axes so an exact axis-aligned test is finally expressible".
+        // Cards are wide short pills too: the field capture that prompted this
+        // carried `cards=2x3,4x2`, and a 4x2 card's circumscribed radius is
+        // 2.2x its own half-height, so two of them one above the other were
+        // refused while their ink cleared easily.
+        //
+        // The consequence was not one card: a refusal escalates EVERY room the
+        // group covered, and dropEscalatedGroups then takes every group
+        // touching those rooms to a fixpoint — so a handful of false refusals
+        // collapse the whole villa at one zoom step. That is the reported
+        // "entities group too soon", recorded in sources/files/group.mov, where
+        // a room showing a readable 2x2 card with space around it becomes a
+        // "Master Bedroom 6" chip on the next rung.
+        //
+        // A box test can only refuse LESS than the disc that contains it, so
+        // the promise this function makes absolutely — two summaries never
+        // overlap — is preserved exactly and merely stops being approximated
+        // from the conservative side.
+        //
+        // Only in the PLANE metric, where projectToView sets `pz = 0` and the
+        // two axes ARE the screen's. The walk camera keeps the 3-axis distance
+        // for the same reason it keeps its own metric (see VIEW_METRIC).
+        if (planar) {
+          const mine = groupBox(g), theirs = groupBox(o);
+          if (Math.abs(g.sx - o.sx) < mine.hw + theirs.hw + gapPx
+            && Math.abs(cardCentreY(g) - cardCentreY(o)) < mine.hh + theirs.hh + gapPx) {
+            return false;
+          }
+          continue;
+        }
         const d = this.drawnDistance(
           g.sx, cardCentreY(g), g.sz, o.sx, cardCentreY(o), o.sz);
         if (d < mineHalf + groupHalf(o) + gapPx) return false;

@@ -1,3 +1,13 @@
+## 2.405.0
+
+### Fixed — rooms collapsed into chips while their badges still had space
+
+Two summary cards were kept apart by circumscribed circles rather than by their
+actual rectangles, which reserves up to 2.2x too much room on a wide card's
+short axis. Each false refusal escalates every room the card covered and
+cascades to its neighbours, so one zoom step took the whole villa. Cards now
+clear each other by box, exactly as room chips have since 2.287.0.
+
 ## 2.404.0
 
 ### Fixed — room chips flicked sideways whenever the window regained focus
