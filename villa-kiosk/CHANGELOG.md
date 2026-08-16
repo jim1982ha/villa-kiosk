@@ -1,3 +1,11 @@
+## 2.393.1
+
+### Fixed — 2.393.0 did not compile
+
+Nulling the overview backdrop left its helper with no callers, which
+`noUnusedLocals` rejects. The call is restored: the dome covers the frame, so
+the value only shows in the instants before the first sky update.
+
 ## 2.393.0
 
 ### Fixed — the sky was switched off for the whole session

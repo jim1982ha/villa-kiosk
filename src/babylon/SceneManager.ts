@@ -665,11 +665,11 @@ export class SceneManager {
     // that works for both.
     this.sky.setHorizonDrop(OVERVIEW_HORIZON_DROP);
     this.nightSky?.setHorizonDrop(OVERVIEW_HORIZON_DROP);
-    // null, exactly as setViewMode's overview branch does — the dome covers the
-    // frame (infiniteDistance), so pinning a flat backdrop only mattered while
-    // the dome was off, and that was the bug. clearColor now shows only where
-    // the dome does not, which is nowhere.
-    this.sun.setBackgroundOverride(null);
+    // The dome is on now and is infiniteDistance, so it covers the frame and
+    // this only shows where the dome does not — which is nowhere. Kept rather
+    // than nulled because it is still the right answer for the instants before
+    // the first sky update lands, and it is theme-aware (see the method).
+    this.sun.setBackgroundOverride(this.overviewBackdropColor());
 
     this.startRenderLoop();
     window.addEventListener("resize", this.handleResize);
