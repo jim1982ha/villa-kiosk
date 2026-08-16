@@ -248,7 +248,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // opened the picker — a different gesture from every other hold in the app,
   // on the one surface most likely to be touched mid-swipe. HOLD_MS_HUD keeps
   // the 480ms this button has always used.
-  const pickerHold = useLongPress(() => setPickerOpen(true), HOLD_MS_HUD);
+  // nativeButton: this is a real <button> with its own onClick, and a native
+  // button fires that click on ENTER'S KEYDOWN — arming the hold on Enter too
+  // would step the camera AND open the picker from one press. 2.380.0 shipped
+  // exactly that for one release.
+  const pickerHold = useLongPress(
+    () => setPickerOpen(true), { holdMs: HOLD_MS_HUD, nativeButton: true });
   const onCycleBtnClick = (delta: number) => {
     // A hold that already opened the picker must not ALSO step to the next
     // camera the instant the button is released (a held pointer still fires

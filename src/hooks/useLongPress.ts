@@ -31,6 +31,26 @@ const LONG_PRESS_MS = 600;
  *  slower hold on the app's most-used buttons, which is a product decision and
  *  not a refactor's to make. */
 export const HOLD_MS_HUD = 480;
+
+export interface LongPressOptions {
+  /** How long the hold must last. Defaults to LONG_PRESS_MS. */
+  holdMs?: number;
+  /**
+   * The element is a NATIVE `<button>`, so arm the keyboard hold on Space only.
+   *
+   * ⚠️ Not a preference — a correctness flag, and getting it wrong double-fires.
+   * A native button dispatches its click on ENTER'S KEYDOWN but on SPACE'S
+   * KEYUP. So on a native button, arming this timer on Enter means the tap
+   * action runs immediately AND the hold action runs `holdMs` later while the
+   * key is still down: both gestures, from one press. Only Space's keyup can
+   * time a genuine hold on a native button. `useHomeAnchor` records the same
+   * finding, which is why it stayed hand-rolled.
+   *
+   * A `role="button"` div gets no native click on Enter at all, which is why
+   * the default (both keys) is correct for the hook's original consumers.
+   */
+  nativeButton?: boolean;
+}
 /** Pixels of drift tolerated before the press is treated as a scroll/drag. */
 const MOVE_TOLERANCE_PX = 10;
 
@@ -51,8 +71,9 @@ export interface LongPressHandlers {
 
 /** @param onLongPress fired once, when the hold completes. */
 export function useLongPress(
-  onLongPress: () => void, holdMs: number = LONG_PRESS_MS,
+  onLongPress: () => void, opts: LongPressOptions = {},
 ): LongPressHandlers {
+  const { holdMs = LONG_PRESS_MS, nativeButton = false } = opts;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const origin = useRef<{ x: number; y: number } | null>(null);
   /** Set when a hold completes, cleared by the click that follows it. */
@@ -94,7 +115,8 @@ export function useLongPress(
     // Holding Enter/Space auto-repeats, so ignore the repeats and let the
     // first press start the same timer a finger would.
     onKeyDown: (e) => {
-      if (e.repeat || (e.key !== "Enter" && e.key !== " ")) return;
+      if (e.repeat) return;
+      if (e.key !== " " && !(e.key === "Enter" && !nativeButton)) return;
       start(0, 0);
     },
     onKeyUp: cancel,

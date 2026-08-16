@@ -38,6 +38,7 @@ import { ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX, clampIconScale } from "@/
 import type { Category, TeleportPoint } from "@/types/scene.types";
 import VirtualJoystick from "./VirtualJoystick";
 import ViewControls from "./ViewControls";
+import { useLongPress, HOLD_MS_HUD } from "@/hooks/useLongPress";
 import { useHomeAnchor } from "./useHomeAnchor";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 import LegendModal from "./LegendModal";
@@ -250,6 +251,15 @@ export default function HUD({
     setRadial({ cx, cy, activeFloor: f });
   };
 
+  // ── DELIBERATELY NOT useLongPress — do not "DRY" this into the hook ───────
+  // The category icons above did migrate, and this looks like the same
+  // gesture, but it is not. This button's TAP acts on POINTER UP and it has no
+  // onClick at all, precisely so the keyboard path below can preventDefault the
+  // browser's click-on-activation; the hook's whole tap model is consumeClick,
+  // i.e. an onClick that runs and is sometimes swallowed. It also omits
+  // onPointerLeave on purpose, so dragging off the button and releasing still
+  // switches floors, where the hook cancels. Converting it would restructure
+  // working gesture code to look like a sibling it does not behave like.
   const onFloorPointerDown = (f: number) => (e: React.PointerEvent<HTMLButtonElement>) => {
     if (e.button !== undefined && e.button !== 0) return;
     floorLongFired.current = false;
@@ -360,22 +370,25 @@ export default function HUD({
   // every device in that category. Same tap-vs-hold convention as the floor
   // buttons' rooms dial and the camera panel's next-arrow picker — a single
   // shared timer is enough since only one category can be held at a time.
-  const CATEGORY_HOLD_MS = 480;
-  const catPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const catLongFired = useRef(false);
-  const onCatPointerDown = (cat: Category) => () => {
-    catLongFired.current = false;
-    if (catPressTimer.current) clearTimeout(catPressTimer.current);
-    catPressTimer.current = setTimeout(() => {
-      catLongFired.current = true;
-      onOpenCategory(cat);
-    }, CATEGORY_HOLD_MS);
+  // One shared hook, not a fourth hand-rolled timer: only one category can be
+  // held at a time, so the callback reads whichever button armed it. This also
+  // gains the movement threshold the hand-rolled version never had — the
+  // category row is a horizontal scroller on a phone, and a hold that fired
+  // mid-flick opened a device list nobody asked for.
+  const heldCat = useRef<Category | null>(null);
+  const catHold = useLongPress(() => {
+    if (heldCat.current) onOpenCategory(heldCat.current);
+  }, { holdMs: HOLD_MS_HUD, nativeButton: true });
+  const onCatPointerDown = (cat: Category) => (e: React.PointerEvent) => {
+    heldCat.current = cat;
+    catHold.onPointerDown(e);
   };
-  const onCatPointerUp = () => {
-    if (catPressTimer.current) { clearTimeout(catPressTimer.current); catPressTimer.current = null; }
+  const onCatKeyDown = (cat: Category) => (e: React.KeyboardEvent) => {
+    heldCat.current = cat;
+    catHold.onKeyDown(e);
   };
   const onCatClick = (cat: Category) => () => {
-    if (catLongFired.current) { catLongFired.current = false; return; }
+    if (catHold.consumeClick()) return;
     toggleCategory(cat);
   };
 
@@ -475,18 +488,13 @@ export default function HUD({
                   // "you can hold this" hint read as visual clutter rather
                   // than a useful affordance, at the user's request.
                   className={`icon-btn${hidden ? "" : " active"}`}
+                  {...catHold}
                   onPointerDown={onCatPointerDown(cat)}
-                  onPointerUp={onCatPointerUp}
-                  onPointerLeave={onCatPointerUp}
-                  onPointerCancel={onCatPointerUp}
+                  // Space-only, and that now comes from the hook's nativeButton
+                  // flag rather than from a rule restated per element.
+                  onKeyDown={onCatKeyDown(cat)}
                   onContextMenu={(e) => e.preventDefault()}
                   onClick={onCatClick(cat)}
-                  // Space-only (not Enter) — same reasoning as the brand icon's
-                  // own hold gesture (useHomeAnchor): a <button> fires its click
-                  // on Enter's KEYDOWN but Space's KEYUP, so only Space can time
-                  // a real hold.
-                  onKeyDown={(e) => { if (e.key === " " && !e.repeat) onCatPointerDown(cat)(); }}
-                  onKeyUp={(e) => { if (e.key === " ") onCatPointerUp(); }}
                   title={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map — hold to list them`}
                   aria-label={`${CATEGORY_LABELS[cat]} devices on the map`}
                   aria-pressed={!hidden}

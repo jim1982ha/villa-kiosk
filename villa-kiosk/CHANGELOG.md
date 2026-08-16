@@ -1,3 +1,13 @@
+## 2.381.0
+
+### Fixed — Enter on the camera's Next button did both things at once
+
+2.380.0 put that button on the shared hold hook, which arms on Enter as well as
+Space. A native button fires its click on Enter's keydown, so one press stepped
+the camera AND opened the picker 480ms later. The hook now takes a
+`nativeButton` flag for Space-only holds. The HUD category icons move onto it
+too, gaining the drift cancel they never had on a scrolling row.
+
 ## 2.380.0
 
 ### Fixed — holding the camera's Next button while drifting
