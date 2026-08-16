@@ -1,3 +1,12 @@
+## 2.391.0
+
+### Fixed — the overview could keep its first-person horizon
+
+Startup puts the app in overview visually but leaves the view mode at its
+first-person default, and `setViewMode` early-returns when the mode already
+matches — so a session that never toggled modes kept the sky set up for a
+camera at eye level. The overview horizon is now stated at startup too.
+
 ## 2.390.0
 
 ### Fixed — `?debug?skyTime=12:00` silently did nothing

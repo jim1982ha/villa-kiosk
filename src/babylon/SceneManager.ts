@@ -639,6 +639,17 @@ export class SceneManager {
     this.overview.enable();
     this.scene.activeCamera = this.overview.camera;
     this.sky.setEnabled(false);
+    // ⚠️ The horizon drop is stated HERE as well as in setViewMode, because
+    // this block puts the app in overview VISUALLY while leaving `viewMode` at
+    // its "first-person" default — and setViewMode early-returns when the mode
+    // it is handed already matches. Any path that reaches overview without a
+    // mode CHANGE therefore skipped the drop entirely, leaving the dome at a
+    // first-person horizon under a camera that looks down: no gradient, no sun,
+    // no moon, no stars, just the loading backdrop below. Same early-return
+    // that bit 2.383.0's aim flag; stating startup state explicitly is the fix
+    // that works for both.
+    this.sky.setHorizonDrop(OVERVIEW_HORIZON_DROP);
+    this.nightSky?.setHorizonDrop(OVERVIEW_HORIZON_DROP);
     this.sun.setBackgroundOverride(this.overviewBackdropColor());
 
     this.startRenderLoop();
