@@ -4021,6 +4021,13 @@ export class EntityVisuals {
    *  regardless: anchors projecting behind the camera (z outside [0,1]),
    *  categories filtered off in the HUD, and entities on a hidden floor. */
   private cullLabels(): void {
+    // ⚠️ CLEARED HERE, at the top of the PASS — not inside placeEntityGroups,
+    // which is where it started and which silently broke the instrument: the
+    // solver's `pair` lines are pushed BEFORE that method runs, so clearing
+    // there wiped every one of them and a capture came back with a `place`
+    // line and no pairs at all. Anything buffered for this pass has to be
+    // reset where the pass begins, or the buffer eats the earliest writers.
+    this.seatLog.length = 0;
     if (this.labels.size === 0) return;
     const cam = this.scene.activeCamera;
     if (!cam) return;
@@ -5283,7 +5290,6 @@ export class EntityVisuals {
      *  rung the members were projected with. */
     clearance: { pxPerWorld: number; basis: ViewBasis },
   ): void {
-    this.seatLog.length = 0;
     if (pending.length === 0) return;
     const pxPerWorld = clearance.pxPerWorld;
     const scale = this.effectiveScale();

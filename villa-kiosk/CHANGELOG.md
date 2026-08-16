@@ -1,3 +1,11 @@
+## 2.411.1
+
+### Fixed — the new pair diagnostic printed nothing
+
+The per-pair lines were buffered before the step that cleared the buffer, so
+every one of them was discarded and a capture came back with the summary line
+and no detail. The buffer is now reset where the pass begins.
+
 ## 2.411.0
 
 ### Added — `?debug` prints the numbers behind every pair that groups
