@@ -9,7 +9,7 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
-import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { SkyMaterial } from "@babylonjs/materials/sky/skyMaterial";
 
 export class SkyDome {
@@ -62,14 +62,22 @@ export class SkyDome {
     this.box = box;
   }
 
+  /** The dome's radius, and the denominator setHorizonDrop's angle is measured
+   *  against — one constant so the two cannot drift apart. */
+  private static readonly RADIUS = 500;
+  /** Last direction handed to update(), so a horizon-drop change can re-place
+   *  the sun without waiting for the next astronomical tick. */
+  private readonly sunDir = new Vector3(0, -1, 0);
+  private dropUnits = 0;
+
   /**
    * Update the sky from the scene's sun. `dirToScene` is the direction the sunlight
    * travels (sun → scene), exactly as SunController computes it, so the sun in the
    * sky sits opposite that direction.
    */
   update(dirToScene: Vector3, isDay: boolean): void {
-    // Sun position points back toward the sun; scale it well outside the box.
-    this.mat.sunPosition = dirToScene.scale(-300);
+    this.sunDir.copyFrom(dirToScene);
+    this.placeSun();
     // Night: drop the luminance hard so the dome reads as a deep night sky rather
     // than a glowing daytime dome, and lift turbidity slightly so the little light
     // that remains pools softly at the horizon instead of leaving a harsh edge.
@@ -110,6 +118,45 @@ export class SkyDome {
    */
   setHorizonDrop(units: number): void {
     this.mat.cameraOffset.y = units;
+    this.dropUnits = units;
+    this.placeSun();
+  }
+
+  /**
+   * Put the sun disc in the sky, LIFTED BY THE SAME ANGLE THE HORIZON WAS
+   * DROPPED.
+   *
+   * Until 2.388.0 this was one line — `sunPosition = dirToScene.scale(-300)` —
+   * and setHorizonDrop's own docstring called it a feature that the disc used
+   * the UN-offset direction: "the horizon slides down past it rather than the
+   * sun being dragged along". That is right for a sun already on screen and
+   * wrong for the overview, where the drop exists precisely BECAUSE the camera
+   * looks down and the real sky is out of frame. The gradient came into view
+   * and the sun was left behind it, so the colour changed all day over an empty
+   * blue field — reported as exactly that.
+   *
+   * Lifting by `atan(drop / RADIUS)` is the one value that cannot be argued
+   * with: it is the same rotation setHorizonDrop applies to the horizon, so the
+   * sun keeps its position RELATIVE TO THE SKY IT BELONGS TO. Nothing else is
+   * touched — in particular the AZIMUTH is untouched, so the sun still rises in
+   * the east, sets in the west and tracks live across the day, which is the
+   * whole point of 2.385.0's revert. First person passes 0 and gets the true
+   * elevation back with no special case.
+   */
+  private placeSun(): void {
+    // The sun is opposite the direction its light travels.
+    const x = -this.sunDir.x, y = -this.sunDir.y, z = -this.sunDir.z;
+    const horiz = Math.hypot(x, z);
+    const lift = Math.atan(this.dropUnits / SkyDome.RADIUS);
+    if (horiz < 1e-6 || lift === 0) {
+      this.mat.sunPosition = new Vector3(x, y, z).scale(300);
+      return;
+    }
+    const alt = Math.atan2(y, horiz) + lift;
+    const c = Math.cos(alt);
+    this.mat.sunPosition = new Vector3(
+      (x / horiz) * c, Math.sin(alt), (z / horiz) * c,
+    ).scale(300);
   }
 
   setEnabled(on: boolean): void {

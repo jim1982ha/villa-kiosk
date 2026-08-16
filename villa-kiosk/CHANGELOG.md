@@ -1,3 +1,12 @@
+## 2.388.0
+
+### Fixed — the sun was never in frame in the overview
+
+The overview drops the horizon ~22° so sky stays on screen while the camera
+looks down, and the sun disc was deliberately left at its true elevation — so
+the colour changed all day over an empty field. The disc now rides the same
+lift. Azimuth is untouched, so it still rises east, sets west and tracks live.
+
 ## 2.387.0
 
 ### Added — "North is the way I'm facing", beside the north-offset slider
