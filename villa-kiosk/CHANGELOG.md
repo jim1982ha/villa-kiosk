@@ -1,3 +1,12 @@
+## 2.371.0
+
+### Added — a Clear button in the `?debug` panel
+
+Sharing a diagnostic meant re-sending the whole page load every time, because
+"Copy all" is all-or-nothing by design. Clear drops the history so the next
+interaction can be captured on its own. Both header buttons now come from one
+factory so a second control cannot drift out of style with the first.
+
 ## 2.370.0
 
 ### Changed — the phone's top-bar button is the same gear as the desktop's

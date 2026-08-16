@@ -122,6 +122,14 @@ function fallbackCopy(text: string): boolean {
   }
 }
 
+/** Drop the whole page-load history so the next lines logged are the only
+ *  ones "Copy all" will hand over. The reader's tool for isolating one
+ *  interaction out of a session's worth of noise. */
+function clearAll(): void {
+  history = [];
+  if (bodyEl) bodyEl.textContent = "";
+}
+
 function copyAll(): void {
   const text = history.join("\n");
   const flash = (label: string) => {
@@ -163,21 +171,28 @@ function ensureBox(): HTMLDivElement {
   title.style.cssText = "color:#86efac;font-weight:bold;";
   header.appendChild(title);
 
-  copyBtn = document.createElement("button");
-  copyBtn.type = "button";
-  copyBtn.textContent = "Copy all";
-  // pointer-events:auto + a real <button> so this is reliably tappable on a
-  // kiosk tablet with no devtools — the whole point of this control is to
-  // get the FULL log (not just the last 40 visible lines, which scroll past
-  // too fast to read during model load) into the clipboard for sharing.
-  copyBtn.style.cssText =
-    "font:11px monospace;background:#166534;color:#eafff0;border:none;" +
-    "border-radius:4px;padding:3px 10px;cursor:pointer;pointer-events:auto;";
-  copyBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    copyAll();
-  });
-  header.appendChild(copyBtn);
+  // pointer-events:auto + a real <button> so these are reliably tappable on a
+  // kiosk tablet with no devtools, and one factory so a second control cannot
+  // drift out of style with the first.
+  const headerBtn = (label: string, bg: string, onTap: () => void) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.style.cssText =
+      `font:11px monospace;background:${bg};color:#eafff0;border:none;` +
+      "border-radius:4px;padding:3px 10px;cursor:pointer;pointer-events:auto;";
+    b.addEventListener("click", (e) => { e.stopPropagation(); onTap(); });
+    header.appendChild(b);
+    return b;
+  };
+
+  // Clear before Copy, in reading order: narrow the log to the thing being
+  // investigated, THEN copy it. Sharing the whole page load every time is
+  // what this pair exists to avoid.
+  headerBtn("Clear", "#3f3f46", clearAll);
+  // Copies the FULL history, not just the 40 visible lines — during model
+  // load they scroll past faster than they can be read.
+  copyBtn = headerBtn("Copy all", "#166534", copyAll);
   box.appendChild(header);
 
   bodyEl = document.createElement("div");
