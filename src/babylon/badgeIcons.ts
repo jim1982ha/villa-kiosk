@@ -74,6 +74,23 @@ function iconFraction(): number {
 // icon standard (EntityCategories' CATEGORY_ICONS, the top bar, chips — see
 // VESTA-DESIGN.md §1.3): one stroke weight everywhere, never a filled glyph.
 const ICON_STROKE_VIEWBOX = 1.5;
+/**
+ * The glyph weight the CARD badge style asks for, in the same viewBox units.
+ *
+ * lucide's own default is 2.0 and this app draws 1.5, which reads as intended
+ * on the classic badge — a filled squircle where the glyph is the only ink on
+ * a saturated ground. The card style puts the same glyph on a pale chip inside
+ * a bordered card, and at that contrast a 1.5 stroke thins out to almost
+ * nothing on hardware; reported from a tablet as "the lines are too thin".
+ *
+ * Past lucide's default rather than at it, because the competing ink here is
+ * the card's own border and the chip's edge, not the badge's fill. One
+ * constant, so the weight can be tuned in a single place after it is judged on
+ * a real screen — which is the whole reason the classic style is deliberately
+ * left at ICON_STROKE_VIEWBOX for now: two styles at two weights makes the
+ * delta measurable side by side.
+ */
+const ICON_STROKE_VIEWBOX_BOLD = 2.25;
 /** Squircle corner radius as a fraction of the badge's size — exported so
  *  EntityVisuals' outline Rectangle can match this canvas's rounding exactly.
  *  Approximates --radius-badge (12px) at the classic badge's typical ~40-44px
@@ -102,14 +119,17 @@ function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
 
 function drawIcon(
   ctx: CanvasRenderingContext2D, primitives: readonly IconPrimitive[], scale: number, offset: number, strokeStyle: string,
+  bold = false,
 ): void {
   ctx.save();
   ctx.translate(offset, offset);
   ctx.scale(scale, scale);
   ctx.strokeStyle = strokeStyle;
   // ctx is already scaled by `scale`, so a viewBox-unit width renders
-  // proportionally to the icon — see ICON_STROKE_VIEWBOX.
-  ctx.lineWidth = ICON_STROKE_VIEWBOX;
+  // proportionally to the icon — see ICON_STROKE_VIEWBOX. That is also why the
+  // bold weight is a viewBox constant and not a pixel one: it has to survive
+  // the label-size stepper and the zoom cap without being re-derived.
+  ctx.lineWidth = bold ? ICON_STROKE_VIEWBOX_BOLD : ICON_STROKE_VIEWBOX;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   for (const [tag, attrs] of primitives) {
@@ -213,6 +233,15 @@ export function badgeImageDataUrl(
    * the whole bug. Omit only if the drawn size is genuinely unknown.
    */
   pxHint = 0,
+  /**
+   * Draw the glyph at the heavier weight — see ICON_STROKE_VIEWBOX_BOLD.
+   *
+   * Passed by the CARD badge style only. It is an argument rather than a read
+   * of `config.badgeStyle` because this module knows nothing about config and
+   * must not start to: it is a pure canvas baker, and its cache key is the
+   * complete description of the picture it returns.
+   */
+  boldGlyph = false,
 ): string {
   const theme = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") ?? "" : "";
   // ringState is part of the key: two badges alike in every other respect but
@@ -223,7 +252,10 @@ export function badgeImageDataUrl(
   // 128px one are different pictures, and serving the small one to the large
   // control is the blur this whole mechanism exists to remove.
   const px = bakeSizeFor(pxHint);
-  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}`;
+  // Weight is part of the key for the same reason size is: the two weights are
+  // two different pictures, and a cache that conflated them would serve
+  // whichever style happened to bake first to both of them.
+  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}:${boldGlyph}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -270,7 +302,7 @@ export function badgeImageDataUrl(
     const iconScale = (size / ICON_VIEWBOX) * iconFraction();
     const iconPx = ICON_VIEWBOX * iconScale;
     const offset = (px - iconPx) / 2;       // centred in the canvas = in the squircle
-    drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset, surface.glyph);
+    drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset, surface.glyph, boldGlyph);
 
     url = canvas.toDataURL("image/png");
   }

@@ -3608,7 +3608,8 @@ export class EntityVisuals {
           // Card: the Rectangle above strokes the edge, so the chip bakes no
           // ring of its own — see updateLabel for the doubled outline this
           // stops. Classic: the image IS the badge and carries its own.
-          undefined, card, glyphPx));
+          // Card only: the glyph is bolder there — see ICON_STROKE_VIEWBOX_BOLD.
+          undefined, card, glyphPx, card));
 
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
@@ -3811,7 +3812,10 @@ export class EntityVisuals {
       lbl.badge.color = surface.ring ?? "transparent";
       lbl.glyph.source = badgeImageDataUrl(
         lbl.category, iconKey, state, override,
-        dashed ? 0 : BADGE_INSET_CARD, ringState, !dashed, this.glyphBakePx(true));
+        dashed ? 0 : BADGE_INSET_CARD, ringState, !dashed, this.glyphBakePx(true),
+        // This whole branch IS the card style, so the heavier glyph weight is
+        // unconditional here — see ICON_STROKE_VIEWBOX_BOLD.
+        true);
       // Neutral ink, on a now-neutral card — the bottom bar's value is
       // `--text-primary` beside a coloured chip, not the chip's own hue. The
       // state is carried by the chip and the ring; the number is just a number.

@@ -1,3 +1,13 @@
+## 2.375.0
+
+### Changed — Card-style entity glyphs are drawn at a heavier weight
+
+At 1.5 viewBox units the lucide strokes almost disappeared on a pale chip
+inside a bordered card, unlike the classic badge where the same glyph is the
+only ink on a saturated fill. Card badges now bake at 2.25 (past lucide's own
+2.0, because the competing ink there is the card border). The classic Icon
+style is deliberately untouched so the two can be compared side by side.
+
 ## 2.374.0
 
 ### Changed — the mouse wheel zooms, and by exactly as much as ⌘+drag
