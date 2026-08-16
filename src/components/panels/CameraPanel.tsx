@@ -25,6 +25,7 @@ import { usePanelActions } from "./PanelActionsContext";
 import { useHA } from "@/ha/HAStateStore";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
+import { useLongPress, HOLD_MS_HUD } from "@/hooks/useLongPress";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useBackToClose } from "@/hooks/useBackToClose";
@@ -241,26 +242,18 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // dial / default-view anchor buttons elsewhere in the app: a plain tap
   // still steps as before; only a HOLD opens the picker, so this is purely
   // additive and never intrudes on the existing gesture.
-  const CAMERA_PICKER_HOLD_MS = 480;
   const [pickerOpen, setPickerOpen] = useState(false);
-  const pickerPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pickerLongFired = useRef(false);
-  const onCycleBtnDown = () => {
-    pickerLongFired.current = false;
-    if (pickerPressTimer.current) clearTimeout(pickerPressTimer.current);
-    pickerPressTimer.current = setTimeout(() => {
-      pickerLongFired.current = true;
-      setPickerOpen(true);
-    }, CAMERA_PICKER_HOLD_MS);
-  };
-  const onCycleBtnUp = () => {
-    if (pickerPressTimer.current) { clearTimeout(pickerPressTimer.current); pickerPressTimer.current = null; }
-  };
+  // Press-and-hold from the shared hook, not a fourth hand-rolled timer. The
+  // version this replaces had no movement origin, so a hold that DRIFTED still
+  // opened the picker — a different gesture from every other hold in the app,
+  // on the one surface most likely to be touched mid-swipe. HOLD_MS_HUD keeps
+  // the 480ms this button has always used.
+  const pickerHold = useLongPress(() => setPickerOpen(true), HOLD_MS_HUD);
   const onCycleBtnClick = (delta: number) => {
     // A hold that already opened the picker must not ALSO step to the next
     // camera the instant the button is released (a held pointer still fires
     // a native click on release) — swallow exactly that one click.
-    if (pickerLongFired.current) { pickerLongFired.current = false; return; }
+    if (pickerHold.consumeClick()) return;
     stepCamera(delta);
   };
   // The picker is a surface too, so it registers like one — that is what puts
@@ -968,7 +961,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                   camera picker on BOTH arrows was redundant — one entry point
                   is enough, and it stays on Next (below). Calls stepCamera
                   directly rather than onCycleBtnClick, so it can't be
-                  swallowed by the shared long-press flag that exists only to
+                  swallowed by the hook's consumeClick, which exists only to
                   suppress the click at the end of a hold. */}
               <button
                 className="icon-btn cam-prev"
@@ -981,10 +974,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               </button>
               <button
                 className="icon-btn cam-next has-hold-action"
-                onPointerDown={onCycleBtnDown}
-                onPointerUp={onCycleBtnUp}
-                onPointerLeave={onCycleBtnUp}
-                onPointerCancel={onCycleBtnUp}
+                {...pickerHold}
                 onContextMenu={(e) => e.preventDefault()}
                 onClick={() => onCycleBtnClick(1)}
                 title="Next camera — hold to pick a camera"

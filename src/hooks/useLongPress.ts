@@ -21,7 +21,16 @@
 
 import { useCallback, useRef } from "react";
 
+/** Default hold. The HUD's own convention is shorter (see HOLD_MS_HUD) — a
+ *  hold on a top-bar icon competes with nothing, whereas the destructive
+ *  gates this hook was written for should not be easy to trip. */
 const LONG_PRESS_MS = 600;
+/** The duration the HUD category icons, the floor buttons and the camera
+ *  picker have always used. Exported so a migration onto this hook CONVERGES
+ *  THE CODE WITHOUT CHANGING THE GESTURE — 600 on those controls is a 25%
+ *  slower hold on the app's most-used buttons, which is a product decision and
+ *  not a refactor's to make. */
+export const HOLD_MS_HUD = 480;
 /** Pixels of drift tolerated before the press is treated as a scroll/drag. */
 const MOVE_TOLERANCE_PX = 10;
 
@@ -41,7 +50,9 @@ export interface LongPressHandlers {
 }
 
 /** @param onLongPress fired once, when the hold completes. */
-export function useLongPress(onLongPress: () => void): LongPressHandlers {
+export function useLongPress(
+  onLongPress: () => void, holdMs: number = LONG_PRESS_MS,
+): LongPressHandlers {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const origin = useRef<{ x: number; y: number } | null>(null);
   /** Set when a hold completes, cleared by the click that follows it. */
@@ -61,8 +72,8 @@ export function useLongPress(onLongPress: () => void): LongPressHandlers {
       origin.current = null;
       justFired.current = true;
       onLongPress();
-    }, LONG_PRESS_MS);
-  }, [cancel, onLongPress]);
+    }, holdMs);
+  }, [cancel, onLongPress, holdMs]);
 
   return {
     consumeClick: () => {

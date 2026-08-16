@@ -1,3 +1,12 @@
+## 2.380.0
+
+### Fixed — holding the camera's Next button while drifting
+
+It hand-rolled its own press-and-hold with no movement origin, so a hold that
+slid still opened the picker — unlike every other hold in the app. It now uses
+`useLongPress`, which cancels on drift, at the same 480ms as before. Two badge
+dimensions also moved into `badgeMetrics.ts`, where every other one lives.
+
 ## 2.379.0
 
 ### Fixed — three writes under `/data` could tear

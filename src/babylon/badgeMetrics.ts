@@ -172,6 +172,15 @@ export interface BadgeMetrics {
   cardIconFraction: number;
   /** Clear space required between two drawn footprints. */
   minGapPx: number;
+  /** Clear space required between two ROOM CHIPS before they are judged too
+   *  close and MERGE (chips are never nudged — see EntityVisuals.updateClusters).
+   *  Here rather than in the scene file for the reason every other number in
+   *  this file is: a dimension written in the scene layer is in RENDER pixels
+   *  and is therefore a different physical size per device. */
+  chipGapPx: number;
+  /** Floor on pickBadgeAt's hit-area expansion, so a badge already at or above
+   *  --touch-min still forgives a slightly-off tap. */
+  tapSlopMinPx: number;
   /**
    * Floor on centre-to-centre distance between two drawn badges.
    *
@@ -271,6 +280,8 @@ const COARSE: BadgeMetrics = {
   cardIconFraction: 22 / 28,
   ringThicknessPx: 3,
   minGapPx: 6,
+  chipGapPx: 6,
+  tapSlopMinPx: 10,
   // Apple's 44pt hit region, which is also this app's --touch-min and exactly
   // what pickBadgeAt expands an undersized badge's slop to reach.
   minCentrePitchPx: 44,
@@ -325,6 +336,8 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
     cardIconFraction: base.cardIconFraction,
     ringThicknessPx: Math.max(1, px(base.ringThicknessPx)),
     minGapPx: base.minGapPx,
+    chipGapPx: base.chipGapPx,
+    tapSlopMinPx: base.tapSlopMinPx,
     minCentrePitchPx: base.minCentrePitchPx,
     countPillFraction: base.countPillFraction,
     countFontFraction: base.countFontFraction,

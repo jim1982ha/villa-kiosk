@@ -319,9 +319,6 @@ const LABEL_ANCHOR_MARGIN = 0.12;
 // badge's hit area up to this whenever the PAINTED badge is smaller — which
 // is the whole point of letting a fine pointer have a smaller badge.
 const TOUCH_MIN_CSS_PX = 44;
-// Floor on that expansion, so a badge already at or above --touch-min still
-// forgives a slightly-off tap exactly as it did before this was derived.
-const TAP_SLOP_MIN_CSS_PX = 10;
 // Unit offsets for pickBadgeAt's two sampling rings: the exact hit, then 8
 // directions at half slop, then the same 8 at full slop. Flat [cos,sin,...]
 // pairs so a tap allocates nothing at all.
@@ -643,10 +640,6 @@ const CHIP_COLLISION = true as boolean;
  *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
  *  navigation affordance, not a device — rather than any category's badge. */
 const CLUSTER_BG_COLOR = "#475569"; // fallback only — see --chip-surface
-/** Breathing room required between two chips. Chips are never nudged — this is
- *  purely the threshold at which two of them are judged too close and MERGE
- *  into one (see updateClusters). */
-const CLUSTER_GAP_PX = 6;
 /**
  * One room chip as DERIVED — everything needed to decide where it lands and
  * what it swallows, before a single GUI control is touched.
@@ -6590,7 +6583,10 @@ export class EntityVisuals {
     }
 
     if (merge && vp && chips.length > 1) {
-      const gap = CLUSTER_GAP_PX * scale;
+      // badgeMetrics owns every badge-layer dimension, in CSS px — this used
+      // to be a local constant, which is the shape of the bug that once painted
+      // a "44px" badge at 22 CSS px on every retina tablet.
+      const gap = this.metrics.chipGapPx * scale;
       for (;;) {
         let bi = -1, bj = -1, worst = 0;
         for (let i = 0; i < chips.length; i++) {
@@ -6886,7 +6882,7 @@ export class EntityVisuals {
     // target area, not the painted pixels)".
     const paintedCssPx = this.metrics.badgeDiameterPx
       * this.iconUserScale * this.iconZoomScale;
-    const slopCssPx = Math.max(TAP_SLOP_MIN_CSS_PX, (TOUCH_MIN_CSS_PX - paintedCssPx) / 2);
+    const slopCssPx = Math.max(this.metrics.tapSlopMinPx, (TOUCH_MIN_CSS_PX - paintedCssPx) / 2);
     const slop = slopCssPx * scaleX;
     // The ring OFFSETS are constant unit vectors, so they are a module
     // constant scaled at use rather than 17 fresh tuples per tap — and this
