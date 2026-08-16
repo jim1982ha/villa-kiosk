@@ -8,12 +8,13 @@
 //    Shift + drag        → ROTATE (dx → heading/bearing) + TILT (dy → pitch)
 //    Ctrl/⌘ + drag       → ZOOM  (dy → in/out)
 //
-//  TRACKPAD — no click required, gestures arrive as WheelEvents:
-//    two-finger slide    → PAN
-//    pinch (ctrlKey)     → ZOOM
+//  WHEEL — no click required, arrives as WheelEvents from both mouse and
+//  trackpad. Its VERTICAL axis is the Ctrl/⌘+drag zoom, through the very same
+//  primitive (zoomByPixels), so the two cannot mean different things:
+//    wheel / two-finger slide, vertically → ZOOM
+//    pinch (ctrlKey)                      → ZOOM
+//    horizontal component (deltaX)        → PAN sideways
 //    (two-finger twist has no cross-browser event — rotate via Shift+drag)
-//
-//  MOUSE WHEEL → ZOOM (the universal map idiom)
 //
 //  TOUCHSCREEN (PointerEvent):
 //    1 finger drag       → PAN
@@ -66,7 +67,12 @@ const DRAG_SENS       = 0.0016; // world-units per pixel × radius (pointer pan)
 const WHEEL_PAN_SENS  = 0.0009; // per normalised wheel pixel (two-finger slide pan)
 const ROT_SENS_DRAG   = 0.005;  // radians per pixel (Shift+drag horizontal → heading)
 const TILT_SENS_DRAG  = 0.005;  // radians per pixel (Shift+drag vertical → pitch)
-const ZOOM_SENS_DRAG  = 0.004;  // per pixel × radius (Ctrl+drag vertical → zoom)
+/** The ONE zoom rate, per vertical pixel × radius. Ctrl/⌘+drag and the wheel
+ *  both go through zoomByPixels, so a wheel notch of N normalised pixels moves
+ *  the camera exactly as far as dragging N pixels with ⌘ held. That identity is
+ *  the point: two ways to ask for the same thing that answered at two different
+ *  rates is what made the wheel feel like a separate, unfamiliar gesture. */
+const ZOOM_SENS = 0.004;
 // ── Double-tap zoom step (see zoomStep) ────────────────────────────────────
 /** One "level" = halve the distance = double the scale, the step every map
  *  application uses for a double tap. */
@@ -78,7 +84,6 @@ export const ZOOM_STEP_FACTOR = 0.5;
 const ZOOM_STEP_RECENTRE = 0.5;
 const ZOOM_STEP_FRAMES = 18;   // at 60fps
 const ZOOM_STEP_MS = 300;
-const WHEEL_ZOOM_SENS = 0.006;  // per normalised wheel pixel (wheel / pinch → zoom)
 const TILT_SENS_TOUCH = 0.007;  // radians per px of the two fingers' SHARED vertical drag
 // Fraction of the whole-villa fit radius used as the icon-scaling "1×"
 // reference (see fitTo). <1 so the default overview starts with shrunk
@@ -340,7 +345,7 @@ export class OverviewController {
       this.applyTilt(dy * TILT_SENS_DRAG * s);
     } else if (e.ctrlKey || e.metaKey) {
       // Ctrl (or ⌘ on macOS) + drag → ZOOM (vertical). Drag up = zoom in.
-      this.applyZoom(-dy * ZOOM_SENS_DRAG * this.camera.radius * s);
+      this.zoomByPixels(dy, s);
     } else {
       // Plain single-pointer drag (1-finger touch or left mouse) → PAN.
       // Use exact ground tracking so the spot under the finger stays under the
@@ -485,16 +490,26 @@ export class OverviewController {
     base.ax = a.x; base.ay = a.y; base.bx = b.x; base.by = b.y;
   }
 
-  // ── Wheel events (trackpad gestures + mouse wheel, no click needed) ────────
+  // ── Wheel events (mouse wheel + trackpad gestures, no click needed) ───────
   //
-  //   pinch (ctrlKey=true, set by the browser)  → ZOOM
-  //   classic mouse wheel (discrete, vertical)  → ZOOM
-  //   trackpad two-finger slide                 → PAN
+  // ⚠️ THE VERTICAL AXIS IS ZOOM, FOR EVERY DEVICE, and it is the SAME call
+  // Ctrl/⌘+drag makes. There used to be a heuristic here that tried to tell a
+  // mouse from a trackpad — `deltaX === 0` plus a ≥100px notch — and sent the
+  // mouse to zoom and the trackpad to pan. It cannot work: a mouse with smooth
+  // scrolling, a Magic Mouse, and a trackpad doing a pure-vertical swipe all
+  // report small pixel deltas with no horizontal component, so a real mouse
+  // regularly fell through to the PAN branch and the wheel silently performed a
+  // different gesture from the one the same user got by holding ⌘. Reported as
+  // exactly that: "the wheel is doing a different gesture and it's not
+  // intuitive."
   //
-  // Distinguishing a mouse wheel from a trackpad slide: a real wheel reports
-  // line-mode deltas (Firefox) or large pixel notches (~100, Chrome) with no
-  // horizontal component, whereas a trackpad slide streams small pixel deltas
-  // and often a non-zero deltaX.
+  // Vertical-is-zoom is also the map idiom the guess was reaching for — it is
+  // what a two-finger slide does in Google Maps and Apple Maps — so nothing is
+  // lost by stating it outright instead of inferring it from a delta magnitude.
+  // Panning by trackpad is still a plain drag, exactly as it is by mouse.
+  //
+  // The horizontal component keeps panning, because it has no zoom meaning and
+  // discarding it would make a diagonal trackpad swipe feel like it stuck.
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
@@ -506,29 +521,11 @@ export class OverviewController {
     const dy = e.deltaY * mul;
     const dx = e.deltaX * mul;
 
-    const isMouseWheel =
-      e.deltaX === 0 &&
-      (e.deltaMode !== WheelEvent.DOM_DELTA_PIXEL || Math.abs(e.deltaY) >= 100);
-
-    if (e.ctrlKey) {
-      // Trackpad pinch (browser sets ctrlKey) → zoom.
-      this.applyZoom(-dy * WHEEL_ZOOM_SENS * this.camera.radius * s);
-    } else if (isMouseWheel) {
-      // Classic mouse wheel notch → zoom.
-      this.applyZoom(-dy * WHEEL_ZOOM_SENS * this.camera.radius * s);
-    } else {
-      // Trackpad two-finger slide → pan (no click required).
-      // A wheel reports SCROLL deltas, whose VERTICAL sign is opposite to a
-      // pointer DRAG's: scrolling down is deltaY>0, but dragging content down is
-      // pointer dy>0. Feeding deltaY straight in (like the drag path does with
-      // dy) therefore inverts up/down vs. click-drag. Negate dy so a two-finger
-      // slide pans the map the SAME direction a click-drag does. It's negated
-      // INSIDE the `s` factor, so this stays consistent whether the app's
-      // Natural Scrolling toggle is on or off (both states flip together).
-      // deltaX already matches the drag convention on the trackpads tested, so
-      // it's left as-is (reported correct; only up/down was inverted).
-      this.applyPan(dx * s, -dy * s, WHEEL_PAN_SENS);
-    }
+    // Wheel notch, trackpad slide and trackpad pinch (which the browser marks
+    // with ctrlKey) are one gesture as far as this camera is concerned.
+    if (dy !== 0) this.zoomByPixels(dy, s);
+    // Sideways only — the vertical component has already been spent on zoom.
+    if (dx !== 0) this.applyPan(dx * s, 0, WHEEL_PAN_SENS);
     this.cb.onActivity();
   };
 
@@ -575,6 +572,21 @@ export class OverviewController {
     // opposes on both.)
     t.x = clamp(t.x + (g0.x - g1.x) * s, this.bounds.minX, this.bounds.maxX);
     t.z = clamp(t.z + (g0.z - g1.z) * s, this.bounds.minZ, this.bounds.maxZ);
+  }
+
+  /**
+   * THE zoom gesture, in vertical pixels. Positive `dyPixels` means "downward"
+   * in both of its callers' vocabularies — a pointer moving down the screen and
+   * a wheel scrolling down both report a positive vertical delta — so one
+   * negation here serves both and up is zoom-in either way.
+   *
+   * Everything about how far a zoom goes lives in this one line, on purpose:
+   * ⌘+drag and the wheel are two spellings of one instruction, and the moment
+   * they had two sensitivity constants they became two gestures that merely
+   * looked related.
+   */
+  private zoomByPixels(dyPixels: number, s: number): void {
+    this.applyZoom(-dyPixels * ZOOM_SENS * this.camera.radius * s);
   }
 
   /**

@@ -1,3 +1,14 @@
+## 2.374.0
+
+### Changed — the mouse wheel zooms, and by exactly as much as ⌘+drag
+
+The wheel guessed whether it was talking to a mouse or a trackpad from the
+delta size, sent one to zoom and the other to pan, and guessed wrong on any
+mouse with smooth scrolling — so scrolling panned the view instead of zooming
+it. The vertical axis is now always zoom, for every device, through the same
+call Ctrl/⌘+drag makes and at the same rate; sideways still pans. The
+device-guessing heuristic and the second sensitivity constant are gone.
+
 ## 2.373.0
 
 ### Added — the `place` debug line says WHY each room chipped
