@@ -173,9 +173,11 @@ def _session_secret() -> bytes:
         pass
     fresh = secrets.token_hex(32).encode()
     try:
-        with open(SESSION_SECRET_FILE, "wb") as f:
-            f.write(fresh)
-        os.chmod(SESSION_SECRET_FILE, 0o600)
+        # atomic_write, like every other write under /data: a torn secret is
+        # not a corrupt file you notice, it is a file shorter than 32 bytes,
+        # which the reader above silently rejects and this function then
+        # REPLACES — logging every session out with no error anywhere.
+        atomic_write(SESSION_SECRET_FILE, lambda out: out.write(fresh), mode=0o600)
     except OSError as err:  # /data unwritable is fatal-ish, but degrade to
         # a process-lifetime secret rather than crashing (sessions then reset
         # on restart, which just means re-entering the PIN).
@@ -204,9 +206,11 @@ def _session_epoch() -> int:
 def _bump_session_epoch() -> int:
     nxt = _session_epoch() + 1
     try:
-        with open(SESSION_EPOCH_FILE, "w", encoding="utf-8") as f:
-            f.write(str(nxt))
-        os.chmod(SESSION_EPOCH_FILE, 0o600)
+        # A torn epoch reads back as 0 (the int() falls over and _session_epoch
+        # returns 0), which silently re-validates every token logout-all was
+        # called to kill. Atomic or not at all.
+        atomic_write(SESSION_EPOCH_FILE, lambda out: out.write(str(nxt)),
+                     binary=False, mode=0o600)
     except OSError as err:
         print(f"[supervisor-proxy] could not persist session epoch: {err}", flush=True)
     return nxt
@@ -1395,13 +1399,15 @@ def _write_upload_sidecar(request: web.Request, dest: str) -> None:
     if not original_name:
         return
     try:
-        with open(dest + ".upload.json", "w", encoding="utf-8") as f:
-            json.dump({
+        atomic_write(
+            dest + ".upload.json",
+            lambda out: json.dump({
                 "original_name": original_name,
                 "uploaded_at": datetime.now(timezone.utc)
                                .isoformat(timespec="seconds"),
-            }, f)
-        os.chmod(dest + ".upload.json", 0o644)
+            }, out),
+            binary=False,
+        )
     except OSError:
         pass
 

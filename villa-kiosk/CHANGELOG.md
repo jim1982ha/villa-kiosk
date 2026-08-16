@@ -1,3 +1,12 @@
+## 2.379.0
+
+### Fixed — three writes under `/data` could tear
+
+The session secret, the session epoch and an upload's `.upload.json` sidecar
+were written with a plain `open()` instead of `atomic_write`. A torn secret
+reads back as too short and gets replaced, logging everyone out; a torn epoch
+reads back as 0, re-validating the tokens `logout-all` was called to kill.
+
 ## 2.378.0
 
 ### Fixed — four dialogs had no focus trap, and two had no Escape
