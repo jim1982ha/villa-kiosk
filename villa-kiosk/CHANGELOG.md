@@ -1,3 +1,12 @@
+## 2.394.1
+
+### Fixed — 2.394.0 turned the daytime sky black
+
+Moving the sun below the horizon to bring it into frame also told the sky
+material it was night, because one value drives both the disc's position and
+the sky's colour. Reverted to a daylit sky; the sun stays out of frame in the
+overview until it is drawn as its own object.
+
 ## 2.394.0
 
 ### Fixed — the sun is drawn where the overview camera can actually see

@@ -123,14 +123,23 @@ export class SkyDome {
    * some 78° above the top edge, which is why six releases of sky work were
    * invisible.
    *
-   * Drawing the sun below the horizon is only strange if the horizon is
-   * visible; here it is not, and the alternative is a sky nobody ever sees.
+   * ⚠️ 2.394.0 pushed this NEGATIVE (-58°) to put the disc inside that cone,
+   * and it turned the sky pitch black. `mat.sunPosition` is ONE input driving
+   * TWO outputs: where the disc is drawn AND what colour the sky is. A sun
+   * below the horizon tells SkyMaterial it is night, so the villa sat under a
+   * black sky with a sunset-red disc beside it at local noon. Reverted here.
+   *
+   * The consequence, stated so nobody re-derives it: WITHIN SkyMaterial there
+   * is no position that is both visible to this camera and lit like day. Making
+   * the sun visible in the overview needs a SEPARATE billboard mesh, placed
+   * independently of the material's sun — exactly how NightSky already draws
+   * the moon. That is the real fix and it is not a constant.
    */
-  private static readonly BAND_MIN = (-58 * Math.PI) / 180;
+  private static readonly BAND_MIN = (14 * Math.PI) / 180;
   /** How much higher noon is drawn than sunrise. BAND_MIN + this is where a
    *  noon sun lands (-42°), comfortably inside the visible cone. These two are
    *  the whole tuning surface if the arc wants to sit higher or flatter. */
-  private static readonly BAND_SPAN = (16 * Math.PI) / 180;
+  private static readonly BAND_SPAN = (26 * Math.PI) / 180;
   /** Altitude over which the lift eases in, so dawn and dusk are continuous. */
   private static readonly FADE = (6 * Math.PI) / 180;
 
