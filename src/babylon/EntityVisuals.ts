@@ -5779,7 +5779,7 @@ export class EntityVisuals {
       }
       placed.push(g);
     }
-    this.dropEscalatedGroups(placed);
+    this.dropEscalatedGroups(placed, shown);
     pending.length = 0;
     for (const g of placed) pending.push(g);
   }
@@ -5811,7 +5811,7 @@ export class EntityVisuals {
    *
    * Prunes `placed` IN PLACE.
    */
-  private dropEscalatedGroups(placed: PendingEntityGroup[]): void {
+  private dropEscalatedGroups(placed: PendingEntityGroup[], shown: ShownLabel[]): void {
     for (let round = 0; round <= placed.length; round++) {
       let dropped = false;
       for (let i = placed.length - 1; i >= 0; i--) {
@@ -5820,25 +5820,54 @@ export class EntityVisuals {
         // room's escalation must not take its card down either.
         if (g.focused) continue;
         if (!g.roomKeys.some((k) => this.roomClustered.get(k))) continue;
-        // The contagion, made countable: this group is dropped because ONE of
-        // its rooms chipped, and it then chips the OTHERS. A cross-room group
-        // is therefore a bridge along which a single refusal walks the villa —
-        // `cross=N` on the place line is how many bridges exist.
-        if (debugFlagEnabled()) {
-          const trigger = g.roomKeys.filter((k) => this.roomClustered.get(k));
-          const spreads = g.roomKeys.filter((k) => !this.roomClustered.get(k));
-          // Only a spreading drop is news. "Spreads to nothing" was the whole
-          // of a field capture — dozens of identical lines a frame, drowning
-          // the REFUSED lines that carry the measurement — and it says only
-          // that a group in an already-chipped room was tidied away, which is
-          // the cascade working, not the cascade amplifying.
-          if (spreads.length) {
-            this.seatLog.push(
-              `seat CASCADE drop ${g.key} n=${g.members.length}`
-              + ` (room ${trigger.join("|")} already chipped) -> ALSO chips [${spreads.join("|")}]`);
-          }
+        // ── A LOST ROOM RELEASES THE OTHERS; IT NO LONGER CHIPS THEM ────────
+        // This used to chip EVERY room the group covered, and that made a
+        // cross-room group a BRIDGE a single refusal walks the villa across.
+        // Measured, from the field capture that prompted this — ONE refusal in
+        // the living room:
+        //     drop camera.main_house_door_cam   -> ALSO chips [outdoor]
+        //     drop binary_sensor.motion1        -> ALSO chips [staircase]
+        //     drop fan.ceiling_fan_patio_terrace-> ALSO chips [patio 1f]
+        //     drop binary_sensor.motion0        -> ALSO chips [master bathroom]
+        // Five rooms chipped because ONE card in a sixth had nowhere to stand.
+        // No device in `outdoor` was crowded; it lost its badges because a
+        // group it shared with the living room was tidied away.
+        //
+        // The reason it chipped them was real and is preserved differently:
+        // those members stay marked in `entityGrouped`, so dropping the group
+        // without a plan leaves them hidden with no summary and no chip — the
+        // orphan bug this method was extracted to prevent. But chipping their
+        // room was never the only answer to that, merely the loudest. The
+        // members whose OWN room did not chip are RELEASED instead: the
+        // partners that crowded them are behind a chip now and off the glass,
+        // so the honest thing is to draw them at their own anchors again.
+        //
+        // Two or more survivors keep their card (pruned, so it SHRINKS — the
+        // strictly safer direction for a seating test that already passed);
+        // one survivor draws as a badge; none drops silently. Nothing is
+        // orphaned in any branch, and no room is chipped here at all, so the
+        // bridge is cut rather than narrowed. Termination is now trivial:
+        // `roomClustered` gains nothing in this method, so one pass suffices.
+        const keep: number[] = [];
+        for (const m of g.members) {
+          if (!this.roomClustered.get(roomKey(this.roomOf(shown[m].id)))) keep.push(m);
         }
-        for (const k of g.roomKeys) this.chipRoom(k, "cascade");
+        if (debugFlagEnabled() && keep.length) {
+          this.seatLog.push(
+            `seat RELEASE ${g.key} n=${g.members.length}`
+            + ` (room ${g.roomKeys.filter((k) => this.roomClustered.get(k)).join("|")} chipped)`
+            + ` -> ${keep.length >= 2 ? `card keeps ${keep.length}` : "1 badge redrawn"}`
+            + `, chips nothing`);
+        }
+        if (keep.length >= 2) {
+          // Survives as a smaller card. Its rooms are by construction the
+          // un-chipped ones, so it cannot be re-entered on a later round.
+          g.members = keep;
+          g.roomKeys = [...new Set(keep.map((m) => roomKey(this.roomOf(shown[m].id))))].sort();
+          continue;
+        }
+        for (const m of keep) this.entityGrouped.delete(shown[m].id);
+        placed.splice(i, 1);
         dropped = true;
       }
       if (!dropped) break;
@@ -6734,7 +6763,7 @@ export class EntityVisuals {
       // The EXISTING fixpoint, not a second escalation path — a group whose
       // room just chipped has to take every other room it covered with it or
       // its members are hidden with nothing in their place.
-      this.dropEscalatedGroups(pending);
+      this.dropEscalatedGroups(pending, shown);
       chips = this.deriveChips(shown, false);
     }
     // Only now, and only for the render: the escalation above is settled, so

@@ -1,3 +1,13 @@
+## 2.410.0
+
+### Fixed — one crowded room took four uncrowded ones with it
+
+A summary shared between two rooms used to chip BOTH when either one collapsed,
+so a single card with nowhere to stand cascaded across the villa: the living
+room took outdoor, then staircase, patio 1F and the master bathroom, none of
+which were crowded. Those devices are now released back to their own badges
+instead, and a room only ever chips for its own crowding.
+
 ## 2.409.0
 
 ### Fixed — summaries that stood for devices nowhere near them
