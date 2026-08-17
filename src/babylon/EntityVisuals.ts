@@ -5226,9 +5226,15 @@ export class EntityVisuals {
       }
     }
     if (chipHits) tapDebug(`PLACEMENT: ${chipHits} drawn badge(s)/card(s) OVERLAP a room chip`);
+    // ⚠️ SHOULD NOW BE ZERO (2.431.0). settleChips drops any chip a focused
+    // badge or card collides with, so this line firing means the drop missed —
+    // most likely because the render set is measured here in TRUE PERSPECTIVE
+    // while the drop tests the orthographic plane, i.e. the same residual the
+    // BURIED counter reports. A small transient count is that; a persistent one
+    // is a real gap in the drop.
     if (chipHitsFocused) {
       tapDebug(`PLACEMENT: ${chipHitsFocused} FOCUSED badge(s)/card(s) over a room chip`
-        + " (allowed: the chip paints behind and is asked last for taps)");
+        + " — settleChips should have dropped that chip (2.431.0)");
     }
 
     // ── (e) CHIP vs CHIP, AND THE ESTIMATE THAT DECIDES IT (2.420.0) ──────
@@ -7156,7 +7162,70 @@ export class EntityVisuals {
     // Only now, and only for the render: the escalation above is settled, so
     // merging can no longer change which badges are drawn — which is the
     // property its own docstring has always claimed.
-    return this.deriveChips(shown);
+    const rendered = this.deriveChips(shown);
+    if (focus.size === 0) return rendered;
+
+    // ── A FOCUSED ROOM'S DEVICES OUTRANK ANOTHER ROOM'S LABEL (2.431.0) ─────
+    // Reported three times, last with a screenshot: focus a room and its badges
+    // sit on top of other rooms' chips. 2.430.0 fixed WHICH of them paints in
+    // front and which answers a tap; it could not remove the overlap, and the
+    // owner's rule is that things must not overlap at all.
+    //
+    // Nothing above can resolve it, and that is structural rather than an
+    // oversight:
+    //
+    //   * the focused room's badges are EXEMPT — they block nobody and may not
+    //     spend their own room's chip, because tapping a room must not be able
+    //     to make that room vanish. So the escalation loop skips them, by
+    //     design, three times over;
+    //   * a chip may never be DISPLACED — "a chip must never leave the room it
+    //     names" is one of the five forbidden fixes, and relaxBoxes was deleted
+    //     in 2.120.0 for flinging one clear off the villa.
+    //
+    // It is also geometrically unavoidable for the case that prompted it: the
+    // focused room was `Outdoor`, which SURROUNDS the others, so its devices
+    // land near interior rooms' centroids however the camera is placed. No gap,
+    // metric or lattice can separate a point inside a room from that room's own
+    // label.
+    //
+    // So the chip yields. While a focus is active a chip is not the last tier
+    // for a crowded room — it is a navigation label for a room the user has
+    // just said they are NOT looking at, and every other room's devices are
+    // already hidden by the focus itself. Dropping the two or three that
+    // actually collide costs one tap of navigation (exit focus, tap the room)
+    // and buys the clean view the focus was asked for.
+    //
+    // ⚠️ This is NOT the orphan bug. That rule guards a room whose devices were
+    // hidden BY CROWDING and would then have no representation at all; here the
+    // hiding is the focus, it is modal, and leaving it restores everything. And
+    // it runs on the RENDER set only, after the escalation fixpoint — exactly
+    // where merging runs, and for the same reason: it must not be able to
+    // change which badges are drawn. `roomClustered` gains nothing here, so
+    // termination is untouched.
+    const focusBoxes: { cx: number; cy: number; hw: number; hh: number }[] = [];
+    for (let i = 0; i < shown.length; i++) {
+      if (this.entityGrouped.has(shown[i].id)) continue;
+      if (!focus.has(roomKey(this.roomOf(shown[i].id)))) continue;
+      // The same box the escalation loop above measures a badge with.
+      focusBoxes.push({
+        cx: shown[i].sx, cy: shown[i].sy, hw: boxes[i].halfW, hh: boxes[i].halfH,
+      });
+    }
+    for (const g of pending) {
+      if (!g.focused) continue;
+      const lay = this.layoutOf(g, g.members.length);
+      const hh = (lay.height / 2) * scale;
+      focusBoxes.push({ cx: g.sx, cy: g.sy - hh, hw: (lay.width / 2) * scale, hh });
+    }
+    if (focusBoxes.length === 0) return rendered;
+    return rendered.filter((c) => {
+      const q = this.planeOf(clearance, c.centre.x, c.centre.y, c.centre.z);
+      const cx = q.sx, cy = q.sy - half, hw = c.halfW + gapPx, hh = half + gapPx;
+      for (const b of focusBoxes) {
+        if (Math.abs(cx - b.cx) < hw + b.hw && Math.abs(cy - b.cy) < hh + b.hh) return false;
+      }
+      return true;
+    });
   }
 
   /**

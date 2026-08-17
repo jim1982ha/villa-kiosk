@@ -1,3 +1,12 @@
+## 2.431.0
+
+### Fixed — a tapped room's devices no longer overlap other rooms' name chips
+
+Neither side could move: the focused room's badges are exempt from grouping, and
+a chip may never leave the room it names. A chip whose label a focused device
+lands on is now simply not drawn — while a focus is active it labels a room you
+have just said you are not looking at, and leaving the focus restores it.
+
 ## 2.430.0
 
 ### Fixed — a tapped room's devices drew behind other rooms' name chips
