@@ -7071,10 +7071,20 @@ export class EntityVisuals {
     }
 
     if (merge && vp && chips.length > 1) {
-      // badgeMetrics owns every badge-layer dimension, in CSS px — this used
-      // to be a local constant, which is the shape of the bug that once painted
-      // a "44px" badge at 22 CSS px on every retina tablet.
-      const gap = this.metrics.chipGapPx * scale;
+      // ── THE SAME GAP AS EVERY OTHER TIER (2.419.0) ────────────────────
+      // This read `chipGapPx`, a second dial that stayed at 6 when 2.412.0 cut
+      // the shared one to 2 — so room chips merged at THREE TIMES the clear
+      // space two badges need, and were reported as "aggregating together too
+      // soon". The rest of the glass had already converged: `settleChips`'
+      // own chip-vs-badge and chip-vs-card tests read `minGapPx` a few lines
+      // up, and only this merge did not.
+      //
+      // It is the last of the three tiers to arrive at THE collision rule —
+      // two things collide when their drawn boxes, inflated by ONE gap,
+      // intersect — and there is now exactly one number to move if contact
+      // ever wants to be tighter or looser. `chipGapPx` is deleted, not
+      // aliased, so nothing can drift back apart.
+      const gap = this.metrics.minGapPx * scale;
       for (;;) {
         let bi = -1, bj = -1, worst = 0;
         for (let i = 0; i < chips.length; i++) {

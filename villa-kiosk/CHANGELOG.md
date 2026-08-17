@@ -1,3 +1,13 @@
+## 2.419.0
+
+### Fixed — room badges merged into each other too soon
+
+Two room badges combined while there was still visible space between them: the
+merge demanded three times the clear space two device icons need, because it
+was the one collision test never updated when that gap was reduced in 2.412.0.
+There is now a single gap setting for everything on screen, so a room badge
+merges when it touches its neighbour and not before.
+
 ## 2.418.0
 
 ### Changed — the debug log now says which version produced it

@@ -236,12 +236,6 @@ export interface BadgeMetrics {
   cardIconFraction: number;
   /** Clear space required between two drawn footprints. */
   minGapPx: number;
-  /** Clear space required between two ROOM CHIPS before they are judged too
-   *  close and MERGE (chips are never nudged — see EntityVisuals.updateClusters).
-   *  Here rather than in the scene file for the reason every other number in
-   *  this file is: a dimension written in the scene layer is in RENDER pixels
-   *  and is therefore a different physical size per device. */
-  chipGapPx: number;
   /** Floor on pickBadgeAt's hit-area expansion, so a badge already at or above
    *  --touch-min still forgives a slightly-off tap. */
   tapSlopMinPx: number;
@@ -361,8 +355,19 @@ const COARSE: BadgeMetrics = {
   // clear-space demand in CSS px — which is exactly why it dominates at the
   // small drawn sizes a zoomed-out villa uses. Raise it back toward 6 if
   // badges start reading as cramped rather than as separate.
+  //
+  // ── ONE GAP FOR THE WHOLE GLASS (2.419.0) ────────────────────────────────
+  // `chipGapPx: 6` used to sit on the next line: a SECOND dial answering the
+  // same question for the chip-vs-chip merge, and the one site 2.412.0's
+  // 6 → 2 correction never reached. So room chips went on merging at three
+  // times the clear space badges needed, and were reported — correctly — as
+  // "aggregating together too soon". Everything else on the glass had already
+  // converged on this number: settleChips' own chip-vs-badge and chip-vs-card
+  // tests read `minGapPx`, and only the merge did not.
+  //
+  // CLAUDE.md said "two dials" while there were three. If a third is ever
+  // wanted, it needs a reason this comment does not already cover.
   minGapPx: 2,
-  chipGapPx: 6,
   tapSlopMinPx: 10,
   // Apple's 44pt hit region, which is also this app's --touch-min and exactly
   // what pickBadgeAt expands an undersized badge's slop to reach.
@@ -418,7 +423,6 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
     cardIconFraction: base.cardIconFraction,
     ringThicknessPx: Math.max(1, px(base.ringThicknessPx)),
     minGapPx: base.minGapPx,
-    chipGapPx: base.chipGapPx,
     tapSlopMinPx: base.tapSlopMinPx,
     minCentrePitchPx: base.minCentrePitchPx,
     countPillFraction: base.countPillFraction,
