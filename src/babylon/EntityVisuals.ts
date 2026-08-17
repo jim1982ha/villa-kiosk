@@ -5112,6 +5112,60 @@ export class EntityVisuals {
     }
     if (chipHits) tapDebug(`PLACEMENT: ${chipHits} drawn badge(s)/card(s) OVERLAP a room chip`);
 
+    // ── (e) CHIP vs CHIP, AND THE ESTIMATE THAT DECIDES IT (2.420.0) ──────
+    // The last hole in this family: every other tier had an overlap counter
+    // and the chip-vs-chip merge — the one test 2.419.0 retuned — had none.
+    //
+    // Worth two counters rather than one, because the merge is the ONLY
+    // collision test in the subsystem whose inputs are an ESTIMATE.
+    // `chipWidthPx` is `len * 8.2 + 24`; the real width comes from Babylon's
+    // `adaptWidthToChildren` and is not readable until after the frame is laid
+    // out. Its docstring says it "only has to be close enough to keep chips
+    // apart" — which was fair while a 6 px gap covered the error and is a
+    // thinner claim now that 2.419.0 cut that to 2. Under-estimate by more
+    // than the slack and two chips overlap on the glass with nothing merging
+    // them; over-estimate and they merge while visibly clear, which is the
+    // complaint 2.419.0 answered.
+    //
+    // So: `estErr` reads the width the renderer ACTUALLY laid out (the
+    // previous frame's `_currentMeasure` — this pass has not laid out yet,
+    // which is the whole reason the estimate exists) and reports the worst
+    // disagreement in CSS px. If it comes back bigger than `minGapPx`, the gap
+    // is not the dial to move: the estimate is, or the merge has to read the
+    // drawn width a frame late.
+    let chipPairs = 0;
+    const chipBoxOf = (c: RoomChip): ScreenBox =>
+      ({ cx: c.x, cy: c.y - c.halfH, hw: c.halfW, hh: c.halfH });
+    for (let i = 0; i < chips.length; i++) {
+      const a = chipBoxOf(chips[i]);
+      if (!onScreen(a)) continue;
+      for (let j = i + 1; j < chips.length; j++) {
+        const b = chipBoxOf(chips[j]);
+        if (onScreen(b) && hits(a, b)) chipPairs++;
+      }
+    }
+    if (chipPairs) {
+      tapDebug(`PLACEMENT: ${chipPairs} room chip pair(s) OVERLAP on screen`
+        + " — the merge should have caught these; suspect chipWidthPx (see estErr)");
+    }
+    let estErr = 0;
+    let estWorst = "";
+    const chipScale = this.effectiveScale();
+    for (const c of chips) {
+      const ctl = this.clusters.get(c.key)?.container as unknown as
+        { _currentMeasure?: { width: number } } | undefined;
+      const drawn = ctl?._currentMeasure?.width;
+      if (!(typeof drawn === "number" && drawn > 0) || !(chipScale > 0)) continue;
+      // Both back to CSS px, the units chipWidthPx and minGapPx are written in.
+      const err = Math.abs(c.halfW * 2 - drawn) / chipScale;
+      if (err > estErr) { estErr = err; estWorst = c.label; }
+    }
+    if (estErr > this.metrics.minGapPx) {
+      tapDebug(`PLACEMENT: chipWidthPx is off by ${estErr.toFixed(1)} CSS px`
+        + ` (worst: "${estWorst}") — more than minGapPx=${this.metrics.minGapPx},`
+        + " so the chip merge is deciding on a width it cannot trust");
+    }
+
     // A badge never moves: the layout writes one shared lift and no X offset.
     let moved = 0;
     for (const s of shown) if (s.lbl.container.linkOffsetXInPixels !== 0) moved++;

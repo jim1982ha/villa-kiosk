@@ -1,3 +1,13 @@
+## 2.420.0
+
+### Added — the debug log now checks the room-badge merge it could not see
+
+Room badges are the only thing on screen positioned from an ESTIMATE of their
+own width, because the real one is not known until the frame is drawn. Last
+release tightened how close they may sit, which left less room for that
+estimate to be wrong — so `?debug` now reports overlapping room badges and how
+far the estimate was off. No visible change.
+
 ## 2.419.0
 
 ### Fixed — room badges merged into each other too soon
