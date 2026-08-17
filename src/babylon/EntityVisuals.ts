@@ -85,7 +85,8 @@ import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
   PHONE_MAX_CSS_WIDTH, ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE,
-  GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice, CARD_VALUE_GAP_OF_CHIP_GAP,
+  GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice,
+  SUMMARY_TEXT_OF_HEIGHT, VALUE_CHAR_ADVANCE,
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
 import {
@@ -3879,7 +3880,10 @@ export class EntityVisuals {
     const m = this.metrics;
     const card = this.isCardStyle();
     const size = card ? m.cardHeightPx : m.badgeDiameterPx;
-    const font = card ? m.cardValueFontPx : m.pillValueFontPx;
+    // Its OWN fraction of the badge height — not the badge's VALUE font, which
+    // is a small secondary readout and was dragging the room name and the count
+    // digit down with it every time it was tuned. See SUMMARY_TEXT_OF_HEIGHT.
+    const font = Math.round(size * SUMMARY_TEXT_OF_HEIGHT);
     return {
       size,
       font,
@@ -3902,9 +3906,14 @@ export class EntityVisuals {
    */
   private chipTextMetrics(): ChipTextMetrics {
     const m = this.metrics;
+    const sm = this.summaryMetrics();
     return {
-      charPx: this.isCardStyle() ? m.cardValueCharPx : m.pillValueCharPx,
-      padPx: m.chipTextPadPx * 2 + this.summaryMetrics().countSize,
+      // The advance follows the font THE CHIP ACTUALLY PRINTS, which since
+      // 2.447.0 is the summary's own — not the badge value's. Deriving it from
+      // the wrong font is the 2.422.0 defect in a new place: a width model that
+      // measures a string at a size nobody draws it at.
+      charPx: sm.font * VALUE_CHAR_ADVANCE,
+      padPx: m.chipTextPadPx * 2 + sm.countSize,
     };
   }
 
@@ -4270,7 +4279,23 @@ export class EntityVisuals {
         valueSpacer = new Rectangle(`lbl_valgap_${entityId}`);
         valueSpacer.thickness = 0;
         valueSpacer.background = "";
-        valueSpacer.width = `${Math.max(1, Math.round(glyphPx * chip.gap * CARD_VALUE_GAP_OF_CHIP_GAP))}px`;
+        // ⚠️ THE CHIP'S INK IS SMALLER THAN ITS BOX, and missing that is why two
+        // attempts at this looked right on paper and wrong on screen (2.447.0).
+        // `badgeImageDataUrl` bakes the squircle at BADGE_INSET_CARD (10%) inside
+        // the image, so the VISIBLE chip stops 0.1·glyphPx short of the control's
+        // edge on every side. Every gap I computed was therefore measured from a
+        // boundary nobody can see, and the drawn gap was that plus the inset —
+        // which is exactly the "still too far right" the owner kept reporting
+        // while the arithmetic said otherwise.
+        //
+        // So the target is stated where it can be checked: the value's visible
+        // clear space on the LEFT (this spacer plus the baked inset) equals its
+        // visible clear space on the RIGHT (the card's own iconPadX). Solve for
+        // the spacer and it is a subtraction, not a fraction — and on this
+        // villa's metrics it comes out at ~1 CSS px, which is why every
+        // fraction-of-the-gap value I tried was too wide.
+        const inkInset = glyphPx * BADGE_INSET_CARD;
+        valueSpacer.width = `${Math.max(0, Math.round(iconPadX - inkInset))}px`;
         valueSpacer.height = `${glyphPx}px`;
         valueSpacer.isPointerBlocker = false;
         valueSpacer.isVisible = false;

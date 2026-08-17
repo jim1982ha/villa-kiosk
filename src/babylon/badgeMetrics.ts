@@ -407,25 +407,16 @@ export interface BadgeMetrics {
  * now true in CSS pixels rather than only in the render-pixel space nobody
  * sees.
  */
-/**
- * The card's ICON-TO-VALUE gap, as a fraction of the gap the DOM twin uses
- * (`--chip-gap`, 28% of the chip, shared with `.summary-tile`).
- *
- * The DOM tile's gap separates the icon from a two-line label+value BLOCK that
- * fills the rest of a 96px-wide tile. The map badge has one short number and
- * hugs it, so the same fraction leaves the value floating between the icon and
- * the edge — reported twice as the value sitting "too much on the right side",
- * once when its two margins were genuinely unequal (2.440.0 fixed that) and
- * again when they were equal, because equal margins around a small number
- * inside a tight pill still read as adrift.
- *
- * So the badge takes HALF the DOM gap on the icon side and keeps the full one
- * as its tail, which reads as "the number belongs to that icon" rather than
- * "the number is centred in a box". A fraction OF the shared token rather than
- * a new literal: `--chip-gap` stays the one place the proportion is defined,
- * and this says how the map deviates and by how much.
+/*
+ * CARD_VALUE_GAP_OF_CHIP_GAP lived here and is GONE (2.447.0). It expressed the
+ * icon-to-value gap as a fraction of the DOM chip's gap, and no fraction of
+ * anything could be right: the gap that matters is measured from the chip's
+ * visible INK, which stops BADGE_INSET_CARD short of its control, so the
+ * quantity is a subtraction (iconPadX − inkInset) rather than a proportion. See
+ * the spacer in EntityVisuals' card branch. Left as a note because "make it a
+ * fraction of --chip-gap" is the obvious-looking move and it is wrong twice
+ * over.
  */
-export const CARD_VALUE_GAP_OF_CHIP_GAP = 0.5;
 
 /**
  * The value text, as a fraction of the CHIP it sits beside.
@@ -445,6 +436,29 @@ export const CARD_VALUE_GAP_OF_CHIP_GAP = 0.5;
  * this time, and `npm run test:placement` now reads THIS CONSTANT rather than a
  * copy of its value, so a pin can no longer assert last month's design.
  */
+/**
+ * A SUMMARY's text (a room chip's name, an entity group's label), as a fraction
+ * of the badge HEIGHT it stands in for — and deliberately NOT the badge's VALUE
+ * font (2.447.0).
+ *
+ * ⚠️ It WAS the value font, on the reasoning that a summary "takes the current
+ * style's own text size" so the relationship cannot drift. The relationship was
+ * the wrong one. A badge's value is a small secondary READOUT ("100%", "3.7 kW")
+ * and a chip's text is a room NAME — the chip's primary content, the thing you
+ * read to know what you are looking at. Coupling them means tuning one silently
+ * retunes the other, and that is exactly what happened: three requests to shrink
+ * the badge value dragged the room name down with it, and the count pill's digit
+ * with that (`countFont` is a fraction OF this), until the owner reported the
+ * name too small and the digit no longer looking centred in its pill.
+ *
+ * 0.464 reproduces the size the chip had before any of that — 13 px on the touch
+ * table's 28 px card, 10 px on a fine pointer's 20.5 px one — so this is a
+ * RESTORATION expressed as a ratio, not a new taste. It still scales with the
+ * badge, the pointer class and the icon-size setting, which is what the original
+ * coupling was for; it simply no longer moves when the value readout does.
+ */
+export const SUMMARY_TEXT_OF_HEIGHT = 0.464;
+
 export const VALUE_FONT_OF_CHIP = 0.4;
 /**
  * The same question for the classic style's pill, whose value is measured
@@ -463,7 +477,7 @@ const VALUE_FONT_OF_PILL = 0.55;
  * from the text it measured. Deriving the advance from the size means a font
  * change can no longer leave the width estimate behind.
  */
-const VALUE_CHAR_ADVANCE = 0.56;
+export const VALUE_CHAR_ADVANCE = 0.56;
 
 const COARSE: BadgeMetrics = {
   badgeDiameterPx: 44,

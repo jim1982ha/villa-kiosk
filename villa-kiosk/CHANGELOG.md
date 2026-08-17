@@ -1,3 +1,16 @@
+## 2.447.0
+
+### Fixed — the room chip's text is back to its own size, and the badge value is centred on the ink
+
+Shrinking the badge's value readout had been shrinking the room chip's name and its
+count digit too, because the chip took its text size from the value font — the
+wrong relationship between a secondary readout and a room's own label. The chip now
+has its own fraction of the badge height, restoring exactly the sizes it had. And
+the badge value: the icon's squircle is baked 10% inside its control, so every gap
+measured to that control's edge was measured from a boundary nobody can see — which
+is why three attempts looked right on paper. The gap is solved from the visible ink
+now.
+
 ## 2.446.0
 
 ### Fixed — the badge value sits next to its icon, and is smaller
