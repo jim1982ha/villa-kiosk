@@ -211,6 +211,22 @@ export interface BadgeMetrics {
   pillValuePadPx: number;
   cardValueCharPx: number;
   cardValuePadPx: number;
+  /**
+   * The room chip's own text inset, on ONE side. Its right padding is this
+   * plus the count overlay's full diameter, which is how the count reserves
+   * its corner without the room name ever rendering under it.
+   *
+   * Here rather than as a literal in the scene layer (2.422.0) because the
+   * chip is the last thing in this subsystem that modelled its own drawn width
+   * with private constants: `labelLayout` carried a FOURTH per-character
+   * advance (8.2) beside the two above, for the very same font at the very
+   * same weight, and a pad of 24 against a real inset of 40-50. The two errors
+   * cancelled near a 14-character room name and diverged at both ends, so the
+   * chip merge carried a delta signed by NAME LENGTH — short names merged
+   * late, long ones early. Same drift `summaryMetrics` was extracted to end,
+   * third instance. See labelLayout.chipWidthPx.
+   */
+  chipTextPadPx: number;
 
   // ── Clearance ────────────────────────────────────────────────────────────
   /**
@@ -327,6 +343,7 @@ const COARSE: BadgeMetrics = {
   pillValuePadPx: 24,
   cardValueCharPx: 7.2,
   cardValuePadPx: 8,
+  chipTextPadPx: 12,
 
   // The icon CHIP's control as a fraction of the card. The chip's own art is
   // inset 10% inside it (BADGE_INSET_CARD), so the drawn squircle is 0.8x
@@ -423,6 +440,7 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
     cardValueCharPx: base.cardValueCharPx
       * (Math.max(MIN_VALUE_FONT_PX, px(base.cardValueFontPx)) / base.cardValueFontPx),
     cardValuePadPx: px(base.cardValuePadPx),
+    chipTextPadPx: px(base.chipTextPadPx),
 
     // A fraction: identical on both classes by construction.
     cardIconFraction: base.cardIconFraction,

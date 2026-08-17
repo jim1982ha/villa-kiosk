@@ -132,7 +132,7 @@ import {
   pickNearestVariant, desiredVariantWord, orderVariantWords,
 } from "./meshVariants";
 // Pure label/chip overlap geometry — see labelLayout.ts.
-import { chipWidthPx, fitChipLabel } from "./labelLayout";
+import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 1.3;
@@ -3471,6 +3471,26 @@ export class EntityVisuals {
       font,
       countSize: Math.round(size * m.countPillFraction),
       countFont: Math.round(font * m.countFontFraction),
+    };
+  }
+
+  /**
+   * The room chip's text model — the ONE answer to "how wide will that chip be
+   * drawn", handed to both `fitChipLabel` and the merge (2.422.0).
+   *
+   * Every term comes from what `ensureCluster` actually writes on the control:
+   * the advance is badgeMetrics' own for this style's value font, which the
+   * chip prints at the same size and the same weight 600; the pad is the left
+   * inset plus the right-hand reserve the count overlay sits in. Nothing here
+   * is a private constant, which is the whole point — labelLayout carried its
+   * own pair until /dry-audit found them, and they were wrong in opposite
+   * directions by enough to cancel at one name length and nowhere else.
+   */
+  private chipTextMetrics(): ChipTextMetrics {
+    const m = this.metrics;
+    return {
+      charPx: this.isCardStyle() ? m.cardValueCharPx : m.pillValueCharPx,
+      padPx: m.chipTextPadPx * 2 + this.summaryMetrics().countSize,
     };
   }
 
@@ -7132,8 +7152,11 @@ export class EntityVisuals {
     const chipBudget = scale > 0
       ? (eng.getRenderWidth() * CHIP_MAX_VIEWPORT_FRACTION) / scale
       : 0;
+    // ONE object, both readers — fitChipLabel truncates against exactly the
+    // model the merge then measures the result with.
+    const chipText = this.chipTextMetrics();
     const measure = (c: RoomChip) => {
-      c.label = fitChipLabel(c.room, chipSuffixOf(c), chipBudget);
+      c.label = fitChipLabel(c.room, chipSuffixOf(c), chipText, chipBudget);
       if (vp) {
         const p = Vector3.Project(c.centre, Matrix.IdentityReadOnly, tm, vp);
         c.x = p.x; c.y = p.y;
@@ -7145,7 +7168,7 @@ export class EntityVisuals {
       // every chip ~33 CSS px of phantom width and merged pills that were
       // visibly clear — sixteen times the gap 2.419.0 removed for the same
       // symptom, added back through the width. See chipWidthPx.
-      c.halfW = (chipWidthPx(c.label) / 2) * scale;
+      c.halfW = (chipWidthPx(c.label, chipText) / 2) * scale;
       c.halfH = (this.summaryMetrics().size / 2) * scale;
     };
 
@@ -7467,8 +7490,11 @@ export class EntityVisuals {
     // (the raw spelling, plus a "+N" when chips merged) on the same pass that
     // created the control, so the key is never what a person reads.
     text.text = key;
-    text.paddingLeft = "12px";
-    text.paddingRight = `${sm.countSize + 12}px`;
+    // ⚠️ THE SAME NUMBER chipTextMetrics() models this chip's width with. A
+    // literal here and an estimate there is how labelLayout came to carry a
+    // pad of 24 against a real inset of 40-50 (/dry-audit, 2.422.0).
+    text.paddingLeft = `${this.metrics.chipTextPadPx}px`;
+    text.paddingRight = `${sm.countSize + this.metrics.chipTextPadPx}px`;
     container.addControl(text);
 
     // The device count as a small corner-overlay pill — matching the HUD's

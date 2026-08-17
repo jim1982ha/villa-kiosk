@@ -28,25 +28,38 @@
  * 81.4 est / 80.4 drawn; a 14-character one 138.8 / 133.7); with the count
  * folded in it over-estimated by 25-30%.
  *
+ * ── AND ITS NUMBERS COME FROM THE RENDERER'S OWN NOW (2.422.0) ─────────────
+ * /dry-audit: this file carried a FOURTH per-character advance (8.2) beside
+ * badgeMetrics' `cardValueCharPx: 7.2` / `pillValueCharPx: 6.2`, for the same
+ * two font sizes at the same weight 600, plus a pad of 24 against a real inset
+ * of 40 (card) / 50 (pill). Both wrong, in OPPOSITE directions — advance 14-32%
+ * high, pad 40-52% low — so they cancelled near a 14-character room name and
+ * diverged at both ends: ~10-13% under-reserved for a 7-character name,
+ * ~4% over for a 25-character one.
+ *
+ * That is a merge delta signed by NAME LENGTH. Short-named rooms merged late,
+ * long-named ones early, and no amount of tuning the 2 px gap could reach it.
+ * The advance also tracked nothing: badgeMetrics derives its two from the
+ * CLAMPED font, so at small label-size settings this drifted further still.
+ * Third instance of the drift `summaryMetrics` was extracted to end.
+ *
  * Still an ESTIMATE on purpose: the real width is resolved by Babylon GUI
  * during layout (adaptWidthToChildren), which is not readable before the frame
  * is drawn — this only has to be close enough to keep chips apart.
  */
-const CLUSTER_CHAR_PX = 8.2;
-/** Left padding PLUS the whole right-hand reserve the count overlay sits in —
- *  not a bare text margin. This term is why the count must never also be
- *  concatenated into the string handed to `chipWidthPx`.
- *
- *  ⚠️ These two ARE chip dimensions in CSS px, and CLAUDE.md says those live
- *  only in badgeMetrics. Deliberately not moved (2.421.0): they model a TEXT
- *  advance and a padding sum that `ensureCluster` writes as literal strings
- *  (`paddingLeft 12`, `paddingRight countSize + 12`), so converging them means
- *  deriving both from summaryMetrics — worth doing, but it changes every
- *  chip's measured width and this release is already changing that once. Note
- *  left here per /dry-audit rather than a silent divergence. */
-const CLUSTER_TEXT_PAD_PX = 24;
-export function chipWidthPx(text: string): number {
-  return text.length * CLUSTER_CHAR_PX + CLUSTER_TEXT_PAD_PX;
+export interface ChipTextMetrics {
+  /** Per-character advance for the chip's font AND weight. badgeMetrics'
+   *  `cardValueCharPx` / `pillValueCharPx` — the chip prints the same two font
+   *  sizes at the same weight 600 as a badge's value text, so it is the same
+   *  question and takes the same answer. */
+  charPx: number;
+  /** Left inset PLUS the whole right-hand reserve the count overlay sits in
+   *  (`chipTextPadPx * 2 + countSize`) — not a bare text margin. This term is
+   *  why the count must never ALSO be concatenated into the measured string. */
+  padPx: number;
+}
+export function chipWidthPx(text: string, m: ChipTextMetrics): number {
+  return text.length * m.charPx + m.padPx;
 }
 
 /**
@@ -80,6 +93,9 @@ export function fitChipLabel(
   /** The merged-rooms marker ("+2"), or "" for a chip that names one room.
    *  Passed SEPARATELY and never truncated — see below. */
   suffix: string,
+  /** The SAME metrics the caller will measure the returned string with — that
+   *  identity is the rule this function exists to keep. */
+  m: ChipTextMetrics,
   maxPx: number,
 ): string {
   const join = (n: string) => (suffix ? `${n} ${suffix}` : n);
@@ -95,7 +111,7 @@ export function fitChipLabel(
   // the name gets what is left. Same rule the count already followed.
   const whole = join(name);
   if (!(maxPx > 0)) return whole;
-  const fits = (s: string) => chipWidthPx(s) <= maxPx;
+  const fits = (s: string) => chipWidthPx(s, m) <= maxPx;
   if (fits(whole)) return whole;
   for (let n = name.length - 1; n >= CHIP_MIN_NAME_CHARS; n--) {
     const cut = join(name.slice(0, n).trimEnd() + CHIP_ELLIPSIS);

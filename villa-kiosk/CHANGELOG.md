@@ -1,3 +1,12 @@
+## 2.422.0
+
+### Fixed — room badges merged at a width that depended on the room's name
+
+The chip modelled its own drawn width with a private character advance and pad
+rather than the ones badgeMetrics already owns for that same font and weight.
+They were wrong in opposite directions, cancelling only near a 14-character
+name: shorter room names merged late, longer ones early, on every screen.
+
 ## 2.421.0
 
 ### Fixed — room badges merged while still visibly apart
