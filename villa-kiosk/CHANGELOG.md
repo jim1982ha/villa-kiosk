@@ -1,3 +1,14 @@
+## 2.437.0
+
+### Fixed — the walk-in banner named a room upstairs, and the wall cull was doing needless work
+
+Standing in the ground-floor kitchen it read "Tearrace 2F": room outlines are flat,
+the upper storey's lie over the lower one's, and this reader still took the first
+match. It is the third place that rule was needed and the last one that had it
+missing. Separately, each occlusion ray asked Babylon to classify every mesh in
+the scene — the occluders are resolved once now, and a `walk:` line reports what
+the sweep actually costs so a lag report has a number behind it.
+
 ## 2.436.0
 
 ### Changed — the debug panel stops drowning in badge grouping

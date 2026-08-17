@@ -271,12 +271,14 @@ const OCCLUSION_NEAR_M = 1.2;
  *  a wall or under a ceiling, so a ray that reaches its anchor ends inside that
  *  surface and reports the device as occluded by the thing it is attached to. */
 const OCCLUSION_SLACK_M = 0.35;
-/** Structure only, and VISIBLE structure at that — a custom pick predicate
- *  replaces Babylon's own enabled/visible filter rather than adding to it (see
- *  floorProbe's header), so both have to be asked for explicitly or a hidden
- *  storey would occlude the storey you are standing on. */
-const OCCLUSION_PREDICATE = (m: AbstractMesh): boolean =>
-  m.isEnabled() && m.isVisible && blocksCameraBeam(m);
+/** One-word revert for the whole first-person wall cull, in the style of
+ *  `BADGE_PLACEMENT` / `CHIP_COLLISION` — the fastest way to bisect a "it feels
+ *  laggier since" report against the tier that was added with it. */
+const WALL_OCCLUSION = true;
+/** How often the `walk:` cost line is printed. Two seconds is long enough that
+ *  a walk across the villa is a handful of lines rather than a wall of them,
+ *  and short enough that a capture of a lag complaint contains several. */
+const WALK_REPORT_MS = 2000;
 const STRIP_DROP_FRACTION = 0.45; // drop the light this fraction of the way to the floor
 const STRIP_DROP_MAX = 1.1; // metres — cap the drop so tall rooms don't put it at knee height
 // SweetHome's Led Line asset is modelled just 1 cm wide (and 3 cm tall) — from
@@ -1373,9 +1375,26 @@ export class EntityVisuals {
    *  the same first eight badges on every step. */
   private occlusionSwept = 0;
   private occlusionCursor = 0;
-  /** Rays cast on the last pass — reported by the `place` line, so the budget
-   *  is a measurement rather than a claim. */
+  /** Rays cast on the last pass, and what they COST in ms — reported by the
+   *  `walk:` line, so the budget is a measurement rather than a claim. A budget
+   *  that is never measured is how a per-frame raycast becomes a freeze. */
   private occlRays = 0;
+  private occlMs = 0;
+  /** performance.now() of the last `walk:` line — see reportWalkCost. */
+  private lastWalkReportAt = 0;
+  /**
+   * The meshes a wall-occlusion ray may hit — resolved ONCE per indexMeshes,
+   * because it cannot change while you walk.
+   *
+   * The classification is the expensive part, not the ray: `blocksCameraBeam`
+   * reads pipeline metadata and falls through to a name regex for anything
+   * unstamped. Running that per mesh per ray (Babylon's pick predicate is
+   * called for EVERY mesh in the scene) was ~7,200 classifications a frame.
+   * Resolving the set once and testing only its members leaves the geometry
+   * identical and deletes the classification entirely — the same "a SET, not a
+   * scan" correction floorProbe.storeyFloorY already made for its predicate.
+   */
+  private occluders: AbstractMesh[] = [];
   /** Reused ray + direction: the sweep runs while walking, and allocating a
    *  Ray and a Vector3 per badge per frame is exactly the kind of steady-state
    *  garbage this file pools everything else to avoid. */
@@ -2199,6 +2218,11 @@ export class EntityVisuals {
     // Delete this span once it has answered — it is a diagnostic, not a
     // permanent boundary.
 
+    // The wall-occlusion occluder set, resolved once here rather than per ray —
+    // see `occluders`. Derived from shadowCasters (already "every non-entity
+    // mesh with geometry") through the SAME predicate the camera beams use, so
+    // "what blocks a line of sight" has one definition in this file, not two.
+    this.occluders = this.shadowCasters.filter(blocksCameraBeam);
     this.extendStripJoints();
     this.mergeStripEntityLights();
     scene.blockMaterialDirtyMechanism = false;
@@ -4975,7 +4999,7 @@ export class EntityVisuals {
    * hidden in overview, cannot occlude anything.
    */
   private refreshWallOcclusion(shown: ShownLabel[], cam: Camera): void {
-    if (!this.firstPerson || shown.length === 0) {
+    if (!WALL_OCCLUSION || !this.firstPerson || shown.length === 0) {
       // Leaving first-person must not strand a hidden badge — the overview has
       // no notion of occlusion at all.
       if (this.occludedIds.size) {
@@ -5006,6 +5030,7 @@ export class EntityVisuals {
     // gets half the ray budget. Read per pass rather than cached: it is a
     // property lookup, and `observePointerClass` can change it live.
     const budget = this.pointer === "coarse" ? OCCLUSION_RAYS_COARSE : OCCLUSION_RAYS_FINE;
+    const t0 = performance.now();
     let rays = 0;
     while (this.occlusionSwept < shown.length && rays < budget) {
       const s = shown[this.occlusionCursor % shown.length];
@@ -5025,19 +5050,71 @@ export class EntityVisuals {
       // surface it hangs from and every wall-mounted device would report itself
       // occluded.
       this.occlRay.length = dist - OCCLUSION_SLACK_M;
-      // fastCheck: the question is "is anything in the way", not "what is
-      // nearest", so Babylon may stop at the first triangle it finds.
-      const hit = this.scene.pickWithRay(this.occlRay, OCCLUSION_PREDICATE, true);
-      s.occluded = !!hit?.hit;
-      if (s.occluded) this.occludedIds.add(s.id); else this.occludedIds.delete(s.id);
+      // ⚠️ NOT `scene.pickWithRay` (2.437.0). That walks EVERY mesh in the scene
+      // and calls the predicate on each — ~900 here — and the predicate was
+      // `blocksCameraBeam`, which falls through to `normaliseMeshName` plus a
+      // regex for any mesh the pipeline did not stamp. Eight rays a frame made
+      // that ~7,200 regex-backed classifications per frame, on the one code
+      // path that has frozen this app before, and it is the nameable half of
+      // "it feels a bit more laggy now".
+      //
+      // The occluder set does not change while you walk, so it is resolved ONCE
+      // (occludersFor) and each ray tests only those meshes. Babylon's
+      // `intersectsMesh` does the same bounding-sphere/box rejection and the
+      // same submesh octree as the pick did — what is gone is the scene walk
+      // and the classification, not the accuracy. `fastCheck` because the
+      // question is "is anything in the way", not "what is nearest".
+      let blocked = false;
+      for (const m of this.occluders) {
+        // Visibility is asked HERE for the same reason the old predicate had to
+        // ask it: a hidden storey's slab must not occlude the storey you are
+        // standing on. Cheap, and it has to be per-frame — the ceiling that
+        // 2.435.0 added appears and disappears with the view mode.
+        if (!m.isEnabled() || !m.isVisible) continue;
+        if (this.occlRay.intersectsMesh(m, true).hit) { blocked = true; break; }
+      }
+      s.occluded = blocked;
+      if (blocked) this.occludedIds.add(s.id); else this.occludedIds.delete(s.id);
     }
     this.occlRays = rays;
+    this.occlMs = performance.now() - t0;
+    this.reportWalkCost(shown.length);
     if (this.occlusionSwept < shown.length) {
       // The sweep owes answers and the camera may now stop moving — see the
       // early-return in cullLabels.
       this.layoutDirty = true;
       this.requestRender();
     }
+  }
+
+  /**
+   * What walking actually costs, once every WALK_REPORT_MS, UNTAGGED so it
+   * survives the default channel set.
+   *
+   * This exists because "it feels a bit more laggy now" arrived against a
+   * release that added two things to the walk path (a per-frame ray sweep and
+   * the storey-above ceiling), and the only honest answer to a *feeling* is a
+   * number. `occlMs` is the sweep's own cost, `active` is how many meshes the
+   * last frame actually drew — which is where the ceiling would show up — and
+   * `fps` is the headline the report was about. If `occlMs` is a rounding error
+   * and `fps` is low, the rays are not the cause and `WALL_OCCLUSION` will
+   * prove it in one line.
+   *
+   * Throttled rather than deduped: this is a rate, and a rate printed once per
+   * change is a rate nobody can read.
+   */
+  private reportWalkCost(eligible: number): void {
+    if (!debugFlagEnabled()) return;
+    const now = performance.now();
+    if (now - this.lastWalkReportAt < WALK_REPORT_MS) return;
+    this.lastWalkReportAt = now;
+    const eng = this.scene.getEngine();
+    tapDebug(
+      `walk: fps=${eng.getFps().toFixed(0)}`
+      + ` occl=${this.occludedIds.size}/${eligible} swept=${this.occlusionSwept}`
+      + ` rays=${this.occlRays}/pass occlMs=${this.occlMs.toFixed(2)}`
+      + ` occluders=${this.occluders.length} active=${this.scene.getActiveMeshes().length}`,
+    );
   }
 
   /** Which camera the badges are being drawn from. Set by SceneManager on every

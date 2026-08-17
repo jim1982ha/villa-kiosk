@@ -26,6 +26,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import { clipPolygonToConvex, earClipTriangulate, pointInPolygon, regularPolygon, type Pt2 } from "@/utils/geometry";
 import type { FloorProbe } from "./floorProbe";
 import { roomKey } from "@/config/roomKey";
+import { onStorey, storeyFloorYAt } from "./roomStorey";
 import { ALERT_RED } from "./colors";
 
 // Same red as a running climate device's mesh outline / the badge alert ring
@@ -63,6 +64,11 @@ const DECAL_PROBE_DEPTH = 8;
 // be deep enough to also catch a staircase's riser/tread steps near the
 // anchor, not just the single triangle directly under it.
 const DECAL_DEPTH = 2.5;
+/** A point-room anchor's floorY IS a floor, and storeyFloorYAt asks for a floor
+ *  a usable distance BELOW the point it is given — so testing with the raw
+ *  value would step down a storey. Lifted by an eye's worth, which is what that
+ *  clearance is built around (see roomStorey.ts). */
+const STOREY_TEST_LIFT = 1.6;
 
 interface RoomEntry {
   mesh: Mesh;
@@ -89,7 +95,7 @@ export class RoomHighlight {
    *  same reason, as the light pool's (see setPointRooms). Not a second source
    *  of truth: it is overwritten wholesale on every re-fit, from the same
    *  argument the meshes are built from. */
-  private roomShapes: { pts: Pt2[] }[] = [];
+  private roomShapes: { pts: Pt2[]; floorY: number }[] = [];
 
   constructor(
     scene: Scene,
@@ -216,7 +222,8 @@ export class RoomHighlight {
    */
   setRooms(polys: { name: string; pts: Pt2[]; floorY?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
     this.disposeMap(this.polyRooms);
-    this.roomShapes = polys.filter((p) => p.pts.length >= 3).map((p) => ({ pts: p.pts }));
+    this.roomShapes = polys.filter((p) => p.pts.length >= 3)
+      .map((p) => ({ pts: p.pts, floorY: p.floorY ?? 0 }));
     for (const room of polys) {
       const key = RoomHighlight.normalise(room.name);
       // A stepped room (staircase) ships a surface-hugging vertex mesh from
@@ -268,7 +275,7 @@ export class RoomHighlight {
       if (this.polyRooms.has(key)) continue; // a real room polygon always wins
       const entry =
         this.buildDecal(key, p.x, p.z, p.floorY) ??
-        this.buildMesh(key, this.pointRoomShape(p.x, p.z), p.floorY + FLOOR_Y_OFFSET);
+        this.buildMesh(key, this.pointRoomShape(p.x, p.z, p.floorY), p.floorY + FLOOR_Y_OFFSET);
       if (entry) this.pointRooms.set(key, entry);
     }
   }
@@ -286,9 +293,18 @@ export class RoomHighlight {
    * landing added via "Add room here" precisely because nothing was drawn there
    * — there is then no wall known to cross.
    */
-  private pointRoomShape(x: number, z: number): Pt2[] {
+  private pointRoomShape(x: number, z: number, floorY: number): Pt2[] {
     const circle = regularPolygon(x, z, POINT_ROOM_RADIUS, POINT_ROOM_SEGMENTS);
-    const room = this.roomShapes.find((r) => pointInPolygon(x, z, r.pts));
+    // ON THE LANDING'S OWN STOREY (2.437.0). Room outlines are flat and the
+    // upper storey's lie over the lower one's, so a bare containment test
+    // clipped a 2F landing's glow to the outline of a ground-floor room — the
+    // third reader of this rule, found by rolling it out across what it APPLIES
+    // to rather than where it was reported. A point-room anchor is a CAMERA
+    // pose's floor height, already a floor rather than an eye, so it is offered
+    // an eye's worth of clearance to be tested at.
+    const storeyY = storeyFloorYAt(this.roomShapes, floorY + STOREY_TEST_LIFT);
+    const room = this.roomShapes.find(
+      (r) => onStorey(r.floorY, storeyY) && pointInPolygon(x, z, r.pts));
     if (!room) return circle;
     const clipped = clipPolygonToConvex(room.pts, circle);
     return clipped.length >= 3 ? clipped : circle;

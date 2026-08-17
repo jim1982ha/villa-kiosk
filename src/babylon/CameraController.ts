@@ -29,6 +29,7 @@ import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint } from "@/types/scene.types";
 import { clamp, pointInPolygon, type Pt2 } from "@/utils/geometry";
+import { onStorey, storeyFloorYAt } from "./roomStorey";
 import { TapRecognizer } from "./TapRecognizer";
 
 interface CameraCallbacks {
@@ -59,7 +60,9 @@ export class CameraController {
   private moveX = 0; // strafe, -1..1
   private moveY = 0; // forward, -1..1
   private roomAnchors: RoomAnchor[] = [];
-  private roomPolygons: Array<{ name: string; pts: Pt2[]; floorY?: number }> = [];
+  /** Normalised by setRoomPolygons — `floorY` is always present here, because
+   *  the per-frame storey test must not have to default it. */
+  private roomPolygons: Array<{ name: string; pts: Pt2[]; floorY: number }> = [];
   private currentRoom: string | null = null;
   private animating = false;
   private eyeHeight: number;
@@ -314,6 +317,9 @@ export class CameraController {
    */
   walkTo(x: number, z: number): void {
     if (this.roomPolygons.length > 0) {
+      // EVERY storey's outline, deliberately — unlike updateRoom below. The
+      // question here is "is this spot inside the house at all", and a point
+      // under an upper-storey room is inside the house by any reading.
       const inside = this.roomPolygons.some((r) => pointInPolygon(x, z, r.pts));
       if (!inside) return; // clicked outside the rooms — ignore
     }
@@ -630,9 +636,11 @@ export class CameraController {
     this.updateRoom();
   }
 
-  /** Set the (model-space) room polygons used for point-in-polygon labelling. */
+  /** Set the (model-space) room polygons used for point-in-polygon labelling.
+   *  `floorY` is defaulted HERE rather than at each read: `updateRoom` runs on
+   *  every frame of a walk and must not allocate a normalised copy per frame. */
   setRoomPolygons(polys: Array<{ name: string; pts: Pt2[]; floorY?: number }>): void {
-    this.roomPolygons = polys;
+    this.roomPolygons = polys.map((p) => ({ ...p, floorY: p.floorY ?? 0 }));
   }
 
   /** World-space XZ bounding box (plus the room's floor height) of a real
@@ -663,10 +671,26 @@ export class CameraController {
     let room: string | null = null;
 
     // Preferred: which actual room polygon am I standing in?
+    //
+    // ⚠️ ON MY OWN STOREY (2.437.0). A room polygon is a flat outline with no
+    // height, so on a two-storey villa the upper storey's outlines lie directly
+    // over the lower one's and a bare containment test answers with whichever
+    // was listed first — the load order of `.rooms.json`. Standing in the
+    // ground-floor kitchen, the walk-in banner read "Tearrace 2F". Same defect,
+    // same fix as the light pools (see roomStorey.ts); this reader was missed
+    // when that rule was rolled out, which is what the dry-audit skill exists
+    // to catch.
+    //
+    // The EYE height is the right input, not the feet: `storeyFloorYAt` asks
+    // for a floor a usable distance BELOW the point, and feet sit exactly ON
+    // their floor — asking with those would step down a storey. An eye is
+    // ~1.6 m up, which is the clearance that rule is built around.
     if (this.roomPolygons.length > 0) {
       const px = this.camera.position.x;
       const pz = this.camera.position.z;
+      const storeyY = storeyFloorYAt(this.roomPolygons, this.camera.position.y);
       for (const r of this.roomPolygons) {
+        if (!onStorey(r.floorY, storeyY)) continue;
         if (pointInPolygon(px, pz, r.pts)) {
           room = r.name;
           break;
