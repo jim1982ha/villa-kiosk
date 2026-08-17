@@ -1,3 +1,12 @@
+## 2.429.0
+
+### Fixed — devices stacked at different heights drew on top of each other
+
+Inside a tapped room, the pass that pairs overlapping badges into a card was
+missing the height half of its collision test, so it demanded only the 24 px tap
+pitch vertically where 50 px is drawn. Height projects almost entirely onto the
+screen's vertical, so a ceiling fan and the lamp under it never paired.
+
 ## 2.428.0
 
 ### Changed — comments only, no behaviour

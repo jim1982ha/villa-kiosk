@@ -6263,7 +6263,28 @@ export class EntityVisuals {
         sub[idx.length] = it;
       }
       it.sx = src.sx; it.sy = src.sy; it.sz = src.sz;
-      it.reach = src.reach; it.rank = src.rank;
+      // ⚠️ reachY TOO, AND ITS ABSENCE WAS THE BUG (2.429.0). This copied every
+      // field of the item EXCEPT reachY, so the pooled 0 it was constructed
+      // with survived into `conflicts` — and reachY is the entire VERTICAL half
+      // of the collision rule. needY collapsed from
+      // `halfH_a + halfH_b + gap` to `max(gap, minSep)` = the tap pitch alone:
+      // 24 render px demanded where 50 is drawn, at icon 1.00x/css 1.00.
+      //
+      // The axis it broke is the one that matters most here. badgeProjection
+      // SUMS world height (at cos tilt) and depth (at sin tilt) onto the
+      // screen's VERTICAL, so two devices at one floor spot at different
+      // heights — a ceiling fan and the floor lamp under it, a "..._top" light
+      // and the "..._bottom" LED on the same fitting — separate almost entirely
+      // in Y. Those are exactly the pairs this failed to pair, so they drew
+      // stacked while horizontally-offset pairs (whose `reach` was correct)
+      // paired fine. Reported from a screenshot as entities overlapping, with
+      // the right guess attached: "some assets are on the floor and others
+      // higher on the wall, and the collision algorithm is failing".
+      //
+      // That is also why `PLACEMENT: N overlapping pair(s) inside the FOCUSED
+      // room` was never zero — the counter measures with the REAL boxes while
+      // the pairing decided with a flat 0, so the two could not agree.
+      it.reach = src.reach; it.reachY = src.reachY; it.rank = src.rank;
       it.sortKey = src.sortKey; it.category = src.category; it.room = src.room;
       it.exempt = false;
       idx.push(i);
