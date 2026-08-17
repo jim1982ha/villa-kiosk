@@ -4354,6 +4354,20 @@ export class EntityVisuals {
         valueWrap.background = "rgba(15,23,42,0.85)";
         // Padding must clear the stadium's corner radius (VALUE_CHIP_HEIGHT/2) or
         // the text crowds the rounded ends and reads as touching the edges.
+        //
+        // ⚠️ FLAGGED BY /dry-audit, DELIBERATELY NOT CHANGED (2026-08-18). This is
+        // the SAME wrap object that carries `adaptWidthToChildren` and
+        // `descendantsOnlyPadding`, and the card branch above measured what that
+        // combination actually does: padding SIZES the box and does not offset the
+        // children, so it collects on one side. The prediction here is therefore
+        // that this pill's text sits LEFT with both pads piled to its right.
+        //
+        // Left alone on purpose: this install runs the CARD style, so nothing can
+        // verify it on hardware, and the failure would look different anyway (a
+        // value off-centre inside its own dark pill, with no icon beside it to
+        // measure against). Fix it the day someone reports the classic style's
+        // value looking off-centre — and fix it with struts, the way the card
+        // was, not with another padding value.
         valueWrap.paddingLeft = `${m.pillPadXPx}px`;
         valueWrap.paddingRight = `${m.pillPadXPx}px`;
         badgeShadow(valueWrap, "pill");

@@ -1,3 +1,12 @@
+## 2.452.1
+
+### Changed — one comment, no behaviour
+
+An audit found the classic badge style's value pill still positioning its text with
+padding inside an adapt-to-children container — the pattern the card style measured
+as not positioning anything. It says so at the site now, with the reason it was left
+alone: this install runs the card style, so nothing can verify a change there.
+
 ## 2.452.0
 
 ### Fixed — the badge's padding never positioned anything, and the optical nudge is back
