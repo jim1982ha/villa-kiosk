@@ -122,6 +122,7 @@ import { axisWorldScale } from "./meshUnits";
 import { LightPool, poolFootprint } from "./LightPools";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { badgeText } from "./badgeText";
+import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
 import {
   arrange, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
@@ -4125,20 +4126,11 @@ export class EntityVisuals {
       badge.background = card
         ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).fill
         : "transparent";
-      badge.shadowColor = "rgba(0,0,0,0.55)";
-      badge.shadowBlur = 6;
-      // ── SYMMETRIC. A canvas shadow does NOT ride the CTM ────────────────
-      // shadowBlur/shadowOffset are applied in device pixels regardless of the
-      // container's scale (see CLAUDE.md), so a 2px downward offset is a fixed
-      // skirt of extra dark under the card at every zoom. On a dark badge over
-      // a bright floor that skirt reads as part of the badge, which makes the
-      // card look taller at the bottom than the top and its contents look
-      // high — an optical offset no amount of centring the CONTENTS can
-      // answer, because the contents were centred. A drop shadow with a
-      // direction is a DOM idiom borrowed from a surface that has a light
-      // source; a badge floating over a 3D villa does not, so the halo is
-      // even.
-      badge.shadowOffsetY = 0;
+      // Symmetric halo, in device pixels — the two facts behind that, and why
+      // they are a function rather than four copies of two numbers, are in
+      // badgeShadow.ts. This block is where the reasoning was written; it moved
+      // there when /dry-audit found the other two controls ignoring it.
+      badgeShadow(badge);
       // Tap/long-press handling is NOT wired here — see pickBadgeAt()'s
       // docstring for why. The badge is a purely visual control now.
       if (card) {
@@ -4283,8 +4275,7 @@ export class EntityVisuals {
         // the text crowds the rounded ends and reads as touching the edges.
         valueWrap.paddingLeft = `${m.pillPadXPx}px`;
         valueWrap.paddingRight = `${m.pillPadXPx}px`;
-        valueWrap.shadowColor = "rgba(0,0,0,0.5)";
-        valueWrap.shadowBlur = 4;
+        badgeShadow(valueWrap, "pill");
         valueWrap.isVisible = false;
         container.addControl(valueWrap);
       }
@@ -7562,9 +7553,9 @@ export class EntityVisuals {
           sub.left = `${src.left}px`;
           sub.top = `${src.top}px`;
           sub.cornerRadius = sm.size * BADGE_CORNER_FRACTION;
-          sub.shadowColor = "rgba(0,0,0,0.4)";
-          sub.shadowBlur = 6;
-          sub.shadowOffsetY = 2;
+          // WAS `shadowOffsetY = 2` — a directional skirt on a control drawn
+          // beside badges that have none. See badgeShadow.ts.
+          badgeShadow(sub, "surface");
         }
         if (drawn >= 2) {
           // Stable order: the solver's own (rank, entity_id), so the same
@@ -8380,9 +8371,8 @@ export class EntityVisuals {
     // chip reads as UI chrome rather than any one category's badge.
     container.thickness = 0;
     container.background = CLUSTER_BG_COLOR;
-    container.shadowColor = "rgba(0,0,0,0.4)";
-    container.shadowBlur = 6;
-    container.shadowOffsetY = 2;
+    // WAS `shadowOffsetY = 2` — see badgeShadow.ts and the summary card above.
+    badgeShadow(container, "surface");
     container.isPointerBlocker = false; // taps resolve via pickClusterAt, like badges
 
     // Room name — the chip's only FLOW content; the count renders as a

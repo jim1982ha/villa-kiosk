@@ -1,3 +1,13 @@
+## 2.442.0
+
+### Changed — the summary card and room chip lose the drop shadow's downward skirt
+
+A badge floating over the villa has no light source, so its shadow is an even halo
+— written down on the badge, and ignored by the two controls drawn beside it, which
+kept a 2px downward offset. On a dark surface over a bright floor that band reads
+as part of the control and makes its centred contents look high. One function now
+owns it, and the offset is not a parameter.
+
 ## 2.441.0
 
 ### Fixed — the badge value still read as adrift, and its size was being decided by a floor
