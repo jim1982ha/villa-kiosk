@@ -1,3 +1,11 @@
+## 2.452.2
+
+### Changed — one stale comment, no behaviour
+
+The GUI-text factory's header still described four call sites and two count pills;
+one of those count pills was deleted three hundred releases ago. It says three and
+one now, so nobody audits the file looking for a site that no longer exists.
+
 ## 2.452.1
 
 ### Changed — one comment, no behaviour

@@ -16,9 +16,9 @@
 //   text alignment        both axes centred.
 //   top                   the optical correction, textOpticalTopEm.
 //
-// The correction itself was applied at all four sites; `resizeToFit` was not.
-// The badge's value and the chip's room name had it, the two COUNT pills did
-// not — and a TextBlock without it is sized 100% of its parent, so
+// The correction itself was applied at all four sites of the time; `resizeToFit`
+// was not. The badge's value and the chip's room name had it, the two COUNT pills
+// did not — and a TextBlock without it is sized 100% of its parent, so
 // `_renderLines` centres the ink in the PILL's height rather than in the line
 // box, and Babylon's integer truncation of the two measures lands differently.
 // A number in a circle was therefore being centred by a slightly different
@@ -43,6 +43,17 @@
 // line-height and has never been reported wrong — pushing this number into a
 // shared CSS token would apply a correction for a Babylon behaviour to text
 // that does not have it. It stays in badgeMetrics, and it stays here.
+
+// ── THREE call sites now, not four (/dry-audit, 2026-08-18) ───────────────
+// The account above is written against FOUR, which is what existed when this
+// factory was extracted: the badge value, the chip's room name, and TWO count
+// pills — the chip's and the summary card's. 2.363.0 deleted the summary's
+// count outright ("a summary never draws a digit where its devices should be"),
+// so there are three sites and one count pill. Corrected here rather than
+// rewritten above, because the four-way drift IS the argument for the factory
+// and is worth keeping legible; but a reader auditing "are all four still
+// consistent?" would otherwise hunt for a site that no longer exists, which is
+// the same failure as a chip reason that cannot fire.
 
 import { TextBlock } from "@babylonjs/gui/2D/controls/textBlock";
 import { Control } from "@babylonjs/gui/2D/controls/control";
