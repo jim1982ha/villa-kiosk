@@ -1,3 +1,14 @@
+## 2.436.0
+
+### Changed — the debug panel stops drowning in badge grouping
+
+The placement and per-entity families were ~95% of a capture, and that tier is
+settled — `place`, `seat`, `chip`, `mesh`, `variant` and `beam` are now silent
+unless named (`?debug=place,seat`). Nothing is deleted: they are still the only
+instrument for a grouping report, and every capture's banner names what is off so
+a silence cannot be misread as a measurement. The two expensive producers skip
+their work as well as their output.
+
 ## 2.435.0
 
 ### Fixed — the light disc hung in the air, and the ceiling was still missing

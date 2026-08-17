@@ -32,6 +32,31 @@ import { debugFlagEnabled } from "@/utils/devLog";
  * so nothing that exists today can be silently lost by asking for a channel
  * that does not match it.
  */
+/**
+ * Channels that are SILENT unless asked for by name (2.436.0).
+ *
+ * `wanted` above filters IN; this filters OUT, and the two exist for opposite
+ * situations. A channel is listed here once its subsystem is settled and its
+ * output is no longer what anyone is reading a capture for — the badge
+ * placement/grouping family (`place`, `seat`, the `PLACEMENT:` assertions) and
+ * the per-entity mesh/variant/beam chatter between them were ~95% of a
+ * session's lines, and a capture of a light-pool question arriving as four
+ * hundred screens of `pair` and `PLACEMENT:` is a capture nobody reads.
+ *
+ * ⚠️ NOT DELETED, and the difference matters. Every one of these is documented
+ * in CLAUDE.md and in the debug-capture skill as the authority for its tier —
+ * `chipWhy` names which rule chipped a room, `seat` gives a refusal in pixels,
+ * the `PLACEMENT:` family is the only guard against a badge silently
+ * disappearing. Deleting them would make the next report of a grouping bug
+ * unanswerable. `?debug=place,seat` brings the whole picture back.
+ *
+ * ⚠️ AND THE BANNER SAYS SO, which is the point (see versionBanner). A muted
+ * family that says nothing about being muted reads as "measured, nothing
+ * happened" — the exact misread that has cost this project four separate
+ * rounds. Every capture states which channels were off.
+ */
+const MUTED_BY_DEFAULT = new Set(["place", "seat", "chip", "mesh", "variant", "beam"]);
+
 const wanted: Set<string> = (() => {
   try {
     const raw = new URLSearchParams(
@@ -282,15 +307,40 @@ function ensureBox(): HTMLDivElement {
 let stamped = false;
 function versionBanner(): string {
   const v = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "?";
-  const chans = wanted.size > 0 ? [...wanted].join(",") : "all";
-  return `villa-kiosk v${v} — debug channels: ${chans}`;
+  const chans = wanted.size > 0 ? [...wanted].join(",") : "default";
+  // What is OFF, named, on every capture. A reader who cannot see a `place`
+  // line has to be able to tell "the grouping tier reported nothing" from
+  // "the grouping tier was not asked" — see MUTED_BY_DEFAULT.
+  const off = [...MUTED_BY_DEFAULT].filter((c) => !wanted.has(c));
+  return `villa-kiosk v${v} — debug channels: ${chans}`
+    + (off.length ? ` (silent unless asked: ?debug=${off.join(",")})` : "");
+}
+
+/**
+ * Would a line on this channel be printed? The SAME predicate `tapDebug` uses —
+ * it is exported so a caller can skip the WORK, not just the line.
+ *
+ * That distinction is the reason this exists: `assertPlacementInvariants`
+ * re-solves the entire layout from a reversed input on every pass, and
+ * `logPlacement`'s pair detail walks every bucket. Both are on muted channels
+ * now, so without this they would burn a full second solve per frame to produce
+ * output nobody is going to see — the diagnostic equivalent of leaving the
+ * lights on in an empty house. Costs a set lookup at the call site.
+ */
+export function channelEnabled(channel: string): boolean {
+  if (!debugFlagEnabled()) return false;
+  // Named outright always wins; failing that, a channel is on when no filter
+  // was asked for AND it is not one of the settled, muted-by-default families.
+  if (wanted.has(channel)) return true;
+  return wanted.size === 0 && !MUTED_BY_DEFAULT.has(channel);
 }
 
 export function tapDebug(msg: string, channel?: string): void {
   if (!debugFlagEnabled()) return;
-  // Untagged lines always pass — see `wanted`. A tagged line passes when no
-  // filter was asked for, or when its channel was named.
-  if (channel && wanted.size > 0 && !wanted.has(channel)) return;
+  // Untagged lines always pass — see `wanted`. Tagged ones go through the one
+  // predicate above, so a caller that gates its work and this call can never
+  // disagree about whether a channel is live.
+  if (channel && !channelEnabled(channel)) return;
   if (!stamped) { stamped = true; tapDebug(versionBanner()); }
   const stamp = new Date().toISOString().slice(11, 23);
   const line = `${stamp} ${msg}`;

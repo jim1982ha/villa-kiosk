@@ -108,7 +108,7 @@ import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable } from "@/utils/stateColors";
 import { phantomEntity } from "@/utils/phantomEntity";
-import { tapDebug } from "@/utils/tapDebug";
+import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
 import { beginSpan } from "@/utils/perfSpans";
 import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
@@ -230,6 +230,21 @@ function clampRatio(ratio: number | undefined): number {
 // DOWN toward the floor, well clear of the mounting surface, where its pool is
 // wide and soft instead of a tight hotspot.
 const STRIP_MIN_LENGTH = 1.5; // metres — fixture meshes longer than this are "strips"
+
+/**
+ * Every `PLACEMENT:` assertion, on the `place` channel — one call so sixteen
+ * sites cannot drift apart, and so the whole family is muted or restored by one
+ * word (`?debug=place`). It is muted by default since 2.436.0: the grouping tier
+ * is settled, and these lines plus the solver's `pair` detail were ~95% of a
+ * capture, drowning the question the capture was actually taken to answer.
+ *
+ * ⚠️ Muted, NOT deleted — see MUTED_BY_DEFAULT in tapDebug.ts. These are the
+ * only guard against a badge silently disappearing, and the banner on every
+ * capture names them so a silent tier cannot be misread as a clean one.
+ */
+function placeDebug(msg: string): void {
+  tapDebug(msg, "place");
+}
 
 // ── First-person wall occlusion (see refreshWallOcclusion) ──────────────────
 /**
@@ -2240,6 +2255,7 @@ export class EntityVisuals {
       tapDebug(
         `mesh variant groups:\n  ${variantSummary.join("\n  ") || "(none)"}`
         + (orphanIds.length ? `\n  ORPHAN un-collapsed entities: ${orphanIds.join(", ")}` : ""),
+        "variant",
       );
     }
 
@@ -3284,7 +3300,7 @@ export class EntityVisuals {
     }
     if (sources.length || skipped.length) {
       tapDebug(`camera beams: ${sources.length} built [${sources.map((s) => s.entityId).join(", ")}]`
-        + (skipped.length ? ` | skipped: ${skipped.join("; ")}` : ""));
+        + (skipped.length ? ` | skipped: ${skipped.join("; ")}` : ""), "beam");
     }
     // NOT the full shadowCasters set — that includes every static mesh
     // (furniture blocks light too, legitimately, for shadows), but a beam's
@@ -3411,7 +3427,7 @@ export class EntityVisuals {
       (entity.entity_id.startsWith("cover.") && map.type !== "cover") ||
       (entity.entity_id.startsWith("lock.") && map.type !== "lock")
     ) {
-      tapDebug(`apply(${entity.entity_id}): resolved mesh(es) but map.type="${map.type}" — a variant pose will NEVER be applied while the type mismatch stands (check Advanced Settings' Type field for this entity).`);
+      tapDebug(`apply(${entity.entity_id}): resolved mesh(es) but map.type="${map.type}" — a variant pose will NEVER be applied while the type mismatch stands (check Advanced Settings' Type field for this entity).`, "mesh");
     }
     // Normalise by the number of DISTINCT light objects, not meshes — a merged
     // strip entity (mergeStripEntityLights) shares ONE light across several
@@ -4810,7 +4826,10 @@ export class EntityVisuals {
       // and the half-extents each requirement came from — which is where a
       // requirement can be larger than the ink. Same buffer as the seat lines,
       // so it rides the `place` line's outcome dedupe.
-      if (debugFlagEnabled()) {
+      // Gated on the channel that PRINTS it, not on the debug flag: `seat` is
+      // muted by default since 2.436.0, and this loop would otherwise walk
+      // every bucket and build a string per pair for a line nobody sees.
+      if (channelEnabled("seat")) {
         for (let b = 0; b < result.bucketCount; b++) {
           const bk = result.buckets[b];
           if (bk.members.length !== 2) continue;
@@ -4901,10 +4920,20 @@ export class EntityVisuals {
     }
     this.renderChips(chips);
     this.updateEntityGroups(shown, pending);
-    if (debugFlagEnabled()) this.logPlacement(shown, clearance, solved, pending);
+    // Either channel, because this method emits BOTH the `place` line and the
+    // flush of the `seat` buffer — asking for one of them must not silence the
+    // other. Cheap enough to keep on the flag alone were it not for that.
+    if (channelEnabled("place") || channelEnabled("seat")) {
+      this.logPlacement(shown, clearance, solved, pending);
+    }
     // Last, so every visibility flag it reads is this pass's, not the previous
     // frame's.
-    if (debugFlagEnabled() && clearance) {
+    // ⚠️ Gated on the CHANNEL, not the debug flag. Every line this emits is a
+    // `placeDebug`, and the method re-solves the whole layout from a reversed
+    // input to check purity — a second full solve per pass. With `place` muted
+    // (2.436.0) that is pure cost for output nobody sees, and `?debug=place`
+    // brings both the work and the lines back together.
+    if (channelEnabled("place") && clearance) {
       this.assertPlacementInvariants(shown, boxes, clearance, pending, chips, tm, vp);
     }
   }
@@ -5523,9 +5552,9 @@ export class EntityVisuals {
         else if (Math.hypot(a.cx - b.cx, a.cy - b.cy) < minSepPx) tooClose++;
       }
     }
-    if (overlaps) tapDebug(`PLACEMENT: ${overlaps} drawn badge pair(s) OVERLAP on screen`);
-    if (tooClose) tapDebug(`PLACEMENT: ${tooClose} drawn badge pair(s) closer than the ${Math.round(minSepPx)}px tap pitch`);
-    if (focusOverlaps) tapDebug(`PLACEMENT: ${focusOverlaps} overlapping pair(s) inside the FOCUSED room (expected; pairFocusedRoom's leftovers)`);
+    if (overlaps) placeDebug(`PLACEMENT: ${overlaps} drawn badge pair(s) OVERLAP on screen`);
+    if (tooClose) placeDebug(`PLACEMENT: ${tooClose} drawn badge pair(s) closer than the ${Math.round(minSepPx)}px tap pitch`);
+    if (focusOverlaps) placeDebug(`PLACEMENT: ${focusOverlaps} overlapping pair(s) inside the FOCUSED room (expected; pairFocusedRoom's leftovers)`);
 
     // (b) Drawn badge vs summary card, split in two — and the split is what
     // makes the line actionable. `overhung` is expressly allowed: a card MAY be
@@ -5590,10 +5619,10 @@ export class EntityVisuals {
         if (ink) buried++; else overhung++;
       }
     }
-    if (buried) tapDebug(`PLACEMENT: ${buried} drawn badge(s) BURIED under a summary's ink`);
-    if (overhung) tapDebug(`PLACEMENT: ${overhung} drawn badge(s) under a card's overhang (allowed)`);
+    if (buried) placeDebug(`PLACEMENT: ${buried} drawn badge(s) BURIED under a summary's ink`);
+    if (overhung) placeDebug(`PLACEMENT: ${overhung} drawn badge(s) under a card's overhang (allowed)`);
     if (focusCardHits) {
-      tapDebug(`PLACEMENT: ${focusCardHits} badge/card overlap(s) involving a FOCUSED`
+      placeDebug(`PLACEMENT: ${focusCardHits} badge/card overlap(s) involving a FOCUSED`
         + " object (expected: a focused card skips `fits`, a focused badge blocks"
         + " nobody — pairFocusedRoom is what keeps them all tappable)");
     }
@@ -5615,12 +5644,12 @@ export class EntityVisuals {
       }
     }
     if (summaryFocusOverlaps) {
-      tapDebug(`PLACEMENT: ${summaryFocusOverlaps} summary pair(s) OVERLAP involving a`
+      placeDebug(`PLACEMENT: ${summaryFocusOverlaps} summary pair(s) OVERLAP involving a`
         + " FOCUSED card (expected: a focused card is seated unconditionally and"
         + " never went through `fits`)");
     }
     if (summaryOverlaps) {
-      tapDebug(`PLACEMENT: ${summaryOverlaps} summary pair(s) OVERLAP on screen`
+      placeDebug(`PLACEMENT: ${summaryOverlaps} summary pair(s) OVERLAP on screen`
         + (GROUP_OVERLAP_ALLOW_WIDTHS === 0
           // Saying "fits() promises this cannot happen" was true while a margin
           // covered the plane-vs-perspective residual. At zero it is not, and a
@@ -5662,7 +5691,7 @@ export class EntityVisuals {
         if (cardFocused[k]) chipHitsFocused++; else chipHits++;
       }
     }
-    if (chipHits) tapDebug(`PLACEMENT: ${chipHits} drawn badge(s)/card(s) OVERLAP a room chip`);
+    if (chipHits) placeDebug(`PLACEMENT: ${chipHits} drawn badge(s)/card(s) OVERLAP a room chip`);
     // ⚠️ SHOULD NOW BE ZERO (2.431.0). settleChips drops any chip a focused
     // badge or card collides with, so this line firing means the drop missed —
     // most likely because the render set is measured here in TRUE PERSPECTIVE
@@ -5670,7 +5699,7 @@ export class EntityVisuals {
     // BURIED counter reports. A small transient count is that; a persistent one
     // is a real gap in the drop.
     if (chipHitsFocused) {
-      tapDebug(`PLACEMENT: ${chipHitsFocused} FOCUSED badge(s)/card(s) over a room chip`
+      placeDebug(`PLACEMENT: ${chipHitsFocused} FOCUSED badge(s)/card(s) over a room chip`
         + " — ONE FRAME while the camera flies in is the plane-vs-perspective"
         + " residual (expected); a PERSISTENT count is a gap in settleChips'"
         + " focus drop");
@@ -5713,7 +5742,7 @@ export class EntityVisuals {
       // a merge that failed to reach a fixpoint — never a wrong `halfW`, since
       // both sides read the same estimate. `estErr` below is the half that can
       // see the estimate, and it is the one to trust about width.
-      tapDebug(`PLACEMENT: ${chipPairs} room chip pair(s) OVERLAP on screen`
+      placeDebug(`PLACEMENT: ${chipPairs} room chip pair(s) OVERLAP on screen`
         + " — the merge did not reach a fixpoint (width error is estErr's job)");
     }
     let estErr = 0;
@@ -5736,7 +5765,7 @@ export class EntityVisuals {
       if (err > estErr) { estErr = err; estWorst = c.label; }
     }
     if (estErr > this.metrics.minGapPx) {
-      tapDebug(`PLACEMENT: chipWidthPx is off by ${estErr.toFixed(1)} CSS px`
+      placeDebug(`PLACEMENT: chipWidthPx is off by ${estErr.toFixed(1)} CSS px`
         + ` (worst: "${estWorst}") — more than minGapPx=${this.metrics.minGapPx},`
         + " so the chip merge is deciding on a width it cannot trust");
     }
@@ -5744,7 +5773,7 @@ export class EntityVisuals {
     // A badge never moves: the layout writes one shared lift and no X offset.
     let moved = 0;
     for (const s of shown) if (s.lbl.container.linkOffsetXInPixels !== 0) moved++;
-    if (moved) tapDebug(`PLACEMENT: ${moved} badge(s) have a non-zero X offset`);
+    if (moved) placeDebug(`PLACEMENT: ${moved} badge(s) have a non-zero X offset`);
 
     // A chipped room hands over ALL of its badges, never a subset.
     let leaked = 0;
@@ -5752,7 +5781,7 @@ export class EntityVisuals {
       if (!this.roomClustered.get(roomKey(this.roomOf(shown[i].id)))) continue;
       if (shown[i].lbl.container.isVisible) leaked++;
     }
-    if (leaked) tapDebug(`PLACEMENT: ${leaked} badge(s) visible inside a chipped room`);
+    if (leaked) placeDebug(`PLACEMENT: ${leaked} badge(s) visible inside a chipped room`);
 
     // ── EVERY BADGE IS DRAWN, INSIDE A DRAWN SUMMARY, OR CHIPPED ─────────
     // The one whole-system promise: a device the map knows about is always
@@ -5783,7 +5812,7 @@ export class EntityVisuals {
       orphaned++;
     }
     if (orphaned || byWall) {
-      tapDebug(
+      placeDebug(
         `PLACEMENT: ${orphaned} badge(s) hidden with no summary and no chip`
         + ` (+${byWall} deliberately, behind a wall)`,
       );
@@ -5815,7 +5844,7 @@ export class EntityVisuals {
     let differing = idsA.size !== idsB.size;
     if (!differing) for (const id of idsA) if (!idsB.has(id)) { differing = true; break; }
     if (differing) {
-      tapDebug(`PLACEMENT: ORDER DEPENDENT — ${idsA.size} vs ${idsB.size} accepted on a reversed input`);
+      placeDebug(`PLACEMENT: ORDER DEPENDENT — ${idsA.size} vs ${idsB.size} accepted on a reversed input`);
     }
   }
 
@@ -6557,7 +6586,7 @@ export class EntityVisuals {
         // that matters is not whether a refusal is correct but how far it
         // travels: each line names the blocker and the per-axis shortfall, and
         // the CASCADE lines below name every room dragged along after it.
-        if (debugFlagEnabled()) {
+        if (channelEnabled("seat")) {
           // `box` vs `wasSpread` is the question the user actually asked: the
           // MEMBERS were grouped because their badge boxes collided, but what
           // gets seated is a CARD, and a card can be LARGER than the cluster it
@@ -6654,7 +6683,7 @@ export class EntityVisuals {
         for (const m of g.members) {
           if (!this.roomClustered.get(roomKey(this.roomOf(shown[m].id)))) keep.push(m);
         }
-        if (debugFlagEnabled() && keep.length) {
+        if (channelEnabled("seat") && keep.length) {
           this.seatLog.push(
             `seat RELEASE ${g.key} n=${g.members.length}`
             + ` (room ${g.roomKeys.filter((k) => this.roomClustered.get(k)).join("|")} chipped)`
@@ -7924,7 +7953,7 @@ export class EntityVisuals {
    * finding rather than a reason to stay quiet.
    */
   private watchChipJump(): void {
-    if (!debugFlagEnabled()) return; // per-frame loop — pay nothing when off
+    if (!channelEnabled("chip")) return; // per-frame loop — pay nothing when the channel is off
     for (const [key, c] of this.clusters) {
       if (!c.container.isVisible) continue;
       const w = c.node.position;
