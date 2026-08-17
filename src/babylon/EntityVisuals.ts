@@ -206,6 +206,11 @@ const POOL_MIN_RADIUS = 0.4;
  *  height (a table lamp clears its floor by more) and far above the few
  *  centimetres a ceiling lamp clears its slab by. See `airborne` in
  *  reshapeLightPools. */
+/** The comparison key of the no-room bucket, normalised ONCE at module level —
+ *  `roomOf` hands out the LABEL and every map here is keyed by `roomKey`, so
+ *  the two must be related in exactly one place. See chipRoom, which refuses
+ *  to chip it. */
+const NO_ROOM_KEY = roomKey(NO_ROOM_LABEL);
 const POOL_AIRBORNE_M = 0.5;
 /** How far a pool sits above the floor it was probed onto. Enough to clear
  *  z-fighting with the floor polygon, small enough that it still reads as
@@ -1232,12 +1237,45 @@ export class EntityVisuals {
    * is to add up to the chips actually drawn.
    */
   private chipWhyCount = new Map<string, number>();
+  /** How many times a chip was REFUSED for naming the no-room bucket — see
+   *  chipRoom. Deliberately not in `chipWhyCount`: that map holds reasons a chip
+   *  EXISTS, and `total=` sums it against `chips=`. */
+  private chipRefusedNoRoom = 0;
 
   /**
    * THE one writer for `roomClustered` — a room may not become a chip without
    * saying which rule did it. See chipWhyCount for what that is worth.
    */
   private chipRoom(key: string, why: string): void {
+    // ⚠️ THE NO-ROOM BUCKET IS NOT A ROOM, AND MUST NEVER DRAW A CHIP (2.440.0).
+    //
+    // `roomOf` falls back to NO_ROOM_LABEL ("Other") for any entity whose room
+    // is unknown — no HA Area, and no drawn polygon containing it. That bucket
+    // is a legitimate thing to LIST (the Cockpit and the group panel both sort
+    // it last on purpose), but on the map a chip is a claim: "this room,
+    // summarised, tap it to see inside". There is no Other room in the villa,
+    // so the chip names a place that does not exist and puts it at the
+    // centroid of devices that have nothing to do with each other.
+    //
+    // Refused HERE because this is the one writer of `roomClustered` (2.403.0),
+    // so one guard covers every tier that can chip — solver, seating, focus,
+    // chip-vs-badge, chip-vs-card. Its members keep their individual badges;
+    // they can still form summary CARDS, which are per-PILE and make no claim
+    // about rooms, and nothing hides them, so the orphan invariant is
+    // unaffected.
+    //
+    // Counted, never silently dropped: `noroom=` in chipWhy is how many rooms'
+    // worth of chipping this guard turned down, so the guard cannot become
+    // invisible the way the ten unnamed chip sites were before 2.403.0.
+    if (key === NO_ROOM_KEY) {
+      // ⚠️ ITS OWN COUNTER, NOT chipWhyCount. That map is the list of REASONS A
+      // CHIP EXISTS and `total=` sums it to reconcile against `chips=` — a
+      // refusal in there would inflate the total above the chips drawn and make
+      // the one field that audits this tier stop adding up. Counted separately,
+      // printed separately, labelled as a refusal.
+      this.chipRefusedNoRoom += 1;
+      return;
+    }
     if (this.roomClustered.get(key)) return;
     this.roomClustered.set(key, true);
     this.chipWhyCount.set(why, (this.chipWhyCount.get(why) ?? 0) + 1);
@@ -2891,7 +2929,27 @@ export class EntityVisuals {
     const p = anchor.getAbsolutePosition();
     // The anchor's OWN height decides the storey — a 2F device is not in the
     // 1F room its outline happens to sit over (see roomPolyAt).
-    return this.roomContaining(p.x, p.y, p.z);
+    const onMyStorey = this.roomContaining(p.x, p.y, p.z);
+    if (onMyStorey) return onMyStorey;
+    // ⚠️ THE STOREY FILTER MAY REFINE AN ANSWER, NEVER DELETE ONE (2.440.0).
+    //
+    // A device inside a drawn room got a room name before 2.434.0 and must
+    // still get one: an entity with no room falls into the NO_ROOM_LABEL
+    // bucket, and that bucket is what puts an "Other" pile on the map. The
+    // storey rule is a preference between polygons that BOTH contain the
+    // point, and this villa reports three distinct floor heights — enough for
+    // the clearance test to name a storey none of whose rooms contain a given
+    // anchor, which used to turn a perfectly good room into "Other".
+    //
+    // Deliberately NOT pushed down into roomPolyAt: the light pool wants the
+    // opposite when its storey has no room here — it falls through to bounding
+    // the pool by the nearest boundary, which is a better answer than a room
+    // one floor up. Same lookup, two right answers, so the fallback belongs to
+    // the caller that wants it.
+    for (const room of this.roomPolys) {
+      if (pointInPolygon(p.x, p.z, room.pts)) return room.name;
+    }
+    return null;
   }
 
   /** World-space XZ bounding box (plus a floor height) of a room's registered
@@ -4187,15 +4245,30 @@ export class EntityVisuals {
         // i.e. 28% of the chip, and that is the proportion this is measured
         // against because it is the same object drawn in the DOM. A flat 4px
         // came out at 18% and read as the text crowding the chip's edge.
-        valueWrap.paddingLeft = `${Math.round(glyphPx * chip.gap)}px`;
-        // NONE. The card's own right padding (iconPadX) is the value's right
-        // margin, which makes the card's two outer margins equal — the chip
-        // has iconPadX to its left and the value has iconPadX to its right,
-        // with the gap between them the only asymmetric measurement, as it
-        // should be. This carried `gap - iconPadX` while padding was still
-        // being subtracted rather than added; keeping it now would put the
-        // whole gap on the right a second time.
-        valueWrap.paddingRight = "0px";
+        const valueGap = Math.round(glyphPx * chip.gap);
+        valueWrap.paddingLeft = `${valueGap}px`;
+        // ⚠️ THE VALUE'S OWN TWO SIDES, not the CARD's two margins (2.441.0).
+        //
+        // This was 0, on the reasoning that "the card's own right padding
+        // (iconPadX) is the value's right margin, which makes the card's two
+        // outer margins equal". Both halves of that are true and neither is
+        // what a reader sees. The card's margins were equal; the VALUE had
+        // `gap` between itself and the chip (6 px at the base metrics) and only
+        // `iconPadX` between itself and the card's edge (3 px) — so the number
+        // sat twice as close to the right edge as to the icon, and read as
+        // right-aligned rather than centred in the space it occupies. Reported
+        // as exactly that.
+        //
+        // Making up the difference gives the value `gap` of clear space on BOTH
+        // sides. Clamped at 0 because a chip whose gap fraction came out under
+        // iconPadX needs no help — it is already the wider margin.
+        //
+        // Width model unaffected, and that is checked rather than assumed: the
+        // reserve is `cardPadLeftPx + cardHeightPx + cardValuePadPx` = 40 px
+        // against a draw of iconPadX + glyph + gap + gap = 37 px, so this still
+        // over-reserves. Under-reserving is the direction that breaks
+        // "layout geometry must equal render geometry".
+        valueWrap.paddingRight = `${Math.max(0, valueGap - iconPadX)}px`;
         valueWrap.isVisible = false;
         row!.addControl(valueWrap);
       } else {
@@ -4801,6 +4874,7 @@ export class EntityVisuals {
     // saying so.
     this.roomClustered.clear();
     this.chipWhyCount.clear();
+    this.chipRefusedNoRoom = 0;
     this.roomDisplay.clear();
     this.entityGrouped.clear();
     for (const s2 of shown) {
@@ -5543,6 +5617,8 @@ export class EntityVisuals {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => ` ${k}=${v}`).join("")
       + ` total=${[...this.chipWhyCount.values()].reduce((a, b) => a + b, 0)}`
+      // OUTSIDE total, on purpose: a chip that was refused is not a chip.
+      + (this.chipRefusedNoRoom ? ` noroomRefused=${this.chipRefusedNoRoom}` : "")
       + ` [${groups}] chips=${chips.length} [${chips.join(", ")}]`;
     // ⚠️ Dedupe on the OUTCOME, not the whole line. rung/sinTilt/az change on
     // every frame of a drag, so the old whole-line compare emitted a `place`

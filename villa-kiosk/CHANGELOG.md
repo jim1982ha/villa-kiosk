@@ -1,3 +1,15 @@
+## 2.440.0
+
+### Fixed — an "Other" room chip, and the badge value's size and alignment
+
+"Other" is the bucket for devices with no room; a chip claims "this room,
+summarised", so it must never draw one — refused now at the single writer of that
+flag. A storey filter added in 2.434.0 could also drop a known room INTO that
+bucket, and falls back rather than deleting the answer. Separately the value text
+sat twice as close to the card's edge as to its icon, and was drawn half again as
+large as the identical component in the bottom bar; size, advance and alignment
+all derive from the chip now.
+
 ## 2.439.0
 
 ### Added — the walk report now measures BOTH raycasts that run while you move

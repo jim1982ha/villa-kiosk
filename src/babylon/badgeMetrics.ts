@@ -407,27 +407,65 @@ export interface BadgeMetrics {
  * now true in CSS pixels rather than only in the render-pixel space nobody
  * sees.
  */
+/**
+ * The value text, as a fraction of the CHIP it sits beside.
+ *
+ * MEASURED against the DOM twin, which is the reference this component has had
+ * since chipProportions.ts existed: `.summary-tile-value` is `--text-lg` (18px)
+ * on a `--chip-size` of 46px — **0.391**. The map badge carried an independent
+ * `cardValueFontPx: 13` against a 22px chip, i.e. **0.591**, so the same value
+ * beside the same chip was drawn half again as large on the map as in the
+ * bottom bar. Reported as "a little bit too big, according to the rest of the
+ * UI", which is exactly what that arithmetic says.
+ *
+ * ⚠️ Deliberately NOT 0.391. The bottom-bar tile carries a LABEL line above its
+ * value ("LIGHTS / 6 On"); the map badge has only the number, read at arm's
+ * length across a room, with no second line to carry the meaning. 0.5 closes
+ * most of the gap and is stated here so the remaining difference is a decision
+ * with a number attached rather than drift — take it to 0.391 if the owner
+ * wants the two to match exactly.
+ */
+const VALUE_FONT_OF_CHIP = 0.5;
+/**
+ * The same question for the classic style's pill, whose value is measured
+ * against the PILL it sits inside rather than a chip beside it — a different
+ * container, so a different fraction, and saying so here is what stops the two
+ * being "unified" into one wrong number.
+ */
+const VALUE_FONT_OF_PILL = 0.55;
+/**
+ * Mean per-character advance of the value font, as a fraction of its SIZE.
+ *
+ * This file used to carry two independent literals — 7.2 px at 13 px (0.554)
+ * and 6.2 px at 11 px (0.564) — for the same family at the same weight. Two
+ * measurements of one constant, and worse, two that do not follow when a font
+ * size changes: 2.422.0 was a whole release about a chip width model drifting
+ * from the text it measured. Deriving the advance from the size means a font
+ * change can no longer leave the width estimate behind.
+ */
+const VALUE_CHAR_ADVANCE = 0.56;
+
 const COARSE: BadgeMetrics = {
   badgeDiameterPx: 44,
   labelHeightPx: 76,
   valueChipHeightPx: 18,
   pillPadXPx: 10,
-  pillValueFontPx: 11,
+  pillValueFontPx: Math.round(18 * VALUE_FONT_OF_PILL),
 
   // The card IS the frame now (the glyph is baked at inset 0, like the Icon
   // style's), so this hugs the art instead of padding a second squircle
   // inside it: 28 = 22px of icon + the 3px ring each side.
   cardHeightPx: 28,
   cardPadLeftPx: 4,
-  cardValueFontPx: 13,
+  cardValueFontPx: Math.round(28 * (22 / 28) * VALUE_FONT_OF_CHIP),
 
   classicHalfHPx: 20,
   classicHalfHWithPillPx: 30.5,
   classicCyPx: -56,
   classicCyWithPillPx: -45.5,
-  pillValueCharPx: 6.2,
+  pillValueCharPx: Math.round(18 * VALUE_FONT_OF_PILL) * VALUE_CHAR_ADVANCE,
   pillValuePadPx: 24,
-  cardValueCharPx: 7.2,
+  cardValueCharPx: Math.round(28 * (22 / 28) * VALUE_FONT_OF_CHIP) * VALUE_CHAR_ADVANCE,
   cardValuePadPx: 8,
   chipTextPadPx: 12,
   labelMaxWidthPx: 180,
