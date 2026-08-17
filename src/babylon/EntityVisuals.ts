@@ -82,6 +82,7 @@ import { chipProportions } from "@/config/chipProportions";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
   PHONE_MAX_CSS_WIDTH, ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE,
+  GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice,
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
 import {
@@ -502,38 +503,6 @@ const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climat
  */
 const BADGE_PLACEMENT = "priority" as "priority" | "legacy";
 
-/**
- * Zoom is quantised to steps of 1/N of a doubling before it feeds the grouping
- * radius — the direct equivalent of a map engine clustering per discrete zoom
- * level. Inside a step nothing re-groups at all, so a slow pinch can't sit
- * exactly on a threshold and chatter; crossing one is a single clean change,
- * and crossing back undoes it exactly.
- *
- * ⚠️ 3 WAS THE "GROUPS TOO SOON" BUG, AND IT WAS ARITHMETIC, NOT GEOMETRY.
- * The solver measures separations at the QUANTISED rung (`s.sx = p.px * k`)
- * while badge boxes are the REAL drawn pixels, so any rung below the true zoom
- * compares shrunken distances against full-size boxes — it groups while
- * visible space remains. At N=3 a rung is a 26% step, so `Math.round` sat up
- * to HALF a step low: every distance measured up to 10.9% shorter than drawn.
- * A pair needing 89px of clearance grouped while 100px was on the glass.
- * Worse, one rung crossing shrank every measured distance by 26% at once,
- * flipping the whole villa in a single frame — the cliff in move2.mov, where
- * rung 101.594 draws badges with space and rung 80.635 is all room chips.
- *
- * 12 makes a step 5.9%. Combined with the ceil in quantisedPixelsPerWorldUnit
- * the residual error is one-sided and small: the solver now measures distances
- * at most 5.9% LONGER than drawn, never shorter, so grouping can only ever be
- * a touch LATE — which is the side the rule has to err on ("as soon as they
- * collide, and not before").
- *
- * Nothing the lattice exists for is weakened: 5.9% of zoom is a deliberate
- * gesture, not jitter, so a pinch still cannot chatter; the value is still
- * quantised, so placement is still a pure function of the rung; and rung
- * ordering is untouched, so monotone-in-zoom still holds. The only cost is
- * `solveRoomZoomRadius` walking ~4x the rungs, once per tap, over one room's
- * badges.
- */
-const GROUP_ZOOM_STEPS_PER_DOUBLING = 12;
 /**
  * ⚠️ VERTICAL_FORESHORTEN_STEPS lived here and is GONE (2.287.0). It quantised
  * the COSINE of the tilt into 8 steps, and it was only half a correction: it
@@ -2891,10 +2860,14 @@ export class EntityVisuals {
     for (let k = kLo; k <= kHi; k++) {
       const radius = Math.pow(2, k / q);
       if (radius < lo || radius > hi) continue;
-      // The zoom the renderer will actually quantise to at this radius.
+      // The zoom the renderer will actually quantise to at this radius — and
+      // now genuinely so. This read `Math.round` while the renderer has used
+      // `Math.ceil` since 2.407.0, so the rung this loop tested was up to 2.9%
+      // below the one that would be drawn (/dry-audit, 2.425.0). One function,
+      // every walker of the lattice.
       const raw = view.vpH / (2 * radius * tanV);
       if (!(raw > 0)) continue;
-      const pxPerWorld = Math.pow(2, Math.round(Math.log2(raw) * q) / q);
+      const pxPerWorld = snapToZoomLattice(raw);
 
       // Every badge fully inside the frame? Per screen axis, in drawn pixels,
       // against the box the renderer will actually paint — including the `cy`
@@ -3428,8 +3401,7 @@ export class EntityVisuals {
     // therefore the layout — became a function of the path taken rather than
     // the zoom arrived at. That is hysteresis, the first of the five things
     // this subsystem's rules forbid outright, hiding in a size setter.
-    const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
-    const snapped = z > 0 ? Math.pow(2, Math.ceil(Math.log2(z) * q) / q) : z;
+    const snapped = snapToZoomLattice(z);
     if (snapped === this.iconZoomScale) return;
     this.iconZoomScale = snapped;
     // `false`: this runs INSIDE the layout pass, before anything is measured,
@@ -5434,7 +5406,6 @@ export class EntityVisuals {
     if (!(dist > 0) || vpH <= 0) return 0;
     const raw = EntityVisuals.pxPerWorldAt(vpH, fov, dist);
     if (!(raw > 0)) return 0;
-    const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
     // ⚠️ CEIL, NOT ROUND — the rung must never sit BELOW the drawn zoom.
     // `k` scales every separation the solver measures (`s.sx = p.px * k`)
     // while the badge boxes it compares them against are real drawn pixels
@@ -5444,7 +5415,7 @@ export class EntityVisuals {
     // error one-sided: measured separations are always ≥ drawn, so grouping
     // can only ever be late, never early. See GROUP_ZOOM_STEPS_PER_DOUBLING
     // for why the step is small enough that "late" is imperceptible.
-    return Math.pow(2, Math.ceil(Math.log2(raw) * q) / q);
+    return snapToZoomLattice(raw);
   }
 
   /** Each label's collision box in screen px, relative to its anchor point —

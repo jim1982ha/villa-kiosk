@@ -104,6 +104,77 @@ export const CHIP_MAX_VIEWPORT_FRACTION = 0.5;
  * the inequality without importing Babylon.
  */
 export const ICON_ZOOM_EXPONENT = 1;
+/**
+ * Zoom is quantised to steps of 1/N of a doubling before it feeds the grouping
+ * radius — the direct equivalent of a map engine clustering per discrete zoom
+ * level. Inside a step nothing re-groups at all, so a slow pinch can't sit
+ * exactly on a threshold and chatter; crossing one is a single clean change,
+ * and crossing back undoes it exactly.
+ *
+ * ⚠️ 3 WAS THE "GROUPS TOO SOON" BUG, AND IT WAS ARITHMETIC, NOT GEOMETRY.
+ * The solver measures separations at the QUANTISED rung (`s.sx = p.px * k`)
+ * while badge boxes are the REAL drawn pixels, so any rung below the true zoom
+ * compares shrunken distances against full-size boxes — it groups while
+ * visible space remains. At N=3 a rung is a 26% step, so `Math.round` sat up
+ * to HALF a step low: every distance measured up to 10.9% shorter than drawn.
+ * A pair needing 89px of clearance grouped while 100px was on the glass.
+ * Worse, one rung crossing shrank every measured distance by 26% at once,
+ * flipping the whole villa in a single frame — the cliff in move2.mov, where
+ * rung 101.594 draws badges with space and rung 80.635 is all room chips.
+ *
+ * 12 makes a step 5.9%. Combined with the ceil in quantisedPixelsPerWorldUnit
+ * the residual error is one-sided and small: the solver now measures distances
+ * at most 5.9% LONGER than drawn, never shorter, so grouping can only ever be
+ * a touch LATE — which is the side the rule has to err on ("as soon as they
+ * collide, and not before").
+ *
+ * Nothing the lattice exists for is weakened: 5.9% of zoom is a deliberate
+ * gesture, not jitter, so a pinch still cannot chatter; the value is still
+ * quantised, so placement is still a pure function of the rung; and rung
+ * ordering is untouched, so monotone-in-zoom still holds. The only cost is
+ * `solveRoomZoomRadius` walking ~4x the rungs, once per tap, over one room's
+ * badges.
+ */
+export const GROUP_ZOOM_STEPS_PER_DOUBLING = 12;
+
+/**
+ * Snap a zoom quantity onto that lattice — THE one implementation.
+ *
+ * ── CEIL, AND IT MUST BE THE SAME CEIL EVERYWHERE (2.425.0) ────────────────
+ * The rung must never sit BELOW the drawn zoom: it scales every separation the
+ * placement solver measures while the badge boxes it compares them against are
+ * real drawn pixels no rung can shrink, so a rung under the true zoom hands the
+ * solver shortened distances and full-size boxes and it groups while space is
+ * still visible. Rounding UP makes the error one-sided.
+ *
+ * This exists because that correction was rolled out by CALL SITE rather than
+ * by what it applies to (/dry-audit). 2.407.0 fixed `quantisedPixelsPerWorldUnit`
+ * and `applyIconZoom`, and missed the third walker of the same lattice:
+ * `solveRoomZoomRadius`'s rung loop kept `Math.round` under a comment that read
+ * "the zoom the renderer will actually quantise to at this radius". It was not.
+ * The solver's own docstring twice invokes "whatever decides a thing must BE the
+ * thing that does it" and calls the renderer's own `markContacts` rather than a
+ * copy of its arithmetic — while feeding it a rung from a different quantiser,
+ * which is the exact failure that docstring lists three times: exact arithmetic
+ * on a wrong input, invisible in review because the formula reads correctly.
+ *
+ * Half a step is 2^(1/24), so the solver's rung sat up to 2.9% below the
+ * renderer's, and the two halves of its test broke in OPPOSITE directions:
+ * `clean` measured short separations and under-reported cleanliness (harmless
+ * alone, but it buys zoom the room framing did not ask for — see 2.424.0),
+ * while `fits` measured badges closer to the centre than they will be drawn and
+ * could promise a shot with a device off screen.
+ *
+ * Pure and here rather than beside any one caller, so the suite can pin the
+ * one-sidedness without importing Babylon — the same reason ICON_ZOOM_EXPONENT
+ * lives here.
+ */
+export function snapToZoomLattice(v: number): number {
+  if (!(v > 0)) return v;
+  const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
+  return Math.pow(2, Math.ceil(Math.log2(v) * q) / q);
+}
+
 
 /**
  * How far the zoom-out shrink may take badges below their configured size.

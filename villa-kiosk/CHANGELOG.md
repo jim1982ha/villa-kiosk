@@ -1,3 +1,12 @@
+## 2.425.0
+
+### Fixed — the room-zoom solver predicted a zoom the renderer never uses
+
+It rounded onto the zoom lattice while everything that draws has rounded UP
+since 2.407.0, so every rung it tested sat up to 2.9% below the one that would
+appear — under a comment claiming to be "the zoom the renderer will actually
+quantise to". All three walkers of that lattice now call one function.
+
 ## 2.424.0
 
 ### Fixed — tapping a room framed its devices instead of the room
