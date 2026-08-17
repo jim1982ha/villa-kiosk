@@ -924,8 +924,8 @@ interface EntityGroupControls {
    *  target than the card can afford to offer; the zones TILE, so every tap
    *  inside the card belongs to exactly one device. */
   zones: Rectangle[];
-  /** Cells drawn this pass, or 0 for a count. Also how many zones are live
-   *  for hit-testing. */
+  /** Cells drawn this pass — never 0 for a live group (see badgeCard's
+   *  `cells`). Also how many zones are live for hit-testing. */
   gridN: number;
 }
 
@@ -956,7 +956,9 @@ interface PendingEntityGroup {
    *  card is measured where it is drawn" a fact rather than a discipline. */
   sx: number; sy: number; sz: number;
   /**
-   * How many device pictograms this group asks to draw, or 0 for a count.
+   * How many device pictograms this group asks to draw. Never 0: every group
+   * reaching the renderer has at least two members, and `gridCells` stopped
+   * refusing in 2.363.0.
    *
    * The card is an integer number of badge boxes on each axis (see
    * babylon/badgeCard), so every cell's tap zone is exactly the box of the
@@ -5443,17 +5445,17 @@ export class EntityVisuals {
       return (Math.min(lay.width, lay.height) / 2) * scale * allow;
     };
     // A group is measured against OTHER GROUPS at the width it is actually
-    // DRAWN at — the file's oldest rule. Against badges it is measured at the
-    // count's box instead; see `fits` for why that asymmetry is deliberate.
-    const groupHalf = (g: PendingEntityGroup) =>
-      (this.drawnCells(g, g.members.length) >= 2 ? cardHalfOf(g) : squareHalf);
+    // DRAWN at — the file's oldest rule. Against badges it is measured at ONE
+    // badge box (`vsBadge`) instead; see `fits` for why that asymmetry is
+    // deliberate. Both of these used to branch on `drawnCells < 2` and fall
+    // back to `squareHalf` — the count badge's footprint, unreachable since
+    // 2.363.0. See the absorb block for the proof.
+    const groupHalf = (g: PendingEntityGroup) => cardHalfOf(g);
 
     /** The same extent as `groupHalf`, kept as SEPARATE half-width and
      *  half-height instead of collapsed into a circumscribed radius — see the
-     *  boxes-not-discs block in `fits`. A group drawn as a single count badge
-     *  is a square, so both halves are `squareHalf` and the two tests agree. */
+     *  boxes-not-discs block in `fits`. */
     const groupBox = (g: PendingEntityGroup): { hw: number; hh: number } => {
-      if (this.drawnCells(g, g.members.length) < 2) return { hw: squareHalf, hh: squareHalf };
       const lay = this.layoutOf(g, g.members.length);
       return { hw: (lay.width / 2) * scale * allow, hh: (lay.height / 2) * scale * allow };
     };
@@ -5764,70 +5766,30 @@ export class EntityVisuals {
         g.sx = q.sx; g.sy = q.sy; g.sz = q.sz;
       }
 
-      // ── A COUNT MUST STAND WHERE ITS DEVICES ARE (2.294.0) ───────────
-      // The defect this closes, in full, because it produced the single worst
-      // thing this subsystem has ever drawn: a badge reading "50" in the
-      // middle of the villa, standing for fifty devices in a dozen rooms, none
-      // of them near it and none of them visible.
+      // ── THE TWO COUNT-BADGE TIERS ARE GONE, AND THEY WERE UNREACHABLE ──
+      // `strays` (2.294.0 — "a count must stand where its devices are", born of
+      // a badge reading "50" in the middle of the villa) and `wholeroom` (a
+      // count covering every badge its room shows IS the room, so defer to the
+      // chip, which at least says which room) both guarded the same thing: a
+      // summary that draws a NUMBER instead of its devices.
       //
-      // A pile is a CONNECTED COMPONENT of "who overlaps whom" (union-find,
-      // badgePlacement). Connectivity is transitive and overlap is not: A may
-      // touch B and B touch C while A and C are a screen apart, and all three
-      // are one pile. At a wide zoom — or merely at a larger icon size, which
-      // is the same thing — the chain closes across the whole floor plan and
-      // one pile swallows most of the villa. A deferral bucket is keyed by
-      // pile, so that becomes ONE summary; a summary of more than six draws a
-      // count; and a count is drawn at its members' CENTROID, which for a
-      // chain spanning the villa is a point in the middle of it that no member
-      // is anywhere near.
+      // 2.363.0 deleted that summary. Since then `drawnCells` cannot return
+      // less than two for any group that reaches here, so neither branch could
+      // fire — found by /dry-audit sweeping "everything that still expects a
+      // COUNT", the predicate that also turned up PHONE_MAX_TOTAL_CHIPS.
       //
-      // Nothing before this noticed, because every existing rule asks about
-      // the group's MEMBERSHIP — how many, which rooms, is that the whole room
-      // — and none of them asks the question a person asks looking at it:
-      // is this number standing anywhere near the things it counts?
+      // Removed rather than left as dead insurance because each owned a
+      // `chipWhy` REASON, and an unreachable reason is worse than no reason: it
+      // prints as absent, which reads as "measured, did not happen" instead of
+      // "cannot happen". This session already lost four captures to a counter
+      // read that way.
       //
-      // So that is the test. A count occupies exactly one badge box. A member
-      // further from it than that box plus its own plus the gap is a device
-      // the count is not covering, merely pointing at from a distance. One
-      // such member and this is not a summary of a place, it is room-level
-      // crowding wearing a summary's clothes — so every room it covers goes to
-      // its own chip, which is named, sits inside the room it names, and opens
-      // that room's device list.
-      //
-      // A genuinely CO-LOCATED pile — a ceiling fan, its own light, the sensor
-      // clipped to the same mount, which is what the count badge was designed
-      // for — has a spread of nearly zero and keeps its count exactly as
-      // before. This narrows the count to the case it was built for rather
-      // than removing it.
-      //
-      // Cards of two to six are deliberately NOT tested. Their members
-      // overlapped to be piled at all, so a card is at most a few badge boxes
-      // from every one of them, and it draws those devices rather than a
-      // number — there is nothing hidden to be dishonest about.
-      if (this.drawnCells(g, g.members.length) < 2) {
-        const countY = cardCentreY(g);
-        let strays = false;
-        for (const i of g.members) {
-          const d = this.drawnDistance(
-            g.sx, countY, g.sz, shown[i].sx, shown[i].sy, shown[i].sz);
-          if (d > squareHalf + halfOf(i) + gapPx) { strays = true; break; }
-        }
-        if (strays) for (const k of g.roomKeys) this.chipRoom(k, "strays");
-      }
-
-      // ── The whole-room rule, re-checked against the membership we ended up
-      // with. The solver applied it (badgePlacement step 7) against a room
-      // count taken BEFORE any of this, so absorb can manufacture a group that
-      // covers every badge its room shows. If that group draws a COUNT it is
-      // the thing the rule forbids — a number standing for a whole room, next
-      // to no room name — so it goes to the chip, which at least says which
-      // room. A group that draws its devices is not a duplicate of anything
-      // and stays.
-      if (g.roomKeys.length === 1 && this.drawnCells(g, g.members.length) < 2) {
-        let inRoom = 0;
-        for (const s2 of shown) if (roomKey(this.roomOf(s2.id)) === g.roomKeys[0]) inRoom++;
-        if (g.members.length >= inRoom) this.chipRoom(g.roomKeys[0], "wholeroom");
-      }
+      // The proof, so a future member-pruning change knows what it would break:
+      // badgePlacement step 7 kills every bucket under two members before the
+      // caller sees it (`dead[b] = 1`, compacted at the `live` sweep);
+      // pairFocusedRoom skips piles under two; absorb only ever grows; and
+      // dropEscalatedGroups either keeps two or splices the group out. Restore
+      // BOTH branches if any of those four stops holding.
     }
     this.absorbed = absorbed;
 
@@ -5984,6 +5946,13 @@ export class EntityVisuals {
           // Survives as a smaller card. Its rooms are by construction the
           // un-chipped ones, so it cannot be re-entered on a later round.
           g.members = keep;
+          // `grid` moves WITH the membership. It was left stale here, and only
+          // two coincidences hid it: every reader takes `min(g.grid, length)`,
+          // and `cellMax`'s `g.grid` arm is focused-only while a focused group
+          // never reaches this method. Neither is a rule, so neither is a
+          // guarantee — absorb already updates the pair together, and so does
+          // this. (/dry-audit)
+          g.grid = keep.length;
           g.roomKeys = [...new Set(keep.map((m) => roomKey(this.roomOf(shown[m].id))))].sort();
           continue;
         }

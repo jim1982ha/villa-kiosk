@@ -1,3 +1,12 @@
+## 2.416.0
+
+### Changed — the debug log no longer lists reasons a room chip cannot have
+
+Three of the nine reasons the layout could give for collapsing a room into its
+badge had quietly stopped existing — two of them guarded a summary that draws a
+number, removed in 2.363.0. They printed as zero, which reads as "checked,
+didn't happen" rather than "impossible". No visible change.
+
 ## 2.415.0
 
 ### Fixed — on a phone, room badges never split back into entities

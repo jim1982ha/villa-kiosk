@@ -56,8 +56,9 @@ export const PHONE_MAX_GRID_CHIPS = 2;
  * this is about 1.8, and two full 2x2s side by side would be 2.24 — at which
  * point groups of five upward start failing to place and escalating their room
  * to a chip, which is the complaint this whole area exists to answer. Above
- * the cap the summary is a count badge, one unit square, which after the
- * absorb phase no longer costs its room a chip either.
+ * the cap the SOLVER escalates to the room chip before the renderer sees the
+ * bucket (`drawableMax`); this is not a fallback the drawing can reach, and
+ * the count badge that used to be one went in 2.363.0.
  */
 export const MAX_TOTAL_CHIPS = 6;
 
@@ -119,7 +120,8 @@ export interface CardArrangement {
   /** Centre-to-centre distance between cells, on both axes: one unit, so a
    *  cell IS a badge box and its tap zone is exactly the badge it replaces. */
   pitch: number;
-  /** Cells drawn, after clamping. 0 means a count badge. */
+  /** Cells drawn. Always `floor(n)` since 2.363.0 — `gridCells` no longer
+   *  refuses, so this is never 0 for a group and there is no count badge. */
   cells: number;
   /** Cell centre offsets from the ARRANGEMENT's centre, in units. */
   cellLeft(k: number): number;
@@ -138,7 +140,8 @@ export interface CardArrangement {
  *   n <= 2 → a single row  (1x1, 2x1)
  *   n = 3, 4 → one 2x2, filled ROW-MAJOR so cell 3 is bottom-right
  *   n = 5, 6 → a 2x2 plus a second card holding the rest, side by side
- *   n >= 7 → zero cells: the caller draws a count on the degenerate 1x1 card
+ *   n >= 7 → every cell still, WRAPPED into `maxWidth` (2.363.0 removed the
+ *            zero-cell/count fallback this line used to describe)
  *
  * Cards are filled GREEDILY — four, then the remainder — so a device keeps its
  * CELL WITHIN ITS CARD when another joins. It does not keep its absolute
