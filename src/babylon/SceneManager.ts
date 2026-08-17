@@ -3235,8 +3235,15 @@ export class SceneManager {
     const stamped = this.ceilingMeshes.filter((m) => structureRole(m).isCeiling).length;
     const named = this.ceilingMeshes.filter(
       (m) => !structureRole(m).isCeiling && isCeilingMesh(m)).length;
+    // `enabled=` is the field that separates the two ways a "shown" ceiling can
+    // still be absent: the floor filter disabled it (FloorManager runs BEFORE
+    // this), or it is drawn and you cannot see it (orientation, lighting). The
+    // line said "11 shown" for two releases while they were back-face culled —
+    // true, and useless, which is the failure mode this project keeps paying for.
+    const enabled = this.ceilingMeshes.filter((m) => m.isEnabled(false)).length;
     tapDebug(
       `ceilings: ${this.ceilingMeshes.length} mesh(es) shown in first-person`
+      + ` (${enabled} enabled on the active floor)`
       + ` (${stamped} stamped vk_role=ceiling, ${named} by name,`
       + ` ${this.ceilingMeshes.length - stamped - named} by height)`
       + (stamped + named === 0 && this.ceilingMeshes.length === 0

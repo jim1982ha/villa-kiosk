@@ -1,3 +1,15 @@
+## 2.449.0
+
+### Fixed — the ceiling was invisible, not dark
+
+SweetHome exports thin slabs whose covering can carry a normal pointing the wrong
+way; both of this app's baked material paths already double-side them for exactly
+that reason, and a ceiling picked up by name went through neither, so from
+underneath you saw its culled back — in daylight as well as at night. The previous
+explanation blamed lighting, which a daylight screenshot disproved: unlit still
+catches the sun. The debug line now reports how many ceilings are enabled on the
+active floor, so "shown" can no longer mean "shown and unseeable".
+
 ## 2.448.0
 
 ### Fixed — a name-matched ceiling rendered black, and the badge value now lines up with its icon

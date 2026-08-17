@@ -812,7 +812,24 @@ export async function loadModelInto(
       // rather than flattened.
       for (const m of ceilings) {
         const mat = m.material as (LightmapMat & { albedoColor?: Color3 }) | null;
-        if (mat?.albedoColor) mat.albedoColor = mat.albedoColor.scale(CEILING_TONE);
+        if (!mat) continue;
+        if (mat.albedoColor) mat.albedoColor = mat.albedoColor.scale(CEILING_TONE);
+        // ⚠️ DOUBLE-SIDED, and this is why a ceiling was INVISIBLE rather than
+        // merely dark (2.449.0). Both baked paths in this file already set this
+        // for the same stated reason — "SweetHome exports thin slabs (floors,
+        // CEILINGS) whose covering can carry a downward normal; with the default
+        // backFaceCulling the camera sees the culled back of those faces and
+        // looks straight through" — and a name-matched ceiling went through
+        // NEITHER of them, so it kept Babylon's default culling and its upward
+        // normal made it invisible from underneath.
+        //
+        // The owner disproved my first explanation with one screenshot: I said
+        // they rendered BLACK for want of light, and they were missing in broad
+        // DAYLIGHT too, with blue sky showing through. Unlit would still be lit
+        // by the sun; culled is invisible in every light. Free of any artefact
+        // here for the same reason as the baked paths: the surface shows its own
+        // albedo, so there is no per-face lighting to get wrong.
+        mat.backFaceCulling = false;
       }
       for (const sm of lmMats) {
         // useLightmapAsShadowmap makes the PBR shader MULTIPLY the lit result
