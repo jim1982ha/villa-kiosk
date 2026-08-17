@@ -1,3 +1,13 @@
+## 2.417.0
+
+### Fixed — the map flickered between a few room badges and many while zooming
+
+Badge SIZE and badge SPACING both step in fixed increments as you zoom, but
+they were stepping at different moments, so one zoom level could draw two
+different maps — measured on a phone as three room badges one instant and eight
+the next, from a hair of movement. Size is now derived from spacing, so a given
+zoom level always draws the same thing.
+
 ## 2.416.0
 
 ### Changed — the debug log no longer lists reasons a room chip cannot have

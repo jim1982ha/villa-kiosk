@@ -597,9 +597,13 @@ export class SceneManager {
       onActivity: () => {
         // Keep badges their configured size at the fit and zoomed IN, but shrink
         // them once zoomed OUT past the fit so a far zoom-out can't pile every
-        // badge into one fixed-size blob over a tiny villa (getIconZoomCap).
+        // badge into one fixed-size blob over a tiny villa. Only the THRESHOLD
+        // is pushed: the scale itself is derived from the zoom rung inside the
+        // layout pass, because a scale computed from the raw radius here landed
+        // on a lattice offset from the rung's and made one rung mean two
+        // layouts (2.417.0 — see OverviewController.getFitRadius).
         if (this.viewMode === "overview") {
-          this.visuals.setIconZoomScale(this.overview.getIconZoomCap());
+          this.visuals.setIconZoomFit(this.overview.getFitRadius());
         }
         this.requestRender();
       },
@@ -1581,7 +1585,7 @@ export class SceneManager {
       // drop here would put the sea's edge below the terrace floor.
       this.sky.setHorizonDrop(0);
       this.nightSky?.setHorizonDrop(0);
-      this.visuals.setIconZoomScale(1); // fixed screen size when walking
+      this.visuals.setIconZoomFit(0); // 0 = no zoom shrink: fixed size when walking
     }
     this.requestRender(600);
   }

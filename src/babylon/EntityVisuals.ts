@@ -81,7 +81,7 @@ import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { chipProportions } from "@/config/chipProportions";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
-  PHONE_MAX_CSS_WIDTH,
+  PHONE_MAX_CSS_WIDTH, ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE,
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
 import {
@@ -3353,9 +3353,20 @@ export class EntityVisuals {
       pool.setState(on, colour, brightnessFrac * this.lightPoolStrength));
   }
 
-  /** Live bird's-eye zoom factor (1 = default fit). Driven per-frame by
-   *  SceneManager from the overview camera; ignored (reset to 1) elsewhere. */
-  setIconZoomScale(z: number): void {
+  /**
+   * The whole-villa fit RADIUS, or 0 for "no zoom shrink" (the walk camera).
+   *
+   * A threshold, not a scale. Pushed by SceneManager whenever the overview
+   * camera moves; the scale itself is derived from the rung in
+   * `syncIconZoomToRung`, which is what makes it a function of the rung rather
+   * than a second quantity racing it.
+   */
+  setIconZoomFit(fitRadius: number): void {
+    this.iconZoomFitRadius = fitRadius > 0 ? fitRadius : 0;
+  }
+
+  /** Applies an already-derived zoom scale, snapped onto the zoom lattice. */
+  private applyIconZoom(z: number): void {
     // ── QUANTISED ONTO THE ZOOM LATTICE, AND NOT DEADBANDED ────────────────
     // This is the SECOND quantity that scales badge layout with zoom — the
     // rung scales the positions, this scales the sizes — and until 2.414.0 it
@@ -3366,20 +3377,28 @@ export class EntityVisuals {
     //   place rung=53.817 zoom=0.95 … drawn=6 chips=3
     //
     // Same rung, different answer — the purity violation `rung` exists to make
-    // visible. Snapping it to the same lattice makes the pair (rung, size) hold
-    // still together, which is what "inside a step nothing re-groups" was always
-    // supposed to mean.
+    // visible.
     //
-    // The 0.02 deadband it replaces was worse than merely imprecise: whether it
-    // updated depended on the PREVIOUS value, so the drawn size — and therefore
-    // the layout — became a function of the path taken rather than the zoom
-    // arrived at. That is hysteresis, the first of the five things this
-    // subsystem's rules forbid outright, hiding in a size setter.
+    // ⚠️ THE LATTICE ALONE DID NOT FIX IT (2.417.0). The caller now DERIVES `z`
+    // from the rung, and that is what makes the pair hold still; snapping here
+    // is only tidiness on top of a value that is already a function of the
+    // rung. Restoring a caller that computes `z` from the raw camera radius
+    // re-opens the whole bug however fine this lattice is — see
+    // syncIconZoomToRung.
+    //
+    // The 0.02 deadband both replaced was worse than merely imprecise: whether
+    // it updated depended on the PREVIOUS value, so the drawn size — and
+    // therefore the layout — became a function of the path taken rather than
+    // the zoom arrived at. That is hysteresis, the first of the five things
+    // this subsystem's rules forbid outright, hiding in a size setter.
     const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
     const snapped = z > 0 ? Math.pow(2, Math.ceil(Math.log2(z) * q) / q) : z;
     if (snapped === this.iconZoomScale) return;
     this.iconZoomScale = snapped;
-    this.applyIconScale();
+    // `false`: this runs INSIDE the layout pass, before anything is measured,
+    // so the new size is used by this very frame. Asking for another render
+    // here would schedule a frame per lattice step for no visible change.
+    this.applyIconScale(false);
   }
 
   /**
@@ -4243,6 +4262,11 @@ export class EntityVisuals {
     for (const s of shown) {
       s.lbl.valueWrap.isVisible = s.lbl.valueText.text.length > 0;
     }
+    // Before ANY measurement this pass: the icon scale is derived from the rung
+    // (see syncIconZoomToRung) and resizing controls after `labelBoxes` has read
+    // them would break the file's oldest rule — layout geometry equals render
+    // geometry.
+    this.syncIconZoomToRung(shown);
     const clearance = this.screenClearance(shown);
     if (clearance) {
       const withText = this.placementItems(shown, this.labelBoxes(shown), clearance);
@@ -5168,6 +5192,57 @@ export class EntityVisuals {
    * to a group of devices SHOULD separate them, the same way zooming does.
    * Median rather than mean so one far-off badge can't skew the whole scale.
    */
+  /** Pixels per world unit at a given distance — ONE expression, two callers:
+   *  the rung (at the camera's own distance) and the icon-zoom reference (at
+   *  the fit radius). They must not be two formulas; the whole point of
+   *  2.417.0 is that the icon scale is the rung measured against this. */
+  private static pxPerWorldAt(vpH: number, fov: number, dist: number): number {
+    return vpH / (2 * dist * Math.tan(fov / 2));
+  }
+
+  /**
+   * ── THE ICON SCALE IS A FUNCTION OF THE RUNG. NOT OF THE RADIUS. ─────────
+   * Two quantities scale badge layout with zoom: the RUNG scales the positions
+   * the solver measures, and this scales the boxes it measures them against.
+   * The layout is the ratio, so "same rung ⇒ same layout" holds only if the
+   * second is determined by the first.
+   *
+   * 2.414.0 put both on the same 12-per-doubling lattice and that was not
+   * enough. Both are proportional to 1/radius but with different constants, so
+   * the ceil boundaries sat at different radii: inside ONE rung bucket the icon
+   * scale still stepped, and a phone capture showed every rung paired with two
+   * adjacent scales — `rung=71.838 zoom=0.84 → chips=3` beside
+   * `rung=71.838 zoom=0.89 → chips=8`. Zooming smoothly through a rung made the
+   * villa flicker between three chips and eight.
+   *
+   * So the ratio is taken against the rung itself. `atFit` is the same
+   * expression at the fit radius, so `rung / atFit` is exactly `fitRadius / r`
+   * before quantisation — the number getIconZoomCap used to return — and after
+   * it, a function of the rung alone. One rung, one size, one layout.
+   *
+   * ⚠️ The exponent may NEVER exceed 1: badge/separation ∝ r^(1−e), so
+   * "zooming out may never un-group" IS e ≤ 1. See ICON_ZOOM_EXPONENT, and the
+   * pin in the suite that rejects the 1.8 this shipped with.
+   */
+  private syncIconZoomToRung(shown: ShownLabel[]): void {
+    const fit = this.iconZoomFitRadius;
+    if (!(fit > 0)) { this.applyIconZoom(1); return; }
+    const cam = this.scene.activeCamera;
+    if (!cam) return;
+    const vpH = this.scene.getEngine().getRenderHeight();
+    const fov = 2 * cameraFrame(this.scene, cam).vHalf;
+    // ⚠️ RENDER pixels on BOTH sides, and deliberately not the `cssPixels`
+    // variant. It cancels in the ratio, so this is hw-independent anyway — and
+    // asking for CSS px here would quantise against a DIFFERENT rung from the
+    // one scaling the positions, which is the offset-lattice bug this method
+    // exists to remove, reintroduced through the other door.
+    const atFit = EntityVisuals.pxPerWorldAt(vpH, fov, fit);
+    const rung = this.quantisedPixelsPerWorldUnit(shown);
+    if (!(atFit > 0) || !(rung > 0)) return;
+    const ratio = Math.pow(rung / atFit, ICON_ZOOM_EXPONENT);
+    this.applyIconZoom(Math.min(1, Math.max(ICON_ZOOM_MIN_SCALE, ratio)));
+  }
+
   private quantisedPixelsPerWorldUnit(shown: ShownLabel[], cssPixels = false): number {
     const cam = this.scene.activeCamera;
     if (!cam) return 0;
@@ -5220,7 +5295,7 @@ export class EntityVisuals {
       dist = view[shown.length >> 1];
     }
     if (!(dist > 0) || vpH <= 0) return 0;
-    const raw = vpH / (2 * dist * Math.tan(fov / 2));
+    const raw = EntityVisuals.pxPerWorldAt(vpH, fov, dist);
     if (!(raw > 0)) return 0;
     const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
     // ⚠️ CEIL, NOT ROUND — the rung must never sit BELOW the drawn zoom.
@@ -7118,6 +7193,8 @@ export class EntityVisuals {
   }
 
   /** This pass's `seat` detail, flushed by logPlacement on a real change. */
+  /** Whole-villa fit radius, or 0 for no zoom shrink. See setIconZoomFit. */
+  private iconZoomFitRadius = 0;
   private seatLog: string[] = [];
 
   /** Previous frame's DRAWN chip position per room key, for watchChipJump. */

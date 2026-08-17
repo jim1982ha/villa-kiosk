@@ -42,7 +42,6 @@ import { Animation } from "@babylonjs/core/Animations/animation";
 import "@babylonjs/core/Animations/animatable";
 import { CubicEase, EasingFunction } from "@babylonjs/core/Animations/easing";
 import { TapRecognizer } from "./TapRecognizer";
-import { ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE } from "./badgeMetrics";
 import { cameraFrame } from "./cameraFrame";
 
 interface OverviewCallbacks {
@@ -87,15 +86,12 @@ const ZOOM_STEP_RECENTRE = 0.5;
 const ZOOM_STEP_FRAMES = 18;   // at 60fps
 const ZOOM_STEP_MS = 300;
 const TILT_SENS_TOUCH = 0.007;  // radians per px of the two fingers' SHARED vertical drag
-// Fraction of the whole-villa fit radius used as the icon-scaling "1×"
-// reference (see fitTo). <1 so the default overview starts with shrunk
-// badges instead of full-size ones.
-const ICON_REF_FRACTION = 0.55;
-/** Badge sizing under zoom lives in badgeMetrics with every other badge
- *  dimension — see ICON_ZOOM_EXPONENT there for why the exponent may never
- *  exceed 1, and ICON_ZOOM_MIN_SCALE for why the shrink is floored. Both were
- *  local constants here until 2.414.0; one decision in two files is how the
- *  exponent came to invert the grouping rule without the suite noticing. */
+/** Badge sizing under zoom is not decided here at all. The constants live in
+ *  badgeMetrics (2.414.0) and the derivation lives beside the RUNG in
+ *  EntityVisuals (2.417.0) — this file publishes only the fit radius, because
+ *  one decision spread over two files is how the exponent came to invert the
+ *  grouping rule, and one decision spread over two LATTICES is how a single
+ *  rung came to mean two layouts. See getFitRadius. */
 
 export class OverviewController {
   readonly camera: ArcRotateCamera;
@@ -105,13 +101,11 @@ export class OverviewController {
   private attached = false;
   private naturalScrolling = true;
   private bounds: Bounds = { minX: -20, maxX: 20, minZ: -20, maxZ: 20 };
-  /** Radius of the default whole-villa fit — the "1×" reference for icon zoom
-   *  scaling (icons grow when the user zooms past it, shrink when zoomed out). */
-  private refRadius = 30;
-  /** The exact whole-villa fit radius (see fitTo). Distinct from refRadius: this
-   *  is the threshold at/below which badges render at their configured size, and
-   *  above which (zoomed OUT past the fit) getIconZoomCap shrinks them so a far
-   *  zoom-out can't pile every badge into one blob over a tiny villa. */
+  /** The whole-villa fit radius (see fitTo): the threshold at/below which
+   *  badges render at their configured size, and above which — zoomed OUT past
+   *  the fit — EntityVisuals shrinks them so a far zoom-out can't pile every
+   *  badge into one fixed-size blob over a tiny villa. Published by
+   *  getFitRadius; the SCALE itself is derived from the rung, not from here. */
   private fitRadius = 30;
 
   private static readonly BETA_MIN = 0.05; // ~3° from straight down
@@ -135,27 +129,35 @@ export class OverviewController {
   }
 
   setNaturalScrolling(v: boolean): void { this.naturalScrolling = v; }
-
-  /** Zoom factor for the state-icon badges: 1× at the default whole-villa fit,
-   *  >1 when zoomed in (closer), <1 when zoomed out. Clamped so icons never
-   *  vanish or swamp the view. */
-  getIconZoomScale(): number {
-    return clamp(this.refRadius / (this.camera.radius || this.refRadius), 0.5, 3);
-  }
-
-  /** Downward-only badge size factor vs the whole-villa fit. At the fit or
-   *  zoomed IN (radius ≤ fitRadius) it returns 1 — badges keep their configured
-   *  screen size, so standard framing is untouched (no side effects). Zoomed OUT
-   *  past the fit it shrinks proportionally so badges scale down with the
-   *  shrinking villa instead of swamping it in a fixed-size blob. */
-  getIconZoomCap(): number {
-    const r = this.camera.radius || this.fitRadius;
-    if (r <= this.fitRadius) return 1;
-    // ⚠️ The exponent may NEVER exceed 1 — see ICON_ZOOM_EXPONENT. "Shrink
-    // faster than the villa so badges visibly recede" is what this used to say
-    // at 1.8, and it inverted the whole tier: badges shrank faster than the
-    // distances between them, so zooming OUT de-clustered.
-    return clamp(Math.pow(this.fitRadius / r, ICON_ZOOM_EXPONENT), ICON_ZOOM_MIN_SCALE, 1);
+  /**
+   * The whole-villa fit radius — the threshold past which badges shrink.
+   *
+   * ── THIS USED TO RETURN THE SCALE ITSELF, AND THAT WAS THE BUG (2.417.0) ──
+   * `getIconZoomCap()` computed `clamp(fitRadius / camera.radius, MIN, 1)` from
+   * the RAW radius, and EntityVisuals then snapped the result onto the zoom
+   * lattice. Both that and the RUNG are proportional to 1/radius and both were
+   * ceil-quantised on the same 12-per-doubling lattice — but with DIFFERENT
+   * constants of proportionality, so their step boundaries were offset and a
+   * single rung spanned two icon scales. A phone capture caught it
+   * systematically: every rung appeared twice, once per adjacent scale, and the
+   * two layouts were not close —
+   *
+   *     place rung=71.838 zoom=0.84 … drawn=8 groups=11/17 chips=3
+   *     place rung=71.838 zoom=0.89 … drawn=5 groups=3/15  chips=8
+   *
+   * Same rung, eight chips against three. "Same rung ⇒ same layout" is the
+   * property the rung exists to make checkable, and two OFFSET lattices cannot
+   * have it however finely either one is stepped. 2.414.0 put both on the same
+   * lattice; they still were not on the same POINT.
+   *
+   * So the scale is derived from the rung now, in EntityVisuals where the rung
+   * is (see syncIconZoomToRung). This exposes only the threshold, which is a
+   * camera fact and genuinely belongs here. `getIconZoomScale()` — a second,
+   * unrelated answer to the same question, with its own `refRadius` — went at
+   * the same time: /dry-audit found it had no callers at all.
+   */
+  getFitRadius(): number {
+    return this.fitRadius;
   }
 
   fitTo(ext: { min: Vector3; max: Vector3 }): void {
@@ -191,16 +193,7 @@ export class OverviewController {
     this.camera.alpha = -Math.PI / 2;
     this.camera.beta = 0.5;
     this.camera.radius = correctedSpan * 1.05;
-    this.fitRadius = this.camera.radius;   // threshold for getIconZoomCap
-    // The icon "1x" reference is deliberately CLOSER than the whole-villa fit
-    // radius, not equal to it: the default overview is the single most crowded
-    // view (every device in the villa on screen at once), so anchoring "1x" to
-    // it renders every badge at full size exactly where there's least room —
-    // guaranteeing overlap and forcing the declutter pass to hide most of
-    // them. Referencing a nearer, room-scale radius means badges start already
-    // shrunk on the default overview and grow toward 1x as the user zooms into
-    // a room, where there's actually space for them.
-    this.refRadius = this.camera.radius * ICON_REF_FRACTION;
+    this.fitRadius = this.camera.radius;   // published by getFitRadius
     this.cb.onActivity();
   }
 
