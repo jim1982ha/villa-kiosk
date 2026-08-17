@@ -3685,7 +3685,7 @@ export class EntityVisuals {
 
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
-      container.width = "180px";
+      container.width = `${m.labelMaxWidthPx}px`;
       container.height = `${labelH}px`;
       container.spacing = 3;
       this.labelLayer.addControl(container);
@@ -7730,7 +7730,34 @@ export class EntityVisuals {
       const v = this.compactValue(t, st);
       if (v) parts.push(v);
     }
-    return parts.join("  ·  ");
+    // ⚠️ THE JOIN IS CLAMPED, NOT JUST EACH PART. clampPill bounds a single
+    // value at 16 characters for tidiness; nothing bounded the JOIN, which
+    // grows at 21N-5 characters for an N-member group. labelBoxes then reserved
+    // that full width while the container could never draw past
+    // labelMaxWidthPx — ~384 CSS px reserved against 180 drawn at three
+    // members (/dry-audit 2.423.0). Two different questions, so both clamps
+    // stay: one keeps a value tidy, this one keeps the model honest.
+    return this.clampToLabelWidth(parts.join("  ·  "));
+  }
+
+  /**
+   * Truncate value text to what the label container can actually DRAW.
+   *
+   * Derived, not guessed: the ceiling is `labelMaxWidthPx` and the per-character
+   * advance is the one `labelBoxes` measures the very same string with, so the
+   * width the solver reserves and the width the renderer draws agree by
+   * construction rather than by a constant that happens to be big enough.
+   */
+  private clampToLabelWidth(text: string): string {
+    const m = this.metrics;
+    const card = this.isCardStyle();
+    const fixed = card
+      ? m.cardPadLeftPx + m.cardHeightPx + m.cardValuePadPx
+      : m.pillValuePadPx;
+    const charPx = card ? m.cardValueCharPx : m.pillValueCharPx;
+    if (!(charPx > 0)) return text;
+    const max = Math.max(1, Math.floor((m.labelMaxWidthPx - fixed) / charPx));
+    return text.length > max ? `${text.slice(0, Math.max(1, max - 1))}…` : text;
   }
 
   /** Tiny chip text under the badge for entities whose state is a reading, not just on/off. */

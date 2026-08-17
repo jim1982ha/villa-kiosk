@@ -1,3 +1,12 @@
+## 2.423.0
+
+### Fixed — grouped badges pushed their neighbours away with width they never drew
+
+A badge showing several grouped readings clamped each value but never the joined
+string, and the layout reserved its full length while the label container has
+always clipped at a fixed 180 px. Three readings reserved ~384 px against 180
+drawn, so those badges grouped their neighbours far earlier than the ink asked.
+
 ## 2.422.0
 
 ### Fixed — room badges merged at a width that depended on the room's name

@@ -227,6 +227,21 @@ export interface BadgeMetrics {
    * third instance. See labelLayout.chipWidthPx.
    */
   chipTextPadPx: number;
+  /**
+   * Widest a badge's label container may be DRAWN — the ceiling the renderer
+   * has always enforced, now visible to the layout that measures against it.
+   *
+   * It was a literal `container.width = "180px"` in the scene layer while
+   * `labelBoxes` reserved `len * charPx + pad` with no upper bound at all, and
+   * `groupedValue` joins one clamped value PER GROUP MEMBER with "  .  "
+   * separators and clamps nothing — reaching 21N-5 characters. At three
+   * members the solver reserved ~384 CSS px for a pill the container could
+   * never draw wider than 180: 113% over, which is early grouping by
+   * construction and breaks "layout geometry must equal render geometry"
+   * (/dry-audit 2.423.0). Both sides read this now, and the value text is
+   * truncated to fit it rather than clipped by it.
+   */
+  labelMaxWidthPx: number;
 
   // ── Clearance ────────────────────────────────────────────────────────────
   /**
@@ -344,6 +359,7 @@ const COARSE: BadgeMetrics = {
   cardValueCharPx: 7.2,
   cardValuePadPx: 8,
   chipTextPadPx: 12,
+  labelMaxWidthPx: 180,
 
   // The icon CHIP's control as a fraction of the card. The chip's own art is
   // inset 10% inside it (BADGE_INSET_CARD), so the drawn squircle is 0.8x
@@ -441,6 +457,7 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
       * (Math.max(MIN_VALUE_FONT_PX, px(base.cardValueFontPx)) / base.cardValueFontPx),
     cardValuePadPx: px(base.cardValuePadPx),
     chipTextPadPx: px(base.chipTextPadPx),
+    labelMaxWidthPx: px(base.labelMaxWidthPx),
 
     // A fraction: identical on both classes by construction.
     cardIconFraction: base.cardIconFraction,
