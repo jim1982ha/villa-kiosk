@@ -1,3 +1,14 @@
+## 2.437.1
+
+### Fixed — no room name at all when walking
+
+2.437.0 gave the walk-in banner the storey rule a light FIXTURE needs, which works
+from a clearance because a fixture's height above its floor is a guess. A walker's
+is not — its feet are on the floor. This villa has three distinct room floor
+heights, a mid-level group won that test over the ground floor, and every
+ground-floor room was filtered out. It now takes the nearest floor to the feet,
+which always returns one of the rooms containing you.
+
 ## 2.437.0
 
 ### Fixed — the walk-in banner named a room upstairs, and the wall cull was doing needless work

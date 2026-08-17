@@ -5104,6 +5104,10 @@ export class EntityVisuals {
    * change is a rate nobody can read.
    */
   private reportWalkCost(eligible: number): void {
+    // The FLAG, not a channel, and deliberately so: this line is untagged
+    // precisely because it measures a tier whose own channel is muted. Do not
+    // "converge" it onto channelEnabled — an instrument that goes quiet with
+    // the thing it measures is not an instrument.
     if (!debugFlagEnabled()) return;
     const now = performance.now();
     if (now - this.lastWalkReportAt < WALK_REPORT_MS) return;
@@ -8071,7 +8075,14 @@ export class EntityVisuals {
   private wakeAt = 0;
 
   private onWake = (): void => {
-    if (document.visibilityState !== "visible" || !debugFlagEnabled()) return;
+    // The CHANNEL, not the flag — every line `traceWake` emits is on `chip`,
+    // which is muted by default since 2.436.0. Arming the trace on the flag
+    // alone left it walking the cluster map and building a string on every
+    // rendered frame after a wake, for output that was then dropped.
+    // (`watchChipJump` was converted at the time and this one was missed — the
+    // applicable set of that rule is "every gate gating output on a muted
+    // channel", not "the sites I happened to be editing".)
+    if (document.visibilityState !== "visible" || !channelEnabled("chip")) return;
     this.wakeTrace = WAKE_TRACE_FRAMES;
     this.wakeAt = performance.now();
     tapDebug(`wake: visible — tracing the next ${WAKE_TRACE_FRAMES} RENDERED frames`, "chip");

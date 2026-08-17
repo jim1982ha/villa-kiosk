@@ -102,6 +102,48 @@ export function storeyFloorYAt(rooms: readonly StoreyRoom[], y: number): number 
   return Number.isFinite(lowest) ? lowest : 0;
 }
 
+/**
+ * The room whose floor is NEAREST a known floor height — for the callers that
+ * already know which floor they are on, rather than guessing from a fixture's
+ * mounting height.
+ *
+ * ⚠️ TWO QUESTIONS, NOT ONE, and collapsing them is what broke the walk-in room
+ * banner in 2.437.0. `storeyFloorYAt` answers "here is a point at an UNKNOWN
+ * height above its floor — which storey does it belong to", and it has to work
+ * from a clearance because a ceiling lamp and the floor above it are
+ * centimetres apart. That rule needs the storeys to be metres apart to be safe.
+ * This one answers "I am STANDING on a floor at exactly this height" — the
+ * walker's feet, a landing anchor, a probed floor under a fixture — where the
+ * nearest floor is simply the right answer and no threshold is involved.
+ *
+ * The banner is what happens when the wrong one is used: this villa reports
+ * THREE distinct room floor heights, so a group partway between the storeys
+ * (a terrace, a step-down, a room whose per-storey probe found nothing and
+ * answered 0) sat above the walker's eye-minus-clearance and won the storey
+ * test, excluding the ground floor the walker was actually standing in. Every
+ * room was then filtered out and the banner showed NOTHING. Nearest-floor
+ * cannot do that: it always returns one of the candidates it was given, so a
+ * reader that had an answer before can never lose it to this rule.
+ *
+ * Takes a `keep` predicate rather than a pre-filtered array so a per-frame
+ * caller does not have to allocate one.
+ */
+export function nearestFloorRoom<T extends StoreyRoom>(
+  rooms: readonly T[], floorY: number, keep: (room: T) => boolean,
+): T | null {
+  let best: T | null = null;
+  let bestDist = Infinity;
+  for (const room of rooms) {
+    if (!keep(room)) continue;
+    const d = Math.abs(room.floorY - floorY);
+    // Strictly closer, so ties keep the FIRST — the same "array order breaks a
+    // tie" the rest of this file relies on, and the reason a single-storey
+    // villa behaves exactly as it did before any of this existed.
+    if (d < bestDist) { bestDist = d; best = room; }
+  }
+  return best;
+}
+
 // The containment half — "and is the point inside that room's outline" — is
 // EntityVisuals.roomPolyAt, which already holds `pointInPolygon`. It degrades to
 // plain containment exactly where storeys cannot be told apart: on a

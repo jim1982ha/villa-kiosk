@@ -29,7 +29,7 @@ import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint } from "@/types/scene.types";
 import { clamp, pointInPolygon, type Pt2 } from "@/utils/geometry";
-import { onStorey, storeyFloorYAt } from "./roomStorey";
+import { nearestFloorRoom } from "./roomStorey";
 import { TapRecognizer } from "./TapRecognizer";
 
 interface CameraCallbacks {
@@ -655,6 +655,19 @@ export class CameraController {
     name: string,
   ): { minX: number; maxX: number; minZ: number; maxZ: number; floorY: number } | null {
     const key = roomKey(name);
+    // ⚠️ BY NAME ALONE, ACROSS STOREYS — deliberately not converged onto the
+    // storey rule `updateRoom` uses, and recorded here so the next audit does
+    // not flag it as an oversight. A name is all a caller gives us: this is
+    // reached from "frame the room the user picked", which arrives as a string.
+    // The storey test needs a HEIGHT, and there is none to pass.
+    //
+    // The consequence is real but latent: a villa with a "Bathroom" upstairs
+    // AND down has two polygons under one key, and this takes the first. That
+    // is the by-NAME twin of the by-POSITION defect fixed in 2.434.0-2.437.0,
+    // and it is not a one-line fix — room identity is the name in `roomKey`,
+    // in RoomHighlight's two maps, in `roomClustered`, in `resolvedRooms` and
+    // in the teleport points. Changing it is a design change to what a room IS.
+    // Fix it the day a plan with duplicate room names is reported, not before.
     const poly = this.roomPolygons.find((r) => roomKey(r.name) === key);
     if (!poly || poly.pts.length === 0) return null;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -681,21 +694,21 @@ export class CameraController {
     // when that rule was rolled out, which is what the dry-audit skill exists
     // to catch.
     //
-    // The EYE height is the right input, not the feet: `storeyFloorYAt` asks
-    // for a floor a usable distance BELOW the point, and feet sit exactly ON
-    // their floor — asking with those would step down a storey. An eye is
-    // ~1.6 m up, which is the clearance that rule is built around.
+    // ⚠️ AND VIA THE FEET, not the eye-and-clearance rule a FIXTURE needs —
+    // see `nearestFloorRoom`. Reusing the fixture rule here cost a release: a
+    // walker knows exactly which floor it is on (its feet are on it), while
+    // that rule has to guess from a mounting height and so works from "the
+    // highest floor a clearance BELOW the point". This villa reports three
+    // distinct room floor heights; a group partway up beat the ground floor on
+    // that test, every ground-floor room was filtered out, and the banner
+    // showed NOTHING AT ALL. Nearest-floor always returns one of the rooms
+    // that contain the point, so this reader can never lose a name it had.
     if (this.roomPolygons.length > 0) {
       const px = this.camera.position.x;
       const pz = this.camera.position.z;
-      const storeyY = storeyFloorYAt(this.roomPolygons, this.camera.position.y);
-      for (const r of this.roomPolygons) {
-        if (!onStorey(r.floorY, storeyY)) continue;
-        if (pointInPolygon(px, pz, r.pts)) {
-          room = r.name;
-          break;
-        }
-      }
+      room = nearestFloorRoom(
+        this.roomPolygons, this.getFeetY(), (r) => pointInPolygon(px, pz, r.pts),
+      )?.name ?? null;
     } else if (this.roomAnchors.length > 0) {
       // Fallback: nearest anchor within ~3.5 m.
       let best = Infinity;
