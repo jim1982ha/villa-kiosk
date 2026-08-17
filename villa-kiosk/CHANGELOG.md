@@ -1,3 +1,14 @@
+## 2.446.0
+
+### Fixed — the badge value sits next to its icon, and is smaller
+
+Third attempt at one report, and the first two failed for the same reason: the gap
+was padding on the value's box, whose interaction with Babylon's adapt-to-children
+sizing produced the opposite of the arithmetic. It is a sized spacer control now —
+a gap with a width instead of an inset with a sign. The font finally moved too: the
+minimum-font floor had been clamping the fine-pointer result back up, so two
+previous reductions never reached a desktop screen at all.
+
 ## 2.445.0
 
 ### Fixed — the ceiling shows the colour you set in SweetHome 3D

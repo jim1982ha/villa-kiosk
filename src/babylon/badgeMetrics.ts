@@ -438,14 +438,14 @@ export const CARD_VALUE_GAP_OF_CHIP_GAP = 0.5;
  * bottom bar. Reported as "a little bit too big, according to the rest of the
  * UI", which is exactly what that arithmetic says.
  *
- * ⚠️ Deliberately NOT 0.391. The bottom-bar tile carries a LABEL line above its
- * value ("LIGHTS / 6 On"); the map badge has only the number, read at arm's
- * length across a room, with no second line to carry the meaning. 0.5 closes
- * most of the gap and is stated here so the remaining difference is a decision
- * with a number attached rather than drift — take it to 0.391 if the owner
- * wants the two to match exactly.
+ * ⚠️ NOW BELOW the DOM's 0.391, not above it, and the history is the point: the
+ * owner asked for a smaller value THREE times and twice it did not move at all,
+ * because `MIN_VALUE_FONT_PX` was clamping the fine-pointer result back up (see
+ * there). A ratio that a floor overrides is not a ratio. Both moved together
+ * this time, and `npm run test:placement` now reads THIS CONSTANT rather than a
+ * copy of its value, so a pin can no longer assert last month's design.
  */
-const VALUE_FONT_OF_CHIP = 0.5;
+export const VALUE_FONT_OF_CHIP = 0.4;
 /**
  * The same question for the classic style's pill, whose value is measured
  * against the PILL it sits inside rather than a chip beside it — a different
@@ -556,14 +556,14 @@ const COARSE: BadgeMetrics = {
  * Pinned now (`the value font honours its ratio on BOTH pointer classes`), so a
  * floor that starts deciding again fails a test instead of a screenshot.
  *
- * 8 is safe because THIS IS NOT THE DRAWN SIZE. The container is scaled by
+ * 6 is safe because THIS IS NOT THE DRAWN SIZE. The container is scaled by
  * `effectiveScale()` = cssToGui x iconUserScale — 1.6 on a retina panel before
  * the user's icon-size setting, which this install runs at 2.5 — so 8 here draws
  * at 13 render px at the smallest possible setting and ~32 at this owner's. The
  * 9-10pt cartographic floor is about what a reader SEES, and what a reader sees
  * is this number times a factor no metrics table can know.
  */
-const MIN_VALUE_FONT_PX = 8;
+const MIN_VALUE_FONT_PX = 6;
 
 /**
  * Derive one metrics table from another by scaling the GEOMETRY only.

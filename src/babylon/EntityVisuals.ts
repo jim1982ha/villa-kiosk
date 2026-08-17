@@ -928,6 +928,11 @@ interface LabelControls {
   badge: Rectangle;
   glyph: Image;
   valueWrap: Rectangle;
+  /** The card style's icon-to-value gap, as a sized control rather than padding
+   *  (see its construction). Null for the classic style, whose value is a pill
+   *  BELOW the badge with no gap to hold. Toggled only through
+   *  `setValueVisible`, because a gap to a hidden value is dead width. */
+  valueSpacer: Rectangle | null;
   valueText: TextBlock;
   anchor: TransformNode;
   type: EntityType;
@@ -3107,12 +3112,12 @@ export class EntityVisuals {
     //     badges up to 1.43x too small, so the camera flew to a distance
     //     computed for badges that then grew on arrival and re-collided.
     const wasVisible = members.map((m) => m.lbl.valueWrap.isVisible);
-    for (const m of members) m.lbl.valueWrap.isVisible = false;
+    for (const m of members) this.setValueVisible(m.lbl, false);
     // Destination scale: the zoom cap is 1 where this shot lands, so only
     // the user size and the CSS→GUI conversion apply.
     const mScale = this.iconUserScale * this.cssToGui();
     const boxes = this.labelBoxes(members, [], [], mScale);
-    for (let i = 0; i < members.length; i++) members[i].lbl.valueWrap.isVisible = wasVisible[i];
+    for (let i = 0; i < members.length; i++) this.setValueVisible(members[i].lbl, wasVisible[i]);
 
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
     const gapPx = this.metrics.minGapPx * mScale;
@@ -4219,6 +4224,9 @@ export class EntityVisuals {
 
       // Value: classic → a dark rounded pill BELOW the badge; card → inline
       // text to the RIGHT of the icon chip, on the coloured card itself.
+      // Declared out here so the label record can carry it: the classic style
+      // has no gap to hold (its value is a pill BELOW the badge), so null.
+      let valueSpacer: Rectangle | null = null;
       const valueWrap = new Rectangle(`lbl_valwrap_${entityId}`);
       valueWrap.thickness = 0;
       valueWrap.adaptWidthToChildren = true;
@@ -4237,35 +4245,36 @@ export class EntityVisuals {
         // i.e. 28% of the chip, and that is the proportion this is measured
         // against because it is the same object drawn in the DOM. A flat 4px
         // came out at 18% and read as the text crowding the chip's edge.
-        // The TAIL keeps the DOM chip's full gap; the icon side takes a
-        // fraction of it (see CARD_VALUE_GAP_OF_CHIP_GAP) so the number reads as
-        // belonging to its icon rather than floating in the middle of the pill.
-        const valueTail = Math.round(glyphPx * chip.gap);
-        const valueGap = Math.round(valueTail * CARD_VALUE_GAP_OF_CHIP_GAP);
-        valueWrap.paddingLeft = `${valueGap}px`;
-        // ⚠️ THE VALUE'S OWN TWO SIDES, not the CARD's two margins (2.441.0).
+        // ── THE GAP IS A SPACER CONTROL, NOT PADDING (2.446.0) ───────────────
+        // Third attempt at "the number sits too far right", and the first two
+        // failed the same way: the gap was expressed as PADDING on this wrap,
+        // and a padding here interacts with `descendantsOnlyPadding` and
+        // `adaptWidthToChildren` in a way I mis-modelled twice — predicting the
+        // text left of centre while the owner's screenshot measured it 20 px
+        // from the icon and 10 px from the pill's edge, i.e. the opposite.
         //
-        // This was 0, on the reasoning that "the card's own right padding
-        // (iconPadX) is the value's right margin, which makes the card's two
-        // outer margins equal". Both halves of that are true and neither is
-        // what a reader sees. The card's margins were equal; the VALUE had
-        // `gap` between itself and the chip (6 px at the base metrics) and only
-        // `iconPadX` between itself and the card's edge (3 px) — so the number
-        // sat twice as close to the right edge as to the icon, and read as
-        // right-aligned rather than centred in the space it occupies. Reported
-        // as exactly that.
-        //
-        // Making up the difference gives the value `gap` of clear space on BOTH
-        // sides. Clamped at 0 because a chip whose gap fraction came out under
-        // iconPadX needs no help — it is already the wider margin.
-        //
-        // Width model unaffected, and that is checked rather than assumed: the
-        // reserve is `cardPadLeftPx + cardHeightPx + cardValuePadPx` = 40 px
-        // against a draw of iconPadX + glyph + gap/2 + gap = 34 px, so this
-        // still over-reserves. Under-reserving is the direction that breaks
-        // "layout geometry must equal render geometry".
-        valueWrap.paddingRight = `${Math.max(0, valueTail - iconPadX)}px`;
+        // A StackPanel lays its children out by their WIDTHS. A transparent
+        // Rectangle of width G therefore puts exactly G between the icon and the
+        // text, with no padding semantics involved at all — the gap becomes a
+        // thing with a size instead of an inset whose sign I have to reason
+        // about. The wrap now carries NO horizontal padding, so the pill hugs
+        // the number and the only space to its right is the card's own
+        // `iconPadX`, matching the icon's inset on the left.
+        valueWrap.paddingLeft = "0px";
+        // ⚠️ ZERO, and see the spacer note above for why this is not the dial.
+        valueWrap.paddingRight = "0px";
         valueWrap.isVisible = false;
+        // Added BEFORE the wrap so the row reads glyph | spacer | value. It
+        // shares the wrap's visibility: a badge with no value must not carry a
+        // gap to nothing, or every valueless card would be that much wider.
+        valueSpacer = new Rectangle(`lbl_valgap_${entityId}`);
+        valueSpacer.thickness = 0;
+        valueSpacer.background = "";
+        valueSpacer.width = `${Math.max(1, Math.round(glyphPx * chip.gap * CARD_VALUE_GAP_OF_CHIP_GAP))}px`;
+        valueSpacer.height = `${glyphPx}px`;
+        valueSpacer.isPointerBlocker = false;
+        valueSpacer.isVisible = false;
+        row!.addControl(valueSpacer);
         row!.addControl(valueWrap);
       } else {
         valueWrap.height = `${m.valueChipHeightPx}px`;
@@ -4293,7 +4302,9 @@ export class EntityVisuals {
       });
       valueWrap.addControl(valueText);
 
-      this.labels.set(entityId, { container, badge, glyph, valueWrap, valueText, anchor, type, category });
+      this.labels.set(entityId, {
+        container, badge, glyph, valueWrap, valueSpacer, valueText, anchor, type, category,
+      });
 
       // Repaint from the last known state so a rebuild (toggle on / icon edit)
       // shows live status immediately instead of an idle default. An entity
@@ -4456,7 +4467,7 @@ export class EntityVisuals {
 
     const value = this.groupedValue(entityId, this.compactValue(type, entity));
     lbl.valueText.text = value;
-    lbl.valueWrap.isVisible = value.length > 0;
+    this.setValueVisible(lbl, value.length > 0);
     const dirty = lbl.category !== prevCategory
       || lbl.valueText.text.length !== prevLen
       || lbl.valueWrap.isVisible !== prevVisible;
@@ -4718,7 +4729,7 @@ export class EntityVisuals {
     // survives and its label is the thing that goes. The badge does not move
     // or shrink; it just stops carrying its number.
     for (const s of shown) {
-      s.lbl.valueWrap.isVisible = s.lbl.valueText.text.length > 0;
+      this.setValueVisible(s.lbl, s.lbl.valueText.text.length > 0);
     }
     // Before ANY measurement this pass: the icon scale is derived from the rung
     // (see syncIconZoomToRung) and resizing controls after `labelBoxes` has read
@@ -4730,7 +4741,7 @@ export class EntityVisuals {
       const withText = this.placementItems(shown, this.labelBoxes(shown), clearance);
       const touching = markContacts(withText, clearance.gap, clearance.minSep, this.placeScratch);
       for (let i = 0; i < shown.length; i++) {
-        if (touching[i]) shown[i].lbl.valueWrap.isVisible = false;
+        if (touching[i]) this.setValueVisible(shown[i].lbl, false);
       }
     }
     // ── Tier 2 → 3: only now, if the ICONS THEMSELVES still collide ───────
@@ -5272,6 +5283,23 @@ export class EntityVisuals {
     this.occlusionCursor = 0;
     if (!on) this.occludedIds.clear();
     this.markLayoutDirty();
+  }
+
+  /**
+   * Show or hide a badge's value — and, with it, the gap that separates the
+   * value from the icon.
+   *
+   * ONE owner, because there are six places that decide a value's visibility
+   * (the readout drop in cullLabels, the contact drop, updateLabel's empty
+   * check, the room-zoom measurement's save and restore, and construction) and
+   * a seventh will exist eventually. A gap left visible beside a hidden value is
+   * dead width on every valueless card; a gap hidden beside a visible one puts
+   * the number back against the icon. Neither is discoverable from the site that
+   * forgot it, which is the whole reason this is a method and not two lines.
+   */
+  private setValueVisible(lbl: LabelControls, on: boolean): void {
+    lbl.valueWrap.isVisible = on;
+    if (lbl.valueSpacer) lbl.valueSpacer.isVisible = on;
   }
 
   /** A badge's room, normalised — the single definition every grouping,
