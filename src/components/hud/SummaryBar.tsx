@@ -310,6 +310,13 @@ function SceneMenu({ scenes, canRun, apply }: {
       if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
       setOpen(false);
     };
+    // ⚠️ DELIBERATELY NOT useModalA11y (/dry-audit note, 2.433.0). That hook is
+    // the MODAL contract — focus trap, Escape, focus restore, back-to-close —
+    // and this is a non-modal POPOVER: anchored to the tile, no backdrop, no
+    // role="dialog", dismissed by an outside pointerdown. Trapping focus in a
+    // menu that is not modal is a defect, not a fix: a keyboard user could not
+    // Tab out of a thing that is not covering anything. Escape alone is the
+    // right half of the contract here, so it is hand-written on purpose.
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);

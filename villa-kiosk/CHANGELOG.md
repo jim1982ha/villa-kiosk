@@ -1,3 +1,12 @@
+## 2.433.0
+
+### Fixed — the first-run tips card let the keyboard reach the villa behind it
+
+It shared the dialog shell but had no focus trap, Escape key or focus restore, so
+Tab walked out of it into the live controls under the scrim — on a kiosk's
+first-ever login, to someone who has never seen the app. It now uses the shared
+dialog hook every other surface does.
+
 ## 2.432.1
 
 ### Changed — one comment, no behaviour
