@@ -137,20 +137,38 @@ export const CARD_MAX_VIEWPORT_FRACTION = 0.45;
 export const PHONE_MAX_CSS_WIDTH = 720;
 
 /**
- * The most device pictograms one summary may show ON A PHONE.
+ * ── THERE IS NO PHONE CAP ON AN ARRANGEMENT'S CELL COUNT (2.415.0) ─────────
+ * `PHONE_MAX_TOTAL_CHIPS = 2` used to live here, and deleting it is the fix
+ * for "on a phone the room badges never split back into entities".
  *
- * A 2×2 card is legible on a tablet held at arm's length and simply is not on
- * a phone: the cells are ~44 CSS px each on a 402 px-wide screen, so four of
- * them plus the card's own padding is most of the width, and each cell's tap
- * zone is right at the touch minimum with nothing between neighbours. Reported
- * from an iPhone as "the 4-group badges are not usable".
+ * Its argument was: a 2×2 card is not legible on a phone (four ~44 CSS px
+ * cells plus padding is most of a 402 px screen, every tap zone at the touch
+ * minimum with nothing between neighbours — reported from an iPhone as "the
+ * 4-group badges are not usable"), and *over the cap a summary draws its
+ * COUNT*. That second half is what made it safe, and 2.363.0 deleted the count
+ * badge. From that release on, "over the cap" meant the ROOM CHIP — so a phone
+ * ran with `drawableMax = 2` and every pile of three or more chipped its whole
+ * room, at every zoom rung. A field capture at 360 CSS px showed the whole
+ * villa as `chips=11 drawn=0`, and `solver=0u/16d`: sixteen rooms chipped by
+ * the solver's degenerate rule alone, because splitting every pile into
+ * cliques of TWO leaves singletons nothing to pair with.
  *
- * Over this a summary draws its COUNT, not fewer cells — a card that drops a
- * member hides a device with no cell to tap, which is the regression `g.grid`
- * exists to prevent. So on a phone a pair is a card and anything larger is a
- * number that opens the room.
+ * The legibility complaint it named is answered — twice over, and by rules
+ * that were always the right ones:
+ *   • `PHONE_MAX_GRID_CHIPS` caps cells per CARD at two, so a phone never
+ *     draws a 2×2 at all; four devices are two pair-cards with a real gap
+ *     between them, each cell a full badge box. That IS the iPhone report.
+ *   • `CARD_MAX_VIEWPORT_FRACTION` caps how wide an ARRANGEMENT may be drawn,
+ *     measured through `cardOf` — the same function that lays the card out —
+ *     so it adapts to the actual screen instead of guessing from a breakpoint,
+ *     and `arrange` WRAPS into it rather than refusing. On a 360 px phone that
+ *     is a near-square block of pair-cards: growth goes to the axis a portrait
+ *     phone has spare.
+ *
+ * A constant that answers a question another constant already measures is the
+ * duplicate this project keeps paying for; the one that survived here was the
+ * guess, and it outlived the fallback that justified it.
  */
-export const PHONE_MAX_TOTAL_CHIPS = 2;
 
 /** Which kind of pointer is PRIMARY on this device. */
 export type PointerClass = "fine" | "coarse";

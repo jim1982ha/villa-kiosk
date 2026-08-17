@@ -81,7 +81,7 @@ import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { chipProportions } from "@/config/chipProportions";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
-  PHONE_MAX_CSS_WIDTH, PHONE_MAX_TOTAL_CHIPS,
+  PHONE_MAX_CSS_WIDTH,
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
 import {
@@ -5430,9 +5430,13 @@ export class EntityVisuals {
      * reaches 1.0 on either axis, and `fits` accepts a badge from about 1.0
      * plus a gap — so absorbing at 1.41 would swallow badges that are visibly
      * clear of the card. That is deleting devices from the map to fix a bug
-     * about the opposite. Inscribed leaves exactly a `gapPx`-wide annulus
-     * between "absorbed" and "fits passes", which is the right amount of
-     * nothing.
+     * about the opposite.
+     *
+     * ⚠️ Inscribed leaves exactly a `gapPx`-wide annulus between this and the
+     * box `fits` refuses at, and the absorb sweep adds `gapPx` back to close
+     * it — see the block there. This comment used to call that annulus "the
+     * right amount of nothing"; a badge in it refused its card and chipped
+     * every room the card covered.
      */
     const cardInscribedHalf = (g: PendingEntityGroup) => {
       const lay = this.layoutOf(g, g.members.length);
@@ -5696,12 +5700,32 @@ export class EntityVisuals {
           // `sz` is the walk camera's depth residual and is identically 0 under
           // the orbit camera, so keeping it as a third axis leaves first person
           // separating down a corridor exactly as it did.
+          //
+          // ── THE `+ gapPx` IS WHAT MAKES A BADGE UNABLE TO REFUSE A CARD ──
+          // Without it this stops exactly `gapPx` short of the box `fits`
+          // starts refusing at (`vsBadge + halfW + gapPx`), and an earlier
+          // comment here called that annulus "the right amount of nothing".
+          // It is not nothing: a badge landing in that 2 CSS px band is
+          // neither absorbed nor clear, so its card is refused and EVERY room
+          // that card covered goes to its chip. A phone capture caught it three
+          // times in one zoom-in — `seat REFUSED … blocked by badge … dx=59/63`
+          // against the card's OWN pile-mate, chipping that room at rung 483
+          // when 456 and 542 either side of it drew every device. That is the
+          // non-monotone chip → entities → chip the tier may not have.
+          //
+          // With the gap included, the absorb box strictly CONTAINS the refusal
+          // box on every axis (`cardInscribedHalf >= squareHalf` for every
+          // arrangement — a card is at least one unit tall — and `allow <= 1`),
+          // so the two regions are one region and the outcome is total: a drawn
+          // badge is either clear of a summary or a cell inside it. A
+          // `seat REFUSED … blocked by badge` line is therefore now an
+          // invariant violation, not a measurement.
           const dx = Math.abs(g.sx - shown[j].sx);
           const dy = Math.abs(inkY - shown[j].sy);
           const dz = Math.abs(g.sz - shown[j].sz);
-          if (dx < reach + boxes[j].halfW
-            && dy < reach + boxes[j].halfH
-            && dz < reach + halfOf(j)) take.push(j);
+          if (dx < reach + boxes[j].halfW + gapPx
+            && dy < reach + boxes[j].halfH + gapPx
+            && dz < reach + halfOf(j) + gapPx) take.push(j);
         }
         if (take.length === 0) break;
         for (const j of take) {
@@ -6072,13 +6096,12 @@ export class EntityVisuals {
     // members are valid but SPREAD draws its card at a centroid none of them
     // is near. Candidates are offered nearest-first with category as the
     // tiebreak; `order` still seeds and still breaks every remaining tie.
-    // ⚠️ cardCellCap(), NOT the raw MAX_TOTAL_CHIPS. Its own docstring says the
-    // phone ceiling "belongs HERE and nowhere else", and records what a second
-    // answer costs: the solver keeps a bucket the renderer then refuses. This
-    // was the third answer — on a narrow phone it built cliques of 6 while
-    // cardCellCap allows PHONE_MAX_TOTAL_CHIPS, so a tapped room could produce
-    // a card the renderer could not draw in full. Found by /dry-audit against
-    // the solver's own `drawableMax`, which has always come through this cap.
+    // ⚠️ cardCellCap(), NOT the raw MAX_TOTAL_CHIPS — the one MEASURED answer
+    // to "how many cells fit on this screen", which the solver's own
+    // `drawableMax` has always come through. This was a third answer: it built
+    // cliques of 6 on a narrow phone while cardCellCap allowed fewer, so a
+    // tapped room could produce a card the renderer could not draw in full.
+    // Found by /dry-audit against `drawableMax`.
     const piles = buildCliques(
       sub, order, clearance.gap, clearance.minSep, this.cardCellCap());
 
@@ -6324,17 +6347,22 @@ export class EntityVisuals {
   }
 
   /**
-   * The phone ceiling, in CSS pixels — see PHONE_MAX_TOTAL_CHIPS.
+   * Is this a PHONE, in CSS pixels — the one reading of that question.
+   *
+   * It now governs exactly one thing: cells per CARD (`perCardCap`). It used
+   * to ALSO cap the arrangement's total cell count, which on a phone pinned
+   * `drawableMax` at 2 and sent every pile of three to its room chip — see
+   * badgeMetrics' block where PHONE_MAX_TOTAL_CHIPS used to be.
    *
    * Read in CSS px, never render px: the resolution valve moves the render
    * width whenever the camera starts and stops, and a device that stopped
    * being a phone mid-gesture would regroup its badges for no reason. That is
    * the same trap the focus-retention rule fell into in 2.354.0.
    */
-  private phoneCellCap(): number {
+  private isPhoneWidth(): boolean {
     const engine = this.scene.getEngine();
     const cssWidth = engine.getRenderWidth() * engine.getHardwareScalingLevel();
-    return cssWidth > 0 && cssWidth <= PHONE_MAX_CSS_WIDTH ? PHONE_MAX_TOTAL_CHIPS : MAX_TOTAL_CHIPS;
+    return cssWidth > 0 && cssWidth <= PHONE_MAX_CSS_WIDTH;
   }
 
   private cardCellCap(max = MAX_TOTAL_CHIPS): number {
@@ -6342,12 +6370,14 @@ export class EntityVisuals {
     const scale = this.effectiveScale();
     if (width === this.capWidth && scale === this.capScale && max === this.capMax) return this.capCells;
     this.capWidth = width; this.capScale = scale; this.capMax = max;
-    // ⚠️ The phone ceiling belongs HERE and nowhere else. `drawnCells` and
-    // `drawableMax` both come through this function, and the comment on
-    // drawableMax records what happens when two caps answer the same question
-    // separately: the solver keeps a bucket the renderer then refuses, and a
-    // count badge survives on a narrow phone at three members.
-    let cells = Math.min(max, this.phoneCellCap());
+    // ⚠️ ONE answer to "how many cells fit on this screen", and it is MEASURED,
+    // not guessed: the loop below asks `cardOf` — the function that lays the
+    // card out — whether the arrangement is inside CARD_MAX_VIEWPORT_FRACTION.
+    // `perCardCap` already makes a phone's cards pairs, so the shapes this
+    // walks are the shapes the phone will actually draw. A second, screen-blind
+    // ceiling used to sit in front of it and that is what this cache-line's
+    // earlier comment defended; it outlived the count badge that made it safe.
+    let cells = max;
     if (scale > 0 && width > 0) {
       const budget = this.cardBudget();
       // Down to 2 and no further: a pair card is two badge boxes, which fits
@@ -6403,8 +6433,7 @@ export class EntityVisuals {
    *  PHONE_MAX_GRID_CHIPS — so a pile of four is two pair-cards side by side
    *  rather than one 2x2, with nothing hidden and no number drawn. */
   private perCardCap(): number {
-    return this.phoneCellCap() === PHONE_MAX_TOTAL_CHIPS
-      ? PHONE_MAX_GRID_CHIPS : MAX_GRID_CHIPS;
+    return this.isPhoneWidth() ? PHONE_MAX_GRID_CHIPS : MAX_GRID_CHIPS;
   }
 
   /** The arrangement a group actually draws — cells and ceiling in one place,

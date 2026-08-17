@@ -1,3 +1,12 @@
+## 2.415.0
+
+### Fixed — on a phone, room badges never split back into entities
+
+A phone capped a summary at TWO devices, which was safe only while anything
+larger drew a count; that count went in 2.363.0, so since then a pile of three
+fell to its room chip instead, at every zoom level. Summary width is now
+measured against the screen, as it already was everywhere else.
+
 ## 2.414.0
 
 ### Fixed — zooming out could un-group badges it had already grouped
