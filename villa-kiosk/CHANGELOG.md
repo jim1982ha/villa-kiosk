@@ -1,3 +1,15 @@
+## 2.451.0
+
+### Fixed — the badge value's margins, measured off the drawn geometry at last
+
+The instrument settled it: the icon's squircle is baked inside its control, so equal
+padding on both sides of the card is not equal on screen — 3.6 px of visible margin
+on the left against 2.0 on the right — and the previous fix had also squeezed the
+icon-to-value gap below both margins, which reads as cramped rather than centred.
+The left padding now cancels the inset and the gap is twice the margin, the
+proportion the bottom bar's own tiles use. Both are pinned, and the debug line
+prints the three visible measurements directly.
+
 ## 2.450.0
 
 ### Fixed — the ceiling fell through a gate before reaching its own branch

@@ -4108,6 +4108,11 @@ export class EntityVisuals {
       // Half the card's leftover height: the same clear space on all four
       // sides of the chip, and it makes a bare-icon card square (see below).
       const iconPadX = card ? (m.cardHeightPx - glyphPx) / 2 : 0;
+      /** The transparent margin `badgeImageDataUrl` bakes around the chip's
+       *  squircle, so the ink stops this far inside its own control. Both the
+       *  card's left padding and the value gap are measured against the INK,
+       *  not the control — see their two sites. */
+      const inkInset = card ? glyphPx * BADGE_INSET_CARD : 0;
 
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
@@ -4185,7 +4190,15 @@ export class EntityVisuals {
         // same on all four sides and width equals height when there is no
         // value. The icon-to-text gap is a different measurement and lives on
         // the value below.
-        badge.paddingLeft = `${iconPadX}px`;
+        // ⚠️ THE LEFT PAD IS SHORT BY THE INK INSET, and that asymmetry is the
+        // whole bug (2.451.0, measured off the drawn geometry at last). The chip's
+        // squircle is baked BADGE_INSET_CARD inside its control, so an equal pad
+        // on both sides is NOT equal on screen: the left margin is
+        // `iconPadX + ink` from the badge edge to the ink, while the right is
+        // `iconPadX` from the text to the edge. Measured on the owner's device:
+        // 3.6 left against 2.0 right. Taking the inset off the left pad makes the
+        // two visible margins agree.
+        badge.paddingLeft = `${Math.max(0, Math.round(iconPadX - inkInset))}px`;
         badge.paddingRight = `${iconPadX}px`;
       } else {
         badge.width = `${m.badgeDiameterPx}px`;
@@ -4297,8 +4310,16 @@ export class EntityVisuals {
         // the spacer and it is a subtraction, not a fraction — and on this
         // villa's metrics it comes out at ~1 CSS px, which is why every
         // fraction-of-the-gap value I tried was too wide.
-        const inkInset = glyphPx * BADGE_INSET_CARD;
-        valueSpacer.width = `${Math.max(0, Math.round(iconPadX - inkInset))}px`;
+        // ⚠️ AND THE GAP MUST BE BIGGER THAN THE MARGINS, which is where the
+        // previous attempt went wrong in the other direction. Solving only for
+        // "equal on both sides of the text" gave a gap of 2.6 against margins of
+        // 3.6 and 2.0 — the number jammed against the icon while the icon had
+        // more air on its left, which is cramped rather than centred. The DOM
+        // twin has the same relationship the other way up: `.summary-tile` runs
+        // 9-14 px of padding against a 13 px gap, so the gap is ~1.5-2x the
+        // margin. VISIBLE gap = 2x the visible margin, and the spacer is that
+        // minus the baked inset the chip already contributes.
+        valueSpacer.width = `${Math.max(1, Math.round(2 * iconPadX - inkInset))}px`;
         valueSpacer.height = `${glyphPx}px`;
         valueSpacer.isPointerBlocker = false;
         valueSpacer.isVisible = false;
@@ -5356,10 +5377,20 @@ export class EntityVisuals {
    */
   private logBadgeGeometry(): void {
     if (!channelEnabled("badge")) return;
+    // ⚠️ RELATIVE to the badge, and vertical included. The first cut printed
+    // ABSOLUTE left positions and deduped on the whole string, so it re-fired on
+    // every frame the camera moved — the owner's capture came back as eighty
+    // identical-but-for-L lines. What is being investigated is the layout INSIDE
+    // the badge, which does not move with the camera at all.
+    const meas = (c: unknown) => (c as {
+      _currentMeasure?: { left: number; top: number; width: number; height: number };
+    } | undefined)?._currentMeasure;
+    const origin = meas(this.labels.values().next().value?.badge);
     const box = (c: unknown): string => {
-      const m = (c as { _currentMeasure?: { left: number; width: number } } | undefined)
-        ?._currentMeasure;
-      return m ? `L${m.left.toFixed(1)}/W${m.width.toFixed(1)}` : "?";
+      const m = meas(c);
+      if (!m || !origin) return "?";
+      return `x${(m.left - origin.left).toFixed(1)}+${m.width.toFixed(1)}`
+        + `/y${(m.top - origin.top).toFixed(1)}+${m.height.toFixed(1)}`;
     };
     for (const [id, lbl] of this.labels) {
       if (!lbl.container.isVisible || !lbl.valueWrap.isVisible) continue;
@@ -5367,6 +5398,18 @@ export class EntityVisuals {
       const m = this.metrics;
       const card = this.isCardStyle();
       const glyphPx = this.glyphPxFor(card);
+      const badgeM = meas(lbl.badge);
+      const glyphM = meas(lbl.glyph);
+      const textM = meas(lbl.valueText);
+      const ink = card ? glyphPx * BADGE_INSET_CARD : 0;
+      // The three numbers the fix is ABOUT, spelled out so nobody has to
+      // subtract four boxes by hand again: the visible margins either side and
+      // the visible gap between the chip's ink and the number.
+      const visible = badgeM && glyphM && textM
+        ? `visL=${(glyphM.left + ink - badgeM.left).toFixed(2)}`
+          + ` gap=${(textM.left - (glyphM.left + glyphM.width - ink)).toFixed(2)}`
+          + ` visR=${(badgeM.left + badgeM.width - (textM.left + textM.width)).toFixed(2)}`
+        : "visL=? gap=? visR=?";
       const line =
         `badge "${id}" val="${lbl.valueText.text}"`
         + ` style=${card ? "CARD" : "classic"} scale=${this.effectiveScale().toFixed(2)}`
@@ -5376,8 +5419,7 @@ export class EntityVisuals {
         + ` | badge ${box(lbl.badge)} glyph ${box(lbl.glyph)}`
         + ` gap ${lbl.valueSpacer ? box(lbl.valueSpacer) : "-"}`
         + ` wrap ${box(lbl.valueWrap)} text ${box(lbl.valueText)}`
-        + ` textAlign=${lbl.valueText.textHorizontalAlignment}`
-        + ` ctlAlign=${lbl.valueText.horizontalAlignment}`;
+        + ` | ${visible}`;
       if (line !== this.lastBadgeGeom) {
         this.lastBadgeGeom = line;
         tapDebug(line, "badge");
