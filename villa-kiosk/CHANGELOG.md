@@ -1,3 +1,12 @@
+## 2.428.0
+
+### Changed — comments only, no behaviour
+
+The debug counter for a badge drawn under a summary was labelled an invariant
+violation. It is not: it measures the renderer's true-perspective output while
+the decision it appears to contradict is made in the orthographic plane, so a
+small transient count is the residual that difference is already known to cost.
+
 ## 2.427.0
 
 ### Removed — the temporary room-zoom telemetry, now that it has answered

@@ -5123,11 +5123,41 @@ export class EntityVisuals {
     if (focusOverlaps) tapDebug(`PLACEMENT: ${focusOverlaps} overlapping pair(s) inside the FOCUSED room (expected; pairFocusedRoom's leftovers)`);
 
     // (b) Drawn badge vs summary card, split in two — and the split is what
-    // makes the line actionable. Only the first is a violation: a card MAY be
+    // makes the line actionable. `overhung` is expressly allowed: a card MAY be
     // drawn over a badge outside its ink, because gating a card's existence on
     // its full width sends groups to room chips instead (see `fits`). A single
     // undifferentiated counter would be permanently non-zero for a documented
     // reason, and a permanently non-zero assertion is a disabled one.
+    //
+    // ⚠️ `buried` IS NOT AN INVARIANT VIOLATION EITHER, AND CALLING IT ONE COST
+    // TWO ROUNDS OF CHASING (2.428.0). It is measured in a DIFFERENT SPACE from
+    // the decision it appears to contradict:
+    //
+    //   * absorb decides in the ORTHOGRAPHIC view plane at the QUANTISED rung
+    //     (`g.sx` vs `shown[j].sx`), which is what makes grouping invariant to
+    //     camera position at all;
+    //   * these boxes come from `Vector3.ProjectToRef(…, tm, vp, …)` — TRUE
+    //     PERSPECTIVE at the LIVE camera — which is deliberate, because the
+    //     assertion's job is to check the renderer's own output, not to re-run
+    //     the solver's arithmetic.
+    //
+    // The gap between those two spaces is the orthographic-vs-perspective
+    // residual CLAUDE.md documents as the ACCEPTED COST of
+    // GROUP_OVERLAP_ALLOW_WIDTHS = 0, "always in the direction of the plane
+    // over-estimating separation, and always for objects further from the camera
+    // than the zoom rung's reference depth" — which is exactly a badge absorb
+    // believed was clear being drawn under the ink. Its own list of what the old
+    // margin covered includes "one or two things over a room chip": same family.
+    //
+    // So a small, transient `buried` is a MEASUREMENT. The invariant that really
+    // must hold is the other side of the same absorb block — `seat REFUSED …
+    // blocked by badge`, which cannot happen because the absorb box strictly
+    // contains the refusal box on every axis — and every capture since 2.415.0
+    // shows zero of those. Do NOT reinstate a margin on sight of this counter;
+    // the honest mitigation is that a covered badge is still reachable, because
+    // tap and long-press both ask pickBadgeAt first. The one dial, if it ever
+    // costs more than the early grouping did, is GROUP_OVERLAP_ALLOW_WIDTHS at
+    // -0.075 (half the old margin).
     let buried = 0, overhung = 0;
     for (let k = 0; k < cardBoxes.length; k++) {
       if (cardFocused[k]) continue; // skips `fits` by design — see PendingEntityGroup.focused
