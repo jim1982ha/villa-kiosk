@@ -1,3 +1,14 @@
+## 2.443.0
+
+### Added — real ceilings, read from the pipeline's own stamp
+
+The Blender pipeline (≥2.23.0) now ships each non-top storey's ceiling as its own
+object rather than fusing it into the interior, so the app can show it while
+walking and hide it for the top-down view — which is the only way a ceiling can
+carry its SweetHome colour instead of the storey-above floor slab's texture. This
+reads that stamp as a first-class role: a ceiling is still structure for
+occlusion and floor indexing, and only its visibility is special.
+
 ## 2.442.0
 
 ### Changed — the summary card and room chip lose the drop shadow's downward skirt

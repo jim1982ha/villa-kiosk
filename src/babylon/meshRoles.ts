@@ -49,6 +49,19 @@ export interface StructureRole {
   /** True when this mesh is villa structure (walls/slabs/ceilings), as opposed
    *  to furniture, an entity-bound prop, or a helper mesh. */
   isStructure: boolean;
+  /**
+   * True for a CEILING that the pipeline shipped as its own object
+   * (`vk_role: "ceiling"`, pipeline ≥2.23.0) — the one structural part the app
+   * has to hide per VIEW: a walk-through needs a lid overhead, the top-down
+   * overview is a cut-away that a lid turns into a picture of the lid.
+   *
+   * ⚠️ Still `isStructure: true`. A ceiling occludes, belongs to a storey, and
+   * must keep taking part in floor indexing, camera-beam clipping and the badge
+   * wall cull — everything that asks "is this the villa's shell". Only its
+   * VISIBILITY is special, so only visibility reads this flag. A GLB older than
+   * 2.23.0 has no such object and every field here reads exactly as before.
+   */
+  isCeiling: boolean;
   /** Storey index: 0 = ground floor / exterior, 1.. = upper storeys. Note the
    *  pipeline's own convention — "Structure" (no suffix) and
    *  "Structure_Exterior" are both level 0; "Structure_L2" is level 2. */
@@ -58,7 +71,9 @@ export interface StructureRole {
   isExterior: boolean;
 }
 
-const NOT_STRUCTURE: StructureRole = { isStructure: false, level: 0, isExterior: false };
+const NOT_STRUCTURE: StructureRole = {
+  isStructure: false, isCeiling: false, level: 0, isExterior: false,
+};
 
 /** The `extras` object Babylon attached from the glTF node, if any. */
 function gltfExtras(mesh: AbstractMesh): Record<string, unknown> | null {
@@ -73,12 +88,20 @@ function gltfExtras(mesh: AbstractMesh): Record<string, unknown> | null {
  */
 export function structureRole(mesh: AbstractMesh): StructureRole {
   const extras = gltfExtras(mesh);
-  if (extras && extras[ROLE_KEY] === "structure") {
-    const rawLevel = extras[LEVEL_KEY];
+  const role = extras?.[ROLE_KEY];
+  // "ceiling" is structure that the app must be able to hide per view — see
+  // StructureRole.isCeiling. Both roles read the same level/exterior keys.
+  if (role === "structure" || role === "ceiling") {
+    const rawLevel = extras![LEVEL_KEY];
     const level = typeof rawLevel === "number" && Number.isFinite(rawLevel)
       ? Math.max(0, Math.trunc(rawLevel))
       : 0;
-    return { isStructure: true, level, isExterior: extras[EXTERIOR_KEY] === true };
+    return {
+      isStructure: true,
+      isCeiling: role === "ceiling",
+      level,
+      isExterior: extras![EXTERIOR_KEY] === true,
+    };
   }
 
   // Legacy GLB: fall back to the old naming convention.
@@ -87,6 +110,10 @@ export function structureRole(mesh: AbstractMesh): StructureRole {
   if (!m) return NOT_STRUCTURE;
   return {
     isStructure: true,
+    // The legacy name convention predates ceiling objects entirely, so a GLB
+    // that reaches this fallback has none — `applyStructure`'s name/height
+    // heuristic is what classifies a ceiling there, exactly as before.
+    isCeiling: false,
     level: m[1] ? Number(m[1]) : 0,
     isExterior: LEGACY_EXTERIOR_RE.test(name),
   };

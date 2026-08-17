@@ -68,7 +68,7 @@ import { runPerfProbe, type ProbeRow } from "./perfProbe";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
-import { isStructureMesh } from "./meshRoles";
+import { structureRole } from "./meshRoles";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
@@ -3125,13 +3125,22 @@ export class SceneManager {
       // hole in the 2F floor. Name-matched ceilings are still hidden.
       // Classified from the mesh's own pipeline metadata, not its name —
       // see meshRoles.ts (name matching survives only as a legacy fallback).
-      const isPipelineStructure = isStructureMesh(m);
+      const role = structureRole(m);
+      const isPipelineStructure = role.isStructure;
       // Tag the load-bearing shell (floor slabs + walls + baked stairs) so the
       // camera can ground on the real FLOOR and never on furniture: these fused
       // meshes contain no furniture, so a downward ray against them alone finds
       // the walking surface even when a table/bed sits directly overhead.
       m.metadata = { ...(m.metadata ?? {}), isStructure: isPipelineStructure };
-      if (ceilingPat.test(name) || (!isPipelineStructure && meshMinY > 2.5 && meshH < 0.35)) {
+      // `role.isCeiling` FIRST, because it is the only one of the three that is
+      // a FACT rather than a guess: pipeline ≥2.23.0 ships each non-top storey's
+      // ceiling as its own object stamped `vk_role: "ceiling"` (before that the
+      // app borrowed the storey-above's floor slab, which is why the 1F ceiling
+      // wore the 2F floor's texture). The name pattern and the height heuristic
+      // stay for every GLB built before that — see meshRoles.ts on why a new
+      // structural fact becomes a `vk_*` key and never another word list.
+      if (role.isCeiling || ceilingPat.test(name)
+        || (!isPipelineStructure && meshMinY > 2.5 && meshH < 0.35)) {
         // HIDDEN IN OVERVIEW, SHOWN WHILE WALKING (2.434.0). A ceiling exists to
         // be under, and the two cameras want opposite things from it: the
         // bird's-eye view is a cut-away and a lid over it shows nothing but the
@@ -3218,7 +3227,15 @@ export class SceneManager {
     // first-person — see its applyVisibility. Both halves are needed and
     // neither is a substitute for the other: the slab does not exist over a
     // top-storey room, and these strays are all there is there.
-    tapDebug(`ceilings: ${this.ceilingMeshes.length} stray mesh(es) classified — the storey-above slab does the rest (first-person only)`);
+    // `stamped` separates the two eras: a pipeline ≥2.23.0 GLB reports real
+    // ceiling OBJECTS, so a low number is now a finding rather than the norm.
+    const stamped = this.ceilingMeshes.filter((m) => structureRole(m).isCeiling).length;
+    tapDebug(
+      `ceilings: ${this.ceilingMeshes.length} mesh(es) shown in first-person`
+      + ` (${stamped} stamped vk_role=ceiling by the pipeline,`
+      + ` ${this.ceilingMeshes.length - stamped} matched by name/height)`
+      + (stamped === 0 ? " — no pipeline ceilings: the storey-above slab is doing the job" : ""),
+    );
     this.requestRender();
   }
 
