@@ -129,12 +129,20 @@ export class FloorProbe {
    *  world-space room polygons, and it receives them AFTER the load path has
    *  already run (SceneManager calibrates post-first-frame). Returning null —
    *  which it does for the whole of that first pass — simply routes every key
-   *  through the grid fallback, exactly as before. */
-  private roomAt: ((x: number, z: number) => string | null) | null = null;
+   *  through the grid fallback, exactly as before.
+   *
+   *  ⚠️ Takes Y as well as X/Z, and that is not decoration. Storeys OVERLAP in
+   *  XZ — every ground-floor point is also inside some upper-floor polygon — so
+   *  an XZ-only resolver answers with whichever storey's polygon the array
+   *  happened to list first. That is the 2.300.0 bug (a key that merges across a
+   *  wall) reintroduced along the vertical axis: two rooms on one storey sitting
+   *  under a single room of another storey resolve to ONE name and, at the same
+   *  rounded fixture height, share one cached floor. */
+  private roomAt: ((x: number, y: number, z: number) => string | null) | null = null;
 
   constructor(private scene: Scene) {}
 
-  setRoomResolver(fn: ((x: number, z: number) => string | null) | null): void {
+  setRoomResolver(fn: ((x: number, y: number, z: number) => string | null) | null): void {
     this.roomAt = fn;
   }
 
@@ -200,7 +208,7 @@ export class FloorProbe {
   }
 
   private bucket(x: number, y: number, z: number): string {
-    const room = this.roomAt?.(x, z) ?? null;
+    const room = this.roomAt?.(x, y, z) ?? null;
     if (room !== null) return `r:${roomKey(room)}|${Math.round(y)}`;
     return `g:${Math.round(x / FALLBACK_GRID_M)}:${Math.round(y)}:${Math.round(z / FALLBACK_GRID_M)}`;
   }

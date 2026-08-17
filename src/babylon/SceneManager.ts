@@ -298,6 +298,13 @@ export class SceneManager {
    *  to report how long the view was actually dead. */
   private contextLostAt = 0;
   private loadedMeshes: AbstractMesh[] = [];
+  /** Ceiling/roof meshes, as classified by applyStructure. Kept as a list so
+   *  the view toggle can show them while walking and hide them for the
+   *  bird's-eye cut-away, without re-running the classification or re-deriving
+   *  it from names. Empty on a GLB whose pipeline already dropped the ceiling
+   *  in Blender — which is the common case, and is reported by ?debug rather
+   *  than left looking like a broken feature. */
+  private ceilingMeshes: AbstractMesh[] = [];
   private calibratedPoints: TeleportPoint[] | null = null;
   /** Bumped by every calibration, so a cosmetic tail still yielding between
    *  frames can tell that a newer fit has superseded the geometry it holds. */
@@ -1543,6 +1550,12 @@ export class SceneManager {
   setViewMode(mode: "first-person" | "overview"): void {
     if (mode === this.viewMode) return;
     this.viewMode = mode;
+    // Both of these are pure view-mode questions and are answered here, once,
+    // for both directions: the ceiling is a lid the overview must not have and
+    // the walker must, and badge wall-occlusion only makes sense from inside
+    // the villa (see EntityVisuals.setFirstPerson).
+    this.applyCeilingVisibility();
+    this.visuals.setFirstPerson(mode === "first-person");
     if (mode === "overview") {
       this.camera.setMovement(0, 0); // stop any in-flight walk
       this.camera.detachInput();
@@ -2498,7 +2511,11 @@ export class SceneManager {
     // magnitude more than the step it was protecting. The yield above, ahead of
     // the genuinely heavy indexMeshes, is kept.
     if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
-    this.applyStructure(result.meshes); // solid walls + collisions + hidden ceilings
+    this.applyStructure(result.meshes); // solid walls + collisions + view-scoped ceilings
+    // A model can load in either view (the first-run boot walks, a reload from
+    // the overview does not), so the badge occluder pass is told which one it
+    // landed in rather than waiting for a toggle that may never come.
+    this.visuals.setFirstPerson(this.viewMode === "first-person");
     mark("applyStructure");
 
     // The villa is correct and interactive now — reveal it. The first-person
@@ -3028,6 +3045,10 @@ export class SceneManager {
   }
 
   private applyStructureInner(meshes: AbstractMesh[]): void {
+    // Rebuilt from scratch on every load — these are meshes of the model being
+    // replaced, and a stale entry is a disposed mesh the view toggle would
+    // still try to write to.
+    this.ceilingMeshes = [];
     // Name patterns that are explicitly collidable (walls, railings, glass
     // barriers). Still NAME-based, and deliberately so for now: unlike the
     // pipeline's own structure groups, these are individual SweetHome catalog
@@ -3099,7 +3120,22 @@ export class SceneManager {
       // the walking surface even when a table/bed sits directly overhead.
       m.metadata = { ...(m.metadata ?? {}), isStructure: isPipelineStructure };
       if (ceilingPat.test(name) || (!isPipelineStructure && meshMinY > 2.5 && meshH < 0.35)) {
-        m.isVisible = false;
+        // HIDDEN IN OVERVIEW, SHOWN WHILE WALKING (2.434.0). A ceiling exists to
+        // be under, and the two cameras want opposite things from it: the
+        // bird's-eye view is a cut-away and a lid over it shows nothing but the
+        // lid, while standing inside a room with open sky overhead is the one
+        // thing that never reads as "indoors". So the decision moves from load
+        // time to the view toggle — `applyCeilingVisibility`, driven by
+        // setViewMode, which is also the only thing that may write `isVisible`
+        // on these meshes from here on.
+        //
+        // Collisions stay OFF regardless: the walker climbs stairs by
+        // floor-following and CameraController deliberately keeps the space
+        // overhead clear (see its ellipsoid note) — a collidable ceiling is how
+        // you get wedged mid-staircase.
+        m.metadata = { ...(m.metadata ?? {}), isCeiling: true };
+        this.ceilingMeshes.push(m);
+        m.isVisible = this.viewMode === "first-person";
         m.checkCollisions = false;
         continue;
       }
@@ -3158,7 +3194,37 @@ export class SceneManager {
         }
       }
     }
+    // The one field that separates "this villa has no ceiling geometry" from
+    // "the ceiling feature is broken". A pipeline ≥2.6.0 DROPS the top
+    // ceiling/roof in Blender, so zero here is the expected answer on a
+    // freshly-baked villa and means the GLB, not this code, is what has to
+    // change. Reported once per load rather than per mesh.
+    tapDebug(`ceilings: ${this.ceilingMeshes.length} mesh(es) classified — shown in first-person only`);
     this.requestRender();
+  }
+
+  /**
+   * Show ceiling/roof meshes while walking, hide them in the bird's-eye view.
+   *
+   * The overview is a CUT-AWAY: it looks down into rooms, and a lid over them
+   * hides everything the view exists to show — which is why these meshes were
+   * hidden unconditionally at load until 2.434.0. First-person has the opposite
+   * requirement: standing in a room with open sky overhead never reads as being
+   * indoors. Same meshes, opposite answers, so the answer belongs to the view
+   * toggle rather than to the load path.
+   *
+   * ⚠️ `isVisible`, never `setEnabled` — FloorManager owns setEnabled for the
+   * per-storey cut and the two must not stomp each other (see its header). That
+   * also means this cannot resurrect a ceiling belonging to a hidden storey:
+   * FloorManager has already disabled it, and a disabled mesh does not render
+   * however visible it claims to be. Walking on 1F therefore gets 1F's ceiling
+   * and not 2F's, with no storey logic here at all.
+   */
+  private applyCeilingVisibility(): void {
+    const show = this.viewMode === "first-person";
+    for (const m of this.ceilingMeshes) {
+      if (m.isVisible !== show) m.isVisible = show;
+    }
   }
 
   /**

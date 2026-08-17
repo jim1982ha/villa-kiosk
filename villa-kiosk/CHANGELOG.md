@@ -1,3 +1,13 @@
+## 2.434.0
+
+### Fixed — two lights in one room lit the floor differently
+
+A room outline is flat, so on a two-storey villa the upper storey's outlines cover the
+lower one's: a pool was clipped to whichever room the plan listed first, and a fixture
+whose load-time floor probe missed never got a pool at all. Both are settled on the
+fixture's own storey now. First-person also gains the GLB's ceiling, and stops drawing
+badges for devices standing behind a wall.
+
 ## 2.433.0
 
 ### Fixed — the first-run tips card let the keyboard reach the villa behind it

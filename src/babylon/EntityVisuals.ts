@@ -63,6 +63,8 @@ import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import { Material } from "@babylonjs/core/Materials/material";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import type { Camera } from "@babylonjs/core/Cameras/camera";
+import { Ray } from "@babylonjs/core/Culling/ray";
 import type { Scene } from "@babylonjs/core/scene";
 // Side-effect only: patches the renderOutline/renderOverlay setters onto
 // Mesh.prototype (used below for the climate red outline). @babylonjs/core's
@@ -80,7 +82,8 @@ import type { AppConfig } from "@/config/AppConfig";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { chipProportions } from "@/config/chipProportions";
 import {
-  badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
+  badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
+  CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
   PHONE_MAX_CSS_WIDTH, ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE,
   GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice,
 } from "./badgeMetrics";
@@ -113,6 +116,7 @@ import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam } from "./meshRoles";
+import { onStorey, storeyFloorYAt } from "./roomStorey";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import { LightPool, poolFootprint } from "./LightPools";
@@ -164,9 +168,13 @@ const LIGHT_POOL_RADIUS = 1.8;
  *  bounded by the nearest room's edge instead (see reshapeLightPools). Without
  *  a floor, a fixture standing right on a boundary would shrink to nothing and
  *  read as an unlit lamp; a small pool is a better answer than none. */
+const POOL_MIN_RADIUS = 0.4;
 /**
- * The cell ceiling for a FOCUSED group's card — the one a room chip's tap
- * produces.
+ * ⚠️ HISTORICAL NOTE, not a live constant. There is NO cell ceiling for a
+ * FOCUSED group's card — the one a room chip's tap produces — and this records
+ * why, because "add a cap" is the obvious-looking change that keeps being
+ * proposed. (`FOCUS_MAX_CHIPS` was deleted here; `badgeCard.cellMax` still
+ * points at this paragraph.)
  *
  * MAX_TOTAL_CHIPS (6) is set by the summary-vs-summary clearance test: a wide
  * arrangement claims a wide disc and starts escalating rooms to their chip. A
@@ -193,7 +201,6 @@ const LIGHT_POOL_RADIUS = 1.8;
  * membership for a focused group, so the clamp can never be the thing that
  * refuses, and the budget stays the only bound.
  */
-const POOL_MIN_RADIUS = 0.4;
 /** How far a pool sits above the floor it was probed onto. Enough to clear
  *  z-fighting with the floor polygon, small enough that it still reads as
  *  lying ON it rather than hovering. */
@@ -217,6 +224,38 @@ function clampRatio(ratio: number | undefined): number {
 // DOWN toward the floor, well clear of the mounting surface, where its pool is
 // wide and soft instead of a tight hotspot.
 const STRIP_MIN_LENGTH = 1.5; // metres — fixture meshes longer than this are "strips"
+
+// ── First-person wall occlusion (see refreshWallOcclusion) ──────────────────
+/**
+ * Rays per layout pass. The whole point is that this is a BUDGET and not a
+ * count of badges: the cost of a pass must not grow with the villa.
+ *
+ * ⚠️ This is a SUSTAINED cost, not a burst — walking moves the eye every frame,
+ * so the sweep restarts every frame and never finishes while you are moving.
+ * Eight against the 1-2 rays `CameraController.followFloor` already casts each
+ * frame against the same geometry is a 4-8x step on the one code path that has
+ * previously frozen this app on a phone, so the coarse-pointer budget is half
+ * the fine one: four rays sweep a hundred badges in 25 passes — under half a
+ * second of walking — and a badge lagging the camera by that much is invisible
+ * next to the camera's own motion. `rays=` on the `place` line is the field to
+ * read if this ever needs re-tuning; it is measured, not assumed.
+ */
+const OCCLUSION_RAYS_FINE = 8;
+const OCCLUSION_RAYS_COARSE = 4;
+/** Devices closer than this are in the room with you by definition — testing
+ *  them buys nothing and a very short ray is the one most likely to clip the
+ *  surface the device is mounted on. */
+const OCCLUSION_NEAR_M = 1.2;
+/** How far short of the anchor the ray stops. A device is normally mounted ON
+ *  a wall or under a ceiling, so a ray that reaches its anchor ends inside that
+ *  surface and reports the device as occluded by the thing it is attached to. */
+const OCCLUSION_SLACK_M = 0.35;
+/** Structure only, and VISIBLE structure at that — a custom pick predicate
+ *  replaces Babylon's own enabled/visible filter rather than adding to it (see
+ *  floorProbe's header), so both have to be asked for explicitly or a hidden
+ *  storey would occlude the storey you are standing on. */
+const OCCLUSION_PREDICATE = (m: AbstractMesh): boolean =>
+  m.isEnabled() && m.isVisible && blocksCameraBeam(m);
 const STRIP_DROP_FRACTION = 0.45; // drop the light this fraction of the way to the floor
 const STRIP_DROP_MAX = 1.1; // metres — cap the drop so tall rooms don't put it at knee height
 // SweetHome's Led Line asset is modelled just 1 cm wide (and 3 cm tall) — from
@@ -805,6 +844,13 @@ interface ShownLabel {
   /** Anchor is in front of the camera, i.e. has a valid screen position at
    *  all. Purely a RENDER gate — deliberately not an input to grouping. */
   inFront: boolean;
+  /** A wall (or slab, or shell) stands between the walking camera's eye and
+   *  this anchor. First-person only, and — like `inFront`, and for the same
+   *  reason — purely a RENDER gate: an occluded badge still takes part in
+   *  grouping, so walking around a room can never change how it is presented.
+   *  Always false in overview, where the whole villa is deliberately seen at
+   *  once and through its own walls. */
+  occluded: boolean;
 }
 
 // Status/enum SENSOR states (a text sensor like an AP's connectivity state).
@@ -1095,6 +1141,15 @@ export class EntityVisuals {
    *  ends, so two strips meeting at a corner light that corner too instead of
    *  leaving it dark between their centres (see the light-creation block). */
   private meshLightPools = new Map<number, LightPool[]>();
+  /** Fixture spots whose LOAD-PATH floor probe came up empty, kept so
+   *  `reshapeLightPools` can ask again once the probe can answer per ROOM
+   *  instead of per 4-metre grid. Keyed by fixture mesh uniqueId, exactly as
+   *  `meshLightPools` is, and emptied into it as each retry succeeds — see the
+   *  deferral site in the light-creation block for why a load-path miss is not
+   *  a final answer. */
+  private pendingPoolSpots = new Map<number, {
+    mesh: AbstractMesh; x: number; z: number; y: number; scale: number; i: number;
+  }[]>();
   /** config.render.lightPoolIntensity, cached — see setLightPoolIntensity. */
   private lightPoolStrength = 1;
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
@@ -1164,6 +1219,10 @@ export class EntityVisuals {
   /** Every badge dimension, in CSS px, for the pointer currently driving this
    *  device. Read by BOTH labelBoxes and rebuildLabels — see badgeMetrics. */
   private metrics: BadgeMetrics = badgeMetricsFor(detectPointerClass());
+  /** The pointer class `metrics` was chosen for, kept in its own field because
+   *  the wall-occlusion ray budget needs the CLASS and not the table (two
+   *  classes can share a table value while deserving different budgets). */
+  private pointer: PointerClass = detectPointerClass();
   private offPointerClass: (() => void) | null = null;
   /** The layout pass's own solver workspace. solveRoomZoomRadius keeps a
    *  SEPARATE one — see PlacementResult's warning about pooled returns. */
@@ -1268,8 +1327,39 @@ export class EntityVisuals {
   /** Each room's real drawn polygon (world-space X/Z, original casing) — the
    *  geometric signal roomForEntity uses to auto-fill a freshly detected
    *  entity's room on first sight (see getDetectedMappings). Stored as the
-   *  actual point list because containment testing needs it. */
-  private roomPolys: { name: string; pts: { x: number; z: number }[] }[] = [];
+   *  actual point list because containment testing needs it.
+   *
+   *  ⚠️ `floorY` is carried, not dropped, and it is what makes every lookup here
+   *  STOREY-AWARE. These polygons are a floor PLAN — flat outlines with no
+   *  height — and on a two-storey villa the upper storey's outlines cover the
+   *  lower one's in XZ. A containment test alone therefore answers with
+   *  whichever polygon the array lists first, which is the load order of
+   *  `.rooms.json` and nothing else. See `roomPolyAt`. */
+  private roomPolys: { name: string; pts: { x: number; z: number }[]; floorY: number }[] = [];
+  /** True while the walking camera is the active one — see setFirstPerson. */
+  private firstPerson = false;
+  /** Entity ids whose badge is behind a wall from the walker's current eye
+   *  position. A SET rather than a flag on the label, because `shown` is
+   *  rebuilt every pass while the answer outlives it (the sweep is
+   *  round-robin). Empty in overview, always. */
+  private occludedIds = new Set<string>();
+  /** Where the answers in `occludedIds` were measured from; a different eye
+   *  position restarts the sweep. */
+  private occlusionFrom = new Vector3(NaN, NaN, NaN);
+  /** How many badges have been answered at `occlusionFrom`, and where the
+   *  round-robin is. The cursor deliberately does NOT reset with the sweep —
+   *  resuming where it left off spreads the cost evenly instead of re-testing
+   *  the same first eight badges on every step. */
+  private occlusionSwept = 0;
+  private occlusionCursor = 0;
+  /** Rays cast on the last pass — reported by the `place` line, so the budget
+   *  is a measurement rather than a claim. */
+  private occlRays = 0;
+  /** Reused ray + direction: the sweep runs while walking, and allocating a
+   *  Ray and a Vector3 per badge per frame is exactly the kind of steady-state
+   *  garbage this file pools everything else to avoid. */
+  private occlRay = new Ray(new Vector3(0, 0, 0), new Vector3(0, 0, 1), 1);
+  private occlDir = new Vector3(0, 0, 0);
   /** Active storey from FloorManager (1-based). Floors below it stay rendered
    *  (cumulative visibility), so enabled-state alone can't cull their badges —
    *  cullLabels compares each label's stamped floorIndex against this. */
@@ -1338,7 +1428,7 @@ export class EntityVisuals {
     // The probe can only key by ROOM once calibration has produced the world
     // polygons; until then roomContaining returns null and it falls back to the
     // grid, exactly as every load did before 2.300.0 (see floorProbe.ts).
-    this.probe.setRoomResolver((x, z) => this.roomContaining(x, z));
+    this.probe.setRoomResolver((x, y, z) => this.roomContaining(x, y, z));
     this.roomHighlight = new RoomHighlight(scene, requestRender, this.probe, this.requestAnimationRender);
     this.beams = new CameraBeams(scene);
     scene.registerBeforeRender(() => {
@@ -1379,6 +1469,9 @@ export class EntityVisuals {
     // them while the layout used the new metrics is exactly the mismatch this
     // subsystem has been bitten by before. Rare enough to afford it.
     this.offPointerClass = observePointerClass((p) => {
+      // Set BEFORE the early return below: the ray budget reads this even on a
+      // change that leaves the metrics table identical.
+      this.pointer = p;
       const next = badgeMetricsFor(p);
       if (next === this.metrics) return;
       this.metrics = next;
@@ -2035,11 +2128,25 @@ export class EntityVisuals {
               // that rarer case is still visible on the kiosk itself via
               // ?debug, without needing devtools.
               if (surfaceY === null) {
-                tapDebug(
-                  `light pool: no floor found below ${m.name} at world `
-                  + `(${fixturePos.x.toFixed(2)}, ${fixturePos.y.toFixed(2)}, ${fixturePos.z.toFixed(2)}) `
-                  + `even after the seam-nudge retry — fixture skipped (was a floating disc before this fix).`,
-                );
+                // DEFERRED, not abandoned (2.434.0). This probe runs on the
+                // LOAD path, where no room resolver exists yet, so it is keyed
+                // by the 4-metre grid — the very key 2.300.0 removed for
+                // merging THROUGH A WALL. A fixture near a wall can therefore
+                // inherit a cached `null` from a neighbouring cell that really
+                // has no floor (a void, the garden), and until now that verdict
+                // was FINAL: no pool object was created, so `reshapeLightPools`
+                // — which re-probes every pool room-keyed a moment later — had
+                // nothing to correct. The fixture stayed permanently unlit
+                // beside identical fixtures that drew a full pool, which is the
+                // "why are the light effects shown differently" report.
+                //
+                // Recorded as five numbers and a mesh reference, not a mesh: no
+                // GPU allocation happens until the retry actually succeeds, so
+                // a fixture that genuinely has no floor under it (an outdoor
+                // light over water) still costs nothing at all.
+                const spots = this.pendingPoolSpots.get(m.uniqueId) ?? [];
+                spots.push({ mesh: m, x: fixturePos.x, z: fixturePos.z, y: fixturePos.y, scale, i });
+                this.pendingPoolSpots.set(m.uniqueId, spots);
                 return null;
               }
               const floorPos = new Vector3(fixturePos.x, surfaceY + POOL_FLOOR_LIFT, fixturePos.z);
@@ -2377,6 +2484,10 @@ export class EntityVisuals {
     this.meshLights.clear();
     this.meshLightPools.forEach((arr) => arr.forEach((p) => p.dispose()));
     this.meshLightPools.clear();
+    // Holds mesh references from the outgoing model — clearing it here (rather
+    // than only on the next indexMeshes) is what stops a reload's calibration
+    // retrying spots that belong to a scene that no longer exists.
+    this.pendingPoolSpots.clear();
   }
 
   /** World-space bounding box spanning ALL of an entity's meshes merged (e.g.
@@ -2458,7 +2569,8 @@ export class EntityVisuals {
     // Nothing lays badges out any more (2.159.0 — badges sit on their anchors
     // or their room summarises), so the room's own size no longer takes part
     // in any grouping decision and the cache is gone with the fan.
-    this.roomPolys = polys.filter((p) => p.pts.length >= 3).map((p) => ({ name: p.name, pts: p.pts }));
+    this.roomPolys = polys.filter((p) => p.pts.length >= 3)
+      .map((p) => ({ name: p.name, pts: p.pts, floorY: p.floorY ?? 0 }));
     // Everything below depends on these polygons and nothing above does, so
     // this is the earliest moment either half of the 2.300.0 fix can run.
     this.reshapeLightPools();
@@ -2493,34 +2605,121 @@ export class EntityVisuals {
     // under. Dropping the in-memory map lets the same points be re-asked now
     // that the resolver can name their room — a few dozen rays, post-reveal.
     this.probe.clearMemo();
+    // Bucketed, never dropped: a pool that ends up looking different from its
+    // neighbours got that way through exactly one of these branches, and until
+    // 2.434.0 none of them was counted. "Some lights show a floor wash and
+    // others do not" is unanswerable from a screenshot; it is one line from
+    // here. (See the same rule in the badge tier — an expected category gets a
+    // labelled number, never a silent `continue`.)
+    let clipped = 0, whole = 0, bounded = 0, nofloor = 0;
+    const recovered = this.retryPendingPools();
     for (const pools of this.meshLightPools.values()) {
       for (const pool of pools) {
         const x = pool.mesh.position.x, z = pool.mesh.position.z;
-        const room = this.roomPolys.find((r) => pointInPolygon(x, z, r.pts));
+        // PROBE FIRST, then resolve the room — the order is the correctness
+        // argument, not a tidy-up.
+        //
+        // This lookup is storey-aware as of 2.434.0 (see roomPolyAt; the plain
+        // XZ containment it replaced handed a ground-floor pool the outline of
+        // the room ABOVE it whenever that polygon was listed first). But a
+        // storey read off the FIXTURE's height has one genuinely ambiguous
+        // band, and light fixtures live in it: a ceiling lamp hangs within
+        // centimetres of the slab overhead, which is the very height that slab
+        // reports as the next storey's floor. A downward ray does not have that
+        // problem — it answers "which floor is physically under this fixture"
+        // by touching it — and this method is already casting one. So the
+        // pool's room is resolved at the height of the floor it will be drawn
+        // on, and the fixture's own height is only the fallback for a probe
+        // that found nothing at all.
+        const surfaceY = this.surfaceBelow(x, pool.probeFromY, z);
+        if (surfaceY === null) nofloor++;
+        const room = this.roomPolyAt(x, surfaceY ?? pool.probeFromY, z);
         let radius = LIGHT_POOL_RADIUS;
         let shape: Pt2[] | undefined;
         if (room) {
           // Room = SUBJECT (may be L-shaped), footprint = CLIP (convex). That
           // order is the correctness argument — see clipPolygonToConvex.
-          const clipped = clipPolygonToConvex(room.pts, poolFootprint(x, z, radius));
-          if (clipped.length >= 3) shape = clipped;
+          const cut = clipPolygonToConvex(room.pts, poolFootprint(x, z, radius));
+          if (cut.length >= 3) { shape = cut; clipped++; } else whole++;
         } else {
-          // Outside every polygon — open ground, or a fixture whose anchor sits
-          // just past a wall. There is no room to clip to, so bound the radius
-          // by the nearest room boundary instead: still cannot cross a wall,
-          // and a fixture far from everything keeps its full pool.
+          // Outside every polygon ON THIS STOREY — open ground, or a fixture
+          // whose anchor sits just past a wall. There is no room to clip to, so
+          // bound the radius by the nearest room boundary instead: still cannot
+          // cross a wall, and a fixture far from everything keeps its full pool.
+          //
+          // Same-storey rooms ONLY. Measuring against every polygon in the model
+          // let a terrace fixture standing clear of everything on its own storey
+          // be crushed to POOL_MIN_RADIUS by a bedroom wall one floor up —
+          // a 0.4 m pool under a fixture whose neighbours drew 1.8 m ones.
+          const storeyY = this.storeyFloorYAt(surfaceY ?? pool.probeFromY);
           let nearest = Infinity;
           for (const r of this.roomPolys) {
+            if (!onStorey(r.floorY, storeyY)) continue;
             nearest = Math.min(nearest, distanceToPolygonBoundary(x, z, r.pts));
           }
           if (Number.isFinite(nearest)) radius = Math.min(radius, Math.max(POOL_MIN_RADIUS, nearest));
+          bounded++;
         }
-        const surfaceY = this.surfaceBelow(x, pool.probeFromY, z);
         pool.reshape(shape, radius, surfaceY === null ? undefined : surfaceY + POOL_FLOOR_LIFT);
       }
     }
     this.probe.save();
+    // A pool created just now has never been handed a live HA state — the state
+    // pass ran long before calibration — so an already-ON light would keep a
+    // dark pool until its next state change. This is the same resync a floor
+    // toggle runs, and it is skipped entirely when nothing was recovered.
+    if (recovered) this.resyncLightPoolsToFloor();
+    tapDebug(
+      `light pools: clipped=${clipped} whole=${whole} bounded=${bounded} nofloor=${nofloor}`
+      + ` recovered=${recovered} stillNoFloor=${
+        [...this.pendingPoolSpots.values()].reduce((n, s) => n + s.length, 0)}`
+      + ` rooms=${this.roomPolys.length} storeys=${new Set(this.roomPolys.map((r) => Math.round(r.floorY))).size}`,
+    );
     this.requestRender();
+  }
+
+  /**
+   * Ask again for every fixture whose LOAD-PATH floor probe missed, now that
+   * the probe can key by ROOM. Returns how many pools this created.
+   *
+   * The load path is grid-keyed by necessity (calibration has not run, so there
+   * is no room resolver), and a 4-metre grid merges straight through a wall —
+   * so a `null` there is not "there is no floor under this fixture", it is "the
+   * cell this fixture shares with something else had none". Every other
+   * consequence of that key is already corrected here (shape, height); this was
+   * the one verdict that used to be final, because nothing was allocated to
+   * correct. A spot that misses AGAIN stays pending and is reported by the
+   * `light pools:` line, so "this fixture genuinely has no floor beneath it"
+   * and "we never asked twice" stop looking identical.
+   *
+   * Costs nothing on a villa with no misses: the map is empty and this returns
+   * immediately.
+   */
+  private retryPendingPools(): number {
+    if (this.pendingPoolSpots.size === 0) return 0;
+    let created = 0;
+    for (const [uniqueId, spots] of [...this.pendingPoolSpots]) {
+      const stillMissing: typeof spots = [];
+      const pools = this.meshLightPools.get(uniqueId) ?? [];
+      for (const spot of spots) {
+        const surfaceY = this.surfaceBelow(spot.x, spot.y, spot.z, spot.mesh);
+        if (surfaceY === null) { stillMissing.push(spot); continue; }
+        const pool = new LightPool(
+          this.scene,
+          `${spot.mesh.name}_${uniqueId}_${spot.i}`,
+          new Vector3(spot.x, surfaceY + POOL_FLOOR_LIFT, spot.z),
+          LIGHT_POOL_RADIUS,
+        );
+        pool.intensityScale = spot.scale;
+        pool.probeFromY = spot.y;
+        pools.push(pool);
+        created++;
+      }
+      if (pools.length) this.meshLightPools.set(uniqueId, pools);
+      if (stillMissing.length) this.pendingPoolSpots.set(uniqueId, stillMissing);
+      else this.pendingPoolSpots.delete(uniqueId);
+    }
+    return created;
   }
 
   /** Replace the resolved entity->room map (see the field's own docstring) —
@@ -2550,11 +2749,62 @@ export class EntityVisuals {
    *  linear scan: called only once per freshly detected entity right after a
    *  model load, never per-frame, so the room count (a couple dozen at most)
    *  costs nothing worth caching further. */
-  private roomContaining(x: number, z: number): string | null {
+  private roomContaining(x: number, y: number, z: number): string | null {
+    return this.roomPolyAt(x, y, z)?.name ?? null;
+  }
+
+  /**
+   * The room polygon a world point is IN — containment in XZ **and** on the
+   * storey the point stands on.
+   *
+   * ⚠️ The storey half is the whole point, and its absence was a real defect
+   * (see `roomPolys`). A room polygon is a flat outline with no height, and on
+   * a two-storey villa the upper storey's outlines sit directly over the lower
+   * one's, so `find(pointInPolygon)` returns whichever polygon `.rooms.json`
+   * happened to list first. Two consequences, both visible on the glass:
+   *
+   *   - a ground-floor light's pool clipped to the outline of the room ABOVE
+   *     it — cut off along edges that do not exist on this storey, or spilling
+   *     through this storey's walls where the upper room is wider. Which of
+   *     the two you got depended on array order, so identical fixtures in one
+   *     room could look different from each other. That is the "why are the
+   *     light effects shown differently" report.
+   *   - the floor probe's cache key (`floorProbe.bucket`) is `room|round(y)`,
+   *     so two rooms on one storey lying under a single room of the storey
+   *     above collapsed to ONE key and shared a probed floor height. The 4-metre
+   *     grid key 2.300.0 removed for merging THROUGH A WALL had been
+   *     reintroduced along the vertical axis, where a wall is a whole slab.
+   *
+   * The storey is chosen from the point's own height: the highest room floor at
+   * or (marginally) below it. `STOREY_PICK_EPS` is deliberately centimetres and
+   * not a generous margin — a 1F ceiling fixture hangs within centimetres of the
+   * 2F slab, so any tolerance wide enough to "be safe" hands it to the storey
+   * above, which is the bug this exists to prevent. A point below every floor
+   * (a fixture under the ground slab, or a villa whose probe found nothing)
+   * falls back to the LOWEST storey rather than to none.
+   *
+   * Degrades to the previous behaviour exactly on a single-storey villa, and on
+   * any model whose per-storey floor heights all came back equal: every room is
+   * then on the point's storey and the first containing one wins, as before.
+   */
+  private roomPolyAt(
+    x: number, y: number, z: number,
+  ): { name: string; pts: { x: number; z: number }[]; floorY: number } | null {
+    const storeyY = this.storeyFloorYAt(y);
     for (const room of this.roomPolys) {
-      if (pointInPolygon(x, z, room.pts)) return room.name;
+      if (!onStorey(room.floorY, storeyY)) continue;
+      if (pointInPolygon(x, z, room.pts)) return room;
     }
     return null;
+  }
+
+  /** The floor height of the storey a world Y stands on. Delegates to
+   *  roomStorey.ts, which owns the two tolerances and is pinned by
+   *  `npm run test:geometry`; shared by `roomPolyAt` and the light pool's
+   *  no-room fallback so the two cannot disagree about which storey a fixture
+   *  belongs to. */
+  private storeyFloorYAt(y: number): number {
+    return storeyFloorYAt(this.roomPolys, y);
   }
 
   /** Geometric room fallback: which real drawn room polygon this entity's
@@ -2570,7 +2820,9 @@ export class EntityVisuals {
     const anchor = this.labels.get(entityId)?.anchor;
     if (!anchor) return null;
     const p = anchor.getAbsolutePosition();
-    return this.roomContaining(p.x, p.z);
+    // The anchor's OWN height decides the storey — a 2F device is not in the
+    // 1F room its outline happens to sit over (see roomPolyAt).
+    return this.roomContaining(p.x, p.y, p.z);
   }
 
   /** World-space XZ bounding box (plus a floor height) of a room's registered
@@ -4230,7 +4482,10 @@ export class EntityVisuals {
       // allocates nothing at all.
       let s = this.shownPool[shownCount];
       if (!s) {
-        s = { id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, sx: 0, sy: 0, sz: 0, inFront: false };
+        s = {
+          id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, sx: 0, sy: 0, sz: 0,
+          inFront: false, occluded: false,
+        };
         this.shownPool[shownCount] = s;
       }
       s.id = id;
@@ -4241,12 +4496,16 @@ export class EntityVisuals {
       s.wy = wp.y;
       s.wz = wp.z;
       s.inFront = p.z >= 0 && p.z <= 1;
+      s.occluded = this.occludedIds.has(id);
       shown[shownCount] = s;
       shownCount++;
     }
     // Truncate to this frame's count. The objects themselves stay alive in
     // shownPool, so refilling next frame reuses them.
     shown.length = shownCount;
+    // Answers are for the pose this pass is drawing, so this runs AFTER the
+    // world positions are collected and BEFORE anything reads `occluded`.
+    this.refreshWallOcclusion(shown, cam);
 
     // ── The focus lasts as long as you stay at least as close ──────────────
     // Resolved BEFORE any grouping runs, so a single pass cannot group with a
@@ -4618,6 +4877,11 @@ export class EntityVisuals {
       s.lbl.container.linkOffsetXInPixels = 0;
       s.lbl.container.linkOffsetYInPixels = baseY;
       s.lbl.container.isVisible = s.inFront
+        // A wall between the eye and the device, while walking. Sits beside
+        // `inFront` deliberately: both are gates on DRAWING a badge whose
+        // grouping has already been decided, so neither can move a badge or
+        // change which pile it belongs to.
+        && !s.occluded
         && !this.roomClustered.get(roomKey(this.roomOf(s.id)))
         && !this.entityGrouped.has(s.id);
     }
@@ -4629,6 +4893,121 @@ export class EntityVisuals {
     if (debugFlagEnabled() && clearance) {
       this.assertPlacementInvariants(shown, boxes, clearance, pending, chips, tm, vp);
     }
+  }
+
+  /**
+   * Hide the badges of devices standing behind a wall, while walking.
+   *
+   * In the bird's-eye view the villa is deliberately seen through its own
+   * walls — that is what a cut-away plan IS — so this does nothing there and
+   * the unfocused overview path stays byte-identical. Standing inside a room,
+   * the opposite holds: a badge for a device three rooms away, painted over the
+   * wall in front of you, is not a label for anything you can see.
+   *
+   * ── Why this cannot be a per-frame raycast ────────────────────────────────
+   * One ray per badge per pass, at ~50-100 badges, against a fused structure
+   * mesh, on every frame of a walk, is precisely the cost profile that once
+   * froze this app the instant first-person movement started (see
+   * SceneManager.applyStructure's octree note). So the sweep is BUDGETED and
+   * round-robin: at most `OCCLUSION_RAYS_PER_PASS` rays per layout pass, each
+   * badge keeping its previous answer until its turn comes round. A full sweep
+   * of a hundred badges completes in ~13 passes — a fifth of a second of
+   * walking — and the error in between is a badge that lags by that much, which
+   * is invisible next to the camera's own motion.
+   *
+   * The sweep restarts whenever the eye MOVES, and only then: standing still,
+   * it finishes once and every later pass costs a single Vector3 comparison.
+   * While a sweep is incomplete the pass marks the layout dirty and asks for
+   * another frame, because `cullLabels` early-returns on an unchanged
+   * view-projection matrix — without that, stopping mid-sweep would freeze half
+   * the badges on a stale answer until the camera moved again.
+   *
+   * The occluder set is `blocksCameraBeam` — structure only, the same predicate
+   * a camera's detection cone is clipped against, for the same reason: walls,
+   * slabs and the shell are what you genuinely cannot see through, while
+   * furniture, curtains and door trim are not (and a beam clipped on those
+   * collapsed to a stub). Visibility is tested EXPLICITLY because a custom pick
+   * predicate REPLACES Babylon's enabled/visible filter rather than adding to
+   * it (see floorProbe's header) — so a hidden storey's slab, or a ceiling
+   * hidden in overview, cannot occlude anything.
+   */
+  private refreshWallOcclusion(shown: ShownLabel[], cam: Camera): void {
+    if (!this.firstPerson || shown.length === 0) {
+      // Leaving first-person must not strand a hidden badge — the overview has
+      // no notion of occlusion at all.
+      if (this.occludedIds.size) {
+        this.occludedIds.clear();
+        for (const s of shown) s.occluded = false;
+      }
+      return;
+    }
+    const eye = cam.globalPosition;
+    // Compared in WORLD METRES, deliberately — the one quantity in this file
+    // that is compared BETWEEN frames and so must not be in render pixels,
+    // which the resolution valve moves every time the camera starts or stops
+    // (see quantisedPixelsPerWorldUnit's cssPixels note). A camera position
+    // cannot be forged by a resolution change.
+    if (this.occlusionSwept >= shown.length && this.occlusionFrom.equalsWithEpsilon(eye, 1e-4)) {
+      // Zero rays is the truth for this pass, and leaving the previous pass's
+      // count standing would overstate the sustained cost in every capture
+      // taken while standing still.
+      this.occlRays = 0;
+      return;
+    }
+    if (!this.occlusionFrom.equalsWithEpsilon(eye, 1e-4)) {
+      this.occlusionFrom.copyFrom(eye);
+      this.occlusionSwept = 0;
+    }
+    const dir = this.occlDir;
+    // The pointer class this file already tracks for badge sizing — a phone
+    // gets half the ray budget. Read per pass rather than cached: it is a
+    // property lookup, and `observePointerClass` can change it live.
+    const budget = this.pointer === "coarse" ? OCCLUSION_RAYS_COARSE : OCCLUSION_RAYS_FINE;
+    let rays = 0;
+    while (this.occlusionSwept < shown.length && rays < budget) {
+      const s = shown[this.occlusionCursor % shown.length];
+      this.occlusionCursor++;
+      this.occlusionSwept++;
+      rays++;
+      dir.set(s.wx - eye.x, s.wy - eye.y, s.wz - eye.z);
+      const dist = dir.length();
+      // Anything within arm's reach is in the room with you; and a ray shorter
+      // than the slack below has no interval left to test.
+      if (dist <= OCCLUSION_NEAR_M) { s.occluded = false; this.occludedIds.delete(s.id); continue; }
+      dir.scaleInPlace(1 / dist);
+      this.occlRay.origin.copyFrom(eye);
+      this.occlRay.direction.copyFrom(dir);
+      // Stop SHORT of the anchor. A device is normally mounted ON a wall or a
+      // ceiling, so a ray run all the way to its anchor ends inside the very
+      // surface it hangs from and every wall-mounted device would report itself
+      // occluded.
+      this.occlRay.length = dist - OCCLUSION_SLACK_M;
+      // fastCheck: the question is "is anything in the way", not "what is
+      // nearest", so Babylon may stop at the first triangle it finds.
+      const hit = this.scene.pickWithRay(this.occlRay, OCCLUSION_PREDICATE, true);
+      s.occluded = !!hit?.hit;
+      if (s.occluded) this.occludedIds.add(s.id); else this.occludedIds.delete(s.id);
+    }
+    this.occlRays = rays;
+    if (this.occlusionSwept < shown.length) {
+      // The sweep owes answers and the camera may now stop moving — see the
+      // early-return in cullLabels.
+      this.layoutDirty = true;
+      this.requestRender();
+    }
+  }
+
+  /** Which camera the badges are being drawn from. Set by SceneManager on every
+   *  view switch AND after a model load, because a load can land in either
+   *  view. Only wall-occlusion reads it — everything else that differs between
+   *  the two cameras already rides `VIEW_METRIC`/`setIconZoomFit`. */
+  setFirstPerson(on: boolean): void {
+    if (on === this.firstPerson) return;
+    this.firstPerson = on;
+    this.occlusionSwept = 0;
+    this.occlusionCursor = 0;
+    if (!on) this.occludedIds.clear();
+    this.markLayoutDirty();
   }
 
   /** A badge's room, normalised — the single definition every grouping,
@@ -4933,6 +5312,18 @@ export class EntityVisuals {
       + ` sinTilt=${clearance.basis.sinPhi.toFixed(3)} az=${clearance.basis.ax.toFixed(3)}`
       + ` metric=${clearance.basis.mode}`
       + ` | badges=${this.labels.size} eligible=${shown.length} behind=${behind} drawn=${drawn}`
+      // BUCKETED, NOT DROPPED, and `off` is not the same word as `0`. Wall
+      // occlusion exists only under the walking camera, so in overview this
+      // field must say "not applicable" rather than print a zero that reads as
+      // "measured, nothing hidden" — the exact misread that made four counters
+      // in this subsystem lie about the case they existed to measure.
+      // `swept/eligible` is how much of the round-robin has answered at the
+      // current eye position: anything below `eligible` means some badges are
+      // still carrying the previous pose's answer.
+      + (this.firstPerson
+        ? ` occl=${this.occludedIds.size} swept=${this.occlusionSwept}/${shown.length}`
+        + ` rays=${this.occlRays}`
+        : " occl=off")
       + ` | piles=${stats.piles} exempt=${stats.exempt} accepted=${stats.accepted}`
       + ` deferred=${stats.deferred} pulledBack=${stats.pulledBack}`
       + ` | groups=${placed.length}/${stats.buckets} cross=${stats.crossRoom}`
@@ -5362,15 +5753,26 @@ export class EntityVisuals {
     const covered = new Set<string>();
     for (const g of groups) for (const i of g.members) covered.add(shown[i].id);
     let orphaned = 0;
+    // BUCKETED, NOT DROPPED. A badge behind a wall in first-person is hidden on
+    // purpose and is not an orphan — but a bare `continue` would delete it from
+    // the only number that can report it, and this subsystem has already been
+    // burned four times by an expected case swallowed by a `continue` (see the
+    // badge-rules skill). It gets its own count on the same line, so "the wall
+    // cull is hiding more than you think" stays visible from a capture.
+    let byWall = 0;
     for (const s of shown) {
       if (s.lbl.container.isVisible) continue;
       if (!s.inFront) continue; // off screen is not the same as unreachable
       if (this.roomClustered.get(roomKey(this.roomOf(s.id)))) continue;
       if (covered.has(s.id)) continue;
+      if (s.occluded) { byWall++; continue; }
       orphaned++;
     }
-    if (orphaned) {
-      tapDebug(`PLACEMENT: ${orphaned} badge(s) hidden with no summary and no chip`);
+    if (orphaned || byWall) {
+      tapDebug(
+        `PLACEMENT: ${orphaned} badge(s) hidden with no summary and no chip`
+        + ` (+${byWall} deliberately, behind a wall)`,
+      );
     }
 
     // "Nothing is drawn inside a summary's ink" — the invariant the absorb
@@ -6817,6 +7219,19 @@ export class EntityVisuals {
       const surface = rest.fill;
       const sm = this.summaryMetrics();
       for (const g of groups) {
+        // A summary whose every member is behind a wall is behind it too — the
+        // same rule the room chip applies below, at the same tier (the render
+        // set, after every placement decision is final), so a card and a chip
+        // standing for the same hidden devices cannot disagree. `every`, not
+        // `some`: one visible member and the card still has something to show,
+        // and its other cells are the honest statement that those devices are
+        // co-located with it.
+        if (this.firstPerson && g.members.length > 0
+          && g.members.every((i) => shown[i].occluded)) {
+          const stale = this.entityGroups.get(g.key);
+          if (stale) stale.container.isVisible = false;
+          continue;
+        }
         live.add(g.key);
         const c = this.ensureEntityGroup(g.key, layer);
         c.entityIds = g.members.map((i) => shown[i].id);
@@ -7598,6 +8013,21 @@ export class EntityVisuals {
     const chipRest = categorySurface("others", "off");
     const chipAlert = categorySurface("others", "alert");
     for (const chip of chips) {
+      // A chip whose every device is behind a wall is behind that wall too.
+      //
+      // RENDER SET ONLY, exactly like the merge and the focused-room yield
+      // above it: this runs after the escalation fixpoint, so it cannot change
+      // which badges are drawn and cannot feed back into any collision test.
+      // It is also `every`, not `some` — a chip stands for its whole room, and
+      // one visible device in that room is reason enough to keep the room's
+      // label on the glass. `occludedIds` is empty in overview, so this is a
+      // set lookup that can never fire there.
+      if (this.firstPerson && chip.ids.length > 0
+        && chip.ids.every((id) => this.occludedIds.has(id))) {
+        const stale = this.clusters.get(chip.key);
+        if (stale) stale.container.isVisible = false;
+        continue;
+      }
       const c = this.ensureCluster(chip.key, layer);
       c.entityIds = chip.ids;
       c.displayName = chip.room;
