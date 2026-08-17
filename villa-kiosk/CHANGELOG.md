@@ -1,3 +1,15 @@
+## 2.448.0
+
+### Fixed — a name-matched ceiling rendered black, and the badge value now lines up with its icon
+
+Eleven ceilings were being made visible and lit by nothing: SweetHome exports them
+as their own named objects, which are not the pipeline's fused structure, and the
+lighting pass only ever looked at that. One shared predicate now answers "is this a
+ceiling" for both the visibility pass and the lighting pass, which cannot see each
+other's work. Separately the badge's value is left-aligned against its icon with no
+optical nudge — it sits on a row beside something, rather than centred in a box of
+its own, and the two count pills and the room name keep the centring they need.
+
 ## 2.447.0
 
 ### Fixed — the room chip's text is back to its own size, and the badge value is centred on the ink

@@ -119,6 +119,34 @@ export function structureRole(mesh: AbstractMesh): StructureRole {
   };
 }
 
+/**
+ * A CEILING/ROOF surface — pipeline stamp first, name second.
+ *
+ * ONE predicate, because three subsystems have to agree about it and two of them
+ * cannot see each other's work: `SceneManager.applyStructure` decides its
+ * VISIBILITY per view, and `ModelLoader` decides its LIGHTING — and ModelLoader
+ * runs FIRST, before any tag applyStructure could leave behind. They were
+ * disagreeing in exactly that gap (2.448.0): a villa whose SweetHome rooms have
+ * "Display ceiling" on exports its ceilings as their own NAMED objects, which
+ * the pipeline never fuses into `Structure`, so `isStructureMesh` is false for
+ * them — and ModelLoader's lightmap pass skips every non-structure mesh. The
+ * result was eleven ceilings that `applyStructure` dutifully made visible and
+ * that rendered BLACK, because they got no lightmap, no uniform fill light, and
+ * no exclusion from the scene's other lights. Reported as "I still don't see the
+ * ceiling in FPS" against a debug line that said eleven were shown.
+ *
+ * The NAME list is the legacy half and stays deliberately short — see this
+ * file's header on why new behaviour goes in a `vk_*` key instead. Height-based
+ * detection is NOT here: it needs a computed world bounding box, so it stays at
+ * its one call site in applyStructure.
+ */
+const CEILING_NAME_RE = /ceiling|plafond|toiture|toit(?!ure)/i;
+
+export function isCeilingMesh(mesh: AbstractMesh): boolean {
+  if (structureRole(mesh).isCeiling) return true;
+  return CEILING_NAME_RE.test(normaliseMeshName(mesh.name));
+}
+
 /** Convenience: is this mesh part of the villa's structure at all? */
 export function isStructureMesh(mesh: AbstractMesh): boolean {
   return structureRole(mesh).isStructure;

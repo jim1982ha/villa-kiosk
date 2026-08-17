@@ -32,7 +32,7 @@ import mscTranscoderJsUrl from "@/assets/ktx2/msc_basis_transcoder.js?url";
 import mscTranscoderWasmUrl from "@/assets/ktx2/msc_basis_transcoder.wasm?url";
 import { saveModelToIndexedDB } from "@/utils/storage";
 import { devLog } from "@/utils/devLog";
-import { isStructureMesh, structureRole } from "./meshRoles";
+import { isCeilingMesh, isStructureMesh } from "./meshRoles";
 
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
 // still only instantiated lazily, when a model actually uses Draco — so an
@@ -687,7 +687,12 @@ export async function loadModelInto(
       const ceilings: AbstractMesh[] = [];
       let missingUv2 = 0;
       for (const m of result.meshes) {
-        if (!isStructureMesh(m)) continue;
+        // ⚠️ `|| isCeilingMesh` — a name-matched ceiling is not pipeline
+        // structure, and skipping it here is what made eleven of them render
+        // black (2.448.0): no lightmap, no uniform fill, and no exclusion from
+        // the scene's other lights, which in baked mode at night is nothing at
+        // all. See isCeilingMesh for why the predicate is shared.
+        if (!isStructureMesh(m) && !isCeilingMesh(m)) continue;
         if (m.getTotalVertices() === 0) continue;
         // Glass and no-BakeUV meshes still count as STRUCTURE — they keep the
         // fill light and stay excluded from the scene's other lights like the
@@ -742,7 +747,7 @@ export async function loadModelInto(
         // open sky, using the --bake-day-ambient family of knobs the pipeline
         // already has), which keeps them in the same lighting model at the cost
         // of a re-bake to see. The owner chose this one; that is the revert.
-        if (structureRole(m).isCeiling) {
+        if (isCeilingMesh(m)) {
           ceilings.push(m);
           noLightmap.push(m);
           continue;
@@ -768,7 +773,7 @@ export async function loadModelInto(
         // conditional clone would skip, and toning the ceiling would tone that
         // furniture too. One compile per distinct ceiling material, of which
         // this villa has one.
-        const isCeiling = structureRole(m).isCeiling;
+        const isCeiling = isCeilingMesh(m);
         if (!isCeiling && !lmMats.has(src as unknown as LightmapMat)) continue;
         const copy = src.clone(`${src.name}__${isCeiling ? "ceiling" : "noLightmap"}`);
         if (copy) m.material = copy;

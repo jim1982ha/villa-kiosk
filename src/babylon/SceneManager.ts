@@ -68,7 +68,7 @@ import { runPerfProbe, type ProbeRow } from "./perfProbe";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
-import { structureRole } from "./meshRoles";
+import { isCeilingMesh, structureRole } from "./meshRoles";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { devLog } from "@/utils/devLog";
@@ -3078,8 +3078,7 @@ export class SceneManager {
     // Never block movement through these (floors, outdoor terrain, helpers, stairs).
     const neverCollide =
       /ground|floor|room_|terrain|grass|lawn|water|pool|sky|__root__|ceiling|plafond|toit|ramp|slope/i;
-    // Ceiling/roof meshes to hide (first-person view; outdoor "roof" artefacts).
-    const ceilingPat = /ceiling|plafond|toiture|toit(?!ure)/i;
+
 
     for (const m of meshes) {
       const name = m.name;
@@ -3139,8 +3138,12 @@ export class SceneManager {
       // wore the 2F floor's texture). The name pattern and the height heuristic
       // stay for every GLB built before that — see meshRoles.ts on why a new
       // structural fact becomes a `vk_*` key and never another word list.
-      if (role.isCeiling || ceilingPat.test(name)
-        || (!isPipelineStructure && meshMinY > 2.5 && meshH < 0.35)) {
+      // `isCeilingMesh` owns the stamp AND the name list (see meshRoles) — the
+      // same predicate ModelLoader lights them by, which is the disagreement
+      // 2.448.0 closed. The HEIGHT heuristic stays here because it needs a
+      // computed world bounding box.
+      const byHeight = !isPipelineStructure && meshMinY > 2.5 && meshH < 0.35;
+      if (isCeilingMesh(m) || byHeight) {
         // HIDDEN IN OVERVIEW, SHOWN WHILE WALKING (2.434.0). A ceiling exists to
         // be under, and the two cameras want opposite things from it: the
         // bird's-eye view is a cut-away and a lid over it shows nothing but the
@@ -3230,13 +3233,14 @@ export class SceneManager {
     // `stamped` separates the two eras: a pipeline ≥2.23.0 GLB reports real
     // ceiling OBJECTS, so a low number is now a finding rather than the norm.
     const stamped = this.ceilingMeshes.filter((m) => structureRole(m).isCeiling).length;
+    const named = this.ceilingMeshes.filter(
+      (m) => !structureRole(m).isCeiling && isCeilingMesh(m)).length;
     tapDebug(
       `ceilings: ${this.ceilingMeshes.length} mesh(es) shown in first-person`
-      + ` (${stamped} stamped vk_role=ceiling by the pipeline,`
-      + ` ${this.ceilingMeshes.length - stamped} matched by name/height)`
-      + (stamped === 0
-        ? " — NO pipeline ceilings in this GLB, and nothing stands in for them since"
-          + " 2.444.0: re-bake with blender_pipeline >=2.23.0 to get one"
+      + ` (${stamped} stamped vk_role=ceiling, ${named} by name,`
+      + ` ${this.ceilingMeshes.length - stamped - named} by height)`
+      + (stamped + named === 0 && this.ceilingMeshes.length === 0
+        ? " — NONE: this GLB ships no ceiling geometry"
         : ""),
     );
     this.requestRender();

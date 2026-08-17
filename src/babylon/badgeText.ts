@@ -65,6 +65,29 @@ export interface BadgeTextOptions {
   weight: string;
   /** Supplies textOpticalTopEm, and nothing else. */
   metrics: BadgeMetrics;
+  /**
+   * LEFT instead of centred, for text that has to line up with something beside
+   * it rather than sit in the middle of its own box. The badge's VALUE is the
+   * one such case: it follows an icon on a row, and a centred string in a box
+   * that hugs it is not the same thing as a string whose first glyph starts at a
+   * known x — `resizeToFit` measures the advance width, which includes the right
+   * side bearing of the last glyph, so a centred string drifts by half that.
+   * Everything else here (both count pills, the room name) is genuinely centred
+   * in a box of its own and must stay that way.
+   */
+  align?: "center" | "left";
+  /**
+   * Skip the optical nudge.
+   *
+   * ⚠️ The nudge exists because text centred in a box of UNRELATED HEIGHT lands
+   * wrong in Babylon (see this file's header). `resizeToFit` removes that
+   * situation — the control becomes its own line box — so for a control that is
+   * then centred by its PARENT the nudge is a second correction on top of a
+   * correct result. It is kept ON by default because it was tuned on real
+   * hardware for the strings that were shipping, and turning it off wholesale
+   * would move four things to fix one. The badge value opts out.
+   */
+  opticalNudge?: boolean;
 }
 
 /**
@@ -86,9 +109,17 @@ export function badgeText(name: string, opts: BadgeTextOptions): TextBlock {
   // gives NaN — and `top: "NaNpx"` does not throw, it silently stops the text
   // rendering at all. That took a release to find and another to understand.
   t.fontSize = opts.fontPx;
-  t.top = `${opts.fontPx * opts.metrics.textOpticalTopEm}px`;
+  t.top = opts.opticalNudge === false
+    ? "0px"
+    : `${opts.fontPx * opts.metrics.textOpticalTopEm}px`;
   t.resizeToFit = true;
-  t.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+  t.textHorizontalAlignment = opts.align === "left"
+    ? Control.HORIZONTAL_ALIGNMENT_LEFT
+    : Control.HORIZONTAL_ALIGNMENT_CENTER;
+  // The CONTROL's own placement in its parent follows the text's: a left-aligned
+  // string whose control is centred is centred again by the parent, which is the
+  // drift this option exists to remove.
+  if (opts.align === "left") t.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
   t.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
   return t;
 }

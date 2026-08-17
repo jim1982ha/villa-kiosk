@@ -4318,6 +4318,12 @@ export class EntityVisuals {
       // badge and shifts with state exactly as the icon does. Classic: white,
       // on its own dark pill. updateLabel re-applies the card case per state.
       const valueText = badgeText(`lbl_value_${entityId}`, {
+        // LEFT, and NO optical nudge — the two things that make a value line up
+        // with the icon beside it rather than float in its own box. See
+        // BadgeTextOptions for why both are per-caller rather than global: the
+        // count pills and the room name are genuinely centred and must not move.
+        align: "left",
+        opticalNudge: false,
         fontPx: card ? m.cardValueFontPx : m.pillValueFontPx,
         color: card
           ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).ink
