@@ -1470,6 +1470,19 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
                 {"error": f"offset mismatch (server has {have}, client sent "
                           f"{offset}) — restart the upload"}, status=409)
 
+    # ⚠️ DELIBERATELY NOT atomic_write / atomic_write_async (/dry-audit note).
+    # Every other write under /data goes through those two, and this is the one
+    # exception: a chunked upload APPENDS across several HTTP requests, while
+    # atomic_write takes a single writer callback and completes within one call —
+    # it cannot express a file whose content arrives over minutes. The atomicity
+    # guarantee is kept by hand and is the same one: all chunks land in `.part`,
+    # never at `dest`, and only the final chunk chmods and os.replace()s it into
+    # place, with `os.unlink(part)` on any exception. A reader therefore sees the
+    # old file or the new one, never a half-assembled GLB.
+    #
+    # Recorded here because a bare `open(..., "ab")` in this file reads exactly
+    # like a missed atomic_write, and an audit that re-flags it every time
+    # eventually gets someone to "fix" it into something that cannot work.
     try:
         with open(part, "wb" if offset == 0 else "ab") as out:
             n = await _stream_upload_body(

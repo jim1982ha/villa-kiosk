@@ -1,3 +1,12 @@
+## 2.432.1
+
+### Changed — one comment, no behaviour
+
+The chunked-upload handler is the only write under /data that does not use the
+shared atomic helper, because a file arriving over several requests cannot. It now
+says so where it happens, so a reader does not mistake it for an oversight and
+"fix" it into something that cannot work.
+
 ## 2.432.0
 
 ### Added — the debug log stops hiding overlaps that involve a focused room
