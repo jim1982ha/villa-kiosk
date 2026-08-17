@@ -1387,6 +1387,13 @@ export class EntityVisuals {
   private occlMs = 0;
   /** performance.now() of the last `walk:` line — see reportWalkCost. */
   private lastWalkReportAt = 0;
+  /**
+   * Reads `CameraController.floorProbeCost` for the `walk:` line — injected by
+   * SceneManager rather than imported, because this file owns no camera and the
+   * scene layer's one rule is that these subsystems talk through SceneManager.
+   * Null until wired, and the field simply reads `-` then.
+   */
+  private walkFloorCost: (() => { rays: number; ms: number }) | null = null;
   /** performance.now() when the eye last MOVED. The sweep waits for this to go
    *  quiet, so a walking frame never pays for a ray — see refreshWallOcclusion. */
   private movingSince = 0;
@@ -5144,6 +5151,11 @@ export class EntityVisuals {
    * Throttled rather than deduped: this is a rate, and a rate printed once per
    * change is a rate nobody can read.
    */
+  /** See `walkFloorCost`. Called once by SceneManager after the camera exists. */
+  setWalkFloorCost(fn: () => { rays: number; ms: number }): void {
+    this.walkFloorCost = fn;
+  }
+
   private reportWalkCost(eligible: number): void {
     // The FLAG, not a channel, and deliberately so: this line is untagged
     // precisely because it measures a tier whose own channel is muted. Do not
@@ -5162,7 +5174,21 @@ export class EntityVisuals {
       // "not asked", which is the misread this project keeps paying for.
       + ` moving=${performance.now() - this.movingSince < OCCLUSION_SETTLE_MS ? "y" : "n"}`
       + ` rays=${this.occlRays}/pass occlMs=${this.occlMs.toFixed(2)}`
-      + ` occluders=${this.occluders.length} active=${this.scene.getActiveMeshes().length}`,
+      + ` occluders=${this.occluders.length} active=${this.scene.getActiveMeshes().length}`
+      // The OTHER raycast that runs while the camera moves — CameraController's
+      // floor follower, which mine is not a substitute for and which no capture
+      // has ever measured. Reported as a RATE (what it spent since the last
+      // line, i.e. per WALK_REPORT_MS) because that is the shape of the
+      // question: how much of a second is it eating? Zeroed on read, so two
+      // lines cannot double-count the same milliseconds.
+      + (() => {
+        const c = this.walkFloorCost?.();
+        if (!c) return " floor=-";
+        const line = ` floorRays=${c.rays} floorMs=${c.ms.toFixed(2)}`;
+        c.rays = 0;
+        c.ms = 0;
+        return line;
+      })(),
     );
   }
 

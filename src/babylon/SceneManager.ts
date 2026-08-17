@@ -659,6 +659,12 @@ export class SceneManager {
     // badges on every overview pan/zoom; the user expects the configured size to
     // hold at any zoom, so the zoom-driven rescale was removed.)
 
+    // The `walk:` diagnostic reports BOTH raycasts that run while the camera
+    // moves, not just the badge one — the floor follower is the other, and no
+    // capture has ever measured it. Wired here, where both objects exist, so
+    // neither subsystem has to know the other.
+    this.visuals.setWalkFloorCost(() => this.camera.floorProbeCost);
+
     // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
     // Created after both cameras exist so SSAO can attach to all of them; the
     // initial apply() pushes config.render onto the freshly-built scene.

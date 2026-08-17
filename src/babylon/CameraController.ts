@@ -64,6 +64,25 @@ export class CameraController {
    *  the per-frame storey test must not have to default it. */
   private roomPolygons: Array<{ name: string; pts: Pt2[]; floorY: number }> = [];
   private currentRoom: string | null = null;
+  /**
+   * What `followFloor`'s raycasts cost, since the last read — the instrument for
+   * the one raycast in this app that runs while the camera is MOVING.
+   *
+   * /dry-audit, 2026-08-17: "what is the floor height below this point" is
+   * supposed to have exactly one answer (`floorProbe.ts`, three callers named in
+   * CLAUDE.md). This is a fourth, and its divergence is only half documented:
+   * the CACHE must differ (a walking camera cannot memoise an answer that
+   * changes every step — see SceneManager.applyStructure's octree note), but its
+   * PREDICATE also differs, silently, accepting every pickable mesh (~900) where
+   * floorProbe accepts structure only (~307). An owner capture measured a ray
+   * against this geometry at 7-15 ms, and this fires one or two of them ~11
+   * times a second while you walk.
+   *
+   * That makes it a CANDIDATE for the residual walk lag, not a finding — six
+   * perf hypotheses in this app have been argued from exactly that reasoning and
+   * disproved. So it gets measured before it gets changed.
+   */
+  readonly floorProbeCost = { rays: 0, ms: 0 };
   /** Scratch for `roomHitTest` — see updateRoom. */
   private hitX = 0;
   private hitZ = 0;
@@ -433,8 +452,10 @@ export class CameraController {
       // slab above you.
       const predicate = (m: AbstractMesh) =>
         m.isPickable && m.isVisible && m.isEnabled() && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name);
+      const probeT0 = performance.now();
       let hit = this.scene.pickWithRay(
         new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 2.6), predicate);
+      this.floorProbeCost.rays += 1;
       if (!hit?.hit || !hit.pickedPoint) {
         // The band missed: we walked over a drop taller than 1 m (terrace edge
         // down to the garden, a stair void) or re-entered first-person above
@@ -443,7 +464,11 @@ export class CameraController {
         // the real floor however far below and glide down (MAX_STEP paces it).
         hit = this.scene.pickWithRay(
           new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 200), predicate);
+        this.floorProbeCost.rays += 1;
       }
+      // Both rays, including the fallback — which is the expensive one: 200 m
+      // that hits nothing has to be tested against everything.
+      this.floorProbeCost.ms += performance.now() - probeT0;
       // A miss keeps the previous lastFloorHit rather than clearing it, so one
       // unlucky probe (e.g. a momentary gap) doesn't stall the follower for a
       // whole throttle interval — it just tries again next time.

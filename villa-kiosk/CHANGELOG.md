@@ -1,3 +1,14 @@
+## 2.439.0
+
+### Added — the walk report now measures BOTH raycasts that run while you move
+
+An audit of "which code asks what the floor height is" found a fourth asker that
+bypasses the shared one: the camera's own floor follower, firing one or two rays
+about eleven times a second while walking, against every pickable mesh rather than
+structure alone. A ray against this villa measures 7-15 ms. It is measured rather
+than changed — `floorRays=` and `floorMs=` join the `walk:` line — because a perf
+theory argued from reasoning is how this app has been wrong six times.
+
 ## 2.438.1
 
 ### Changed — one allocation per frame removed from the walk path
