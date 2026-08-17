@@ -1,3 +1,16 @@
+## 2.452.0
+
+### Fixed — the badge's padding never positioned anything, and the optical nudge is back
+
+The instrument showed the icon starting at exactly the badge's own left edge while
+the badge's width still counted both paddings: under Babylon's adapt-to-children
+sizing, padding sizes the box and does not move the children, so all of it collected
+as dead space on the right. Five attempts at this were five padding values feeding a
+mechanism that positions nothing — the row is built from sized spacers now, the one
+mechanism that measured what it was set to. And the text's optical nudge is restored:
+every box is centred on the same pixel and the digits still read high, which is the
+third time the arithmetic has been trusted over someone looking at hardware.
+
 ## 2.451.0
 
 ### Fixed — the badge value's margins, measured off the drawn geometry at last

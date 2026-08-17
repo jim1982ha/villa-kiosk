@@ -4190,16 +4190,23 @@ export class EntityVisuals {
         // same on all four sides and width equals height when there is no
         // value. The icon-to-text gap is a different measurement and lives on
         // the value below.
-        // ⚠️ THE LEFT PAD IS SHORT BY THE INK INSET, and that asymmetry is the
-        // whole bug (2.451.0, measured off the drawn geometry at last). The chip's
-        // squircle is baked BADGE_INSET_CARD inside its control, so an equal pad
-        // on both sides is NOT equal on screen: the left margin is
-        // `iconPadX + ink` from the badge edge to the ink, while the right is
-        // `iconPadX` from the text to the edge. Measured on the owner's device:
-        // 3.6 left against 2.0 right. Taking the inset off the left pad makes the
-        // two visible margins agree.
-        badge.paddingLeft = `${Math.max(0, Math.round(iconPadX - inkInset))}px`;
-        badge.paddingRight = `${iconPadX}px`;
+        // ⚠️ ZERO. THE CARD'S OUTER MARGINS ARE SPACER CONTROLS TOO (2.452.0),
+        // and this is measurement, not another theory. The `badge` line printed
+        // `glyph.left === badge.left` EXACTLY while the badge's width still
+        // included both paddings (1 + 16 + 3 + 17 + 2.25 = 39.25, drawn 39) — so
+        // under `descendantsOnlyPadding` + `adaptWidthToChildren` the padding
+        // sizes the box and does NOT offset the children. Every pixel of it
+        // therefore piled up as dead space on the RIGHT: visL=1.60, which is only
+        // the baked ink, against visR=3.00, which was all the padding. Five
+        // attempts at this bug were five different padding values feeding a
+        // mechanism that never positioned anything.
+        //
+        // The gap spacer, by contrast, measured EXACTLY the 3 px it was set to —
+        // a StackPanel lays children out by their widths and gets it right. So
+        // the outer margins become spacers as well, and the whole card is now
+        // positioned by one mechanism that is proven to work.
+        badge.paddingLeft = "0px";
+        badge.paddingRight = "0px";
       } else {
         badge.width = `${m.badgeDiameterPx}px`;
       }
@@ -4245,6 +4252,22 @@ export class EntityVisuals {
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
       glyph.stretch = Image.STRETCH_UNIFORM;
+      /** A transparent, sized gap — the ONE mechanism in this row that measures
+       *  what it is set to (see the badge's zeroed padding above). */
+      const strut = (name: string, w: number): Rectangle => {
+        const r = new Rectangle(`lbl_${name}_${entityId}`);
+        r.thickness = 0;
+        r.background = "";
+        r.width = `${Math.max(0, w)}px`;
+        r.height = `${glyphPx}px`;
+        r.isPointerBlocker = false;
+        return r;
+      };
+      if (row) {
+        // The LEFT margin is short by the baked ink the chip already contributes,
+        // so the two VISIBLE margins match: visL = padL + ink, visR = padR.
+        row.addControl(strut("padl", Math.round(iconPadX - inkInset)));
+      }
       (row ?? badge).addControl(glyph);
 
       // Value: classic → a dark rounded pill BELOW the badge; card → inline
@@ -4292,9 +4315,7 @@ export class EntityVisuals {
         // Added BEFORE the wrap so the row reads glyph | spacer | value. It
         // shares the wrap's visibility: a badge with no value must not carry a
         // gap to nothing, or every valueless card would be that much wider.
-        valueSpacer = new Rectangle(`lbl_valgap_${entityId}`);
-        valueSpacer.thickness = 0;
-        valueSpacer.background = "";
+        valueSpacer = strut("valgap", 0);
         // ⚠️ THE CHIP'S INK IS SMALLER THAN ITS BOX, and missing that is why two
         // attempts at this looked right on paper and wrong on screen (2.447.0).
         // `badgeImageDataUrl` bakes the squircle at BADGE_INSET_CARD (10%) inside
@@ -4320,11 +4341,13 @@ export class EntityVisuals {
         // margin. VISIBLE gap = 2x the visible margin, and the spacer is that
         // minus the baked inset the chip already contributes.
         valueSpacer.width = `${Math.max(1, Math.round(2 * iconPadX - inkInset))}px`;
-        valueSpacer.height = `${glyphPx}px`;
-        valueSpacer.isPointerBlocker = false;
         valueSpacer.isVisible = false;
         row!.addControl(valueSpacer);
         row!.addControl(valueWrap);
+        // The right margin, LAST in the row. It is the counterpart of `padl`
+        // above and the reason the card no longer collects its padding on one
+        // side. Always present: a valueless card is icon + two equal margins.
+        row!.addControl(strut("padr", Math.round(iconPadX)));
       } else {
         valueWrap.height = `${m.valueChipHeightPx}px`;
         valueWrap.cornerRadius = m.valueChipHeightPx / 2;
@@ -4342,12 +4365,21 @@ export class EntityVisuals {
       // badge and shifts with state exactly as the icon does. Classic: white,
       // on its own dark pill. updateLabel re-applies the card case per state.
       const valueText = badgeText(`lbl_value_${entityId}`, {
-        // LEFT, and NO optical nudge — the two things that make a value line up
-        // with the icon beside it rather than float in its own box. See
-        // BadgeTextOptions for why both are per-caller rather than global: the
-        // count pills and the room name are genuinely centred and must not move.
+        // LEFT so the number starts at a known x beside the icon (resizeToFit
+        // measures the advance width, which carries the last glyph's side
+        // bearing, so a centred string drifts by half of it).
         align: "left",
-        opticalNudge: false,
+        // ⚠️ THE OPTICAL NUDGE STAYS ON. I turned it off in 2.448.0 arguing that
+        // `resizeToFit` removes the situation it corrects, and the drawn geometry
+        // says the argument was right and the conclusion was wrong: badge y447+20,
+        // glyph y449+16, text y452+10 — every box centred on 457.0, and the owner
+        // still reads the digits as sitting high. That is EXACTLY what this file's
+        // header already recorded: "the arithmetic says no correction is needed.
+        // It does not match the screen, and the value that does — half a
+        // descender — was arrived at by a person looking at real hardware after
+        // the arithmetic had twice been trusted over them." I trusted it a third
+        // time. Whatever in Babylon's chain the model misses, it is still there
+        // with resizeToFit on.
         fontPx: card ? m.cardValueFontPx : m.pillValueFontPx,
         color: card
           ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).ink
@@ -5385,7 +5417,13 @@ export class EntityVisuals {
     const meas = (c: unknown) => (c as {
       _currentMeasure?: { left: number; top: number; width: number; height: number };
     } | undefined)?._currentMeasure;
-    const origin = meas(this.labels.values().next().value?.badge);
+
+    // ⚠️ Relative to THIS badge, not to some other label's — the first cut read
+    // the origin off `labels.values().next()`, so every value still moved with
+    // the camera, the dedupe never matched, and the owner's capture came back as
+    // two hundred lines. The layout under investigation is INSIDE one badge and
+    // does not move at all; with the right origin this prints once and stops.
+    let origin: { left: number; top: number } | undefined;
     const box = (c: unknown): string => {
       const m = meas(c);
       if (!m || !origin) return "?";
@@ -5399,6 +5437,7 @@ export class EntityVisuals {
       const card = this.isCardStyle();
       const glyphPx = this.glyphPxFor(card);
       const badgeM = meas(lbl.badge);
+      origin = badgeM;
       const glyphM = meas(lbl.glyph);
       const textM = meas(lbl.valueText);
       const ink = card ? glyphPx * BADGE_INSET_CARD : 0;
