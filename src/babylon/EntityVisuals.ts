@@ -4850,7 +4850,12 @@ export class EntityVisuals {
     const cardSizes = [...bySize.entries()].sort(([a], [b]) => a - b)
       .map(([n, c]) => `${n}x${c}`).join(",") || "-";
     const line =
-      `place rung=${clearance.pxPerWorld.toFixed(3)} icon=${this.iconUserScale.toFixed(2)}x`
+      // The build, on the line itself — a `place` line is almost always pasted
+      // as an EXCERPT, so the panel's one-time banner does not travel with it.
+      // v2.417.0's claim was falsifiable from two of these lines; deciding
+      // whether it had failed or simply not shipped was not.
+      `place v${typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "?"}`
+      + ` rung=${clearance.pxPerWorld.toFixed(3)} icon=${this.iconUserScale.toFixed(2)}x`
       + ` zoom=${this.iconZoomScale.toFixed(2)} gapPx=${clearance.gap.toFixed(1)}`
       + ` sepPx=${clearance.minSep.toFixed(1)}`
       + ` sinTilt=${clearance.basis.sinPhi.toFixed(3)} az=${clearance.basis.ax.toFixed(3)}`

@@ -266,11 +266,32 @@ function ensureBox(): HTMLDivElement {
  *  available (e.g. testing from a desktop browser) — plain console.log is
  *  ordinary JS, not stripped in production like devLog.ts's calls are, so
  *  this works in the deployed build same as the on-screen box does. */
+/**
+ * ── EVERY CAPTURE STAMPS ITS BUILD, ONCE, BEFORE ANYTHING ELSE (2.418.0) ───
+ * A capture that does not say which build produced it cannot be read: the
+ * fields change meaning between releases, and — the reason this exists — a
+ * fix that has not reached the device is indistinguishable from a fix that did
+ * not work. That cost a full round-trip: v2.417.0's whole claim is "one rung
+ * ⇒ one icon scale", the returning capture showed one rung with two scales,
+ * and settling whether the code was wrong or simply not running took an
+ * arithmetic argument over `gapPx / zoom` instead of one line at the top.
+ *
+ * `__APP_VERSION__` already existed (Settings prints it, telemetry sends it,
+ * diagnostics list it) — the debug panel was the one reader that did not ask.
+ */
+let stamped = false;
+function versionBanner(): string {
+  const v = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "?";
+  const chans = wanted.size > 0 ? [...wanted].join(",") : "all";
+  return `villa-kiosk v${v} — debug channels: ${chans}`;
+}
+
 export function tapDebug(msg: string, channel?: string): void {
   if (!debugFlagEnabled()) return;
   // Untagged lines always pass — see `wanted`. A tagged line passes when no
   // filter was asked for, or when its channel was named.
   if (channel && wanted.size > 0 && !wanted.has(channel)) return;
+  if (!stamped) { stamped = true; tapDebug(versionBanner()); }
   const stamp = new Date().toISOString().slice(11, 23);
   const line = `${stamp} ${msg}`;
   console.log(`[tapDebug] ${line}`);

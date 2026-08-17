@@ -1,3 +1,12 @@
+## 2.418.0
+
+### Changed — the debug log now says which version produced it
+
+A diagnostic that does not name its build cannot be read: a fix that has not
+reached the device looks exactly like a fix that did not work, and telling the
+two apart cost a round-trip. The version is now the first line of every
+capture, and repeated on each placement line since those get pasted alone.
+
 ## 2.417.0
 
 ### Fixed — the map flickered between a few room badges and many while zooming
