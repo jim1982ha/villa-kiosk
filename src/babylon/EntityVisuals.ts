@@ -5158,29 +5158,61 @@ export class EntityVisuals {
     // tap and long-press both ask pickBadgeAt first. The one dial, if it ever
     // costs more than the early grouping did, is GROUP_OVERLAP_ALLOW_WIDTHS at
     // -0.075 (half the old margin).
-    let buried = 0, overhung = 0;
+    // ── BUCKET, DO NOT DROP (2.432.0) ─────────────────────────────────────
+    // These two `continue`s USED to skip every pair involving a focused card or
+    // a focused badge, which made this test blind in exactly the state every
+    // reported overlap has come from. The exemption is NOT the same condition as
+    // "all other rooms are chipped": cullLabels computes `suppressOthers`
+    // separately (`focusedRooms.size > 0 && z <= focusedAtZoom`), so a focus can
+    // be live while other rooms still draw their own badges and cards — a
+    // capture caught precisely that, `exempt=12` beside `chips=1`.
+    //
+    // So focused pairs go in their own bucket, which is the pattern the
+    // badge-vs-badge test two tiers up already uses (`focusOverlaps`). Dropping
+    // them is what made `chipHits` report 0 for the case a screenshot showed
+    // plainly (2.430.0), and /dry-audit found the same shape here. A counter
+    // must never be blind to the case it exists to see; if a category is
+    // expected, LABEL it, do not exclude it.
+    let buried = 0, overhung = 0, focusCardHits = 0;
     for (let k = 0; k < cardBoxes.length; k++) {
-      if (cardFocused[k]) continue; // skips `fits` by design — see PendingEntityGroup.focused
       for (let i = 0; i < badgeBoxes.length; i++) {
-        if (badgeExempt[i]) continue;
-        if (hits(cardInk[k], badgeBoxes[i])) buried++;
-        else if (hits(cardBoxes[k], badgeBoxes[i])) overhung++;
+        const ink = hits(cardInk[k], badgeBoxes[i]);
+        if (!ink && !hits(cardBoxes[k], badgeBoxes[i])) continue;
+        // A focused card never went through `fits`, and a focused badge blocks
+        // nobody — so neither is a violation. Still counted, so the number
+        // exists.
+        if (cardFocused[k] || badgeExempt[i]) { focusCardHits++; continue; }
+        if (ink) buried++; else overhung++;
       }
     }
     if (buried) tapDebug(`PLACEMENT: ${buried} drawn badge(s) BURIED under a summary's ink`);
     if (overhung) tapDebug(`PLACEMENT: ${overhung} drawn badge(s) under a card's overhang (allowed)`);
+    if (focusCardHits) {
+      tapDebug(`PLACEMENT: ${focusCardHits} badge/card overlap(s) involving a FOCUSED`
+        + " object (expected: a focused card skips `fits`, a focused badge blocks"
+        + " nobody — pairFocusedRoom is what keeps them all tappable)");
+    }
 
-    // (c) Summary vs summary. This one must be EXACTLY ZERO, always — it is
-    // the single clearance guarantee `fits` makes without qualification, and
-    // nothing has ever verified it. Focused groups are excluded because they
-    // never went through `fits` at all.
-    let summaryOverlaps = 0;
+    // (c) Summary vs summary. This one must be EXACTLY ZERO for cards that went
+    // through `fits` — the single clearance guarantee it makes without
+    // qualification, and nothing verified it before 2.405.0.
+    //
+    // Focused groups are BUCKETED rather than skipped, for the reason (b) above
+    // spells out: they never went through `fits`, so they are not violations,
+    // but two focused pair-cards CAN overlap each other (pairFocusedRoom emits
+    // several per room) and a counter that drops them cannot say so.
+    let summaryOverlaps = 0, summaryFocusOverlaps = 0;
     for (let i = 0; i < cardBoxes.length; i++) {
-      if (cardFocused[i]) continue;
       for (let j = i + 1; j < cardBoxes.length; j++) {
-        if (cardFocused[j]) continue;
-        if (hits(cardBoxes[i], cardBoxes[j])) summaryOverlaps++;
+        if (!hits(cardBoxes[i], cardBoxes[j])) continue;
+        if (cardFocused[i] || cardFocused[j]) summaryFocusOverlaps++;
+        else summaryOverlaps++;
       }
+    }
+    if (summaryFocusOverlaps) {
+      tapDebug(`PLACEMENT: ${summaryFocusOverlaps} summary pair(s) OVERLAP involving a`
+        + " FOCUSED card (expected: a focused card is seated unconditionally and"
+        + " never went through `fits`)");
     }
     if (summaryOverlaps) {
       tapDebug(`PLACEMENT: ${summaryOverlaps} summary pair(s) OVERLAP on screen`

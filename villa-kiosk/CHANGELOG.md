@@ -1,3 +1,12 @@
+## 2.432.0
+
+### Added — the debug log stops hiding overlaps that involve a focused room
+
+Three more checks silently skipped every pair involving a tapped room's badge or
+card, which is the exact state every overlap reported this week came from. They
+now count those pairs on their own labelled line instead of dropping them, the
+same way the badge-vs-badge check already did.
+
 ## 2.431.1
 
 ### Changed — one debug message, no behaviour
