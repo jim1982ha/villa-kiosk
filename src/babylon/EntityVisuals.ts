@@ -5201,18 +5201,35 @@ export class EntityVisuals {
     // height, exactly as badges and cards are). Focused-room badges are
     // excluded: they are exempt from the escalation pass by design, because
     // tapping a room must not be able to make that room vanish.
+    // ⚠️ THE FOCUSED CASE IS COUNTED, NOT EXCLUDED (2.430.0). This skipped every
+    // exempt badge and focused card — and when a room is focused those are the
+    // ONLY things drawn besides the chips, so `chipHits=0` meant "not measured"
+    // rather than "did not happen". A capture of exactly this complaint came
+    // back clean while the screenshot showed it plainly. Third blind counter in
+    // this file's history — same shape as estErr (2.421.0) and the chip-vs-chip
+    // pair test (2.420.0): a counter must never be blind to the case it exists
+    // to see. Reported SEPARATELY because it is expected and now harmless: the
+    // chip paints behind (zIndex -1) and is asked last for taps, so the device
+    // stays both visible and reachable.
     let chipHits = 0;
+    let chipHitsFocused = 0;
     for (const c of chips) {
       const box: ScreenBox = { cx: c.x, cy: c.y - c.halfH, hw: c.halfW, hh: c.halfH };
       if (!onScreen(box)) continue;
       for (let i = 0; i < badgeBoxes.length; i++) {
-        if (!badgeExempt[i] && hits(box, badgeBoxes[i])) chipHits++;
+        if (!hits(box, badgeBoxes[i])) continue;
+        if (badgeExempt[i]) chipHitsFocused++; else chipHits++;
       }
       for (let k = 0; k < cardBoxes.length; k++) {
-        if (!cardFocused[k] && hits(box, cardBoxes[k])) chipHits++;
+        if (!hits(box, cardBoxes[k])) continue;
+        if (cardFocused[k]) chipHitsFocused++; else chipHits++;
       }
     }
     if (chipHits) tapDebug(`PLACEMENT: ${chipHits} drawn badge(s)/card(s) OVERLAP a room chip`);
+    if (chipHitsFocused) {
+      tapDebug(`PLACEMENT: ${chipHitsFocused} FOCUSED badge(s)/card(s) over a room chip`
+        + " (allowed: the chip paints behind and is asked last for taps)");
+    }
 
     // ── (e) CHIP vs CHIP, AND THE ESTIMATE THAT DECIDES IT (2.420.0) ──────
     // The last hole in this family: every other tier had an overlap counter
@@ -7611,6 +7628,23 @@ export class EntityVisuals {
     });
     countBadge.addControl(countText);
 
+    // ── A ROOM CHIP PAINTS BEHIND BADGES AND CARDS (2.430.0) ───────────────
+    // Reported: focus a room and its devices draw "behind" other rooms' chips.
+    // They did. Every control here shares one layer at the default zIndex, so
+    // paint order WAS insertion order, and clusters are built last — after
+    // badges (rebuildLabels) and after summary cards. A chip therefore painted
+    // over the very devices the focus exists to show.
+    //
+    // A chip labels a room you are NOT looking at; a badge is a device you are.
+    // When they overlap the specific thing wins — the same rule the tap path
+    // already states for cards ("a tap that lands on something visible belongs
+    // to that thing").
+    //
+    // ⚠️ PAINT ORDER AND HIT ORDER MUST AGREE. SceneManager's handleTap and
+    // handleLongPress now ask pickClusterAt LAST among the GUI tiers; flipping
+    // one without the other leaves a chip nobody can see stealing taps from the
+    // badge drawn on top of it. Both were `chip first` and both moved together.
+    container.zIndex = -1;
     layer.addControl(container);
     container.linkWithMesh(node);
     container.linkOffsetYInPixels = -sm.size / 2;

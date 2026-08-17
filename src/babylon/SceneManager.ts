@@ -463,17 +463,7 @@ export class SceneManager {
     // see EntityVisuals.pickBadgeAt()'s docstring for why that was dropped.
     const handleTap = (x: number, y: number) => {
       tapDebug(`TAP client(${x.toFixed(0)},${y.toFixed(0)})`);
-      // Room-cluster chips first: a chip only exists while its room is too
-      // crowded to show individual badges, so this can never take a tap away
-      // from a badge the user can actually see. A short tap navigates to the
-      // room (onClusterTapped) — the long-press-for-the-full-list gesture is
-      // handled separately below.
-      const cluster = this.visuals.pickClusterAt(x, y);
-      if (cluster && opts.onClusterTapped) {
-        opts.onClusterTapped(cluster.room, cluster.entityIds, cluster.roomNames);
-        return;
-      }
-      // Entity groups (tier 4) next, and before badges for the same reason:
+      // Entity groups (tier 4) first, and before badges:
       // a group's members are hidden exactly while it is drawn, so it cannot
       // steal a tap from a badge anyone can see. Unlike a room chip, a TAP
       // opens the device list rather than navigating — you are already looking
@@ -507,16 +497,30 @@ export class SceneManager {
       }
       const badgeEntity = this.visuals.pickBadgeAt(x, y, true);
       if (badgeEntity) { opts.onEntityPicked(badgeEntity, x, y); return; }
+      // ── ROOM CHIPS LAST AMONG THE GUI TIERS (2.430.0) ─────────────────────
+      // This ran FIRST, on the premise that "a chip only exists while its room
+      // is too crowded to show individual badges, so this can never take a tap
+      // away from a badge the user can actually see". That premise is false
+      // whenever a room is FOCUSED: the chip belongs to room A while room B's
+      // exempt badges and pair-cards draw on top of it, so the chip was taking
+      // taps from devices the user could see — and painting over them too.
+      //
+      // Asking it last is the same rule this function already states two tiers
+      // up: a tap that lands on something visible belongs to that thing. Safe
+      // because pickBadgeAt tests the DRAWN controls (Control.contains) with no
+      // slop ring of its own, so it can only pre-empt the chip where a badge is
+      // genuinely painted. Paired with `container.zIndex = -1` on the chip in
+      // EntityVisuals.ensureCluster — paint order and hit order must agree.
+      const cluster = this.visuals.pickClusterAt(x, y);
+      if (cluster && opts.onClusterTapped) {
+        opts.onClusterTapped(cluster.room, cluster.entityIds, cluster.roomNames);
+        return;
+      }
       this.pick.pickAtScreen(x, y);
     };
     const handleLongPress = (x: number, y: number) => {
       tapDebug(`LONGPRESS client(${x.toFixed(0)},${y.toFixed(0)})`);
-      const cluster = this.visuals.pickClusterAt(x, y);
-      if (cluster && opts.onClusterPicked) {
-        opts.onClusterPicked(cluster.room, cluster.entityIds, cluster.roomNames);
-        return;
-      }
-      // Entity groups next, and the CELL ANSWERS FIRST — exactly as it does in
+      // Entity groups first, and the CELL ANSWERS FIRST — exactly as it does in
       // handleTap, because a cell IS that device's badge. A summary of 2-6
       // draws one badge box per member and hides the badges themselves, so a
       // cell is not a shorthand for the group: it is the only representation
@@ -546,6 +550,16 @@ export class SceneManager {
       }
       const badgeEntity = this.visuals.pickBadgeAt(x, y, true);
       if (badgeEntity) { opts.onEntityLongPressed(badgeEntity, x, y); return; }
+      // Room chips LAST, for the reason handleTap spells out: a chip paints
+      // BEHIND badges and cards (zIndex -1), so it must not answer for a pixel
+      // one of them is drawn on. Both gestures moved together — a tap and a
+      // press-and-hold resolving to different objects at one point is worse
+      // than either order.
+      const cluster = this.visuals.pickClusterAt(x, y);
+      if (cluster && opts.onClusterPicked) {
+        opts.onClusterPicked(cluster.room, cluster.entityIds, cluster.roomNames);
+        return;
+      }
       this.pick.pickAtScreen(x, y, true);
     };
 

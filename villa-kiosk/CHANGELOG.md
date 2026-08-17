@@ -1,3 +1,12 @@
+## 2.430.0
+
+### Fixed — a tapped room's devices drew behind other rooms' name chips
+
+Every label shares one layer at the same depth, so paint order was creation
+order and chips are built last — over the devices the focus exists to show. A
+chip now paints behind them, and both tap and press-and-hold ask it last so a
+chip nobody can see cannot take a tap from the badge on top of it.
+
 ## 2.429.0
 
 ### Fixed — devices stacked at different heights drew on top of each other
