@@ -248,21 +248,26 @@ function placeDebug(msg: string): void {
 
 // ── First-person wall occlusion (see refreshWallOcclusion) ──────────────────
 /**
- * Rays per layout pass. The whole point is that this is a BUDGET and not a
- * count of badges: the cost of a pass must not grow with the villa.
+ * How long a settled pass may spend casting, before it stops and leaves the
+ * rest of the sweep to the next frame.
  *
- * ⚠️ This is a SUSTAINED cost, not a burst — walking moves the eye every frame,
- * so the sweep restarts every frame and never finishes while you are moving.
- * Eight against the 1-2 rays `CameraController.followFloor` already casts each
- * frame against the same geometry is a 4-8x step on the one code path that has
- * previously frozen this app on a phone, so the coarse-pointer budget is half
- * the fine one: four rays sweep a hundred badges in 25 passes — under half a
- * second of walking — and a badge lagging the camera by that much is invisible
- * next to the camera's own motion. `rays=` on the `place` line is the field to
- * read if this ever needs re-tuning; it is measured, not assumed.
+ * ⚠️ A TIME budget, because a RAY-COUNT budget is a budget in the wrong unit —
+ * and that mistake shipped. An owner capture measured the same eight rays at
+ * 7 ms in one pose and 121 ms in another: a baked villa's structure is ~150
+ * material primitives per storey whose bounding boxes each span the whole
+ * building, so nothing is rejected cheaply and a ray that hits nothing is the
+ * most expensive kind. A count that is affordable in a corridor is four dropped
+ * frames looking down the hall. Milliseconds are the same everywhere.
+ *
+ * Only ever spent while the camera is STILL (see refreshWallOcclusion), so this
+ * is not competing with a frame anyone is watching move.
  */
-const OCCLUSION_RAYS_FINE = 8;
-const OCCLUSION_RAYS_COARSE = 4;
+const OCCLUSION_MS_BUDGET = 8;
+const OCCLUSION_MS_COARSE = 4;
+/** How long the eye must hold still before the sweep resumes. Long enough that
+ *  a walk of many small steps never triggers it, short enough that stopping to
+ *  look at something settles before you have finished looking. */
+const OCCLUSION_SETTLE_MS = 250;
 /** Devices closer than this are in the room with you by definition — testing
  *  them buys nothing and a very short ray is the one most likely to clip the
  *  surface the device is mounted on. */
@@ -1382,6 +1387,9 @@ export class EntityVisuals {
   private occlMs = 0;
   /** performance.now() of the last `walk:` line — see reportWalkCost. */
   private lastWalkReportAt = 0;
+  /** performance.now() when the eye last MOVED. The sweep waits for this to go
+   *  quiet, so a walking frame never pays for a ray — see refreshWallOcclusion. */
+  private movingSince = 0;
   /**
    * The meshes a wall-occlusion ray may hit — resolved ONCE per indexMeshes,
    * because it cannot change while you walk.
@@ -4972,18 +4980,33 @@ export class EntityVisuals {
    * wall in front of you, is not a label for anything you can see.
    *
    * ── Why this cannot be a per-frame raycast ────────────────────────────────
-   * One ray per badge per pass, at ~50-100 badges, against a fused structure
-   * mesh, on every frame of a walk, is precisely the cost profile that once
-   * froze this app the instant first-person movement started (see
-   * SceneManager.applyStructure's octree note). So the sweep is BUDGETED and
-   * round-robin: at most `OCCLUSION_RAYS_PER_PASS` rays per layout pass, each
-   * badge keeping its previous answer until its turn comes round. A full sweep
-   * of a hundred badges completes in ~13 passes — a fifth of a second of
-   * walking — and the error in between is a badge that lags by that much, which
-   * is invisible next to the camera's own motion.
+   * ── IT CASTS NOTHING WHILE YOU ARE MOVING, AND THAT IS THE DESIGN (2.438.0) ─
+   * MEASURED, from an owner capture, after I shipped this costing a ray budget
+   * per frame: `occlMs=54.4 … 121.3` for eight rays — 7 to 15 ms EACH, against
+   * a frame budget of 16. `occluders=307`, because a baked villa's structure is
+   * split into ~150 material primitives per storey and each one's bounding box
+   * spans the whole building, so the cheap bounding rejection rejects nothing
+   * and every ray does real triangle work across ~1.4M triangles. floorProbe's
+   * header had already recorded this exact fact ("~950 ms measured, 27% of
+   * visible load" for a few hundred probes) and its whole design — memoise per
+   * room, persist to localStorage — exists because of it. I had the number and
+   * shipped eight per frame anyway.
    *
-   * The sweep restarts whenever the eye MOVES, and only then: standing still,
-   * it finishes once and every later pass costs a single Vector3 comparison.
+   * So the rule is: **a moving camera casts no rays at all.** It keeps the
+   * answers from the last time it stood still, which are wrong by at most the
+   * distance walked since — and a badge that lags a step behind while the whole
+   * view is sliding is invisible, where a 100 ms hitch is not. The sweep runs
+   * only once the eye has been still for `OCCLUSION_SETTLE_MS`, which is also
+   * exactly when the frames are cheap enough to afford it.
+   *
+   * The budget is then TIME, not a ray count, because a ray count is a budget
+   * in the wrong unit: the same eight rays cost 7 ms in a corridor and 121 ms
+   * looking down the length of the villa. At least one ray always runs (so the
+   * sweep cannot stall) and the pass stops as soon as it has spent
+   * `OCCLUSION_MS_BUDGET`. On this villa that is one ray per pass and a full
+   * sweep of 73 badges takes about a second of standing still — unnoticeable,
+   * because nothing is moving.
+   *
    * While a sweep is incomplete the pass marks the layout dirty and asks for
    * another frame, because `cullLabels` early-returns on an unchanged
    * view-projection matrix — without that, stopping mid-sweep would freeze half
@@ -5014,25 +5037,43 @@ export class EntityVisuals {
     // which the resolution valve moves every time the camera starts or stops
     // (see quantisedPixelsPerWorldUnit's cssPixels note). A camera position
     // cannot be forged by a resolution change.
-    if (this.occlusionSwept >= shown.length && this.occlusionFrom.equalsWithEpsilon(eye, 1e-4)) {
+    const still = this.occlusionFrom.equalsWithEpsilon(eye, 1e-4);
+    if (this.occlusionSwept >= shown.length && still) {
       // Zero rays is the truth for this pass, and leaving the previous pass's
       // count standing would overstate the sustained cost in every capture
       // taken while standing still.
       this.occlRays = 0;
+      this.occlMs = 0;
       return;
     }
-    if (!this.occlusionFrom.equalsWithEpsilon(eye, 1e-4)) {
+    if (!still) {
       this.occlusionFrom.copyFrom(eye);
       this.occlusionSwept = 0;
+      this.movingSince = performance.now();
+    }
+    // ⚠️ NOT A FRAME OF RAYS WHILE MOVING — see this method's header. The
+    // answers on screen are the last still pose's, stale by at most the
+    // distance walked, and the cost of a walking frame is unchanged from before
+    // this feature existed. `requestRender` keeps a settle frame coming so the
+    // sweep starts the moment the camera stops.
+    if (performance.now() - this.movingSince < OCCLUSION_SETTLE_MS) {
+      this.occlRays = 0;
+      this.occlMs = 0;
+      this.requestRender();
+      return;
     }
     const dir = this.occlDir;
-    // The pointer class this file already tracks for badge sizing — a phone
-    // gets half the ray budget. Read per pass rather than cached: it is a
-    // property lookup, and `observePointerClass` can change it live.
-    const budget = this.pointer === "coarse" ? OCCLUSION_RAYS_COARSE : OCCLUSION_RAYS_FINE;
+    // A TIME budget, halved on a phone. A ray-count budget was the wrong unit:
+    // the same eight rays measured 7 ms in a corridor and 121 ms down the
+    // length of the villa, so the count that is safe in one pose is a dropped
+    // frame in another. This one is self-limiting on any device and any villa.
+    const msBudget = this.pointer === "coarse" ? OCCLUSION_MS_COARSE : OCCLUSION_MS_BUDGET;
     const t0 = performance.now();
     let rays = 0;
-    while (this.occlusionSwept < shown.length && rays < budget) {
+    // `rays < 1 ||` — at least one ray always runs, or a villa where a single
+    // ray exceeds the whole budget would never sweep at all.
+    while (this.occlusionSwept < shown.length
+      && (rays < 1 || performance.now() - t0 < msBudget)) {
       const s = shown[this.occlusionCursor % shown.length];
       this.occlusionCursor++;
       this.occlusionSwept++;
@@ -5115,7 +5156,11 @@ export class EntityVisuals {
     const eng = this.scene.getEngine();
     tapDebug(
       `walk: fps=${eng.getFps().toFixed(0)}`
-      + ` occl=${this.occludedIds.size}/${eligible} swept=${this.occlusionSwept}`
+      + ` occl=${this.occludedIds.size}/${eligible} swept=${this.occlusionSwept}/${eligible}`
+      // `moving` is the field that says whether the sweep was even ALLOWED to
+      // run this pass — without it, `rays=0` reads as "cheap" when it means
+      // "not asked", which is the misread this project keeps paying for.
+      + ` moving=${performance.now() - this.movingSince < OCCLUSION_SETTLE_MS ? "y" : "n"}`
       + ` rays=${this.occlRays}/pass occlMs=${this.occlMs.toFixed(2)}`
       + ` occluders=${this.occluders.length} active=${this.scene.getActiveMeshes().length}`,
     );

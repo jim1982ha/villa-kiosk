@@ -1,3 +1,15 @@
+## 2.438.0
+
+### Fixed — walking was laggy, and the wall cull was the measurable half of it
+
+A capture put a number on it: eight occlusion rays cost 54-121 ms in a single
+frame, because this villa's structure is hundreds of material primitives whose
+bounding boxes each span the whole building, so nothing is cheaply rejected. A
+moving camera now casts none at all — it keeps the answers from the last time you
+stood still, which are wrong by at most the distance walked — and a settled pass
+stops on a millisecond budget rather than a ray count, because the same eight rays
+cost 7 ms in a corridor and 121 ms down the hall.
+
 ## 2.437.1
 
 ### Fixed — no room name at all when walking
