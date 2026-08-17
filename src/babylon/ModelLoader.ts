@@ -32,7 +32,7 @@ import mscTranscoderJsUrl from "@/assets/ktx2/msc_basis_transcoder.js?url";
 import mscTranscoderWasmUrl from "@/assets/ktx2/msc_basis_transcoder.wasm?url";
 import { saveModelToIndexedDB } from "@/utils/storage";
 import { devLog } from "@/utils/devLog";
-import { isStructureMesh } from "./meshRoles";
+import { isStructureMesh, structureRole } from "./meshRoles";
 
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
 // still only instantiated lazily, when a model actually uses Draco — so an
@@ -195,6 +195,17 @@ const BAKED_NIGHT_RE = /night/i;
 // few cm/texel. Must be tested BEFORE the generic BAKED_ branch below (the
 // night carrier would otherwise be captured as an albedo night atlas).
 const BAKED_LIGHTMAP_PREFIX = "BAKED_Lightmap";
+/**
+ * How much of its authored colour an exempt CEILING keeps, so it sits among the
+ * baked walls instead of glowing against them — see the tone loop in the
+ * lightmap branch for why an exact match is not available at all.
+ *
+ * 0.45 is the top of the range the pipeline measured for enclosed interior
+ * surfaces (~0.28 ambient-only, ~0.46 sunlit — both cited in
+ * `_drop_top_ceiling`'s docstring), so it reads as a lit ceiling rather than a
+ * lamp. Raise it toward 1 for a brighter ceiling; the ONE knob for this.
+ */
+const CEILING_TONE = 0.45;
 // Meshes whose materials receive the lightmap: the pipeline's structure
 // groups (it forks any material shared with entities to a private _ST copy,
 // so wiring these never leaks the lightmap onto UV2-less entity meshes).
@@ -663,7 +674,17 @@ export async function loadModelInto(
       lmDayTex.coordinatesIndex = 1; // the pipeline's BakeUV → TEXCOORD_1
       const structureMeshes: AbstractMesh[] = [];
       const lmMats = new Set<LightmapMat>();
-      const noBakeUv: AbstractMesh[] = [];
+      /** Structure meshes the lightmap is WITHHELD from, for either of two
+       *  unrelated reasons — no TEXCOORD_1 to sample it at, or it is a ceiling
+       *  that renders on its own colour (see both sites below). One list because
+       *  the remedy is identical; two counters because the reasons are not, and
+       *  a single number would make "your GLB is missing bake UVs" and "your
+       *  ceilings are working as intended" the same reading. */
+      const noLightmap: AbstractMesh[] = [];
+      /** The ceiling subset of `noLightmap` — same withholding, but they alone
+       *  get the tonal scale below. A window that arrived without BakeUV must
+       *  keep its authored brightness. */
+      const ceilings: AbstractMesh[] = [];
       let missingUv2 = 0;
       for (const m of result.meshes) {
         if (!isStructureMesh(m)) continue;
@@ -693,7 +714,37 @@ export async function loadModelInto(
         // instead, which is merely flatter, not wrong.
         if (!m.isVerticesDataPresent(VertexBuffer.UV2Kind)) {
           missingUv2++;
-          noBakeUv.push(m);
+          noLightmap.push(m);
+          continue;
+        }
+        // ── A CEILING RENDERS ON ITS OWN COLOUR, NOT ON A LIGHTMAP (2.445.0) ──
+        // It CAN be lightmapped — it has BakeUV — and the result is nearly
+        // black, for a reason that is structural rather than a bad bake. The
+        // pipeline bakes every storey under an OPEN SKY (each storey with the
+        // ones above it hidden), which is the fiction that makes interiors
+        // bright. A ceiling cannot take part in that fiction, because it IS the
+        // thing the fiction removes: while its own group bakes, the room beneath
+        // it is lidded BY IT, so the only surface anyone ever sees — the
+        // underside — sits in a sunless room and receives almost nothing. On
+        // this villa that came out as a white material times a near-zero
+        // lightmap, reported as "the ceiling appears grey despite having set a
+        // colour in Sweet Home 3D".
+        //
+        // So it is withheld, and what is left is exactly what the author asked
+        // for: the uniform white fill light below makes a lit material evaluate
+        // to its plain albedo, i.e. the SweetHome colour, flat and even — which
+        // is how a ceiling reads anyway.
+        //
+        // ⚠️ KNOWN TRADE, accepted deliberately: a withheld surface does not
+        // follow the day/night lightmap swap, so a pale ceiling stays pale at
+        // midnight while every other surface darkens. The alternative was to
+        // fix the BAKE (give ceiling groups a uniform ambient instead of the
+        // open sky, using the --bake-day-ambient family of knobs the pipeline
+        // already has), which keeps them in the same lighting model at the cost
+        // of a re-bake to see. The owner chose this one; that is the revert.
+        if (structureRole(m).isCeiling) {
+          ceilings.push(m);
+          noLightmap.push(m);
           continue;
         }
         if (mat) lmMats.add(mat);
@@ -703,11 +754,60 @@ export async function loadModelInto(
       // above is not enough on its own. Give those meshes their own copy, and
       // only when the material they share is genuinely about to be lightmapped
       // (a clone costs a shader compile, which is the load's dominant cost).
-      for (const m of noBakeUv) {
+      for (const m of noLightmap) {
         const src = m.material;
-        if (!src || !lmMats.has(src as unknown as LightmapMat)) continue;
-        const copy = src.clone(`${src.name}__noBakeUV`);
+        if (!src) continue;
+        // ⚠️ A CEILING ALWAYS gets its own copy; a no-BakeUV mesh only when the
+        // material it shares is genuinely about to be lightmapped (a clone costs
+        // a shader compile, and that path can involve many meshes).
+        //
+        // The difference matters because a ceiling is about to be MUTATED — the
+        // tone scale below — not merely left out of something. If its material
+        // happened to be shared with a mesh that is not lightmapped structure
+        // (a furniture piece wearing the same SweetHome material), the
+        // conditional clone would skip, and toning the ceiling would tone that
+        // furniture too. One compile per distinct ceiling material, of which
+        // this villa has one.
+        const isCeiling = structureRole(m).isCeiling;
+        if (!isCeiling && !lmMats.has(src as unknown as LightmapMat)) continue;
+        const copy = src.clone(`${src.name}__${isCeiling ? "ceiling" : "noLightmap"}`);
         if (copy) m.material = copy;
+      }
+      // The two intensities the lightmapped branch zeroes below, zeroed here
+      // too. Without them an exempt surface is albedo PLUS the scene's IBL
+      // gradient and a specular lobe — brighter and shinier than the colour
+      // that was authored, which for a ceiling deliberately showing its own
+      // flat colour is the whole point missed. `environmentIntensity` matters
+      // most: the gradient ignores `light.excludedMeshes`, which is why the
+      // lightmapped branch has to zero it as well.
+      for (const m of noLightmap) {
+        const mat = m.material as LightmapMat | null;
+        if (!mat) continue;
+        mat.environmentIntensity = 0;
+        mat.specularIntensity = 0;
+      }
+      // ── AND A CEILING IS TONED DOWN TO SIT AMONG THE BAKED WALLS ──────────
+      // Withholding the lightmap answers "show the authored colour" and creates
+      // a second problem the owner spotted before it shipped: a wall renders as
+      // albedo x BAKED LIGHT, and an exempt ceiling renders as albedo x 1. Give
+      // both the same SweetHome colour and the ceiling comes out two to three
+      // times brighter than the wall beside it — the same colour, plainly not
+      // matching, which was the actual goal.
+      //
+      // No exact match exists. A wall's light is the light the ceiling BLOCKS,
+      // so the ceiling can never carry it, whatever we do here. What is
+      // available is the tonal RANGE, and the pipeline measured it: an enclosed
+      // interior surface bakes at ~0.28 (ambient only) and a sunlit one at ~0.46
+      // (see _drop_top_ceiling's docstring, which cites both). 0.45 puts the
+      // ceiling at the top of that range — a lit-looking ceiling rather than a
+      // glowing one — and is a measurement rather than a preference.
+      //
+      // Scaling albedoColor works for a plain colour AND a texture: in Babylon's
+      // PBR it multiplies the albedo texture, so a textured ceiling is toned
+      // rather than flattened.
+      for (const m of ceilings) {
+        const mat = m.material as (LightmapMat & { albedoColor?: Color3 }) | null;
+        if (mat?.albedoColor) mat.albedoColor = mat.albedoColor.scale(CEILING_TONE);
       }
       for (const sm of lmMats) {
         // useLightmapAsShadowmap makes the PBR shader MULTIPLY the lit result
@@ -759,6 +859,9 @@ export async function loadModelInto(
         `[ModelLoader] LIGHTMAP GLB detected — baked light on UV1 multiplied ` +
         `onto ${lmMats.size} original structure material(s) across ` +
         `${structureMeshes.length} mesh(es)` +
+        (ceilings.length
+          ? `; ${ceilings.length} ceiling(s) EXEMPT (own colour at ${CEILING_TONE} tone)`
+          : "") +
         (lmNightTex ? "; night lightmap present (hard swap at twilight)" : ""),
       );
       if (missingUv2 > 0) {

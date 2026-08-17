@@ -1,3 +1,16 @@
+## 2.445.0
+
+### Fixed — the ceiling shows the colour you set in SweetHome 3D
+
+It was rendering nearly black because the lightmap it was multiplied by is nearly
+black, and that is structural: every storey is baked under an open sky with the
+floors above hidden, and a ceiling cannot take part in that because it is the thing
+being hidden — while its own group bakes, the room beneath is lidded by it, so the
+only face you ever see gets almost no light. The lightmap is withheld from ceilings
+now, so they render on their authored colour, toned to the brightness range the
+bake measures for enclosed interior surfaces so a ceiling reads as lit rather than
+as a lamp.
+
 ## 2.444.0
 
 ### Removed — the stand-in ceiling borrowed from the floor above
