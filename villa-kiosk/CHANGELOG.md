@@ -1,3 +1,12 @@
+## 2.421.0
+
+### Fixed — room badges merged while still visibly apart
+
+Each room badge reserved ~33 px of width for a device count that is drawn as a
+fixed-size corner overlay, not as text — it was inline once and the width
+estimate never noticed it moved. 2.419.0 cut the merge's clearance from 6 px to
+2 for this same complaint while the width quietly added back sixteen times that.
+
 ## 2.420.1
 
 ### Changed — comments only, no behaviour

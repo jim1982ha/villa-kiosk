@@ -4869,6 +4869,16 @@ export class EntityVisuals {
       // whether it had failed or simply not shipped was not.
       `place v${typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "?"}`
       + ` rung=${clearance.pxPerWorld.toFixed(3)} icon=${this.iconUserScale.toFixed(2)}x`
+      // ⚠️ `css` is what makes `rung` READABLE, and without it a capture can
+      // fake a purity violation. The rung is RENDER pixels (deliberately — it
+      // cancels against the badge boxes within a frame), so the resolution
+      // valve moves it: on a dpr-3 phone the same pose measures 1.5x more
+      // while idle than while being dragged, and a v2.420.1 capture duly
+      // showed `rung=45.255 zoom=0.84` beside `rung=45.255 zoom=0.71`. Those
+      // are two DIFFERENT camera radii wearing one label, not one rung with
+      // two layouts. "Same rung => same layout" is only checkable between
+      // lines that agree on this field.
+      + ` css=${this.cssToGui().toFixed(2)}`
       + ` zoom=${this.iconZoomScale.toFixed(2)} gapPx=${clearance.gap.toFixed(1)}`
       + ` sepPx=${clearance.minSep.toFixed(1)}`
       + ` sinTilt=${clearance.basis.sinPhi.toFixed(3)} az=${clearance.basis.ax.toFixed(3)}`
@@ -5158,8 +5168,12 @@ export class EntityVisuals {
       }
     }
     if (chipPairs) {
+      // ⚠️ This measures the merge against its OWN boxes, so it can only catch
+      // a merge that failed to reach a fixpoint — never a wrong `halfW`, since
+      // both sides read the same estimate. `estErr` below is the half that can
+      // see the estimate, and it is the one to trust about width.
       tapDebug(`PLACEMENT: ${chipPairs} room chip pair(s) OVERLAP on screen`
-        + " — the merge should have caught these; suspect chipWidthPx (see estErr)");
+        + " — the merge did not reach a fixpoint (width error is estErr's job)");
     }
     let estErr = 0;
     let estWorst = "";
@@ -5169,8 +5183,15 @@ export class EntityVisuals {
         { _currentMeasure?: { width: number } } | undefined;
       const drawn = ctl?._currentMeasure?.width;
       if (!(typeof drawn === "number" && drawn > 0) || !(chipScale > 0)) continue;
-      // Both back to CSS px, the units chipWidthPx and minGapPx are written in.
-      const err = Math.abs(c.halfW * 2 - drawn) / chipScale;
+      // ⚠️ ONLY THE ESTIMATE IS DIVIDED (2.421.0). `_currentMeasure` is the
+      // control's PRE-TRANSFORM measure, so it is already in the CSS px the
+      // control's own `width`/padding strings are written in — `scaleX` is
+      // applied at draw time and never reaches it. `c.halfW` alone carries the
+      // scale. As shipped, this divided both and reported 76-135 CSS px of
+      // disagreement on a build whose estimate was within 30%: an instrument
+      // that indicts the thing it is auditing is worse than no instrument, and
+      // this one nearly bought a rewrite of chipWidthPx that was not needed.
+      const err = Math.abs((c.halfW * 2) / chipScale - drawn);
       if (err > estErr) { estErr = err; estWorst = c.label; }
     }
     if (estErr > this.metrics.minGapPx) {
@@ -7112,14 +7133,19 @@ export class EntityVisuals {
       ? (eng.getRenderWidth() * CHIP_MAX_VIEWPORT_FRACTION) / scale
       : 0;
     const measure = (c: RoomChip) => {
-      c.label = fitChipLabel(c.room, chipSuffixOf(c), formatCountBadge(c.ids.length), chipBudget);
+      c.label = fitChipLabel(c.room, chipSuffixOf(c), chipBudget);
       if (vp) {
         const p = Vector3.Project(c.centre, Matrix.IdentityReadOnly, tm, vp);
         c.x = p.x; c.y = p.y;
       }
       // Same width ESTIMATE the old path used (chipWidthPx) — it only has to be
       // close enough to decide overlap, not match the drawn glyphs exactly.
-      c.halfW = (chipWidthPx(`${c.label}  ${formatCountBadge(c.ids.length)}`) / 2) * scale;
+      // ⚠️ THE LABEL ALONE. The count is a fixed-size corner overlay living in
+      // padding chipWidthPx already reserves; concatenating it here charged
+      // every chip ~33 CSS px of phantom width and merged pills that were
+      // visibly clear — sixteen times the gap 2.419.0 removed for the same
+      // symptom, added back through the width. See chipWidthPx.
+      c.halfW = (chipWidthPx(c.label) / 2) * scale;
       c.halfH = (this.summaryMetrics().size / 2) * scale;
     };
 
