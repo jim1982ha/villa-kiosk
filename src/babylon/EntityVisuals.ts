@@ -5234,7 +5234,9 @@ export class EntityVisuals {
     // is a real gap in the drop.
     if (chipHitsFocused) {
       tapDebug(`PLACEMENT: ${chipHitsFocused} FOCUSED badge(s)/card(s) over a room chip`
-        + " — settleChips should have dropped that chip (2.431.0)");
+        + " — ONE FRAME while the camera flies in is the plane-vs-perspective"
+        + " residual (expected); a PERSISTENT count is a gap in settleChips'"
+        + " focus drop");
     }
 
     // ── (e) CHIP vs CHIP, AND THE ESTIMATE THAT DECIDES IT (2.420.0) ──────

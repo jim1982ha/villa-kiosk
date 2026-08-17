@@ -1,3 +1,12 @@
+## 2.431.1
+
+### Changed — one debug message, no behaviour
+
+The focused-badge-over-a-chip counter read as a failure when it fired once during
+the flight into a room, which is the expected difference between the plane the
+drop tests and the perspective the counter measures. It now says which count
+means what, so a single line is not mistaken for a defect.
+
 ## 2.431.0
 
 ### Fixed — a tapped room's devices no longer overlap other rooms' name chips
