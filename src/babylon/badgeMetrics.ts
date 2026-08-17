@@ -369,8 +369,13 @@ const COARSE: BadgeMetrics = {
   // wanted, it needs a reason this comment does not already cover.
   minGapPx: 2,
   tapSlopMinPx: 10,
-  // Apple's 44pt hit region, which is also this app's --touch-min and exactly
-  // what pickBadgeAt expands an undersized badge's slop to reach.
+  // Apple's 44pt hit region, which is also this app's --touch-min.
+  //
+  // ⚠️ NOT the same question as `EntityVisuals.TOUCH_MIN_CSS_PX`, which shares
+  // the number: that one expands ONE badge's hit AREA, this one is the floor on
+  // the DISTANCE BETWEEN TWO CENTRES before the solver groups them — which is
+  // why this drops to 24 on a fine pointer (see FINE) and that one stays flat.
+  // Deliberately not converged; see the block at TOUCH_MIN_CSS_PX for why.
   minCentrePitchPx: 44,
   countPillFraction: 0.58,
   countFontFraction: 0.78,

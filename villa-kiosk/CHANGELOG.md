@@ -1,3 +1,11 @@
+## 2.420.1
+
+### Changed — comments only, no behaviour
+
+Two constants that both equal 44 answer different questions (how far one badge's
+tap area expands, versus how far apart two badges must sit). Each now says so
+and points at the other, so the next audit does not spend time re-deciding it.
+
 ## 2.420.0
 
 ### Added — the debug log now checks the room-badge merge it could not see

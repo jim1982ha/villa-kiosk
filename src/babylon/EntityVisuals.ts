@@ -331,6 +331,19 @@ const WAKE_TRACE_FRAMES = 40;
 // The app-wide --touch-min (styles.css), in CSS px. pickBadgeAt expands a
 // badge's hit area up to this whenever the PAINTED badge is smaller — which
 // is the whole point of letting a fine pointer have a smaller badge.
+//
+// ⚠️ NOT a duplicate of `badgeMetrics.minCentrePitchPx`, which is also 44 on a
+// coarse pointer. Two questions that happen to share a number:
+//   this            — how far a HIT AREA is expanded around one badge, so a
+//                     shrunken badge stays tappable. Flat, because the target
+//                     must not shrink with the paint on any pointer.
+//   minCentrePitchPx— how far two badge CENTRES must be before the solver
+//                     stops grouping them. 44 coarse / 24 fine, because the
+//                     fine profile paints 32 px and leans on WCAG 2.5.8's
+//                     spacing exception.
+// Converging them would drag the fine pointer's hit expansion down to 24 and
+// undo exactly the decoupling this constant exists for. Cross-referenced in
+// both directions so /dry-audit does not re-flag the pair every pass.
 const TOUCH_MIN_CSS_PX = 44;
 // Unit offsets for pickBadgeAt's two sampling rings: the exact hit, then 8
 // directions at half slop, then the same 8 at full slop. Flat [cos,sin,...]
