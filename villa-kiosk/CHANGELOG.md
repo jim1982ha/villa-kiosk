@@ -1,3 +1,15 @@
+## 2.444.0
+
+### Removed — the stand-in ceiling borrowed from the floor above
+
+With no real ceiling in the GLB, the walk-through used to switch on the storey
+above's structure so its floor slab could act as a lid. That is why the ceiling
+wore the upper floor's texture. The pipeline now ships a real ceiling per storey,
+so the stand-in is redundant where one exists and could never help the top storey
+anyway — and floor visibility goes back to being a pure function of the active
+floor. A GLB with no ceiling object now simply has no ceiling, and the debug line
+says so instead of letting a stand-in hide it.
+
 ## 2.443.0
 
 ### Added — real ceilings, read from the pipeline's own stamp

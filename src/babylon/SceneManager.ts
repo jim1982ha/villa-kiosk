@@ -3234,7 +3234,10 @@ export class SceneManager {
       `ceilings: ${this.ceilingMeshes.length} mesh(es) shown in first-person`
       + ` (${stamped} stamped vk_role=ceiling by the pipeline,`
       + ` ${this.ceilingMeshes.length - stamped} matched by name/height)`
-      + (stamped === 0 ? " — no pipeline ceilings: the storey-above slab is doing the job" : ""),
+      + (stamped === 0
+        ? " — NO pipeline ceilings in this GLB, and nothing stands in for them since"
+          + " 2.444.0: re-bake with blender_pipeline >=2.23.0 to get one"
+        : ""),
     );
     this.requestRender();
   }
