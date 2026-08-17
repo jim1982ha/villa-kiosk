@@ -32,6 +32,7 @@ import mscTranscoderJsUrl from "@/assets/ktx2/msc_basis_transcoder.js?url";
 import mscTranscoderWasmUrl from "@/assets/ktx2/msc_basis_transcoder.wasm?url";
 import { saveModelToIndexedDB } from "@/utils/storage";
 import { devLog } from "@/utils/devLog";
+import { tapDebug } from "@/utils/tapDebug";
 import { isCeilingMesh, isStructureMesh } from "./meshRoles";
 
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
@@ -703,25 +704,15 @@ export async function loadModelInto(
         // Panes keep the runtime glass treatment above — a lightmap multiply
         // would just darken what you see through them.
         if (mat?.name && glassMats.has(mat.name)) continue;
-        // ── No TEXCOORD_1 means the lightmap CANNOT be applied here ────────
-        // Not merely counted-and-warned-about, which is what this did. The
-        // lightmap is bound with coordinatesIndex = 1; a mesh with no second
-        // UV set falls back to UV0, which on structure geometry is the TILING
-        // texture UV — so the bake atlas gets repeated across the surface and
-        // renders as a grid of unrelated grey patches. Reported as "weird
-        // artifacts in some of the glass", and it is exactly that: a window
-        // pane whose custom mesh arrived without BakeUV, wearing a tiled
-        // photograph of somebody else's baked light.
-        //
-        // A lightmap sampled through UVs it was not baked for carries no
-        // information at all, so there is nothing to weigh against dropping
-        // it: the mesh renders on its plain albedo and the scene's own lights
-        // instead, which is merely flatter, not wrong.
-        if (!m.isVerticesDataPresent(VertexBuffer.UV2Kind)) {
-          missingUv2++;
-          noLightmap.push(m);
-          continue;
-        }
+        // ⚠️ CEILINGS ARE DECIDED BEFORE THE UV2 GATE, and the order is the fix
+        // (2.450.0). A ceiling exported as its own SweetHome object is not one of
+        // the objects the pipeline BAKES, so it carries no BakeUV — and with the
+        // gate first, all eleven of this villa's ceilings fell into the
+        // no-TEXCOORD_1 bucket and never reached the branch below. They got no
+        // double-siding, no tone and no exemption, which is why "11 enabled, 11
+        // visible" still drew nothing. The gate answers "can the lightmap be
+        // sampled here"; for a ceiling the lightmap is not wanted at all, so the
+        // question is moot and must not be asked first.
         // ── A CEILING RENDERS ON ITS OWN COLOUR, NOT ON A LIGHTMAP (2.445.0) ──
         // It CAN be lightmapped — it has BakeUV — and the result is nearly
         // black, for a reason that is structural rather than a bad bake. The
@@ -749,6 +740,25 @@ export async function loadModelInto(
         // of a re-bake to see. The owner chose this one; that is the revert.
         if (isCeilingMesh(m)) {
           ceilings.push(m);
+          noLightmap.push(m);
+          continue;
+        }
+        // ── No TEXCOORD_1 means the lightmap CANNOT be applied here ────────
+        // Not merely counted-and-warned-about, which is what this did. The
+        // lightmap is bound with coordinatesIndex = 1; a mesh with no second
+        // UV set falls back to UV0, which on structure geometry is the TILING
+        // texture UV — so the bake atlas gets repeated across the surface and
+        // renders as a grid of unrelated grey patches. Reported as "weird
+        // artifacts in some of the glass", and it is exactly that: a window
+        // pane whose custom mesh arrived without BakeUV, wearing a tiled
+        // photograph of somebody else's baked light.
+        //
+        // A lightmap sampled through UVs it was not baked for carries no
+        // information at all, so there is nothing to weigh against dropping
+        // it: the mesh renders on its plain albedo and the scene's own lights
+        // instead, which is merely flatter, not wrong.
+        if (!m.isVerticesDataPresent(VertexBuffer.UV2Kind)) {
+          missingUv2++;
           noLightmap.push(m);
           continue;
         }
@@ -877,6 +887,16 @@ export async function loadModelInto(
           }
         };
       }
+      // ⚠️ tapDebug, not devLog. devLog is stripped outside DEV, and every one of
+      // this feature's failures has been diagnosed from a kiosk log the owner
+      // pasted — "11 shown" told us nothing three times because the LIGHTING
+      // outcome was invisible. This is the field that says whether a ceiling was
+      // actually exempted, double-sided and toned, or quietly fell through a gate.
+      tapDebug(
+        `ceiling lighting: ${ceilings.length} exempt (own colour x ${CEILING_TONE}, `
+        + `double-sided), ${missingUv2} structure mesh(es) skipped for no TEXCOORD_1, `
+        + `${lmMats.size} material(s) lightmapped`,
+      );
       devLog(
         `[ModelLoader] LIGHTMAP GLB detected — baked light on UV1 multiplied ` +
         `onto ${lmMats.size} original structure material(s) across ` +

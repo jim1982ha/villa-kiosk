@@ -1430,6 +1430,8 @@ export class EntityVisuals {
    *  that is never measured is how a per-frame raycast becomes a freeze. */
   private occlRays = 0;
   private occlMs = 0;
+  /** Dedupe for the badge-geometry diagnostic — see logBadgeGeometry. */
+  private lastBadgeGeom = "";
   /** performance.now() of the last `walk:` line — see reportWalkCost. */
   private lastWalkReportAt = 0;
   /**
@@ -1559,6 +1561,7 @@ export class EntityVisuals {
     // the same class of mistake as watching the world centre.
     scene.onAfterRenderObservable.add(() => {
       this.watchChipJump();
+      this.logBadgeGeometry();
       if (this.wakeTrace > 0) { this.wakeTrace--; this.traceWake(); }
     });
     document.addEventListener("visibilitychange", this.onWake);
@@ -5331,6 +5334,56 @@ export class EntityVisuals {
   private setValueVisible(lbl: LabelControls, on: boolean): void {
     lbl.valueWrap.isVisible = on;
     if (lbl.valueSpacer) lbl.valueSpacer.isVisible = on;
+  }
+
+  /**
+   * What a badge's value is ACTUALLY DRAWN AT — read off Babylon after the frame
+   * is laid out, on the `badge` channel.
+   *
+   * ⚠️ THIS EXISTS BECAUSE I GOT THE SAME REPORT WRONG FOUR TIMES. "The value
+   * sits too far right" was answered with a padding change, an equalised-margin
+   * change, a spacer control and an alignment change, each derived from my model
+   * of the layout, and the owner's screenshots kept disagreeing with the
+   * arithmetic. A model that loses four times to a screenshot is not the thing to
+   * reason from. `_currentMeasure` is Babylon's own PRE-transform measure, in CSS
+   * pixels (see the chip's `estErr`, which lied for a release by dividing it by
+   * the render scale twice), so these numbers are directly comparable with the
+   * metrics that produced them — and the FIRST thing they settle is which style
+   * is on screen, which I had been assuming rather than checking.
+   *
+   * Deduped on its own text, so a static view prints one line. Delete this once
+   * it has answered: it is a diagnostic, not a permanent boundary.
+   */
+  private logBadgeGeometry(): void {
+    if (!channelEnabled("badge")) return;
+    const box = (c: unknown): string => {
+      const m = (c as { _currentMeasure?: { left: number; width: number } } | undefined)
+        ?._currentMeasure;
+      return m ? `L${m.left.toFixed(1)}/W${m.width.toFixed(1)}` : "?";
+    };
+    for (const [id, lbl] of this.labels) {
+      if (!lbl.container.isVisible || !lbl.valueWrap.isVisible) continue;
+      if (!lbl.valueText.text) continue;
+      const m = this.metrics;
+      const card = this.isCardStyle();
+      const glyphPx = this.glyphPxFor(card);
+      const line =
+        `badge "${id}" val="${lbl.valueText.text}"`
+        + ` style=${card ? "CARD" : "classic"} scale=${this.effectiveScale().toFixed(2)}`
+        + ` font=${card ? m.cardValueFontPx : m.pillValueFontPx}`
+        + ` glyphPx=${glyphPx} iconPad=${card ? ((m.cardHeightPx - glyphPx) / 2).toFixed(2) : 0}`
+        + ` ink=${card ? (glyphPx * BADGE_INSET_CARD).toFixed(2) : 0}`
+        + ` | badge ${box(lbl.badge)} glyph ${box(lbl.glyph)}`
+        + ` gap ${lbl.valueSpacer ? box(lbl.valueSpacer) : "-"}`
+        + ` wrap ${box(lbl.valueWrap)} text ${box(lbl.valueText)}`
+        + ` textAlign=${lbl.valueText.textHorizontalAlignment}`
+        + ` ctlAlign=${lbl.valueText.horizontalAlignment}`;
+      if (line !== this.lastBadgeGeom) {
+        this.lastBadgeGeom = line;
+        tapDebug(line, "badge");
+      }
+      return;
+    }
   }
 
   /** A badge's room, normalised — the single definition every grouping,

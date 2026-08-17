@@ -56,6 +56,11 @@ import { debugFlagEnabled } from "@/utils/devLog";
  * rounds. Every capture states which channels were off.
  */
 const MUTED_BY_DEFAULT = new Set(["place", "seat", "chip", "mesh", "variant", "beam"]);
+// ⚠️ `badge` is deliberately NOT in that set: it is a live investigation (the
+// badge value's drawn geometry, see EntityVisuals.logBadgeGeometry) and the owner
+// has to get it from a plain `?debug`. It is deduped to one line per layout, so
+// it costs a line, not a stream. Move it into the set — or delete the emitter —
+// the moment it has answered.
 
 const wanted: Set<string> = (() => {
   try {

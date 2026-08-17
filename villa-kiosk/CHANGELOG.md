@@ -1,3 +1,14 @@
+## 2.450.0
+
+### Fixed — the ceiling fell through a gate before reaching its own branch
+
+A ceiling exported as its own SweetHome object is not baked by the pipeline, so it
+has no bake UVs — and the check for that ran BEFORE the ceiling branch, so all
+eleven were treated as "cannot be lightmapped" and never got the double-siding,
+tone or exemption that would have made them visible. That is why the log could say
+eleven were enabled and shown while nothing appeared. The lighting outcome is now
+reported in the kiosk log too, and the badge value's DRAWN geometry with it.
+
 ## 2.449.0
 
 ### Fixed — the ceiling was invisible, not dark
