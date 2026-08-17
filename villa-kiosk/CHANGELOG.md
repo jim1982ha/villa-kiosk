@@ -1,3 +1,12 @@
+## 2.426.0
+
+### Fixed — tapping a room landed far too close, with none of its surroundings
+
+A room is now framed to fill 60% of whichever screen axis binds rather than 85%,
+so what is around it stays visible. And the shot no longer hunts for a zoom that
+separates the room's badges: a focused room's badges are exempt from grouping and
+every other room is chipped, so that search could never fire — it only pulled in.
+
 ## 2.425.0
 
 ### Fixed — the room-zoom solver predicted a zoom the renderer never uses

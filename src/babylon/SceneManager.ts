@@ -163,13 +163,32 @@ const HW_START_CAP = 2;
 const OVERVIEW_HORIZON_DROP = 700;
 
 // ── Zoom-to-room framing (see computeRoomOverviewPose) ──────────────────────
-// Breathing room left around a room once it fills the frame, as a FRACTION of
-// the distance needed to fit it exactly — so it scales with the room rather
-// than being a fixed world distance that would swamp a small room and vanish
-// on a large one. The entity-bounds fallback gets more, because device anchors
-// sit inside the room rather than at its walls, so their box under-states it.
-const ROOM_FIT_MARGIN = 0.18;
-const ROOM_FIT_MARGIN_ENTITIES = 0.45;
+// How much of the BINDING SCREEN AXIS the room's own footprint should occupy.
+//
+// ── A ROOM IS SHOWN WITH ITS SURROUNDINGS, NOT EDGE TO EDGE (2.426.0) ───────
+// This was a margin — 0.18, i.e. the footprint filled 85% of the axis — and it
+// was reported as bad UX with four screenshots: the pool filled the glass
+// corner to corner with no context at all, and the living room cropped its own
+// curtains off the sides. The user then dragged to the shot they wanted and the
+// log recorded it, twice: rung 271.223 -> ~152, and rung 170.860 -> ~117. Both
+// asked for 1.5-1.8x more room around the subject.
+//
+// Restated as a FRACTION because that is the decision actually being made —
+// "how much of the frame is the room" — and because it is then the same
+// vocabulary as CHIP_MAX_VIEWPORT_FRACTION and CARD_MAX_VIEWPORT_FRACTION,
+// which answer the same shape of question for the other two composite objects.
+//
+// ⚠️ It is applied AFTER the per-axis max, so it is a property of whichever
+// axis binds — which is what makes one number behave identically on a portrait
+// phone, a landscape laptop and a tablet either way. A margin expressed against
+// one axis, or against the footprint's diagonal, is the 2.362.0 bug: the same
+// room wanted radius 36 at one aspect and 51 at another.
+//
+// The entity-bounds fallback takes a SMALLER fraction (a wider shot), because
+// device anchors sit inside the room rather than at its walls, so their box
+// under-states it and the shot has to cover what the box does not describe.
+const ROOM_FIT_VIEWPORT_FRACTION = 0.6;
+const ROOM_FIT_VIEWPORT_FRACTION_ENTITIES = 0.45;
 // Floor under the fitted radius, for a "room" that measures as a point (a
 // single device, or a one-entity teleport spot) and would otherwise ask the
 // camera to fly arbitrarily close. Expressed in world units = metres.
@@ -1886,6 +1905,27 @@ export class SceneManager {
         minRadius: Math.round((this.overview.camera.lowerRadiusLimit ?? 0) * 100) / 100,
       });
     }
+    // ── THE SAME NUMBERS, ON THE DEBUG LINE (2.426.0) ─────────────────────
+    // Every field above already existed and every one of them went ONLY to
+    // telemetry, so four screenshots of a bad room shot arrived with no way to
+    // tell whether the wall fit itself was too tight or something had tightened
+    // it — the one question that decides where the fix goes. A `?debug` capture
+    // is the instrument the owner actually has to hand; this is the same row,
+    // in it. `radius` equal to `wallFit` means the framing IS the fit, so the
+    // fraction is the dial; smaller means something is still pulling in.
+    if (framed) {
+      tapDebug(
+        `focus [${roomNames.join("+")}] rooms=${roomNames.length}`
+        + ` radius=${framed.radius.toFixed(2)} wallFit=${framed.wallFit.toFixed(2)}`
+        + ` tightenedBy=${(framed.wallFit > 0
+          ? framed.radius / framed.wallFit : 1).toFixed(3)}x`
+        + ` solved=${framed.solved} declutters=${framed.declutters}`
+        + ` real=${framed.real} halfW=${framed.halfW.toFixed(2)}`
+        + ` halfH=${framed.halfH.toFixed(2)}`
+        + ` minRadius=${(this.overview.camera.lowerRadiusLimit ?? 0).toFixed(2)}`,
+        "seat",
+      );
+    }
     // `declutters` is now advisory, not a veto: it says whether the shot also
     // separates the badges or merely frames them. Either way they are drawn.
     if (framed) this.overview.applyPose(framed);
@@ -1940,7 +1980,9 @@ export class SceneManager {
     if (!bounds) return null;
     // Entity anchors mark devices, not walls, so their box under-states the
     // room — give that fallback more headroom than a true polygon needs.
-    const marginFrac = allReal ? ROOM_FIT_MARGIN : ROOM_FIT_MARGIN_ENTITIES;
+    const fitFrac = allReal
+      ? ROOM_FIT_VIEWPORT_FRACTION
+      : ROOM_FIT_VIEWPORT_FRACTION_ENTITIES;
 
     const cx = (bounds.minX + bounds.maxX) / 2;
     const cz = (bounds.minZ + bounds.maxZ) / 2;
@@ -2016,11 +2058,14 @@ export class SceneManager {
         halfH = Math.max(halfH, Math.abs(p.py));
       }
     }
+    // Per axis against its OWN half-angle, THEN the context fraction — see
+    // ROOM_FIT_VIEWPORT_FRACTION for why that order is what makes one number
+    // correct on every aspect ratio.
     let radius = Math.max(
       halfW / Math.tan(hFov / 2),
       halfH / Math.tan(vFov / 2),
       MIN_ROOM_FIT_RADIUS,
-    ) * (1 + marginFrac);
+    ) / fitFrac;
 
     // ── Now ask the badges, by TESTING rather than deriving ───────────────
     // The wall fit above frames the ROOM. It says nothing about whether the

@@ -2856,7 +2856,6 @@ export class EntityVisuals {
     // was right that the cap was the wrong description. The right one is that
     // no rung tighter than the room's own fit was ever wanted.
     let widestClean: number | null = null;
-    let widestBoth: number | null = null;
     for (let k = kLo; k <= kHi; k++) {
       const radius = Math.pow(2, k / q);
       if (radius < lo || radius > hi) continue;
@@ -2909,15 +2908,49 @@ export class EntityVisuals {
       // in radius but not exactly, because pxPerWorld is quantised onto the
       // renderer's ladder, and taking the widest rung that actually tested
       // clean is correct either way.
+      // Recorded for the ADVISORY flag only — it no longer selects. The rungs
+      // ascend, so the last write is the widest.
       if (clean) widestClean = radius;
-      // Widest rung that both frames and declutters. The rungs ascend, so the
-      // last write is the widest; recorded rather than returned early, which
-      // is the whole of the 2.424.0 change.
-      if (clean && fits) widestBoth = radius;
     }
-    if (widestBoth !== null) return { radius: widestBoth, declutters: true };
-    if (widestClean !== null) return { radius: widestClean, declutters: true };
-    return widestFitting === null ? null : { radius: widestFitting, declutters: false };
+
+    // ── `clean` NO LONGER SELECTS THE SHOT, BECAUSE IT CANNOT FIRE (2.426.0) ─
+    // Reported: tapping a room lands far too close — the pool filled the glass
+    // edge to edge, the living room cropped its own curtains off the sides.
+    // Measured from two taps: rung 271.223 where the user then settled at ~152,
+    // and rung 170.860 where they settled at ~117. Consistently 1.5-1.8x too
+    // close, and `clean` is what did it: it gets EASIER as the camera comes in,
+    // so making it a requirement drags the shot toward the camera.
+    //
+    // And it is measuring a rule that CANNOT FIRE for a focused room:
+    //
+    //   * every OTHER room is chipped for the focus — the same captures show
+    //     `chipWhy: focus=10 total=10`, all ten of them — so there are no
+    //     other rooms' badges left on screen to collide with;
+    //   * the focused room's OWN badges are EXEMPT from grouping, and
+    //     pairFocusedRoom draws them individually or as pair-cards.
+    //
+    // The captures prove the exemption had already delivered it at the shot the
+    // old code chose: `exempt=9 drawn=7 focusGroups=1` (a 2-cell card) accounts
+    // for all nine pool devices, and `exempt=17 drawn=9 focusGroups=4` for all
+    // seventeen living-room ones. Every device was already drawn. The declutter
+    // search bought nothing and cost 1.5-1.8x of zoom.
+    //
+    // This solver's own docstring already contains the argument, applied to the
+    // OTHER branch: "ONE room only. With several, the wall fit IS the answer...
+    // The badges are not left to chance either — the EXEMPTION above is
+    // unconditional and is what guarantees they are drawn individually, at
+    // whatever distance the framing lands on." That reasoning holds verbatim
+    // for one room. It was applied to merged chips and not to a single room.
+    //
+    // What remains is a genuine framing guarantee — every one of the room's
+    // badges fully on screen — and `fits` gets easier as the camera backs off,
+    // so the widest such rung is the room's own fit whenever it is reachable.
+    // `declutters` stays as the ADVISORY it already was (SceneManager: "it says
+    // whether the shot also separates the badges or merely frames them. Either
+    // way they are drawn"), so nothing downstream loses information.
+    return widestFitting === null
+      ? null
+      : { radius: widestFitting, declutters: widestClean !== null };
   }
 
   /** Replace the named-viewpoint "rooms" (config.teleportPoints) that don't
