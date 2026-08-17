@@ -2837,7 +2837,7 @@ export class EntityVisuals {
     const hi = Math.max(lo, view.maxRadius);
     const kLo = Math.floor(Math.log2(lo) * q);
     const kHi = Math.ceil(Math.log2(hi) * q);
-    let firstFitting: number | null = null;
+    let widestFitting: number | null = null;
     // ── The two conditions pull in OPPOSITE directions, and that is the whole
     //    shape of this problem ────────────────────────────────────────────
     // `fits` (every badge on screen) gets easier as the camera backs off: the
@@ -2859,13 +2859,35 @@ export class EntityVisuals {
     //
     // So `clean` is now evaluated at EVERY rung, and framing is the preference
     // it was written to be:
-    //   * both hold somewhere → the TIGHTEST such rung (unchanged, and still
-    //     the common case);
+    //   * both hold somewhere → the WIDEST such rung (see below);
     //   * they never overlap → the WIDEST clean rung, i.e. the readable shot
     //     that crops least. A device at the room's edge may hang off the frame;
     //     that beats every device in the room being illegible;
-    //   * nothing is clean at any zoom → the old framing fallback, unchanged.
+    //   * nothing is clean at any zoom → the WIDEST framing rung.
+    //
+    // ── EVERY BRANCH TAKES THE WIDEST, AND THAT IS THE FIX (2.424.0) ───────
+    // All three used to take the TIGHTEST qualifying rung, so the shot was
+    // framed on the BADGES and the room's own footprint entered only as
+    // `maxRadius` — a bound the search never had to reach. Tapping a room with
+    // two devices near its middle therefore dived past the room to whatever
+    // distance those two badges happened to need, which is "the zoom is acting
+    // very poorly, it is zooming on the entities and not the room".
+    //
+    // The search interval is [minRadius, wallFit], so taking the WIDEST rung
+    // that still satisfies the predicates means exactly: FRAME THE ROOM, and
+    // come closer only as far as the badges actually force. Decluttering stays
+    // a hard requirement in the first branch — this does not reopen 2.365.0,
+    // where a rung was accepted with the badges still grouped — it only stops
+    // buying more zoom than legibility asked for.
+    //
+    // It also retires, by description rather than by a cap, the symptom the
+    // note above MIN_ROOM_FIT_RADIUS records: a fan and its own light kit
+    // driving the camera point-blank onto a bed. 2.209.0 removed
+    // DECLUTTER_RADIUS_MIN_FRACTION for capping that at half the wall fit and
+    // was right that the cap was the wrong description. The right one is that
+    // no rung tighter than the room's own fit was ever wanted.
     let widestClean: number | null = null;
+    let widestBoth: number | null = null;
     for (let k = kLo; k <= kHi; k++) {
       const radius = Math.pow(2, k / q);
       if (radius < lo || radius > hi) continue;
@@ -2885,7 +2907,7 @@ export class EntityVisuals {
         if (Math.abs(sx) + boxes[i].halfW > halfWpx
           || Math.abs(sy) + boxes[i].halfH > halfHpx) { fits = false; break; }
       }
-      if (fits && firstFitting === null) firstFitting = radius;
+      if (fits) widestFitting = radius;
 
       // Is every badge of THIS room drawn on its own here? "Clear of every
       // other eligible badge" is the exact test — against neighbours from
@@ -2915,12 +2937,14 @@ export class EntityVisuals {
       // renderer's ladder, and taking the widest rung that actually tested
       // clean is correct either way.
       if (clean) widestClean = radius;
-      // Tightest rung that both frames and declutters — the happy case, and
-      // the first one reached because the walk starts from the closest.
-      if (clean && fits) return { radius, declutters: true };
+      // Widest rung that both frames and declutters. The rungs ascend, so the
+      // last write is the widest; recorded rather than returned early, which
+      // is the whole of the 2.424.0 change.
+      if (clean && fits) widestBoth = radius;
     }
+    if (widestBoth !== null) return { radius: widestBoth, declutters: true };
     if (widestClean !== null) return { radius: widestClean, declutters: true };
-    return firstFitting === null ? null : { radius: firstFitting, declutters: false };
+    return widestFitting === null ? null : { radius: widestFitting, declutters: false };
   }
 
   /** Replace the named-viewpoint "rooms" (config.teleportPoints) that don't

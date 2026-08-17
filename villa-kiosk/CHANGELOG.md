@@ -1,3 +1,12 @@
+## 2.424.0
+
+### Fixed — tapping a room framed its devices instead of the room
+
+The zoom ladder returned the TIGHTEST rung at which a room's badges were
+legible, so the room's own footprint entered only as an upper bound the search
+never had to reach — a room with two devices near its middle dived straight past
+it. Every branch now takes the widest qualifying rung.
+
 ## 2.423.0
 
 ### Fixed — grouped badges pushed their neighbours away with width they never drew
