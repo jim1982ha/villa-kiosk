@@ -201,6 +201,12 @@ const POOL_MIN_RADIUS = 0.4;
  * membership for a focused group, so the clamp can never be the thing that
  * refuses, and the budget stays the only bound.
  */
+/** Closer than this to its own fixture, a pool is not on a floor — it is on the
+ *  ceiling the fixture hangs from. Half a metre is below any real mounting
+ *  height (a table lamp clears its floor by more) and far above the few
+ *  centimetres a ceiling lamp clears its slab by. See `airborne` in
+ *  reshapeLightPools. */
+const POOL_AIRBORNE_M = 0.5;
 /** How far a pool sits above the floor it was probed onto. Enough to clear
  *  z-fighting with the floor polygon, small enough that it still reads as
  *  lying ON it rather than hovering. */
@@ -2611,7 +2617,7 @@ export class EntityVisuals {
     // others do not" is unanswerable from a screenshot; it is one line from
     // here. (See the same rule in the badge tier — an expected category gets a
     // labelled number, never a silent `continue`.)
-    let clipped = 0, whole = 0, bounded = 0, nofloor = 0;
+    let clipped = 0, whole = 0, bounded = 0, nofloor = 0, airborne = 0;
     const recovered = this.retryPendingPools();
     for (const pools of this.meshLightPools.values()) {
       for (const pool of pools) {
@@ -2633,6 +2639,13 @@ export class EntityVisuals {
         // that found nothing at all.
         const surfaceY = this.surfaceBelow(x, pool.probeFromY, z);
         if (surfaceY === null) nofloor++;
+        // THE COUNTER THAT NAMES THE 2.435.0 BUG, and the one whose absence let
+        // it ship: a pool that lands within POOL_AIRBORNE_M of its own fixture
+        // is not lying on a floor, it is stuck to the ceiling that fixture hangs
+        // from — "the light disk is floating in the air". A light is mounted a
+        // usable distance above what it lights, so this is 0 on a healthy villa
+        // and the exact number of wrong pools on a sick one.
+        else if (pool.probeFromY - surfaceY < POOL_AIRBORNE_M) airborne++;
         const room = this.roomPolyAt(x, surfaceY ?? pool.probeFromY, z);
         let radius = LIGHT_POOL_RADIUS;
         let shape: Pt2[] | undefined;
@@ -2671,6 +2684,7 @@ export class EntityVisuals {
     if (recovered) this.resyncLightPoolsToFloor();
     tapDebug(
       `light pools: clipped=${clipped} whole=${whole} bounded=${bounded} nofloor=${nofloor}`
+      + ` airborne=${airborne} bucketAbove=${this.probe.stats.probeAbove}`
       + ` recovered=${recovered} stillNoFloor=${
         [...this.pendingPoolSpots.values()].reduce((n, s) => n + s.length, 0)}`
       + ` rooms=${this.roomPolys.length} storeys=${new Set(this.roomPolys.map((r) => Math.round(r.floorY))).size}`,

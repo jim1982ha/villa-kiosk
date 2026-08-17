@@ -1,3 +1,14 @@
+## 2.435.0
+
+### Fixed — the light disc hung in the air, and the ceiling was still missing
+
+A ceiling lamp hangs centimetres UNDER the slab above it, and 2.434.0's storey
+test allowed a floor at or just above a fixture to count as its own — so the lamp
+was assigned upstairs, inherited that storey's floor height, and lit the ceiling
+it was mounted on. The test is now a clearance: a lamp sits a usable distance
+above what it lights. And what roofs a room you walk in is the floor slab of the
+storey above, which was being hidden with the rest of that storey.
+
 ## 2.434.0
 
 ### Fixed — two lights in one room lit the floor differently

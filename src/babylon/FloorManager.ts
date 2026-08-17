@@ -38,6 +38,19 @@ export class FloorManager {
   private onFloorChange: (floor: number) => void;
 
   private floorMeshes = new Map<number, AbstractMesh[]>();
+  /**
+   * The STRUCTURE meshes among them (walls + slabs, never furniture).
+   *
+   * Kept apart because of what a storey's floor slab is when you are standing
+   * under it: THE CEILING OF THE STOREY BELOW. On a villa whose pipeline
+   * dropped the modelled ceilings in Blender (≥2.6.0 does, so
+   * `SceneManager.ceilingMeshes` is typically near-empty — this one reported
+   * TWO), that slab is the only ceiling geometry there is, and the
+   * cumulative-downward rule below was hiding it along with the rest of the
+   * storey. Walking through a villa with open sky overhead is what
+   * "you didn't add the ceiling" meant.
+   */
+  private structureMeshes = new Set<AbstractMesh>();
   /** World Y of each floor's slab (its meshes' lowest point) — the elevation you
    *  stand on when on that storey. Used to pick the storey from the walker's
    *  feet height when the GLB ships no stair-trigger meshes. */
@@ -61,14 +74,19 @@ export class FloorManager {
     this.camera = camera;
   }
 
-  /** Toggle elevation-driven floor switching (on only in first-person walk). */
+  /** Toggle elevation-driven floor switching (on only in first-person walk) —
+   *  and, since 2.435.0, the storey-above CEILING (see applyVisibility), which
+   *  is why this now re-applies visibility instead of only setting a flag. */
   setFirstPerson(active: boolean): void {
+    if (active === this.firstPerson) return;
     this.firstPerson = active;
+    this.applyVisibility();
   }
 
   indexFloors(meshes: AbstractMesh[]): void {
     this.floorMeshes.clear();
     this.floorBaseY.clear();
+    this.structureMeshes.clear();
     this.alwaysOnMeshes = [];
     for (const m of meshes) {
       if (/^trigger_stair_up/i.test(m.name)) {
@@ -115,6 +133,7 @@ export class FloorManager {
       // Stamp the floor on the mesh so other systems (the entity-label culler)
       // can tell which storey a mesh belongs to without re-deriving the rules.
       m.metadata = { ...(m.metadata ?? {}), floorIndex: floor };
+      if (role.isStructure) this.structureMeshes.add(m);
       const list = this.floorMeshes.get(floor) ?? [];
       list.push(m);
       this.floorMeshes.set(floor, list);
@@ -159,8 +178,25 @@ export class FloorManager {
   private applyVisibility(): void {
     for (const [floor, list] of this.floorMeshes) {
       const on = floor <= this.currentFloor;
+      // ── The storey above, in FIRST PERSON only: its STRUCTURE, nothing else ──
+      // Its floor slab is the ceiling of the storey you are standing on, and on
+      // a villa whose pipeline dropped the modelled ceilings it is the only
+      // ceiling there is. Structure only: the walls come with it (harmless —
+      // the slab hides them from below) while the upper storey's FURNITURE
+      // stays off, which is what keeps this a couple of draw calls rather than
+      // a second villa. Its light fixtures stay disabled too, so their pools
+      // stay dark (resyncLightPoolsToFloor reads exactly this enabled state).
+      //
+      // Overview is untouched and must stay so: it is a CUT-AWAY, and a lid
+      // over it shows nothing but the lid.
+      //
+      // The ACTIVE FLOOR does not change here, so nothing downstream shifts
+      // with it — badges are still culled against `activeFloor`, and a device
+      // upstairs stays hidden while its slab is drawn.
+      const ceiling = this.firstPerson && floor === this.currentFloor + 1;
       for (const m of list) {
-        if (m.isEnabled(false) !== on) m.setEnabled(on);
+        const show = on || (ceiling && this.structureMeshes.has(m));
+        if (m.isEnabled(false) !== show) m.setEnabled(show);
       }
     }
     for (const m of this.alwaysOnMeshes) {

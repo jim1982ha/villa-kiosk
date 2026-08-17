@@ -2493,6 +2493,12 @@ export class SceneManager {
     // --- Critical path: everything needed for a correct, navigable first paint.
     this.normalizeScale(result.meshes); // bring to metres BEFORE recentring
     this.recenterModel(result.meshes); // align to origin BEFORE indexing positions
+    // BEFORE indexFloors, which applies visibility as its last act: a model can
+    // load in either view (the first-run boot walks; a reload from the overview
+    // does not) and only setViewMode was telling FloorManager which, so a boot
+    // straight into first-person got no storey-above ceiling until the user
+    // toggled views and came back.
+    this.floors.setFirstPerson(this.viewMode === "first-person");
     this.floors.indexFloors(result.meshes);
     this.pick.indexInteractiveMeshes(result.meshes); // taps work immediately
     mark("pickIndex");
@@ -3199,7 +3205,14 @@ export class SceneManager {
     // ceiling/roof in Blender, so zero here is the expected answer on a
     // freshly-baked villa and means the GLB, not this code, is what has to
     // change. Reported once per load rather than per mesh.
-    tapDebug(`ceilings: ${this.ceilingMeshes.length} mesh(es) classified — shown in first-person only`);
+    // ⚠️ A LOW NUMBER HERE IS NORMAL AND IS NOT THE WHOLE CEILING. A pipeline
+    // ≥2.6.0 drops the modelled ceiling in Blender, so this counts only the
+    // strays it left (this villa: 2). What actually roofs a room while you walk
+    // in it is the FLOOR SLAB OF THE STOREY ABOVE, which FloorManager shows in
+    // first-person — see its applyVisibility. Both halves are needed and
+    // neither is a substitute for the other: the slab does not exist over a
+    // top-storey room, and these strays are all there is there.
+    tapDebug(`ceilings: ${this.ceilingMeshes.length} stray mesh(es) classified — the storey-above slab does the rest (first-person only)`);
     this.requestRender();
   }
 

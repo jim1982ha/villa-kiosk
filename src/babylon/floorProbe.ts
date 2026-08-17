@@ -88,10 +88,15 @@ export interface FloorProbeStats {
   probeMs: number;
   probeRays: number;
   probeHits: number;
+  /** Cached answers REJECTED for sitting above the point that asked (see
+   *  `below`). Non-zero means two fixtures are sharing a bucket they should not
+   *  — the shape of bug that puts a light pool in mid-air — so this is a
+   *  diagnosis, not a statistic. */
+  probeAbove: number;
 }
 
 export class FloorProbe {
-  readonly stats: FloorProbeStats = { probeMs: 0, probeRays: 0, probeHits: 0 };
+  readonly stats: FloorProbeStats = { probeMs: 0, probeRays: 0, probeHits: 0, probeAbove: 0 };
   /** The lookup map for THIS pass. `clearMemo` empties it so the same points
    *  can be re-asked under room keys once a resolver exists. */
   private cache = new Map<string, number | null>();
@@ -166,6 +171,7 @@ export class FloorProbe {
     this.stats.probeMs = 0;
     this.stats.probeRays = 0;
     this.stats.probeHits = 0;
+    this.stats.probeAbove = 0;
   }
 
   load(): void {
@@ -233,7 +239,21 @@ export class FloorProbe {
     const key = this.bucket(x, y, z);
     const cached = this.cache.get(key);
     this.stats.probeHits += 1;
-    if (cached !== undefined) return cached;
+    // ⚠️ A CACHED ANSWER MUST BE BELOW THE POINT THAT IS ASKING (2.435.0).
+    //
+    // A ray cast downward from `y` cannot return a hit above `y`, so a cached
+    // value that IS above it did not come from this point — it came from
+    // another fixture sharing this bucket, and the bucket is wrong for one of
+    // them. That is not an abstract worry: the caller draws a light pool at the
+    // height this returns, and a floor "above" a lamp puts a disc of light in
+    // mid-air. Cheaper to notice than to debug, and it costs one comparison on
+    // every hit.
+    //
+    // The recomputed answer is deliberately NOT written back: the bucket is
+    // contested, and overwriting it would just move the wrong answer onto the
+    // other fixture. It stops being a cache for this one call.
+    if (cached !== undefined && (cached === null || cached <= y)) return cached;
+    if (cached !== undefined) this.stats.probeAbove += 1;
 
     // Only a cache MISS casts a ray; probeRays vs probeHits is the bucketing's
     // real-world hit rate, which is the number that says whether a finer key
@@ -260,8 +280,11 @@ export class FloorProbe {
       }
     }
     this.stats.probeMs += performance.now() - t0;
-    this.cache.set(key, result);
-    this.persisted.set(key, result);
+    // Only a bucket nobody has contested may be stored — see the guard above.
+    if (cached === undefined) {
+      this.cache.set(key, result);
+      this.persisted.set(key, result);
+    }
     return result;
   }
 

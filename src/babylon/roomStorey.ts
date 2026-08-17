@@ -36,29 +36,36 @@ export interface StoreyRoom {
 }
 
 /**
- * How far BELOW a world point a room's floor may sit and still be the storey
- * that point stands on.
+ * How far a floor must sit BELOW a world point to be the storey that point
+ * belongs to. A CLEARANCE, not an epsilon — and the sign is the entire fix
+ * (2.435.0).
  *
- * ⚠️ Centimetres, and deliberately NOT a comfortable margin. A ground-floor
- * ceiling fixture hangs within centimetres of the slab above it, so any
- * tolerance wide enough to feel safe hands that fixture to the upper storey.
- * A device is never more than a hair below its own floor (a recessed floor
- * light is the only case at all).
+ * ⚠️ v2.434.0 had this as a +0.05 tolerance: a floor at or *just above* the
+ * point still counted. That reads as cautious and is exactly backwards, because
+ * of where light fixtures actually live. A ground-floor ceiling lamp hangs
+ * within centimetres of the slab above it — 2.60 m under a slab at 2.56 — so
+ * the tolerance handed it to the UPPER storey. It then shared the floor probe's
+ * cache bucket (`room|round(y)`, and both round to 3) with a genuine upstairs
+ * fixture, inherited that room's floor height, and its pool was drawn at 2.58 m
+ * — a disc of light hanging at ceiling height instead of lying on the floor
+ * two and a half metres below. Reported as exactly that: "the light disk is
+ * floating in the air".
  *
- * ⚠️ THE RESIDUAL, stated because it is real and a pin would otherwise imply
- * otherwise: within roughly this distance of a slab, HEIGHT ALONE CANNOT
- * DECIDE. A ceiling lamp on the floor below and a recessed uplight on the floor
- * above are at the same world Y, and `storeyFloorYAt` will call both of them
- * upstairs. No epsilon fixes that — the two really are at the same height, and
- * a wider one only widens the band. The fix belongs to the CALLER: anything
- * that can afford a downward ray should pass the height of the floor it found
- * rather than the fixture's own, which answers by touching the floor instead of
- * guessing from a number. `EntityVisuals.reshapeLightPools` does exactly that
- * (it is already probing), and it is the caller that draws the thing a user can
- * see. The probe's own cache key cannot — it must key BEFORE casting the ray —
- * so it keeps the height rule and, with it, this band.
+ * Flipping the sign separates the two cases by the thing that really tells them
+ * apart: **a lamp is mounted a usable distance above the floor it lights.** A
+ * ceiling lamp is ~0.04 m below its slab (fails the test, falls through to the
+ * floor it actually lights); a table or floor lamp upstairs is 0.3–1.5 m above
+ * its own (passes). 0.30 m sits an order of magnitude from both.
+ *
+ * ⚠️ THE RESIDUAL, stated because a pin would otherwise imply there is none: a
+ * fixture recessed INTO an upper floor and pointing up (a floor uplight less
+ * than 0.30 m above its own slab) still reads as belonging to the storey below.
+ * That case fails quietly — its pool lands on the floor beneath — and it cannot
+ * be fixed by a number, because height alone genuinely cannot separate it from
+ * a ceiling lamp hanging at the same Y. Only a ray can, and a ray per fixture is
+ * what the memo exists to avoid.
  */
-export const STOREY_PICK_EPS = 0.05;
+export const STOREY_MIN_MOUNT = 0.30;
 
 /**
  * How far two room floor heights may differ and still be the SAME storey.
@@ -76,10 +83,10 @@ export function onStorey(roomFloorY: number, storeyY: number): boolean {
 }
 
 /**
- * The floor height of the storey a world Y stands on: the HIGHEST room floor at
- * or just below it, or — for a point under every floor there is — the lowest
- * floor of all, so a fixture below the ground slab still belongs somewhere
- * rather than to nothing.
+ * The floor height of the storey a world Y belongs to: the HIGHEST room floor
+ * at least `STOREY_MIN_MOUNT` below it, or — for a point with no floor that far
+ * beneath it (something at or near ground level, or below every floor there is)
+ * — the lowest floor of all, so nothing ever belongs to no storey.
  *
  * Returns 0 for an empty room list, which is what every caller wants: before
  * calibration there are no polygons and no storeys to tell apart.
@@ -89,7 +96,7 @@ export function storeyFloorYAt(rooms: readonly StoreyRoom[], y: number): number 
   let lowest = Infinity;
   for (const room of rooms) {
     if (room.floorY < lowest) lowest = room.floorY;
-    if (room.floorY <= y + STOREY_PICK_EPS && room.floorY > below) below = room.floorY;
+    if (room.floorY <= y - STOREY_MIN_MOUNT && room.floorY > below) below = room.floorY;
   }
   if (below > -Infinity) return below;
   return Number.isFinite(lowest) ? lowest : 0;
