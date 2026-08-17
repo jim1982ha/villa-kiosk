@@ -85,7 +85,7 @@ import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
   PHONE_MAX_CSS_WIDTH, ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE,
-  GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice,
+  GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice, CARD_VALUE_GAP_OF_CHIP_GAP,
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
 import {
@@ -4245,7 +4245,11 @@ export class EntityVisuals {
         // i.e. 28% of the chip, and that is the proportion this is measured
         // against because it is the same object drawn in the DOM. A flat 4px
         // came out at 18% and read as the text crowding the chip's edge.
-        const valueGap = Math.round(glyphPx * chip.gap);
+        // The TAIL keeps the DOM chip's full gap; the icon side takes a
+        // fraction of it (see CARD_VALUE_GAP_OF_CHIP_GAP) so the number reads as
+        // belonging to its icon rather than floating in the middle of the pill.
+        const valueTail = Math.round(glyphPx * chip.gap);
+        const valueGap = Math.round(valueTail * CARD_VALUE_GAP_OF_CHIP_GAP);
         valueWrap.paddingLeft = `${valueGap}px`;
         // ⚠️ THE VALUE'S OWN TWO SIDES, not the CARD's two margins (2.441.0).
         //
@@ -4265,10 +4269,10 @@ export class EntityVisuals {
         //
         // Width model unaffected, and that is checked rather than assumed: the
         // reserve is `cardPadLeftPx + cardHeightPx + cardValuePadPx` = 40 px
-        // against a draw of iconPadX + glyph + gap + gap = 37 px, so this still
-        // over-reserves. Under-reserving is the direction that breaks
+        // against a draw of iconPadX + glyph + gap/2 + gap = 34 px, so this
+        // still over-reserves. Under-reserving is the direction that breaks
         // "layout geometry must equal render geometry".
-        valueWrap.paddingRight = `${Math.max(0, valueGap - iconPadX)}px`;
+        valueWrap.paddingRight = `${Math.max(0, valueTail - iconPadX)}px`;
         valueWrap.isVisible = false;
         row!.addControl(valueWrap);
       } else {

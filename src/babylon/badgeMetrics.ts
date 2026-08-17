@@ -408,6 +408,26 @@ export interface BadgeMetrics {
  * sees.
  */
 /**
+ * The card's ICON-TO-VALUE gap, as a fraction of the gap the DOM twin uses
+ * (`--chip-gap`, 28% of the chip, shared with `.summary-tile`).
+ *
+ * The DOM tile's gap separates the icon from a two-line label+value BLOCK that
+ * fills the rest of a 96px-wide tile. The map badge has one short number and
+ * hugs it, so the same fraction leaves the value floating between the icon and
+ * the edge — reported twice as the value sitting "too much on the right side",
+ * once when its two margins were genuinely unequal (2.440.0 fixed that) and
+ * again when they were equal, because equal margins around a small number
+ * inside a tight pill still read as adrift.
+ *
+ * So the badge takes HALF the DOM gap on the icon side and keeps the full one
+ * as its tail, which reads as "the number belongs to that icon" rather than
+ * "the number is centred in a box". A fraction OF the shared token rather than
+ * a new literal: `--chip-gap` stays the one place the proportion is defined,
+ * and this says how the map deviates and by how much.
+ */
+export const CARD_VALUE_GAP_OF_CHIP_GAP = 0.5;
+
+/**
  * The value text, as a fraction of the CHIP it sits beside.
  *
  * MEASURED against the DOM twin, which is the reference this component has had
@@ -524,10 +544,26 @@ const COARSE: BadgeMetrics = {
   textOpticalTopEm: 0.105,
 };
 
-/** Smallest legible label text. Cartographic practice puts the floor for map
- *  labels at 9–10pt; below it the value stops being readable and the badge may
- *  as well drop it entirely (which is what tier 2 does anyway). */
-const MIN_VALUE_FONT_PX = 10;
+/**
+ * Smallest legible label text, in CSS pixels BEFORE `effectiveScale()`.
+ *
+ * ⚠️ 10 SILENTLY PINNED THE FINE-POINTER VALUE AND MADE `VALUE_FONT_OF_CHIP` A
+ * LIE THERE (2.441.0). FINE is COARSE scaled by 32/44, so the card value scaled
+ * to 8.0 px and this floor clamped it back to 10 — on every mouse-driven screen,
+ * both before AND after 2.440.0 lowered the base from 13 to 11. The owner
+ * reported the size unchanged on their laptop and they were exactly right: the
+ * ratio had no effect on that pointer class at all, because the floor decided.
+ * Pinned now (`the value font honours its ratio on BOTH pointer classes`), so a
+ * floor that starts deciding again fails a test instead of a screenshot.
+ *
+ * 8 is safe because THIS IS NOT THE DRAWN SIZE. The container is scaled by
+ * `effectiveScale()` = cssToGui x iconUserScale — 1.6 on a retina panel before
+ * the user's icon-size setting, which this install runs at 2.5 — so 8 here draws
+ * at 13 render px at the smallest possible setting and ~32 at this owner's. The
+ * 9-10pt cartographic floor is about what a reader SEES, and what a reader sees
+ * is this number times a factor no metrics table can know.
+ */
+const MIN_VALUE_FONT_PX = 8;
 
 /**
  * Derive one metrics table from another by scaling the GEOMETRY only.

@@ -1,3 +1,15 @@
+## 2.441.0
+
+### Fixed — the badge value still read as adrift, and its size was being decided by a floor
+
+The value now takes half the shared chip gap on its icon side and keeps the full
+gap as its tail, so a short number reads as belonging to its icon rather than
+floating mid-pill. And the size: a minimum-font floor of 10 CSS px was clamping
+the fine-pointer value all along, so the ratio the last release introduced had no
+effect on a mouse-driven screen at all. The floor applies before the badge is
+scaled for the display, so 8 is safe, and the ratio is now pinned on both pointer
+classes.
+
 ## 2.440.0
 
 ### Fixed — an "Other" room chip, and the badge value's size and alignment
