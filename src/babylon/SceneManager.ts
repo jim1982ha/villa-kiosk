@@ -1876,35 +1876,6 @@ export class SceneManager {
     this.visuals.setFocusedRooms(roomNames);
     if (this.viewMode !== "overview") return;
     const framed = this.computeRoomOverviewPose(roomNames);
-    // TEMPORARY (2.361.0) — one row per room tap, answering "is the shot the
-    // WALL fit or the badge spread". Reported rather than logged because the
-    // complaint ("the zoom is too low") comes from a phone nobody can attach a
-    // console to, and the two causes need opposite fixes. Delete once read.
-    if (framed) {
-      reportTelemetry("roomzoom", {
-        room: roomNames.join("+"),
-        rooms: roomNames.length,
-        // Equal to `radius` ⇒ the badge solver never tightened the shot.
-        wallFit: Math.round(framed.wallFit * 100) / 100,
-        radius: Math.round(framed.radius * 100) / 100,
-        solved: framed.solved,
-        declutters: framed.declutters,
-        // Which INPUT the fit was measured from. False ⇒ at least one room had
-        // no wall polygon and fell back to its entity anchors, which carries
-        // the far looser ROOM_FIT_MARGIN_ENTITIES (0.45 vs 0.18) — a shot 23%
-        // wider than the same room with a polygon, for a reason that has
-        // nothing to do with the formula.
-        real: framed.real,
-        // The room's own half-extents ON THE VIEW PLANE, world units. With
-        // wallFit these say which SCREEN AXIS bound the fit: recompute
-        // halfW/tan(hFov/2) against halfH/tan(vFov/2) and the larger one won.
-        halfW: Math.round(framed.halfW * 100) / 100,
-        halfH: Math.round(framed.halfH * 100) / 100,
-        // The floor the camera itself imposes: a shot sitting ON this is as
-        // tight as this camera can go, and no framing change can help.
-        minRadius: Math.round((this.overview.camera.lowerRadiusLimit ?? 0) * 100) / 100,
-      });
-    }
     // ── THE SAME NUMBERS, ON THE DEBUG LINE (2.426.0) ─────────────────────
     // Every field above already existed and every one of them went ONLY to
     // telemetry, so four screenshots of a bad room shot arrived with no way to
@@ -1939,17 +1910,22 @@ export class SceneManager {
     roomNames: readonly string[],
   ): {
     alpha: number; beta: number; radius: number;
-    /** TEMPORARY (2.361.0) — the WALL fit before the badge solver walked in,
-     *  and whether the solver returned at all. The question this answers is
-     *  which of the two decides the shot: if `wallFit` and `radius` are equal
-     *  the solver never tightened (look at the fit), and if they differ the
-     *  shot IS the badge spread (look at the badges, or accept it). Guessing
-     *  between those two is what three earlier releases did wrong. */
+    /** The WALL fit before anything else could narrow it, and whether the rung
+     *  solver returned at all. `radius / wallFit` is the whole verdict on a
+     *  room shot that reads wrong: 1.0 means the framing IS the fit, so
+     *  ROOM_FIT_VIEWPORT_FRACTION is the dial; below it, something is pulling
+     *  in. Guessing between those two is what three releases did wrong before
+     *  2.361.0 measured it, and 2.426.0 is the fourth — it read 0.53x for a
+     *  long thin room and ~1.0 after. NOT temporary: focusRooms prints these on
+     *  the debug channel, which is the instrument the owner actually has. */
     wallFit: number; solved: boolean;
-    /** TEMPORARY (2.365.0) — the fit's INPUTS, so a shot that still reads wrong
-     *  can be attributed without another measurement round: whether every room
-     *  had a real wall polygon (false ⇒ the 0.45 entity margin, not the 0.18
-     *  one), and the footprint's half-extents on the view plane. */
+    /** The fit's INPUTS, so a shot that still reads wrong is attributable
+     *  without another measurement round: whether every room had a real wall
+     *  polygon (false ⇒ the wider entity-anchor fraction), and the footprint's
+     *  half-extents on the view plane. Those two say which SCREEN AXIS bound
+     *  the fit — recompute halfW/tan(hFov/2) against halfH/tan(vFov/2) and the
+     *  larger one won — which is how the same one number is checked on a
+     *  portrait phone and a landscape laptop. */
     real: boolean; halfW: number; halfH: number;
     target: { x: number; y: number; z: number };
     /** False when NO zoom this camera allows can separate the room's badges —

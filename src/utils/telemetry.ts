@@ -58,12 +58,14 @@ export type TelemetryKind =
   // across one block; they cannot say whether that block ran twice, which is
   // the open question about `calibrateRooms`. See perfSpans' census notes —
   // this kind goes away with them.
-  | "spans"
-  // TEMPORARY (2.361.0): one row per "show me this room" tap, saying whether
-  // the shot is the WALL fit or the tighter badge-spread the solver walked in
-  // to. "The zoom is too low" has those two causes and they need opposite
-  // fixes; three earlier releases guessed. Goes away with the answer.
-  | "roomzoom";
+  | "spans";
+  // "roomzoom" lived here from 2.361.0 and is GONE (2.427.0). It asked whether a
+  // room shot was the WALL fit or a tighter badge-spread, and it got its answer:
+  // 0.53x for a long thin room, ~1.0 once 2.426.0 stopped the declutter search
+  // selecting the shot. It also taught the lesson its own removal records — the
+  // fields went ONLY to telemetry, so four screenshots of a bad shot arrived
+  // with no way to read them. They print on the debug channel now (focusRooms),
+  // which is the instrument the owner has to hand.
 
 let disabled = false;
 

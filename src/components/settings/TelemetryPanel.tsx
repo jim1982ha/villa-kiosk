@@ -13,8 +13,14 @@ import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope, Activity } from 
 import { ingressPath } from "@/ha/ingress";
 import { buildReport, captureError } from "@/utils/diagnostics";
 import { runRegisteredProbe, probeAvailable, formatProbe } from "@/babylon/perfProbe";
+import type { TelemetryKind } from "@/utils/telemetry";
 
 interface TelemetryEvent {
+  // ⚠️ `string`, not TelemetryKind, and deliberately (2.427.0): these events are
+  // parsed from the stored JSON under /data, which is HISTORY — it legitimately
+  // contains kinds retired since it was written, so typing this as the union
+  // would be a lie about untrusted input. The narrowing happens at the one place
+  // it can be honest instead: `summarise`'s switch.
   kind: string;
   at?: string;
   ua?: string;
@@ -48,7 +54,22 @@ function ms(v: unknown): string {
 /** The one-line summary per event kind — the fields that actually matter for
  *  that kind, rather than a raw JSON dump nobody reads. */
 function summarise(e: TelemetryEvent): string {
-  switch (e.kind) {
+  // ── NARROWED, SO A DEAD RENDERER IS A COMPILE ERROR (2.427.0) ─────────────
+  // /dry-audit: the channel list in telemetry.ts and the renderers here are two
+  // lists that must agree, and nothing made them. `TelemetryEvent.kind` was
+  // `string`, so `switch (e.kind)` narrowed nothing and every case label went
+  // unchecked — proven the same hour: "roomzoom" was deleted from TelemetryKind
+  // and its `case` here still compiled clean.
+  //
+  // The cast fixes the direction that fails SILENTLY: a channel retired or
+  // renamed now breaks the build at its renderer instead of leaving dead code.
+  //
+  // The other direction — a NEW channel with no renderer — is deliberately not
+  // converged. It would need a Record<TelemetryKind, …> to be exhaustive, and
+  // that is a second list to maintain for a failure that announces itself the
+  // first time anyone opens the panel (the event falls to `default` and prints
+  // raw). Noted here rather than left as a silent divergence.
+  switch (e.kind as TelemetryKind) {
     case "load": {
       // Post-phase step timings arrive as loose keys on the event (see
       // BabylonCanvas) — surface the biggest, since that's the actionable one.
@@ -238,18 +259,6 @@ function summarise(e: TelemetryEvent): string {
         return `${name} ${ms(Number(totalMs))}${n > 1 ? ` over ${n} RUNS` : ""}`;
       });
       return `${ms(e.at)} into load — ${rows.join(" · ")}${stale}`;
-    }
-    case "roomzoom": {
-      // TEMPORARY — the verdict is whether wallFit and radius DIFFER.
-      const tightened = e.wallFit !== e.radius;
-      const floored = e.radius === e.minRadius;
-      return `zoom to ${e.room} → radius ${e.radius} (wall fit ${e.wallFit})`
-        + (e.solved ? "" : " · solver returned NOTHING")
-        + (tightened ? " · badge solver tightened it" : " · WALL FIT UNCHANGED")
-        + (floored ? " · AT the camera's zoom-in limit" : "")
-        + (e.declutters === false ? " · does not declutter" : "")
-        + (e.real === false ? " · NO WALL POLYGON (entity-bounds margin)" : "")
-        + (e.halfW !== undefined ? ` · footprint ${e.halfW}x${e.halfH} half-extent` : "");
     }
     case "context-lost":
       return `WebGL context lost (${e.total ?? "?"} this session)`;

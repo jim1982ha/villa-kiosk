@@ -1,3 +1,12 @@
+## 2.427.0
+
+### Removed — the temporary room-zoom telemetry, now that it has answered
+
+It asked whether a room shot was the wall fit or a tighter badge spread: 0.53x
+for a long thin room, ~1.0 since 2.426.0. Its fields print on the debug channel
+now. The diagnostics panel is typed against the channel list too, so a retired
+channel's renderer breaks the build instead of becoming dead code.
+
 ## 2.426.0
 
 ### Fixed — tapping a room landed far too close, with none of its surroundings
