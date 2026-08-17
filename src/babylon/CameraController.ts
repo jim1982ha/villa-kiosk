@@ -64,6 +64,14 @@ export class CameraController {
    *  the per-frame storey test must not have to default it. */
   private roomPolygons: Array<{ name: string; pts: Pt2[]; floorY: number }> = [];
   private currentRoom: string | null = null;
+  /** Scratch for `roomHitTest` — see updateRoom. */
+  private hitX = 0;
+  private hitZ = 0;
+  /** Allocated ONCE. `nearestFloorRoom` takes a predicate so a caller need not
+   *  build a filtered array per frame; handing it a fresh arrow each frame
+   *  would have given back the allocation it was designed to save. */
+  private roomHitTest = (r: { pts: Pt2[] }): boolean =>
+    pointInPolygon(this.hitX, this.hitZ, r.pts);
   private animating = false;
   private eyeHeight: number;
   private walkSpeed: number;
@@ -706,9 +714,12 @@ export class CameraController {
     if (this.roomPolygons.length > 0) {
       const px = this.camera.position.x;
       const pz = this.camera.position.z;
-      room = nearestFloorRoom(
-        this.roomPolygons, this.getFeetY(), (r) => pointInPolygon(px, pz, r.pts),
-      )?.name ?? null;
+      // The predicate is a FIELD, not an arrow written here: this runs on every
+      // frame of a walk, and a closure per frame is the kind of steady-state
+      // garbage the rest of this app pools specifically to avoid.
+      this.hitX = px;
+      this.hitZ = pz;
+      room = nearestFloorRoom(this.roomPolygons, this.getFeetY(), this.roomHitTest)?.name ?? null;
     } else if (this.roomAnchors.length > 0) {
       // Fallback: nearest anchor within ~3.5 m.
       let best = Infinity;

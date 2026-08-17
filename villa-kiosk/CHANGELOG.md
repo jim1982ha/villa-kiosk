@@ -1,3 +1,10 @@
+## 2.438.1
+
+### Changed — one allocation per frame removed from the walk path
+
+The room-name lookup built its hit-test closure fresh on every frame. It is a
+field now, allocated once, which is what the rest of the walk path already does.
+
 ## 2.438.0
 
 ### Fixed — walking was laggy, and the wall cull was the measurable half of it
