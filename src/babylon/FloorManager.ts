@@ -275,13 +275,24 @@ export class FloorManager {
       // Reported because its absence is exactly what went unnoticed for twenty
       // releases: with no line for it, "there is no ceiling" and "the fallback
       // that provided one was deleted" look identical from a capture.
-      tapDebug(`ceiling slab fallback: ${lid} structure mesh(es) from storey `
-        + `${lidFloor} used as a lid over floor ${this.currentFloor}`
-        + (lid === 0
-          ? (ceilingSlabFallback()
-            ? " — none available (top storey?)"
-            : " — DISABLED by ?noslab: what you see overhead is the real ceiling")
-          : ""));
+      // ⚠️ SAY WHICH OF THE FOUR STATES THIS IS. The first cut printed
+      // "0 structure mesh(es) from storey -1 — none available (top storey?)"
+      // whenever the overview was showing, because `lidFloor` is -1 there by
+      // design — a lid is first-person only. That reads as a fault, in a
+      // subsystem where "no ceiling" has been the reported symptom for twenty
+      // releases, and an instrument that cries wolf in the normal case is worse
+      // than no instrument. Four states, four sentences.
+      tapDebug("ceiling slab fallback: " + (
+        !ceilingSlabFallback()
+          ? "OFF (?noslab) — whatever is overhead is the real ceiling"
+          : !this.firstPerson
+            ? "idle — overview is a cut-away and takes no lid"
+            : lid > 0
+              ? `${lid} structure mesh(es) from storey ${lidFloor} used as a lid `
+                + `over floor ${this.currentFloor}`
+              : `no lid over floor ${this.currentFloor} — storey ${lidFloor} `
+                + "ships no structure (top storey), so only a real ceiling can cover it"
+      ));
     }
     for (const m of this.alwaysOnMeshes) {
       if (!m.isEnabled(false)) m.setEnabled(true);

@@ -1,3 +1,13 @@
+## 2.475.1
+
+### Changed — the ceiling-lid line reported the normal case as a failure
+
+In the overview it printed "0 mesh(es) from storey -1 — none available (top
+storey?)", because a lid is deliberately first-person only and there is nothing
+to report there. That reads as a fault, in the one subsystem where "no ceiling"
+has been the reported symptom all along. It now names which of its four states
+it is in.
+
 ## 2.475.0
 
 ### Added — name the floating light pools instead of counting them
