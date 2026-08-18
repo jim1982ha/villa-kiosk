@@ -1,3 +1,16 @@
+## 2.459.0
+
+### Fixed — the walker spawned in the crawlspace under the staircase
+
+"On the ground floor" was tested as a floor height alone, and the floor under a
+staircase is at ground level — so stepping off the stairs found the space beneath
+them and dropped the walker inside the structure, capsule jammed under the
+treads, which is why walking felt blocked. A spot now has to have headroom as
+well as a floor, tested against structure geometry because stairs are
+deliberately non-collidable. Every spawn candidate is validated and the chain
+falls through when one fails, instead of taking the first non-null answer; the
+choice is logged.
+
 ## 2.458.0
 
 ### Fixed — the spawn still landed on the stairs, and the ceiling report never named a room

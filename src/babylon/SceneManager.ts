@@ -1832,13 +1832,46 @@ export class SceneManager {
   private firstPersonSpawn(): TeleportPoint {
     const eye = this.config.eyeHeight ?? 1.7;
     const ground = (p: TeleportPoint) => p.floor === 1;
-    return (
-      this.staircaseSpawn() ??
-      this.calibratedPoints?.find((p) => ground(p) && /main|living|salon|séjour|sejour|hall|entr/i.test(p.name)) ??
-      this.calibratedPoints?.find(ground) ??
-      this.calibratedPoints?.[0] ??
-      { name: "Start", floor: 1, position: { x: 0, y: eye, z: 0 }, target: { x: 0, y: 1.6, z: 2 } }
-    );
+    // ⚠️ EVERY CANDIDATE IS VALIDATED, AND THE CHAIN FALLS THROUGH ON FAILURE
+    // (2.459.0). The staircase spawn has now put the walker somewhere unstandable
+    // twice — mid-flight, then in the crawlspace under the steps — and both times
+    // it was the ONLY candidate consulted, because the chain took the first
+    // non-null answer rather than the first WORKABLE one. A spawn that cannot be
+    // stood in is not an answer, so it no longer counts as one.
+    const ok = (p: TeleportPoint): boolean =>
+      this.standable(p.position.x, p.position.z, p.floor);
+    const named = this.calibratedPoints?.find(
+      (p) => ground(p) && /main|living|salon|séjour|sejour|hall|entr/i.test(p.name));
+    const stairs = this.staircaseSpawn();
+    // Ordered by how sure we are the spot is somewhere a person would stand.
+    // A ROOM's centroid is open floor by construction; a stairwell is the one
+    // place in a villa that is reliably neither.
+    const candidates: Array<[string, TeleportPoint | null | undefined]> = [
+      ["stairFoot", stairs],
+      ["namedRoom", named],
+      ["groundRoom", this.calibratedPoints?.find(ground)],
+      ["anyPoint", this.calibratedPoints?.[0]],
+    ];
+    for (const [why, p] of candidates) {
+      if (!p) continue;
+      if (!ok(p)) {
+        tapDebug(`spawn: REJECTED ${why} "${p.name}" — not standable`);
+        continue;
+      }
+      tapDebug(
+        `spawn: ${why} "${p.name}" floor=${p.floor}`
+        + ` at=${p.position.x.toFixed(1)},${p.position.z.toFixed(1)}`
+        + ` floorY=${this.estimateFloorY(p.position.x, p.position.z, p.floor).toFixed(2)}`,
+      );
+      return p;
+    }
+    // Nothing validated. Say so — silently falling back to the origin is how a
+    // spawn bug reads as "the villa loaded somewhere strange".
+    const fallback = this.calibratedPoints?.find(ground) ?? this.calibratedPoints?.[0];
+    tapDebug(`spawn: NO standable candidate — using ${fallback ? `"${fallback.name}"` : "origin"}`);
+    return fallback ?? {
+      name: "Start", floor: 1, position: { x: 0, y: eye, z: 0 }, target: { x: 0, y: 1.6, z: 2 },
+    };
   }
 
   /** A horizontal look-target facing the MOST OPEN direction from (x,z): probe
@@ -1870,6 +1903,42 @@ export class SceneManager {
     const z = room.position.z;
     const y = this.estimateFloorY(x, z, room.floor) + eye;
     return { name: room.name, floor: room.floor, position: { x, y, z }, target: this.bestFacing(x, z, y - 0.1) };
+  }
+
+  /**
+   * Can a PERSON STAND HERE? Floor at the storey's own level, and headroom above
+   * it.
+   *
+   * ⚠️ HEADROOM IS THE HALF THAT WAS MISSING, AND IT IS WHY 2.458.0'S SPAWN FIX
+   * MADE THINGS WORSE (2.459.0). "On the ground floor" was tested as a floor
+   * height alone — and the floor UNDER A STAIRCASE is at ground level, so the
+   * search happily returned the crawlspace beneath the stairs. The walker
+   * spawned inside the stair structure, with its collision capsule jammed under
+   * the treads: reported as landing "across the wall asset" and walking being
+   * "very buggy, like something was blocking the path", with a screenshot
+   * looking at the underside of the steps.
+   *
+   * ⚠️ The headroom ray must test STRUCTURE, not collidables. Stairs are
+   * deliberately `checkCollisions = false` (a collidable staircase is how you
+   * get wedged mid-flight — see CameraController's ellipsoid note), so a
+   * collision-based test is blind to exactly the obstruction that caused this.
+   * Structure geometry contains the baked stairs, which is what floorProbe uses
+   * and for the same reason.
+   */
+  private standable(x: number, z: number, floor: 1 | 2): boolean {
+    const floorY = this.estimateFloorY(x, z, floor);
+    let groundY = Infinity;
+    for (const r of this.worldRoomPolys) groundY = Math.min(groundY, r.floorY);
+    if (Number.isFinite(groundY) && floor === 1
+      && floorY > groundY + STAIR_FOOT_TOLERANCE) return false;
+    // Eye height plus a little, measured from just above the floor so the slab
+    // itself is never the hit.
+    const need = (this.config.eyeHeight ?? 1.7) + 0.15;
+    const hit = this.scene.pickWithRay(
+      new Ray(new Vector3(x, floorY + 0.1, z), new Vector3(0, 1, 0), need),
+      (m) => m.isPickable && m.isEnabled() && m.metadata?.isStructure === true
+        && !m.metadata?.isCeiling);
+    return !hit?.hit;
   }
 
   /**
@@ -1912,7 +1981,10 @@ export class SceneManager {
     // inside a room. Probe the floor instead: a tread reads a riser or more
     // above the storey's own level, and a floor does not.
     const atGroundLevel = (px: number, pz: number): boolean =>
-      this.estimateFloorY(px, pz, 1) <= groundY + STAIR_FOOT_TOLERANCE
+      // `standable` carries the floor-height test AND the headroom one. The
+      // headroom half is not optional: the floor beneath a staircase is at
+      // ground level, so height alone accepts the crawlspace under the stairs.
+      this.standable(px, pz, 1)
       && onGround.some((r) => pointInPolygon(px, pz, r.pts));
     if (atGroundLevel(x, z)) return { x, z };
     // Outward in rings. The first hit is the nearest spot that is both indoors
