@@ -1,3 +1,15 @@
+## 2.454.0
+
+### Fixed — you could see the sky through the ceiling, and the badge value was off-centre
+
+The ceiling is classified early in the structure pass and `continue`s past the
+rest of it — including the step that forces SweetHome's alpha-bleeding materials
+opaque. Every other surface in the villa got that and the ceiling did not, so it
+drew translucent and you looked straight up through it. The badge value is now
+centred between the icon and the card's edge, as asked, replacing the wider-gap
+rule of 2.451.0. Walking also stopped re-deciding which meshes a floor ray may
+hit on every ray, which a capture measured at 12.8 ms per ray.
+
 ## 2.453.0
 
 ### Fixed — walking was laggy, and the floor follower was raycasting at a standstill

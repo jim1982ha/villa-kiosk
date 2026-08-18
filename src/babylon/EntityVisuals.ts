@@ -86,7 +86,7 @@ import {
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
   PHONE_MAX_CSS_WIDTH, ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE,
   GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice,
-  SUMMARY_TEXT_OF_HEIGHT, VALUE_CHAR_ADVANCE,
+  SUMMARY_TEXT_OF_HEIGHT, VALUE_CHAR_ADVANCE, CARD_VALUE_MARGIN_OF_ICON_PAD,
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
 import {
@@ -934,6 +934,10 @@ interface LabelControls {
    *  BELOW the badge with no gap to hold. Toggled only through
    *  `setValueVisible`, because a gap to a hidden value is dead width. */
   valueSpacer: Rectangle | null;
+  /** The card style's margin to the RIGHT of the value, the counterpart of
+   *  `valueSpacer`. Null for the classic style. Toggled only through
+   *  `setValueVisible` — see there. */
+  valueTail: Rectangle | null;
   valueText: TextBlock;
   anchor: TransformNode;
   type: EntityType;
@@ -4266,7 +4270,10 @@ export class EntityVisuals {
       if (row) {
         // The LEFT margin is short by the baked ink the chip already contributes,
         // so the two VISIBLE margins match: visL = padL + ink, visR = padR.
-        row.addControl(strut("padl", Math.round(iconPadX - inkInset)));
+        // Unrounded, like the two on the value's side (2.454.0): these are
+        // PRE-scale CSS px and rounding 0.65 to 1 is a 35% error on the very
+        // quantity the `visL/gap/visR` readout exists to make checkable.
+        row.addControl(strut("padl", iconPadX - inkInset));
       }
       (row ?? badge).addControl(glyph);
 
@@ -4275,6 +4282,9 @@ export class EntityVisuals {
       // Declared out here so the label record can carry it: the classic style
       // has no gap to hold (its value is a pill BELOW the badge), so null.
       let valueSpacer: Rectangle | null = null;
+      /** The value's right-hand margin, shown and hidden with it — see where it
+       *  is added for why it is the value's and not the card's. */
+      let valueTail: Rectangle | null = null;
       const valueWrap = new Rectangle(`lbl_valwrap_${entityId}`);
       valueWrap.thickness = 0;
       valueWrap.adaptWidthToChildren = true;
@@ -4331,23 +4341,38 @@ export class EntityVisuals {
         // the spacer and it is a subtraction, not a fraction — and on this
         // villa's metrics it comes out at ~1 CSS px, which is why every
         // fraction-of-the-gap value I tried was too wide.
-        // ⚠️ AND THE GAP MUST BE BIGGER THAN THE MARGINS, which is where the
-        // previous attempt went wrong in the other direction. Solving only for
-        // "equal on both sides of the text" gave a gap of 2.6 against margins of
-        // 3.6 and 2.0 — the number jammed against the icon while the icon had
-        // more air on its left, which is cramped rather than centred. The DOM
-        // twin has the same relationship the other way up: `.summary-tile` runs
-        // 9-14 px of padding against a 13 px gap, so the gap is ~1.5-2x the
-        // margin. VISIBLE gap = 2x the visible margin, and the spacer is that
-        // minus the baked inset the chip already contributes.
-        valueSpacer.width = `${Math.max(1, Math.round(2 * iconPadX - inkInset))}px`;
+        // ⚠️ THE OWNER STATED THE TARGET AND IT REVERSES THE 2x RULE (2.454.0):
+        // "I want the 100% to appear centered between the end of the entity
+        // icon and the end of the badge graph". That is VISIBLE gap == VISIBLE
+        // right margin, and both are printed on the `badge` line as `gap=` and
+        // `visR=` — so this stopped being a number to argue and became an
+        // equation to satisfy. See CARD_VALUE_MARGIN_OF_ICON_PAD for why the
+        // multiple is 1.5 (it preserves the card's width) and for the six
+        // attempts that were argued from the DOM twin instead of measured.
+        //
+        // No Math.round, deliberately: these are PRE-scale CSS px multiplied by
+        // effectiveScale (3.2 on this capture), so rounding 3.375 to 3 is a
+        // 1.2 render-px error on a 2 px quantity — and it lands on exactly the
+        // equality the pin checks. The struts take fractional widths fine.
+        valueSpacer.width =
+          `${Math.max(0, CARD_VALUE_MARGIN_OF_ICON_PAD * iconPadX - inkInset)}px`;
         valueSpacer.isVisible = false;
         row!.addControl(valueSpacer);
         row!.addControl(valueWrap);
-        // The right margin, LAST in the row. It is the counterpart of `padl`
-        // above and the reason the card no longer collects its padding on one
-        // side. Always present: a valueless card is icon + two equal margins.
-        row!.addControl(strut("padr", Math.round(iconPadX)));
+        // The value's TAIL, and it rides the value's own visibility for the
+        // same reason the gap spacer does — a bare-icon card must keep
+        // visL == visR == iconPadX (that is what makes it square), so the extra
+        // margin the owner's centring asks for belongs to the VALUE, not to the
+        // card. With a value: visR = this + padr = 1.5·iconPadX, which is the
+        // visible gap on the other side of the text. Without one: it collapses
+        // and the card is symmetric exactly as before.
+        valueTail = strut("valtail", (CARD_VALUE_MARGIN_OF_ICON_PAD - 1) * iconPadX);
+        valueTail.isVisible = false;
+        row!.addControl(valueTail);
+        // The right margin proper, LAST in the row. It is the counterpart of
+        // `padl` above and the reason the card no longer collects its padding
+        // on one side. Always present.
+        row!.addControl(strut("padr", iconPadX));
       } else {
         valueWrap.height = `${m.valueChipHeightPx}px`;
         valueWrap.cornerRadius = m.valueChipHeightPx / 2;
@@ -4404,7 +4429,7 @@ export class EntityVisuals {
       valueWrap.addControl(valueText);
 
       this.labels.set(entityId, {
-        container, badge, glyph, valueWrap, valueSpacer, valueText, anchor, type, category,
+        container, badge, glyph, valueWrap, valueSpacer, valueTail, valueText, anchor, type, category,
       });
 
       // Repaint from the last known state so a rebuild (toggle on / icon edit)
@@ -5405,6 +5430,10 @@ export class EntityVisuals {
   private setValueVisible(lbl: LabelControls, on: boolean): void {
     lbl.valueWrap.isVisible = on;
     if (lbl.valueSpacer) lbl.valueSpacer.isVisible = on;
+    // BOTH margins around the value ride its visibility, or a valueless card
+    // pays for space around text it is not drawing — the same dead-width bug
+    // the gap spacer above was written to avoid, on the other side.
+    if (lbl.valueTail) lbl.valueTail.isVisible = on;
   }
 
   /**

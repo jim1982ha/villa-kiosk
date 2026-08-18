@@ -241,6 +241,30 @@ interface ConformData { positions: number[]; indices: number[] }
 /** FNV-1a over the polygon, quantised to millimetres. A hash rather than the
  *  raw point list because this becomes a localStorage key and a 40-vertex
  *  outdoor polygon would otherwise write a kilobyte of key per entry. */
+/**
+ * SweetHome bleeds alpha onto surfaces that are meant to be solid, so anything
+ * still MOSTLY opaque is treated as a bleed and forced fully opaque; anything
+ * at or under half is taken as deliberate (glass, a curtain sheer) and left
+ * alone.
+ *
+ * A free function rather than an inline block at the bottom of applyStructure's
+ * loop because the ceiling branch `continue`s before reaching that bottom, and
+ * for two releases nobody noticed the ceiling was the ONE surface the rule was
+ * not reaching — the surface where a bled alpha means you look through it at
+ * the sky. A rule that must apply to a mesh classified early has to be callable
+ * from where that classification happens.
+ */
+function forceOpaque(m: AbstractMesh): void {
+  const mat = m.material;
+  if (!mat || mat.alpha <= 0.5) return;
+  mat.alpha = 1;
+  mat.transparencyMode = Material.MATERIAL_OPAQUE;
+  if (mat instanceof PBRMaterial) {
+    mat.useAlphaFromAlbedoTexture = false;
+    if (mat.albedoTexture) mat.albedoTexture.hasAlpha = false;
+  }
+}
+
 function polygonKey(pts: Pt2[], floor: number): string {
   let h = 0x811c9dc5;
   for (const p of pts) {
@@ -2531,6 +2555,10 @@ export class SceneManager {
     // the genuinely heavy indexMeshes, is kept.
     if (this.disposed) return { importMs: result.importMs, postMs: performance.now() - tPostStart };
     this.applyStructure(result.meshes); // solid walls + collisions + view-scoped ceilings
+    // AFTER applyStructure, which is what stamps `isStair`/`isMarker` — the
+    // floor follower resolves its candidate set once here instead of walking
+    // every mesh on every ray (see CameraController.floorCandidates).
+    this.camera.setFloorCandidates(result.meshes);
     // A model can load in either view (the first-run boot walks, a reload from
     // the overview does not), so the badge occluder pass is told which one it
     // landed in rather than waiting for a toggle that may never come.
@@ -3168,6 +3196,19 @@ export class SceneManager {
         this.ceilingMeshes.push(m);
         m.isVisible = this.viewMode === "first-person";
         m.checkCollisions = false;
+        // ⚠️ THIS `continue` SKIPS THE REST OF THE LOOP, AND THE OPACITY
+        // NORMALISATION AT THE BOTTOM OF IT IS ONE OF THE THINGS IT SKIPPED
+        // (2.454.0). Exactly the shape of 2.450.0, where the same early exit
+        // put the ceiling ahead of the UV2 gate: a decision made here is made
+        // BEFORE every later rule, so each later rule has to be asked for
+        // explicitly or it silently does not apply.
+        //
+        // SweetHome bleeds alpha onto flat slabs, and a ceiling is the one
+        // surface where that is not cosmetic: you look straight up through it
+        // at the sky, which is precisely the "no ceiling in first-person"
+        // report that four fixes chased. Everything else in the villa got
+        // forced opaque at the bottom of this loop and the ceiling did not.
+        forceOpaque(m);
         continue;
       }
 
@@ -3212,18 +3253,8 @@ export class SceneManager {
         m.createOrUpdateSubmeshesOctree();
       }
 
-      // --- Opacity ---
-      // alpha > 0.5 → wall/furniture that bled alpha → force opaque.
-      // alpha ≤ 0.5 → deliberately transparent (glass, curtain sheer) → leave alone.
-      const mat = m.material;
-      if (mat && mat.alpha > 0.5) {
-        mat.alpha = 1;
-        mat.transparencyMode = Material.MATERIAL_OPAQUE;
-        if (mat instanceof PBRMaterial) {
-          mat.useAlphaFromAlbedoTexture = false;
-          if (mat.albedoTexture) mat.albedoTexture.hasAlpha = false;
-        }
-      }
+      // --- Opacity --- (see forceOpaque; the ceiling branch above calls it too)
+      forceOpaque(m);
     }
     // The one field that separates "this villa has no ceiling geometry" from
     // "the ceiling feature is broken". A pipeline ≥2.6.0 DROPS the top
@@ -3300,10 +3331,27 @@ export class SceneManager {
     }
     const ext = this.worldExtends(this.loadedMeshes);
     const villaFoot = Math.max(1e-6, (ext.max.x - ext.min.x) * (ext.max.z - ext.min.z));
+    // ⚠️ `alpha=` is the field the first geometry line was missing, and the one
+    // that turned "drawn but unseen" from a category into a mechanism: an owner
+    // screenshot looking up from the ground floor showed SKY through translucent
+    // planes overhead. A ceiling you can see through is not a lighting bug and
+    // not a visibility bug, which is why four fixes aimed at those missed it.
+    // `see-through=` counts the ones still under 1 AFTER forceOpaque has run,
+    // so a non-zero value means a ceiling is deliberately transparent in the
+    // GLB (alpha ≤ 0.5) rather than bleeding — a different finding, and one
+    // this app must not silently paper over.
+    let minAlpha = 1;
+    let seeThrough = 0;
+    for (const m of this.ceilingMeshes) {
+      const a = m.material?.alpha ?? 1;
+      minAlpha = Math.min(minAlpha, a);
+      if (a < 1) seeThrough += 1;
+    }
     tapDebug(
       `ceiling geometry: y=${minY.toFixed(2)}..${maxY.toFixed(2)}m`
       + ` foot=${foot.toFixed(1)}m2 (${(100 * foot / villaFoot).toFixed(1)}% of villa)`
       + ` eye=${(this.config.eyeHeight ?? 1.7).toFixed(2)}m`
+      + ` alpha=${minAlpha.toFixed(2)} see-through=${seeThrough}/${this.ceilingMeshes.length}`
       + (maxY < (this.config.eyeHeight ?? 1.7)
         ? " — ENTIRELY BELOW EYE LEVEL: this is trim, not a lid"
         : ""),

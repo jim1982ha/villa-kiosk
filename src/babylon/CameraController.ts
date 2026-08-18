@@ -459,6 +459,45 @@ export class CameraController {
    */
   private static readonly FLOOR_PROBE_MIN_MOVE = 0.01;
   private floorProbeAnchor: { x: number; z: number } | null = null;
+  /**
+   * The meshes a downward floor ray is allowed to hit, resolved ONCE per load
+   * rather than re-decided per ray — the same correction `refreshWallOcclusion`
+   * made in 2.437.0, applied to the other raycast that runs while walking.
+   *
+   * ⚠️ This is a MECHANICAL change and deliberately not a narrowing. The set is
+   * exactly what the old inline predicate accepted (every pickable mesh, ~900,
+   * NOT floorProbe's structure-only ~307), because stairs are not reliably
+   * stamped `isStructure` and climbing them is what this raycast exists for.
+   * What is removed is the scene walk and the per-mesh name regex, not any
+   * geometry.
+   *
+   * Justified by measurement rather than by the plausibility argument that has
+   * been wrong six times here — an owner capture (v2.452.0, one 2 s window,
+   * walking down the stairs) timed BOTH mechanisms against this villa at once:
+   *
+   *   occlusion  rays=9/pass  occlMs=8.20    → 0.91 ms/ray  (resolved set + intersectsMesh)
+   *   floor      floorRays=24 floorMs=307.60 → 12.8 ms/ray  (pickWithRay + predicate)
+   *
+   * Not a controlled experiment — the occlusion ray is short and `fastCheck`,
+   * this one needs the NEAREST hit over 2.6 m (200 m on the fallback) — so the
+   * gap will not be the full 14x. But the term 2.437.0 named, `scene.pickWithRay`
+   * walking every mesh and running a regex on each, is identical in both and is
+   * what this removes. `floorMs=` on the `walk:` line is how the result gets
+   * checked instead of claimed.
+   *
+   * Only the STATIC half of the old predicate is applied here (name, marker
+   * flag); `isPickable`/`isVisible`/`isEnabled` are asked per ray below,
+   * because FloorManager moves them and a hidden storey's slab must never be
+   * the floor you are standing on.
+   */
+  private floorCandidates: AbstractMesh[] = [];
+
+  /** Called by SceneManager after every model load — see `floorCandidates`. */
+  setFloorCandidates(meshes: AbstractMesh[]): void {
+    this.floorCandidates = meshes.filter(
+      (m) => !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name));
+    this.invalidateFloorProbe();
+  }
 
   /**
    * Floor-following: while walking, smoothly keep the eye at floor+height by
@@ -495,24 +534,15 @@ export class CameraController {
         // Search 1.6 m above current feet (to catch a stair step ahead) and
         // 1.0 m below (a small drop-off). Total band = 2.6 m.
         const originY = currentFloorY + 1.6;
-        // isEnabled() matters: FloorManager HIDES upper storeys with setEnabled(false)
-        // (not isVisible), so without it the follower would snap onto a hidden floor's
-        // slab above you.
-        const predicate = (m: AbstractMesh) =>
-          m.isPickable && m.isVisible && m.isEnabled() && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name);
         const probeT0 = performance.now();
-        let hit = this.scene.pickWithRay(
-          new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 2.6), predicate);
-        this.floorProbeCost.rays += 1;
-        if (!hit?.hit || !hit.pickedPoint) {
+        let hit = this.castFloorRay(p.x, originY, p.z, 2.6);
+        if (!hit) {
           // The band missed: we walked over a drop taller than 1 m (terrace edge
           // down to the garden, a stair void) or re-entered first-person above
           // the floor. Without this fallback the early return kept the old
           // height for good — the "person floats above the ground" bug. Catch
           // the real floor however far below and glide down (MAX_STEP paces it).
-          hit = this.scene.pickWithRay(
-            new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 200), predicate);
-          this.floorProbeCost.rays += 1;
+          hit = this.castFloorRay(p.x, originY, p.z, 200);
         }
         // Both rays, including the fallback — which is the expensive one: 200 m
         // that hits nothing has to be tested against everything.
@@ -520,12 +550,7 @@ export class CameraController {
         // A miss keeps the previous lastFloorHit rather than clearing it, so one
         // unlucky probe (e.g. a momentary gap) doesn't stall the follower for a
         // whole throttle interval — it just tries again next time.
-        if (hit?.hit && hit.pickedPoint) {
-          this.lastFloorHit = {
-            y: hit.pickedPoint.y,
-            onStair: hit.pickedMesh?.metadata?.isStair === true,
-          };
-        }
+        if (hit) this.lastFloorHit = hit;
       }
     }
     if (!this.lastFloorHit) return;
@@ -548,6 +573,49 @@ export class CameraController {
     const delta = (targetY - this.camera.position.y) * 0.5; // smooth follow
     const MAX_STEP = 0.25; // metres per frame
     this.camera.position.y += clamp(delta, -MAX_STEP, MAX_STEP);
+  }
+
+  /**
+   * One downward ray against the resolved candidate set — see `floorCandidates`
+   * for why this is not `scene.pickWithRay`, and for the capture that measured
+   * the difference.
+   *
+   * `fastCheck: false` because the question here IS "what is nearest": the
+   * follower's furniture rejection compares the hit height against the step
+   * clearance, so a first-found tabletop instead of the floor under it would
+   * read as a step-up and stall the walker. The occlusion sweep can use
+   * fastCheck precisely because its question is only "is anything in the way".
+   *
+   * The `length` clamp is explicit rather than left to `ray.length`. Babylon
+   * applies that to the bounding-box rejection, and the 2.6 m band vs the 200 m
+   * fallback is the whole reason two rays exist — a hit past the band leaking
+   * into the first cast would silently delete the fallback's meaning.
+   */
+  private readonly floorRay = new Ray(Vector3.Zero(), new Vector3(0, -1, 0), 2.6);
+
+  private castFloorRay(
+    x: number, y: number, z: number, length: number,
+  ): { y: number; onStair: boolean } | null {
+    this.floorProbeCost.rays += 1;
+    this.floorRay.origin.set(x, y, z);
+    this.floorRay.direction.set(0, -1, 0);
+    this.floorRay.length = length;
+    let bestDist = Infinity;
+    let best: { y: number; onStair: boolean } | null = null;
+    for (const m of this.floorCandidates) {
+      // The DYNAMIC half of the old predicate, asked per ray because
+      // FloorManager moves it: isEnabled() matters because upper storeys are
+      // hidden with setEnabled(false), not isVisible, and without it the
+      // follower snaps onto a hidden floor's slab above you.
+      if (!m.isPickable || !m.isVisible || !m.isEnabled()) continue;
+      const info = this.floorRay.intersectsMesh(m, false);
+      if (!info.hit || !info.pickedPoint || info.distance > length) continue;
+      if (info.distance < bestDist) {
+        bestDist = info.distance;
+        best = { y: info.pickedPoint.y, onStair: m.metadata?.isStair === true };
+      }
+    }
+    return best;
   }
 
   /**
