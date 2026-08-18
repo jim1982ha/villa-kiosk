@@ -59,7 +59,7 @@ import type { PickingInfo } from "@babylonjs/core/Collisions/pickingInfo";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { roomKey } from "@/config/roomKey";
-import { isStructureMesh } from "./meshRoles";
+import { structureRole } from "./meshRoles";
 import { ModelKeyedStore } from "./modelStore";
 
 /** Fallback bucket size for a point that belongs to no room polygon. Only the
@@ -259,10 +259,35 @@ export class FloorProbe {
     // real-world hit rate, which is the number that says whether a finer key
     // would help or is already exhausted.
     const t0 = performance.now();
-    const predicate = (candidate: AbstractMesh) =>
-      candidate !== exclude && candidate.getTotalVertices() > 0
-      && !/^(halo_|label_|marker)/i.test(candidate.name)
-      && isStructureMesh(candidate);
+    // ⚠️ A CEILING IS STRUCTURE, AND YOU CANNOT STAND ON IT (2.474.0).
+    // `isStructureMesh` is true for a ceiling by design — it occludes and it
+    // belongs to a storey, only its VISIBILITY is special — so this predicate
+    // accepted one as a floor. A ceiling-mounted lamp's anchor sits AT the
+    // ceiling plane, sometimes a few centimetres above a ceiling face, and a
+    // downward ray from there hits that face within centimetres and reports it
+    // as the floor. The light pool is then drawn at ceiling height: "the light
+    // effect is floating in the air, not down to the floor", and
+    // `airborne=26` in every capture of this session.
+    //
+    // ⚠️ It bites even for a HIDDEN storey. A custom predicate REPLACES
+    // Babylon's enabled/visible filter (see this file's header), so the ~484 m²
+    // of ceiling stranded in the disabled `Structure_L1` is picked exactly as
+    // well as visible geometry — which is precisely where these fixtures' rays
+    // were landing.
+    //
+    // Free: `structureRole` is resolved ONCE here and both facts read off it,
+    // where the old line called `isStructureMesh` (which resolves the same
+    // role) and then knew nothing about ceilings. Strictly fewer candidates,
+    // so if anything the ray gets cheaper.
+    const predicate = (candidate: AbstractMesh) => {
+      if (candidate === exclude || candidate.getTotalVertices() === 0) return false;
+      if (/^(halo_|label_|marker)/i.test(candidate.name)) return false;
+      const role = structureRole(candidate);
+      if (!role.isStructure) return false;
+      // The stamp first; the metadata flag catches a legacy GLB whose ceiling
+      // was classified by name or height in applyStructure.
+      return !role.isCeiling && candidate.metadata?.isCeiling !== true;
+    };
     const cast = (px: number, pz: number): number | null => {
       this.stats.probeRays += 1;
       const hit = this.scene.pickWithRay(
@@ -347,7 +372,14 @@ export class FloorProbe {
     // World Y is metres after normalisation; ±1000 comfortably brackets any villa.
     const hits = this.scene.multiPickWithRay(
       new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000),
-      (m) => wanted.has(m),
+      // ⚠️ NEVER A CEILING, for the same reason as `below()`'s predicate
+      // (2.474.0): a storey's ceiling is in that storey's mesh set, so a ray
+      // dropped from 1000 m hits it long before the floor and this would answer
+      // "the floor of storey N is at ceiling height". Every consumer wants the
+      // surface you STAND on — room glow, teleport points, camera framing, and
+      // the first-person spawn's standability test.
+      (m) => wanted.has(m)
+        && !structureRole(m).isCeiling && m.metadata?.isCeiling !== true,
     );
     // Counted alongside the `below()` rays: this is the same ~21ms pick against
     // the same unoctree'd structure, and splitting it into a second statistic

@@ -1,3 +1,16 @@
+## 2.474.0
+
+### Fixed — light pools drawn at ceiling height instead of on the floor
+
+"What is the floor under this point" accepted a ceiling as an answer: a ceiling
+counts as structure by design, so a downward ray from a ceiling-mounted lamp hit
+the ceiling within centimetres and reported it as the floor. The light wash was
+then drawn up in the air rather than on the ground — 26 of 144 pools in every
+capture. It bit even for a hidden storey, because a custom pick predicate
+replaces Babylon's visibility filter. Fixed for both floor queries, so room
+glows, teleport points, camera framing and the walking spawn all stop being able
+to land on a ceiling too.
+
 ## 2.473.0
 
 ### Added — `?noslab` turns the stand-in ceiling off for one reload
