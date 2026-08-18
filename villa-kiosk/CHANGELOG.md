@@ -1,3 +1,13 @@
+## 2.466.0
+
+### Fixed — the new ceiling lid was grounding the walker on the floor above it
+
+Enabling the storey above put its slab into every downward raycast, and grounding
+takes the first hit from 20 m up — so entering first-person placed the walker on
+top of the lid, on the second floor, in a room they had not chosen. It also made
+the floor probe three times slower and let taps land on the ceiling. A lid is
+scenery: it is no longer pickable, which fixes all three.
+
 ## 2.465.0
 
 ### Fixed — the ceiling is back while walking

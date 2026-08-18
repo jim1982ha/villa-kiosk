@@ -3863,6 +3863,7 @@ export class SceneManager {
     const ceilingSet = new Set(this.ceilingMeshes);
     let down = 0; let up = 0; let scanned = 0;
     const byHeight = new Map<number, number>();
+    const byMesh = new Map<string, number>();
     for (const m of meshes) {
       if (ceilingSet.has(m) || m.getTotalVertices() === 0) continue;
       if (m.metadata?.isStructure !== true) continue;
@@ -3870,6 +3871,18 @@ export class SceneManager {
       if (r.down || r.up) scanned += 1;
       down += r.down; up += r.up;
       for (const [k, v] of r.byHeight) byHeight.set(k, (byHeight.get(k) ?? 0) + v);
+      // ⚠️ WHICH OBJECT the area belongs to, and whether that object is even
+      // DRAWN on this storey. Without this the previous verdict ("PEEL TOO
+      // NARROW — fix the pipeline") could not be told from its opposite: the
+      // scan accepts every `isStructure` mesh, which includes `Structure_L1`,
+      // and the upper storey is DISABLED while you walk the lower one. Area
+      // sitting in a hidden mesh is the storey-above SLAB — the thing the lid
+      // fallback exists to show — not ceiling the peel forgot. Same number,
+      // opposite owner, and I nearly sent the owner to edit their pipeline on
+      // the strength of it.
+      const stem = m.name.replace(/_primitive\d+$/, "");
+      const key = `${stem}${m.isEnabled() ? "" : " [DISABLED here]"}`;
+      byMesh.set(key, (byMesh.get(key) ?? 0) + r.down);
     }
     let peeled = 0;
     for (const m of this.ceilingMeshes) peeled += projectedAreaXZ(m);
@@ -3891,6 +3904,11 @@ export class SceneManager {
     if (top.length) {
       tapDebug(`  unpeeled down-facing by height: `
         + top.map(([k, v]) => `${k.toFixed(1)}m=${v.toFixed(0)}m2`).join(" "));
+    }
+    const tops = [...byMesh].filter(([, v]) => v >= 1).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    if (tops.length) {
+      tapDebug(`  unpeeled down-facing by object: `
+        + tops.map(([k, v]) => `${k}=${v.toFixed(0)}m2`).join(" "));
     }
   }
 

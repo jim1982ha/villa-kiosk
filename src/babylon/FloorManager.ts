@@ -219,6 +219,22 @@ export class FloorManager {
         if (isLid) lid += 1;
         const on = floor <= this.currentFloor || isLid;
         if (m.isEnabled(false) !== on) m.setEnabled(on);
+        // ⚠️ A LID IS SCENERY, AND MUST NOT BE PICKABLE (2.466.0). Enabling the
+        // storey above put its slab into every downward raycast in the app, and
+        // `SceneManager.groundCamera` takes the FIRST hit from 20 m up — so the
+        // walker was grounded ON TOP of the lid and arrived on the second floor.
+        // Reported as "I land in another room than the one I specified", with
+        // `spawn: groundRoom "Bedroom 1" ... standY=0.00` immediately followed
+        // by `at=-6.5,4.3,1.0` — an eye at 4.3 m over a floor the spawn had
+        // just measured at 0.00.
+        //
+        // The same set feeds `followFloor` (a capture shows floorMs=1192.90 for
+        // 35 rays, 34 ms each, against ~13 ms before) and the tap picker, which
+        // started returning `Structure_L1_primitive97` for a tap on the ceiling.
+        // One flag fixes all three, because all three filter on isPickable.
+        const meta = (m.metadata ??= {}) as { vkLidHid?: boolean };
+        if (isLid && m.isPickable) { meta.vkLidHid = true; m.isPickable = false; }
+        else if (!isLid && meta.vkLidHid) { meta.vkLidHid = false; m.isPickable = true; }
       }
     }
     if (lid !== this.lastLidCount) {
