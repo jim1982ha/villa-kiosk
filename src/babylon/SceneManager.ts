@@ -887,12 +887,25 @@ export class SceneManager {
       // visible on screen. A field that cannot distinguish the thing you are
       // looking at from nothing is worse than absent.
       let slabAbove: number | null = null;
+      let slabWhat = "";
       for (const m of this.loadedMeshes) {
-        if (!(m.metadata as { vkLidHid?: boolean } | null)?.vkLidHid) continue;
-        if (!m.isEnabled()) continue;
+        const md = m.metadata as { vkLidHid?: boolean; vkLidMat?: unknown } | null;
+        if (!md?.vkLidHid || !m.isEnabled()) continue;
         const info = this.ceilingRay.intersectsMesh(m, false);
         if (!info.hit || !info.pickedPoint) continue;
-        if (slabAbove === null || info.pickedPoint.y < slabAbove) slabAbove = info.pickedPoint.y;
+        if (slabAbove !== null && info.pickedPoint.y >= slabAbove) continue;
+        slabAbove = info.pickedPoint.y;
+        // ⚠️ NAME IT. Three separate fixes have been aimed at "the surface over
+        // the walker's head" while only its HEIGHT was known, and 2.469.0's
+        // material swap changed nothing on screen — which means the surface
+        // overhead is probably not one of the meshes it cloned. `toned=` says
+        // whether this exact mesh got the ceiling look, and `mat=` says what it
+        // is actually wearing, so the next question is answered from the capture
+        // instead of from another assumption.
+        slabWhat = `${m.name.replace(/_primitive\d+$/, "")}`
+          + `#${m.name.match(/_primitive(\d+)$/)?.[1] ?? "?"}`
+          + ` mat="${m.material?.name ?? "none"}"`
+          + ` toned=${md.vkLidMat ? "y" : "n"}`;
       }
       // ⚠️ WHERE THE WALKER IS, AND HOW FAR THE NEAREST CEILING IS. `above=none`
       // was uninterpretable without these: it could mean "the model has no
@@ -906,7 +919,7 @@ export class SceneManager {
         near = Math.min(near, Math.hypot(c.x - eye.x, c.z - eye.z));
       }
       return {
-        enabled, visible, active: drawn, above, slabAbove,
+        enabled, visible, active: drawn, above, slabAbove, slabWhat,
         at: { x: eye.x, y: eye.y, z: eye.z },
         near: Number.isFinite(near) ? near : null,
       };

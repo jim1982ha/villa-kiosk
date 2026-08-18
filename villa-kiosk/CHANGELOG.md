@@ -1,3 +1,13 @@
+## 2.470.0
+
+### Added — say which surface is over the walker's head, and what it is wearing
+
+The previous release's material swap ran on 29 meshes and changed nothing on
+screen, which means the surface overhead is probably not one of them. Three fixes
+have now been aimed at "the thing above the walker" knowing only its height. The
+walk line now names the mesh, its material, and whether it received the ceiling
+treatment.
+
 ## 2.469.0
 
 ### Fixed — the ceiling you see on the ground floor is grey because it carries the bake

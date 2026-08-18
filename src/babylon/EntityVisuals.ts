@@ -939,6 +939,9 @@ export interface CeilingState {
    *  `above` because they are different objects wearing different materials —
    *  see SceneManager.setCeilingState. */
   slabAbove: number | null;
+  /** Which mesh and material the slab overhead actually is, and whether it got
+   *  the ceiling look — see SceneManager.setCeilingState. */
+  slabWhat: string;
   at: { x: number; y: number; z: number };
 }
 
@@ -5452,7 +5455,8 @@ export class EntityVisuals {
         return s
           ? ` ceil=${s.enabled}e/${s.visible}v/${s.active}a`
             + ` above=${s.above !== null ? `ceiling@${s.above.toFixed(2)}m`
-              : s.slabAbove !== null ? `slab@${s.slabAbove.toFixed(2)}m` : "none"}`
+              : s.slabAbove !== null
+                ? `slab@${s.slabAbove.toFixed(2)}m ${s.slabWhat}` : "none"}`
             + ` near=${s.near === null ? "-" : `${s.near.toFixed(1)}m`}`
             + ` at=${s.at.x.toFixed(1)},${s.at.y.toFixed(1)},${s.at.z.toFixed(1)}`
           : "";
