@@ -78,11 +78,19 @@ const PROBE_REACH_M = 20;
  *  which side of it the room's interior is on. */
 const SEAM_NUDGE_M = 0.12;
 
-/** localStorage prefix. BUMPED from `vk.probe.` in 2.300.0 on purpose: those
+/** localStorage prefix. ⚠️ BUMPED AGAIN to `vk.probe3.` in 2.474.1, for the same
+ *  reason and with the same symptom: every stored answer was computed by a
+ *  predicate that ACCEPTED CEILINGS as floors, so a persisted cache silently
+ *  re-serves the bug the new predicate was written to fix. `airborne=26` did not
+ *  move after 2.474.0 because none of those points ever re-cast a ray — they hit
+ *  a stored answer from before it. **Any change to what the probe ACCEPTS is a
+ *  change to what every stored answer MEANS, and must bump this.**
+ *
+ *  BUMPED from `vk.probe.` in 2.300.0 on purpose: those
  *  entries are keyed by the old 4m grid, and reading one as though it were
  *  room-keyed would silently reinstate the exact bug this module fixes. An old
  *  entry is never read, and is evicted by `save()`'s one-model-at-a-time sweep. */
-const STORE_PREFIX = "vk.probe2.";
+const STORE_PREFIX = "vk.probe3.";
 
 export interface FloorProbeStats {
   probeMs: number;
@@ -127,8 +135,8 @@ export class FloorProbe {
    */
   private persisted = new Map<string, number | null>();
   /** The localStorage half, shared with the camera beams — see modelStore.
-   *  Prefix UNCHANGED at `vk.probe2.` so existing caches survive this move;
-   *  the sweep still also retires the pre-2.300.0 `vk.probe.` keys. */
+   *  ⚠️ Prefix moved to `vk.probe3.` in 2.474.1 — see STORE_PREFIX. The sweep
+   *  retires the older `vk.probe.` and `vk.probe2.` keys with it. */
   private store = new ModelKeyedStore<number | null>(STORE_PREFIX, /^vk\.probe2?\./);
   /** Injected rather than imported: only EntityVisuals holds the calibrated
    *  world-space room polygons, and it receives them AFTER the load path has

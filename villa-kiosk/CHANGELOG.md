@@ -1,3 +1,12 @@
+## 2.474.1
+
+### Fixed — the floor-probe fix was being served answers from before it
+
+Every stored probe answer had been computed by the old predicate that accepted a
+ceiling as a floor, so the points that needed re-asking hit the cache instead and
+nothing moved. Changing what the probe accepts changes what every stored answer
+means, so the cache generation is bumped.
+
 ## 2.474.0
 
 ### Fixed — light pools drawn at ceiling height instead of on the floor
