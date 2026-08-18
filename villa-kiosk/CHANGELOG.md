@@ -1,3 +1,13 @@
+## 2.467.0
+
+### Fixed — the ceiling readout could not tell an authored ceiling from the borrowed slab
+
+A room lidded by the storey-above slab reported `above=none`, which reads as "no
+ceiling" in a capture taken while a ceiling is plainly on screen. It now says
+which one is overhead. The slab is also excluded from badge occlusion: it is
+structure, so restoring it had put 103 extra meshes into every occlusion ray and
+the sweep went from ~8 ms to 96 ms.
+
 ## 2.466.0
 
 ### Fixed — the new ceiling lid was grounding the walker on the floor above it

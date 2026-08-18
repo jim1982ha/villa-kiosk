@@ -872,6 +872,23 @@ export class SceneManager {
         if (!info.hit || !info.pickedPoint) continue;
         if (above === null || info.pickedPoint.y < above) above = info.pickedPoint.y;
       }
+      // ⚠️ WHICH ONE IS OVERHEAD — the AUTHORED ceiling or the borrowed slab.
+      // The owner asked exactly this and could not tell from the screen: "is it
+      // the ceiling I defined in SweetHome or the slab fallback? it appears
+      // grey whereas I set the ceiling colour to match the walls." They are two
+      // different objects with two different materials, and `above=` reported
+      // only the first, so a room lidded by the slab read as `none` — which
+      // looks like "no ceiling" in a capture taken while a ceiling is plainly
+      // visible on screen. A field that cannot distinguish the thing you are
+      // looking at from nothing is worse than absent.
+      let slabAbove: number | null = null;
+      for (const m of this.loadedMeshes) {
+        if (!(m.metadata as { vkLidHid?: boolean } | null)?.vkLidHid) continue;
+        if (!m.isEnabled()) continue;
+        const info = this.ceilingRay.intersectsMesh(m, false);
+        if (!info.hit || !info.pickedPoint) continue;
+        if (slabAbove === null || info.pickedPoint.y < slabAbove) slabAbove = info.pickedPoint.y;
+      }
       // ⚠️ WHERE THE WALKER IS, AND HOW FAR THE NEAREST CEILING IS. `above=none`
       // was uninterpretable without these: it could mean "the model has no
       // ceiling in this wing" or "there is one 40 cm away and the alignment is
@@ -884,7 +901,7 @@ export class SceneManager {
         near = Math.min(near, Math.hypot(c.x - eye.x, c.z - eye.z));
       }
       return {
-        enabled, visible, active: drawn, above,
+        enabled, visible, active: drawn, above, slabAbove,
         at: { x: eye.x, y: eye.y, z: eye.z },
         near: Number.isFinite(near) ? near : null,
       };

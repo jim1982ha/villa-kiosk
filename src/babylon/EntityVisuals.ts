@@ -935,6 +935,10 @@ export interface CeilingState {
   /** Horizontal distance to the nearest ceiling panel. Metres means the model
    *  ships none here; centimetres would mean one is misplaced. */
   near: number | null;
+  /** Height of the borrowed storey-above SLAB overhead, or null. Separate from
+   *  `above` because they are different objects wearing different materials —
+   *  see SceneManager.setCeilingState. */
+  slabAbove: number | null;
   at: { x: number; y: number; z: number };
 }
 
@@ -5339,6 +5343,15 @@ export class EntityVisuals {
         // standing on. Cheap, and it has to be per-frame — the ceiling that
         // 2.435.0 added appears and disappears with the view mode.
         if (!m.isEnabled() || !m.isVisible) continue;
+        // ⚠️ A CEILING LID IS SCENERY AND DOES NOT OCCLUDE (2.467.0). The
+        // storey-above slab restored in 2.465.0 is structure, so it is in the
+        // resolved occluder set, and enabling it put 103 extra meshes into
+        // every occlusion ray: `occlMs` went from ~8 to 96.8 in an owner
+        // capture, 48 ms for TWO rays. It also cannot legitimately occlude
+        // anything a walker sees — it is above head height, and every badge
+        // being tested is below it. Same flag the picker uses, for the same
+        // reason: a lid is drawn and nothing else.
+        if ((m.metadata as { vkLidHid?: boolean } | null)?.vkLidHid) continue;
         if (this.occlRay.intersectsMesh(m, true).hit) { blocked = true; break; }
       }
       s.occluded = blocked;
@@ -5438,7 +5451,8 @@ export class EntityVisuals {
         // "there is no ceiling over this spot" — see SceneManager.setCeilingState.
         return s
           ? ` ceil=${s.enabled}e/${s.visible}v/${s.active}a`
-            + ` above=${s.above === null ? "none" : `${s.above.toFixed(2)}m`}`
+            + ` above=${s.above !== null ? `ceiling@${s.above.toFixed(2)}m`
+              : s.slabAbove !== null ? `slab@${s.slabAbove.toFixed(2)}m` : "none"}`
             + ` near=${s.near === null ? "-" : `${s.near.toFixed(1)}m`}`
             + ` at=${s.at.x.toFixed(1)},${s.at.y.toFixed(1)},${s.at.z.toFixed(1)}`
           : "";
