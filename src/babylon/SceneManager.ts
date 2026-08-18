@@ -127,6 +127,19 @@ const STAIR_FOOT_TOLERANCE = 0.30;
  */
 const STAIR_ROOM_RE = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i;
 
+/**
+ * The tallest structure rise that counts as SOMETHING TO STAND ON rather than
+ * something in the way — a step, a threshold, a plinth, or the surface of a
+ * raised room whose slab the floor probe reported from underneath.
+ *
+ * 0.70 m: a domestic step is ~0.17 m and a split-level change is a few of them;
+ * a person's torso starts well above this, so nothing at head height can hide
+ * under it. Deliberately larger than CameraController.STEP_CLEAR (0.55), which
+ * answers a different question — what the collision capsule may climb WHILE
+ * WALKING, rather than what a spawn may be placed on top of.
+ */
+const STAND_STEP_MAX = 0.70;
+
 // ── Frame-time sampling (see sampleFrame) ───────────────────────────────────
 // A gap above this is the render loop RESUMING — the app went idle, the tab
 // was throttled, a modal held the thread — not one frame that took a second.
@@ -1946,12 +1959,18 @@ export class SceneManager {
         tapDebug(`spawn: REJECTED ${why} "${p.name}" — ${this.lastStandableWhy || "not standable"}`);
         continue;
       }
+      // Place the eye on the surface `standable` actually validated. The point's
+      // own `position.y` was built from `estimateFloorY`, which on a split level
+      // reports the slab UNDER a raised room — spawning from it drops the walker
+      // through the floor that was just approved.
+      const eyeY = this.lastStandY + eye;
+      const probed = this.estimateFloorY(p.position.x, p.position.z, p.floor);
       tapDebug(
         `spawn: ${why} "${p.name}" floor=${p.floor}`
         + ` at=${p.position.x.toFixed(1)},${p.position.z.toFixed(1)}`
-        + ` floorY=${this.estimateFloorY(p.position.x, p.position.z, p.floor).toFixed(2)}`,
+        + ` floorY=${probed.toFixed(2)} standY=${this.lastStandY.toFixed(2)}`,
       );
-      return p;
+      return { ...p, position: { ...p.position, y: eyeY } };
     }
     // Nothing validated. Say so — silently falling back to the origin is how a
     // spawn bug reads as "the villa loaded somewhere strange".
@@ -2044,36 +2063,70 @@ export class SceneManager {
     const inStairwell = this.worldRoomPolys.find(
       (r) => STAIR_ROOM_RE.test(r.name) && pointInPolygon(x, z, r.pts));
     if (inStairwell) { this.lastStandableWhy = `inside stairwell "${inStairwell.name}"`; return false; }
-    // Eye height plus a little, measured from just above the floor so the slab
-    // itself is never the hit. SAMPLED ACROSS THE BODY'S WIDTH rather than down
-    // one line, for the same open-riser reason — a ray is a measure zero object
-    // and real obstructions have gaps in them. The offsets are the collision
-    // capsule's own radius, so this asks about the volume that will actually be
-    // moved through.
     const need = (this.config.eyeHeight ?? 1.7) + 0.15;
     const R = 0.3;
     const blocks = (m: AbstractMesh) =>
       m.isPickable && m.isEnabled() && m.metadata?.isStructure === true
       && !m.metadata?.isCeiling;
+
+    // ⚠️ THE PROBED FLOOR IS NOT ALWAYS THE SURFACE YOU STAND ON (2.464.0).
+    // `estimateFloorY` -> `floorProbe.storeyFloorY` deliberately takes the
+    // LOWEST hit in the column, so an overhead beam can never be mistaken for
+    // the floor. On a SPLIT-LEVEL villa — this one has three ground-storey
+    // floor heights — the lowest hit under a raised room is the slab BENEATH
+    // it, and the headroom ray then started below the real floor and hit it
+    // from underneath. That is what the named blockers were:
+    //
+    //   REJECTED "Bedroom 1"   — blocked 0.08m up by "Structure_primitive72"
+    //   REJECTED "Living Room" — blocked 0.55m up by "Structure_primitive21"
+    //
+    // 8 cm and 55 cm are floors, not obstructions. So walk UP: a structure
+    // surface within one step of the probe IS the walking surface here, and
+    // standing on it is the whole point. Bounded, because each pass is a ray.
+    let standY = floorY;
+    for (let i = 0; i < 4; i++) {
+      const step = this.scene.pickWithRay(
+        new Ray(new Vector3(x, standY + 0.02, z), new Vector3(0, 1, 0), STAND_STEP_MAX),
+        blocks);
+      if (!step?.hit || step.pickedPoint === null) break;
+      standY = step.pickedPoint.y;
+    }
+
+    // Head-and-torso room only: anything under one step of the surface you are
+    // standing on is a step, a threshold or a plinth, and none of those stop a
+    // person. SAMPLED ACROSS THE BODY'S WIDTH rather than down one line, for the
+    // open-riser reason above — a ray is a measure-zero object and real
+    // obstructions have gaps in them. The offsets are the collision capsule's
+    // own radius, so this asks about the volume that will actually be moved
+    // through.
     for (const [dx, dz] of [[0, 0], [R, 0], [-R, 0], [0, R], [0, -R]] as const) {
       const hit = this.scene.pickWithRay(
-        new Ray(new Vector3(x + dx, floorY + 0.1, z + dz), new Vector3(0, 1, 0), need),
+        new Ray(new Vector3(x + dx, standY + STAND_STEP_MAX, z + dz),
+          new Vector3(0, 1, 0), need - STAND_STEP_MAX),
         blocks);
       if (hit?.hit) {
         // ⚠️ NAME THE BLOCKER. Three releases were spent on a spawn that
         // reported only pass/fail, and "not standable" is not a diagnosis — it
         // is the same silence that made `undrawable=0` mean "not measured".
         this.lastStandableWhy =
-          `blocked ${(hit.distance ?? 0).toFixed(2)}m up by "${hit.pickedMesh?.name ?? "?"}"`;
+          `blocked ${(standY + STAND_STEP_MAX + (hit.distance ?? 0) - floorY).toFixed(2)}m`
+          + ` above floor by "${hit.pickedMesh?.name ?? "?"}"`
+          + (standY !== floorY ? ` (stood up to ${(standY - floorY).toFixed(2)}m)` : "");
         return false;
       }
     }
     this.lastStandableWhy = "";
+    this.lastStandY = standY;
     return true;
   }
 
   /** Why the last `standable()` said no — see its blocker note. */
   private lastStandableWhy = "";
+  /** The surface the last successful `standable()` resolved as the one you
+   *  actually stand on, which is NOT `estimateFloorY` on a split level — see
+   *  the walk-up note there. The spawn places the eye from this, or it drops
+   *  the walker below the floor it just validated. */
+  private lastStandY = 0;
 
   /**
    * The nearest spot to (x, z) that stands on a GROUND-LEVEL room floor.

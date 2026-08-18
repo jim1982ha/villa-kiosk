@@ -1,3 +1,14 @@
+## 2.464.0
+
+### Fixed — the spawn measured headroom from below the floor
+
+The floor probe returns the LOWEST surface in a column so an overhead beam can
+never be read as the floor, and under a raised room that is the slab beneath it —
+so on a split-level villa the headroom ray started under the real floor and hit
+it from underneath, at 8 cm in one room and 55 cm in another. Both were reported
+as blocked and the spawn fell back to the staircase. It now walks up onto the
+surface it is standing on before measuring, and places the eye there.
+
 ## 2.463.0
 
 ### Fixed — the spawn rejected every real room on a split-level villa
