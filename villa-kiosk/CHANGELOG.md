@@ -1,3 +1,14 @@
+## 2.471.0
+
+### Fixed — the pipeline's structural stamps were never being read
+
+Babylon splits a multi-primitive mesh into `<name>_primitive<N>` children and
+leaves the glTF `extras` on the parent, so every structural mesh in a baked villa
+was asked for a stamp it could not have. Every classification has therefore been
+running on the legacy name convention — which is how ceiling fans came to be
+classified as ceilings. Roles are now read from the parent node when a child is
+one of those splits.
+
 ## 2.470.0
 
 ### Added — say which surface is over the walker's head, and what it is wearing

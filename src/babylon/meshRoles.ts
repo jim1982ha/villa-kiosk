@@ -75,11 +75,46 @@ const NOT_STRUCTURE: StructureRole = {
   isStructure: false, isCeiling: false, level: 0, isExterior: false,
 };
 
-/** The `extras` object Babylon attached from the glTF node, if any. */
-function gltfExtras(mesh: AbstractMesh): Record<string, unknown> | null {
-  const meta = mesh.metadata as { gltf?: { extras?: Record<string, unknown> } } | undefined;
+function ownExtras(node: { metadata?: unknown }): Record<string, unknown> | null {
+  const meta = node.metadata as { gltf?: { extras?: Record<string, unknown> } } | undefined;
   const extras = meta?.gltf?.extras;
   return extras && typeof extras === "object" ? extras : null;
+}
+
+/**
+ * The `extras` object Babylon attached from the glTF node, if any.
+ *
+ * ⚠️ **THE STAMP LIVES ON THE PARENT, AND UNTIL 2.471.0 NOTHING EVER READ IT.**
+ * Babylon's glTF loader splits a multi-primitive mesh into `<name>_primitive<N>`
+ * CHILDREN and leaves the node's `extras` on the parent — and a baked villa's
+ * `Structure` carries ~190 primitives, so essentially every structural mesh in
+ * the scene is one of those children. This function asked the child, found
+ * nothing, and every caller fell through to the legacy NAME convention.
+ *
+ * Proven from the shipped GLB, not inferred: its `Structure_Ceiling_L0` node
+ * carries `{"vk_role":"ceiling","vk_level":0,"vk_exterior":false}`, while the
+ * app's own census printed `0 stamped vk_role=ceiling` on every single capture.
+ *
+ * That made the whole `vk_*` contract decorative. meshRoles' header calls the
+ * stamp the mechanism a new structural fact should use — and it could not work,
+ * so the app has been inferring structure from names all along. That is not a
+ * cosmetic gap: the name path is why `fan.ceiling_fan_*` was classified as a
+ * CEILING (2.457.0), and it is what breaks first on a villa whose author names
+ * things differently, which is exactly the case this add-on has to survive.
+ *
+ * The hop is deliberately narrow — one level, and only when the child's name is
+ * the parent's plus `_primitive<N>`. That is precisely Babylon's split
+ * convention, so a mesh cannot inherit a role from an unrelated ancestor it
+ * merely happens to be parented under.
+ */
+function gltfExtras(mesh: AbstractMesh): Record<string, unknown> | null {
+  const own = ownExtras(mesh);
+  if (own) return own;
+  const parent = mesh.parent;
+  if (!parent) return null;
+  const stem = mesh.name.replace(/_primitive\d+$/, "");
+  if (stem === mesh.name || parent.name !== stem) return null;
+  return ownExtras(parent);
 }
 
 /**
