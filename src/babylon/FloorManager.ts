@@ -30,8 +30,19 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import type { CameraController } from "./CameraController";
 import { structureRole } from "./meshRoles";
+import { tapDebug } from "@/utils/tapDebug";
 
 const FLOOR_SPLIT_Y = 2.8; // metres; ground floor wall height is ~2.5 m
+
+/**
+ * One-word revert for the storey-above ceiling fallback — see applyVisibility.
+ *
+ * Set false to go back to 2.444.0's behaviour: no lid at all unless the GLB
+ * ships real `Structure_Ceiling_L{n}` geometry over the room you are in. That
+ * is the correct end state, and it becomes reachable the day the pipeline's
+ * ceiling peel stops leaving 80% of the ceiling behind.
+ */
+const CEILING_SLAB_FALLBACK = true;
 
 export class FloorManager {
   private camera: CameraController | null = null;
@@ -51,6 +62,8 @@ export class FloorManager {
   // Elevation-based floor switching only runs while walking (first-person). In
   // overview the walker camera sits at a stale position and must not drive floors.
   private firstPerson = false;
+  /** Dedupe for the lid report — see applyVisibility. */
+  private lastLidCount = -1;
 
   constructor(scene: Scene, onFloorChange: (floor: number) => void) {
     this.onFloorChange = onFloorChange;
@@ -72,7 +85,12 @@ export class FloorManager {
    *  there is no storey above to borrow from. Floor visibility is a pure
    *  function of the active floor again — see applyVisibility. */
   setFirstPerson(active: boolean): void {
+    if (this.firstPerson === active) return;
     this.firstPerson = active;
+    // The lid is a function of this flag, so the flag has to re-apply it.
+    // Without this the slab would only appear at the next storey change, i.e.
+    // never for anyone who walks a single floor — which is most sessions.
+    this.applyVisibility();
   }
 
   indexFloors(meshes: AbstractMesh[]): void {
@@ -166,11 +184,51 @@ export class FloorManager {
    * enabled regardless of floor.
    */
   private applyVisibility(): void {
+    // ⚠️ THE STOREY-ABOVE SLAB IS BACK, AS A FALLBACK (2.465.0). It shipped from
+    // 2.435.0 to 2.443.0 and was deleted in 2.444.0 on three arguments, one of
+    // which was simply wrong: that it was "redundant the moment a real ceiling
+    // existed". A real ceiling now exists and the measurement says it covers
+    // **17% of the ground floor** — `ceiling coverage: 2/14 ground rooms`, with
+    // the Kitchen, both bathrooms and the Laundry at zero, because
+    // blender_pipeline's peel leaves 493 m2 of down-facing ceiling fused in the
+    // structure against 124.8 m2 it takes. So deleting this removed the thing
+    // that was covering the other 83%, and the owner said so plainly: "the slab
+    // fallback you added a few versions ago was working very well".
+    //
+    // The other two arguments stand and are why this is scoped, not restored:
+    // it wears the storey-above FLOOR's texture (a real complaint, and the
+    // reason it is a fallback rather than the mechanism), and it can never help
+    // the TOP storey, whose ceiling the pipeline deliberately drops. Both are
+    // better than open sky over every interior room.
+    //
+    // FIRST-PERSON ONLY. The overview is a cut-away and a lid turns it into a
+    // picture of the lid — the same rule `applyCeilingVisibility` follows, for
+    // the same reason. `firstPerson` is already tracked here for the stair
+    // auto-switch, so this needs no new state.
+    const lidFloor = this.firstPerson && CEILING_SLAB_FALLBACK
+      ? this.currentFloor + 1 : -1;
+    let lid = 0;
     for (const [floor, list] of this.floorMeshes) {
-      const on = floor <= this.currentFloor;
       for (const m of list) {
+        // STRUCTURE ONLY on the lid storey. Its `floorMeshes` entry holds that
+        // storey's furniture and fixtures too, and enabling those would render
+        // a room's worth of objects standing on top of the slab — invisible
+        // from underneath, except through the stairwell opening, and paid for
+        // every frame regardless.
+        const isLid = floor === lidFloor && m.metadata?.isStructure === true;
+        if (isLid) lid += 1;
+        const on = floor <= this.currentFloor || isLid;
         if (m.isEnabled(false) !== on) m.setEnabled(on);
       }
+    }
+    if (lid !== this.lastLidCount) {
+      this.lastLidCount = lid;
+      // Reported because its absence is exactly what went unnoticed for twenty
+      // releases: with no line for it, "there is no ceiling" and "the fallback
+      // that provided one was deleted" look identical from a capture.
+      tapDebug(`ceiling slab fallback: ${lid} structure mesh(es) from storey `
+        + `${lidFloor} used as a lid over floor ${this.currentFloor}`
+        + (lid === 0 ? " — none available (top storey?)" : ""));
     }
     for (const m of this.alwaysOnMeshes) {
       if (!m.isEnabled(false)) m.setEnabled(true);

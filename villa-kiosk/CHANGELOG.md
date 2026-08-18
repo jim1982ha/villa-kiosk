@@ -1,3 +1,14 @@
+## 2.465.0
+
+### Fixed — the ceiling is back while walking
+
+The storey-above floor slab was used as a ceiling until 2.444.0, when it was
+removed partly on the grounds that a real ceiling made it redundant. That premise
+was never checked and is false: the model's own ceiling covers 17% of the ground
+floor, so removing the slab removed the thing covering the other 83%. It is back
+as a fallback, first-person only and structure only, with a one-word revert for
+the day the pipeline stops leaving 80% of the real ceiling behind.
+
 ## 2.464.0
 
 ### Fixed — the spawn measured headroom from below the floor
