@@ -1,3 +1,21 @@
+## 2.463.0
+
+### Fixed — the spawn rejected every real room on a split-level villa
+
+Standability required the spot to be within 30 cm of the LOWEST floor in the
+model, and this villa has three distinct ground-storey floor heights — so the
+Living Room and Bedroom 1 were both refused and the spawn fell back to the very
+staircase it exists to avoid. That test was only ever about not landing on a
+tread, which the stairwell check already answers exactly. A refusal also names
+its blocker now instead of just saying no.
+
+### Note — the missing ceiling is the bake, not the plan
+
+493 m² of down-facing ceiling is still fused inside the structure mesh against
+124.8 m² peeled out, so the geometry is in the model and the pipeline's peel is
+taking a fifth of it. The report now breaks that area down by height, which is
+what the peel's band has to be set from.
+
 ## 2.462.0
 
 ### Added — is the missing ceiling still inside the model, or was it never exported?

@@ -341,8 +341,8 @@ function projectedAreaXZ(m: AbstractMesh): number {
  */
 function horizontalAreaInBand(
   m: AbstractMesh, loY: number, hiY: number,
-): { down: number; up: number } {
-  const out = { down: 0, up: 0 };
+): { down: number; up: number; byHeight: Map<number, number> } {
+  const out = { down: 0, up: 0, byHeight: new Map<number, number>() };
   const bb = m.getBoundingInfo().boundingBox;
   if (bb.maximumWorld.y < loY || bb.minimumWorld.y > hiY) return out;
   const pos = m.getVerticesData(VertexBuffer.PositionKind);
@@ -370,6 +370,15 @@ function horizontalAreaInBand(
     // comparable rather than merely similar.
     if (Math.abs(ny) / len <= 0.85) continue;
     if (ny < 0) out.down += len / 2; else out.up += len / 2;
+    // Which HEIGHTS the unpeeled area sits at, in 10 cm buckets. This is the
+    // number the pipeline's band has to be set from: its lower edge is
+    // `base + 0.80 * storeyHeight`, and a room with a dropped ceiling (a
+    // bathroom, a laundry) sits below that and is silently excluded. A total
+    // says the peel is wrong; a histogram says what to change it to.
+    if (ny < 0) {
+      const k = Math.round(cy * 10) / 10;
+      out.byHeight.set(k, (out.byHeight.get(k) ?? 0) + len / 2);
+    }
   }
   return out;
 }
@@ -1934,7 +1943,7 @@ export class SceneManager {
     for (const [why, p] of candidates) {
       if (!p) continue;
       if (!ok(p)) {
-        tapDebug(`spawn: REJECTED ${why} "${p.name}" — not standable`);
+        tapDebug(`spawn: REJECTED ${why} "${p.name}" — ${this.lastStandableWhy || "not standable"}`);
         continue;
       }
       tapDebug(
@@ -2006,10 +2015,23 @@ export class SceneManager {
    */
   private standable(x: number, z: number, floor: 1 | 2): boolean {
     const floorY = this.estimateFloorY(x, z, floor);
-    let groundY = Infinity;
-    for (const r of this.worldRoomPolys) groundY = Math.min(groundY, r.floorY);
-    if (Number.isFinite(groundY) && floor === 1
-      && floorY > groundY + STAIR_FOOT_TOLERANCE) return false;
+    // ⚠️ NO GLOBAL "IS THIS THE LOWEST FLOOR IN THE VILLA" TEST HERE (2.463.0).
+    // It was here, and it rejected the Living Room and Bedroom 1 outright, which
+    // sent the spawn back to the staircase this whole exercise exists to leave:
+    //
+    //   spawn: REJECTED namedRoom "Living Room" — not standable
+    //   spawn: REJECTED groundRoom "Bedroom 1" — not standable
+    //   spawn: stairFoot "Staircase" ...
+    //
+    // This villa has THREE distinct room floor heights (see roomStorey.ts, where
+    // the same fact blanked the walk-in room banner), so "within 30 cm of the
+    // LOWEST floor in the model" is false for most of a split-level ground
+    // storey. The test was never about the villa's lowest floor anyway — it was
+    // about not landing on a stair tread, and the stairwell polygon test below
+    // answers that directly and exactly. `stairFoot` keeps the ground-level
+    // requirement, because THERE it means "come down off the stairs", which is
+    // a different question from "can a person stand here".
+    //
     // ⚠️ NEVER INSIDE A STAIRWELL, and this is the test that actually holds
     // (2.460.0). The headroom ray below was defeated by the geometry it exists
     // to detect: this villa's staircase is OPEN-RISER, so a single vertical ray
@@ -2019,8 +2041,9 @@ export class SceneManager {
     // threaded. `onGround` in stairFoot excludes stair rooms from the list of
     // places to LAND; this excludes them as places to STAND, which is not the
     // same thing, because another room's polygon routinely overlaps a stairwell.
-    if (this.worldRoomPolys.some(
-      (r) => STAIR_ROOM_RE.test(r.name) && pointInPolygon(x, z, r.pts))) return false;
+    const inStairwell = this.worldRoomPolys.find(
+      (r) => STAIR_ROOM_RE.test(r.name) && pointInPolygon(x, z, r.pts));
+    if (inStairwell) { this.lastStandableWhy = `inside stairwell "${inStairwell.name}"`; return false; }
     // Eye height plus a little, measured from just above the floor so the slab
     // itself is never the hit. SAMPLED ACROSS THE BODY'S WIDTH rather than down
     // one line, for the same open-riser reason — a ray is a measure zero object
@@ -2036,10 +2059,21 @@ export class SceneManager {
       const hit = this.scene.pickWithRay(
         new Ray(new Vector3(x + dx, floorY + 0.1, z + dz), new Vector3(0, 1, 0), need),
         blocks);
-      if (hit?.hit) return false;
+      if (hit?.hit) {
+        // ⚠️ NAME THE BLOCKER. Three releases were spent on a spawn that
+        // reported only pass/fail, and "not standable" is not a diagnosis — it
+        // is the same silence that made `undrawable=0` mean "not measured".
+        this.lastStandableWhy =
+          `blocked ${(hit.distance ?? 0).toFixed(2)}m up by "${hit.pickedMesh?.name ?? "?"}"`;
+        return false;
+      }
     }
+    this.lastStandableWhy = "";
     return true;
   }
+
+  /** Why the last `standable()` said no — see its blocker note. */
+  private lastStandableWhy = "";
 
   /**
    * The nearest spot to (x, z) that stands on a GROUND-LEVEL room floor.
@@ -3775,12 +3809,14 @@ export class SceneManager {
     loY -= 0.5; hiY += 0.5;
     const ceilingSet = new Set(this.ceilingMeshes);
     let down = 0; let up = 0; let scanned = 0;
+    const byHeight = new Map<number, number>();
     for (const m of meshes) {
       if (ceilingSet.has(m) || m.getTotalVertices() === 0) continue;
       if (m.metadata?.isStructure !== true) continue;
       const r = horizontalAreaInBand(m, loY, hiY);
       if (r.down || r.up) scanned += 1;
       down += r.down; up += r.up;
+      for (const [k, v] of r.byHeight) byHeight.set(k, (byHeight.get(k) ?? 0) + v);
     }
     let peeled = 0;
     for (const m of this.ceilingMeshes) peeled += projectedAreaXZ(m);
@@ -3795,6 +3831,14 @@ export class SceneManager {
             + " down-facing filter skips them (pipeline fix)"
           : " — export ships no further ceiling here"),
     );
+    // Descending by area: the top few buckets are the heights the pipeline's
+    // band must cover, and comparing them against the peeled ceilings' own
+    // 2.44-2.74 m says whether the band is too high, too low, or too thin.
+    const top = [...byHeight].filter(([, v]) => v >= 1).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    if (top.length) {
+      tapDebug(`  unpeeled down-facing by height: `
+        + top.map(([k, v]) => `${k.toFixed(1)}m=${v.toFixed(0)}m2`).join(" "));
+    }
   }
 
   /**
