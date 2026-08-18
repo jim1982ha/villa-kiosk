@@ -51,12 +51,14 @@ staircase it exists to avoid. That test was only ever about not landing on a
 tread, which the stairwell check already answers exactly. A refusal also names
 its blocker now instead of just saying no.
 
-### Note — the missing ceiling is the bake, not the plan
+### Note — WRONG, retracted in 2.467.0
 
-493 m² of down-facing ceiling is still fused inside the structure mesh against
-124.8 m² peeled out, so the geometry is in the model and the pipeline's peel is
-taking a fifth of it. The report now breaks that area down by height, which is
-what the peel's band has to be set from.
+This read "the missing ceiling is the bake, not the plan", on the grounds that
+493 m² of down-facing ceiling was still fused in the structure mesh against
+124.8 m² peeled out. 473 m² of that is the upper storey's floor slab, which is
+hidden while walking the storey below — the measurement accepted every structure
+mesh and was never broken down by which one. The ceiling peel is correct and
+needs no change.
 
 ## 2.462.0
 
