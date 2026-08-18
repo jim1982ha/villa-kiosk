@@ -37,6 +37,8 @@ import { normaliseMeshName, inferTypeFromEntityId } from "../config/EntityMap";
 const ROLE_KEY = "vk_role";
 const LEVEL_KEY = "vk_level";
 const EXTERIOR_KEY = "vk_exterior";
+/** How the bake LIT this ceiling — see StructureRole.ceilingLight. */
+const CEILING_LIGHT_KEY = "vk_ceiling_light";
 
 /** LEGACY fallback only — the pre-2.13.0 pipeline's naming convention. Used
  *  exclusively when a mesh carries no `vk_role`, so a GLB built before the
@@ -69,10 +71,29 @@ export interface StructureRole {
   /** The always-visible outdoor group (ground, plot, ground-rooted planting),
    *  which is never hidden by floor switching. */
   isExterior: boolean;
+  /**
+   * How the BAKE treated this ceiling's lighting, stamped by the pipeline's
+   * `--ceiling-lighting` option. The app must match it or the ceiling is lit
+   * twice or not at all:
+   *
+   *   "exempt"  (default, and what every GLB before this stamp did) — the
+   *             ceiling was baked under the open-sky split, where its underside
+   *             is the face the fiction removes and therefore receives almost
+   *             nothing. Its lightmap is near-black and must be WITHHELD; the
+   *             surface shows its authored colour, flat, toned to sit among the
+   *             lit walls.
+   *   "ambient" — the ceiling group was baked under a uniform ambient instead,
+   *             so its lightmap carries real, usable light. Withholding it
+   *             there would throw that away and flatten the very thing the
+   *             option exists to produce, so the ceiling is lit like any other
+   *             surface and gets no tone.
+   */
+  ceilingLight: "exempt" | "ambient";
 }
 
 const NOT_STRUCTURE: StructureRole = {
   isStructure: false, isCeiling: false, level: 0, isExterior: false,
+  ceilingLight: "exempt",
 };
 
 function ownExtras(node: { metadata?: unknown }): Record<string, unknown> | null {
@@ -136,6 +157,7 @@ export function structureRole(mesh: AbstractMesh): StructureRole {
       isCeiling: role === "ceiling",
       level,
       isExterior: extras![EXTERIOR_KEY] === true,
+      ceilingLight: extras![CEILING_LIGHT_KEY] === "ambient" ? "ambient" : "exempt",
     };
   }
 
@@ -151,6 +173,9 @@ export function structureRole(mesh: AbstractMesh): StructureRole {
     isCeiling: false,
     level: m[1] ? Number(m[1]) : 0,
     isExterior: LEGACY_EXTERIOR_RE.test(name),
+    // A GLB old enough to need the name fallback predates the stamp, and every
+    // one of them was baked the only way that existed then.
+    ceilingLight: "exempt",
   };
 }
 

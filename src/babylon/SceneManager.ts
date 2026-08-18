@@ -140,10 +140,21 @@ const STAIR_ROOM_RE = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\
  */
 const STAND_STEP_MAX = 0.70;
 
-/** Albedo scale for a lid surface standing in for a ceiling. Mirrors
- *  ModelLoader's CEILING_TONE, which is a measurement of the range the pipeline
- *  reports for enclosed interior surfaces, not a taste. */
-const LID_CEILING_TONE = 0.45;
+/**
+ * Albedo scale for a lid surface standing in for a ceiling.
+ *
+ * ⚠️ 1.0 — NO TONE (2.472.0), by the owner's report and by arithmetic. It was
+ * 0.45, mirroring ModelLoader's CEILING_TONE, and that constant exists for a
+ * situation this surface is not in: a properly-peeled ceiling is exempt from
+ * the lightmap AND lit by the uniform fill, so it evaluates to its full albedo
+ * and would come out 2-3x brighter than the lit wall beside it unless toned
+ * down. A LID has its lightmap withheld too, but it is the underside of the
+ * upper floor and gets no such fill — so 0.45 was not compensating for
+ * anything, it was simply multiplying a white ceiling into mid grey. Which is
+ * exactly what was reported, twice: "greyish", and then "how come there are no
+ * light effects on it".
+ */
+const LID_CEILING_TONE = 1.0;
 
 // ── Frame-time sampling (see sampleFrame) ───────────────────────────────────
 // A gap above this is the render loop RESUMING — the app went idle, the tab
@@ -3931,6 +3942,11 @@ export class SceneManager {
       const floorIdx = (m.metadata as { floorIndex?: number } | null)?.floorIndex ?? 1;
       if (floorIdx < 2) continue;
       if (horizontalAreaInBand(m, loY, hiY).down < 1) continue;
+      // ⚠️ NOT WHEN THE BAKE ALREADY LIT IT. `--ceiling-lighting ambient` bakes
+      // ceiling groups under a uniform ambient, so their lightmap carries real
+      // light; withholding it here would throw that away and flatten the very
+      // thing the option produces. The stamp decides, never this code.
+      if (structureRole(m).ceilingLight === "ambient") continue;
       const base = m.material as (Material & {
         lightmapTexture?: unknown; albedoColor?: Color3;
       }) | null;

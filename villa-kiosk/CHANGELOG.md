@@ -1,3 +1,20 @@
+## 2.472.0
+
+### Fixed — the stand-in ceiling was being multiplied into grey
+
+It was darkened to 45%, a figure that exists to stop a properly-lit ceiling
+outshining the walls beside it. A borrowed upper-floor underside gets no such
+lighting, so the number was not compensating for anything — it was turning a
+white ceiling mid-grey. It now shows its authored colour.
+
+### Added — ceilings can be lit by the bake instead of exempted from it
+
+A ceiling baked under the open-sky split receives almost nothing on its
+underside, which is why the app withholds that near-black lightmap and shows a
+flat colour. The pipeline's new `--ceiling-lighting ambient` bakes ceiling groups
+alone under the sky dome so they carry real shading, and stamps the choice into
+the model so the app always matches the bake.
+
 ## 2.471.0
 
 ### Fixed — the pipeline's structural stamps were never being read

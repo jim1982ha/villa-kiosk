@@ -33,7 +33,7 @@ import mscTranscoderWasmUrl from "@/assets/ktx2/msc_basis_transcoder.wasm?url";
 import { saveModelToIndexedDB } from "@/utils/storage";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
-import { isCeilingMesh, isStructureMesh } from "./meshRoles";
+import { isCeilingMesh, isStructureMesh, structureRole } from "./meshRoles";
 
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
 // still only instantiated lazily, when a model actually uses Draco — so an
@@ -687,6 +687,8 @@ export async function loadModelInto(
        *  keep its authored brightness. */
       const ceilings: AbstractMesh[] = [];
       let missingUv2 = 0;
+      /** Ceilings the bake lit with a real ambient — see the branch below. */
+      let ambientCeilings = 0;
       for (const m of result.meshes) {
         // ⚠️ `|| isCeilingMesh` — a name-matched ceiling is not pipeline
         // structure, and skipping it here is what made eleven of them render
@@ -739,9 +741,27 @@ export async function loadModelInto(
         // already has), which keeps them in the same lighting model at the cost
         // of a re-bake to see. The owner chose this one; that is the revert.
         if (isCeilingMesh(m)) {
-          ceilings.push(m);
-          noLightmap.push(m);
-          continue;
+          // ⚠️ ONLY WHEN THE BAKE SAYS SO. Everything above describes a ceiling
+          // baked under the OPEN-SKY split, whose underside receives almost
+          // nothing and whose lightmap is therefore near-black — withholding it
+          // is the only way to get the authored colour back. A pipeline run
+          // with `--ceiling-lighting ambient` bakes ceiling groups under a
+          // uniform ambient instead, and there the lightmap carries real,
+          // usable light: withholding it would flatten the very thing that
+          // option exists to produce. So the app follows the stamp rather than
+          // assuming, and a GLB with no stamp keeps the old behaviour.
+          if (structureRole(m).ceilingLight === "ambient") {
+            ambientCeilings += 1;
+            // Still double-sided: SweetHome's thin slabs carry normals that can
+            // point the wrong way, and the underside is the only face anyone
+            // sees. That is orthogonal to how it was lit.
+            const cm = m.material as { backFaceCulling?: boolean } | null;
+            if (cm) cm.backFaceCulling = false;
+          } else {
+            ceilings.push(m);
+            noLightmap.push(m);
+            continue;
+          }
         }
         // ── No TEXCOORD_1 means the lightmap CANNOT be applied here ────────
         // Not merely counted-and-warned-about, which is what this did. The
@@ -915,7 +935,11 @@ export async function loadModelInto(
         `ceiling lighting: ${ceilings.length} exempt (own colour x ${CEILING_TONE}, `
         + `double-sided), ${missingUv2} structure mesh(es) skipped for no TEXCOORD_1, `
         + `${lmMats.size} material(s) lightmapped`
-        + ` — objects: ${[...stems].map(([n, c]) => `${n} x${c}`).join(", ") || "none"}`,
+        + ` — objects: ${[...stems].map(([n, c]) => `${n} x${c}`).join(", ") || "none"}`
+        + (ambientCeilings
+          ? `; ${ambientCeilings} ceiling mesh(es) LIT BY THE BAKE `
+            + "(--ceiling-lighting ambient) so they keep their lightmap"
+          : ""),
       );
       devLog(
         `[ModelLoader] LIGHTMAP GLB detected — baked light on UV1 multiplied ` +
