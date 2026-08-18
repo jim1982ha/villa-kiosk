@@ -1,3 +1,21 @@
+## 2.476.0
+
+### Fixed — the walker stood on top of the new ceiling
+
+Now that the bake produces a real ceiling over the living room, grounding put the
+walker on top of it: entering first-person from the ground floor landed the eye
+at 4.1 m. The camera keeps its own floor raycasts, separate from the shared
+probe, and they still accepted a ceiling as a floor.
+
+### Fixed — light pools parked at the height of a neighbouring fixture
+
+Floor answers are memoised per room and rounded height, which is right for
+ceiling lamps and wrong for anything mounted on something: an LED strip under a
+soffit was handing its 2.15 m answer to a strip whose real floor was 0.00. A
+suspicious answer is now re-asked without the cache. Stair and plinth lights,
+which sit close to what they light and were being reported as faults, are counted
+separately as what they are.
+
 ## 2.475.1
 
 ### Changed — the ceiling-lid line reported the normal case as a failure

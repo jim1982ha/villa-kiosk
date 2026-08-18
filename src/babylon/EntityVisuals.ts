@@ -2745,7 +2745,11 @@ export class EntityVisuals {
     // others do not" is unanswerable from a screenshot; it is one line from
     // here. (See the same rule in the badge tier — an expected category gets a
     // labelled number, never a silent `continue`.)
-    let clipped = 0, whole = 0, bounded = 0, nofloor = 0, airborne = 0;
+    let clipped = 0, whole = 0, bounded = 0, nofloor = 0;
+    /** Pools whose bucketed floor was wrong and was re-probed — a real fix. */
+    let poolCorrected = 0;
+    /** Pools legitimately mounted close to what they light — NOT a fault. */
+    let nearFixture = 0;
     let airborneNamed = 0;
     const recovered = this.retryPendingPools();
     for (const pools of this.meshLightPools.values()) {
@@ -2766,7 +2770,7 @@ export class EntityVisuals {
         // pool's room is resolved at the height of the floor it will be drawn
         // on, and the fixture's own height is only the fallback for a probe
         // that found nothing at all.
-        const surfaceY = this.surfaceBelow(x, pool.probeFromY, z);
+        let surfaceY = this.surfaceBelow(x, pool.probeFromY, z);
         if (surfaceY === null) nofloor++;
         // THE COUNTER THAT NAMES THE 2.435.0 BUG, and the one whose absence let
         // it ship: a pool that lands within POOL_AIRBORNE_M of its own fixture
@@ -2775,7 +2779,37 @@ export class EntityVisuals {
         // usable distance above what it lights, so this is 0 on a healthy villa
         // and the exact number of wrong pools on a sick one.
         else if (pool.probeFromY - surfaceY < POOL_AIRBORNE_M) {
-          airborne++;
+          // ⚠️ THE BUCKET IS TOO COARSE FOR FIXTURES MOUNTED HIGH (2.476.0).
+          // The memo keys by `room | round(height)`, so every fixture in one
+          // room at one rounded height shares an answer — which is right for
+          // the ceiling lamps it was designed around and wrong for anything
+          // mounted ON something. An owner capture named both cases at once:
+          //
+          //   bedroom1_light_led_top  fixtureY=2.20 cached=2.15 fresh=0.00
+          //   stairs1f_light_stairs   fixtureY=0.60 cached=0.46 fresh=0.46
+          //
+          // The first is a strip whose pool was parked at 2.15 m because a
+          // neighbour under a soffit answered first. The second is a STEP light
+          // 14 cm above its tread — correct, and only "airborne" because the
+          // threshold was written for lamps. A count could never separate them;
+          // they need opposite responses and one of them needs none.
+          //
+          // So a suspicious answer is re-asked WITHOUT the cache, and the fresh
+          // one wins. Bounded by construction: only pools already inside
+          // POOL_AIRBORNE_M pay for it — 20 of 144 here — and it runs after
+          // first paint, never on the load path.
+          const fresh = this.probe.describeBelow(x, pool.probeFromY, z);
+          const poolCorrectedHere = !!fresh && Math.abs(fresh.y - surfaceY) > 2 * POOL_FLOOR_LIFT;
+          if (poolCorrectedHere) {
+            surfaceY = fresh.y;
+            poolCorrected++;
+          } else {
+            // Cached and fresh agree: the fixture really is mounted close to
+            // what it lights. A stair light, a plinth strip, an under-counter
+            // run. Reported separately because it is NOT a fault, and counting
+            // it as one is what made this number unreadable for a whole session.
+            nearFixture++;
+          }
           // ⚠️ NAME THEM. Two fixes have been aimed at this counter from causes
           // I inferred rather than observed, and neither moved it. A count says
           // "26 pools are wrong"; it cannot say whether they are ceiling lamps
@@ -2786,11 +2820,12 @@ export class EntityVisuals {
           // uncached, ~21 ms a piece.
           if (airborneNamed < 12 && debugFlagEnabled()) {
             airborneNamed += 1;
-            const d = this.probe.describeBelow(x, pool.probeFromY, z);
-            tapDebug(`  airborne "${pool.mesh.name}"`
+            tapDebug(`  pool "${pool.mesh.name}"`
               + ` fixtureY=${pool.probeFromY.toFixed(2)}`
-              + ` cachedFloorY=${surfaceY.toFixed(2)}`
-              + (d ? ` freshFloorY=${d.y.toFixed(2)} hit="${d.what}"` : " fresh=MISS"));
+              + ` floorY=${surfaceY.toFixed(2)}`
+              + (fresh ? ` hit="${fresh.what}"` : " fresh=MISS")
+              + (poolCorrectedHere ? "  — CORRECTED from the bucketed answer"
+                : "  — mounted close to what it lights, not a fault"));
           }
         }
         const room = this.roomPolyAt(x, surfaceY ?? pool.probeFromY, z);
@@ -2831,7 +2866,8 @@ export class EntityVisuals {
     if (recovered) this.resyncLightPoolsToFloor();
     tapDebug(
       `light pools: clipped=${clipped} whole=${whole} bounded=${bounded} nofloor=${nofloor}`
-      + ` airborne=${airborne} bucketAbove=${this.probe.stats.probeAbove}`
+      + ` corrected=${poolCorrected} nearFixture=${nearFixture}`
+      + ` bucketAbove=${this.probe.stats.probeAbove}`
       + ` recovered=${recovered} stillNoFloor=${
         [...this.pendingPoolSpots.values()].reduce((n, s) => n + s.length, 0)}`
       + ` rooms=${this.roomPolys.length} storeys=${new Set(this.roomPolys.map((r) => Math.round(r.floorY))).size}`,

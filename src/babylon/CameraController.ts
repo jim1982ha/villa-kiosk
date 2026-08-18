@@ -30,6 +30,7 @@ import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint } from "@/types/scene.types";
 import { clamp, pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { nearestFloorRoom } from "./roomStorey";
+import { structureRole } from "./meshRoles";
 import { TapRecognizer } from "./TapRecognizer";
 
 interface CameraCallbacks {
@@ -495,7 +496,11 @@ export class CameraController {
   /** Called by SceneManager after every model load — see `floorCandidates`. */
   setFloorCandidates(meshes: AbstractMesh[]): void {
     this.floorCandidates = meshes.filter(
-      (m) => !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name));
+      // Same rule as groundCamera and floorProbe: you cannot walk on a ceiling.
+      // Resolved ONCE here rather than per ray, which is the whole point of
+      // this set.
+      (m) => !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name)
+        && !structureRole(m).isCeiling && m.metadata?.isCeiling !== true);
     this.invalidateFloorProbe();
   }
 
@@ -636,8 +641,20 @@ export class CameraController {
     // isEnabled() so we never ground on a HIDDEN upper floor (FloorManager
     // disables storeys above the active one) — that slab sits right over the
     // staircase and would otherwise teleport the spawn up onto the 2nd floor.
+    // ⚠️ NEVER A CEILING (2.476.0). A ceiling IS `isStructure` — it occludes and
+    // belongs to a storey — so the moment the pipeline started peeling real
+    // ceilings, this grounded the walker ON TOP of the one over the living
+    // room: `spawn … standY=0.65` immediately followed by `at=-1.2,4.1,-0.2`,
+    // an eye at 4.1 m over a floor the spawn had measured at 0.00, i.e.
+    // standing on the 2.44 m ceiling. 2.474.0 fixed floorProbe's two entry
+    // points and missed the camera's, which CLAUDE.md calls out as the FOURTH
+    // asker of "what is the floor here" and the one that deliberately does not
+    // share that module.
+    const notCeiling = (m: AbstractMesh) =>
+      !structureRole(m).isCeiling && m.metadata?.isCeiling !== true;
     const base = (m: AbstractMesh) =>
-      m.isPickable && m.isVisible && m.isEnabled() && !/^(halo_|label_)/i.test(m.name) && !m.metadata?.isMarker;
+      m.isPickable && m.isVisible && m.isEnabled() && !/^(halo_|label_)/i.test(m.name)
+      && !m.metadata?.isMarker && notCeiling(m);
     // Prefer the STRUCTURAL shell (floor slabs) so we land on the actual floor,
     // never on a table/bed/sofa top the generic ray would hit first ("landing
     // above an asset"). Fall back to any surface for GLBs without tagged structure.
