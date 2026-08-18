@@ -310,6 +310,11 @@ export default function HUD({
       closeRadial();
       onOpenTeleport();                                    // full Rooms list — create / edit / re-anchor
     } else {
+      // Exact match is correct HERE and deliberately not `roomKey` (/dry-audit,
+      // 2026-08-18): the radial's label IS the stored name — `label: p.name`
+      // where these items are built — so this is an identity lookup on one
+      // object, not a comparison of two independently-sourced room names.
+      // TeleportMenu, which creates the data from typed input, does use roomKey.
       const point = config.teleportPoints.find((p) => p.name === it.label);
       if (point) onNavigateRoom(point);                   // tap a room → zoom there
       closeRadial();

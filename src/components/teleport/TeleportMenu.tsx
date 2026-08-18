@@ -13,7 +13,10 @@
 
 import { X, MapPin, Plus, Trash2 } from "lucide-react";
 import { Axis } from "@babylonjs/core/Maths/math.axis";
+import { useState } from "react";
 import { useConfig } from "@/config/ConfigContext";
+import AskDialog from "@/components/common/AskDialog";
+import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint, Vec3 } from "@/types/scene.types";
 import type { SceneManager } from "@/babylon/SceneManager";
 
@@ -27,6 +30,9 @@ interface Props {
 export default function TeleportMenu({ manager, currentFloor, onClose, onTeleport }: Props) {
   const { config, update } = useConfig();
   const points = config.teleportPoints;
+  /** Which in-app dialog is open, if any — see AskDialog for why these are not
+   *  `prompt`/`confirm`/`alert`. `null` means none. */
+  const [ask, setAsk] = useState<{ kind: "add" } | { kind: "remove"; name: string } | null>(null);
 
   /**
    * "Where am I standing" — captured from whichever camera is ACTUALLY
@@ -57,21 +63,64 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
     };
   };
 
-  const addRoomHere = () => {
-    if (!manager) return;
-    const name = prompt("Name this room/viewpoint:")?.trim();
-    if (!name) return;
+  // ⚠️ THIS IS WHERE `roomKey` WAS MISSING, AND IT IS THE ONE PLACE THAT
+  // CREATES THE DATA (/dry-audit, 2026-08-18). Forty-three sites across the app
+  // compare room names through `roomKey` — case- and whitespace-insensitively —
+  // and this file compared them raw, so typing "Kitchen" while "kitchen "
+  // already existed produced TWO teleport points for ONE room. Every consumer
+  // then collapsed them back to a single room, leaving two rows in this grid
+  // pointing at different poses and no way to tell which was which.
+  //
+  // Worse than a local glitch: `teleportPoints` is a SHARED config key, so the
+  // duplicate syncs to every client in the villa. A rule honoured at every
+  // reader and absent at the writer is the exact shape this audit exists to
+  // find.
+  /** Returns a rejection string for AskDialog, or nothing on success. */
+  const addRoomHere = (name: string): string | void => {
+    if (!manager) return "The scene is not ready yet.";
+    // The name is kept VERBATIM — `roomKey` is for comparing, never for
+    // storing (see its header). Only the collision test is normalised.
+    const key = roomKey(name);
+    const clash = config.teleportPoints.find((p) => roomKey(p.name) === key);
+    // Rejected INLINE rather than through a second dialog: the native flow was
+    // prompt → alert → prompt, which threw away what was typed and asked twice.
+    if (clash) return `"${clash.name}" already exists — remove or rename it first.`;
     const { position, target } = captureCurrentPose();
     update({
       teleportPoints: [...config.teleportPoints, { name, floor: currentFloor as 1 | 2, position, target }],
     });
+    setAsk(null);
   };
 
   const removeRoom = (name: string) => {
-    update({ teleportPoints: config.teleportPoints.filter((p) => p.name !== name) });
+    // By KEY, so the row the user is looking at goes whatever case it was typed
+    // in. Deduping on the way in makes this at most one row in practice; it
+    // matters for the entries an older build already stored.
+    const key = roomKey(name);
+    update({ teleportPoints: config.teleportPoints.filter((p) => roomKey(p.name) !== key) });
   };
 
   return (
+    <>
+    {ask?.kind === "add" && (
+      <AskDialog
+        title="Add room"
+        input={{ label: "Name this room or viewpoint", placeholder: "e.g. Kitchen" }}
+        confirmLabel="Add"
+        onConfirm={addRoomHere}
+        onCancel={() => setAsk(null)}
+      />
+    )}
+    {ask?.kind === "remove" && (
+      <AskDialog
+        title="Remove room"
+        message={`Remove "${ask.name}"? This only deletes the saved viewpoint, not the room itself.`}
+        confirmLabel="Remove"
+        danger
+        onConfirm={() => { removeRoom(ask.name); setAsk(null); }}
+        onCancel={() => setAsk(null)}
+      />
+    )}
     <div className="teleport-grid">
       <button
         className="icon-btn"
@@ -103,7 +152,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
               className="tp-delete"
               onClick={(e) => {
                 e.stopPropagation();
-                if (confirm(`Remove "${p.name}"?`)) removeRoom(p.name);
+                setAsk({ kind: "remove", name: p.name });
               }}
               title="Remove room"
               aria-label={`Remove room ${p.name}`}
@@ -114,7 +163,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
           </button>
         ))}
 
-        <button className="tp-card tp-add" onClick={addRoomHere} title="Add current viewpoint as a room">
+        <button className="tp-card tp-add" onClick={() => setAsk({ kind: "add" })} title="Add current viewpoint as a room">
           <Plus size={26} />
           <span>Add room here</span>
         </button>
@@ -123,6 +172,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
         <MapPin size={16} /> Tap a room to fly there — the view is framed to that room automatically.
       </p>
     </div>
+    </>
   );
 }
 

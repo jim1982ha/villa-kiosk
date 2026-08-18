@@ -5,6 +5,7 @@
 // and components/panels/DeviceGroupPanel for the combined detail view.
 
 import { useMemo, useState } from "react";
+import AskDialog from "@/components/common/AskDialog";
 import { ChevronDown, ChevronRight, Plus, Trash2, X, Sparkles } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import { useConfig } from "@/config/ConfigContext";
@@ -20,6 +21,9 @@ export default function GroupedDevices() {
   const { entityDeviceIds } = useHA();
   const entityLabel = useEntityLabel();
   const [newPrimary, setNewPrimary] = useState<string | undefined>(undefined);
+  /** A refusal to show in the app's own dialog — see AskDialog for why this is
+   *  not `alert()`. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const suggestions = useMemo(
@@ -45,7 +49,7 @@ export default function GroupedDevices() {
 
   const createGroup = (primaryEntityId: string) => {
     if (grouped.has(primaryEntityId)) {
-      alert("This entity is already part of another group.");
+      setNotice("This entity is already part of another group.");
       return;
     }
     update(upsertGroup(config, { id: newGroupId(), primaryEntityId, memberEntityIds: [] }));
@@ -55,7 +59,7 @@ export default function GroupedDevices() {
   const addMember = (group: DeviceGroup, memberEntityId: string) => {
     if (!memberEntityId || memberEntityId === group.primaryEntityId) return;
     if (grouped.has(memberEntityId)) {
-      alert("This entity is already part of a group.");
+      setNotice("This entity is already part of a group.");
       return;
     }
     update(upsertGroup(config, { ...group, memberEntityIds: [...group.memberEntityIds, memberEntityId] }));
@@ -70,6 +74,16 @@ export default function GroupedDevices() {
 
   return (
     <div>
+      {notice && (
+        <AskDialog
+          title="Cannot group this entity"
+          message={notice}
+          confirmLabel="OK"
+          cancelLabel={null}
+          onConfirm={() => setNotice(null)}
+          onCancel={() => setNotice(null)}
+        />
+      )}
       <p className="muted body-text" style={{ marginTop: 0, marginBottom: 12 }}>
         Fold several HA entities that are really one physical device (e.g. a combo
         sensor exposing separate temperature and humidity entities) into a single

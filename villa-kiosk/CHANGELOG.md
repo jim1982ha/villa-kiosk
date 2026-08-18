@@ -1,3 +1,13 @@
+## 2.483.0
+
+### Changed — the browser's own dialogs no longer break through the kiosk
+
+Naming a room, removing one, and two grouping refusals used `prompt`/`confirm`/
+`alert`, which draw an OS sheet titled with the Ingress URL, cannot trap focus
+over the live canvas beneath them, and ignore the phone's Back button. They now
+use the app's own dialog. A duplicate room name is refused under the field
+instead of through a second popup that discarded what you typed.
+
 ## 2.482.0
 
 ### Fixed — a diagnostic that kept warning after its problem was solved
