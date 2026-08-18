@@ -59,7 +59,7 @@ import type { PickingInfo } from "@babylonjs/core/Collisions/pickingInfo";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { roomKey } from "@/config/roomKey";
-import { structureRole } from "./meshRoles";
+import { structureRole, isResolvedCeiling } from "./meshRoles";
 import { ModelKeyedStore } from "./modelStore";
 
 /** Fallback bucket size for a point that belongs to no room polygon. Only the
@@ -145,7 +145,7 @@ export class FloorProbe {
     if (!role.isStructure) return false;
     // The stamp first; the metadata flag catches a legacy GLB whose ceiling was
     // classified by name or height in applyStructure.
-    return !role.isCeiling && candidate.metadata?.isCeiling !== true;
+    return !isResolvedCeiling(candidate);
   };
   /** The localStorage half, shared with the camera beams — see modelStore.
    *  ⚠️ Prefix moved to `vk.probe3.` in 2.474.1 — see STORE_PREFIX. The sweep
@@ -414,8 +414,7 @@ export class FloorProbe {
       // "the floor of storey N is at ceiling height". Every consumer wants the
       // surface you STAND on — room glow, teleport points, camera framing, and
       // the first-person spawn's standability test.
-      (m) => wanted.has(m)
-        && !structureRole(m).isCeiling && m.metadata?.isCeiling !== true,
+      (m) => wanted.has(m) && !isResolvedCeiling(m),
     );
     // Counted alongside the `below()` rays: this is the same ~21ms pick against
     // the same unoctree'd structure, and splitting it into a second statistic
@@ -456,7 +455,7 @@ export class FloorProbe {
     const hit = this.scene.pickWithRay(
       new Ray(new Vector3(x, fromY, z), Vector3.Down(), depth),
       (m) => m.isPickable && m.isVisible && !m.metadata?.isMarker
-        && !structureRole(m).isCeiling && m.metadata?.isCeiling !== true,
+        && !isResolvedCeiling(m),
     );
     return hit?.hit && hit.pickedMesh && hit.pickedPoint ? hit : null;
   }

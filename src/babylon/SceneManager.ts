@@ -69,7 +69,7 @@ import { runPerfProbe, type ProbeRow } from "./perfProbe";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
-import { isCeilingMesh, structureRole } from "./meshRoles";
+import { isCeilingMesh, structureRole, isResolvedCeiling } from "./meshRoles";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { devLog, debugFlagEnabled } from "@/utils/devLog";
@@ -2113,7 +2113,7 @@ export class SceneManager {
     const R = 0.3;
     const blocks = (m: AbstractMesh) =>
       m.isPickable && m.isEnabled() && m.metadata?.isStructure === true
-      && !m.metadata?.isCeiling;
+      && !isResolvedCeiling(m);
 
     // ⚠️ THE PROBED FLOOR IS NOT ALWAYS THE SURFACE YOU STAND ON (2.464.0).
     // `estimateFloorY` -> `floorProbe.storeyFloorY` deliberately takes the
@@ -3157,7 +3157,7 @@ export class SceneManager {
             // lid rather than the floor. Harmless where a floor is directly
             // beneath, wrong wherever a ceiling overhangs past one — and it
             // feeds CALIBRATION, so a wrong answer moves the whole plan fit.
-            if (structureRole(m).isCeiling || m.metadata?.isCeiling === true) return false;
+            if (isResolvedCeiling(m)) return false;
             const bb = m.getBoundingInfo().boundingBox;
             return (bb.maximumWorld.y - bb.minimumWorld.y) < 0.8; // flat = floor/ground
           },
@@ -3772,6 +3772,14 @@ export class SceneManager {
     // deliberately drops. So this count is now the whole of what roofs a walker.
     // `stamped` separates the two eras: a pipeline ≥2.23.0 GLB reports real
     // ceiling OBJECTS, so a low number is now a finding rather than the norm.
+    // ⚠️ DELIBERATELY NOT `isResolvedCeiling` — /dry-audit will re-flag these
+    // otherwise. Every other consumer asks "IS this a ceiling"; these two ask
+    // "which ROUTE classified it", which is the entire purpose of the line: a
+    // capture reading `11 shown` beside an invisible ceiling was a true
+    // statement that hid the fault, and splitting stamped / by-name / by-height
+    // is what made "this GLB ships none" distinguishable from "the feature is
+    // broken". Collapsing them onto the resolved answer would delete the
+    // distinction and put that blind spot back.
     const stamped = this.ceilingMeshes.filter((m) => structureRole(m).isCeiling).length;
     const named = this.ceilingMeshes.filter(
       (m) => !structureRole(m).isCeiling && isCeilingMesh(m)).length;

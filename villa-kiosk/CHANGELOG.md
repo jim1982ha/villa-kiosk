@@ -1,3 +1,12 @@
+## 2.479.0
+
+### Changed — one answer to "is this a ceiling", not seven copies
+
+Recent fixes each wrote the same two-part test inline, and one of them wrote only
+half of it. They now share a single predicate. The two places that ask which rule
+classified a ceiling, rather than whether it is one, are deliberately left alone
+and say so — that distinction is what makes a missing ceiling diagnosable.
+
 ## 2.478.0
 
 ### Fixed — room glows would have draped on the ceiling, not the floor

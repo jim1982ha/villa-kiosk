@@ -180,6 +180,33 @@ export function structureRole(mesh: AbstractMesh): StructureRole {
 }
 
 /**
+ * Is this mesh a ceiling, as far as anything running AFTER `applyStructure` is
+ * concerned — stamp first, then the resolved metadata flag.
+ *
+ * ⚠️ THE SECOND ANSWER TO A QUESTION CLAUDE.md SAYS HAS ONE, converged here by
+ * /dry-audit (2.479.0). `isCeilingMesh` below is the CLASSIFIER: stamp or name,
+ * minus devices, and it is what ModelLoader and `applyStructure` use to DECIDE.
+ * By the time anything else asks, that decision has already been made and
+ * written to `metadata.isCeiling` — including the height heuristic, which lives
+ * at its call site because it needs a computed world bbox and which the
+ * classifier therefore cannot see.
+ *
+ * So consumers need the RESOLVED answer, not the classifier, and between
+ * 2.474.0 and 2.478.0 seven of them wrote it inline as
+ * `structureRole(m).isCeiling || m.metadata?.isCeiling === true`. One wrote only
+ * half of it. Seven copies of one predicate is the shape of bug this project
+ * has paid for twice; this is the one reader they now share.
+ *
+ * ⚠️ NOT interchangeable with `isCeilingMesh`. Use that to CLASSIFY (before the
+ * stamp exists), this to ASK (after). A caller that picks the wrong one gets a
+ * height-detected ceiling wrong in one direction or a device wrong in the other.
+ */
+export function isResolvedCeiling(mesh: AbstractMesh): boolean {
+  if (structureRole(mesh).isCeiling) return true;
+  return (mesh.metadata as { isCeiling?: boolean } | null)?.isCeiling === true;
+}
+
+/**
  * A CEILING/ROOF surface — pipeline stamp first, name second.
  *
  * ONE predicate, because three subsystems have to agree about it and two of them

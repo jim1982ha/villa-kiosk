@@ -30,7 +30,7 @@ import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint } from "@/types/scene.types";
 import { clamp, pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { nearestFloorRoom } from "./roomStorey";
-import { structureRole } from "./meshRoles";
+import { isResolvedCeiling } from "./meshRoles";
 import { TapRecognizer } from "./TapRecognizer";
 
 interface CameraCallbacks {
@@ -500,7 +500,7 @@ export class CameraController {
       // Resolved ONCE here rather than per ray, which is the whole point of
       // this set.
       (m) => !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name)
-        && !structureRole(m).isCeiling && m.metadata?.isCeiling !== true);
+        && !isResolvedCeiling(m));
     this.invalidateFloorProbe();
   }
 
@@ -651,7 +651,7 @@ export class CameraController {
     // asker of "what is the floor here" and the one that deliberately does not
     // share that module.
     const notCeiling = (m: AbstractMesh) =>
-      !structureRole(m).isCeiling && m.metadata?.isCeiling !== true;
+      !isResolvedCeiling(m);
     const base = (m: AbstractMesh) =>
       m.isPickable && m.isVisible && m.isEnabled() && !/^(halo_|label_)/i.test(m.name)
       && !m.metadata?.isMarker && notCeiling(m);
