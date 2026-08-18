@@ -3830,6 +3830,11 @@ export class SceneManager {
    */
   private reportCeilingGeometry(): void {
     if (!this.ceilingMeshes.length) return;
+    // ⚠️ THE GATE SKIPS THE WORK, NOT JUST THE LINE (2.480.0, /dry-audit).
+    // `projectedAreaXZ` walks every triangle of every ceiling mesh, twice —
+    // once for the total and once per mesh — and that is pure waste on a boot
+    // nobody is debugging. Same rule the placement tier already follows.
+    if (!debugFlagEnabled()) return;
     let minY = Infinity; let maxY = -Infinity; let foot = 0; let area = 0;
     for (const m of this.ceilingMeshes) {
       m.computeWorldMatrix(true);
@@ -4135,6 +4140,11 @@ export class SceneManager {
    */
   private reportCeilingCoverage(): void {
     if (!this.ceilingMeshes.length || !this.worldRoomPolys.length) return;
+    // ⚠️ THE MOST EXPENSIVE DIAGNOSTIC IN THE APP, AND IT WAS UNGATED
+    // (2.480.0, /dry-audit). Up to 14 ground rooms x 25 grid samples x 16
+    // ceiling meshes is ~5,600 ray/mesh intersections, run on EVERY boot to
+    // print a line only a debugging session reads.
+    if (!debugFlagEnabled()) return;
     let groundY = Infinity;
     for (const r of this.worldRoomPolys) groundY = Math.min(groundY, r.floorY);
     const rooms = this.worldRoomPolys.filter(

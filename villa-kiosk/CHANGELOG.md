@@ -1,3 +1,11 @@
+## 2.480.0
+
+### Fixed — two ceiling diagnostics did their work on every boot
+
+One walked every triangle of every ceiling mesh twice; the other cast several
+thousand ray/mesh intersections across the plan. Both only ever printed a line a
+debugging session reads, and neither checked the debug flag before starting.
+
 ## 2.479.0
 
 ### Changed — one answer to "is this a ceiling", not seven copies
