@@ -3036,6 +3036,14 @@ export class SceneManager {
     // points (see updateConfig's teleportPoints diff below).
     this.lastRoomPolyNames = new Set(worldPolys.map((r) => roomKey(r.name)));
     this.worldRoomPolys = worldPolys;
+    // ⚠️ HERE, NOT IN applyStructure (2.461.0). The coverage report was called
+    // from the ceiling block at load, and `worldRoomPolys` is not filled until
+    // calibration — which runs AFTER applyStructure — so it hit its own
+    // early-return on every boot and never printed once. Four captures were
+    // read waiting for a line that could not exist. The instrument has to live
+    // where its inputs do, which is the same mistake in a new place: measuring
+    // at the point that was convenient rather than the point that has the data.
+    this.reportCeilingCoverage();
     this.syncRoomPoints();
 
     // Camera motion-beam directions: each camera's sh3d plan `angle` (yaw)
@@ -3576,7 +3584,6 @@ export class SceneManager {
         : ""),
     );
     this.reportCeilingGeometry();
-    this.reportCeilingCoverage();
     this.requestRender();
   }
 

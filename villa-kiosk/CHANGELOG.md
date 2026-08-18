@@ -1,3 +1,12 @@
+## 2.461.0
+
+### Fixed — the ceiling coverage report never ran
+
+It was called from the structure pass at load, and the room outlines it needs are
+not built until calibration, which runs later — so it returned immediately every
+boot and never printed a line. It runs where the outlines exist now, and reports
+which ground-floor rooms have a ceiling above them and which do not, by name.
+
 ## 2.460.0
 
 ### Fixed — first-person now starts in a room, not on the staircase
