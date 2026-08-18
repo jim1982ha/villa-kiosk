@@ -1,3 +1,16 @@
+## 2.462.0
+
+### Added — is the missing ceiling still inside the model, or was it never exported?
+
+The owner confirmed "Display ceiling" is on in SweetHome, which points at the
+bake rather than the plan. The pipeline peels a ceiling by taking DOWN-facing
+faces only, so anything it misses stays fused in the structure mesh — where this
+build can still measure it, Draco already decoded. One line now reports the
+horizontal area in the ceiling band, split by which way it faces: down-facing
+left behind means the peel is too narrow, up-facing means SweetHome's ceiling
+normals are inverted and the peel's filter skips them, neither means the export
+carries no more ceiling. Debug-flag gated.
+
 ## 2.461.0
 
 ### Fixed — the ceiling coverage report never ran

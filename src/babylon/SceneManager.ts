@@ -72,7 +72,7 @@ import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
 import { isCeilingMesh, structureRole } from "./meshRoles";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
-import { devLog } from "@/utils/devLog";
+import { devLog, debugFlagEnabled } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { loadOverviewView, saveOverviewView } from "@/utils/storage";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
@@ -310,6 +310,68 @@ function projectedAreaXZ(m: AbstractMesh): number {
     area += Math.abs((b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)) / 2;
   }
   return area;
+}
+
+/**
+ * Horizontal triangle area in a height band, split by which way it FACES.
+ *
+ * ⚠️ THIS IS THE TEST THAT SEPARATES "the pipeline dropped the ceiling" FROM
+ * "SweetHome never exported one" (2.462.0), and it is the question the owner
+ * asked directly: their room settings have "Display ceiling" checked, so where
+ * did it go?
+ *
+ * blender_pipeline `_split_for_bake` peels a storey's ceiling off the fused
+ * Structure by taking **DOWN-FACING** horizontal faces in a band around the
+ * storey boundary (`_ceiling_face_mask(..., facing=-1)`), with a 1.2 m² minimum
+ * component area. Anything it does not take stays fused inside `Structure` —
+ * where the app can still see it, because by then Draco is decoded. So:
+ *
+ *   down ≈ 0 and up ≈ 0  → the OBJ has no ceiling here. Model/export problem.
+ *   down ≈ 0 and up LARGE → the faces EXIST and point the wrong way, so the
+ *                           peel's `facing=-1` filter skipped them. That also
+ *                           explains why a ceiling had to be forced
+ *                           double-sided in 2.449.0 — SweetHome slabs carry
+ *                           inverted normals, and the same inversion defeats
+ *                           the peel. FIX: the pipeline, not the app.
+ *   down LARGE            → the peel's band or area threshold is too tight.
+ *
+ * Debug-flag gated and bbox-prefiltered: `Structure` is ~1.4M triangles across
+ * ~190 primitives, and this walks index data, so it must not run on a normal
+ * boot.
+ */
+function horizontalAreaInBand(
+  m: AbstractMesh, loY: number, hiY: number,
+): { down: number; up: number } {
+  const out = { down: 0, up: 0 };
+  const bb = m.getBoundingInfo().boundingBox;
+  if (bb.maximumWorld.y < loY || bb.minimumWorld.y > hiY) return out;
+  const pos = m.getVerticesData(VertexBuffer.PositionKind);
+  const idx = m.getIndices();
+  if (!pos || !idx) return out;
+  const w = m.computeWorldMatrix(true);
+  const a = Vector3.Zero(); const b = Vector3.Zero(); const c = Vector3.Zero();
+  for (let i = 0; i + 2 < idx.length; i += 3) {
+    for (const [j, v] of [[idx[i], a], [idx[i + 1], b], [idx[i + 2], c]] as const) {
+      Vector3.TransformCoordinatesFromFloatsToRef(
+        pos[j * 3], pos[j * 3 + 1], pos[j * 3 + 2], w, v);
+    }
+    const cy = (a.y + b.y + c.y) / 3;
+    if (cy < loY || cy > hiY) continue;
+    // Cross product of the two edges: its Y component is the projected area
+    // (signed by facing), its length is twice the true area.
+    const ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
+    const vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
+    const nx = uy * vz - uz * vy;
+    const ny = uz * vx - ux * vz;
+    const nz = ux * vy - uy * vx;
+    const len = Math.hypot(nx, ny, nz);
+    if (len === 0) continue;
+    // Same 0.85 threshold the pipeline's own mask uses, so the two answers are
+    // comparable rather than merely similar.
+    if (Math.abs(ny) / len <= 0.85) continue;
+    if (ny < 0) out.down += len / 2; else out.up += len / 2;
+  }
+  return out;
 }
 
 function forceOpaque(m: AbstractMesh): void {
@@ -3584,6 +3646,7 @@ export class SceneManager {
         : ""),
     );
     this.reportCeilingGeometry();
+    this.reportUnpeeledCeiling(meshes);
     this.requestRender();
   }
 
@@ -3685,6 +3748,53 @@ export class SceneManager {
         + ` vis=${m.visibility.toFixed(2)}`,
       );
     }
+  }
+
+  /**
+   * Is there ceiling geometry still FUSED INTO `Structure` that the pipeline's
+   * peel did not take? See `horizontalAreaInBand` for the full reasoning and
+   * for how to read the two numbers.
+   *
+   * Reported against what WAS peeled, so the line is self-contained: if the
+   * unpeeled down-facing area dwarfs `Structure_Ceiling_L0`'s, the peel's band
+   * or threshold is wrong; if the UP-facing area dwarfs both, SweetHome's
+   * ceiling faces are inverted and the peel's down-facing filter is skipping
+   * them; if both are ~0, the export genuinely contains no more ceiling.
+   */
+  private reportUnpeeledCeiling(meshes: AbstractMesh[]): void {
+    if (!debugFlagEnabled() || !this.ceilingMeshes.length) return;
+    // The band the pipeline searches, in world metres: 80% of the storey up to
+    // 15% past its boundary. Taken from the drawn ceilings rather than assumed,
+    // so this holds for a villa with any storey height.
+    let loY = Infinity; let hiY = -Infinity;
+    for (const m of this.ceilingMeshes) {
+      const bb = m.getBoundingInfo().boundingBox;
+      loY = Math.min(loY, bb.minimumWorld.y);
+      hiY = Math.max(hiY, bb.maximumWorld.y);
+    }
+    loY -= 0.5; hiY += 0.5;
+    const ceilingSet = new Set(this.ceilingMeshes);
+    let down = 0; let up = 0; let scanned = 0;
+    for (const m of meshes) {
+      if (ceilingSet.has(m) || m.getTotalVertices() === 0) continue;
+      if (m.metadata?.isStructure !== true) continue;
+      const r = horizontalAreaInBand(m, loY, hiY);
+      if (r.down || r.up) scanned += 1;
+      down += r.down; up += r.up;
+    }
+    let peeled = 0;
+    for (const m of this.ceilingMeshes) peeled += projectedAreaXZ(m);
+    tapDebug(
+      `unpeeled ceiling: down=${down.toFixed(1)}m2 up=${up.toFixed(1)}m2`
+      + ` still fused in ${scanned} structure mesh(es), band ${loY.toFixed(2)}..${hiY.toFixed(2)}m`
+      + ` (peeled=${peeled.toFixed(1)}m2)`
+      + (down > peeled
+        ? " — PEEL TOO NARROW: down-facing ceiling was left behind"
+        : up > 4 * Math.max(down, peeled)
+          ? " — INVERTED NORMALS: faces exist but point UP, so the peel's"
+            + " down-facing filter skips them (pipeline fix)"
+          : " — export ships no further ceiling here"),
+    );
   }
 
   /**
