@@ -1,3 +1,16 @@
+## 2.455.0
+
+### Changed — instruments only; two earlier claims corrected
+
+Every ceiling report so far was taken at load in the overview — the one view whose
+job is to hide ceilings — so "11 enabled" was measured where invisibility is
+correct. The walk line now carries `ceil=Ne/Nv/Na`, which says how many the last
+frame actually submitted, and each ceiling mesh is listed with its name and
+footprint. Also records two things that were claimed and are not true: the floor
+raycast change made no measurable difference (13.68 ms/ray before, 13.70 after),
+and Babylon quantises a control's pixel width to an integer, so removing the
+struts' rounding moved it rather than removing it.
+
 ## 2.454.0
 
 ### Fixed — you could see the sky through the ceiling, and the badge value was off-centre

@@ -692,6 +692,20 @@ export class SceneManager {
     // capture has ever measured it. Wired here, where both objects exist, so
     // neither subsystem has to know the other.
     this.visuals.setWalkFloorCost(() => this.camera.floorProbeCost);
+    // The ceiling's state while WALKING — see EntityVisuals.setCeilingState for
+    // why every previous ceiling report was taken in the one view that hides
+    // them. `active` is read from the meshes the last frame actually submitted,
+    // which is the only one of the three that Babylon owns rather than us.
+    this.visuals.setCeilingState(() => {
+      const active = new Set(this.scene.getActiveMeshes().data);
+      let enabled = 0; let visible = 0; let drawn = 0;
+      for (const m of this.ceilingMeshes) {
+        if (m.isEnabled()) enabled += 1;
+        if (m.isVisible) visible += 1;
+        if (active.has(m)) drawn += 1;
+      }
+      return { enabled, visible, active: drawn };
+    });
 
     // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
     // Created after both cameras exist so SSAO can attach to all of them; the
@@ -3356,6 +3370,26 @@ export class SceneManager {
         ? " — ENTIRELY BELOW EYE LEVEL: this is trim, not a lid"
         : ""),
     );
+    // ⚠️ PER MESH, because every aggregate so far has been a true statement that
+    // hid the fault. `foot=` is a SUM of bounding boxes and deliberately
+    // over-counts overlap, so 51% of the villa is consistent with two big
+    // overlapping slabs covering one wing and nothing over the room the walker
+    // is standing in. Names and centres are what separate those, and a name is
+    // also the only thing that can be taken back to the pipeline: `0 stamped
+    // vk_role=ceiling` means SweetHome emitted these as ordinary objects, so
+    // which objects they are is the question the GLB has to answer.
+    for (const m of this.ceilingMeshes) {
+      const bb = m.getBoundingInfo().boundingBox;
+      tapDebug(
+        `  ceiling "${m.name}"`
+        + ` y=${bb.minimumWorld.y.toFixed(2)}..${bb.maximumWorld.y.toFixed(2)}`
+        + ` xz=${bb.centerWorld.x.toFixed(1)},${bb.centerWorld.z.toFixed(1)}`
+        + ` ${(bb.maximumWorld.x - bb.minimumWorld.x).toFixed(1)}x`
+        + `${(bb.maximumWorld.z - bb.minimumWorld.z).toFixed(1)}m`
+        + ` floor=${(m.metadata as { floorIndex?: number } | null)?.floorIndex ?? "-"}`
+        + ` verts=${m.getTotalVertices()}`,
+      );
+    }
   }
 
   /**

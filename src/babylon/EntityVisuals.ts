@@ -5362,6 +5362,24 @@ export class EntityVisuals {
     this.walkFloorCost = fn;
   }
 
+  /**
+   * The ceiling's state DURING A WALKING FRAME, which is the one time nobody
+   * has measured it (2.455.0).
+   *
+   * Everything known about the ceiling so far was reported at LOAD, in the
+   * overview, where `isVisible` is deliberately false — so `11 enabled` was
+   * measured in the one view that is supposed to hide them. Five fixes have
+   * been argued from that line. `active` is the field that cannot be argued
+   * with: it counts how many of them Babylon actually submitted for the last
+   * frame, so `enabled=11 visible=11 active=0` and `active=11` are completely
+   * different faults and every previous report collapsed them.
+   */
+  private ceilingState: (() => { enabled: number; visible: number; active: number }) | null = null;
+
+  setCeilingState(fn: () => { enabled: number; visible: number; active: number }): void {
+    this.ceilingState = fn;
+  }
+
   private reportWalkCost(eligible: number): void {
     // The FLAG, not a channel, and deliberately so: this line is untagged
     // precisely because it measures a tier whose own channel is muted. Do not
@@ -5398,6 +5416,10 @@ export class EntityVisuals {
         c.ms = 0;
         c.still = 0;
         return line;
+      })()
+      + (() => {
+        const s = this.ceilingState?.();
+        return s ? ` ceil=${s.enabled}e/${s.visible}v/${s.active}a` : "";
       })(),
     );
   }
