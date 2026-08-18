@@ -1,3 +1,13 @@
+## 2.485.0
+
+### Fixed — the floor button and the icon above it answered a hold 30ms apart
+
+`HOLD_MS_HUD` exists so every top-bar control holds for the same length of time,
+and its own note names the floor buttons as one of the three it stands for. They
+never used it: they carried the older literal 450 while the constant shipped at
+480, so two adjacent buttons in the same bar disagreed. They now read the
+constant, which makes the floor hold 30ms longer.
+
 ## 2.484.0
 
 ### Fixed — Tab escaped the superadmin code prompt into the villa behind it

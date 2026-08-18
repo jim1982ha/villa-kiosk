@@ -264,6 +264,17 @@ export default function HUD({
   // onPointerLeave on purpose, so dragging off the button and releasing still
   // switches floors, where the hook cancels. Converting it would restructure
   // working gesture code to look like a sibling it does not behave like.
+  //
+  // ⚠️ THE MECHANISM DIVERGES; THE DURATION MUST NOT. It did, silently, for
+  // four releases: these two timers held the literal 450 while HOLD_MS_HUD —
+  // whose docstring names "the HUD category icons, THE FLOOR BUTTONS and the
+  // camera picker" as the three controls it stands for — was introduced at 480
+  // in 2.380.0 by generalising from the other two without checking this one.
+  // So the category icon and the floor button directly beneath it answered a
+  // hold 30 ms apart, and the constant asserted they did not. A "do not DRY
+  // this" note protects the shape of a gesture, and is exactly the thing that
+  // lets a NUMBER inside it drift unread — the two decisions are separate and
+  // only the first one was ever made here.
   const onFloorPointerDown = (f: number) => (e: React.PointerEvent<HTMLButtonElement>) => {
     if (e.button !== undefined && e.button !== 0) return;
     floorLongFired.current = false;
@@ -271,7 +282,7 @@ export default function HUD({
     floorLongTimer.current = setTimeout(() => {
       floorLongFired.current = true;
       openRadialForFloor(f);
-    }, 450);
+    }, HOLD_MS_HUD);
   };
   const onFloorPointerUp = (f: number) => () => {
     if (floorLongTimer.current) { clearTimeout(floorLongTimer.current); floorLongTimer.current = null; }
@@ -298,7 +309,7 @@ export default function HUD({
     floorLongTimer.current = setTimeout(() => {
       floorLongFired.current = true;
       openRadialForFloor(f);
-    }, 450);
+    }, HOLD_MS_HUD);
   };
   const onFloorKeyUp = (f: number) => (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key !== "Enter" && e.key !== " ") return;
