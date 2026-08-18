@@ -5,10 +5,19 @@
 // IS A WALL-MOUNTED iPAD. `prompt()` and friends draw an OS sheet with the
 // site's ORIGIN in the title — under HA Ingress that is a long opaque URL — so
 // on a kiosk they read as the browser breaking through the app rather than as
-// the app asking a question. They also cannot carry the focus-trap contract
-// every other dialog here owes (see useModalA11y), cannot be dismissed by the
-// phone's Back button, and block the whole tab while open, which on this app
-// means the Babylon render loop with them.
+// the app asking a question. They also ignore the dismissal contract every
+// other dialog here honours (Escape and the phone's Back, through
+// useBackToClose's stack), and they block the whole tab while open, which on
+// this app means the Babylon render loop with it.
+//
+// ⚠️ WHAT THEY ARE *NOT* GUILTY OF, corrected here because the first version of
+// this comment got it wrong: focus cannot escape a native dialog. `alert`,
+// `confirm` and `prompt` are browser-modal — they pause script execution and the
+// page behind them is uninteractable, so Tab cannot reach the villa controls
+// under the scrim. That failure is real but belongs to the app's OWN ten
+// `.modal-backdrop` surfaces, which is what useModalA11y was written for; it was
+// transplanted onto native dialogs where it does not apply. This component DOES
+// carry the focus trap, and that is a property it has, not a bug it fixed.
 //
 // Five of them shipped — two in GroupedDevices, three in TeleportMenu — and the
 // last was added by me during a /dry-audit, which is how it became visible:
@@ -26,7 +35,7 @@
 // what the user typed and asks them twice. Returning a string keeps the dialog
 // open with the text intact and the reason under the field.
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 
 interface Props {
@@ -53,14 +62,8 @@ export default function AskDialog({
   danger = false, onConfirm, onCancel,
 }: Props) {
   const dialogRef = useModalA11y(onCancel);
-  const fieldRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState(input?.initial ?? "");
   const [error, setError] = useState<string | null>(null);
-
-  // A prompt whose field is not focused is a prompt the user has to tap twice,
-  // and on iOS that second tap is what summons the keyboard. useModalA11y puts
-  // focus INTO the dialog; this puts it on the thing being asked for.
-  useEffect(() => { if (input) fieldRef.current?.focus(); }, [input]);
 
   const submit = () => {
     const trimmed = value.trim();
@@ -95,7 +98,15 @@ export default function AskDialog({
               <label htmlFor="ask-dialog-input">{input.label}</label>
               <input
                 id="ask-dialog-input"
-                ref={fieldRef}
+                // `data-autofocus` is useModalA11y's OWN way to nominate the
+                // primary control — it prefers a marked element over "the first
+                // focusable" when it focuses into the dialog. The first cut here
+                // added a second `useEffect` doing the same job, which is two
+                // mechanisms racing to focus one field and the shape of drift
+                // /dry-audit exists to catch. A prompt whose field is not
+                // focused costs the user a second tap, and on iOS that tap is
+                // what summons the keyboard.
+                data-autofocus
                 type="text"
                 value={value}
                 placeholder={input.placeholder}

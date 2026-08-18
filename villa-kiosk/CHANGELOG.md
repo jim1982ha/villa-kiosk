@@ -1,12 +1,22 @@
+## 2.483.1
+
+### Changed — one duplicated focus mechanism, and a corrected claim
+
+The new dialog focused its text field with an effect of its own while the shared
+modal hook was already focusing into the dialog — two mechanisms for one job. It
+uses the hook's `data-autofocus` marker instead. The 2.483.0 note also claimed
+native dialogs let focus escape to the canvas behind them; they do not, being
+browser-modal, and that is corrected.
+
 ## 2.483.0
 
 ### Changed — the browser's own dialogs no longer break through the kiosk
 
 Naming a room, removing one, and two grouping refusals used `prompt`/`confirm`/
-`alert`, which draw an OS sheet titled with the Ingress URL, cannot trap focus
-over the live canvas beneath them, and ignore the phone's Back button. They now
-use the app's own dialog. A duplicate room name is refused under the field
-instead of through a second popup that discarded what you typed.
+`alert`, which draw an OS sheet titled with the Ingress URL, ignore Escape and
+the phone's Back button, and freeze the render loop while open. They now use the
+app's own dialog. A duplicate room name is refused under the field instead of
+through a second popup that discarded what you typed.
 
 ## 2.482.0
 
