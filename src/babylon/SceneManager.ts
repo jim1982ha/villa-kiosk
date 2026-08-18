@@ -2743,6 +2743,10 @@ export class SceneManager {
     // per stair room. Identical semantics; only the cost changes.
     const wanted = new Set(meshes);
     const probe = (x: number, z: number): number | null => {
+      // A ceiling in `wanted` cannot corrupt this the way it corrupts a
+      // first-hit probe: the loop below keeps the LOWEST hit per column, and a
+      // ceiling is never below its own floor. Stated because /dry-audit had to
+      // re-derive it, and the next reader should not have to.
       const hits = this.scene.multiPickWithRay(
         new Ray(new Vector3(x, 1000, z), Vector3.Down(), 2000), (m) => wanted.has(m));
       if (!hits?.length) return null;
@@ -3147,6 +3151,13 @@ export class SceneManager {
           new Ray(new Vector3(wx, 20, wz), new Vector3(0, -1, 0), 40),
           (m) => {
             if (!m.isPickable || !m.isVisible || m.metadata?.isMarker) return false;
+            // ⚠️ A CEILING IS THIN TOO (2.478.0, /dry-audit). This ray starts at
+            // y=20 and the thinness test alone happily accepts a 2.44 m ceiling
+            // slab on the way down, answering "there is floor here" from the
+            // lid rather than the floor. Harmless where a floor is directly
+            // beneath, wrong wherever a ceiling overhangs past one — and it
+            // feeds CALIBRATION, so a wrong answer moves the whole plan fit.
+            if (structureRole(m).isCeiling || m.metadata?.isCeiling === true) return false;
             const bb = m.getBoundingInfo().boundingBox;
             return (bb.maximumWorld.y - bb.minimumWorld.y) < 0.8; // flat = floor/ground
           },

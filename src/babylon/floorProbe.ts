@@ -438,11 +438,25 @@ export class FloorProbe {
    * whatever is really there. Deliberately NOT the structure-only predicate the
    * other two use: a decal draping over a staircase should land on the stair
    * asset, furniture or not; it only excludes the app's own markers.
+   *
+   * ⚠️ …AND CEILINGS (2.478.0, found by /dry-audit). The exemption above is
+   * about FURNITURE — "land on the stair asset, furniture or not" — and a
+   * ceiling is neither furniture nor something a floor decal may land on. Its
+   * one caller probes from `floorY + DECAL_PROBE_ABOVE`, which is 3 m, and this
+   * villa's ceilings sit at 2.44 m: the ray therefore STARTS ABOVE THE CEILING
+   * and hits it first, so every ground-floor room glow would drape on the
+   * ceiling's underside instead of the floor.
+   *
+   * Not a latent risk — a live one as of this session, because until the peel
+   * was fixed there was almost no ceiling geometry for it to hit. The bug was
+   * created by making something else work, which is exactly the shape an audit
+   * of the APPLICABLE SET catches and an audit of call sites does not.
    */
   surfaceUnder(x: number, z: number, fromY: number, depth: number): PickingInfo | null {
     const hit = this.scene.pickWithRay(
       new Ray(new Vector3(x, fromY, z), Vector3.Down(), depth),
-      (m) => m.isPickable && m.isVisible && !m.metadata?.isMarker,
+      (m) => m.isPickable && m.isVisible && !m.metadata?.isMarker
+        && !structureRole(m).isCeiling && m.metadata?.isCeiling !== true,
     );
     return hit?.hit && hit.pickedMesh && hit.pickedPoint ? hit : null;
   }

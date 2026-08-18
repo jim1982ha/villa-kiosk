@@ -1,3 +1,14 @@
+## 2.478.0
+
+### Fixed — room glows would have draped on the ceiling, not the floor
+
+An audit of every downward "what is the floor here" raycast, rather than the ones
+already changed, found two more that accept a ceiling. The room-glow decal probes
+from three metres above a room's floor and the new ceilings sit at 2.44 m, so it
+would have hit the ceiling first and projected every ground-floor glow onto its
+underside. The calibration floor test admits a ceiling too, by way of a
+thin-mesh filter, and that one feeds the plan fit.
+
 ## 2.477.0
 
 ### Fixed — upper-storey light pools washed straight through their walls
