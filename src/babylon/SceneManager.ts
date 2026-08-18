@@ -613,6 +613,10 @@ export class SceneManager {
     this.floors = new FloorManager(this.scene, (floor) => {
       opts.onFloorChange(floor);
       this.visuals.setActiveFloor(floor);
+      // A storey switch swaps the slab under a walker who may not have moved a
+      // millimetre, and the floor follower now declines to re-probe a spot it
+      // has already answered — so tell it the answer is stale.
+      this.camera.invalidateFloorProbe();
       // Re-scope the blue "clickable" outlines to the newly-active floor (they're
       // set once at load; without this the 1F glows persist while you're on 2F).
       if (this.loadedMeshes.length) this.applyHighlight(this.loadedMeshes);
@@ -1617,6 +1621,9 @@ export class SceneManager {
       this.overview.disable();
       this.scene.activeCamera = this.camera.camera;
       this.camera.attachInput();
+      // The eye is about to be placed somewhere the floor follower has never
+      // stood; any anchor it holds is from a previous visit to this camera.
+      this.camera.invalidateFloorProbe();
       this.floors.setFirstPerson(true); // walking now — feet elevation drives the storey
       // Where to drop the walker: INTO the room the user picked in overview if
       // there is one (so "select a room, switch to first-person" lands there),
@@ -3223,13 +3230,11 @@ export class SceneManager {
     // ceiling/roof in Blender, so zero here is the expected answer on a
     // freshly-baked villa and means the GLB, not this code, is what has to
     // change. Reported once per load rather than per mesh.
-    // ⚠️ A LOW NUMBER HERE IS NORMAL AND IS NOT THE WHOLE CEILING. A pipeline
-    // ≥2.6.0 drops the modelled ceiling in Blender, so this counts only the
-    // strays it left (this villa: 2). What actually roofs a room while you walk
-    // in it is the FLOOR SLAB OF THE STOREY ABOVE, which FloorManager shows in
-    // first-person — see its applyVisibility. Both halves are needed and
-    // neither is a substitute for the other: the slab does not exist over a
-    // top-storey room, and these strays are all there is there.
+    // ⚠️ A LOW NUMBER HERE IS NOT "the rest is covered by something else" any
+    // more. The storey-above slab stood in for a missing ceiling from 2.435.0
+    // to 2.443.0 and is GONE (2.444.0) — it wore the 2F floor's texture, and it
+    // could never roof the TOP storey, the one storey whose ceiling the pipeline
+    // deliberately drops. So this count is now the whole of what roofs a walker.
     // `stamped` separates the two eras: a pipeline ≥2.23.0 GLB reports real
     // ceiling OBJECTS, so a low number is now a finding rather than the norm.
     const stamped = this.ceilingMeshes.filter((m) => structureRole(m).isCeiling).length;
@@ -3250,7 +3255,59 @@ export class SceneManager {
         ? " — NONE: this GLB ships no ceiling geometry"
         : ""),
     );
+    this.reportCeilingGeometry();
     this.requestRender();
+  }
+
+  /**
+   * WHERE the ceilings are, in world units — the diagnostic that four fixes
+   * were shipped without.
+   *
+   * Every previous ceiling report answered a question about the CODE ("is it
+   * enabled", "is it visible", "did it get a lightmap", "is it double-sided")
+   * and all four came back healthy while nothing was on screen. Each of those
+   * fixes was real, and none of them could ever have answered the remaining
+   * possibility, which is about the GEOMETRY: that these meshes are not over
+   * anywhere a person stands. The pipeline peel found a 1.79 m lintel and zero
+   * stamped objects, which is the shape of "SweetHome emitted a few strays" —
+   * so the two hypotheses left are "nothing is above the walker" and "it is
+   * drawn and unseen", and they are separated by three numbers.
+   *
+   *   `y=` the world Y band the ceilings occupy. Under ~2 m and this is trim,
+   *         a lintel or a soffit, not a lid — no lighting fix can help it.
+   *   `foot=` their combined XZ footprint as a FRACTION of the villa's own.
+   *         A few percent is "some rooms only"; near zero is "strays".
+   *   `eye=` the walker's eye height, so the band can be read against the head
+   *         it is meant to be above without a second lookup.
+   *
+   * On `tapDebug`, never `devLog`, for the reason the lighting line is: three
+   * rounds of this were diagnosed from owner-pasted kiosk logs, where anything
+   * stripped outside DEV is invisible.
+   */
+  private reportCeilingGeometry(): void {
+    if (!this.ceilingMeshes.length) return;
+    let minY = Infinity; let maxY = -Infinity; let foot = 0;
+    for (const m of this.ceilingMeshes) {
+      m.computeWorldMatrix(true);
+      const bb = m.getBoundingInfo().boundingBox;
+      minY = Math.min(minY, bb.minimumWorld.y);
+      maxY = Math.max(maxY, bb.maximumWorld.y);
+      // Bounding-box footprint, summed per mesh rather than unioned: it
+      // over-counts overlap and that is the safe direction here — the finding
+      // this is looking for is a number far too SMALL to be a villa's ceiling.
+      foot += (bb.maximumWorld.x - bb.minimumWorld.x)
+        * (bb.maximumWorld.z - bb.minimumWorld.z);
+    }
+    const ext = this.worldExtends(this.loadedMeshes);
+    const villaFoot = Math.max(1e-6, (ext.max.x - ext.min.x) * (ext.max.z - ext.min.z));
+    tapDebug(
+      `ceiling geometry: y=${minY.toFixed(2)}..${maxY.toFixed(2)}m`
+      + ` foot=${foot.toFixed(1)}m2 (${(100 * foot / villaFoot).toFixed(1)}% of villa)`
+      + ` eye=${(this.config.eyeHeight ?? 1.7).toFixed(2)}m`
+      + (maxY < (this.config.eyeHeight ?? 1.7)
+        ? " — ENTIRELY BELOW EYE LEVEL: this is trim, not a lid"
+        : ""),
+    );
   }
 
   /**

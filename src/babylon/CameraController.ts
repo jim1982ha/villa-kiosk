@@ -78,11 +78,18 @@ export class CameraController {
    * against this geometry at 7-15 ms, and this fires one or two of them ~11
    * times a second while you walk.
    *
-   * That makes it a CANDIDATE for the residual walk lag, not a finding — six
+   * That made it a CANDIDATE for the residual walk lag, not a finding — six
    * perf hypotheses in this app have been argued from exactly that reasoning and
-   * disproved. So it gets measured before it gets changed.
+   * disproved. So it got measured before it got changed, and the measurement
+   * came back (owner capture, 2026-08-17): `floorMs=176..447` per 2 s window,
+   * i.e. 12-19 ms per ray and 9-22% of wall-clock — **while STANDING STILL**,
+   * because the throttle below is the only thing that ever gated it and a
+   * throttle asks "how long since last time", never "did anything change".
+   * `still` is the count of probe slots the stationary gate declined, and it is
+   * here for the reason `moving=` is on the occlusion line: without it
+   * `floorRays=0` reads as "cheap" when it means "not asked".
    */
-  readonly floorProbeCost = { rays: 0, ms: 0 };
+  readonly floorProbeCost = { rays: 0, ms: 0, still: 0 };
   /** Scratch for `roomHitTest` — see updateRoom. */
   private hitX = 0;
   private hitZ = 0;
@@ -431,6 +438,27 @@ export class CameraController {
   private static readonly FLOOR_PROBE_INTERVAL_MS = 90;
   private lastFloorProbeAt = 0;
   private lastFloorHit: { y: number; onStair: boolean } | null = null;
+  /**
+   * Where the eye stood when the last probe was actually cast, and the distance
+   * it must leave before the next one is allowed. The interval above caps the
+   * RATE; this caps the WORK, and they are not the same gate — a throttle asks
+   * "how long since last time" and answers "cast" forever to a camera that has
+   * not moved a millimetre, which is what an owner capture measured this doing
+   * for 9-22% of wall-clock.
+   *
+   * Skipping is sound because a downward ray from a fixed XZ against fixed
+   * geometry has a fixed answer: nothing about the villa moves. The two things
+   * that CAN change that answer without the eye moving are a storey switch
+   * (FloorManager toggles `setEnabled`, and the predicate below honours it) and
+   * entering first-person, and both call `invalidateFloorProbe()` — a gate that
+   * can be invalidated is the difference between caching an answer and
+   * assuming one.
+   *
+   * 1 cm: walking at ~1.4 m/s covers ~13 cm between probes, so this can only
+   * ever swallow numerical drift, never a step.
+   */
+  private static readonly FLOOR_PROBE_MIN_MOVE = 0.01;
+  private floorProbeAnchor: { x: number; z: number } | null = null;
 
   /**
    * Floor-following: while walking, smoothly keep the eye at floor+height by
@@ -444,39 +472,60 @@ export class CameraController {
 
     if (now - this.lastFloorProbeAt >= CameraController.FLOOR_PROBE_INTERVAL_MS) {
       this.lastFloorProbeAt = now;
-      // Search 1.6 m above current feet (to catch a stair step ahead) and
-      // 1.0 m below (a small drop-off). Total band = 2.6 m.
-      const originY = currentFloorY + 1.6;
-      // isEnabled() matters: FloorManager HIDES upper storeys with setEnabled(false)
-      // (not isVisible), so without it the follower would snap onto a hidden floor's
-      // slab above you.
-      const predicate = (m: AbstractMesh) =>
-        m.isPickable && m.isVisible && m.isEnabled() && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name);
-      const probeT0 = performance.now();
-      let hit = this.scene.pickWithRay(
-        new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 2.6), predicate);
-      this.floorProbeCost.rays += 1;
-      if (!hit?.hit || !hit.pickedPoint) {
-        // The band missed: we walked over a drop taller than 1 m (terrace edge
-        // down to the garden, a stair void) or re-entered first-person above
-        // the floor. Without this fallback the early return kept the old
-        // height for good — the "person floats above the ground" bug. Catch
-        // the real floor however far below and glide down (MAX_STEP paces it).
-        hit = this.scene.pickWithRay(
-          new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 200), predicate);
+      // The stationary gate, INSIDE the throttle rather than in front of it, so
+      // that `still` counts probe SLOTS declined and is therefore on the same
+      // scale as `rays` — a per-frame count here would read as ~5x the work
+      // that was actually avoided and make the instrument's two numbers
+      // incomparable. The cost is that resuming from a standstill waits up to
+      // one interval for its first probe, which is the same 90 ms staleness
+      // walking already carries.
+      const anchor = this.floorProbeAnchor;
+      const eps = CameraController.FLOOR_PROBE_MIN_MOVE;
+      const still = anchor !== null && this.lastFloorHit !== null
+        && Math.abs(p.x - anchor.x) < eps && Math.abs(p.z - anchor.z) < eps;
+      if (still) {
+        // No probe. The GLIDE below still runs every frame against the cached
+        // answer, exactly as it did before — only the expensive question is
+        // skipped, so a walker mid-descent keeps descending while standing on
+        // the spot, which is what makes this invisible rather than a behaviour
+        // change.
+        this.floorProbeCost.still += 1;
+      } else {
+        this.floorProbeAnchor = { x: p.x, z: p.z };
+        // Search 1.6 m above current feet (to catch a stair step ahead) and
+        // 1.0 m below (a small drop-off). Total band = 2.6 m.
+        const originY = currentFloorY + 1.6;
+        // isEnabled() matters: FloorManager HIDES upper storeys with setEnabled(false)
+        // (not isVisible), so without it the follower would snap onto a hidden floor's
+        // slab above you.
+        const predicate = (m: AbstractMesh) =>
+          m.isPickable && m.isVisible && m.isEnabled() && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name);
+        const probeT0 = performance.now();
+        let hit = this.scene.pickWithRay(
+          new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 2.6), predicate);
         this.floorProbeCost.rays += 1;
-      }
-      // Both rays, including the fallback — which is the expensive one: 200 m
-      // that hits nothing has to be tested against everything.
-      this.floorProbeCost.ms += performance.now() - probeT0;
-      // A miss keeps the previous lastFloorHit rather than clearing it, so one
-      // unlucky probe (e.g. a momentary gap) doesn't stall the follower for a
-      // whole throttle interval — it just tries again next time.
-      if (hit?.hit && hit.pickedPoint) {
-        this.lastFloorHit = {
-          y: hit.pickedPoint.y,
-          onStair: hit.pickedMesh?.metadata?.isStair === true,
-        };
+        if (!hit?.hit || !hit.pickedPoint) {
+          // The band missed: we walked over a drop taller than 1 m (terrace edge
+          // down to the garden, a stair void) or re-entered first-person above
+          // the floor. Without this fallback the early return kept the old
+          // height for good — the "person floats above the ground" bug. Catch
+          // the real floor however far below and glide down (MAX_STEP paces it).
+          hit = this.scene.pickWithRay(
+            new Ray(new Vector3(p.x, originY, p.z), new Vector3(0, -1, 0), 200), predicate);
+          this.floorProbeCost.rays += 1;
+        }
+        // Both rays, including the fallback — which is the expensive one: 200 m
+        // that hits nothing has to be tested against everything.
+        this.floorProbeCost.ms += performance.now() - probeT0;
+        // A miss keeps the previous lastFloorHit rather than clearing it, so one
+        // unlucky probe (e.g. a momentary gap) doesn't stall the follower for a
+        // whole throttle interval — it just tries again next time.
+        if (hit?.hit && hit.pickedPoint) {
+          this.lastFloorHit = {
+            y: hit.pickedPoint.y,
+            onStair: hit.pickedMesh?.metadata?.isStair === true,
+          };
+        }
       }
     }
     if (!this.lastFloorHit) return;
@@ -499,6 +548,19 @@ export class CameraController {
     const delta = (targetY - this.camera.position.y) * 0.5; // smooth follow
     const MAX_STEP = 0.25; // metres per frame
     this.camera.position.y += clamp(delta, -MAX_STEP, MAX_STEP);
+  }
+
+  /**
+   * "The floor under this exact spot may have changed." The stationary gate in
+   * `followFloor` caches an answer, and every cache in this app that went wrong
+   * went wrong by having no way to be told it was stale. Two callers, both in
+   * SceneManager: a storey switch (FloorManager `setEnabled`s a different slab
+   * under a walker who has not moved) and entering first-person (the eye was
+   * last placed by the overview camera, so any anchor is from another pose).
+   */
+  invalidateFloorProbe(): void {
+    this.floorProbeAnchor = null;
+    this.lastFloorProbeAt = 0;
   }
 
   groundCamera(): void {

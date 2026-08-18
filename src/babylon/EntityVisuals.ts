@@ -1440,7 +1440,7 @@ export class EntityVisuals {
    * scene layer's one rule is that these subsystems talk through SceneManager.
    * Null until wired, and the field simply reads `-` then.
    */
-  private walkFloorCost: (() => { rays: number; ms: number }) | null = null;
+  private walkFloorCost: (() => { rays: number; ms: number; still: number }) | null = null;
   /** performance.now() when the eye last MOVED. The sweep waits for this to go
    *  quiet, so a walking frame never pays for a ray — see refreshWallOcclusion. */
   private movingSince = 0;
@@ -5333,7 +5333,7 @@ export class EntityVisuals {
    * change is a rate nobody can read.
    */
   /** See `walkFloorCost`. Called once by SceneManager after the camera exists. */
-  setWalkFloorCost(fn: () => { rays: number; ms: number }): void {
+  setWalkFloorCost(fn: () => { rays: number; ms: number; still: number }): void {
     this.walkFloorCost = fn;
   }
 
@@ -5365,9 +5365,13 @@ export class EntityVisuals {
       + (() => {
         const c = this.walkFloorCost?.();
         if (!c) return " floor=-";
-        const line = ` floorRays=${c.rays} floorMs=${c.ms.toFixed(2)}`;
+        // `floorStill` is this line's `moving=`: probe slots the stationary gate
+        // declined. Without it `floorRays=0` reads as "cheap" when what it means
+        // is "the eye did not move", and those are different findings.
+        const line = ` floorRays=${c.rays} floorStill=${c.still} floorMs=${c.ms.toFixed(2)}`;
         c.rays = 0;
         c.ms = 0;
+        c.still = 0;
         return line;
       })(),
     );

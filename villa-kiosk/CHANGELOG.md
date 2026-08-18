@@ -1,3 +1,14 @@
+## 2.453.0
+
+### Fixed — walking was laggy, and the floor follower was raycasting at a standstill
+
+The camera re-asks "how high is the floor here" eleven times a second, and its only
+gate was a clock — which answers "cast" forever to someone who has not moved. A
+capture measured that at 9-22% of wall-clock while standing still. It now skips a
+probe whose spot it has already answered, and a storey switch or a return to
+first-person invalidates that. The ceiling report also prints where the ceiling
+meshes actually are (`ceiling geometry:`), which no earlier report said.
+
 ## 2.452.2
 
 ### Changed — one stale comment, no behaviour
