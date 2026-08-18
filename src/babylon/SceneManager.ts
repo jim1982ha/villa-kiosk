@@ -118,6 +118,15 @@ const mm = (v: number): number => Math.round(v * 1000) / 1000;
  */
 const STAIR_FOOT_TOLERANCE = 0.30;
 
+/**
+ * A room the PLAN calls a staircase. Hoisted because it had been written out
+ * three times and a fourth was about to be added — and the fourth is the one
+ * that matters, so the copies would have drifted exactly where correctness
+ * depends on them agreeing. Multilingual for the same reason every other room
+ * matcher here is: the plan is authored in the owner's language.
+ */
+const STAIR_ROOM_RE = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i;
+
 // ── Frame-time sampling (see sampleFrame) ───────────────────────────────────
 // A gap above this is the render loop RESUMING — the app went idle, the tab
 // was throttled, a modal held the thread — not one frame that took a second.
@@ -1843,13 +1852,21 @@ export class SceneManager {
     const named = this.calibratedPoints?.find(
       (p) => ground(p) && /main|living|salon|séjour|sejour|hall|entr/i.test(p.name));
     const stairs = this.staircaseSpawn();
-    // Ordered by how sure we are the spot is somewhere a person would stand.
-    // A ROOM's centroid is open floor by construction; a stairwell is the one
-    // place in a villa that is reliably neither.
+    // ⚠️ THE STAIRCASE IS LAST NOW, AND THAT IS THE OWNER'S CALL (2.460.0).
+    // It was first for years, on the reasoning that a stairwell is a legible
+    // place to arrive. Four consecutive releases could not make it produce a
+    // spot a person can stand in — mid-flight, then the crawlspace beneath,
+    // then between the open risers — because a staircase is, definitionally,
+    // the one part of a villa that is neither one storey nor the next. The
+    // owner has asked three times to arrive on the ground floor.
+    //
+    // A ROOM's centroid is open floor by construction, which is the property
+    // that was being approximated the hard way. `standable` still validates
+    // whichever wins, so this is a change of preference, not of guarantee.
     const candidates: Array<[string, TeleportPoint | null | undefined]> = [
-      ["stairFoot", stairs],
       ["namedRoom", named],
       ["groundRoom", this.calibratedPoints?.find(ground)],
+      ["stairFoot", stairs],
       ["anyPoint", this.calibratedPoints?.[0]],
     ];
     for (const [why, p] of candidates) {
@@ -1931,14 +1948,35 @@ export class SceneManager {
     for (const r of this.worldRoomPolys) groundY = Math.min(groundY, r.floorY);
     if (Number.isFinite(groundY) && floor === 1
       && floorY > groundY + STAIR_FOOT_TOLERANCE) return false;
+    // ⚠️ NEVER INSIDE A STAIRWELL, and this is the test that actually holds
+    // (2.460.0). The headroom ray below was defeated by the geometry it exists
+    // to detect: this villa's staircase is OPEN-RISER, so a single vertical ray
+    // between two treads reaches the sky and reports 1.85 m of clear headroom
+    // while a person standing there is inside the stairs. The plan already
+    // knows where the staircase is — asking it is exact, free, and cannot be
+    // threaded. `onGround` in stairFoot excludes stair rooms from the list of
+    // places to LAND; this excludes them as places to STAND, which is not the
+    // same thing, because another room's polygon routinely overlaps a stairwell.
+    if (this.worldRoomPolys.some(
+      (r) => STAIR_ROOM_RE.test(r.name) && pointInPolygon(x, z, r.pts))) return false;
     // Eye height plus a little, measured from just above the floor so the slab
-    // itself is never the hit.
+    // itself is never the hit. SAMPLED ACROSS THE BODY'S WIDTH rather than down
+    // one line, for the same open-riser reason — a ray is a measure zero object
+    // and real obstructions have gaps in them. The offsets are the collision
+    // capsule's own radius, so this asks about the volume that will actually be
+    // moved through.
     const need = (this.config.eyeHeight ?? 1.7) + 0.15;
-    const hit = this.scene.pickWithRay(
-      new Ray(new Vector3(x, floorY + 0.1, z), new Vector3(0, 1, 0), need),
-      (m) => m.isPickable && m.isEnabled() && m.metadata?.isStructure === true
-        && !m.metadata?.isCeiling);
-    return !hit?.hit;
+    const R = 0.3;
+    const blocks = (m: AbstractMesh) =>
+      m.isPickable && m.isEnabled() && m.metadata?.isStructure === true
+      && !m.metadata?.isCeiling;
+    for (const [dx, dz] of [[0, 0], [R, 0], [-R, 0], [0, R], [0, -R]] as const) {
+      const hit = this.scene.pickWithRay(
+        new Ray(new Vector3(x + dx, floorY + 0.1, z + dz), new Vector3(0, 1, 0), need),
+        blocks);
+      if (hit?.hit) return false;
+    }
+    return true;
   }
 
   /**
@@ -1969,7 +2007,7 @@ export class SceneManager {
     for (const r of this.worldRoomPolys) groundY = Math.min(groundY, r.floorY);
     const onGround = this.worldRoomPolys.filter(
       (r) => r.floorY <= groundY + STAIR_FOOT_TOLERANCE
-        && !/stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i.test(r.name));
+        && !STAIR_ROOM_RE.test(r.name));
     if (!onGround.length) return { x, z };
     // ⚠️ THE TEST IS THE SURFACE HEIGHT, NOT POLYGON CONTAINMENT (2.458.0).
     // The first cut asked "is this point inside a ground-level room outline",
@@ -2020,7 +2058,7 @@ export class SceneManager {
 
     // 1. A room the plan names as a staircase.
     const namedRoom = this.calibratedPoints?.find((p) =>
-      /stair|escalier|escalera|scala|treppe|stufe|trap\b/i.test(p.name));
+      STAIR_ROOM_RE.test(p.name));
     if (namedRoom) {
       // stairFoot, NOT the centroid — the centroid of a stairwell is mid-flight.
       const foot = this.stairFoot(namedRoom.position.x, namedRoom.position.z);
@@ -2953,7 +2991,7 @@ export class SceneManager {
       // TWO stair rooms — a third of a block that runs after first paint, for a
       // glow that is only ever seen once a stair room is highlighted. The room
       // ships with its flat patch now and is upgraded a few frames later.
-      const isStairRoom = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i.test(room.name);
+      const isStairRoom = STAIR_ROOM_RE.test(room.name);
       if (isStairRoom) stairJobs.push({ index: worldPolys.length, pts, floor });
       worldPolys.push({ name: room.name, pts, floorY });
       // QUANTISED TO MILLIMETRES, and that is not cosmetic — it is what stops

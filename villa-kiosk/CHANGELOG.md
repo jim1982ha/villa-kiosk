@@ -1,3 +1,15 @@
+## 2.460.0
+
+### Fixed — first-person now starts in a room, not on the staircase
+
+The headroom test was defeated by the very geometry it existed to detect: an
+open-riser staircase lets a single vertical ray pass between the treads and
+report clear space, so standing inside the stairs looked standable. It asks the
+plan where the staircase is instead, which cannot be threaded, and samples across
+the body's width rather than down one line. The staircase is also no longer the
+preferred spawn — four releases could not make it yield a spot a person can stand
+in, and a room's centroid is open floor by construction.
+
 ## 2.459.0
 
 ### Fixed — the walker spawned in the crawlspace under the staircase
