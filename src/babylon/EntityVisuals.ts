@@ -2746,6 +2746,7 @@ export class EntityVisuals {
     // here. (See the same rule in the badge tier — an expected category gets a
     // labelled number, never a silent `continue`.)
     let clipped = 0, whole = 0, bounded = 0, nofloor = 0, airborne = 0;
+    let airborneNamed = 0;
     const recovered = this.retryPendingPools();
     for (const pools of this.meshLightPools.values()) {
       for (const pool of pools) {
@@ -2773,7 +2774,25 @@ export class EntityVisuals {
         // from — "the light disk is floating in the air". A light is mounted a
         // usable distance above what it lights, so this is 0 on a healthy villa
         // and the exact number of wrong pools on a sick one.
-        else if (pool.probeFromY - surfaceY < POOL_AIRBORNE_M) airborne++;
+        else if (pool.probeFromY - surfaceY < POOL_AIRBORNE_M) {
+          airborne++;
+          // ⚠️ NAME THEM. Two fixes have been aimed at this counter from causes
+          // I inferred rather than observed, and neither moved it. A count says
+          // "26 pools are wrong"; it cannot say whether they are ceiling lamps
+          // landing on a ceiling, floor-level strips that are CORRECTLY within
+          // half a metre of the floor and merely tripping a threshold written
+          // for lamps, or something else entirely. Those need opposite fixes —
+          // and one of them needs no fix at all. Debug-gated: this re-probes
+          // uncached, ~21 ms a piece.
+          if (airborneNamed < 12 && debugFlagEnabled()) {
+            airborneNamed += 1;
+            const d = this.probe.describeBelow(x, pool.probeFromY, z);
+            tapDebug(`  airborne "${pool.mesh.name}"`
+              + ` fixtureY=${pool.probeFromY.toFixed(2)}`
+              + ` cachedFloorY=${surfaceY.toFixed(2)}`
+              + (d ? ` freshFloorY=${d.y.toFixed(2)} hit="${d.what}"` : " fresh=MISS"));
+          }
+        }
         const room = this.roomPolyAt(x, surfaceY ?? pool.probeFromY, z);
         let radius = LIGHT_POOL_RADIUS;
         let shape: Pt2[] | undefined;

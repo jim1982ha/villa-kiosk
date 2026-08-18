@@ -134,6 +134,19 @@ export class FloorProbe {
    * before. What changes is only whether a ray is cast to re-derive it.
    */
   private persisted = new Map<string, number | null>();
+
+  /** What may answer "this is the floor". ONE definition, shared by `below`'s
+   *  predicate and by `describeBelow`, so a diagnostic can never disagree with
+   *  the thing it is diagnosing. */
+  private readonly acceptsAsFloor = (candidate: AbstractMesh): boolean => {
+    if (candidate.getTotalVertices() === 0) return false;
+    if (/^(halo_|label_|marker)/i.test(candidate.name)) return false;
+    const role = structureRole(candidate);
+    if (!role.isStructure) return false;
+    // The stamp first; the metadata flag catches a legacy GLB whose ceiling was
+    // classified by name or height in applyStructure.
+    return !role.isCeiling && candidate.metadata?.isCeiling !== true;
+  };
   /** The localStorage half, shared with the camera beams — see modelStore.
    *  ⚠️ Prefix moved to `vk.probe3.` in 2.474.1 — see STORE_PREFIX. The sweep
    *  retires the older `vk.probe.` and `vk.probe2.` keys with it. */
@@ -287,15 +300,8 @@ export class FloorProbe {
     // where the old line called `isStructureMesh` (which resolves the same
     // role) and then knew nothing about ceilings. Strictly fewer candidates,
     // so if anything the ray gets cheaper.
-    const predicate = (candidate: AbstractMesh) => {
-      if (candidate === exclude || candidate.getTotalVertices() === 0) return false;
-      if (/^(halo_|label_|marker)/i.test(candidate.name)) return false;
-      const role = structureRole(candidate);
-      if (!role.isStructure) return false;
-      // The stamp first; the metadata flag catches a legacy GLB whose ceiling
-      // was classified by name or height in applyStructure.
-      return !role.isCeiling && candidate.metadata?.isCeiling !== true;
-    };
+    const predicate = (candidate: AbstractMesh) =>
+      candidate !== exclude && this.acceptsAsFloor(candidate);
     const cast = (px: number, pz: number): number | null => {
       this.stats.probeRays += 1;
       const hit = this.scene.pickWithRay(
@@ -346,6 +352,28 @@ export class FloorProbe {
    * geometry but not bit-identically. A millimetre is far below anything a
    * floor height can express and far above that noise.
    */
+  /**
+   * A FRESH, uncached probe that also says WHAT it hit — debug only.
+   *
+   * ⚠️ Exists because a COUNT is not a diagnosis, and `airborne=26` has now
+   * survived two fixes aimed at causes I inferred rather than observed. The
+   * pattern that actually worked on the ceiling was per-object attribution, so
+   * this names the mesh under each floating pool instead of tallying them.
+   *
+   * Deliberately bypasses both maps: a cached answer is exactly what must not
+   * be trusted here, and the whole point is to see what a ray finds today. Never
+   * called outside the debug flag — it is a full pick against the unoctree'd
+   * structure, ~21 ms, and there are 144 pools.
+   */
+  describeBelow(x: number, y: number, z: number): { y: number; what: string } | null {
+    const hit = this.scene.pickWithRay(
+      new Ray(new Vector3(x, y, z), Vector3.Down(), PROBE_REACH_M),
+      this.acceptsAsFloor,
+    );
+    if (!hit?.hit || !hit.pickedPoint) return null;
+    return { y: hit.pickedPoint.y, what: hit.pickedMesh?.name ?? "?" };
+  }
+
   storeyFloorY(meshes: AbstractMesh[], x: number, z: number, storey: number): number {
     if (!meshes.length) return 0;
     const key = `s:${storey}:${Math.round(x * 1000)}:${Math.round(z * 1000)}`;

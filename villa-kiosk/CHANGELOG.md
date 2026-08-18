@@ -1,3 +1,14 @@
+## 2.475.0
+
+### Added — name the floating light pools instead of counting them
+
+Two fixes aimed at the "26 pools in mid-air" counter changed nothing, both
+targeting causes inferred rather than observed. A count cannot tell a ceiling
+lamp landing on a ceiling from a floor-level strip that is correctly close to the
+floor and merely trips a threshold written for lamps — and those need opposite
+fixes, one of them none at all. Each floating pool now reports its fixture, the
+height it was placed at, and what a fresh uncached probe finds beneath it.
+
 ## 2.474.1
 
 ### Fixed — the floor-probe fix was being served answers from before it
