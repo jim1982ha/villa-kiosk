@@ -3881,6 +3881,7 @@ export class SceneManager {
     let down = 0; let up = 0; let scanned = 0;
     const byHeight = new Map<number, number>();
     const byMesh = new Map<string, number>();
+    const byMeshHeight = new Map<string, Map<number, number>>();
     for (const m of meshes) {
       if (ceilingSet.has(m) || m.getTotalVertices() === 0) continue;
       if (m.metadata?.isStructure !== true) continue;
@@ -3900,6 +3901,24 @@ export class SceneManager {
       const stem = m.name.replace(/_primitive\d+$/, "");
       const key = `${stem}${m.isEnabled() ? "" : " [DISABLED here]"}`;
       byMesh.set(key, (byMesh.get(key) ?? 0) + r.down);
+      // ⚠️ PER OBJECT **AND** PER HEIGHT, because the aggregate is ambiguous in
+      // exactly the way that made me retract a correct finding (2.468.0). Seeing
+      // 473 m2 sitting in `Structure_L1` I concluded "that is the upper storey's
+      // floor slab" and called the pipeline correct. The owner then said they
+      // had set "Display ceiling" on the INTERIOR rooms and NOT on the patio or
+      // onsen — the exact inverse of what the app reports as covered — which
+      // means the 9 peeled objects are the patio/onsen ROOFS, and their real
+      // ceilings are somewhere else.
+      //
+      // A floor slab sits at ONE height, the storey boundary. Room ceilings sit
+      // at the two or three heights the rooms were drawn with. So the SHAPE of
+      // this histogram, per object, tells them apart — and blender_pipeline's
+      // own v2.24.0 note records this precise failure ("Structure_L1 reached
+      // DOWN to 2.25 m while Structure topped out at 2.51 m"), which it believed
+      // it had fixed by peeling before the level split.
+      let hm = byMeshHeight.get(key);
+      if (!hm) { hm = new Map(); byMeshHeight.set(key, hm); }
+      for (const [k, v] of r.byHeight) hm.set(k, (hm.get(k) ?? 0) + v);
     }
     let peeled = 0;
     for (const m of this.ceilingMeshes) peeled += projectedAreaXZ(m);
@@ -3927,6 +3946,33 @@ export class SceneManager {
       tapDebug(`  unpeeled down-facing by object: `
         + tops.map(([k, v]) => `${k}=${v.toFixed(0)}m2`).join(" "));
     }
+    for (const [k] of tops.slice(0, 3)) {
+      const hm = byMeshHeight.get(k);
+      if (!hm) continue;
+      const hs = [...hm].filter(([, v]) => v >= 1).sort((a, b) => b[1] - a[1]).slice(0, 6);
+      if (hs.length) {
+        tapDebug(`    ${k}: `
+          + hs.map(([h, v]) => `${h.toFixed(1)}m=${v.toFixed(0)}m2`).join(" ")
+          // ONE height means a slab; several means room lids.
+          + (hs.length >= 2 && hs[1][1] > 0.25 * hs[0][1]
+            ? " — SEVERAL HEIGHTS: room ceilings, not one floor slab"
+            : " — single height: a floor slab"));
+      }
+    }
+    // Where each structure group actually SITS. The pipeline's own v2.24.0 note
+    // diagnosed this bug from exactly these two numbers.
+    const groups = new Map<string, { lo: number; hi: number }>();
+    for (const m of meshes) {
+      if (m.metadata?.isStructure !== true || m.getTotalVertices() === 0) continue;
+      const stem = m.name.replace(/_primitive\d+$/, "");
+      const bb = m.getBoundingInfo().boundingBox;
+      const g = groups.get(stem) ?? { lo: Infinity, hi: -Infinity };
+      g.lo = Math.min(g.lo, bb.minimumWorld.y);
+      g.hi = Math.max(g.hi, bb.maximumWorld.y);
+      groups.set(stem, g);
+    }
+    tapDebug(`  structure groups: `
+      + [...groups].map(([k, g]) => `${k}=${g.lo.toFixed(2)}..${g.hi.toFixed(2)}m`).join(" "));
   }
 
   /**

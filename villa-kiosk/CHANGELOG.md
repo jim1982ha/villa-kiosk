@@ -1,3 +1,14 @@
+## 2.468.0
+
+### Added — tell a mis-grouped room ceiling from an upper floor's slab
+
+The owner set "Display ceiling" on the interior rooms and not on the patio or
+onsen, which is the exact inverse of what the app reports as covered — so the
+objects the bake peeled out are those areas' roofs, and the real ceilings are
+elsewhere. The unpeeled-area report now breaks down by object AND height, and
+prints each structure group's vertical extent: a floor slab sits at one height,
+room ceilings sit at the two or three the rooms were drawn with.
+
 ## 2.467.0
 
 ### Fixed — the ceiling readout could not tell an authored ceiling from the borrowed slab
