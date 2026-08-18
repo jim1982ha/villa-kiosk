@@ -1,3 +1,15 @@
+## 2.456.0
+
+### Fixed — the ceiling census counted two texture holders, and its coverage figure was a bounding box
+
+`foot=649.5m2 (51.3% of villa)` was a sum of bounding boxes, and a box around
+scattered panels measures the scatter, not the panels: one "ceiling" reported a
+27.7 x 13.7 m box from twenty vertices. The line now reports real projected
+triangle area, and the walk line casts one ray straight up from the eye — a
+height means the geometry is there, `none` means the GLB ships no ceiling over
+that spot. The height heuristic was also classifying the two zero-area
+`BAKED_LightmapCarrier` meshes as ceilings.
+
 ## 2.455.0
 
 ### Changed — instruments only; two earlier claims corrected

@@ -16,6 +16,7 @@ import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { Material } from "@babylonjs/core/Materials/material";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { Ray } from "@babylonjs/core/Culling/ray";
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import "@babylonjs/loaders/glTF";
@@ -254,6 +255,42 @@ interface ConformData { positions: number[]; indices: number[] }
  * the sky. A rule that must apply to a mesh classified early has to be callable
  * from where that classification happens.
  */
+/**
+ * The area a mesh's triangles actually COVER, projected onto the ground plane,
+ * in m². Not its bounding box.
+ *
+ * ⚠️ THE BOUNDING BOX LIED, AND IT LIED BY AN ORDER OF MAGNITUDE (2.456.0).
+ * `ceiling geometry: foot=649.5m2 (51.3% of villa)` was a sum of bounding boxes,
+ * and the per-mesh dump showed why that is not a coverage figure at all:
+ * `Structure_Ceiling_L0_primitive8` reports a 27.7 x 13.7 m box — 379 m² — from
+ * **20 vertices**, i.e. at most five small quads scattered far apart. A box
+ * around scattered panels is the size of the SCATTER, not of the panels.
+ *
+ * That mattered because the whole "drawn but unseen" conclusion rested on it:
+ * half the villa appearing to be covered ruled out "there is simply no ceiling
+ * here", and it should not have. Projected triangle area cannot make that
+ * mistake — it is the number that says whether there is anything overhead.
+ */
+function projectedAreaXZ(m: AbstractMesh): number {
+  const pos = m.getVerticesData(VertexBuffer.PositionKind);
+  const idx = m.getIndices();
+  if (!pos || !idx) return 0;
+  const w = m.computeWorldMatrix(true);
+  const a = Vector3.Zero(); const b = Vector3.Zero(); const c = Vector3.Zero();
+  let area = 0;
+  for (let i = 0; i + 2 < idx.length; i += 3) {
+    for (const [j, v] of [[idx[i], a], [idx[i + 1], b], [idx[i + 2], c]] as const) {
+      Vector3.TransformCoordinatesFromFloatsToRef(
+        pos[j * 3], pos[j * 3 + 1], pos[j * 3 + 2], w, v);
+    }
+    // Half the cross product's Y component — the triangle's own area projected
+    // straight down, which is what "covers the floor below" means. Absolute,
+    // so a downward-facing ceiling counts the same as an upward-facing one.
+    area += Math.abs((b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)) / 2;
+  }
+  return area;
+}
+
 function forceOpaque(m: AbstractMesh): void {
   const mat = m.material;
   if (!mat || mat.alpha <= 0.5) return;
@@ -329,6 +366,8 @@ export class SceneManager {
    *  in Blender — which is the common case, and is reported by ?debug rather
    *  than left looking like a broken feature. */
   private ceilingMeshes: AbstractMesh[] = [];
+  /** Reused by the ceiling-overhead probe — see setCeilingState. */
+  private readonly ceilingRay = new Ray(Vector3.Zero(), new Vector3(0, 1, 0), 10);
   private calibratedPoints: TeleportPoint[] | null = null;
   /** Bumped by every calibration, so a cosmetic tail still yielding between
    *  frames can tell that a newer fit has superseded the geometry it holds. */
@@ -704,7 +743,27 @@ export class SceneManager {
         if (m.isVisible) visible += 1;
         if (active.has(m)) drawn += 1;
       }
-      return { enabled, visible, active: drawn };
+      // ⚠️ THE ONE QUESTION SIX ROUNDS NEVER ASKED: is there a ceiling above the
+      // walker's head RIGHT NOW? Every counter so far has been about the SET of
+      // ceiling meshes — how many exist, are enabled, are visible, are lit, are
+      // opaque — and all of them can read perfectly while the room the person is
+      // standing in has nothing over it. One ray straight up from the eye
+      // answers it and cannot be argued with: a height means the geometry is
+      // there and the fault is in rendering it; `none` means the GLB does not
+      // ship a ceiling over this spot and no amount of app-side work will
+      // conjure one. 11 meshes, once per `walk:` line, so the cost is nil.
+      const eye = this.camera.camera.position;
+      this.ceilingRay.origin.copyFrom(eye);
+      this.ceilingRay.direction.set(0, 1, 0);
+      this.ceilingRay.length = 10;
+      let above: number | null = null;
+      for (const m of this.ceilingMeshes) {
+        if (!m.isEnabled() || !m.isVisible) continue;
+        const info = this.ceilingRay.intersectsMesh(m, false);
+        if (!info.hit || !info.pickedPoint) continue;
+        if (above === null || info.pickedPoint.y < above) above = info.pickedPoint.y;
+      }
+      return { enabled, visible, active: drawn, above };
     });
 
     // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
@@ -3191,8 +3250,18 @@ export class SceneManager {
       // same predicate ModelLoader lights them by, which is the disagreement
       // 2.448.0 closed. The HEIGHT heuristic stays here because it needs a
       // computed world bounding box.
-      const byHeight = !isPipelineStructure && meshMinY > 2.5 && meshH < 0.35;
-      if (isCeilingMesh(m) || byHeight) {
+      // ⚠️ A DEGENERATE MESH IS NOT A CEILING (2.456.0). The per-mesh dump
+      // caught the height heuristic classifying `BAKED_LightmapCarrier` and
+      // `BAKED_LightmapCarrier_Night` — 4-vertex, 0.0 x 0.0 m holders for the
+      // day/night lightmap textures, which sit at 2.79 m and are flat, so they
+      // satisfy every term of it. They were then counted in `ceilings: 11`, had
+      // their `isVisible` driven by the view toggle, and made a fifth of the
+      // ceiling census meaningless. A ceiling has AREA; these have none, and
+      // `BAKED_` is the pipeline's own prefix for its carriers.
+      const degenerate = footMax < 0.01 || m.name.startsWith("BAKED_");
+      const byHeight = !isPipelineStructure && !degenerate
+        && meshMinY > 2.5 && meshH < 0.35;
+      if (!degenerate && (isCeilingMesh(m) || byHeight)) {
         // HIDDEN IN OVERVIEW, SHOWN WHILE WALKING (2.434.0). A ceiling exists to
         // be under, and the two cameras want opposite things from it: the
         // bird's-eye view is a cut-away and a lid over it shows nothing but the
@@ -3331,7 +3400,7 @@ export class SceneManager {
    */
   private reportCeilingGeometry(): void {
     if (!this.ceilingMeshes.length) return;
-    let minY = Infinity; let maxY = -Infinity; let foot = 0;
+    let minY = Infinity; let maxY = -Infinity; let foot = 0; let area = 0;
     for (const m of this.ceilingMeshes) {
       m.computeWorldMatrix(true);
       const bb = m.getBoundingInfo().boundingBox;
@@ -3342,6 +3411,7 @@ export class SceneManager {
       // this is looking for is a number far too SMALL to be a villa's ceiling.
       foot += (bb.maximumWorld.x - bb.minimumWorld.x)
         * (bb.maximumWorld.z - bb.minimumWorld.z);
+      area += projectedAreaXZ(m);
     }
     const ext = this.worldExtends(this.loadedMeshes);
     const villaFoot = Math.max(1e-6, (ext.max.x - ext.min.x) * (ext.max.z - ext.min.z));
@@ -3363,7 +3433,11 @@ export class SceneManager {
     }
     tapDebug(
       `ceiling geometry: y=${minY.toFixed(2)}..${maxY.toFixed(2)}m`
-      + ` foot=${foot.toFixed(1)}m2 (${(100 * foot / villaFoot).toFixed(1)}% of villa)`
+      + ` bbox=${foot.toFixed(1)}m2`
+      // ⚠️ READ `area=`, NOT `bbox=`. See projectedAreaXZ: the box figure is the
+      // size of the SCATTER between panels, not of the panels, and reading it as
+      // coverage is what made "half the villa is covered" look like a fact.
+      + ` area=${area.toFixed(1)}m2 (${(100 * area / villaFoot).toFixed(1)}% of villa)`
       + ` eye=${(this.config.eyeHeight ?? 1.7).toFixed(2)}m`
       + ` alpha=${minAlpha.toFixed(2)} see-through=${seeThrough}/${this.ceilingMeshes.length}`
       + (maxY < (this.config.eyeHeight ?? 1.7)
@@ -3384,8 +3458,9 @@ export class SceneManager {
         `  ceiling "${m.name}"`
         + ` y=${bb.minimumWorld.y.toFixed(2)}..${bb.maximumWorld.y.toFixed(2)}`
         + ` xz=${bb.centerWorld.x.toFixed(1)},${bb.centerWorld.z.toFixed(1)}`
-        + ` ${(bb.maximumWorld.x - bb.minimumWorld.x).toFixed(1)}x`
+        + ` bbox=${(bb.maximumWorld.x - bb.minimumWorld.x).toFixed(1)}x`
         + `${(bb.maximumWorld.z - bb.minimumWorld.z).toFixed(1)}m`
+        + ` area=${projectedAreaXZ(m).toFixed(1)}m2`
         + ` floor=${(m.metadata as { floorIndex?: number } | null)?.floorIndex ?? "-"}`
         + ` verts=${m.getTotalVertices()}`,
       );

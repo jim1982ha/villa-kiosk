@@ -5374,9 +5374,12 @@ export class EntityVisuals {
    * frame, so `enabled=11 visible=11 active=0` and `active=11` are completely
    * different faults and every previous report collapsed them.
    */
-  private ceilingState: (() => { enabled: number; visible: number; active: number }) | null = null;
+  private ceilingState:
+    (() => { enabled: number; visible: number; active: number; above: number | null }) | null = null;
 
-  setCeilingState(fn: () => { enabled: number; visible: number; active: number }): void {
+  setCeilingState(
+    fn: () => { enabled: number; visible: number; active: number; above: number | null },
+  ): void {
     this.ceilingState = fn;
   }
 
@@ -5419,7 +5422,12 @@ export class EntityVisuals {
       })()
       + (() => {
         const s = this.ceilingState?.();
-        return s ? ` ceil=${s.enabled}e/${s.visible}v/${s.active}a` : "";
+        // `above=` is the field that decides between "rendering is broken" and
+        // "there is no ceiling over this spot" — see SceneManager.setCeilingState.
+        return s
+          ? ` ceil=${s.enabled}e/${s.visible}v/${s.active}a`
+            + ` above=${s.above === null ? "none" : `${s.above.toFixed(2)}m`}`
+          : "";
       })(),
     );
   }

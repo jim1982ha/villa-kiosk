@@ -892,10 +892,30 @@ export async function loadModelInto(
       // pasted — "11 shown" told us nothing three times because the LIGHTING
       // outcome was invisible. This is the field that says whether a ceiling was
       // actually exempted, double-sided and toned, or quietly fell through a gate.
+      // ⚠️ THE STEMS, because this count and applyStructure's DISAGREE and both
+      // claim to use the one predicate `isCeilingMesh` (2.448.0). A 2026-08-18
+      // capture read `ceiling lighting: 28 exempt` beside `ceilings: 11
+      // mesh(es)`, and a 17-mesh gap between two subsystems that are supposed to
+      // classify identically is either a real divergence or two different mesh
+      // SETS — this loop walks every mesh the loader returned, applyStructure's
+      // walks its own with several early `continue`s ahead of the test.
+      //
+      // Names collapse to their object stem (Babylon's glTF loader splits one
+      // multi-primitive mesh into `<name>_primitive<N>` children, so nine of
+      // these are one SweetHome object), which turns 28 log lines into a handful
+      // and answers the question the count cannot: WHICH objects, and for which
+      // storeys. A ceiling list showing only L0 means the upper storeys' lids
+      // are missing from the GLB, not from this code.
+      const stems = new Map<string, number>();
+      for (const m of ceilings) {
+        const stem = m.name.replace(/_primitive\d+$/, "");
+        stems.set(stem, (stems.get(stem) ?? 0) + 1);
+      }
       tapDebug(
         `ceiling lighting: ${ceilings.length} exempt (own colour x ${CEILING_TONE}, `
         + `double-sided), ${missingUv2} structure mesh(es) skipped for no TEXCOORD_1, `
-        + `${lmMats.size} material(s) lightmapped`,
+        + `${lmMats.size} material(s) lightmapped`
+        + ` — objects: ${[...stems].map(([n, c]) => `${n} x${c}`).join(", ") || "none"}`,
       );
       devLog(
         `[ModelLoader] LIGHTMAP GLB detected — baked light on UV1 multiplied ` +
