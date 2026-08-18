@@ -2751,6 +2751,9 @@ export class EntityVisuals {
     /** Pools legitimately mounted close to what they light — NOT a fault. */
     let nearFixture = 0;
     let airborneNamed = 0;
+    /** Pools bounded all the way down to POOL_MIN_RADIUS — visually absent. */
+    let crushed = 0;
+    let crushedNamed = 0;
     const recovered = this.retryPendingPools();
     for (const pools of this.meshLightPools.values()) {
       for (const pool of pools) {
@@ -2854,6 +2857,23 @@ export class EntityVisuals {
           }
           if (Number.isFinite(nearest)) radius = Math.min(radius, Math.max(POOL_MIN_RADIUS, nearest));
           bounded++;
+          // ⚠️ NAME THE ONES THAT VANISH. A pool crushed to POOL_MIN_RADIUS is
+          // 0.4 m across and reads on screen as "this light does not light the
+          // floor at all" — reported for the entrance light, and once before for
+          // a terrace fixture (the same-storey fix). The bucket counts them;
+          // only a name says WHICH light and how far the wall that crushed it
+          // was, which is the difference between "a real wall is 30 cm away"
+          // and "a polygon from another storey is being measured against".
+          if (radius <= POOL_MIN_RADIUS + 1e-3 && crushedNamed < 10
+            && debugFlagEnabled()) {
+            crushedNamed += 1;
+            crushed += 1;
+            tapDebug(`  pool CRUSHED "${pool.mesh.name}"`
+              + ` at=${x.toFixed(1)},${z.toFixed(1)}`
+              + ` floorY=${(surfaceY ?? pool.probeFromY).toFixed(2)}`
+              + ` nearestRoomEdge=${Number.isFinite(nearest) ? nearest.toFixed(2) : "-"}m`
+              + ` → radius ${POOL_MIN_RADIUS}m (invisible on screen)`);
+          } else if (radius <= POOL_MIN_RADIUS + 1e-3) crushed += 1;
         }
         pool.reshape(shape, radius, surfaceY === null ? undefined : surfaceY + POOL_FLOOR_LIFT);
       }
@@ -2866,7 +2886,7 @@ export class EntityVisuals {
     if (recovered) this.resyncLightPoolsToFloor();
     tapDebug(
       `light pools: clipped=${clipped} whole=${whole} bounded=${bounded} nofloor=${nofloor}`
-      + ` corrected=${poolCorrected} nearFixture=${nearFixture}`
+      + ` corrected=${poolCorrected} nearFixture=${nearFixture} crushed=${crushed}`
       + ` bucketAbove=${this.probe.stats.probeAbove}`
       + ` recovered=${recovered} stillNoFloor=${
         [...this.pendingPoolSpots.values()].reduce((n, s) => n + s.length, 0)}`

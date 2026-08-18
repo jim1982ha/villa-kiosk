@@ -1,3 +1,13 @@
+## 2.476.1
+
+### Added — name the light pools that get crushed to nothing
+
+A pool bounded down to the minimum radius is 40 cm across and reads on screen as
+"this light does not light the floor at all". The count alone cannot say whether
+a real wall is 30 cm away or a polygon from another storey is being measured
+against, so each one now names its fixture, its position, and the room edge that
+crushed it.
+
 ## 2.476.0
 
 ### Fixed — the walker stood on top of the new ceiling
