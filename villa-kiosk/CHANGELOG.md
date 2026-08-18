@@ -1,3 +1,21 @@
+## 2.457.0
+
+### Fixed — ceiling fans and ceiling lights were being darkened, and first-person spawned mid-staircase
+
+"Is this a ceiling" was an unanchored name match, so every `fan.ceiling_fan_*` and
+`light.*_light_ceiling_center*` in the model counted as one — nineteen devices
+withheld from the lightmap, stripped of environment light and multiplied by 0.45,
+which is why they rendered near-black. A device is never a ceiling now, whatever
+it is called. Entering first-person also grounded at the stairwell's centroid,
+which is mid-flight, so the walker landed between storeys; it now steps out to the
+nearest ground-level room floor.
+
+### Note — the missing ceiling is a MODEL issue, not an app one
+
+`area=124.8m2 (9.9% of villa)` with `above=none` standing in the living room: the
+GLB ships ceiling panels over a tenth of the ground floor and none over the main
+rooms. The app draws every one it has.
+
 ## 2.456.0
 
 ### Fixed — the ceiling census counted two texture holders, and its coverage figure was a bounding box

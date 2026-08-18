@@ -106,6 +106,18 @@ const SHARPEN_STILL_MS = 350;
  *  points built in calibrateRooms for why the precision has to be dropped. */
 const mm = (v: number): number => Math.round(v * 1000) / 1000;
 
+/**
+ * How far above the lowest room floor a room may sit and still count as
+ * "ground level" when locating the foot of a staircase (see stairFoot).
+ *
+ * A real floor varies by a few centimetres across a villa — probes differ, and
+ * plans carry thresholds and split levels — while a stair TREAD is at least one
+ * riser up, and a riser is ~0.17 m. 0.30 m sits between the two, and is the same
+ * clearance `roomStorey.ts` uses for the same shape of question (STOREY_MIN_MOUNT,
+ * where the SIGN of the comparison cost a release).
+ */
+const STAIR_FOOT_TOLERANCE = 0.30;
+
 // ── Frame-time sampling (see sampleFrame) ───────────────────────────────────
 // A gap above this is the render loop RESUMING — the app went idle, the tab
 // was throttled, a modal held the thread — not one frame that took a second.
@@ -407,6 +419,10 @@ export class SceneManager {
    *  used to exclude them when deriving RoomHighlight's point-only "rooms"
    *  from config.teleportPoints (a real room polygon always wins). */
   private lastRoomPolyNames = new Set<string>();
+  /** World-space room outlines with their own floor heights, kept so the spawn
+   *  logic can ask "is this spot on a GROUND-LEVEL room floor" — see stairFoot.
+   *  Everything else consumes them through camera/visuals. */
+  private worldRoomPolys: Array<{ name: string; pts: Pt2[]; floorY: number }> = [];
 
   /** Kept so handlePageShow can ask "is this canvas still on screen?" — the
    *  test that distinguishes a real React unmount from an iOS
@@ -1842,6 +1858,53 @@ export class SceneManager {
   }
 
   /**
+   * The nearest spot to (x, z) that stands on a GROUND-LEVEL room floor.
+   *
+   * ⚠️ THIS IS WHAT "AT THE FOOT OF THE STAIRCASE" ACTUALLY REQUIRES, and the
+   * method below promised it for many releases without delivering it (2.457.0).
+   * It grounded at the stair room's CENTROID, and the centroid of a stairwell is
+   * mid-flight — so `estimateFloorY` there returns the height of a TREAD, and
+   * entering first-person dropped the walker halfway up the stairs, between
+   * storeys, which is exactly where a villa has neither a floor to stand on nor
+   * a ceiling overhead. Reported by the owner from a screenshot.
+   *
+   * Everything here is derived from the plan, so it holds for any villa:
+   * "ground level" is the LOWEST room floor in the model rather than any fixed
+   * elevation (a villa may sit at any height and may be split-level), and the
+   * search is a spiral outward from the stairwell for the first point inside a
+   * room whose own floor sits at that level. Stair-named rooms are excluded for
+   * the same reason they are special-cased at the polygon build above: their
+   * `floorY` is a tread, not a floor.
+   *
+   * Falls through unchanged when there are no polygons yet (calibration has not
+   * run), so a pre-calibration spawn behaves exactly as it did.
+   */
+  private stairFoot(x: number, z: number): { x: number; z: number } {
+    if (!this.worldRoomPolys.length) return { x, z };
+    let groundY = Infinity;
+    for (const r of this.worldRoomPolys) groundY = Math.min(groundY, r.floorY);
+    const onGround = this.worldRoomPolys.filter(
+      (r) => r.floorY <= groundY + STAIR_FOOT_TOLERANCE
+        && !/stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i.test(r.name));
+    if (!onGround.length) return { x, z };
+    const inside = (px: number, pz: number): boolean =>
+      onGround.some((r) => pointInPolygon(px, pz, r.pts));
+    if (inside(x, z)) return { x, z };
+    // Outward in rings. The first hit is the nearest ground-floor standing spot,
+    // which for a stairwell is its landing — the foot of the stairs by
+    // construction rather than by a measured offset that would be villa-specific.
+    for (let radius = 0.75; radius <= 10; radius += 0.75) {
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * Math.PI * 2;
+        const px = x + Math.cos(a) * radius;
+        const pz = z + Math.sin(a) * radius;
+        if (inside(px, pz)) return { x: px, z: pz };
+      }
+    }
+    return { x, z };
+  }
+
+  /**
    * A spawn at the FOOT of the staircase on the ground floor. In this pipeline
    * stairs are baked into the fused `Structure` mesh, so there's no stair mesh to
    * measure — the reliable signal is a stair-NAMED element (a plan room, or an
@@ -1859,7 +1922,11 @@ export class SceneManager {
     // 1. A room the plan names as a staircase.
     const namedRoom = this.calibratedPoints?.find((p) =>
       /stair|escalier|escalera|scala|treppe|stufe|trap\b/i.test(p.name));
-    if (namedRoom) return groundAt(namedRoom.position.x, namedRoom.position.z);
+    if (namedRoom) {
+      // stairFoot, NOT the centroid — the centroid of a stairwell is mid-flight.
+      const foot = this.stairFoot(namedRoom.position.x, namedRoom.position.z);
+      return groundAt(foot.x, foot.z);
+    }
 
     // 2. A stair-named entity/structure mesh marks the stairwell's plan XZ.
     const stairMesh =
@@ -1868,7 +1935,8 @@ export class SceneManager {
     if (stairMesh) {
       stairMesh.computeWorldMatrix(true);
       const c = stairMesh.getBoundingInfo().boundingBox.centerWorld;
-      return groundAt(c.x, c.z);
+      const foot = this.stairFoot(c.x, c.z);
+      return groundAt(foot.x, foot.z);
     }
 
     // 3. Real stair geometry (only present in split-structure GLBs).
@@ -2830,6 +2898,7 @@ export class SceneManager {
     // later once Dashboard's onCalibrated handler adopts the freshly-fitted
     // points (see updateConfig's teleportPoints diff below).
     this.lastRoomPolyNames = new Set(worldPolys.map((r) => roomKey(r.name)));
+    this.worldRoomPolys = worldPolys;
     this.syncRoomPoints();
 
     // Camera motion-beam directions: each camera's sh3d plan `angle` (yaw)

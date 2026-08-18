@@ -30,7 +30,7 @@
 // pipeline — never another word list.
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import { normaliseMeshName } from "../config/EntityMap";
+import { normaliseMeshName, inferTypeFromEntityId } from "../config/EntityMap";
 
 /** glTF `extras` keys written by blender_pipeline.py's _stamp_structure_roles.
  *  Kept in one place so the pipeline contract is greppable from both sides. */
@@ -144,6 +144,27 @@ const CEILING_NAME_RE = /ceiling|plafond|toiture|toit(?!ure)/i;
 
 export function isCeilingMesh(mesh: AbstractMesh): boolean {
   if (structureRole(mesh).isCeiling) return true;
+  // ⚠️ A DEVICE IS NEVER A CEILING, however it is named (2.457.0). The name
+  // pattern above is an unanchored substring — this codebase's own recurring
+  // false-positive source — and "ceiling" is a word HA users put in device
+  // names constantly: an owner capture listed nineteen of these, every
+  // `fan.ceiling_fan_*` and every `light.*_light_ceiling_center*` in the villa.
+  //
+  // The consequence was not cosmetic. ModelLoader treats a ceiling as exempt
+  // from the lightmap, zeroes its environment and specular intensity and scales
+  // its albedo by CEILING_TONE (0.45), so every ceiling FAN and ceiling LIGHT in
+  // the model was being darkened to 45% and stripped of its lighting — which is
+  // why they render near-black. It also explains a 19-mesh disagreement between
+  // this predicate's two callers that had been open for three releases:
+  // `applyStructure` happens to test `inferTypeFromEntityId` earlier in its own
+  // loop and `continue`s, so it never reached the ceiling branch for these;
+  // ModelLoader has no such guard and took all of them.
+  //
+  // The guard belongs HERE rather than in either caller, for the reason 2.448.0
+  // made this one predicate: two subsystems that must agree cannot each carry
+  // their own half of the rule. Generic by construction — it asks the shared
+  // entity-id convention what this mesh IS, and names no device and no villa.
+  if (inferTypeFromEntityId(normaliseMeshName(mesh.name))) return false;
   return CEILING_NAME_RE.test(normaliseMeshName(mesh.name));
 }
 
