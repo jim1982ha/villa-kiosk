@@ -1,3 +1,12 @@
+## 2.473.0
+
+### Added — `?noslab` turns the stand-in ceiling off for one reload
+
+There was no way to confirm the borrowed upper-floor lid was not quietly
+covering for a ceiling the bake never produced, short of editing a constant and
+rebuilding. Adding `?noslab` to the URL disables it for that session: whatever
+is overhead afterwards is the real ceiling and nothing else.
+
 ## 2.472.0
 
 ### Fixed — the stand-in ceiling was being multiplied into grey

@@ -36,13 +36,33 @@ import type { Material } from "@babylonjs/core/Materials/material";
 const FLOOR_SPLIT_Y = 2.8; // metres; ground floor wall height is ~2.5 m
 
 /**
- * One-word revert for the storey-above ceiling fallback — see applyVisibility.
+ * Whether the storey-above slab may stand in for a missing ceiling — see
+ * applyVisibility.
  *
- * Set false to go back to 2.444.0's behaviour: no lid at all unless the GLB
- * ships real `Structure_Ceiling_L{n}` geometry over the room you are in. That
- * is the correct end state, and it becomes reachable the day the pipeline's
- * ceiling peel stops leaving 80% of the ceiling behind.
+ * ⚠️ **RUNTIME-OVERRIDABLE, AND THAT IS THE POINT (2.473.0).** The owner asked
+ * the right question: how do you confirm the fallback is not quietly taking
+ * over and hiding whether the REAL ceiling works? A compile-time constant
+ * cannot answer that without a rebuild, so `?noslab` turns the lid off for one
+ * reload. Whatever you can see overhead then is the peeled ceiling and nothing
+ * else — the honest picture of what the bake actually produced.
+ *
+ * Two other signals already separate them and neither can be fooled by the lid:
+ * `above=ceiling@…` vs `above=slab@…` on the `walk:` line names which surface
+ * is over the walker's head at that moment, and `ceiling coverage:` rays only
+ * against `ceilingMeshes`, so it measures the real ceiling whether or not the
+ * fallback is on.
+ *
+ * `false` here is the intended end state: no lid at all once the pipeline's
+ * peel stops leaving most of the ceiling behind.
  */
+function ceilingSlabFallback(): boolean {
+  if (!CEILING_SLAB_FALLBACK) return false;
+  try {
+    if (typeof location !== "undefined" && /[?&]noslab\b/.test(location.search)) return false;
+  } catch { /* no location (tests) — keep the default */ }
+  return true;
+}
+
 const CEILING_SLAB_FALLBACK = true;
 
 export class FloorManager {
@@ -206,7 +226,7 @@ export class FloorManager {
     // picture of the lid — the same rule `applyCeilingVisibility` follows, for
     // the same reason. `firstPerson` is already tracked here for the stair
     // auto-switch, so this needs no new state.
-    const lidFloor = this.firstPerson && CEILING_SLAB_FALLBACK
+    const lidFloor = this.firstPerson && ceilingSlabFallback()
       ? this.currentFloor + 1 : -1;
     let lid = 0;
     for (const [floor, list] of this.floorMeshes) {
@@ -257,7 +277,11 @@ export class FloorManager {
       // that provided one was deleted" look identical from a capture.
       tapDebug(`ceiling slab fallback: ${lid} structure mesh(es) from storey `
         + `${lidFloor} used as a lid over floor ${this.currentFloor}`
-        + (lid === 0 ? " — none available (top storey?)" : ""));
+        + (lid === 0
+          ? (ceilingSlabFallback()
+            ? " — none available (top storey?)"
+            : " — DISABLED by ?noslab: what you see overhead is the real ceiling")
+          : ""));
     }
     for (const m of this.alwaysOnMeshes) {
       if (!m.isEnabled(false)) m.setEnabled(true);
