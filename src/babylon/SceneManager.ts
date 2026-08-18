@@ -140,21 +140,6 @@ const STAIR_ROOM_RE = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\
  */
 const STAND_STEP_MAX = 0.70;
 
-/**
- * Albedo scale for a lid surface standing in for a ceiling.
- *
- * ⚠️ 1.0 — NO TONE (2.472.0), by the owner's report and by arithmetic. It was
- * 0.45, mirroring ModelLoader's CEILING_TONE, and that constant exists for a
- * situation this surface is not in: a properly-peeled ceiling is exempt from
- * the lightmap AND lit by the uniform fill, so it evaluates to its full albedo
- * and would come out 2-3x brighter than the lit wall beside it unless toned
- * down. A LID has its lightmap withheld too, but it is the underside of the
- * upper floor and gets no such fill — so 0.45 was not compensating for
- * anything, it was simply multiplying a white ceiling into mid grey. Which is
- * exactly what was reported, twice: "greyish", and then "how come there are no
- * light effects on it".
- */
-const LID_CEILING_TONE = 1.0;
 
 // ── Frame-time sampling (see sampleFrame) ───────────────────────────────────
 // A gap above this is the render loop RESUMING — the app went idle, the tab
@@ -888,36 +873,6 @@ export class SceneManager {
         if (!info.hit || !info.pickedPoint) continue;
         if (above === null || info.pickedPoint.y < above) above = info.pickedPoint.y;
       }
-      // ⚠️ WHICH ONE IS OVERHEAD — the AUTHORED ceiling or the borrowed slab.
-      // The owner asked exactly this and could not tell from the screen: "is it
-      // the ceiling I defined in SweetHome or the slab fallback? it appears
-      // grey whereas I set the ceiling colour to match the walls." They are two
-      // different objects with two different materials, and `above=` reported
-      // only the first, so a room lidded by the slab read as `none` — which
-      // looks like "no ceiling" in a capture taken while a ceiling is plainly
-      // visible on screen. A field that cannot distinguish the thing you are
-      // looking at from nothing is worse than absent.
-      let slabAbove: number | null = null;
-      let slabWhat = "";
-      for (const m of this.loadedMeshes) {
-        const md = m.metadata as { vkLidHid?: boolean; vkLidMat?: unknown } | null;
-        if (!md?.vkLidHid || !m.isEnabled()) continue;
-        const info = this.ceilingRay.intersectsMesh(m, false);
-        if (!info.hit || !info.pickedPoint) continue;
-        if (slabAbove !== null && info.pickedPoint.y >= slabAbove) continue;
-        slabAbove = info.pickedPoint.y;
-        // ⚠️ NAME IT. Three separate fixes have been aimed at "the surface over
-        // the walker's head" while only its HEIGHT was known, and 2.469.0's
-        // material swap changed nothing on screen — which means the surface
-        // overhead is probably not one of the meshes it cloned. `toned=` says
-        // whether this exact mesh got the ceiling look, and `mat=` says what it
-        // is actually wearing, so the next question is answered from the capture
-        // instead of from another assumption.
-        slabWhat = `${m.name.replace(/_primitive\d+$/, "")}`
-          + `#${m.name.match(/_primitive(\d+)$/)?.[1] ?? "?"}`
-          + ` mat="${m.material?.name ?? "none"}"`
-          + ` toned=${md.vkLidMat ? "y" : "n"}`;
-      }
       // ⚠️ WHERE THE WALKER IS, AND HOW FAR THE NEAREST CEILING IS. `above=none`
       // was uninterpretable without these: it could mean "the model has no
       // ceiling in this wing" or "there is one 40 cm away and the alignment is
@@ -930,7 +885,7 @@ export class SceneManager {
         near = Math.min(near, Math.hypot(c.x - eye.x, c.z - eye.z));
       }
       return {
-        enabled, visible, active: drawn, above, slabAbove, slabWhat,
+        enabled, visible, active: drawn, above,
         at: { x: eye.x, y: eye.y, z: eye.z },
         near: Number.isFinite(near) ? near : null,
       };
@@ -3036,7 +2991,6 @@ export class SceneManager {
     // floor follower resolves its candidate set once here instead of walking
     // every mesh on every ray (see CameraController.floorCandidates).
     this.camera.setFloorCandidates(result.meshes);
-    this.prepareLidCeilingLook(result.meshes);
     // A model can load in either view (the first-run boot walks, a reload from
     // the overview does not), so the badge occluder pass is told which one it
     // landed in rather than waiting for a toggle that may never come.
@@ -3905,92 +3859,6 @@ export class SceneManager {
         // Never checked in six rounds, so it is printed rather than assumed.
         + ` vis=${m.visibility.toFixed(2)}`,
       );
-    }
-  }
-
-  /**
-   * Give the storey-above lid's CEILING-BEARING surfaces the ceiling look.
-   *
-   * ⚠️ THE OWNER'S CEILINGS ARE IN THE WRONG STOREY GROUP, and that is why they
-   * are grey (2.469.0). Measured, not inferred:
-   *
-   *   structure groups: Structure=0.00..2.51m  Structure_L1=2.25..5.07m
-   *   Structure_L1: 2.6m=258m2 2.4m=145m2 3.0m=20m2 — SEVERAL HEIGHTS
-   *
-   * A floor slab sits at ONE height; these are room ceilings at the heights
-   * their rooms were drawn with, sitting inside `Structure_L1`. That is the
-   * exact signature blender_pipeline's own v2.24.0 note records ("Structure_L1
-   * reached DOWN to 2.25 m while Structure topped out at 2.51 m"), from the
-   * level splitter bucketing a ceiling with the storey ABOVE because it assigns
-   * an island by its LOWEST vertex and a ceiling's lowest vertex IS the
-   * boundary.
-   *
-   * Being in that group, they are ordinary structure to ModelLoader: they get
-   * the LIGHTMAP rather than the ceiling exemption. And a lightmapped ceiling is
-   * near-black by construction — the pipeline bakes each storey under an open
-   * sky with the storeys above hidden, so the underside of a lid receives almost
-   * nothing (see CEILING_TONE's note). The owner reported exactly that: "it
-   * appears with the grey colour (ie: baked one, I believe), whereas I defined
-   * the ceiling colour to match the wall colour".
-   *
-   * So while a mesh serves as a LID, it wears a clone of its material with the
-   * lightmap withheld and the albedo toned — the same treatment ModelLoader
-   * gives a properly-grouped ceiling. Restored the moment it stops being a lid,
-   * so the storey's own appearance when you walk it is untouched.
-   *
-   * ⚠️ ONLY the primitives that actually carry down-facing area in the ceiling
-   * band. `Structure_L1` is ~103 meshes and cloning every material would cost
-   * real GPU memory on the iPad this ships to; the ceiling lives in a handful of
-   * them. `lidCeilingMats=` reports the count so that cost is measured rather
-   * than assumed.
-   *
-   * This is a WORKAROUND for a bake-side grouping problem, and the right fix is
-   * for the ceiling to land in `Structure_Ceiling_L{n}` where the exemption
-   * already applies. `CEILING_SLAB_FALLBACK` turns the whole mechanism off.
-   */
-  private prepareLidCeilingLook(meshes: AbstractMesh[]): void {
-    if (!this.ceilingMeshes.length) return;
-    let loY = Infinity; let hiY = -Infinity;
-    for (const m of this.ceilingMeshes) {
-      const bb = m.getBoundingInfo().boundingBox;
-      loY = Math.min(loY, bb.minimumWorld.y);
-      hiY = Math.max(hiY, bb.maximumWorld.y);
-    }
-    loY -= 0.5; hiY += 0.5;
-    const ceilingSet = new Set(this.ceilingMeshes);
-    let prepared = 0;
-    for (const m of meshes) {
-      if (ceilingSet.has(m) || m.metadata?.isStructure !== true) continue;
-      if (m.getTotalVertices() === 0) continue;
-      // Only meshes that can ever BE a lid — i.e. above the ground storey.
-      const floorIdx = (m.metadata as { floorIndex?: number } | null)?.floorIndex ?? 1;
-      if (floorIdx < 2) continue;
-      if (horizontalAreaInBand(m, loY, hiY).down < 1) continue;
-      // ⚠️ NOT WHEN THE BAKE ALREADY LIT IT. `--ceiling-lighting ambient` bakes
-      // ceiling groups under a uniform ambient, so their lightmap carries real
-      // light; withholding it here would throw that away and flatten the very
-      // thing the option produces. The stamp decides, never this code.
-      if (structureRole(m).ceilingLight === "ambient") continue;
-      const base = m.material as (Material & {
-        lightmapTexture?: unknown; albedoColor?: Color3;
-      }) | null;
-      if (!base) continue;
-      const look = base.clone(`${base.name}__lid`) as (Material & {
-        lightmapTexture?: unknown; albedoColor?: Color3; backFaceCulling: boolean;
-      }) | null;
-      if (!look) continue;
-      look.lightmapTexture = null;
-      if (look.albedoColor) look.albedoColor = look.albedoColor.scale(LID_CEILING_TONE);
-      // Same reason as a real ceiling: SweetHome slabs carry normals that can
-      // point the wrong way, and the underside is the only face anyone sees.
-      look.backFaceCulling = false;
-      (m.metadata as Record<string, unknown>).vkLidMat = look;
-      (m.metadata as Record<string, unknown>).vkBaseMat = base;
-      prepared += 1;
-    }
-    if (prepared) {
-      tapDebug(`lid ceiling look: ${prepared} material clone(s) — the storey-above `
-        + `surfaces that carry a ceiling, shown with the lightmap withheld`);
     }
   }
 

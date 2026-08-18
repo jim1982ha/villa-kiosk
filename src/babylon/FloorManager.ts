@@ -30,40 +30,9 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import type { CameraController } from "./CameraController";
 import { structureRole } from "./meshRoles";
-import { tapDebug } from "@/utils/tapDebug";
-import type { Material } from "@babylonjs/core/Materials/material";
 
 const FLOOR_SPLIT_Y = 2.8; // metres; ground floor wall height is ~2.5 m
 
-/**
- * Whether the storey-above slab may stand in for a missing ceiling — see
- * applyVisibility.
- *
- * ⚠️ **RUNTIME-OVERRIDABLE, AND THAT IS THE POINT (2.473.0).** The owner asked
- * the right question: how do you confirm the fallback is not quietly taking
- * over and hiding whether the REAL ceiling works? A compile-time constant
- * cannot answer that without a rebuild, so `?noslab` turns the lid off for one
- * reload. Whatever you can see overhead then is the peeled ceiling and nothing
- * else — the honest picture of what the bake actually produced.
- *
- * Two other signals already separate them and neither can be fooled by the lid:
- * `above=ceiling@…` vs `above=slab@…` on the `walk:` line names which surface
- * is over the walker's head at that moment, and `ceiling coverage:` rays only
- * against `ceilingMeshes`, so it measures the real ceiling whether or not the
- * fallback is on.
- *
- * `false` here is the intended end state: no lid at all once the pipeline's
- * peel stops leaving most of the ceiling behind.
- */
-function ceilingSlabFallback(): boolean {
-  if (!CEILING_SLAB_FALLBACK) return false;
-  try {
-    if (typeof location !== "undefined" && /[?&]noslab\b/.test(location.search)) return false;
-  } catch { /* no location (tests) — keep the default */ }
-  return true;
-}
-
-const CEILING_SLAB_FALLBACK = true;
 
 export class FloorManager {
   private camera: CameraController | null = null;
@@ -83,8 +52,6 @@ export class FloorManager {
   // Elevation-based floor switching only runs while walking (first-person). In
   // overview the walker camera sits at a stale position and must not drive floors.
   private firstPerson = false;
-  /** Dedupe for the lid report — see applyVisibility. */
-  private lastLidCount = -1;
 
   constructor(scene: Scene, onFloorChange: (floor: number) => void) {
     this.onFloorChange = onFloorChange;
@@ -106,12 +73,7 @@ export class FloorManager {
    *  there is no storey above to borrow from. Floor visibility is a pure
    *  function of the active floor again — see applyVisibility. */
   setFirstPerson(active: boolean): void {
-    if (this.firstPerson === active) return;
     this.firstPerson = active;
-    // The lid is a function of this flag, so the flag has to re-apply it.
-    // Without this the slab would only appear at the next storey change, i.e.
-    // never for anyone who walks a single floor — which is most sessions.
-    this.applyVisibility();
   }
 
   indexFloors(meshes: AbstractMesh[]): void {
@@ -205,94 +167,11 @@ export class FloorManager {
    * enabled regardless of floor.
    */
   private applyVisibility(): void {
-    // ⚠️ THE STOREY-ABOVE SLAB IS BACK, AS A FALLBACK (2.465.0). It shipped from
-    // 2.435.0 to 2.443.0 and was deleted in 2.444.0 on three arguments, one of
-    // which was simply wrong: that it was "redundant the moment a real ceiling
-    // existed". A real ceiling now exists and the measurement says it covers
-    // **17% of the ground floor** — `ceiling coverage: 2/14 ground rooms`, with
-    // the Kitchen, both bathrooms and the Laundry at zero, because
-    // blender_pipeline's peel leaves 493 m2 of down-facing ceiling fused in the
-    // structure against 124.8 m2 it takes. So deleting this removed the thing
-    // that was covering the other 83%, and the owner said so plainly: "the slab
-    // fallback you added a few versions ago was working very well".
-    //
-    // The other two arguments stand and are why this is scoped, not restored:
-    // it wears the storey-above FLOOR's texture (a real complaint, and the
-    // reason it is a fallback rather than the mechanism), and it can never help
-    // the TOP storey, whose ceiling the pipeline deliberately drops. Both are
-    // better than open sky over every interior room.
-    //
-    // FIRST-PERSON ONLY. The overview is a cut-away and a lid turns it into a
-    // picture of the lid — the same rule `applyCeilingVisibility` follows, for
-    // the same reason. `firstPerson` is already tracked here for the stair
-    // auto-switch, so this needs no new state.
-    const lidFloor = this.firstPerson && ceilingSlabFallback()
-      ? this.currentFloor + 1 : -1;
-    let lid = 0;
     for (const [floor, list] of this.floorMeshes) {
+      const on = floor <= this.currentFloor;
       for (const m of list) {
-        // STRUCTURE ONLY on the lid storey. Its `floorMeshes` entry holds that
-        // storey's furniture and fixtures too, and enabling those would render
-        // a room's worth of objects standing on top of the slab — invisible
-        // from underneath, except through the stairwell opening, and paid for
-        // every frame regardless.
-        const isLid = floor === lidFloor && m.metadata?.isStructure === true;
-        if (isLid) lid += 1;
-        const on = floor <= this.currentFloor || isLid;
         if (m.isEnabled(false) !== on) m.setEnabled(on);
-        // ⚠️ A LID IS SCENERY, AND MUST NOT BE PICKABLE (2.466.0). Enabling the
-        // storey above put its slab into every downward raycast in the app, and
-        // `SceneManager.groundCamera` takes the FIRST hit from 20 m up — so the
-        // walker was grounded ON TOP of the lid and arrived on the second floor.
-        // Reported as "I land in another room than the one I specified", with
-        // `spawn: groundRoom "Bedroom 1" ... standY=0.00` immediately followed
-        // by `at=-6.5,4.3,1.0` — an eye at 4.3 m over a floor the spawn had
-        // just measured at 0.00.
-        //
-        // The same set feeds `followFloor` (a capture shows floorMs=1192.90 for
-        // 35 rays, 34 ms each, against ~13 ms before) and the tap picker, which
-        // started returning `Structure_L1_primitive97` for a tap on the ceiling.
-        // One flag fixes all three, because all three filter on isPickable.
-        const meta = (m.metadata ??= {}) as {
-          vkLidHid?: boolean; vkLidMat?: Material; vkBaseMat?: Material;
-        };
-        if (isLid && m.isPickable) { meta.vkLidHid = true; m.isPickable = false; }
-        else if (!isLid && meta.vkLidHid) { meta.vkLidHid = false; m.isPickable = true; }
-        // While it is a lid, a surface that carries a ceiling wears the ceiling
-        // LOOK — lightmap withheld, albedo toned. See
-        // SceneManager.prepareLidCeilingLook for why these meshes never got that
-        // treatment at load, and why the alternative is a bake-side fix.
-        // Restored the instant it stops being a lid, so walking that storey
-        // shows its own materials exactly as before.
-        if (meta.vkLidMat && meta.vkBaseMat) {
-          const want = isLid ? meta.vkLidMat : meta.vkBaseMat;
-          if (m.material !== want) m.material = want;
-        }
       }
-    }
-    if (lid !== this.lastLidCount) {
-      this.lastLidCount = lid;
-      // Reported because its absence is exactly what went unnoticed for twenty
-      // releases: with no line for it, "there is no ceiling" and "the fallback
-      // that provided one was deleted" look identical from a capture.
-      // ⚠️ SAY WHICH OF THE FOUR STATES THIS IS. The first cut printed
-      // "0 structure mesh(es) from storey -1 — none available (top storey?)"
-      // whenever the overview was showing, because `lidFloor` is -1 there by
-      // design — a lid is first-person only. That reads as a fault, in a
-      // subsystem where "no ceiling" has been the reported symptom for twenty
-      // releases, and an instrument that cries wolf in the normal case is worse
-      // than no instrument. Four states, four sentences.
-      tapDebug("ceiling slab fallback: " + (
-        !ceilingSlabFallback()
-          ? "OFF (?noslab) — whatever is overhead is the real ceiling"
-          : !this.firstPerson
-            ? "idle — overview is a cut-away and takes no lid"
-            : lid > 0
-              ? `${lid} structure mesh(es) from storey ${lidFloor} used as a lid `
-                + `over floor ${this.currentFloor}`
-              : `no lid over floor ${this.currentFloor} — storey ${lidFloor} `
-                + "ships no structure (top storey), so only a real ceiling can cover it"
-      ));
     }
     for (const m of this.alwaysOnMeshes) {
       if (!m.isEnabled(false)) m.setEnabled(true);

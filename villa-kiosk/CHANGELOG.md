@@ -1,3 +1,14 @@
+## 2.481.0
+
+### Removed — the borrowed upper-floor ceiling, and everything propping it up
+
+The bake now produces a real ceiling over every enclosed ground-floor room, so
+the stand-in that had been covering for it is gone, and with it the material
+clones that made it look like a ceiling, its exemptions from picking and badge
+occlusion, and the debug field that told the two apart. Confirmed on hardware
+first: seven positions across the ground floor all reported the authored ceiling
+overhead with the stand-in switched off.
+
 ## 2.480.0
 
 ### Fixed — two ceiling diagnostics did their work on every boot
