@@ -117,7 +117,7 @@ import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam } from "./meshRoles";
-import { onStorey, storeyFloorYAt } from "./roomStorey";
+import { onStorey, storeyFloorYAt, nearestFloorRoom } from "./roomStorey";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import { LightPool, poolFootprint } from "./LightPools";
@@ -2832,7 +2832,12 @@ export class EntityVisuals {
                 : "  — mounted close to what it lights, not a fault"));
           }
         }
-        const room = this.roomPolyAt(x, surfaceY ?? pool.probeFromY, z);
+        // Two rules, and which one applies is decided by what we KNOW: a probed
+        // surface is a floor being stood on (nearest), a fixture height is an
+        // unknown distance above one (clearance). See roomPolyOnFloor.
+        const room = surfaceY !== null
+          ? this.roomPolyOnFloor(x, surfaceY, z)
+          : this.roomPolyAt(x, pool.probeFromY, z);
         let radius = LIGHT_POOL_RADIUS;
         let shape: Pt2[] | undefined;
         if (room) {
@@ -2850,7 +2855,12 @@ export class EntityVisuals {
           // let a terrace fixture standing clear of everything on its own storey
           // be crushed to POOL_MIN_RADIUS by a bedroom wall one floor up —
           // a 0.4 m pool under a fixture whose neighbours drew 1.8 m ones.
-          const storeyY = this.storeyFloorYAt(surfaceY ?? pool.probeFromY);
+          // Same distinction for the no-room fallback: bounding a pool against
+          // "same-storey rooms only" is meaningless if the storey was resolved
+          // by the wrong rule.
+          const storeyY = surfaceY !== null
+            ? (this.roomPolyOnFloor(x, surfaceY, z)?.floorY ?? surfaceY)
+            : this.storeyFloorYAt(pool.probeFromY);
           let nearest = Infinity;
           for (const r of this.roomPolys) {
             if (!onStorey(r.floorY, storeyY)) continue;
@@ -3036,6 +3046,36 @@ export class EntityVisuals {
    * any model whose per-storey floor heights all came back equal: every room is
    * then on the point's storey and the first containing one wins, as before.
    */
+  /**
+   * The room a point STANDING ON A FLOOR is in — nearest-floor semantics.
+   *
+   * ⚠️ THE SECOND OF THE TWO RULES (2.477.0), and using the wrong one is why
+   * every upper-storey light pool washed through its own walls. `roomPolyAt`
+   * below asks `storeyFloorYAt`, which answers "a point at an UNKNOWN height
+   * above its floor" by taking the highest floor at least STOREY_MIN_MOUNT
+   * BELOW it. Hand it a floor the pool is standing ON — 2.44 m, the upper
+   * storey's slab — and the highest floor 0.30 m below that is the GROUND floor
+   * at 0.00, so every upper-storey room polygon fails `onStorey`, no room is
+   * found, and the pool stays a full circle bounded only by the nearest other
+   * room's edge. Reported as "the lights are lighting outside the walls", with a
+   * Gym Room that turned out to be on 2F.
+   *
+   * roomStorey.ts states this outright — "`nearestFloorRoom` answers 'I am
+   * STANDING on a floor at exactly this height' (the walker's feet, a landing
+   * anchor, A PROBED FLOOR)" — and a light pool sits on a probed floor. The
+   * rule was written and documented; this call site simply used the other one.
+   *
+   * ⚠️ Exposed, not caused, by 2.474.0: before it the probe could land on a
+   * CEILING, so `surfaceY` was often a height in the middle of a storey where
+   * the clearance rule happened to answer correctly. Fixing the probe made the
+   * floors right and the wrong rule visible.
+   */
+  private roomPolyOnFloor(
+    x: number, floorY: number, z: number,
+  ): { name: string; pts: { x: number; z: number }[]; floorY: number } | null {
+    return nearestFloorRoom(this.roomPolys, floorY, (r) => pointInPolygon(x, z, r.pts));
+  }
+
   private roomPolyAt(
     x: number, y: number, z: number,
   ): { name: string; pts: { x: number; z: number }[]; floorY: number } | null {

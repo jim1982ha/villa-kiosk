@@ -1,3 +1,14 @@
+## 2.477.0
+
+### Fixed — upper-storey light pools washed straight through their walls
+
+A pool's room was resolved with the rule for "a point somewhere above its floor",
+which takes the highest floor a clearance below. Given a floor the pool is
+standing on — the upper storey's slab — that answers with the ground floor, so
+every upper-storey room was rejected as belonging to another storey, no room was
+found, and the pool stayed a full circle that crossed its own walls. A probed
+floor now uses the rule written for exactly that case.
+
 ## 2.476.2
 
 ### Added — say which lights wash through their own walls, and why
