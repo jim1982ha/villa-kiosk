@@ -1,3 +1,14 @@
+## 2.484.0
+
+### Fixed — Tab escaped the superadmin code prompt into the villa behind it
+
+The prompt that authorises a permanent deletion was the last dialog in the app
+without the shared focus trap, so Tab walked out of the keypad onto live HUD and
+canvas controls hidden under the scrim. It was written inline in the provider
+that wraps the whole app, where the hook cannot work — a focus trap needs a
+component whose lifetime is the dialog's — so it is now its own component, with
+Escape, phone Back and focus restore coming with it.
+
 ## 2.483.1
 
 ### Changed — one duplicated focus mechanism, and a corrected claim

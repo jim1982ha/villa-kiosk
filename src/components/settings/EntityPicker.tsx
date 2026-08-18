@@ -1,6 +1,18 @@
 // src/components/settings/EntityPicker.tsx
 // Searchable dropdown over the LIVE Home Assistant entity list. This is what
 // makes binding turnkey — you pick from real entities, not typed IDs.
+//
+// ⚠️ IT READS `friendly_name` RAW, AND DELIBERATELY DOES NOT USE
+// `displayLabelFor` — noted here because /dry-audit correctly flags the shape
+// (every other consumer in the app layers the kiosk's own override on top) and
+// would otherwise eventually converge it. The two pickers search two different
+// namespaces: DeviceSearchPicker searches devices the kiosk has ALREADY
+// configured, so it must call them what the rest of the app calls them; this
+// one searches Home Assistant's world to CREATE that configuration, and the
+// override it would show is the very field the surrounding form edits. Showing
+// the kiosk label here would mean renaming a device made it unfindable by the
+// name HA still knows it by — and would print the new name back at the operator
+// as if it were evidence the entity exists.
 
 import { useEffect, useRef, useMemo, useState } from "react";
 import { Search, X } from "lucide-react";

@@ -17,12 +17,32 @@
 // refuses the write without a token whatever the client claims (see
 // _fm_write_guard in supervisor-proxy.py). This module is the way to obtain
 // one honestly.
+//
+// ── WHY THE PROMPT IS ITS OWN COMPONENT ──────────────────────────────────────
+// ⚠️ It is NOT stylistic, and inlining it silently disables the dialog contract.
+// `useModalA11y` traps focus from a mount effect that returns early when its ref
+// is empty, and registers the surface on useBackToClose's dismissal stack for as
+// long as the CALLING component lives. SuperadminGate is a provider wrapping the
+// whole app, so it is mounted from first paint with no prompt on screen: calling
+// the hook there would install the focus trap before the ref existed (i.e.
+// never) while holding the phone's Back button hostage the entire session. The
+// hook has to be called by something whose lifetime IS the dialog's.
+//
+// ⚠️ This surface was the LAST `.modal-backdrop` in the app without that
+// contract (/dry-audit, 2026-08-19), and it is the one where it mattered most.
+// Behind the scrim sits the live Babylon canvas and the whole HUD, so Tab out of
+// the keypad walked into villa controls the operator could not see — while an
+// authorisation prompt for a permanent deletion was open. That is the exact
+// failure useModalA11y was written for; a day earlier I had wrongly attributed
+// it to the native dialogs AskDialog replaced, which cannot suffer it because
+// they are browser-modal. Here it was real.
 
 import {
   createContext, useCallback, useContext, useRef, useState, type ReactNode,
 } from "react";
 import { ShieldAlert } from "lucide-react";
 import PinPad from "@/components/auth/PinPad";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import { requestElevation } from "./elevation";
 
 export interface ElevationIntent {
@@ -85,37 +105,73 @@ export function SuperadminGate({ children }: { children: ReactNode }) {
     <Ctx.Provider value={{ authorize }}>
       {children}
       {intent && (
-        <div className="modal-backdrop" onClick={() => settle(null)}>
-          <div className="superadmin-prompt" onClick={(e) => e.stopPropagation()}>
-            <div className="superadmin-prompt-head">
-              <ShieldAlert size={16} />
-              <span>{intent.title}</span>
-            </div>
-            {intent.detail && <p className="superadmin-prompt-detail">{intent.detail}</p>}
-            {unconfigured ? (
-              <>
-                <p className="superadmin-prompt-note danger-text">
-                  No superadmin code is set for this installation, so records
-                  cannot be erased. It is configured in the add-on&apos;s options.
-                </p>
-                <button className="btn" onClick={() => settle(null)}>Close</button>
-              </>
-            ) : (
-              <PinPad
-                roleLabel="Authorisation required"
-                subtitle="Enter the 6-digit superadmin code"
-                length={6}
-                backLabel="Cancel"
-                helpText="This code is held by whoever is accountable for the villa's records. It authorises this one deletion and nothing else."
-                onSubmit={submit}
-                onAccepted={() => settle(token.current)}
-                onBack={() => settle(null)}
-              />
-            )}
-          </div>
-        </div>
+        <SuperadminPrompt
+          intent={intent}
+          unconfigured={unconfigured}
+          onSubmit={submit}
+          onAccepted={() => settle(token.current)}
+          onCancel={() => settle(null)}
+        />
       )}
     </Ctx.Provider>
+  );
+}
+
+function SuperadminPrompt({
+  intent, unconfigured, onSubmit, onAccepted, onCancel,
+}: {
+  intent: ElevationIntent;
+  unconfigured: boolean;
+  onSubmit: (pin: string) => Promise<{ ok: boolean; retryAfter?: number }>;
+  onAccepted: () => void;
+  onCancel: () => void;
+}) {
+  // On the CARD, not the backdrop — the trap cycles the focusables inside the
+  // node it is given, and the backdrop's only job is to be clicked.
+  //
+  // Escape now arrives through this hook (capture phase, via the dismissal
+  // stack) instead of PinPad's own window listener, which the hook's
+  // stopPropagation forestalls. Same outcome — both cancel — but ONE handler
+  // decides, so a nested dialog can never have Escape answered by the surface
+  // underneath it.
+  const dialogRef = useModalA11y(onCancel);
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div
+        ref={dialogRef}
+        className="superadmin-prompt"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={intent.title}
+      >
+        <div className="superadmin-prompt-head">
+          <ShieldAlert size={16} />
+          <span>{intent.title}</span>
+        </div>
+        {intent.detail && <p className="superadmin-prompt-detail">{intent.detail}</p>}
+        {unconfigured ? (
+          <>
+            <p className="superadmin-prompt-note danger-text">
+              No superadmin code is set for this installation, so records
+              cannot be erased. It is configured in the add-on&apos;s options.
+            </p>
+            <button className="btn" onClick={onCancel}>Close</button>
+          </>
+        ) : (
+          <PinPad
+            roleLabel="Authorisation required"
+            subtitle="Enter the 6-digit superadmin code"
+            length={6}
+            backLabel="Cancel"
+            helpText="This code is held by whoever is accountable for the villa's records. It authorises this one deletion and nothing else."
+            onSubmit={onSubmit}
+            onAccepted={onAccepted}
+            onBack={onCancel}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
