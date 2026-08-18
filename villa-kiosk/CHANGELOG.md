@@ -1,3 +1,15 @@
+## 2.469.0
+
+### Fixed — the ceiling you see on the ground floor is grey because it carries the bake
+
+Your interior ceilings are in the GLB, but the bake filed them under the upper
+storey's group, so they were treated as ordinary structure and given the
+lightmap. A lightmapped ceiling is near-black by construction — each storey is
+baked under an open sky with the ones above hidden, so the underside of a lid
+receives almost nothing. While those surfaces stand in as a ceiling they now wear
+the same treatment a correctly-filed ceiling gets: lightmap withheld, authored
+colour toned. Only the few that actually carry a ceiling are cloned.
+
 ## 2.468.0
 
 ### Added — tell a mis-grouped room ceiling from an upper floor's slab

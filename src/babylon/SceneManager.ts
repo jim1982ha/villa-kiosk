@@ -140,6 +140,11 @@ const STAIR_ROOM_RE = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\
  */
 const STAND_STEP_MAX = 0.70;
 
+/** Albedo scale for a lid surface standing in for a ceiling. Mirrors
+ *  ModelLoader's CEILING_TONE, which is a measurement of the range the pipeline
+ *  reports for enclosed interior surfaces, not a taste. */
+const LID_CEILING_TONE = 0.45;
+
 // ── Frame-time sampling (see sampleFrame) ───────────────────────────────────
 // A gap above this is the render loop RESUMING — the app went idle, the tab
 // was throttled, a modal held the thread — not one frame that took a second.
@@ -3003,6 +3008,7 @@ export class SceneManager {
     // floor follower resolves its candidate set once here instead of walking
     // every mesh on every ray (see CameraController.floorCandidates).
     this.camera.setFloorCandidates(result.meshes);
+    this.prepareLidCeilingLook(result.meshes);
     // A model can load in either view (the first-run boot walks, a reload from
     // the overview does not), so the badge occluder pass is told which one it
     // landed in rather than waiting for a toggle that may never come.
@@ -3851,6 +3857,87 @@ export class SceneManager {
         // Never checked in six rounds, so it is printed rather than assumed.
         + ` vis=${m.visibility.toFixed(2)}`,
       );
+    }
+  }
+
+  /**
+   * Give the storey-above lid's CEILING-BEARING surfaces the ceiling look.
+   *
+   * ⚠️ THE OWNER'S CEILINGS ARE IN THE WRONG STOREY GROUP, and that is why they
+   * are grey (2.469.0). Measured, not inferred:
+   *
+   *   structure groups: Structure=0.00..2.51m  Structure_L1=2.25..5.07m
+   *   Structure_L1: 2.6m=258m2 2.4m=145m2 3.0m=20m2 — SEVERAL HEIGHTS
+   *
+   * A floor slab sits at ONE height; these are room ceilings at the heights
+   * their rooms were drawn with, sitting inside `Structure_L1`. That is the
+   * exact signature blender_pipeline's own v2.24.0 note records ("Structure_L1
+   * reached DOWN to 2.25 m while Structure topped out at 2.51 m"), from the
+   * level splitter bucketing a ceiling with the storey ABOVE because it assigns
+   * an island by its LOWEST vertex and a ceiling's lowest vertex IS the
+   * boundary.
+   *
+   * Being in that group, they are ordinary structure to ModelLoader: they get
+   * the LIGHTMAP rather than the ceiling exemption. And a lightmapped ceiling is
+   * near-black by construction — the pipeline bakes each storey under an open
+   * sky with the storeys above hidden, so the underside of a lid receives almost
+   * nothing (see CEILING_TONE's note). The owner reported exactly that: "it
+   * appears with the grey colour (ie: baked one, I believe), whereas I defined
+   * the ceiling colour to match the wall colour".
+   *
+   * So while a mesh serves as a LID, it wears a clone of its material with the
+   * lightmap withheld and the albedo toned — the same treatment ModelLoader
+   * gives a properly-grouped ceiling. Restored the moment it stops being a lid,
+   * so the storey's own appearance when you walk it is untouched.
+   *
+   * ⚠️ ONLY the primitives that actually carry down-facing area in the ceiling
+   * band. `Structure_L1` is ~103 meshes and cloning every material would cost
+   * real GPU memory on the iPad this ships to; the ceiling lives in a handful of
+   * them. `lidCeilingMats=` reports the count so that cost is measured rather
+   * than assumed.
+   *
+   * This is a WORKAROUND for a bake-side grouping problem, and the right fix is
+   * for the ceiling to land in `Structure_Ceiling_L{n}` where the exemption
+   * already applies. `CEILING_SLAB_FALLBACK` turns the whole mechanism off.
+   */
+  private prepareLidCeilingLook(meshes: AbstractMesh[]): void {
+    if (!this.ceilingMeshes.length) return;
+    let loY = Infinity; let hiY = -Infinity;
+    for (const m of this.ceilingMeshes) {
+      const bb = m.getBoundingInfo().boundingBox;
+      loY = Math.min(loY, bb.minimumWorld.y);
+      hiY = Math.max(hiY, bb.maximumWorld.y);
+    }
+    loY -= 0.5; hiY += 0.5;
+    const ceilingSet = new Set(this.ceilingMeshes);
+    let prepared = 0;
+    for (const m of meshes) {
+      if (ceilingSet.has(m) || m.metadata?.isStructure !== true) continue;
+      if (m.getTotalVertices() === 0) continue;
+      // Only meshes that can ever BE a lid — i.e. above the ground storey.
+      const floorIdx = (m.metadata as { floorIndex?: number } | null)?.floorIndex ?? 1;
+      if (floorIdx < 2) continue;
+      if (horizontalAreaInBand(m, loY, hiY).down < 1) continue;
+      const base = m.material as (Material & {
+        lightmapTexture?: unknown; albedoColor?: Color3;
+      }) | null;
+      if (!base) continue;
+      const look = base.clone(`${base.name}__lid`) as (Material & {
+        lightmapTexture?: unknown; albedoColor?: Color3; backFaceCulling: boolean;
+      }) | null;
+      if (!look) continue;
+      look.lightmapTexture = null;
+      if (look.albedoColor) look.albedoColor = look.albedoColor.scale(LID_CEILING_TONE);
+      // Same reason as a real ceiling: SweetHome slabs carry normals that can
+      // point the wrong way, and the underside is the only face anyone sees.
+      look.backFaceCulling = false;
+      (m.metadata as Record<string, unknown>).vkLidMat = look;
+      (m.metadata as Record<string, unknown>).vkBaseMat = base;
+      prepared += 1;
+    }
+    if (prepared) {
+      tapDebug(`lid ceiling look: ${prepared} material clone(s) — the storey-above `
+        + `surfaces that carry a ceiling, shown with the lightmap withheld`);
     }
   }
 

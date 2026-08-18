@@ -31,6 +31,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import type { CameraController } from "./CameraController";
 import { structureRole } from "./meshRoles";
 import { tapDebug } from "@/utils/tapDebug";
+import type { Material } from "@babylonjs/core/Materials/material";
 
 const FLOOR_SPLIT_Y = 2.8; // metres; ground floor wall height is ~2.5 m
 
@@ -232,9 +233,21 @@ export class FloorManager {
         // 35 rays, 34 ms each, against ~13 ms before) and the tap picker, which
         // started returning `Structure_L1_primitive97` for a tap on the ceiling.
         // One flag fixes all three, because all three filter on isPickable.
-        const meta = (m.metadata ??= {}) as { vkLidHid?: boolean };
+        const meta = (m.metadata ??= {}) as {
+          vkLidHid?: boolean; vkLidMat?: Material; vkBaseMat?: Material;
+        };
         if (isLid && m.isPickable) { meta.vkLidHid = true; m.isPickable = false; }
         else if (!isLid && meta.vkLidHid) { meta.vkLidHid = false; m.isPickable = true; }
+        // While it is a lid, a surface that carries a ceiling wears the ceiling
+        // LOOK — lightmap withheld, albedo toned. See
+        // SceneManager.prepareLidCeilingLook for why these meshes never got that
+        // treatment at load, and why the alternative is a bake-side fix.
+        // Restored the instant it stops being a lid, so walking that storey
+        // shows its own materials exactly as before.
+        if (meta.vkLidMat && meta.vkBaseMat) {
+          const want = isLid ? meta.vkLidMat : meta.vkBaseMat;
+          if (m.material !== want) m.material = want;
+        }
       }
     }
     if (lid !== this.lastLidCount) {
