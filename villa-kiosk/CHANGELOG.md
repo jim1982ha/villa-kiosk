@@ -1,3 +1,15 @@
+## 2.458.0
+
+### Fixed — the spawn still landed on the stairs, and the ceiling report never named a room
+
+Stepping off the staircase tested whether the spot was inside a ground-level
+room's outline, and a stairwell sits inside the outline of the room around it —
+so the search stopped at its first sample and moved nothing. It probes the floor
+height now, which is the question that was meant. The ceiling report also gains
+the reading that is actually actionable: which rooms have a ceiling over them and
+which do not, by name, measured against the plan's own floor area rather than
+against world extents that include the garden.
+
 ## 2.457.0
 
 ### Fixed — ceiling fans and ceiling lights were being darkened, and first-person spawned mid-staircase

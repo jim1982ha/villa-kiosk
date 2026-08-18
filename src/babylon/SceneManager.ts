@@ -779,7 +779,22 @@ export class SceneManager {
         if (!info.hit || !info.pickedPoint) continue;
         if (above === null || info.pickedPoint.y < above) above = info.pickedPoint.y;
       }
-      return { enabled, visible, active: drawn, above };
+      // ⚠️ WHERE THE WALKER IS, AND HOW FAR THE NEAREST CEILING IS. `above=none`
+      // was uninterpretable without these: it could mean "the model has no
+      // ceiling in this wing" or "there is one 40 cm away and the alignment is
+      // off", and those are opposite conclusions. `near=` is the horizontal
+      // distance to the closest ceiling panel's centre — metres means absent,
+      // centimetres means misplaced.
+      let near = Infinity;
+      for (const m of this.ceilingMeshes) {
+        const c = m.getBoundingInfo().boundingBox.centerWorld;
+        near = Math.min(near, Math.hypot(c.x - eye.x, c.z - eye.z));
+      }
+      return {
+        enabled, visible, active: drawn, above,
+        at: { x: eye.x, y: eye.y, z: eye.z },
+        near: Number.isFinite(near) ? near : null,
+      };
     });
 
     // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
@@ -1887,18 +1902,30 @@ export class SceneManager {
       (r) => r.floorY <= groundY + STAIR_FOOT_TOLERANCE
         && !/stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i.test(r.name));
     if (!onGround.length) return { x, z };
-    const inside = (px: number, pz: number): boolean =>
-      onGround.some((r) => pointInPolygon(px, pz, r.pts));
-    if (inside(x, z)) return { x, z };
-    // Outward in rings. The first hit is the nearest ground-floor standing spot,
-    // which for a stairwell is its landing — the foot of the stairs by
-    // construction rather than by a measured offset that would be villa-specific.
-    for (let radius = 0.75; radius <= 10; radius += 0.75) {
-      for (let i = 0; i < 24; i++) {
-        const a = (i / 24) * Math.PI * 2;
+    // ⚠️ THE TEST IS THE SURFACE HEIGHT, NOT POLYGON CONTAINMENT (2.458.0).
+    // The first cut asked "is this point inside a ground-level room outline",
+    // and a stairwell's XZ sits inside the outline of whatever room surrounds
+    // it — so the answer was yes at the very first sample, the search returned
+    // immediately, and the walker still landed mid-flight. Containment says
+    // WHICH ROOM you are over; it says nothing about what you would be standing
+    // ON, which is the entire question when the obstruction is a staircase
+    // inside a room. Probe the floor instead: a tread reads a riser or more
+    // above the storey's own level, and a floor does not.
+    const atGroundLevel = (px: number, pz: number): boolean =>
+      this.estimateFloorY(px, pz, 1) <= groundY + STAIR_FOOT_TOLERANCE
+      && onGround.some((r) => pointInPolygon(px, pz, r.pts));
+    if (atGroundLevel(x, z)) return { x, z };
+    // Outward in rings. The first hit is the nearest spot that is both indoors
+    // and genuinely at floor level — the foot of the stairs by construction
+    // rather than by an offset that would be particular to one villa. Bounded
+    // at 8 m and 12 directions because each sample is a floor probe; the probes
+    // are memoised (floorProbe) and this runs once per view switch.
+    for (let radius = 1; radius <= 8; radius += 1) {
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
         const px = x + Math.cos(a) * radius;
         const pz = z + Math.sin(a) * radius;
-        if (inside(px, pz)) return { x: px, z: pz };
+        if (atGroundLevel(px, pz)) return { x: px, z: pz };
       }
     }
     return { x, z };
@@ -3439,6 +3466,7 @@ export class SceneManager {
         : ""),
     );
     this.reportCeilingGeometry();
+    this.reportCeilingCoverage();
     this.requestRender();
   }
 
@@ -3531,9 +3559,93 @@ export class SceneManager {
         + `${(bb.maximumWorld.z - bb.minimumWorld.z).toFixed(1)}m`
         + ` area=${projectedAreaXZ(m).toFixed(1)}m2`
         + ` floor=${(m.metadata as { floorIndex?: number } | null)?.floorIndex ?? "-"}`
-        + ` verts=${m.getTotalVertices()}`,
+        + ` verts=${m.getTotalVertices()}`
+        // ⚠️ `visibility` is NOT `isVisible`. Babylon has both: the boolean gates
+        // submission, this is a 0..1 alpha multiplier applied when drawing. A
+        // mesh at visibility 0 is enabled, isVisible, in the active list and
+        // draws nothing — every counter this feature has would read healthy.
+        // Never checked in six rounds, so it is printed rather than assumed.
+        + ` vis=${m.visibility.toFixed(2)}`,
       );
     }
+  }
+
+  /**
+   * WHICH ROOMS HAVE A CEILING OVER THEM, BY NAME — the instrument every
+   * previous ceiling report was missing (2.458.0).
+   *
+   * Six rounds measured the ceiling as a SET (how many exist, are enabled,
+   * visible, lit, opaque, submitted) and one round measured its total area. Not
+   * one of them could answer the question the owner keeps actually asking,
+   * which is about a PLACE: "I am standing here and there is no ceiling above
+   * me." `above=` answers it for one point; this answers it for the whole plan,
+   * and names the rooms, which is the only form of the answer that is
+   * ACTIONABLE — an uncovered room is a room to switch "Display ceiling" on for
+   * in SweetHome, and the app cannot fix it at all.
+   *
+   * ⚠️ It also replaces a denominator that was wrong. `ceiling geometry`'s
+   * percentage divides by the world extents, which include the terrain and the
+   * palm trees, so it understates coverage of the HOUSE by however much garden
+   * the model ships. Room polygons are the honest denominator: they are the
+   * floor area a person can stand on.
+   *
+   * Samples a grid inside each ground-level room rather than its centroid,
+   * because a room with a ceiling over half of it is a different finding from
+   * one with none, and a centroid cannot tell them apart.
+   */
+  private reportCeilingCoverage(): void {
+    if (!this.ceilingMeshes.length || !this.worldRoomPolys.length) return;
+    let groundY = Infinity;
+    for (const r of this.worldRoomPolys) groundY = Math.min(groundY, r.floorY);
+    const rooms = this.worldRoomPolys.filter(
+      (r) => r.floorY <= groundY + STAIR_FOOT_TOLERANCE);
+    if (!rooms.length) return;
+
+    const ray = new Ray(Vector3.Zero(), new Vector3(0, 1, 0), 12);
+    const covered: string[] = [];
+    const bare: string[] = [];
+    let totalArea = 0;
+    let coveredArea = 0;
+    for (const r of rooms) {
+      let minX = Infinity; let maxX = -Infinity; let minZ = Infinity; let maxZ = -Infinity;
+      for (const p of r.pts) {
+        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+        minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
+      }
+      const N = 5;
+      let inside = 0; let hit = 0;
+      for (let i = 0; i < N; i++) {
+        for (let j = 0; j < N; j++) {
+          const px = minX + ((i + 0.5) / N) * (maxX - minX);
+          const pz = minZ + ((j + 0.5) / N) * (maxZ - minZ);
+          if (!pointInPolygon(px, pz, r.pts)) continue;
+          inside += 1;
+          ray.origin.set(px, r.floorY + 1.0, pz);
+          ray.direction.set(0, 1, 0);
+          ray.length = 12;
+          if (this.ceilingMeshes.some((m) => ray.intersectsMesh(m, true).hit)) hit += 1;
+        }
+      }
+      if (!inside) continue;
+      // The polygon's own area, so a big bare room outweighs a small covered one
+      // in the summary rather than counting once each.
+      let a2 = 0;
+      for (let i = 0; i < r.pts.length; i++) {
+        const p = r.pts[i]; const q = r.pts[(i + 1) % r.pts.length];
+        a2 += p.x * q.z - q.x * p.z;
+      }
+      const area = Math.abs(a2) / 2;
+      totalArea += area;
+      coveredArea += area * (hit / inside);
+      (hit / inside >= 0.5 ? covered : bare).push(
+        `${r.name}${hit ? ` (${Math.round(100 * hit / inside)}%)` : ""}`);
+    }
+    tapDebug(
+      `ceiling coverage: ${covered.length}/${covered.length + bare.length} ground rooms`
+      + ` — ${(100 * coveredArea / Math.max(1e-6, totalArea)).toFixed(0)}% of ${totalArea.toFixed(0)}m2 floor area`,
+    );
+    if (bare.length) tapDebug(`  NO ceiling over: ${bare.join(", ")}`);
+    if (covered.length) tapDebug(`  ceiling over: ${covered.join(", ")}`);
   }
 
   /**

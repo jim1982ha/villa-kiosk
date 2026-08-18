@@ -924,6 +924,20 @@ const FAN_AXIS_TOP_SLICE = 0.25;
 /** Bucket name for badges whose entity has no room configured — they still
  *  cluster together rather than each becoming its own singleton chip. */
 
+/** What the `walk:` line reports about the ceiling — see setCeilingState. */
+export interface CeilingState {
+  enabled: number;
+  visible: number;
+  /** Meshes the LAST FRAME actually submitted — Babylon's answer, not ours. */
+  active: number;
+  /** Height of the ceiling directly over the eye, or null for open sky. */
+  above: number | null;
+  /** Horizontal distance to the nearest ceiling panel. Metres means the model
+   *  ships none here; centimetres would mean one is misplaced. */
+  near: number | null;
+  at: { x: number; y: number; z: number };
+}
+
 interface LabelControls {
   container: StackPanel;
   badge: Rectangle;
@@ -5375,11 +5389,9 @@ export class EntityVisuals {
    * different faults and every previous report collapsed them.
    */
   private ceilingState:
-    (() => { enabled: number; visible: number; active: number; above: number | null }) | null = null;
+    (() => CeilingState) | null = null;
 
-  setCeilingState(
-    fn: () => { enabled: number; visible: number; active: number; above: number | null },
-  ): void {
+  setCeilingState(fn: () => CeilingState): void {
     this.ceilingState = fn;
   }
 
@@ -5427,6 +5439,8 @@ export class EntityVisuals {
         return s
           ? ` ceil=${s.enabled}e/${s.visible}v/${s.active}a`
             + ` above=${s.above === null ? "none" : `${s.above.toFixed(2)}m`}`
+            + ` near=${s.near === null ? "-" : `${s.near.toFixed(1)}m`}`
+            + ` at=${s.at.x.toFixed(1)},${s.at.y.toFixed(1)},${s.at.z.toFixed(1)}`
           : "";
       })(),
     );
