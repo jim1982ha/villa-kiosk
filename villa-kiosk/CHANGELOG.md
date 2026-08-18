@@ -1,3 +1,20 @@
+## 2.482.0
+
+### Fixed — a diagnostic that kept warning after its problem was solved
+
+The unpeeled-ceiling line judged its verdict on every structure mesh, including
+the storey above — whose floor slab the bake is right to leave alone. It
+therefore announced a peel failure at the same moment the line beneath it
+correctly identified that area as a floor slab. It now judges only what is
+drawable on the storey you are standing on.
+
+### Removed — three per-pool debug listings whose questions are answered
+
+They earned their keep: naming the pools is what separated a strip parked on a
+neighbour's floor from a stair light correctly close to its tread. Both answers
+are now built into the behaviour, and the summary counters still distinguish
+them, so forty lines of listing go.
+
 ## 2.481.0
 
 ### Removed — the borrowed upper-floor ceiling, and everything propping it up

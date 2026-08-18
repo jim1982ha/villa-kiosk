@@ -3887,6 +3887,8 @@ export class SceneManager {
     loY -= 0.5; hiY += 0.5;
     const ceilingSet = new Set(this.ceilingMeshes);
     let down = 0; let up = 0; let scanned = 0;
+    /** The down-facing subset in meshes actually enabled on this storey. */
+    let downHere = 0;
     const byHeight = new Map<number, number>();
     const byMesh = new Map<string, number>();
     const byMeshHeight = new Map<string, Map<number, number>>();
@@ -3896,6 +3898,16 @@ export class SceneManager {
       const r = horizontalAreaInBand(m, loY, hiY);
       if (r.down || r.up) scanned += 1;
       down += r.down; up += r.up;
+      // ⚠️ ONLY WHAT IS DRAWABLE HERE CAN BE "LEFT BEHIND" (2.482.0). `down`
+      // counts every structure mesh, including the storey ABOVE — which is
+      // disabled while you walk below it and whose floor slab the peel is right
+      // to leave alone. Judging the verdict on the raw total made it shout
+      // "PEEL TOO NARROW" at 339 m² of upper-storey slab while the line
+      // directly beneath it correctly called that "a floor slab". An instrument
+      // that keeps printing after its question closes does not go neutral, it
+      // starts lying — so the verdict now reads the enabled subset and the raw
+      // total stays visible beside it.
+      if (m.isEnabled()) downHere += r.down;
       for (const [k, v] of r.byHeight) byHeight.set(k, (byHeight.get(k) ?? 0) + v);
       // ⚠️ WHICH OBJECT the area belongs to, and whether that object is even
       // DRAWN on this storey. Without this the previous verdict ("PEEL TOO
@@ -3934,12 +3946,13 @@ export class SceneManager {
       `unpeeled ceiling: down=${down.toFixed(1)}m2 up=${up.toFixed(1)}m2`
       + ` still fused in ${scanned} structure mesh(es), band ${loY.toFixed(2)}..${hiY.toFixed(2)}m`
       + ` (peeled=${peeled.toFixed(1)}m2)`
-      + (down > peeled
-        ? " — PEEL TOO NARROW: down-facing ceiling was left behind"
+      + ` here=${downHere.toFixed(1)}m2`
+      + (downHere > peeled
+        ? " — PEEL TOO NARROW: down-facing ceiling was left behind on THIS storey"
         : up > 4 * Math.max(down, peeled)
           ? " — INVERTED NORMALS: faces exist but point UP, so the peel's"
             + " down-facing filter skips them (pipeline fix)"
-          : " — export ships no further ceiling here"),
+          : " — the remainder is the storey above's slab, correctly left"),
     );
     // Descending by area: the top few buckets are the heights the pipeline's
     // band must cover, and comparing them against the peeled ceilings' own

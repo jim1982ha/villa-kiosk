@@ -2739,15 +2739,21 @@ export class EntityVisuals {
     // here. (See the same rule in the badge tier — an expected category gets a
     // labelled number, never a silent `continue`.)
     let clipped = 0, whole = 0, bounded = 0, nofloor = 0;
+    // ⚠️ THE PER-POOL NAMING IS GONE, AND THESE COUNTERS ARE WHAT IT LEFT
+    // (2.482.0, /dry-audit). It printed a line per suspicious pool for three
+    // releases and earned every one of them — it is what separated an LED strip
+    // parked on a neighbour's floor (cached 2.15 m, real 0.00 m) from a stair
+    // light 14 cm above its tread, after two fixes aimed at a single number had
+    // moved nothing. Both answers are now encoded: the first became the
+    // re-probe, the second became `nearFixture`, and `bounded`/`crushed` went to
+    // zero once the storey rule was fixed. A counter that still separates two
+    // outcomes stays; forty lines of naming a question nobody is asking do not.
     /** Pools whose bucketed floor was wrong and was re-probed — a real fix. */
     let poolCorrected = 0;
     /** Pools legitimately mounted close to what they light — NOT a fault. */
     let nearFixture = 0;
-    let airborneNamed = 0;
     /** Pools bounded all the way down to POOL_MIN_RADIUS — visually absent. */
     let crushed = 0;
-    let crushedNamed = 0;
-    let boundedNamed = 0;
     const recovered = this.retryPendingPools();
     for (const pools of this.meshLightPools.values()) {
       for (const pool of pools) {
@@ -2815,15 +2821,6 @@ export class EntityVisuals {
           // for lamps, or something else entirely. Those need opposite fixes —
           // and one of them needs no fix at all. Debug-gated: this re-probes
           // uncached, ~21 ms a piece.
-          if (airborneNamed < 12 && debugFlagEnabled()) {
-            airborneNamed += 1;
-            tapDebug(`  pool "${pool.mesh.name}"`
-              + ` fixtureY=${pool.probeFromY.toFixed(2)}`
-              + ` floorY=${surfaceY.toFixed(2)}`
-              + (fresh ? ` hit="${fresh.what}"` : " fresh=MISS")
-              + (poolCorrectedHere ? "  — CORRECTED from the bucketed answer"
-                : "  — mounted close to what it lights, not a fault"));
-          }
         }
         // Two rules, and which one applies is decided by what we KNOW: a probed
         // surface is a floor being stood on (nearest), a fixture height is an
@@ -2868,47 +2865,7 @@ export class EntityVisuals {
           // only a name says WHICH light and how far the wall that crushed it
           // was, which is the difference between "a real wall is 30 cm away"
           // and "a polygon from another storey is being measured against".
-          // ⚠️ THE BUCKET THAT SPILLS THROUGH WALLS, NAMED (2.476.2). A clipped
-          // pool is cut to its room outline and physically cannot cross a wall;
-          // a BOUNDED one found no room at all, stays a full circle, and is
-          // limited only by the distance to the nearest OTHER room's edge — so
-          // it washes straight through its own walls onto whatever is outside.
-          // Reported as "the lights are lighting outside the walls", with a gym
-          // whose name appears in no ground-floor room list.
-          //
-          // The count alone cannot say WHY the room lookup failed, and the two
-          // causes need opposite fixes: the plan genuinely has no polygon there
-          // (nothing the app can do — the room has to exist in SweetHome), or a
-          // polygon exists but was rejected as belonging to another storey,
-          // which is an app bug and one this session has already moved twice by
-          // changing floor heights (`storeys=4 → 3`).
-          if (boundedNamed < 10 && debugFlagEnabled()) {
-            boundedNamed += 1;
-            const fy = surfaceY ?? pool.probeFromY;
-            let best = Infinity; let bestName = "-"; let bestFloor = NaN;
-            for (const r of this.roomPolys) {
-              if (!pointInPolygon(x, z, r.pts)) continue;
-              const d = Math.abs(r.floorY - fy);
-              if (d < best) { best = d; bestName = r.name; bestFloor = r.floorY; }
-            }
-            tapDebug(`  pool UNCLIPPED "${pool.mesh.name}"`
-              + ` at=${x.toFixed(1)},${z.toFixed(1)} floorY=${fy.toFixed(2)}`
-              + ` radius=${radius.toFixed(2)}m`
-              + (Number.isFinite(best)
-                ? ` — inside "${bestName}" (floorY=${bestFloor.toFixed(2)}) but`
-                  + ` REJECTED as another storey`
-                : " — inside no room polygon at all (the plan has none here)"));
-          }
-          if (radius <= POOL_MIN_RADIUS + 1e-3 && crushedNamed < 10
-            && debugFlagEnabled()) {
-            crushedNamed += 1;
-            crushed += 1;
-            tapDebug(`  pool CRUSHED "${pool.mesh.name}"`
-              + ` at=${x.toFixed(1)},${z.toFixed(1)}`
-              + ` floorY=${(surfaceY ?? pool.probeFromY).toFixed(2)}`
-              + ` nearestRoomEdge=${Number.isFinite(nearest) ? nearest.toFixed(2) : "-"}m`
-              + ` → radius ${POOL_MIN_RADIUS}m (invisible on screen)`);
-          } else if (radius <= POOL_MIN_RADIUS + 1e-3) crushed += 1;
+          if (radius <= POOL_MIN_RADIUS + 1e-3) crushed += 1;
         }
         pool.reshape(shape, radius, surfaceY === null ? undefined : surfaceY + POOL_FLOOR_LIFT);
       }
