@@ -1,3 +1,13 @@
+## 2.476.2
+
+### Added — say which lights wash through their own walls, and why
+
+A pool clipped to its room cannot cross a wall; one that found no room stays a
+full circle and spills outside. The count could not say whether the plan simply
+has no room there or whether a room was found and rejected as belonging to
+another storey — the first is a plan question, the second an app bug. Each such
+pool now names itself and says which of the two it is.
+
 ## 2.476.1
 
 ### Added — name the light pools that get crushed to nothing

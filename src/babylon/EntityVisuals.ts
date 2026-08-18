@@ -2754,6 +2754,7 @@ export class EntityVisuals {
     /** Pools bounded all the way down to POOL_MIN_RADIUS — visually absent. */
     let crushed = 0;
     let crushedNamed = 0;
+    let boundedNamed = 0;
     const recovered = this.retryPendingPools();
     for (const pools of this.meshLightPools.values()) {
       for (const pool of pools) {
@@ -2864,6 +2865,37 @@ export class EntityVisuals {
           // only a name says WHICH light and how far the wall that crushed it
           // was, which is the difference between "a real wall is 30 cm away"
           // and "a polygon from another storey is being measured against".
+          // ⚠️ THE BUCKET THAT SPILLS THROUGH WALLS, NAMED (2.476.2). A clipped
+          // pool is cut to its room outline and physically cannot cross a wall;
+          // a BOUNDED one found no room at all, stays a full circle, and is
+          // limited only by the distance to the nearest OTHER room's edge — so
+          // it washes straight through its own walls onto whatever is outside.
+          // Reported as "the lights are lighting outside the walls", with a gym
+          // whose name appears in no ground-floor room list.
+          //
+          // The count alone cannot say WHY the room lookup failed, and the two
+          // causes need opposite fixes: the plan genuinely has no polygon there
+          // (nothing the app can do — the room has to exist in SweetHome), or a
+          // polygon exists but was rejected as belonging to another storey,
+          // which is an app bug and one this session has already moved twice by
+          // changing floor heights (`storeys=4 → 3`).
+          if (boundedNamed < 10 && debugFlagEnabled()) {
+            boundedNamed += 1;
+            const fy = surfaceY ?? pool.probeFromY;
+            let best = Infinity; let bestName = "-"; let bestFloor = NaN;
+            for (const r of this.roomPolys) {
+              if (!pointInPolygon(x, z, r.pts)) continue;
+              const d = Math.abs(r.floorY - fy);
+              if (d < best) { best = d; bestName = r.name; bestFloor = r.floorY; }
+            }
+            tapDebug(`  pool UNCLIPPED "${pool.mesh.name}"`
+              + ` at=${x.toFixed(1)},${z.toFixed(1)} floorY=${fy.toFixed(2)}`
+              + ` radius=${radius.toFixed(2)}m`
+              + (Number.isFinite(best)
+                ? ` — inside "${bestName}" (floorY=${bestFloor.toFixed(2)}) but`
+                  + ` REJECTED as another storey`
+                : " — inside no room polygon at all (the plan has none here)"));
+          }
           if (radius <= POOL_MIN_RADIUS + 1e-3 && crushedNamed < 10
             && debugFlagEnabled()) {
             crushedNamed += 1;
