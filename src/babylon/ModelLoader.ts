@@ -632,9 +632,13 @@ export async function loadModelInto(
       "| all materials:",
       [...allMats].sort(),
     );
+    // ⚠️ tapDebug, for the reason spelled out at the `ceiling lighting:` line
+    // below: this says WHY the villa is lit the way it is, and every lighting
+    // question this project has had was answered from a capture the owner
+    // pasted off a wall iPad, where no console exists. One line per load.
     if (baked) {
-      devLog("[ModelLoader] BAKED-lighting GLB detected — structure renders unlit; " +
-        "dynamic light simulation will be disabled scene-wide");
+      tapDebug("lighting mode: BAKED — structure renders unlit; "
+        + "dynamic light simulation disabled scene-wide");
     }
 
     // Wire the day↔night crossfade when the GLB carries a night atlas.
@@ -652,8 +656,8 @@ export async function loadModelInto(
           dm.emissiveColor = new Color3(t, t, t);
         }
       };
-      devLog("[ModelLoader] night atlas found (" + (nightMat?.name ?? "?") +
-        ") — day/night handled by texture crossfade instead of exposure dimming");
+      tapDebug("night atlas: found (" + (nightMat?.name ?? "?")
+        + ") — day/night by texture crossfade, not exposure dimming");
     }
 
     // ---- Lightmap-mode wiring (see BAKED_LIGHTMAP_PREFIX) ----------------
@@ -931,24 +935,23 @@ export async function loadModelInto(
         const stem = m.name.replace(/_primitive\d+$/, "");
         stems.set(stem, (stems.get(stem) ?? 0) + 1);
       }
+      // ⚠️ ONE line, not two. A devLog sat directly beneath this saying the same
+      // thing in other words — same ceiling count, same tone, same material
+      // count — so the field capture carried half the sentence and the DEV
+      // console carried both. Its two unique numbers (how many meshes those
+      // materials span, and whether a night lightmap is present) are folded in
+      // here; a second, dimmer copy of a line whose own comment says the field
+      // is where it gets read is worse than no copy. (/dry-audit)
       tapDebug(
         `ceiling lighting: ${ceilings.length} exempt (own colour x ${CEILING_TONE}, `
         + `double-sided), ${missingUv2} structure mesh(es) skipped for no TEXCOORD_1, `
-        + `${lmMats.size} material(s) lightmapped`
+        + `${lmMats.size} material(s) lightmapped across ${structureMeshes.length} mesh(es)`
+        + (lmNightTex ? ", night lightmap present (hard swap at twilight)" : "")
         + ` — objects: ${[...stems].map(([n, c]) => `${n} x${c}`).join(", ") || "none"}`
         + (ambientCeilings
           ? `; ${ambientCeilings} ceiling mesh(es) LIT BY THE BAKE `
             + "(--ceiling-lighting ambient) so they keep their lightmap"
           : ""),
-      );
-      devLog(
-        `[ModelLoader] LIGHTMAP GLB detected — baked light on UV1 multiplied ` +
-        `onto ${lmMats.size} original structure material(s) across ` +
-        `${structureMeshes.length} mesh(es)` +
-        (ceilings.length
-          ? `; ${ceilings.length} ceiling(s) EXEMPT (own colour at ${CEILING_TONE} tone)`
-          : "") +
-        (lmNightTex ? "; night lightmap present (hard swap at twilight)" : ""),
       );
       if (missingUv2 > 0) {
         // Reported in the LOAD RECORD too, not just the console: the devices

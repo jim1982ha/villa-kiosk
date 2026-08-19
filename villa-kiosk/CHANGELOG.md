@@ -1,3 +1,13 @@
+## 2.487.0
+
+### Changed — lighting and camera diagnostics now appear in a pasted capture
+
+Four lines that answer "why is the villa lit like this", "which calibration
+fit was used" and "why is the camera blank" were console-only, so they were
+stripped from the add-on build — invisible on the wall iPad, which is the only
+place those questions are ever asked from. They now print with the rest of the
+capture. One duplicate line was removed rather than converted.
+
 ## 2.486.0
 
 ### Fixed — every room glow was rebuilt each time the kiosk regained focus

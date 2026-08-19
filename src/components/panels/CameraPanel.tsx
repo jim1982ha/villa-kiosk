@@ -29,7 +29,7 @@ import { useLongPress, HOLD_MS_HUD } from "@/hooks/useLongPress";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useBackToClose } from "@/hooks/useBackToClose";
-import { devLog } from "@/utils/devLog";
+import { tapDebug } from "@/utils/tapDebug";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { mergeStateHistories } from "./chartUtils";
@@ -422,14 +422,19 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // already decoding underneath by the time the overlay disappears).
   const [previewReady, setPreviewReady] = useState(false);
 
+  // ⚠️ tapDebug, not devLog. These two fire only when a stream has ALREADY
+  // failed, which is the moment someone is reading a capture — and "the camera
+  // shows nothing" is reported from the wall iPad, the one device whose Safari
+  // is fussiest about HLS and the one with no console to strip these into.
+  // A silent fallback chain leaves three indistinguishable failures.
   const fallBackToStream = (reason: string) => {
-    devLog("[Camera] HLS unavailable, falling back to MJPEG:", reason);
+    tapDebug(`camera: HLS unavailable, falling back to MJPEG — ${reason}`);
     streamLoaded.current = false;
     setFrameReady(false);
     setMode("stream");
   };
   const fallBackToSnapshot = (reason: string) => {
-    devLog("[Camera] MJPEG unavailable, falling back to snapshot:", reason);
+    tapDebug(`camera: MJPEG unavailable, falling back to snapshot — ${reason}`);
     snapErrors.current = 0;
     setFrameReady(false);
     setMode("snapshot");

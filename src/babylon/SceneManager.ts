@@ -3126,7 +3126,11 @@ export class SceneManager {
       return;
     }
     const planToWorld = solution.planToWorld;
-    devLog(`[Villa] calibration: ${solution.strategy}`);
+    // ⚠️ tapDebug, not devLog — same rule as ModelLoader's `ceiling lighting:`
+    // line. Which strategy the plan→world fit landed on is the first thing to
+    // ask when badges, room glows or light pools sit in the wrong place, and
+    // that is reported from a wall iPad with no console. One line per load.
+    tapDebug(`calibration: ${solution.strategy}`);
 
     // Transform each room polygon to model space; centroid → teleport point.
     const worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number; conform?: { positions: number[]; indices: number[] } }> = [];
