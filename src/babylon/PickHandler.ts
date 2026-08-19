@@ -145,7 +145,22 @@ export class PickHandler {
     }
 
     const mapping = this.resolveMesh(pick.pickedMesh);
-    tapDebug(`3D pick: mesh="${pick.pickedMesh.name}" mapping=${mapping?.entityId ?? "none"}`);
+    // ⚠️ COLLISION STATE ON THE LINE, because "can I walk through this?" was
+    // asked of this exact log twice and it could not answer. The owner walked
+    // through a glass balcony railing and fell a storey; the mesh's bounding
+    // box was measured against applyStructure's rule and PASSED it, but that
+    // is the rule ON PAPER — whether the flag was actually set on the mesh is
+    // a different claim, and running the two together is how a round was lost.
+    // One tap now separates "collision never enabled here" from "enabled and
+    // the geometry lets you through", which need completely different fixes.
+    const cm = pick.pickedMesh;
+    const bb = cm.getBoundingInfo().boundingBox.extendSizeWorld;
+    tapDebug(
+      `3D pick: mesh="${cm.name}" mapping=${mapping?.entityId ?? "none"}`
+      + ` collides=${cm.checkCollisions ? "y" : "n"}`
+      + ` enabled=${cm.isEnabled() ? "y" : "n"} pickable=${cm.isPickable ? "y" : "n"}`
+      + ` h=${(bb.y * 2).toFixed(2)} foot=${(bb.x * 2).toFixed(2)}x${(bb.z * 2).toFixed(2)}`,
+    );
     if (mapping) (longPress ? this.onLongPicked : this.onPicked)(mapping.entityId, clientX, clientY);
   }
 }

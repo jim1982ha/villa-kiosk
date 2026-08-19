@@ -1,3 +1,13 @@
+## 2.495.0
+
+### Added — tapping an object now reports whether it can be walked through
+
+Walking through a glass balcony railing and falling a storey could not be
+diagnosed from the log: it named the object hit, but said nothing about whether
+that object blocks movement. The tap line now reports collision state, size and
+whether the object is active, so one tap separates "this never blocks" from
+"it blocks but let you past".
+
 ## 2.494.0
 
 ### Added — the debug line now says how much geometry a floor check looked at
