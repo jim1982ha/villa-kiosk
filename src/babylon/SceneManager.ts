@@ -3682,7 +3682,31 @@ export class SceneManager {
       //    axes = a fused whole-house wall mesh). Excludes bulky furniture
       //    (wardrobe/fridge) so you no longer snag on it. (Babylon collides
       //    against real triangles, so a fused wall mesh still blocks correctly.)
-      const isWallShaped = meshH > 1.2 && (footMin < 0.5 || footMax > 3.0);
+      // ⚠️ THE NAME TEST CANNOT MATCH FUSED GEOMETRY, AND THE MATERIAL IS THE
+      // SURVIVING IDENTITY. The word list above was written for individual
+      // SweetHome catalog pieces, but the pipeline FUSES everything into
+      // Structure* and Babylon then names one child mesh per glTF primitive —
+      // so every structural mesh in this villa is called
+      // `Structure_L1_primitiveN`, and the list matches NONE of them: 0 of 344.
+      // The same list matches the MATERIAL of 34 of those 344, because glTF
+      // splits a fused object by material and SweetHome's material names are
+      // the original object's ("Glass_2_2_2_774", "wall_1_2").
+      //
+      // Found from an owner report of walking straight through a 2F glass
+      // balcony railing and falling a storey. Its tap read
+      // `collides=n h=0.66 foot=19.21x8.94`: a 0.66 m band of glass, under the
+      // 1.2 m "tall enough to be a wall" bar, with a name that could never
+      // match. Both tests failed and nothing else was left to catch it.
+      //
+      // ⚠️ A material match RELAXES THE HEIGHT BAR, it does not grant collision
+      // outright — `footMax > 3.0` still has to hold, so a barrier has to span
+      // a real run. That is deliberate: the list contains `glassBowl`, and a
+      // decorative bowl must not become a wall. Height alone is the wrong test
+      // for a balustrade (they are waist-high by definition); spanning nineteen
+      // metres is the thing that makes it a barrier.
+      const barrierMaterial = structuralByName.test(m.material?.name ?? "");
+      const isWallShaped = (meshH > 1.2 && (footMin < 0.5 || footMax > 3.0))
+        || (barrierMaterial && footMax > 3.0);
       const isExplicit = structuralByName.test(name);
       const isExcluded = neverCollide.test(name) || isStair;
       // Wall collisions are always on (the toggle was removed — you should

@@ -1,3 +1,13 @@
+## 2.496.0
+
+### Fixed — you could walk through the glass balcony railing and fall a storey
+
+Barriers were recognised by the name of their mesh, but the pipeline fuses the
+whole villa into a handful of objects, so every wall and railing is called
+"Structure_L1_primitive22" and no name ever matched. A waist-high glass railing
+was also too short to be recognised by shape. Barriers are now recognised by
+their material, which keeps the original name, provided they span a real run.
+
 ## 2.495.0
 
 ### Added — tapping an object now reports whether it can be walked through
