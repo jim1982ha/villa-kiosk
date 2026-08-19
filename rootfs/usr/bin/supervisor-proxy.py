@@ -1712,6 +1712,25 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
     purge evidence photos an authorised delete orphaned). Both are optional
     hooks on this one factory rather than a reason to fork it again.
 
+    ⚠️ TWO STORES ARE DELIBERATELY *NOT* BUILT HERE, AND CONVERGING EITHER ONE
+    WOULD BE A PRIVILEGE BUG, NOT A TIDY-UP (found by /dry-audit, 2026-08-19,
+    when the project's own architecture notes claimed all four stores were on
+    this factory — they are not, and for telemetry the permission model stated
+    there is exactly INVERTED):
+
+      * TELEMETRY is the mirror image of this contract. Its WRITE is open to
+        any authorized session, because a guest's iPhone going white after an
+        app switch is precisely the event worth capturing; its READ is
+        owner-only, because the ring carries other people's user-agent strings
+        and error text. Putting it here would publish that to every guest
+        session AND close the write path that makes it useful. It is also
+        append-one-into-a-bounded-ring, not replace-the-whole-document, so the
+        revision/409 conflict machinery below has nothing to conflict over.
+      * EVIDENCE PHOTOS are binary blobs on their own POST/GET pair, streamed
+        and content-checked rather than parsed as JSON.
+
+    Everything that IS a whole-document JSON store belongs here.
+
     That role difference used to be the excuse for a SECOND, hand-written PUT
     handler for the FM store. Copying the handler copied its auth/validation
     but silently NOT its revision check or its lock, so the FM store — the

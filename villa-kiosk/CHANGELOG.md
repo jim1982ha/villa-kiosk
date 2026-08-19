@@ -1,3 +1,13 @@
+## 2.487.1
+
+### Changed — recorded why telemetry is not on the shared store factory
+
+No behaviour change. The architecture notes said all four `/data` stores shared
+one handler factory with reads open and writes owner-only. Telemetry is the
+opposite on both counts by design — anyone signed in may report an error,
+only the owner may read the ring back — so following that note would have
+published other people's error logs to every guest session.
+
 ## 2.487.0
 
 ### Changed — lighting and camera diagnostics now appear in a pasted capture
