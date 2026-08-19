@@ -1,3 +1,12 @@
+## 2.494.0
+
+### Added — the debug line now says how much geometry a floor check looked at
+
+Walking upstairs costs three to four times more per floor check than walking
+downstairs, and up to half of all available time is spent on it there. Nothing
+recorded whether that is because more objects are being checked or because each
+one costs more, and those need different fixes. The count is now reported.
+
 ## 2.493.0
 
 ### Fixed — badges could stay hidden for a moment after walking to another floor

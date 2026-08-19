@@ -1470,7 +1470,8 @@ export class EntityVisuals {
    * Null until wired, and the field simply reads `-` then.
    */
   private walkFloorCost:
-    (() => { rays: number; ms: number; still: number; flat: boolean }) | null = null;
+    (() => { rays: number; ms: number; still: number; flat: boolean; cand: number })
+    | null = null;
   /** performance.now() when the eye last MOVED. The sweep waits for this to go
    *  quiet, so a walking frame never pays for a ray — see refreshWallOcclusion. */
   private movingSince = 0;
@@ -5557,7 +5558,9 @@ export class EntityVisuals {
    * change is a rate nobody can read.
    */
   /** See `walkFloorCost`. Called once by SceneManager after the camera exists. */
-  setWalkFloorCost(fn: () => { rays: number; ms: number; still: number; flat: boolean }): void {
+  setWalkFloorCost(
+    fn: () => { rays: number; ms: number; still: number; flat: boolean; cand: number },
+  ): void {
     this.walkFloorCost = fn;
   }
 
@@ -5647,7 +5650,8 @@ export class EntityVisuals {
         // a terrace edge it must read n, or the widening is hiding a fault.
         const line = ` floorRays=${c.rays} floorStill=${c.still}`
           + ` floorFlat=${c.flat ? "y" : "n"} floorMs=${c.ms.toFixed(2)}`
-          + (c.rays > 0 ? `/${(c.ms / c.rays).toFixed(1)}ms-per-ray` : "");
+          + (c.rays > 0 ? `/${(c.ms / c.rays).toFixed(1)}ms-per-ray` : "")
+          + ` floorCand=${c.cand}`;
         c.rays = 0;
         c.ms = 0;
         c.still = 0;

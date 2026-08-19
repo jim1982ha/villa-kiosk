@@ -90,7 +90,7 @@ export class CameraController {
    * here for the reason `moving=` is on the occlusion line: without it
    * `floorRays=0` reads as "cheap" when it means "not asked".
    */
-  readonly floorProbeCost = { rays: 0, ms: 0, still: 0, flat: false };
+  readonly floorProbeCost = { rays: 0, ms: 0, still: 0, flat: false, cand: 0 };
   /** Scratch for `roomHitTest` — see updateRoom. */
   private hitX = 0;
   private hitZ = 0;
@@ -686,6 +686,7 @@ export class CameraController {
     this.floorRay.direction.set(0, -1, 0);
     this.floorRay.length = length;
     let bestDist = Infinity;
+    let candTested = 0;
     let best: { y: number; onStair: boolean } | null = null;
     for (const m of this.floorCandidates) {
       // The DYNAMIC half of the old predicate, asked per ray because
@@ -693,6 +694,23 @@ export class CameraController {
       // hidden with setEnabled(false), not isVisible, and without it the
       // follower snaps onto a hidden floor's slab above you.
       if (!m.isPickable || !m.isVisible || !m.isEnabled()) continue;
+      // ⚠️ HOW MANY MESHES THIS RAY ACTUALLY TESTED, because the cost per ray
+      // TRIPLES between storeys and nothing in the capture says why. Owner
+      // capture 2026-08-19: 20.2 ms/ray on the ground floor against 65.6-77.4
+      // upstairs — 34-52% of wall-clock there — while the enabled triangle
+      // count is near-identical either way (~1.19 M: Structure 861k downstairs,
+      // Structure_L1 858k up, plus Structure_Exterior 331k on both).
+      //
+      // So the difference is NOT the storey's triangle budget, and the two
+      // candidate explanations need different fixes: either this ray tests far
+      // MORE meshes upstairs (the set accepts every pickable mesh, ~900, and
+      // the upper storey may simply have more of them enabled — the `active=`
+      // field hints at it, 201-246 up against 64-71 down), or it tests a
+      // similar number and each costs more. Counting is one increment; guessing
+      // between them has cost this project SEVEN disproved perf hypotheses (the
+      // documented count; the 2.492.0 flat gate is not an eighth — it was
+      // reverted for breaking stair climbing before any capture measured it).
+      candTested += 1;
       const info = this.floorRay.intersectsMesh(m, false);
       if (!info.hit || !info.pickedPoint || info.distance > length) continue;
       if (info.distance < bestDist) {
@@ -700,6 +718,10 @@ export class CameraController {
         best = { y: info.pickedPoint.y, onStair: m.metadata?.isStair === true };
       }
     }
+    // The LAST ray's figure, not a sum: it is a property of where you stand,
+    // and a total over a varying window would have to be divided by floorRays
+    // to mean anything (see the win= note on the walk line).
+    this.floorProbeCost.cand = candTested;
     return best;
   }
 
