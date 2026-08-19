@@ -486,8 +486,35 @@ export class CameraController {
    * the floor is flat and it collapses to FLOOR_PROBE_MIN_MOVE the moment the
    * floor stops being flat or a stair is under foot.
    *
-   * 0.30 m is a quarter of the shortest stair tread run this pipeline emits, so
-   * a step cannot hide inside one; at ~1.4 m/s it is ~215 ms of walking.
+   * ⚠️ WHY 0.30 AND NOT MORE, since the obvious question is "why not 0.50, it
+   * would save more". The saving is real and small; the risk is not.
+   *
+   * WALK_SPEED is 0.018/frame at 60 fps = 1.08 m/s, and the 90 ms throttle
+   * already caps the 1 cm gate at ~11 probes/s (9.7 cm of travel per slot, so
+   * the THROTTLE bound, never the 1 cm). At the measured 25-33 ms per ray:
+   *
+   *     gate     rays/s   share of wall-clock
+   *     1 cm      11.1          ~32 %          (throttle-bound)
+   *     0.30 m     3.6          ~10 %
+   *     0.50 m     2.2           ~6 %
+   *
+   * So 1 cm → 0.30 m takes 22 points off; 0.30 → 0.50 takes 4 more. The large
+   * win is already taken and the rest is a tail.
+   *
+   * What 0.50 costs is the margin on the ONE rule that can strand a walker.
+   * `followFloor` below ignores an off-stair step-up above STEP_CLEAR (0.55 m)
+   * as furniture — and stairs are NOT reliably stamped, so a real staircase can
+   * arrive with onStair false. The gate defers noticing a rise until the walker
+   * has moved that far onto it, so with a domestic tread run of ~0.25-0.30 m
+   * (a building fact, not a number this repo owns) the accumulated rise before
+   * the first probe is about one riser at 0.30 m and about two at 0.50 m —
+   * ~0.17 m against ~0.35 m, i.e. a 3.2x margin under STEP_CLEAR falling to
+   * 1.6x. Both still clear it; only one of them clears it comfortably, and the
+   * failure it guards against is not a stutter but a walker that will not climb.
+   *
+   * The 10x lever is not this constant at all — it is splitting `Structure`
+   * SPATIALLY in the bake instead of by material, which is what would make the
+   * ray itself cheap. See the note on that in project memory.
    */
   private static readonly FLOOR_PROBE_FLAT_MOVE = 0.30;
   /** Two consecutive probes agreeing within this are "the same floor". */

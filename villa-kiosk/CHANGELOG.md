@@ -1,3 +1,12 @@
+## 2.492.1
+
+### Changed — corrected the reasoning recorded for the floor-probe distance
+
+No behaviour change. The note explaining why the walker re-checks the floor
+every 30cm justified that number with a stair dimension the pipeline does not
+actually define. It now carries the arithmetic it was really chosen from, and
+the reason a larger distance is not taken.
+
 ## 2.492.0
 
 ### Changed — walking asks "how high is the floor?" far less often on level ground
