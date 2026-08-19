@@ -1434,6 +1434,9 @@ export class EntityVisuals {
    *  rebuilt every pass while the answer outlives it (the sweep is
    *  round-robin). Empty in overview, always. */
   private occludedIds = new Set<string>();
+  /** Scratch for pruning `occludedIds` to the live shown set — allocated once,
+   *  because the prune runs on every sweep restart, i.e. every walking frame. */
+  private readonly occlLive = new Set<string>();
   /** Where the answers in `occludedIds` were measured from; a different eye
    *  position restarts the sweep. */
   private occlusionFrom = new Vector3(NaN, NaN, NaN);
@@ -5419,6 +5422,26 @@ export class EntityVisuals {
       this.occlusionFrom.copyFrom(eye);
       this.occlusionSwept = 0;
       this.movingSince = performance.now();
+      // ⚠️ PRUNE TO THE LIVE SET. `occludedIds` persists across frames on
+      // purpose — it is what carries the last still pose's answers — but it was
+      // only ever CLEARED on leaving first-person, so walking UPSTAIRS kept
+      // every id the ground floor had occluded. Caught by its own counter
+      // printing the impossible `occl=52/16`: 52 remembered ids against 16
+      // badges on the storey.
+      //
+      // Not cosmetic. Every frame seeds `s.occluded` from this set, and
+      // `settleChips` hides a whole room chip when EVERY member is in it — so a
+      // stale id can hide a badge, or a room's chip, until the round-robin
+      // sweep happens to re-test it, which is 2-8 rays a pass.
+      if (this.occludedIds.size > 0) {
+        this.occlLive.clear();
+        for (const s of shown) this.occlLive.add(s.id);
+        for (const id of this.occludedIds) {
+          if (this.occlLive.has(id)) continue;
+          this.occludedIds.delete(id);
+          this.occlBlockedBy.delete(id);
+        }
+      }
     }
     // ⚠️ NOT A FRAME OF RAYS WHILE MOVING — see this method's header. The
     // answers on screen are the last still pose's, stale by at most the
@@ -5565,6 +5588,16 @@ export class EntityVisuals {
     if (!debugFlagEnabled()) return;
     const now = performance.now();
     if (now - this.lastWalkReportAt < WALK_REPORT_MS) return;
+    // ⚠️ THE WINDOW IS NOT WALK_REPORT_MS AND THIS LINE USED TO IMPLY IT WAS.
+    // reportWalkCost is called from the occlusion sweep, which early-returns
+    // once the sweep is complete and the eye is still — so the throttle is a
+    // FLOOR on the gap, never the gap itself. An owner capture ran 2.0, 2.4,
+    // 4.5 and 9.6 s between consecutive lines, and `floorMs=2466` over 9.6 s is
+    // 26% of wall-clock where the same figure over 2 s would be impossible.
+    // Every "per 2 s window" reading taken off this line before 2.493.0 was
+    // therefore arithmetic on an assumed denominator, mine included. Printed so
+    // the rate can be computed instead of assumed.
+    const winMs = this.lastWalkReportAt === 0 ? 0 : now - this.lastWalkReportAt;
     this.lastWalkReportAt = now;
     const eng = this.scene.getEngine();
     tapDebug(
@@ -5576,6 +5609,7 @@ export class EntityVisuals {
       + ` moving=${performance.now() - this.movingSince < OCCLUSION_SETTLE_MS ? "y" : "n"}`
       + ` rays=${this.occlRays}/pass occlMs=${this.occlMs.toFixed(2)}`
       + ` occluders=${this.occluders.length} active=${this.scene.getActiveMeshes().length}`
+      + ` win=${(winMs / 1000).toFixed(1)}s`
       // ⚠️ The field that turns `occl=N/M` from a count into a diagnosis. Top
       // blockers by share, each with up to two of the entities it hid, so
       // "the ceiling is eating badges" and "you are simply indoors and most of
@@ -5612,7 +5646,8 @@ export class EntityVisuals {
         // "the gate widened because the ground was level" — and on a stair or
         // a terrace edge it must read n, or the widening is hiding a fault.
         const line = ` floorRays=${c.rays} floorStill=${c.still}`
-          + ` floorFlat=${c.flat ? "y" : "n"} floorMs=${c.ms.toFixed(2)}`;
+          + ` floorFlat=${c.flat ? "y" : "n"} floorMs=${c.ms.toFixed(2)}`
+          + (c.rays > 0 ? `/${(c.ms / c.rays).toFixed(1)}ms-per-ray` : "");
         c.rays = 0;
         c.ms = 0;
         c.still = 0;

@@ -1,3 +1,14 @@
+## 2.493.0
+
+### Fixed — badges could stay hidden for a moment after walking to another floor
+
+The list of "devices currently behind a wall" was only emptied when leaving
+first-person, so climbing the stairs carried the ground floor's answers upstairs
+with it. A badge, or a whole room's label, could stay hidden until the next
+sweep re-checked it. The list is now trimmed to the devices actually on screen.
+The debug line also states the period it is reporting over, which was not always
+the two seconds it implied.
+
 ## 2.492.2
 
 ### Fixed — stairs could not be climbed
