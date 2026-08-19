@@ -1,3 +1,13 @@
+## 2.488.0
+
+### Changed — two code comments marking sites an audit had already judged
+
+No behaviour change. The maintenance audit re-examined the same handful of
+deliberate exceptions on every run because nothing recorded that they had been
+looked at. Both now say so where they stand: the chunked-upload append in the
+proxy, and the ceiling-fan name test whose safety comes from the caller's type
+check rather than from the pattern itself.
+
 ## 2.487.1
 
 ### Changed — recorded why telemetry is not on the shared store factory

@@ -1483,6 +1483,7 @@ async def _chunked_upload(request: web.Request, kind: str, dest: str,
     # Recorded here because a bare `open(..., "ab")` in this file reads exactly
     # like a missed atomic_write, and an audit that re-flags it every time
     # eventually gets someone to "fix" it into something that cannot work.
+    # (/dry-audit: adjudicated — this token is what keeps the sweep quiet here.)
     try:
         with open(part, "wb" if offset == 0 else "ab") as out:
             n = await _stream_upload_body(

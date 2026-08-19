@@ -9503,6 +9503,12 @@ export class EntityVisuals {
    *  CEILING fans spin — VMC/exhaust `fan.*` entities (bathroom vents) must not. */
   private updateFanSpin(entity: HassEntity, meshes: AbstractMesh[]): void {
     const id = entity.entity_id;
+    // ⚠️ Unanchored on purpose, and safe only because of the `map.type === "fan"`
+    // gate at the call site — without it this would match `light.x_ceiling_fan_light`
+    // and spin a lamp. /dry-audit re-flags this shape (the documented trap is
+    // `door` matching inside `outdoor`); anchoring to (^|[._])…([._]|$) would
+    // not change the verdict for any realistic id, since the ambiguous cases
+    // (`fan.bathroom_ceiling_fan`, a ceiling-mounted extractor) match either way.
     if (!/ceiling[_-]?fan/i.test(id)) return; // e.g. fan.ceiling_fan_* only
     if (entity.state === "on") {
       const pct = entity.attributes.percentage as number | undefined;
