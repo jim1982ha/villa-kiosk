@@ -1,3 +1,13 @@
+## 2.492.2
+
+### Fixed — stairs could not be climbed
+
+2.492.0 re-checked the floor height only every 30cm of walking on level ground,
+to cut the cost of that measurement. But the check is triggered BY walking, and
+a walker stopped at the foot of a staircase cannot walk — so the floor was never
+re-measured, the rise was never noticed, and the climb never started. Walking is
+back to exactly what it was before that change; the saving is given up.
+
 ## 2.492.1
 
 ### Changed — corrected the reasoning recorded for the floor-probe distance

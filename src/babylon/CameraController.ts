@@ -460,12 +460,11 @@ export class CameraController {
    */
   private static readonly FLOOR_PROBE_MIN_MOVE = 0.01;
   /**
-   * The same gate, widened once the floor has PROVED itself flat.
+   * ⚠️ THE WIDENED "FLAT GROUND" GATE WAS TRIED AND WITHDRAWN (2.492.0 →
+   * 2.492.2). Kept in full because the measurements are sound and only the
+   * MECHANISM was wrong, and re-deriving them costs a bake and a capture.
    *
-   * ⚠️ A NUMBER CHOSEN FROM MEASURED GEOMETRY, not from taste, and the eighth
-   * time this ray has been the suspect — so what is claimed here is only what
-   * was measured. Two facts, neither of them a hypothesis:
-   *
+   * WHAT WAS MEASURED, and still stands:
    *  (a) On floor 1 this ray tests `Structure` (861,289 triangles) plus
    *      `Structure_Exterior` (331,029), read out of the GLB itself. They are
    *      MATERIAL-based primitives, so each bounding box spans the whole villa
@@ -476,47 +475,32 @@ export class CameraController {
    *      tested — so the short ray is culled as though it were infinite and
    *      costs what the 200 m fallback costs. That is why floorMs never split
    *      between the two.
+   *  (c) WALK_SPEED 0.018/frame @60fps = 1.08 m/s, and the 90 ms throttle
+   *      already caps the 1 cm gate at ~11 probes/s (9.7 cm per slot — the
+   *      THROTTLE binds, never the 1 cm). At the measured 25-33 ms/ray:
+   *      1 cm ≈ 32 % of wall-clock, 0.30 m ≈ 10 %, 0.50 m ≈ 6 %.
    *
-   * Neither is reachable by tuning a constant, and 2.454.0 already proved that
-   * changing the MECHANISM does nothing (13.68 → 13.70 ms/ray). What is left is
-   * to ask the question less often — and since "how high is the floor here" is a
-   * SPATIAL question, the gate belongs in space, not in time. A backoff measured
-   * in milliseconds would let a walker cross a terrace edge unnoticed; one
-   * measured in metres cannot, because the error it admits is exactly zero while
-   * the floor is flat and it collapses to FLOOR_PROBE_MIN_MOVE the moment the
-   * floor stops being flat or a stair is under foot.
+   * WHY IT WAS WITHDRAWN — the flaw is structural, not a wrong number. A gate
+   * armed by MOVEMENT waits for exactly what a blocked walker cannot produce.
+   * Approach a stair with the gate 0.30 m wide; if the capsule catches at the
+   * foot of the flight the walker stops, therefore never travels 0.30 m,
+   * therefore never re-probes, never learns the floor rose, never rises, and
+   * stays blocked. The 1 cm gate cannot deadlock because collision jitter alone
+   * re-arms it. Reported by the owner as "I can't climb up the stair anymore"
+   * one release after it shipped.
    *
-   * ⚠️ WHY 0.30 AND NOT MORE, since the obvious question is "why not 0.50, it
-   * would save more". The saving is real and small; the risk is not.
+   * ⚠️ THE WAY BACK, if anyone takes this on again: a hard CEILING on
+   * consecutive skipped slots, so a stalled walker always re-probes within a few
+   * frames whatever the distance gate says. That is a different mechanism from
+   * the one that failed, and it must not be shipped on the strength of this
+   * comment alone — it needs the owner's stairs working first and a capture to
+   * judge it by.
    *
-   * WALK_SPEED is 0.018/frame at 60 fps = 1.08 m/s, and the 90 ms throttle
-   * already caps the 1 cm gate at ~11 probes/s (9.7 cm of travel per slot, so
-   * the THROTTLE bound, never the 1 cm). At the measured 25-33 ms per ray:
-   *
-   *     gate     rays/s   share of wall-clock
-   *     1 cm      11.1          ~32 %          (throttle-bound)
-   *     0.30 m     3.6          ~10 %
-   *     0.50 m     2.2           ~6 %
-   *
-   * So 1 cm → 0.30 m takes 22 points off; 0.30 → 0.50 takes 4 more. The large
-   * win is already taken and the rest is a tail.
-   *
-   * What 0.50 costs is the margin on the ONE rule that can strand a walker.
-   * `followFloor` below ignores an off-stair step-up above STEP_CLEAR (0.55 m)
-   * as furniture — and stairs are NOT reliably stamped, so a real staircase can
-   * arrive with onStair false. The gate defers noticing a rise until the walker
-   * has moved that far onto it, so with a domestic tread run of ~0.25-0.30 m
-   * (a building fact, not a number this repo owns) the accumulated rise before
-   * the first probe is about one riser at 0.30 m and about two at 0.50 m —
-   * ~0.17 m against ~0.35 m, i.e. a 3.2x margin under STEP_CLEAR falling to
-   * 1.6x. Both still clear it; only one of them clears it comfortably, and the
-   * failure it guards against is not a stutter but a walker that will not climb.
-   *
-   * The 10x lever is not this constant at all — it is splitting `Structure`
-   * SPATIALLY in the bake instead of by material, which is what would make the
-   * ray itself cheap. See the note on that in project memory.
+   * ⚠️ AND THE REAL LEVER IS NOT THIS CONSTANT AT ALL: splitting `Structure`
+   * SPATIALLY in the bake instead of by material would make bounding-box
+   * rejection work and cut the ray itself, rather than rationing it. See the
+   * note in project memory.
    */
-  private static readonly FLOOR_PROBE_FLAT_MOVE = 0.30;
   /** Two consecutive probes agreeing within this are "the same floor". */
   private static readonly FLOOR_FLAT_EPS = 0.002;
   /** Whether the last probe confirmed flat, level, non-stair ground. */
@@ -586,12 +570,27 @@ export class CameraController {
       // one interval for its first probe, which is the same 90 ms staleness
       // walking already carries.
       const anchor = this.floorProbeAnchor;
-      // Flat ground earns a wider gate; anything else keeps the 1 cm one. The
-      // widening is withdrawn by the probe that DISPROVES flatness, so the
-      // first probe onto a stair or over an edge is already back at 1 cm.
-      const eps = this.floorFlat
-        ? CameraController.FLOOR_PROBE_FLAT_MOVE
-        : CameraController.FLOOR_PROBE_MIN_MOVE;
+      // ⚠️ WITHDRAWN IN 2.492.2 — this read `this.floorFlat ?
+      // FLOOR_PROBE_FLAT_MOVE : FLOOR_PROBE_MIN_MOVE`, and the owner could no
+      // longer climb the stairs. Kept as a record rather than deleted, because
+      // the mechanism is worth understanding before anyone tries it again.
+      //
+      // THE FLAW IS STRUCTURAL, not a wrong constant: this gate is armed by
+      // MOVEMENT, and the movement it waits for is exactly what a walker cannot
+      // produce while blocked. Approach a stair on flat ground and the gate is
+      // 0.30 m wide; if the capsule catches on anything at the foot of the
+      // flight, the walker stops, therefore never travels 0.30 m, therefore
+      // never re-probes, therefore never learns the floor rose, therefore never
+      // rises, therefore stays blocked. The 1 cm gate could not deadlock because
+      // collision jitter alone re-armed it.
+      //
+      // The saving was real (~22 points of wall-clock, see FLOOR_PROBE_FLAT_MOVE)
+      // and the way back is a hard CEILING on consecutive skipped slots so a
+      // stalled walker always re-probes within a few frames — but that is a
+      // second attempt at a mechanism that just broke walking, and it does not
+      // get shipped on the same reasoning that produced the first one. It needs
+      // the owner's stairs working first, and a capture to judge it by.
+      const eps = CameraController.FLOOR_PROBE_MIN_MOVE;
       const still = anchor !== null && this.lastFloorHit !== null
         && Math.abs(p.x - anchor.x) < eps && Math.abs(p.z - anchor.z) < eps;
       if (still) {
