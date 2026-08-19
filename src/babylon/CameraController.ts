@@ -90,7 +90,7 @@ export class CameraController {
    * here for the reason `moving=` is on the occlusion line: without it
    * `floorRays=0` reads as "cheap" when it means "not asked".
    */
-  readonly floorProbeCost = { rays: 0, ms: 0, still: 0 };
+  readonly floorProbeCost = { rays: 0, ms: 0, still: 0, flat: false };
   /** Scratch for `roomHitTest` — see updateRoom. */
   private hitX = 0;
   private hitZ = 0;
@@ -459,6 +459,41 @@ export class CameraController {
    * ever swallow numerical drift, never a step.
    */
   private static readonly FLOOR_PROBE_MIN_MOVE = 0.01;
+  /**
+   * The same gate, widened once the floor has PROVED itself flat.
+   *
+   * ⚠️ A NUMBER CHOSEN FROM MEASURED GEOMETRY, not from taste, and the eighth
+   * time this ray has been the suspect — so what is claimed here is only what
+   * was measured. Two facts, neither of them a hypothesis:
+   *
+   *  (a) On floor 1 this ray tests `Structure` (861,289 triangles) plus
+   *      `Structure_Exterior` (331,029), read out of the GLB itself. They are
+   *      MATERIAL-based primitives, so each bounding box spans the whole villa
+   *      and rejects nothing.
+   *  (b) Babylon's `Ray.intersectsBoxMinMax` carries the comment "This does not
+   *      account for the ray length by design to improve perfs". The 2.6 m band
+   *      is enforced only inside `intersectsTriangle`, AFTER each triangle is
+   *      tested — so the short ray is culled as though it were infinite and
+   *      costs what the 200 m fallback costs. That is why floorMs never split
+   *      between the two.
+   *
+   * Neither is reachable by tuning a constant, and 2.454.0 already proved that
+   * changing the MECHANISM does nothing (13.68 → 13.70 ms/ray). What is left is
+   * to ask the question less often — and since "how high is the floor here" is a
+   * SPATIAL question, the gate belongs in space, not in time. A backoff measured
+   * in milliseconds would let a walker cross a terrace edge unnoticed; one
+   * measured in metres cannot, because the error it admits is exactly zero while
+   * the floor is flat and it collapses to FLOOR_PROBE_MIN_MOVE the moment the
+   * floor stops being flat or a stair is under foot.
+   *
+   * 0.30 m is a quarter of the shortest stair tread run this pipeline emits, so
+   * a step cannot hide inside one; at ~1.4 m/s it is ~215 ms of walking.
+   */
+  private static readonly FLOOR_PROBE_FLAT_MOVE = 0.30;
+  /** Two consecutive probes agreeing within this are "the same floor". */
+  private static readonly FLOOR_FLAT_EPS = 0.002;
+  /** Whether the last probe confirmed flat, level, non-stair ground. */
+  private floorFlat = false;
   private floorProbeAnchor: { x: number; z: number } | null = null;
   /**
    * The meshes a downward floor ray is allowed to hit, resolved ONCE per load
@@ -524,7 +559,12 @@ export class CameraController {
       // one interval for its first probe, which is the same 90 ms staleness
       // walking already carries.
       const anchor = this.floorProbeAnchor;
-      const eps = CameraController.FLOOR_PROBE_MIN_MOVE;
+      // Flat ground earns a wider gate; anything else keeps the 1 cm one. The
+      // widening is withdrawn by the probe that DISPROVES flatness, so the
+      // first probe onto a stair or over an edge is already back at 1 cm.
+      const eps = this.floorFlat
+        ? CameraController.FLOOR_PROBE_FLAT_MOVE
+        : CameraController.FLOOR_PROBE_MIN_MOVE;
       const still = anchor !== null && this.lastFloorHit !== null
         && Math.abs(p.x - anchor.x) < eps && Math.abs(p.z - anchor.z) < eps;
       if (still) {
@@ -555,7 +595,21 @@ export class CameraController {
         // A miss keeps the previous lastFloorHit rather than clearing it, so one
         // unlucky probe (e.g. a momentary gap) doesn't stall the follower for a
         // whole throttle interval — it just tries again next time.
-        if (hit) this.lastFloorHit = hit;
+        //
+        // ⚠️ Flatness is decided BEFORE lastFloorHit is replaced, because it is
+        // a comparison between THIS answer and the previous one. A miss clears
+        // it outright: an unanswered probe is not evidence of flat ground, and
+        // widening the gate on the strength of a question that failed is how a
+        // cache turns into an assumption (see this class's own note above).
+        if (hit) {
+          this.floorFlat = this.lastFloorHit !== null
+            && !hit.onStair
+            && Math.abs(hit.y - this.lastFloorHit.y) < CameraController.FLOOR_FLAT_EPS;
+          this.lastFloorHit = hit;
+        } else {
+          this.floorFlat = false;
+        }
+        this.floorProbeCost.flat = this.floorFlat;
       }
     }
     if (!this.lastFloorHit) return;
@@ -634,6 +688,9 @@ export class CameraController {
   invalidateFloorProbe(): void {
     this.floorProbeAnchor = null;
     this.lastFloorProbeAt = 0;
+    // The two callers change which slab is under the walker without moving
+    // them, so the previous answer is not evidence about the new one.
+    this.floorFlat = false;
   }
 
   groundCamera(): void {

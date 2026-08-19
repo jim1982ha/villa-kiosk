@@ -1466,7 +1466,8 @@ export class EntityVisuals {
    * scene layer's one rule is that these subsystems talk through SceneManager.
    * Null until wired, and the field simply reads `-` then.
    */
-  private walkFloorCost: (() => { rays: number; ms: number; still: number }) | null = null;
+  private walkFloorCost:
+    (() => { rays: number; ms: number; still: number; flat: boolean }) | null = null;
   /** performance.now() when the eye last MOVED. The sweep waits for this to go
    *  quiet, so a walking frame never pays for a ray — see refreshWallOcclusion. */
   private movingSince = 0;
@@ -5533,7 +5534,7 @@ export class EntityVisuals {
    * change is a rate nobody can read.
    */
   /** See `walkFloorCost`. Called once by SceneManager after the camera exists. */
-  setWalkFloorCost(fn: () => { rays: number; ms: number; still: number }): void {
+  setWalkFloorCost(fn: () => { rays: number; ms: number; still: number; flat: boolean }): void {
     this.walkFloorCost = fn;
   }
 
@@ -5606,7 +5607,12 @@ export class EntityVisuals {
         // `floorStill` is this line's `moving=`: probe slots the stationary gate
         // declined. Without it `floorRays=0` reads as "cheap" when what it means
         // is "the eye did not move", and those are different findings.
-        const line = ` floorRays=${c.rays} floorStill=${c.still} floorMs=${c.ms.toFixed(2)}`;
+        // `floorFlat` is why the other two moved. Without it a drop in
+        // floorRays reads as "the probe got cheaper" when what happened is
+        // "the gate widened because the ground was level" — and on a stair or
+        // a terrace edge it must read n, or the widening is hiding a fault.
+        const line = ` floorRays=${c.rays} floorStill=${c.still}`
+          + ` floorFlat=${c.flat ? "y" : "n"} floorMs=${c.ms.toFixed(2)}`;
         c.rays = 0;
         c.ms = 0;
         c.still = 0;

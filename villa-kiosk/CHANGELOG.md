@@ -1,3 +1,14 @@
+## 2.492.0
+
+### Changed — walking asks "how high is the floor?" far less often on level ground
+
+The floor under a walker is re-measured every centimetre of travel, and each
+measurement is expensive because the villa's structure is one fused shape that
+no shortcut can narrow. On flat ground consecutive answers are identical, so the
+question is now only re-asked every 30cm — and the moment two answers differ, or
+a stair is under foot, it returns to every centimetre. Stairs and terrace edges
+behave exactly as before.
+
 ## 2.491.0
 
 ### Fixed — ceiling fans and the sensors beside them lost their badges indoors
