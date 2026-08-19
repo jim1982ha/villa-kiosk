@@ -691,8 +691,10 @@ export async function loadModelInto(
        *  keep its authored brightness. */
       const ceilings: AbstractMesh[] = [];
       let missingUv2 = 0;
-      /** Ceilings the bake lit with a real ambient — see the branch below. */
-      let ambientCeilings = 0;
+      /** Ceilings the bake lit with a real ambient — see the branch below.
+       *  The MESHES, not a count: `objects:` has to name them too, and a count
+       *  beside a list is two sources for one fact. */
+      const ambientCeil: AbstractMesh[] = [];
       for (const m of result.meshes) {
         // ⚠️ `|| isCeilingMesh` — a name-matched ceiling is not pipeline
         // structure, and skipping it here is what made eleven of them render
@@ -755,7 +757,7 @@ export async function loadModelInto(
           // option exists to produce. So the app follows the stamp rather than
           // assuming, and a GLB with no stamp keeps the old behaviour.
           if (structureRole(m).ceilingLight === "ambient") {
-            ambientCeilings += 1;
+            ambientCeil.push(m);
             // Still double-sided: SweetHome's thin slabs carry normals that can
             // point the wrong way, and the underside is the only face anyone
             // sees. That is orthogonal to how it was lit.
@@ -930,9 +932,21 @@ export async function loadModelInto(
       // and answers the question the count cannot: WHICH objects, and for which
       // storeys. A ceiling list showing only L0 means the upper storeys' lids
       // are missing from the GLB, not from this code.
+      // ⚠️ EVERY ceiling, not only the exempt ones. This list answers "WHICH
+      // objects, and for which storeys", and it was built from `ceilings` —
+      // the exempt bucket alone — so the first `--ceiling-lighting ambient`
+      // GLB printed `objects: none` beside `16 ceiling mesh(es) LIT BY THE
+      // BAKE`. A field that reads "none" while sixteen of the thing exist has
+      // stopped answering its question in that mode, which is the shape of
+      // instrument rot this project keeps paying for. Each stem carries its
+      // MODE so the two buckets stay distinguishable in one glance.
       const stems = new Map<string, number>();
       for (const m of ceilings) {
-        const stem = m.name.replace(/_primitive\d+$/, "");
+        const stem = `${m.name.replace(/_primitive\d+$/, "")}[exempt]`;
+        stems.set(stem, (stems.get(stem) ?? 0) + 1);
+      }
+      for (const m of ambientCeil) {
+        const stem = `${m.name.replace(/_primitive\d+$/, "")}[ambient]`;
         stems.set(stem, (stems.get(stem) ?? 0) + 1);
       }
       // ⚠️ ONE line, not two. A devLog sat directly beneath this saying the same
@@ -948,8 +962,8 @@ export async function loadModelInto(
         + `${lmMats.size} material(s) lightmapped across ${structureMeshes.length} mesh(es)`
         + (lmNightTex ? ", night lightmap present (hard swap at twilight)" : "")
         + ` — objects: ${[...stems].map(([n, c]) => `${n} x${c}`).join(", ") || "none"}`
-        + (ambientCeilings
-          ? `; ${ambientCeilings} ceiling mesh(es) LIT BY THE BAKE `
+        + (ambientCeil.length
+          ? `; ${ambientCeil.length} ceiling mesh(es) LIT BY THE BAKE `
             + "(--ceiling-lighting ambient) so they keep their lightmap"
           : ""),
       );

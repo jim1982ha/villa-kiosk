@@ -1450,6 +1450,9 @@ export class EntityVisuals {
   private occlMs = 0;
   /** Dedupe for the badge-geometry diagnostic — see logBadgeGeometry. */
   private lastBadgeGeom = "";
+  /** entityId → the mesh that blocked its badge, stem-collapsed. Read by the
+   *  `walk:` line's `occludedBy=` field; see refreshWallOcclusion. */
+  private readonly occlBlockedBy = new Map<string, string>();
   /** Frames logBadgeGeometry refused to print because the row's children were
    *  not inside their own badge yet — see there. Printed on the next good line
    *  rather than dropped, so "it stopped complaining" and "it never measured"
@@ -5442,16 +5445,36 @@ export class EntityVisuals {
       // and the classification, not the accuracy. `fastCheck` because the
       // question is "is anything in the way", not "what is nearest".
       let blocked = false;
+      let blocker = "";
       for (const m of this.occluders) {
         // Visibility is asked HERE for the same reason the old predicate had to
         // ask it: a hidden storey's slab must not occlude the storey you are
         // standing on. Cheap, and it has to be per-frame — the ceiling that
         // 2.435.0 added appears and disappears with the view mode.
         if (!m.isEnabled() || !m.isVisible) continue;
-        if (this.occlRay.intersectsMesh(m, true).hit) { blocked = true; break; }
+        if (this.occlRay.intersectsMesh(m, true).hit) {
+          blocked = true;
+          blocker = m.name;
+          break;
+        }
       }
       s.occluded = blocked;
-      if (blocked) this.occludedIds.add(s.id); else this.occludedIds.delete(s.id);
+      // ⚠️ WHICH MESH, not just how many. `occl=58/70` is a count, and a count
+      // cannot answer the only question ever asked of this tier — "why is THAT
+      // badge missing when I can see the device". A 2026-08-19 report (a ceiling
+      // fan and the sensor under it, both plainly on screen, neither badged)
+      // could not be diagnosed from a capture at all: the two hypotheses worth
+      // having, self-occlusion against the ceiling the device hangs from and
+      // the disabled storey-above slab, are BOTH already handled in this loop
+      // (OCCLUSION_SLACK_M above, the isEnabled test just now), so the honest
+      // next step was a name rather than a third guess.
+      if (blocked) {
+        this.occludedIds.add(s.id);
+        this.occlBlockedBy.set(s.id, blocker.replace(/_primitive\d+$/, ""));
+      } else {
+        this.occludedIds.delete(s.id);
+        this.occlBlockedBy.delete(s.id);
+      }
     }
     this.occlRays = rays;
     this.occlMs = performance.now() - t0;
@@ -5523,6 +5546,25 @@ export class EntityVisuals {
       + ` moving=${performance.now() - this.movingSince < OCCLUSION_SETTLE_MS ? "y" : "n"}`
       + ` rays=${this.occlRays}/pass occlMs=${this.occlMs.toFixed(2)}`
       + ` occluders=${this.occluders.length} active=${this.scene.getActiveMeshes().length}`
+      // ⚠️ The field that turns `occl=N/M` from a count into a diagnosis. Top
+      // blockers by share, each with up to two of the entities it hid, so
+      // "the ceiling is eating badges" and "you are simply indoors and most of
+      // the villa is behind walls" — which produce the SAME count — are one
+      // glance apart. Empty string when nothing is occluded, so it costs a
+      // stationary overview capture nothing.
+      + (() => {
+        if (!this.occlBlockedBy.size) return "";
+        const counts = new Map<string, number>();
+        const eg = new Map<string, string[]>();
+        for (const [id, mesh] of this.occlBlockedBy) {
+          counts.set(mesh, (counts.get(mesh) ?? 0) + 1);
+          const list = eg.get(mesh) ?? [];
+          if (list.length < 2) { list.push(id); eg.set(mesh, list); }
+        }
+        return " occludedBy=" + [...counts]
+          .sort((a, b) => b[1] - a[1]).slice(0, 4)
+          .map(([m, c]) => `${m}x${c}(${(eg.get(m) ?? []).join(",")})`).join(" ");
+      })()
       // The OTHER raycast that runs while the camera moves — CameraController's
       // floor follower, which mine is not a substitute for and which no capture
       // has ever measured. Reported as a RATE (what it spent since the last

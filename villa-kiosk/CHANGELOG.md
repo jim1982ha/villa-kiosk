@@ -1,3 +1,14 @@
+## 2.490.0
+
+### Added — the debug log now names what is hiding a badge in first-person
+
+A ceiling fan and the sensor beneath it were plainly on screen with no badges,
+and the log could only say how many badges were hidden, never by what. It now
+names the blocking meshes with examples, which separates "the ceiling is
+covering them" from "you are indoors and the rest of the villa is behind walls"
+— those produce the same count. The ceiling lighting line also lists its
+objects again when the bake lit them, where it printed "none".
+
 ## 2.489.0
 
 ### Fixed — the badge geometry readout could report one badge's layout mid-flight
