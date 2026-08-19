@@ -1,3 +1,14 @@
+## 2.486.0
+
+### Fixed — every room glow was rebuilt each time the kiosk regained focus
+
+Room points are shared config, so a focus regain hands the scene a freshly
+parsed copy that no longer matches by reference. That counted as an edit: every
+"Add room here" glow was disposed and rebuilt, each one casting a floor probe
+and building a decal, for a config that had not changed. It now compares
+content, as the three other shared keys already did. Changing eye height also
+moves those glows now, instead of leaving them at the old height until reload.
+
 ## 2.485.0
 
 ### Fixed — the floor button and the icon above it answered a hold 30ms apart

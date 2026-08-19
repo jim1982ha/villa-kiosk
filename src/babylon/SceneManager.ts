@@ -4345,7 +4345,29 @@ export class SceneManager {
     // A room added/renamed/removed via the Rooms menu ("Add room here") should
     // start glowing (or stop) immediately — no model reload needed, unlike the
     // real room polygons which only change on a full recalibration.
-    if (prev.teleportPoints !== config.teleportPoints) {
+    //
+    // ⚠️ CONTENT, NOT REFERENCE — the FOURTH shared key to need this, and the
+    // last one that lacked it (/dry-audit). entityMap, meshBindings and
+    // deviceGroups each got the guard after the same bug was reported in the
+    // field; teleportPoints is a SHARED_CONFIG_KEY too, so DeviceConfigSync's
+    // pull() hands back a freshly JSON-parsed (never `===`) array on every
+    // window focus and visibilitychange. What that bought on each one was not
+    // cheap: syncRoomPoints → setPointRooms disposes EVERY point-room glow and
+    // rebuilds it, and each rebuild casts a floor probe and either builds a
+    // decal against real geometry or triangulates a clipped polygon into a
+    // fresh Mesh + material. Focus the tab, rebuild the lot, for a config that
+    // did not change.
+    //
+    // `eyeHeight` is in the predicate because syncRoomPoints READS it (a point
+    // stores the eye position, so the patch's floorY is `y - eyeHeight`) —
+    // moving the slider in Settings used to leave every point-room glow at its
+    // old height until a reload. Same class of defect from the other side: a
+    // consumer that does not re-run when one of its inputs moves.
+    const roomPointsChanged =
+      (prev.teleportPoints !== config.teleportPoints
+        && JSON.stringify(prev.teleportPoints) !== JSON.stringify(config.teleportPoints))
+      || prev.eyeHeight !== config.eyeHeight;
+    if (roomPointsChanged) {
       this.syncRoomPoints();
     }
 
