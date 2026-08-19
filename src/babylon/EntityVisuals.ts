@@ -1450,6 +1450,11 @@ export class EntityVisuals {
   private occlMs = 0;
   /** Dedupe for the badge-geometry diagnostic — see logBadgeGeometry. */
   private lastBadgeGeom = "";
+  /** Frames logBadgeGeometry refused to print because the row's children were
+   *  not inside their own badge yet — see there. Printed on the next good line
+   *  rather than dropped, so "it stopped complaining" and "it never measured"
+   *  stay distinguishable. */
+  private badgeGeomUnsettled = 0;
   /** performance.now() of the last `walk:` line — see reportWalkCost. */
   private lastWalkReportAt = 0;
   /**
@@ -5636,6 +5641,37 @@ export class EntityVisuals {
       const glyphM = meas(lbl.glyph);
       const textM = meas(lbl.valueText);
       const ink = card ? glyphPx * BADGE_INSET_CARD : 0;
+      // ⚠️ REFUSE TO PRINT A ROW THAT IS NOT LAID OUT YET, because this
+      // instrument's whole job is to be believed over a model of the layout.
+      // A 2026-08-19 capture printed `badge x0.0+18.0 … gap x-54.0+1.0 …
+      // gap=-68.40 visR=55.00` for one badge while every other badge on the
+      // same glass read `gap=2.60 visR=3.00`. 18 px is this badge WITHOUT its
+      // value, and the value's controls sat 54 px to its LEFT — the signature
+      // `adaptWidthToChildren` leaves for one frame (it parks the parent's
+      // width until the layout pass, the same mechanism that drew a room chip
+      // 1439 px off in 2.404.0). The arithmetic was faithful; its inputs came
+      // from two different layout states.
+      //
+      // That mattered more than a stray line: the value here is a constant
+      // ("100%"), so the dedupe below would have kept that ONE wrong reading
+      // as the badge's only entry for the rest of the session. Four rounds of
+      // this bug were already lost to reasoning from numbers that disagreed
+      // with the screen.
+      //
+      // Bounded on BOTH sides deliberately — a right-edge test alone passes
+      // this case, since the offending children are to the LEFT.
+      const inside = badgeM && glyphM && textM
+        && Math.min(glyphM.left, textM.left) >= badgeM.left - 0.5
+        && Math.max(glyphM.left + glyphM.width, textM.left + textM.width)
+          <= badgeM.left + badgeM.width + 0.5;
+      if (!inside) {
+        // Counted, never silently skipped: the next frame re-measures, so if
+        // this were only the first-frame transient it costs one tick and the
+        // real line follows. A count that keeps CLIMBING says the opposite —
+        // the row never settles — which is the finding, not the noise.
+        this.badgeGeomUnsettled += 1;
+        return;
+      }
       // The three numbers the fix is ABOUT, spelled out so nobody has to
       // subtract four boxes by hand again: the visible margins either side and
       // the visible gap between the chip's ink and the number.
@@ -5653,11 +5689,17 @@ export class EntityVisuals {
         + ` | badge ${box(lbl.badge)} glyph ${box(lbl.glyph)}`
         + ` gap ${lbl.valueSpacer ? box(lbl.valueSpacer) : "-"}`
         + ` wrap ${box(lbl.valueWrap)} text ${box(lbl.valueText)}`
-        + ` | ${visible}`;
+        + ` | ${visible}`
+        + (this.badgeGeomUnsettled
+          ? ` (skipped ${this.badgeGeomUnsettled} unsettled frame(s))` : "");
       if (line !== this.lastBadgeGeom) {
         this.lastBadgeGeom = line;
         tapDebug(line, "badge");
       }
+      // Reset only once a good line has been PRINTED OR deduped — either way
+      // this badge has now been measured settled, which is what the count is
+      // there to distinguish.
+      this.badgeGeomUnsettled = 0;
       return;
     }
   }

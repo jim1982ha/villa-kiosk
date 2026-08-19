@@ -1,3 +1,13 @@
+## 2.489.0
+
+### Fixed — the badge geometry readout could report one badge's layout mid-flight
+
+The `?debug` badge line printed positions taken while a badge's own row was
+still being laid out, so one badge read as 54px wide of nonsense while every
+other badge on screen read correctly. Because that badge's value never changes,
+the wrong reading was the only one it would ever print. The readout now refuses
+a row whose parts are not yet inside it, and counts the frames it skipped.
+
 ## 2.488.0
 
 ### Changed — two code comments marking sites an audit had already judged
