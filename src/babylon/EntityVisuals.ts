@@ -116,7 +116,7 @@ import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt
 import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
-import { blocksCameraBeam } from "./meshRoles";
+import { blocksCameraBeam, isResolvedCeiling } from "./meshRoles";
 import { onStorey, storeyFloorYAt, nearestFloorRoom } from "./roomStorey";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
@@ -2311,7 +2311,36 @@ export class EntityVisuals {
     // see `occluders`. Derived from shadowCasters (already "every non-entity
     // mesh with geometry") through the SAME predicate the camera beams use, so
     // "what blocks a line of sight" has one definition in this file, not two.
-    this.occluders = this.shadowCasters.filter(blocksCameraBeam);
+    //
+    // ⚠️ MINUS THE CEILING, and only here — a camera cone must still be clipped
+    // by it, which is why `blocksCameraBeam` itself is untouched (the beam path
+    // builds its own set from the bare predicate).
+    //
+    // A ceiling is the LID OF THE ROOM YOU ARE STANDING IN. Everything it could
+    // legitimately hide is on the storey above, and FloorManager has that storey
+    // disabled while you walk this one — so it can never hide a badge that was
+    // drawable anyway. What it DID do, measured rather than reasoned:
+    // `occludedBy=Structure_Ceiling_L0x16(fan.ceiling_fan_livingroom,
+    // fan.ceiling_fan_kitchen)` — sixteen badges, including the two the owner
+    // reported as missing while looking straight at the fans.
+    //
+    // Why OCCLUSION_SLACK_M did not already cover it, since it was written for
+    // exactly this case: the slack is measured ALONG THE RAY. For a device
+    // mounted just under the ceiling and seen from across the room the ray is
+    // nearly horizontal, so 0.35 m along it buys almost no VERTICAL clearance,
+    // and the ray grazes up through the ceiling plane before the slack bites.
+    // Raising the constant would trade this bug for a worse one (wall-mounted
+    // devices near a corner going unoccluded); removing the surface that cannot
+    // legitimately occlude anything is the predicate fix, not a tuned number.
+    //
+    // ⚠️ Accepted trade, stated so it is not rediscovered as a bug: a device
+    // genuinely tucked behind a low soffit may now keep its badge. It is only
+    // revealed if NO wall also blocks it — the wall test is unchanged and the
+    // loop simply reports the first blocker it finds — and a badge shown a
+    // little too eagerly costs far less than one missing for a device the
+    // operator is looking straight at.
+    this.occluders = this.shadowCasters.filter(
+      (m) => blocksCameraBeam(m) && !isResolvedCeiling(m));
     this.extendStripJoints();
     this.mergeStripEntityLights();
     scene.blockMaterialDirtyMechanism = false;

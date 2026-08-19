@@ -1,3 +1,14 @@
+## 2.491.0
+
+### Fixed — ceiling fans and the sensors beside them lost their badges indoors
+
+Since the ceiling became a real surface it also became something that could hide
+a badge, and the devices it hid were the ones mounted against it: looking
+straight up at a ceiling fan showed no badge for it. A ceiling is the lid of the
+room you are standing in, so it can only ever hide devices you are already
+looking at, and it no longer counts as an obstruction for badges. Camera cones
+are still clipped by it.
+
 ## 2.490.0
 
 ### Added — the debug log now names what is hiding a badge in first-person
