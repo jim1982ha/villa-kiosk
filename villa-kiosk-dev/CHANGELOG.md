@@ -1,3 +1,15 @@
+## 2.511.0
+
+### Fixed — the first analysis module could never find anything on real data
+
+Home Assistant sends a statistic's `start` as epoch milliseconds; the module
+read the first ten characters of it as a date, which is right for an ISO string
+and wrong for a number — the first ten digits of a millisecond timestamp change
+every hour. Every hour became its own day, every day was then discarded as too
+short, and 18 meters with 11,859 readings produced nothing at any threshold.
+Both formats are now understood, and days are bucketed in the villa's local
+time rather than UTC.
+
 ## 2.510.0
 
 ### Fixed — a report claimed no checks were configured while one had just run
