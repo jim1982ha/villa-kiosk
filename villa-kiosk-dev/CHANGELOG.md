@@ -1,3 +1,14 @@
+## 2.508.0
+
+### Added — Reports Phase 3: the first analysis, and the module system around it
+
+Reports now contain findings. `standby_creep` looks for equipment whose IDLE
+draw has risen against its own recent history — the failure that hides, since a
+worn pump or a failing seal announces itself only as a slightly larger bill.
+Every threshold is a ratio or learned from the device's own variation, never a
+wattage, so the same code is correct on any property. A module that is skipped
+always says why.
+
 ## 2.507.0
 
 ### Fixed — two reports on the same day were indistinguishable in the history
