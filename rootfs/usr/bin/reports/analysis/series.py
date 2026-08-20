@@ -93,12 +93,31 @@ def daily_totals(rows: Sequence[Dict[str, Any]],
     return {day: sum(buckets[day]) for day in complete_days(buckets)}
 
 
-def weekday_of(day: str) -> Optional[int]:
-    """Monday = 0. None for an unparseable key."""
+def parse_day(day: str) -> Optional[datetime]:
+    """A `day_key` back into a date, or None if it is not one.
+
+    ⚠️ THIS MODULE OWNS THE DAY-KEY FORMAT, and until 2026-08-21 three others
+    re-implemented parsing it: `weekday_of` here, `pipeline._span_days` and
+    `sensor_health._days_between` each carried their own
+    `strptime(day, "%Y-%m-%d")`. `day_key` is the only thing that produces these
+    strings, so changing its format would have broken two modules silently —
+    the format is an invariant between a producer and its readers, and it had
+    no single reader. Found by /dry-audit.
+
+    What each caller does with the result is NOT shared: an inclusive window
+    span and an exclusive day gap are different questions, and so are their
+    "unparseable" answers (0 days vs None). Only the parse is common.
+    """
     try:
-        return datetime.strptime(day, "%Y-%m-%d").weekday()
+        return datetime.strptime(day, "%Y-%m-%d")
     except ValueError:
         return None
+
+
+def weekday_of(day: str) -> Optional[int]:
+    """Monday = 0. None for an unparseable key."""
+    parsed = parse_day(day)
+    return parsed.weekday() if parsed is not None else None
 
 
 def last_reading_day(rows: Sequence[Dict[str, Any]],

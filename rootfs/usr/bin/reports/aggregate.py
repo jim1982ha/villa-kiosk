@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .analysis.base import Finding, dedup_key
+from .contracts import severity_rank
 
 #: The event name a category is carried on. `vesta_<category>_event`.
 CATEGORY_OF_EVENT = {
@@ -314,7 +315,7 @@ class Group:
 
     def add(self, item: Item) -> None:
         self.items.append(item)
-        if _severity_rank(item.severity) > _severity_rank(self.severity):
+        if severity_rank(item.severity) > severity_rank(self.severity):
             self.severity = item.severity
         if not self.label:
             self.label = item.label
@@ -395,16 +396,6 @@ class Group:
                 total += span
                 paired += 1
         return total if paired else None
-
-
-_SEVERITY_ORDER = ("info", "notice", "warning", "critical")
-
-
-def _severity_rank(severity: str) -> int:
-    try:
-        return _SEVERITY_ORDER.index(severity)
-    except ValueError:
-        return 0
 
 
 def _minutes_between(start_iso: str, end_iso: str) -> Optional[float]:

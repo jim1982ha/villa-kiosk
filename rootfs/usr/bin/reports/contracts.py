@@ -35,6 +35,27 @@ CONTRACT_VERSION: Final[int] = 1
 # by the villa's owner, not by whoever wrote the module.
 SEVERITY: Final[Tuple[str, ...]] = ("info", "notice", "warning", "critical")
 
+
+def severity_rank(severity: str) -> int:
+    """How loud, as a number. The ONE reader of `SEVERITY`'s order.
+
+    ⚠️ THE COMMENT ABOVE PROMISED SOMETHING THE CODE COULD NOT DELIVER. It says
+    the order is meaningful and to "INSERT IN PLACE rather than appending" — but
+    two consumers had each hardcoded their own copy of it (`pipeline`'s
+    `rank = {"info": 0, ...}` dict and `aggregate`'s `_SEVERITY_ORDER` tuple),
+    so inserting a level here would have left both stale and the instruction was
+    unfollowable as written. Found by /dry-audit 2026-08-21; the second copy was
+    added the same day, which is how fast this shape reappears.
+
+    An unknown value ranks lowest rather than raising: severity arrives from
+    blueprint payloads and stored history, and a typo in one event must not take
+    down the report that would have told you about it.
+    """
+    try:
+        return SEVERITY.index(severity)
+    except ValueError:
+        return 0
+
 # Who a report is written for. These are AUDIENCES, not roles: they choose
 # which modules run and how the prose is pitched, and they intentionally do not
 # map one-to-one onto `auth/permissions.ts` profiles — the owner may perfectly

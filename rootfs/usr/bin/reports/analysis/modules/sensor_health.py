@@ -27,7 +27,8 @@ from typing import Any, Dict, List, Optional, Sequence
 from ..base import (Finding, ModuleContext, dedup_key, label_for,
                     resolve_threshold)
 from ..registry import register
-from ..series import daily_totals, hourly_by_day, last_reading_day
+from ..series import (daily_totals, hourly_by_day, last_reading_day,
+                      parse_day)
 
 WINDOW_DAYS = 28
 
@@ -167,12 +168,15 @@ class SensorHealth:
 
 
 def _days_between(earlier: str, later: str) -> Optional[int]:
-    from datetime import datetime
+    """The GAP between two days — exclusive, and None when unanswerable.
 
-    try:
-        a = datetime.strptime(earlier, "%Y-%m-%d")
-        b = datetime.strptime(later, "%Y-%m-%d")
-    except ValueError:
+    Deliberately not `pipeline._span_days`: that one is an inclusive window
+    span and answers 0 rather than None. Different questions, one parser —
+    see `series.parse_day`.
+    """
+    a = parse_day(earlier)
+    b = parse_day(later)
+    if a is None or b is None:
         return None
     return (b - a).days
 

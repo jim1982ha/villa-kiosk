@@ -28,7 +28,8 @@ from aiohttp import ClientSession
 
 from . import collect, discovery, schedule as schedule_mod, stats as stats_mod, store
 from .analysis import ModuleContext, describe_skips, registered, run_all
-from .analysis.series import hourly_by_day
+from .analysis.series import hourly_by_day, parse_day
+from .contracts import severity_rank
 from .analysis import modules as _modules  # noqa: F401  (importing registers them)
 from .hass import HassClient, HassUnavailable
 from .deliver import deliver
@@ -141,12 +142,14 @@ async def measure_history(fetch: Any, ids: Sequence[str]) -> int:
 
 
 def _span_days(first: str, last: str) -> int:
-    from datetime import datetime
+    """How many days the window COVERS — inclusive, hence the +1.
 
-    try:
-        a = datetime.strptime(first, "%Y-%m-%d")
-        b = datetime.strptime(last, "%Y-%m-%d")
-    except ValueError:
+    The `+1` and the 0-on-failure are this caller's, not the parser's; see
+    `series.parse_day`, which owns the day-key format for everyone.
+    """
+    a = parse_day(first)
+    b = parse_day(last)
+    if a is None or b is None:
         return 0
     return (b - a).days + 1
 
@@ -267,12 +270,11 @@ async def run_report(
     # The report's own severity is the loudest thing in it — a finding or a
     # preflight item. Preflight alone would rank a stale config above a
     # freezer that is failing.
-    rank = {"info": 0, "notice": 1, "warning": 2, "critical": 3}
     severity = "info"
     for item in list(found.get("preflight") or []) + findings:
         if isinstance(item, dict):
             candidate = str(item.get("severity", "info"))
-            if rank.get(candidate, 0) > rank.get(severity, 0):
+            if severity_rank(candidate) > severity_rank(severity):
                 severity = candidate
 
     entry: Dict[str, Any] = {

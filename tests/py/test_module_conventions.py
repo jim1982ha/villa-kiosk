@@ -27,6 +27,27 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODULE_DIR = os.path.join(
     REPO_ROOT, "rootfs", "usr", "bin", "reports", "analysis", "modules")
+PACKAGE_DIR = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports")
+
+
+def _package_sources() -> List[Tuple[str, str]]:
+    """Every .py in the reports package, as (repo-relative path, source).
+
+    Wider than `_modules()` on purpose: the two rules below are about the
+    PACKAGE, and both were broken outside `analysis/modules/`.
+    """
+    out: List[Tuple[str, str]] = []
+    for root, _dirs, files in os.walk(PACKAGE_DIR):
+        if "__pycache__" in root:
+            continue
+        for name in sorted(files):
+            if not name.endswith(".py"):
+                continue
+            full = os.path.join(root, name)
+            with open(full, encoding="utf-8") as handle:
+                out.append((os.path.relpath(full, REPO_ROOT), handle.read()))
+    assert out, "no package sources found - the walk or the path is wrong"
+    return out
 
 
 def _modules() -> List[Tuple[str, str]]:
@@ -125,3 +146,74 @@ def test_every_module_resolves_thresholds_through_the_one_order() -> None:
     assert not offenders, (
         "a module is reading settings directly; use resolve_threshold:\n  "
         + "\n  ".join(offenders))
+
+
+def test_the_severity_ORDER_has_exactly_one_implementation() -> None:
+    """`contracts.severity_rank` is the only reader of `SEVERITY`'s order.
+
+    ⚠️ THE DECLARATION'S OWN COMMENT PROMISED THIS AND THE CODE DID NOT KEEP IT.
+    It says the order is meaningful and to "INSERT IN PLACE rather than
+    appending" — while `pipeline` carried `rank = {"info": 0, ...}` and
+    `aggregate` carried `_SEVERITY_ORDER = (...)`. Inserting a level would have
+    left both stale, so the instruction was unfollowable as written. The second
+    copy was added the same day the first was found, which is how fast this
+    reappears. Found by /dry-audit 2026-08-21.
+    """
+    offenders: List[str] = []
+    for path, source in _package_sources():
+        if path.endswith("contracts.py"):
+            continue
+        for number, line in enumerate(_strip_comments(source).splitlines(), 1):
+            # ⚠️ AN ORDERING IS A TABLE OR A SEQUENCE, NOT A CHOICE. The first
+            # cut flagged any line naming two levels, which caught
+            # `severity="warning" if rise >= x else "notice"` in two modules —
+            # a conditional PICK between two levels, which says nothing about
+            # their order and is exactly what a module should be doing.
+            if re.search(r'"(?:info|notice|warning|critical)"\s*:\s*\d', line) \
+               or re.search(r'"(?:info|notice|warning|critical)"\s*,\s*'
+                            r'"(?:info|notice|warning|critical)"', line):
+                offenders.append(f"{path}:{number}: {line.strip()}")
+    assert not offenders, (
+        "a severity ORDER is written out here; call contracts.severity_rank:\n  "
+        + "\n  ".join(offenders))
+
+
+def test_the_day_key_format_is_parsed_only_by_its_owner() -> None:
+    """`series.py` produces day keys with `day_key`, so it parses them too.
+
+    ⚠️ A FORMAT IS AN INVARIANT BETWEEN A PRODUCER AND ITS READERS, and this one
+    had no single reader: `weekday_of`, `pipeline._span_days` and
+    `sensor_health._days_between` each carried their own
+    `strptime(day, "%Y-%m-%d")`, so changing `day_key`'s output would have
+    broken two modules silently.
+
+    What each caller DOES with the parsed date is not shared and must not be —
+    an inclusive window span and an exclusive day gap are different questions,
+    with different answers when the input is unparseable.
+    """
+    offenders: List[str] = []
+    for path, source in _package_sources():
+        if path.endswith(os.path.join("analysis", "series.py")):
+            continue
+        for number, line in enumerate(_strip_comments(source).splitlines(), 1):
+            # ⚠️ PARSING ONLY. `schedule.period_key` FORMATS `%Y-%m-%d` for a
+            # daily period's idempotency key — a different question that happens
+            # to share a format for one of its three cadences, and a producer
+            # rather than a reader. The first cut of this pin flagged it, which
+            # would have converged two things that are deliberately separate.
+            if "strptime" in line:
+                offenders.append(f"{path}:{number}: {line.strip()}")
+    assert not offenders, (
+        "the day-key format is parsed outside series.py; use parse_day:\n  "
+        + "\n  ".join(offenders))
+
+
+def test_aggregates_category_tables_use_real_contract_values() -> None:
+    """A typo in a severity or kind literal would ship silently otherwise."""
+    from reports import aggregate
+    from reports.contracts import FINDING_KIND, SEVERITY
+
+    assert set(aggregate.DEFAULT_SEVERITY.values()) <= set(SEVERITY)
+    assert set(aggregate.KIND_OF_CATEGORY.values()) <= set(FINDING_KIND)
+    assert set(aggregate.DEFAULT_SEVERITY) == set(aggregate.CATEGORY_OF_EVENT.values())
+    assert set(aggregate.KIND_OF_CATEGORY) == set(aggregate.CATEGORY_OF_EVENT.values())

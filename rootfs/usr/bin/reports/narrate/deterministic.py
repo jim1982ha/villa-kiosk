@@ -30,6 +30,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
+from ..contracts import severity_rank
 from .base import ReportContext
 
 #: Human wording for a cadence, in the possessive form the title uses.
@@ -165,10 +166,14 @@ class DeterministicNarrator:
             return []
         # Critical first — a stale configuration explains an empty report, and
         # burying it under notices is how it goes unread for months.
-        order = {"critical": 0, "warning": 1, "notice": 2}
+        # ⚠️ NEGATED `severity_rank`, NOT A LOCAL TABLE. This was
+        # `{"critical": 0, "warning": 1, "notice": 2}` — a FOURTH copy of the
+        # order, descending, and silently missing "info" so an info item sorted
+        # last by falling through to a default rather than by a decision.
+        # Inserting a level in `contracts.SEVERITY` would not have reached it.
         ranked = sorted(
             (i for i in items if isinstance(i, dict)),
-            key=lambda i: order.get(str(i.get("severity")), 9))
+            key=lambda i: -severity_rank(str(i.get("severity") or "")))
         lines = ["Needs attention:"]
         for item in ranked:
             lines.append(f"- {item.get('detail', '')}")
