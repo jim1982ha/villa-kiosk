@@ -292,3 +292,59 @@ def test_a_refusing_target_is_reported_not_raised() -> None:
     results = asyncio.run(deliver(session, ["notify.x"], "T", "B"))  # type: ignore[arg-type]
     assert results[0]["status"] == "failed"
     assert "400" in results[0]["detail"]
+
+
+# ── history entry identity ───────────────────────────────────────────────────
+# ⚠️ FOUND BY QA ON REAL HARDWARE. The entry id was built from
+# cadence/period/audience, so two schedules of the same cadence on the same day
+# produced two rows reading `daily:<date>:owner`, distinguishable only by their
+# timestamp. A history whose rows cannot be told apart is not much of an audit.
+
+def test_a_scheduled_entry_is_identified_by_its_idempotency_key() -> None:
+    """That key is the only thing that actually guarantees uniqueness — one
+    send per schedule per period."""
+    import asyncio
+    from datetime import datetime, timezone
+
+    from reports import pipeline
+
+    entry = asyncio.run(pipeline.run_report(
+        _FakeSession(), "owner", "daily", [],  # type: ignore[arg-type]
+        datetime(2026, 8, 20, 18, 29, tzinfo=timezone.utc),
+        found={"reachable": True, "preflight": []},
+        entry_id="qa2:2026-08-20"))
+    assert entry["id"] == "qa2:2026-08-20"
+
+
+def test_two_schedules_on_one_day_produce_distinct_entries() -> None:
+    """The exact regression, at the size it was observed."""
+    import asyncio
+    from datetime import datetime, timezone
+
+    from reports import pipeline
+
+    moment = datetime(2026, 8, 20, 18, 29, tzinfo=timezone.utc)
+    found = {"reachable": True, "preflight": []}
+    first = asyncio.run(pipeline.run_report(
+        _FakeSession(), "owner", "daily", [], moment,  # type: ignore[arg-type]
+        found=found, entry_id="qa2:2026-08-20"))
+    second = asyncio.run(pipeline.run_report(
+        _FakeSession(), "owner", "daily", [], moment,  # type: ignore[arg-type]
+        found=found, entry_id="qa-asleep:2026-08-20"))
+    assert first["id"] != second["id"]
+
+
+def test_a_manual_send_is_marked_manual_and_carries_the_clock() -> None:
+    """A manual send has no uniqueness guarantee — it can be repeated within a
+    period deliberately — so it gets the time, and says who asked."""
+    import asyncio
+    from datetime import datetime, timezone
+
+    from reports import pipeline
+
+    entry = asyncio.run(pipeline.run_report(
+        _FakeSession(), "owner", "weekly", [],  # type: ignore[arg-type]
+        datetime(2026, 8, 20, 9, 9, 55, tzinfo=timezone.utc),
+        found={"reachable": True, "preflight": []}))
+    assert entry["id"].startswith("manual:")
+    assert entry["id"].endswith(":090955")

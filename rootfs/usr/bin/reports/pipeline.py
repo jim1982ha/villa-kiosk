@@ -41,12 +41,26 @@ async def run_report(
     targets: Sequence[str],
     now_local: datetime,
     found: Optional[Dict[str, Any]] = None,
+    entry_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Produce and deliver one report. Returns the history entry.
 
     `found` lets a caller that has already run discovery this pass hand it in —
     discovery is the expensive part and two schedules firing in the same minute
     should not pay for it twice.
+
+    ⚠️ `entry_id` MUST BE THE SCHEDULER'S IDEMPOTENCY KEY for a scheduled
+    report, because that key is the only thing that actually guarantees
+    uniqueness — one send per schedule per period. The id was built from
+    cadence/period/audience for one release, which made two schedules of the
+    same cadence on the same day produce IDENTICAL history entries: the QA run
+    on real hardware ended with two rows both reading
+    `daily:<date>:owner`, distinguishable only by their timestamp. A history
+    whose rows cannot be told apart is not much of an audit.
+
+    A manual send has no such guarantee — it can be repeated within a period on
+    purpose — so it gets the clock, and says `manual` so the record shows which
+    reports a person asked for rather than the schedule.
     """
     generated_at = now_local.isoformat(timespec="seconds")
     period = period_key(cadence, now_local)
@@ -87,7 +101,7 @@ async def run_report(
             break
 
     entry: Dict[str, Any] = {
-        "id": f"{cadence}:{period}:{audience}",
+        "id": entry_id or f"manual:{period}:{now_local.strftime('%H%M%S')}",
         "at": generated_at,
         "audience": audience,
         "cadence": cadence,
@@ -241,7 +255,7 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
             warn_if_broadcast(targets)
             record = await run_report(
                 session, audience_of(entry), str(entry.get("cadence")),
-                targets, now_local, found)
+                targets, now_local, found, entry_id=str(entry["key"]))
             append_history(record)
             delivered += 1
 
