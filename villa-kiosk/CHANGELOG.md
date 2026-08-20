@@ -1,3 +1,14 @@
+## 2.514.0
+
+### Added — two more checks: unusual daily use, and meters that have failed
+
+`level_anomaly` reports a device that used markedly more than it normally does
+**on that day of the week** — pooling weekdays would flag every weekend
+forever. `sensor_health` reports meters that have gone silent or frozen, as
+DATA_QUALITY rather than as equipment faults, because "the freezer is warming"
+and "the freezer's thermometer died" call for different actions. How much
+history the recorder actually holds is now measured rather than assumed.
+
 ## 2.513.0
 
 ### Fixed — the diagnostic went blank in the case worth diagnosing

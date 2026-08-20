@@ -28,6 +28,7 @@ from aiohttp import ClientSession
 
 from . import discovery, schedule as schedule_mod, stats as stats_mod, store
 from .analysis import ModuleContext, describe_skips, registered, run_all
+from .analysis.series import hourly_by_day
 from .analysis import modules as _modules  # noqa: F401  (importing registers them)
 from .hass import HassClient, HassUnavailable
 from .deliver import deliver
@@ -100,6 +101,56 @@ def _statistics_fetcher(session: ClientSession, now_local: datetime,
     return fetch
 
 
+#: How far back to look when measuring what the recorder actually holds.
+#: Generous, because the answer gates whether a module may run at all and a
+#: short probe would under-report a well-established property.
+HISTORY_PROBE_DAYS = 120
+
+#: How many statistics to probe. One could be a meter added yesterday, which
+#: would report the whole property as having no history; three is enough that
+#: the oldest is representative and still one small query.
+HISTORY_PROBE_IDS = 3
+
+
+async def measure_history(fetch: Any, ids: Sequence[str]) -> int:
+    """How many days of statistics the recorder actually holds.
+
+    ⚠️ THIS WAS A PLACEHOLDER AND THE PLACEHOLDER WAS A LIE. The gate read
+    `min_history_days` — the operator's PREFERENCE — and passed it off as the
+    measured depth. That is harmless while every module wants 14 days and the
+    default is 14, and it silently breaks the moment one wants more:
+    `level_anomaly` needs 28 for a per-weekday baseline, so it would have been
+    skipped forever with "needs 28 days of history, has 14" — a sentence that
+    was not about the recorder at all. A skip reason that states a number
+    nobody measured is worse than no skip reason.
+
+    Takes the LONGEST span among a few statistics, because the shortest would
+    be whichever meter was added most recently.
+    """
+    if not ids:
+        return 0
+    series = await fetch(list(ids)[:HISTORY_PROBE_IDS], HISTORY_PROBE_DAYS)
+    longest = 0
+    for rows in series.values():
+        if isinstance(rows, list) and rows:
+            days = sorted(hourly_by_day(rows))
+            if days:
+                span = _span_days(days[0], days[-1])
+                longest = max(longest, span)
+    return longest
+
+
+def _span_days(first: str, last: str) -> int:
+    from datetime import datetime
+
+    try:
+        a = datetime.strptime(first, "%Y-%m-%d")
+        b = datetime.strptime(last, "%Y-%m-%d")
+    except ValueError:
+        return 0
+    return (b - a).days + 1
+
+
 async def analyse(
     session: ClientSession,
     found: Dict[str, Any],
@@ -133,7 +184,12 @@ async def analyse(
     # History depth is not yet measured per statistic; the recorder's presence
     # is the proxy for it, and each module applies its own `min_days` to the
     # data it actually receives. Stated here rather than passed as a lie.
-    history_days = min_history_days if found.get("capabilities") else 0
+    # ⚠️ MEASURED, not assumed — see `measure_history`.
+    energy = (found.get("inventory") or {}).get("energy") or {}
+    device_ids = [str(i) for i in (energy.get("devices") or []) if isinstance(i, str)]
+    history_days = await measure_history(context.stats, device_ids)
+    tally["history_days"] = history_days
+
     produced, skipped, counts, ran = await run_all(context, failures, history_days)
     return ([f.as_dict() for f in produced], describe_skips(skipped), counts,
             ran, tally)

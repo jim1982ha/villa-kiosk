@@ -6,6 +6,8 @@ because the registry has never heard of it. That is the one way a module can be
 silently absent, which is what the whole gating design exists to prevent.
 """
 
+from . import level_anomaly  # noqa: F401
+from . import sensor_health  # noqa: F401
 from . import standby_creep  # noqa: F401
 
-__all__ = ["standby_creep"]
+__all__ = ["level_anomaly", "sensor_health", "standby_creep"]

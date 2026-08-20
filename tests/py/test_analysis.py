@@ -340,7 +340,11 @@ def test_a_successful_run_clears_the_failure_count() -> None:
                          {"sensor.x_energy": _series([0.1] * 28)}),
                 {"standby_creep": 2}, 30))
     assert counts["standby_creep"] == 0
-    assert ran == ["standby_creep"], "a module that ran must be reported as such"
+    # Membership, not equality: this asserted `== ["standby_creep"]` when it was
+    # the only module in existence, and broke the day a second was added. A
+    # test naming the whole registry is a test of the registry, not of the
+    # thing it claims to check.
+    assert "standby_creep" in ran, "a module that ran must be reported as such"
 
 
 # ── thresholds ───────────────────────────────────────────────────────────────
@@ -453,7 +457,7 @@ def test_every_module_threshold_is_dimensionless() -> None:
 # rows produced zero findings at every threshold down to 3%.
 
 def test_epoch_milliseconds_bucket_by_day() -> None:
-    from reports.analysis.modules.standby_creep import _day_key
+    from reports.analysis.series import day_key as _day_key
 
     same_day = {_day_key(_epoch_ms("2026-07-01", h), timezone.utc)
                 for h in range(24)}
@@ -463,20 +467,20 @@ def test_epoch_milliseconds_bucket_by_day() -> None:
 def test_epoch_seconds_are_understood_too() -> None:
     """HA changed this format once and may again; a module that only knows the
     current wire format breaks on upgrade."""
-    from reports.analysis.modules.standby_creep import _day_key
+    from reports.analysis.series import day_key as _day_key
 
     ms = _epoch_ms("2026-07-01", 12)
     assert _day_key(ms // 1000, timezone.utc) == _day_key(ms, timezone.utc)
 
 
 def test_iso_strings_are_still_accepted() -> None:
-    from reports.analysis.modules.standby_creep import _day_key
+    from reports.analysis.series import day_key as _day_key
 
     assert _day_key("2026-07-01T13:00:00", timezone.utc) == "2026-07-01"
 
 
 def test_junk_produces_no_day_rather_than_a_wrong_one() -> None:
-    from reports.analysis.modules.standby_creep import _day_key
+    from reports.analysis.series import day_key as _day_key
 
     for junk in (None, True, "", "short", float("nan")):
         assert _day_key(junk, timezone.utc) == "", junk
@@ -488,7 +492,7 @@ def test_days_are_bucketed_in_LOCAL_time() -> None:
     exactly when a device is idle — in the wrong one."""
     from zoneinfo import ZoneInfo
 
-    from reports.analysis.modules.standby_creep import _day_key
+    from reports.analysis.series import day_key as _day_key
 
     # 20:00 UTC on the 1st is 04:00 on the 2nd in Singapore.
     stamp = _epoch_ms("2026-07-01", 20)
