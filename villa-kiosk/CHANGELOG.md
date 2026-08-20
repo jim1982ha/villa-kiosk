@@ -1,3 +1,14 @@
+## 2.537.0
+
+### Added — reports can be read and configured from the kiosk
+
+A Reports workspace in the owner menu: compose one and read it without sending
+anything, see what this property can and cannot be measured on, set when reports
+arrive and where they go, and check whether the alerts they are built from are
+actually being received. Until now all of that existed only behind the API, so
+switching reports on meant editing configuration by hand and finding out what
+they say when one arrives on somebody's phone.
+
 ## 2.536.0
 
 ### Fixed — a follow-up could be claimed for something that happened this week

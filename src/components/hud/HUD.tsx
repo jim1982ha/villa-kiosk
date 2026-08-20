@@ -24,7 +24,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, LogOut, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
+  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList, FileText,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -94,6 +94,11 @@ interface Props {
   /** Open the Facility Manager workspace. Undefined when the profile lacks
    *  `manageFacility` — the button is then not rendered at all. */
   onOpenFacility?: () => void;
+  /** Open the reports workspace. Undefined when the profile is not the owner —
+   *  the entry is then not rendered at all. ⚠️ A RENDERING CONVENIENCE ONLY:
+   *  the proxy refuses a non-owner write to /reports-config and a non-owner
+   *  read of /reports-diagnostics whatever the browser sends. */
+  onOpenReports?: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
    *  already opens. A plain tap keeps toggling that category's visibility. */
@@ -114,7 +119,7 @@ export default function HUD({
   onOpenSettings, canOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  mappedEntityIds, onOpenEntity, onOpenFacility, onOpenCategory,
+  mappedEntityIds, onOpenEntity, onOpenFacility, onOpenReports, onOpenCategory,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -715,6 +720,16 @@ export default function HUD({
                   >
                     <ClipboardList size={18} />
                     <span>Facility{facilityAttention > 0 ? ` (${formatCountBadge(facilityAttention)})` : ""}</span>
+                  </button>
+                )}
+                {onOpenReports && (
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    onClick={() => { setMenuOpen(false); onOpenReports(); }}
+                  >
+                    <FileText size={18} />
+                    <span>Reports</span>
                   </button>
                 )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus

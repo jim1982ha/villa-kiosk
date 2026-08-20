@@ -4102,3 +4102,97 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 /* No hover on a touchscreen, and the same gesture there already opens the
    panel — so the tooltip would either never appear or fight the tap. */
 @media (hover: none) { .badge-tooltip { display: none; } }
+
+/* ── Reports workspace ──────────────────────────────────────────────────────
+   Sibling of the Facility workspace and deliberately reuses its shell classes
+   (.fm-tabs/.fm-tab/.fm-banner/.fm-check) rather than cloning them — the two
+   dialogs are the same KIND of thing and a second tab-bar style is a second
+   place to fix a tablet bug. Only what is genuinely new to reports lives here.
+
+   ⚠️ EVERY SIZE COMES FROM THE --text-* SCALE AND EVERY COLOUR FROM A TOKEN.
+   A literal here renders differently per device class and defeats both themes.
+*/
+.reports-pane { display: flex; flex-direction: column; gap: 12px; }
+
+.reports-h3 {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ⚠️ PRE, PRESERVING LINE BREAKS. The renderer emits plain text whose breaks
+   are meaningful — `deliver.py` sends the intersection of what notify
+   platforms accept — so reflowing it would show the operator something
+   different from what lands on the phone. `pre-wrap`, not `pre`: long lines
+   must still wrap on a phone rather than scroll the dialog sideways. */
+.reports-body {
+  margin: 0;
+  padding: 12px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.reports-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+
+.reports-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+.reports-item > span:first-of-type { flex: 1 1 auto; }
+.reports-item.muted { color: var(--text-muted); }
+.reports-item.sev-warning { color: var(--status-warning); }
+.reports-item.sev-critical { color: var(--status-danger); }
+
+.reports-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px; margin: 0;
+}
+.reports-facts > div {
+  padding: 8px 10px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-input);
+}
+.reports-facts dt { font-size: var(--text-xs, 11px); color: var(--text-muted); }
+/* Counts line up in a column, so they get tabular figures. */
+.reports-facts dd { margin: 2px 0 0; font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
+
+.reports-entry {
+  padding: 10px 12px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-input);
+  border-left: 3px solid var(--border);
+}
+.reports-entry.sev-warning { border-left-color: var(--status-warning); }
+.reports-entry.sev-critical { border-left-color: var(--status-danger); }
+.reports-entry-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: var(--text-sm); }
+
+.reports-deliveries { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.reports-delivery { display: flex; gap: 8px; font-size: var(--text-xs, 11px); }
+.reports-delivery > span:first-child { flex: 1 1 auto; }
+.reports-delivery.status-failed { color: var(--status-danger); }
+.reports-delivery.status-skipped { color: var(--text-muted); }
+
+/* ⚠️ WRAPS ON A PHONE. Four controls in a row is comfortable on a tablet and
+   overflows a 360px viewport; the selects grow to the touch target rather than
+   being squeezed under it. */
+.reports-schedule {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 8px; border-radius: var(--radius-md, 8px); background: var(--bg-input);
+}
+/* ⚠️ DIRECT CHILD, NOT A DESCENDANT. `.reports-schedule select` would reach
+   into any component that later sits inside a schedule row and restyle a
+   control it does not own — the CSS form of the applicable-set bug, and the
+   reason `.fm-field > input` is written that way. The selects here ARE direct
+   children, so `>` costs nothing and closes the door. */
+.reports-schedule > select { flex: 1 1 96px; min-height: var(--touch-min); }

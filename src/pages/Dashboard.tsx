@@ -26,6 +26,7 @@ import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceShe
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import FacilityModal from "@/components/fm/FacilityModal";
+import ReportsModal from "@/components/reports/ReportsModal";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
@@ -80,6 +81,7 @@ export default function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [configEditorOpen, setConfigEditorOpen] = useState(false);
   const [facilityOpen, setFacilityOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
   /** Device the Facility modal should open a blank fault for — set by a
    *  panel's "report a fault" shortcut, cleared as soon as the modal has
    *  consumed it so reopening Facility later doesn't resurrect the form. */
@@ -233,8 +235,8 @@ export default function Dashboard() {
   // whatever's most recently rendered.
   const modalOpenRef = useRef(false);
   useEffect(() => {
-    modalOpenRef.current = !!activePanel || teleportOpen || settingsOpen || configEditorOpen || facilityOpen;
-  }, [activePanel, teleportOpen, settingsOpen, configEditorOpen, facilityOpen]);
+    modalOpenRef.current = !!activePanel || teleportOpen || settingsOpen || configEditorOpen || facilityOpen || reportsOpen;
+  }, [activePanel, teleportOpen, settingsOpen, configEditorOpen, facilityOpen, reportsOpen]);
   const lastInteractionRef = useRef(Date.now());
   useEffect(() => {
     const mark = () => { lastInteractionRef.current = Date.now(); };
@@ -816,6 +818,7 @@ export default function Dashboard() {
         mappedEntityIds={effectiveMappedEntityIds}
         onOpenEntity={openEntityPanel}
         onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
+        onOpenReports={canEditConfig ? () => setReportsOpen(true) : undefined}
         onOpenCategory={setCategoryGroup}
       />
 
@@ -1030,6 +1033,10 @@ export default function Dashboard() {
           reportFaultFor={faultForEntity ?? undefined}
           onFaultFormOpened={() => setFaultForEntity(null)}
         />
+      )}
+
+      {reportsOpen && canEditConfig && (
+        <ReportsModal onClose={() => setReportsOpen(false)} />
       )}
 
       {guestReportFor !== null && (
