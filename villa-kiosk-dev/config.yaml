@@ -1,0 +1,142 @@
+# VESTA — Home Assistant add-on manifest (image-pull variant).
+#
+# `image` makes the Supervisor PULL a prebuilt image from GHCR instead of
+# building on the device, so installing from the repository URL is a one-click,
+# no-compile operation. The {arch} placeholder + version resolve to e.g.
+# ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
+name: VESTA (dev)
+version: "2.499.0"
+slug: villa_kiosk_dev
+description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
+url: https://github.com/jim1982ha/villa-kiosk
+image: ghcr.io/jim1982ha/villa-kiosk-dev-{arch}
+arch:
+  - amd64
+  - aarch64
+# The HA base image ships s6-overlay v3 as its own init — disable Docker's.
+init: false
+# Serve in the sidebar through Ingress (HA does the auth there).
+ingress: true
+ingress_port: 8099
+# ALSO publish the kiosk on its own host port, so it can be reached directly —
+# e.g. via a Cloudflare Tunnel pointed at http://<HA-host-ip>:8099 — and opened
+# as a full-screen PWA with none of the Home Assistant UI around it. This is
+# safe to expose because the add-on now authenticates every sensitive request
+# itself: the profile passcode mints a signed session cookie server-side, and
+# /core (HA control) + /model (the villa floor plan) refuse anything without it.
+# Only Ingress-sourced requests skip the cookie (HA already authenticated them).
+# Leave this unmapped in the add-on's Network panel if you only ever want the
+# sidebar. Add Cloudflare Access in front for defence-in-depth.
+# Grants the add-on the Supervisor Core API proxy + SUPERVISOR_TOKEN, so the UI
+# talks to Home Assistant token-lessly (no long-lived token needed). See
+# rootfs/usr/bin/supervisor-proxy.py.
+homeassistant_api: true
+panel_icon: mdi:home-city-outline
+panel_title: VESTA dev
+boot: auto
+startup: application
+# Profile passcodes: a 4-digit PIN per kiosk profile (Guest / Owner / Facility
+# manager). Leave a PIN empty to let that profile in without a passcode. PINs
+# are verified server-side by the add-on (never sent to the browser), and a
+# correct one mints the session cookie that authorizes direct/Cloudflare access.
+#
+# The 3D model is no longer a configured path: it's uploaded once through the
+# kiosk's own Settings → Advanced (Owner profile) and stored in the add-on's
+# private /data volume, served to every client from there. No /config/www file
+# to place, and nothing on HA's unauthenticated /local/ route.
+#
+# public_model_access (off by default): lets the kiosk START DOWNLOADING AND
+# DECODING the GLB while still on the profile-select/PIN screen, instead of
+# only after login — the villa floor plan is a multi-second Draco-decode +
+# GPU-upload, not just a download, so waiting on the PIN screen only helps if
+# that whole pipeline can start early. Enabling this makes /model/ (and its
+# filename metadata) reachable WITHOUT a session cookie or PIN — so anyone who
+# reaches this add-on's public hostname could download the raw floor-plan
+# file without ever entering a PIN. /core (Home Assistant control) and the
+# PINs themselves are NOT affected — they stay fully gated either way. Only
+# turn this on if something else already gates the hostname itself (e.g.
+# Cloudflare Access) — it's meaningless for Ingress, which is already
+# auto-trusted, and unnecessary if you never expose port 8099 directly.
+#
+# superadmin_pin (empty by default = the capability is OFF): a SIX-digit code
+# that authorises permanently deleting a Facility Manager EVIDENCE record — a
+# fault, a cost, or a logged completion, together with its evidence photos.
+# Normal profiles can add and amend those records; nothing can delete one
+# unless this code is set and entered. Schedules and saved reports are NOT
+# covered: a schedule is a plan rather than a record of something that
+# happened, and a saved report can be regenerated, so both keep their ordinary
+# delete buttons.
+#
+# It is not a fourth profile: it never appears on the profile-select screen,
+# mints no session, and cannot be signed in as. Inside the app you reach it by
+# PRESSING AND HOLDING a deletable row, which opens a code prompt; a correct
+# code authorises that ONE deletion and then expires. Rows that can be deleted
+# this way carry a small dot in their corner — deliberately quiet, since it is
+# only meaningful to whoever holds the code.
+#
+# Enforcement is server-side: the add-on rejects any write that removes a
+# record without a fresh authorisation, so the restriction holds regardless of
+# what any client believes. It is additive, not a bypass — deleting still
+# requires an Owner or Facility manager session AS WELL AS the code.
+#
+# Six digits rather than four because it authorises irreversible destruction
+# of the maintenance record; the same brute-force lockout applies as for the
+# profile PINs. Leave it empty unless you actually need deletions, and treat
+# it as separate from the everyday passcodes.
+# NOTE: the help text an operator actually SEES on the Configuration page lives
+# in translations/en.yaml — Supervisor renders that, never these comments. Add
+# a field there whenever you add one here (tests/security_test.py fails if you
+# forget). What stays here is the WHY behind each default, which belongs next
+# to the value it explains.
+#
+# ── Tunable policy ──────────────────────────────────────────────────────────
+# These four are POLICY, not preference: how long records are kept, how long a
+# session lasts, how hard a wrong passcode bites. No single number is right for
+# every property, which is why they are options here rather than constants in
+# the add-on's code that an operator would have to patch and then lose on the
+# next update. All are read live — a change applies without restarting the
+# add-on — and clamped server-side, so a hand-edited value can never turn into
+# "keep nothing" or "never expire".
+#
+# evidence_retention_days (default 550, ~18 months: a 12-month agreement plus
+#   the yield-up/dispute window after it). Photo evidence older than this is
+#   deleted from the add-on's own storage. Raise it if your own obligation runs
+#   longer; set 0 to switch age-based deletion OFF entirely and keep evidence
+#   until you remove the record it belongs to. This is INDEPENDENT of the
+#   automatic clean-up of photos nothing references any more (a photo you
+#   removed from a fault, or attached to a form you then cancelled) — that
+#   always runs, because those files are pure waste at any age.
+#
+# session_days (default 30). How long a profile stays signed in on a device
+#   before the passcode is asked for again. A wall-mounted kiosk wants a long
+#   one; a villa where guests come and go with their own phones wants a short
+#   one, so a departing guest's session lapses on its own.
+#
+# telemetry_max_events (default 500). How much diagnostic history the add-on
+#   keeps (load timings, JS errors, sync outcomes). Raise it while chasing an
+#   intermittent problem on someone else's device — the ring is small and
+#   fixed-size, so the only cost is a slightly larger file.
+#
+# pin_lockout_minutes (default 5). How long a device that has entered five
+#   wrong passcodes must wait. The lockout is per source address, so raising
+#   it punishes a guesser rather than locking the household out.
+options:
+  guest_pin: ""
+  owner_pin: ""
+  ops_pin: ""
+  superadmin_pin: ""
+  public_model_access: false
+  evidence_retention_days: 550
+  session_days: 30
+  telemetry_max_events: 500
+  pin_lockout_minutes: 5
+schema:
+  guest_pin: match(^[0-9]{4}$|^$)?
+  owner_pin: match(^[0-9]{4}$|^$)?
+  ops_pin: match(^[0-9]{4}$|^$)?
+  superadmin_pin: match(^[0-9]{6}$|^$)?
+  public_model_access: bool?
+  evidence_retention_days: int(0,3650)?
+  session_days: int(1,365)?
+  telemetry_max_events: int(50,5000)?
+  pin_lockout_minutes: int(1,1440)?
