@@ -1,3 +1,14 @@
+## 2.509.0
+
+### Added — preview a report without sending it
+
+`POST /reports-run-now {"preview": true}` composes a full report against live
+data, returns the prose and every finding, and delivers nothing. Deciding
+whether to switch reports on previously meant enabling them and finding out on
+someone's phone whether a check was noisy. A preview is not recorded in
+history either — nothing was delivered, and a delivery record of something
+that was not delivered is worse than no record.
+
 ## 2.508.0
 
 ### Added — Reports Phase 3: the first analysis, and the module system around it
