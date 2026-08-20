@@ -1,3 +1,14 @@
+## 2.522.0
+
+### Fixed — the collector's diagnostics could not report a dead subscription
+
+`listening` was derived from a stored timestamp written once and never cleared,
+so it read true forever after the first successful subscribe — through every
+reconnect, restart, and a socket that died days ago. It is now `connected`, read
+from the live socket, with a drop count beside it. `modules` was the literal
+`[]` under a comment calling that a fact rather than a gap; it lists what the
+registry holds.
+
 ## 2.521.0
 
 ### Changed — one home for the report modules' shared helpers
