@@ -218,17 +218,18 @@ def clean_summary(summary: str) -> str:
 
 
 async def todo_tasks(hass: HassClient,
-                     entity_ids: Optional[Sequence[str]] = None
-                     ) -> List[Dict[str, str]]:
-    """Open caretaker tasks a blueprint raised, from every todo list.
+                     entity_ids: Optional[Sequence[str]] = None,
+                     status: str = "needs_action") -> List[Dict[str, str]]:
+    """Caretaker tasks a blueprint raised, from every todo list.
 
     ⚠️ READ ONLY, AND ONLY THE ITEMS THIS SYSTEM WROTE. An unclaimed item is not
     parsed, not counted and not carried anywhere — the caretaker list on the
     reference deployment is also the household's shopping list, and a report
     that enumerated it would be reading somebody's groceries.
 
-    `needs_action` only: a completed task is not outstanding work, and Phase 7
-    is what turns it into a "this was closed" finding.
+    `status` selects which half: `needs_action` is outstanding work, and
+    `completed` is what Phase 7 joins against to claim something was actually
+    done. Both are read the same way and neither is ever written.
     """
     lists = list(entity_ids) if entity_ids is not None else await todo_lists(hass)
     out: List[Dict[str, str]] = []
@@ -245,7 +246,7 @@ async def todo_tasks(hass: HassClient,
         for item in items:
             if not isinstance(item, dict):
                 continue
-            if str(item.get("status") or "needs_action") != "needs_action":
+            if str(item.get("status") or "needs_action") != status:
                 continue
             match = TASK_PREFIX.match(str(item.get("summary") or "").strip())
             if not match:

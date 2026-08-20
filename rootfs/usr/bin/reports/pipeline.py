@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from aiohttp import ClientSession
 
-from . import aggregate as aggregate_mod, collect, discovery, ledger, schedule as schedule_mod, stats as stats_mod, store
+from . import aggregate as aggregate_mod, collect, discovery, ledger, verify as verify_mod, schedule as schedule_mod, stats as stats_mod, store
 from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis.series import hourly_by_day, parse_day
 from .contracts import severity_rank
@@ -265,10 +265,30 @@ async def run_report(
     # Its own failure is non-fatal by design — a report that cannot reach the
     # todo list is thinner, not absent.
     carried: List[Dict[str, str]] = []
+    verified: List[Any] = []
     try:
         async with HassClient(session) as hass:
-            todo = await ledger.todo_tasks(hass)
+            lists = await ledger.todo_lists(hass)
+            todo = await ledger.todo_tasks(hass, lists)
+            done = await ledger.todo_tasks(hass, lists, status="completed")
         carried = ledger.reconcile(todo, aggregated.get("tasks") or [])
+
+        # ── verify ──────────────────────────────────────────────────────────
+        # ⚠️ THE PRIOR WINDOW IS THE REST OF THE RING, NOT ANOTHER PERIOD. A
+        # problem reported two months ago and fixed last week is still a
+        # verification; bounding this to "the previous period" would only find
+        # repairs that happened to land in one cadence.
+        #
+        # ⚠️ AND THE COLLECTOR MUST HAVE BEEN UP FOR THE WHOLE WINDOW. "It has
+        # not recurred" is a claim about the villa only if something was
+        # listening; otherwise it is a claim about the listener. See verify.py.
+        everything = aggregate_mod.normalise_all(collect.events_since(""))
+        prior = [i for i in everything if i.when and i.when < since]
+        inside = [i for i in everything if not i.when or i.when >= since]
+        coverage = collect.coverage(since)
+        verified = verify_mod.verify(
+            prior, inside, done, ledger.read(),
+            listening_throughout=bool(coverage.get("complete")))
     except Exception as err:  # noqa: BLE001 - a report must still go out
         swallow("could not read the caretaker list", err)
 
@@ -276,7 +296,8 @@ async def run_report(
     context = ReportContext(
         audience=audience, cadence=cadence, period=period,
         generated_at=generated_at, discovery=found,
-        findings=findings, skipped=skipped, ran=ran,
+        findings=findings + [f.as_dict() for f in verified],
+        skipped=skipped, ran=ran,
         aggregated=aggregated, collector=collect.state(),
         carried_tasks=carried,
     )

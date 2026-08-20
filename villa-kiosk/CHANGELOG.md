@@ -1,3 +1,14 @@
+## 2.535.0
+
+### Added — the report can now say a problem was dealt with
+
+A fault reported in an earlier period, followed by a closed maintenance ticket
+or a caretaker task marked done, and then no recurrence, is reported as
+followed up — with the date and whether a cost was recorded. All three have to
+hold: something still happening is not a repair, and silence with no repair is
+just a quiet fortnight. Nothing is claimed at all if the listener was down for
+any of the period, because then the silence describes the listener.
+
 ## 2.534.0
 
 ### Changed — the security policy's own notes described a rule it no longer has

@@ -524,8 +524,16 @@ class DeterministicNarrator:
             return []
 
         lines: List[str] = []
-        for item in verified[:MAX_LINES]:
-            lines.append(self._finding_line(item))
+        if verified:
+            # ⚠️ ITS OWN HEADING. These rendered as bare bullets above
+            # "Raised for the caretaker", orphaned under nothing — and a
+            # verification is the one line in the report that says a story
+            # ENDED, which is precisely the line a reader should be able to
+            # find. "Followed up" describes the ACTION, which is evidenced;
+            # the sentence itself never says more than "has not recurred".
+            lines.append("Followed up:")
+            for item in verified[:MAX_LINES]:
+                lines.append(self._finding_line(item))
         if resolved:
             lines.append(
                 f"Resolved without intervention: "
