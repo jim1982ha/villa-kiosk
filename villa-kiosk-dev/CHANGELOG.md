@@ -1,3 +1,15 @@
+## 2.518.0
+
+### Fixed — the collector was deaf to every critical alert
+
+Only blueprints declaring "VESTA" as their author were listened for, and the
+seven `critical_*` blueprints — leaks, unlocked doors, the presence guard — are
+pre-existing files folded into the naming scheme that carry no author field.
+Every P1 and P2 finding would have been discarded, with nothing but a log line
+listing three categories instead of four to show for it. A subscription that
+never fires costs nothing; a missing one loses findings forever, so the filter
+now errs toward listening.
+
 ## 2.517.0
 
 ### Fixed — the collector only listened for one villa's rule categories
