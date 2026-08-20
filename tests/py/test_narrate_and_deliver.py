@@ -93,9 +93,13 @@ def test_a_capability_explained_by_preflight_is_not_repeated() -> None:
         "preflight": [{"severity": "notice", "capability": "energy_cost",
                        "detail": "No tariff is configured on the Energy dashboard."}],
     }))
-    assert "Needs attention" in body
+    # ⚠️ THE INVARIANT IS "SAID ONCE", NOT THE HEADING IT IS SAID UNDER. Phase D
+    # moved preflight into "Monitoring health", where a stale configuration
+    # belongs — it is a fault in the monitoring, not a limit of the property.
+    assert body.count("tariff is configured") == 1, body
+    assert "Monitoring health" in body
     assert "Not covered by this report" not in body, (
-        "the only missing capability was already explained under Needs attention")
+        "the only missing capability was already explained under monitoring health")
 
 
 def test_the_date_is_readable() -> None:
@@ -129,8 +133,15 @@ def test_critical_preflight_is_not_buried(  ) -> None:
             {"severity": "warning", "detail": "A warning."},
         ],
     }))
-    lines = [ln for ln in body.splitlines() if ln.startswith("- ")]
-    assert lines[0] == "- Configuration is stale."
+    # ⚠️ ASSERT THE ORDERING, NOT POSITION 0 IN THE DOCUMENT. `lines[0]` was a
+    # proxy that held only while preflight was the one bulleted section; Phase D
+    # added seven more. The rule was always "critical above notice", and reading
+    # it off the whole body made a section ABOVE preflight look like a
+    # regression when it was the new structure working.
+    order = [body.index(t) for t in
+             ("Configuration is stale.", "A warning.", "A notice.")]
+    assert order == sorted(order), (
+        "critical preflight must sort above warning and notice")
 
 
 def test_findings_are_rendered_when_present() -> None:
@@ -138,8 +149,13 @@ def test_findings_are_rendered_when_present() -> None:
         {"label": "Pool pump", "severity": "warning", "area": "Plant room",
          "detail": "drawing more than its own baseline"},
     ]))
-    assert "1 finding:" in body
+    # Phase D routes findings into the eight sections by KIND rather than
+    # listing them under one heading. What must survive is every FIELD: the
+    # label, the AREA (the only thing distinguishing two identically named
+    # devices) and the detail.
+    assert "1 finding" in body
     assert "Pool pump" in body and "Plant room" in body
+    assert "drawing more than its own baseline" in body
     assert "nothing has been assessed" not in body
 
 
@@ -357,8 +373,8 @@ def test_findings_are_counted_in_readable_english() -> None:
     two = DeterministicNarrator().render(_ctx(findings=[
         {"label": "A", "severity": "info", "detail": "x"},
         {"label": "B", "severity": "info", "detail": "y"}]))[1]
-    assert "1 finding:" in one and "(s)" not in one
-    assert "2 findings:" in two
+    assert "1 finding" in one and "(s)" not in one
+    assert "2 findings" in two and "(s)" not in two
 
 
 # ── preview ──────────────────────────────────────────────────────────────────

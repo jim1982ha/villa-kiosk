@@ -75,6 +75,34 @@ def period_key(cadence: str, moment: datetime) -> str:
     return moment.strftime("%Y-%m-%d")
 
 
+def period_start(cadence: str, moment: datetime) -> datetime:
+    """When the period `moment` falls in BEGAN — the report's window.
+
+    ⚠️ THE COMPANION TO `period_key`, AND IT MUST AGREE WITH IT. The key says
+    which period this is; this says which events belong to it. If the two
+    disagreed, a report titled with one week would be assembled from another's
+    events — and nothing would look wrong, because both halves would be
+    internally consistent.
+
+    ⚠️ WALL-CLOCK MIDNIGHT, NOT "24 HOURS AGO". Subtracting a duration from the
+    send time gives a window that slides with the hour the schedule fires, so a
+    daily report sent at 07:00 would cover 07:00-to-07:00 and cut every evening
+    in half. `replace()` on a tz-aware datetime re-resolves the offset, which is
+    also what keeps this right across a DST change — the same reason
+    `_fire_time` builds its times that way.
+
+    Monthly deliberately walks back to day 1 rather than subtracting 30 days:
+    "this month" is a calendar claim, and a 30-day window in a 31-day month
+    silently drops a day of findings.
+    """
+    midnight = moment.replace(hour=0, minute=0, second=0, microsecond=0)
+    if cadence == "weekly":
+        return midnight - timedelta(days=midnight.weekday())
+    if cadence == "monthly":
+        return midnight.replace(day=1)
+    return midnight
+
+
 def idempotency_key(schedule_id: str, cadence: str, moment: datetime) -> str:
     return f"{schedule_id}:{period_key(cadence, moment)}"
 

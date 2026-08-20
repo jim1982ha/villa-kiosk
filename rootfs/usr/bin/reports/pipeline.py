@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from aiohttp import ClientSession
 
-from . import collect, discovery, schedule as schedule_mod, stats as stats_mod, store
+from . import aggregate as aggregate_mod, collect, discovery, schedule as schedule_mod, stats as stats_mod, store
 from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis.series import hourly_by_day, parse_day
 from .contracts import severity_rank
@@ -36,7 +36,7 @@ from .deliver import deliver
 from .hass import fetch_timezone
 from .log import log, swallow, warn
 from .narrate import DeterministicNarrator, ReportContext
-from .schedule import period_key
+from .schedule import period_key, period_start
 
 
 def _rejected_candidates() -> List[Dict[str, Any]]:
@@ -244,11 +244,24 @@ async def run_report(
         session, found, audience, cadence, now_local, settings,
         min_history_days, module_failures)
 
+    # ── synthesise ──────────────────────────────────────────────────────────
+    # ⚠️ SCOPED TO THE PERIOD, NOT THE WHOLE BUFFER. The ring holds up to
+    # MAX_EVENTS across months; a weekly report assembled from all of it would
+    # restate every finding the owner has already read, and its savings total
+    # would grow forever.
+    since = period_start(cadence, now_local).isoformat(timespec="seconds")
+    try:
+        aggregated = aggregate_mod.aggregate(collect.events_since(since))
+    except Exception as err:  # noqa: BLE001 - a report must still go out
+        swallow("aggregation failed; reporting without it", err)
+        aggregated = {}
+
     # ── narrate ─────────────────────────────────────────────────────────────
     context = ReportContext(
         audience=audience, cadence=cadence, period=period,
         generated_at=generated_at, discovery=found,
         findings=findings, skipped=skipped, ran=ran,
+        aggregated=aggregated, collector=collect.state(),
     )
     narrator = DeterministicNarrator()
     try:

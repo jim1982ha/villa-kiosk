@@ -43,6 +43,16 @@ class ReportContext:
     #: "every check ran and found nothing" are the same empty result — and they
     #: mean opposite things to the person reading the report.
     ran: List[str] = field(default_factory=list)
+    #: `aggregate.aggregate()` over the period's collected blueprint events —
+    #: `groups`, `savings`, `tasks`, `open_incidents`, `schema_drift`, counts.
+    #:
+    #: ⚠️ EMPTY IS A REAL STATE AND NOT THE SAME AS ABSENT. A property with no
+    #: blueprint layer has no aggregation to do, and one whose collector was
+    #: offline has aggregation it could not do. `collector` below is what
+    #: separates them, and section 8 must not report the second as the first.
+    aggregated: Dict[str, Any] = field(default_factory=dict)
+    #: `collect.state()` — whether anything was listening, and for how long.
+    collector: Dict[str, Any] = field(default_factory=dict)
 
 
 class Narrator(Protocol):
