@@ -1,3 +1,14 @@
+## 2.528.0
+
+### Fixed — events fell outside their own day on any property not on UTC
+
+The report's window is built from the villa's local midnight and events are
+stamped in UTC, and the two were compared as raw strings — which only orders
+correctly when the offsets match. On a UTC+8 property everything fired between
+local midnight and 08:00 was excluded from its own daily report, so a preview
+showed eight buffered events, none of them seen, and told the owner five
+categories of automation alert had found nothing.
+
 ## 2.527.0
 
 ### Added — the aggregation can be asked what it did
