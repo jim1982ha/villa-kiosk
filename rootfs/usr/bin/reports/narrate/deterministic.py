@@ -289,9 +289,22 @@ class DeterministicNarrator:
             elif estimated:
                 qualifier = (f", {estimated} of them estimated rather than "
                              f"metered")
+            # ⚠️ A TOTAL THAT EXCLUDES MEASURED WASTE MUST SAY SO. The headline
+            # read "52.00, across 1 finding" while the section below listed two
+            # — the second being real waste with no tariff behind it, so it is
+            # absent from the total AND from its count. A reader seeing one
+            # number and two lines is being quietly under-told, which is the
+            # "say what could not be seen" rule failing in the one place
+            # everybody reads.
+            unpriced = max(0, len([g for g in self._groups(context, "roi")
+                                   if self._text(g, "basis") != "trend"])
+                           - counted)
+            more = (f"; {_plural(unpriced, 'further finding')} "
+                    f"{'was' if unpriced == 1 else 'were'} measured but could "
+                    f"not be priced") if unpriced else ""
             lines.append(
                 f"Avoidable cost identified: {_amount(float(total))}, across "
-                f"{_plural(int(savings['groups']), 'finding')}{qualifier}.")
+                f"{_plural(counted, 'finding')}{qualifier}{more}.")
 
         if context.findings:
             # ⚠️ READABLE ENGLISH, NOT "1 finding(s)". This is read by the

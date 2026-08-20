@@ -1,3 +1,12 @@
+## 2.531.0
+
+### Fixed — the headline total quietly left out waste it could not price
+
+The opening line read "52.00, across 1 finding" while the section below listed
+two, the second being real measured waste with no tariff behind it — absent from
+the total and from its count, so the report under-stated the week without
+saying so. It now names how many findings were measured but could not be priced.
+
 ## 2.530.0
 
 ### Fixed — two kinds of finding were caught, stored and then never printed

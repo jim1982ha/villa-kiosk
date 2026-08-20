@@ -505,3 +505,25 @@ def test_an_unpriced_line_states_the_duration_it_does_have() -> None:
     body = _render(aggregated=_events(event))
     assert "3.5 hours run" in body
     assert "no figure supplied" not in body
+
+
+def test_a_total_that_excludes_measured_waste_says_so() -> None:
+    """⚠️ The headline read "52.00, across 1 finding" while the section below
+    listed two — the second being real waste with no tariff behind it, absent
+    from the total AND from its count. One number and two lines under-tells the
+    reader, which is "say what could not be seen" failing where everyone looks."""
+    when = "2026-08-20T11:00:00+08:00"
+    unpriced = {"type": "vesta_roi_event", "fired": when, "at": when, "data": {
+        "blueprint": "roi_runtime_cap", "rule_id": "ROI-16",
+        "report_bucket": "Living room AC", "entities": ["sensor.a"],
+        "kwh": 0.9, "basis": "measured", "timestamp": when}}
+    body = _render(aggregated=_events(_roi("Bathroom VMC", 52.0), unpriced))
+    assert "1 further finding was measured but could not be priced" in body
+    assert body.count("Living room AC") == 1, "counted once, in the section"
+
+
+def test_a_fully_priced_total_carries_no_such_caveat() -> None:
+    """A caveat on every report is one nobody reads."""
+    body = _render(aggregated=_events(_roi("A", 10.0),
+                                      _roi("B", 20.0, rule="ROI-05")))
+    assert "could not be priced" not in body
