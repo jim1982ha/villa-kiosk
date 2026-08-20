@@ -1,3 +1,13 @@
+## 2.498.0
+
+### Added — a second add-on so `dev` can be installed beside the working one
+
+Home Assistant clones a repository's DEFAULT BRANCH only, so commits on `dev`
+were invisible to the Supervisor and could never be offered as an update. CI now
+builds dev under its own image name and publishes a generated `villa-kiosk-dev/`
+manifest to main: same schema and options, different slug, ingress-only so the
+two add-ons cannot fight over host port 8099.
+
 ## 2.497.0
 
 ### Changed — development builds now produce an installable image of their own

@@ -47,7 +47,12 @@ jobs:
           version=$(grep -E '^version:' villa-kiosk/config.yaml | head -1 | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')
           echo "version=$version" >> "$GITHUB_OUTPUT"
           owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          image="ghcr.io/${owner}/villa-kiosk-${{ matrix.arch }}"
+          # SEPARATE IMAGE PER CHANNEL. dev and main never share a tag
+          # namespace, so a dev build can never overwrite a released image
+          # however the version numbers happen to line up.
+          suffix=""
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then suffix="-dev"; fi
+          image="ghcr.io/${owner}/villa-kiosk${suffix}-${{ matrix.arch }}"
           echo "image=$image" >> "$GITHUB_OUTPUT"
           # ⚠️ `:latest` is pushed ONLY from main, because main is the known-good
           # release line and `:latest` is what a human reads as "the current
@@ -103,3 +108,89 @@ jobs:
             io.hass.type=addon
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,scope=${{ matrix.arch }},mode=max
+
+  # ── Publish the dev channel to Home Assistant ────────────────────────────
+  # Supervisor reads add-on manifests from the repository's DEFAULT BRANCH and
+  # nowhere else — it has no idea `dev` exists. So a dev image is invisible
+  # until a manifest describing it appears on main. This job materialises that
+  # manifest by copying dev's own add-on directory and patching the handful of
+  # fields that must differ, which means the dev channel can never drift from
+  # the stable one's schema, options or translations: it IS the stable one,
+  # with four values changed and the host port removed.
+  #
+  # It touches `villa-kiosk-dev/` only. The stable add-on's files are never
+  # written by CI.
+  sync-dev-manifest:
+    if: github.ref_name == 'dev'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Serialised: two dev pushes landing together would both try to push main.
+    # Not `cancel-in-progress` — a cancelled sync leaves the channel a version
+    # behind with nothing to retry it.
+    concurrency:
+      group: sync-dev-manifest
+      cancel-in-progress: false
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Materialise villa-kiosk-dev/ from dev
+        run: |
+          set -euo pipefail
+          git fetch origin dev
+          rm -rf villa-kiosk-dev && mkdir -p villa-kiosk-dev
+          git archive origin/dev villa-kiosk | tar -x --strip-components=1 -C villa-kiosk-dev
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          OWNER="$owner" python3 - <<'PATCH'
+          import os, re, pathlib
+          p = pathlib.Path("villa-kiosk-dev/config.yaml")
+          out, skip = [], False
+          for line in p.read_text().splitlines(keepends=True):
+              # Drop `ports:` / `ports_description:` and their indented children.
+              # Ingress-only by design: two add-ons cannot bind the same host
+              # port, and a test channel does not need direct access.
+              if re.match(r"^(ports|ports_description):", line):
+                  skip = True
+                  continue
+              if skip:
+                  if line.startswith((" ", "\t")) or not line.strip():
+                      continue
+                  skip = False
+              line = re.sub(r"^name:.*$", "name: VESTA (dev)", line)
+              line = re.sub(r"^slug:.*$", "slug: villa_kiosk_dev", line)
+              line = re.sub(r"^panel_title:.*$", "panel_title: VESTA dev", line)
+              line = re.sub(r"^panel_icon:.*$", "panel_icon: mdi:home-city-outline", line)
+              line = re.sub(r"^image:.*$",
+                            f"image: ghcr.io/{os.environ['OWNER']}/villa-kiosk-dev-{{arch}}", line)
+              out.append(line)
+          p.write_text("".join(out))
+          PATCH
+          python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml
+          python3 -c "import yaml;d=yaml.safe_load(open('villa-kiosk-dev/config.yaml'));assert d['slug']=='villa_kiosk_dev' and 'ports' not in d, d; print('dev manifest ok:', d['version'])"
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- villa-kiosk-dev; then
+            echo "dev manifest already current — nothing to publish"; exit 0
+          fi
+          version=$(grep -E '^version:' villa-kiosk-dev/config.yaml | head -1 \
+                    | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add villa-kiosk-dev
+          git commit -m "chore(dev-channel): publish VESTA (dev) ${version}"
+          # main may have moved (a real release) between checkout and push.
+          # Rebase rather than force: this job's commit is additive and touches
+          # only villa-kiosk-dev/, so it can never conflict with a release.
+          for attempt in 1 2 3; do
+            if git push origin main; then exit 0; fi
+            echo "push rejected (attempt ${attempt}) — rebasing onto main"
+            git fetch origin main && git rebase origin/main
+          done
+          echo "could not publish the dev manifest after 3 attempts"; exit 1
