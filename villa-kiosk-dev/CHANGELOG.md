@@ -1,3 +1,14 @@
+## 2.507.0
+
+### Fixed — two reports on the same day were indistinguishable in the history
+
+The history entry id was built from cadence, period and audience, so two
+schedules of the same cadence firing on one day produced two rows reading
+`daily:<date>:owner` — telling them apart needed the timestamp. A scheduled
+entry now carries the scheduler's own idempotency key, which is what actually
+guarantees one send per schedule per period; a manual send is marked `manual`
+and carries the clock, because it has no such guarantee.
+
 ## 2.506.0
 
 ### Fixed — the scheduler ran in UTC, so a report could fire hours late or never
