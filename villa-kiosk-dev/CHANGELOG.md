@@ -1,3 +1,14 @@
+## 2.530.0
+
+### Fixed — two kinds of finding were caught, stored and then never printed
+
+Self-check alerts had no section at all, and a waste rule with no tariff behind
+it fell between the money section and the trends one. Because the report knew
+those findings existed it also suppressed the sentence that says nothing was
+found, so either one on its own produced a report containing only the date.
+Waste without a price is now stated with the hours or energy it did measure,
+rather than being dropped or given a zero it never had.
+
 ## 2.529.0
 
 ### Fixed — the report priced a finding in its headline and denied it two lines later
