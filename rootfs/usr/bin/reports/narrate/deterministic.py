@@ -129,7 +129,11 @@ class DeterministicNarrator:
         return "No checks raised anything this period."
 
     def _findings(self, findings: List[Dict[str, Any]]) -> List[str]:
-        lines = [f"{len(findings)} finding(s):"]
+        # "1 finding(s)" is machine output. This is read by the villa's owner
+        # every week, and the sloppiness costs nothing to fix and something to
+        # leave.
+        count = len(findings)
+        lines = [f"{count} finding{'' if count == 1 else 's'}:"]
         for item in findings:
             label = str(item.get("label") or item.get("ref") or "unnamed")
             severity = str(item.get("severity") or "info")

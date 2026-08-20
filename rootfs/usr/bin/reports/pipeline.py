@@ -26,12 +26,77 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from aiohttp import ClientSession
 
-from . import discovery, schedule as schedule_mod, store
+from . import discovery, schedule as schedule_mod, stats as stats_mod, store
+from .analysis import ModuleContext, describe_skips, run_all
+from .analysis import modules as _modules  # noqa: F401  (importing registers them)
+from .hass import HassClient, HassUnavailable
 from .deliver import deliver
 from .hass import fetch_timezone
 from .log import log, swallow, warn
 from .narrate import DeterministicNarrator, ReportContext
 from .schedule import period_key
+
+
+def _statistics_fetcher(session: ClientSession, now_local: datetime) -> Any:
+    """The ONLY way a module gets data.
+
+    ⚠️ MODULES DO NOT GET THE SESSION. A module that can open its own
+    websocket can also make its own unbudgeted queries, and the scheduler could
+    then no longer bound a pass — one badly written module would stall the
+    proxy's event loop, and the kiosk's own API alongside it. Modules ask; the
+    pipeline fetches, chunked and with `change` rather than `sum`.
+
+    Hourly, because the idle floor a module looks for is a property of the
+    hours within a day — daily buckets average it away entirely.
+    """
+    async def fetch(ids: Sequence[str], days: int) -> Dict[str, List[Dict[str, Any]]]:
+        if not ids:
+            return {}
+        start = stats_mod.start_of_day(now_local, days)
+        try:
+            async with HassClient(session) as hass:
+                return await stats_mod.statistics_during_period(
+                    hass, list(ids), start, period="hour", types=("change",))
+        except HassUnavailable as err:
+            warn(f"statistics unavailable for this pass: {err}")
+            return {}
+    return fetch
+
+
+async def analyse(
+    session: ClientSession,
+    found: Dict[str, Any],
+    audience: str,
+    cadence: str,
+    now_local: datetime,
+    settings: Dict[str, Any],
+    min_history_days: int,
+    failures: Dict[str, int],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]], Dict[str, int]]:
+    """Run every registered module against this pass's data.
+
+    Never raises — `run_all` bounds and wraps each module individually, so a
+    module that throws produces a skip line rather than an empty report.
+    """
+    if not found.get("reachable", False):
+        # Nothing to analyse, and saying "no checks ran" is honest. Inventing a
+        # skip per module would imply each was considered and declined.
+        return [], [], failures
+
+    context = ModuleContext(
+        audience=audience, cadence=cadence, now_local=now_local,
+        capabilities=list(found.get("capabilities") or []),
+        inventory=found.get("inventory") or {},
+        settings=settings, min_history_days=min_history_days,
+        stats=_statistics_fetcher(session, now_local),
+        labels={},
+    )
+    # History depth is not yet measured per statistic; the recorder's presence
+    # is the proxy for it, and each module applies its own `min_days` to the
+    # data it actually receives. Stated here rather than passed as a lie.
+    history_days = min_history_days if found.get("capabilities") else 0
+    produced, skipped, counts = await run_all(context, failures, history_days)
+    return [f.as_dict() for f in produced], describe_skips(skipped), counts
 
 
 async def run_report(
@@ -42,6 +107,9 @@ async def run_report(
     now_local: datetime,
     found: Optional[Dict[str, Any]] = None,
     entry_id: Optional[str] = None,
+    settings: Optional[Dict[str, Any]] = None,
+    min_history_days: int = 14,
+    module_failures: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
     """Produce and deliver one report. Returns the history entry.
 
@@ -64,17 +132,17 @@ async def run_report(
     """
     generated_at = now_local.isoformat(timespec="seconds")
     period = period_key(cadence, now_local)
+    settings = settings or {}
+    module_failures = module_failures or {}
 
     # ── collect ─────────────────────────────────────────────────────────────
     if found is None:
         found = await discovery.discover(session, generated_at)
 
     # ── analyse ─────────────────────────────────────────────────────────────
-    # Empty until Phase 3. `skipped` stays empty too — a module that does not
-    # exist has not been "skipped", and inventing an entry for it would be a
-    # counter reporting on something that never ran.
-    findings: List[Dict[str, Any]] = []
-    skipped: List[Dict[str, str]] = []
+    findings, skipped, failures = await analyse(session, found, audience,
+                                                cadence, now_local, settings,
+                                                min_history_days, module_failures)
 
     # ── narrate ─────────────────────────────────────────────────────────────
     context = ReportContext(
@@ -94,11 +162,16 @@ async def run_report(
     deliveries = await deliver(session, targets, title, body)
 
     # ── record ──────────────────────────────────────────────────────────────
+    # The report's own severity is the loudest thing in it — a finding or a
+    # preflight item. Preflight alone would rank a stale config above a
+    # freezer that is failing.
+    rank = {"info": 0, "notice": 1, "warning": 2, "critical": 3}
     severity = "info"
-    for item in found.get("preflight") or []:
-        if isinstance(item, dict) and item.get("severity") == "critical":
-            severity = "critical"
-            break
+    for item in list(found.get("preflight") or []) + findings:
+        if isinstance(item, dict):
+            candidate = str(item.get("severity", "info"))
+            if rank.get(candidate, 0) > rank.get(severity, 0):
+                severity = candidate
 
     entry: Dict[str, Any] = {
         "id": entry_id or f"manual:{period}:{now_local.strftime('%H%M%S')}",
@@ -110,6 +183,7 @@ async def run_report(
         "severity": severity,
         "deliveries": deliveries,
     }
+    entry["moduleFailures"] = failures
     log(f"report {entry['id']}: {len(findings)} finding(s), "
         f"{sum(1 for d in deliveries if d.get('status') == 'sent')}/"
         f"{len(deliveries)} delivered")
@@ -253,9 +327,19 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
         for entry in ready:
             targets = targets_for(config, entry)
             warn_if_broadcast(targets)
+            modules_cfg = config.get("modules")
             record = await run_report(
                 session, audience_of(entry), str(entry.get("cadence")),
-                targets, now_local, found, entry_id=str(entry["key"]))
+                targets, now_local, found, entry_id=str(entry["key"]),
+                settings=modules_cfg if isinstance(modules_cfg, dict) else {},
+                min_history_days=int(config.get("min_history_days") or 14),
+                module_failures=(state.get("moduleFailures")
+                                 if isinstance(state.get("moduleFailures"), dict)
+                                 else {}))
+            # ⚠️ Persisted so "three consecutive failures" survives a restart.
+            # Counted in memory only, a module that fails on every boot would
+            # never reach three and would be retried forever.
+            state = {**state, "moduleFailures": record.get("moduleFailures", {})}
             append_history(record)
             delivered += 1
 
@@ -265,8 +349,8 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
             # it twice. Per-target status is in the history entry; a genuine
             # resend is an operator action, not an automatic retry.
             sent_keys = list(sent_keys) + [str(entry["key"])]
-            store.write_json(store.REPORTS_STATE_FILE,
-                             {**state, "sent": schedule_mod.prune_keys(sent_keys)})
+            state = {**state, "sent": schedule_mod.prune_keys(sent_keys)}
+            store.write_json(store.REPORTS_STATE_FILE, state)
 
         return delivered
     except Exception as err:  # noqa: BLE001 - the loop must survive anything

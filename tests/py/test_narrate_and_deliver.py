@@ -138,7 +138,7 @@ def test_findings_are_rendered_when_present() -> None:
         {"label": "Pool pump", "severity": "warning", "area": "Plant room",
          "detail": "drawing more than its own baseline"},
     ]))
-    assert "1 finding(s)" in body
+    assert "1 finding:" in body
     assert "Pool pump" in body and "Plant room" in body
     assert "nothing has been assessed" not in body
 
@@ -348,3 +348,14 @@ def test_a_manual_send_is_marked_manual_and_carries_the_clock() -> None:
         found={"reachable": True, "preflight": []}))
     assert entry["id"].startswith("manual:")
     assert entry["id"].endswith(":090955")
+
+
+def test_findings_are_counted_in_readable_english() -> None:
+    """"1 finding(s)" is machine output; this is read by the villa's owner."""
+    one = DeterministicNarrator().render(_ctx(findings=[
+        {"label": "A", "severity": "info", "detail": "x"}]))[1]
+    two = DeterministicNarrator().render(_ctx(findings=[
+        {"label": "A", "severity": "info", "detail": "x"},
+        {"label": "B", "severity": "info", "detail": "y"}]))[1]
+    assert "1 finding:" in one and "(s)" not in one
+    assert "2 findings:" in two

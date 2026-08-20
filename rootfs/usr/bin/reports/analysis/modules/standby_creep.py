@@ -1,0 +1,232 @@
+"""Equipment that has quietly started drawing more when it is doing nothing.
+
+The question this asks is narrow on purpose: **has this device's IDLE draw
+risen against its own recent history?** Not "is it using a lot" — that is a
+judgement about a property nobody here has made — but "is it different from
+itself", which is answerable from the villa's own recorder and means the same
+thing on every install.
+
+It is the right first module because standby creep is the failure that hides.
+A pump whose seal is going, a fridge whose door no longer seals, a heater whose
+thermostat has stuck — none announce themselves. They draw a little more, every
+hour, for months, and the only symptom is a bill nobody connects to a cause.
+
+⚠️ THE IDLE FLOOR IS THE WHOLE IDEA. Comparing daily TOTALS finds nothing: a
+device used more days runs up a bigger total and that is not a fault. What
+matters is the level it sits at when it should be doing nothing at all — the
+low percentile of its hourly consumption. That number should be flat for years,
+so a change in it is a change in the equipment rather than in how it was used.
+
+⚠️ NOT A LITERAL WATTAGE ANYWHERE. The threshold is a RATIO against the
+device's own baseline, and the noise floor is learned from that device's own
+day-to-day variation. A property with a 3 kW heat pump and a property with a
+40 W router get the same code and the same correctness.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, Sequence
+
+from ..base import Finding, ModuleContext, dedup_key, resolve_threshold
+from ..registry import register
+from ..robust import median, percentile, relative_change, robust_sigma
+
+#: Which hours count as "idle". The 20th percentile of a day's hourly readings:
+#: low enough to exclude normal operation, high enough not to be the single
+#: hour the meter under-reported.
+IDLE_PERCENTILE = 0.20
+
+#: The comparison. Recent days against the ones before them — the device is its
+#: own control, which is what makes this portable.
+RECENT_DAYS = 7
+BASELINE_DAYS = 21
+
+#: ⚠️ DIMENSIONLESS. A 40% rise in a device's own idle floor is a real change
+#: whatever the device is. There is no wattage here and there must never be.
+DEFAULT_RISE_FRACTION = 0.40
+
+#: How many robust sigmas above the baseline's own variation before the rise is
+#: distinguishable from noise. Both tests must pass: a device that is merely
+#: erratic clears the ratio and fails this, and a device whose idle floor is
+#: rock steady clears this on a change too small to care about and fails the
+#: ratio.
+DEFAULT_SIGMA = 3.0
+
+#: A rise measured on a device whose baseline idle floor is essentially zero is
+#: not measurable — see `relative_change`. Expressed as a fraction of the
+#: device's own MEDIAN consumption, so it is still not a wattage.
+MIN_FLOOR_OF_MEDIAN = 0.01
+
+
+def _daily_idle_floors(rows: List[Dict[str, Any]]) -> List[float]:
+    """One idle floor per day, from that day's hourly `change` values.
+
+    Rows are hourly. A day with too few readings to have a floor is DROPPED
+    rather than filled — a floor computed from three hours is not a floor, and
+    inventing one is how a gap in the recorder becomes a finding about a pump.
+    """
+    by_day: Dict[str, List[float]] = {}
+    for row in rows:
+        change = row.get("change")
+        start = row.get("start")
+        if not isinstance(change, (int, float)) or isinstance(change, bool):
+            continue
+        if change < 0:
+            # A negative change means the meter reset (total_increasing allows
+            # it). The hour is unusable; the day may still be fine.
+            continue
+        day = str(start)[:10] if start is not None else ""
+        if not day:
+            continue
+        by_day.setdefault(day, []).append(float(change))
+
+    floors: List[float] = []
+    for day in sorted(by_day):
+        hours = by_day[day]
+        if len(hours) < 12:      # half a day of readings, at minimum
+            continue
+        floor = percentile(hours, IDLE_PERCENTILE)
+        if floor is not None:
+            floors.append(floor)
+    return floors
+
+
+def _label_for(statistic_id: str, labels: Dict[str, str]) -> str:
+    """What to call this device in the report.
+
+    Falls back to a humanised form of the id rather than printing the id
+    itself — `sensor.pool_pump_energy` in prose reads as a database row, and
+    the entity id is exactly what must not travel in Phase 6.
+    """
+    known = labels.get(statistic_id)
+    if known:
+        return known
+    tail = statistic_id.split(".", 1)[-1]
+    for suffix in ("_energy", "_power", "_consumption"):
+        if tail.endswith(suffix):
+            tail = tail[: -len(suffix)]
+            break
+    return tail.replace("_", " ").strip().title() or statistic_id
+
+
+class StandbyCreep:
+    """Idle draw that has risen against the device's own baseline."""
+
+    # Annotated as Sequence, not left to inference: the Protocol declares
+    # mutable attributes, so a bare tuple literal infers as `tuple[str, str]`
+    # and fails the structural match invariantly. mypy --strict catches it;
+    # nothing at runtime would.
+    name: str = "standby_creep"
+    requires: Sequence[str] = ("statistics", "energy_devices")
+    audiences: Sequence[str] = ("owner", "facility")
+    min_days: int = 14
+
+    async def run(self, context: ModuleContext) -> List[Finding]:
+        energy = context.inventory.get("energy") or {}
+        candidates = energy.get("devices")
+        if not isinstance(candidates, list) or not candidates:
+            return []
+
+        # ⚠️ ROLLED-UP METERS ARE INCLUDED HERE ON PURPOSE, unlike a total.
+        # `included_in_stat` matters when SUMMING, because a child's draw is
+        # already inside its parent. This module never sums — it asks each
+        # meter about itself — and a child meter is exactly where a failing
+        # appliance shows up first. Excluding them would blind the module to
+        # every individually metered device on the property.
+        ids = [str(i) for i in candidates if isinstance(i, str)]
+        window = RECENT_DAYS + BASELINE_DAYS
+        series = await context.stats(ids, window)
+
+        findings: List[Finding] = []
+        for index, statistic_id in enumerate(ids):
+            rows = series.get(statistic_id)
+            if not isinstance(rows, list):
+                continue
+            finding = self._assess(statistic_id, index, rows, context)
+            if finding is not None:
+                findings.append(finding)
+
+        # Loudest first — a report is read from the top and a reader who stops
+        # halfway should have seen the worst of it.
+        findings.sort(key=lambda f: (f.delta or 0.0), reverse=True)
+        return findings
+
+    def _assess(self, statistic_id: str, index: int,
+                rows: List[Dict[str, Any]],
+                context: ModuleContext) -> Optional[Finding]:
+        floors = _daily_idle_floors(rows)
+        expected_days = RECENT_DAYS + BASELINE_DAYS
+        if len(floors) < self.min_days:
+            return None
+
+        recent = floors[-RECENT_DAYS:]
+        baseline = floors[:-RECENT_DAYS]
+        if len(recent) < 3 or len(baseline) < 7:
+            return None
+
+        recent_floor = median(recent)
+        baseline_floor = median(baseline)
+        if recent_floor is None or baseline_floor is None:
+            return None
+
+        # A baseline of essentially nothing cannot support a ratio. Expressed
+        # against the device's own median so this stays dimensionless.
+        overall = median([f for f in floors])
+        if overall is None or baseline_floor < overall * MIN_FLOOR_OF_MEDIAN:
+            return None
+
+        rise = relative_change(baseline_floor, recent_floor)
+        if rise is None or rise <= 0:
+            return None
+
+        # ⚠️ LEARNED FROM THE DEVICE'S OWN VARIATION. A device whose idle floor
+        # wanders by 30% week to week should not be reported for wandering 40%.
+        spread = robust_sigma(baseline)
+        settings = context.settings
+        rise_threshold = resolve_threshold(
+            settings, "rise_fraction", None, DEFAULT_RISE_FRACTION)
+        sigma_threshold = resolve_threshold(
+            settings, "sigma", None, DEFAULT_SIGMA)
+
+        if rise < rise_threshold:
+            return None
+
+        # ⚠️ MAD OF ZERO IS LEGITIMATE and must not become a divide-by-nothing.
+        # A perfectly steady device has zero spread; the ratio test alone
+        # carries the decision there, which is the conservative choice.
+        if spread is not None and spread > 0:
+            if (recent_floor - baseline_floor) < sigma_threshold * spread:
+                return None
+
+        completeness = min(1.0, len(floors) / float(expected_days))
+        # Confidence follows completeness rather than being asserted: a
+        # conclusion drawn from 14 of 28 days should not present itself with
+        # the same authority as one drawn from all 28.
+        confidence = round(0.5 + 0.5 * completeness, 3)
+
+        label = _label_for(statistic_id, context.labels)
+        percent = round(rise * 100)
+        severity = "warning" if rise >= rise_threshold * 2 else "notice"
+
+        return Finding(
+            ref=f"d{index}",
+            kind="ANOMALY",
+            severity=severity,
+            label=label,
+            detail=(f"idle consumption is about {percent}% higher over the last "
+                    f"{len(recent)} days than in the {len(baseline)} days before "
+                    f"— the level it sits at when nothing should be running has "
+                    f"risen"),
+            metric="energy",
+            unit="kWh/h",
+            observed=round(recent_floor, 4),
+            baseline=round(baseline_floor, 4),
+            delta=round(rise, 4),
+            window_days=len(floors),
+            confidence=confidence,
+            completeness=round(completeness, 3),
+            dedup_key=dedup_key(self.name, statistic_id),
+        )
+
+
+register(StandbyCreep())
