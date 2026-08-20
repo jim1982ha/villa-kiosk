@@ -1,3 +1,14 @@
+## 2.524.0
+
+### Changed — one severity order, one day-key parser
+
+`contracts.SEVERITY` says its order is meaningful and to insert new levels in
+place, but four separate copies of that order existed — a rank dict in the
+pipeline, a tuple in the aggregator, and a third in the renderer that sorted
+descending and omitted `info` entirely, so an info item sorted last by falling
+through a default rather than by a decision. Three modules also parsed the
+day-key format themselves. Both now have one owner, pinned.
+
 ## 2.523.0
 
 ### Added — the report can now say one thing once, per rule and per bucket
