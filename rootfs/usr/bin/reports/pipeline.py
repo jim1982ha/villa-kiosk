@@ -312,7 +312,12 @@ async def run_report(
     # ⚠️ The instrument for "found nothing" vs "saw nothing".
     entry["_analysis"] = {"ran": ran, "skipped": skipped, "data": data_tally,
                           "rejected": _rejected_candidates(),
-                          "collector": collect.state()}
+                          "collector": collect.state(),
+                          # ⚠️ The synthesis layer's own instrument. Without it,
+                          # an empty section cannot be told from an aggregation
+                          # that raised and was swallowed two lines above.
+                          "aggregated": aggregate_mod.summary(aggregated),
+                          "period_since": since}
     log(f"report {entry['id']}: {len(findings)} finding(s), "
         f"{sum(1 for d in deliveries if d.get('status') == 'sent')}/"
         f"{len(deliveries)} delivered")

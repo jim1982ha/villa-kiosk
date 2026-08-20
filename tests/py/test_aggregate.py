@@ -387,3 +387,41 @@ def _critical_sev(severity: str) -> Dict[str, Any]:
         "report_bucket": "Water leak", "severity": severity,
         "label": "Water leak", "phase": "raised",
         "entities": ["binary_sensor.x"], "timestamp": when}}
+
+
+# ── the aggregation's own instrument ────────────────────────────────────────
+
+def test_summary_is_json_safe() -> None:
+    """⚠️ `Group` IS NOT SERIALISABLE. Putting the raw result on `_analysis`
+    would 500 the diagnostics endpoint — which is the one surface that has to
+    work precisely when something else does not."""
+    import json
+    json.dumps(aggregate.summary(aggregate.aggregate([_roi(), _critical()])))
+
+
+def test_summary_separates_no_events_from_everything_deduplicating() -> None:
+    """The two produce the same empty section and mean opposite things."""
+    empty = aggregate.summary(aggregate.aggregate([]))
+    merged = aggregate.summary(aggregate.aggregate([_roi(), _roi(), _roi()]))
+    assert empty["events_seen"] == 0 and empty["groups"] == 0
+    assert merged["events_seen"] == 3 and merged["groups"] == 1
+
+
+def test_summary_carries_no_bucket_or_entity_id() -> None:
+    """A `report_bucket` is operator free text and entities are entity ids.
+    Diagnostics, not a data export — the same rule as `collect.state()`."""
+    import json
+    rendered = json.dumps(aggregate.summary(aggregate.aggregate([
+        _roi("Emma's bedroom lamp"),
+        _maintenance(bucket="Emma's bedroom", task="check the lamp")])))
+    for forbidden in ("Emma", "light.a", "sensor.pump_pf", "check the lamp"):
+        assert forbidden not in rendered, f"{forbidden} leaked into diagnostics"
+
+
+def test_summary_names_the_blueprint_to_update() -> None:
+    """A blueprint FILE name is not villa-specific the way a bucket is, and
+    naming it is the entire point of reporting drift."""
+    entry = aggregate.summary(aggregate.aggregate(
+        [_critical(legacy=True)]))["schema_drift"][0]
+    assert entry["blueprint"] == "(critical)"
+    assert entry["events"] == 1

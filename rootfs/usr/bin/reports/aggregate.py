@@ -600,6 +600,53 @@ def _detail_for(g: Group) -> str:
     return f"{detail} — {first}" if first else detail
 
 
+def summary(result: Dict[str, Any]) -> Dict[str, Any]:
+    """A JSON-safe précis of an aggregation, for `_analysis`.
+
+    ⚠️ THE BIGGEST PRODUCER OF REPORT CONTENT HAD NO INSTRUMENT. Every other
+    stage of this pipeline can be asked what it did — `ran`, `skipped`, `data`,
+    `rejected`, `collector` — and the layer that decides what the report SAYS
+    could only be inspected by reading the delivered prose and inferring
+    backwards. When a section came out empty there was no way to tell "no events
+    in the period" from "events that all deduplicated into one group" from
+    "aggregation raised and was swallowed".
+
+    ⚠️ COUNTS AND CATEGORY NAMES, NEVER PAYLOADS OR BUCKETS. A `report_bucket`
+    is operator free text ("Emma's bedroom lamp") and the entities are entity
+    ids; this is a diagnostics surface, not a data export. Same rule as
+    `collect.state()`.
+
+    ⚠️ `Group` IS NOT JSON-SERIALISABLE, which is the other reason this exists:
+    putting the raw result on `_analysis` would 500 the endpoint.
+    """
+    groups = result.get("groups") or []
+    per_category: Dict[str, int] = {}
+    priced = 0
+    for group in groups:
+        category = getattr(group, "category", "") or "?"
+        per_category[category] = per_category.get(category, 0) + 1
+        if getattr(group, "total_cost", None) is not None:
+            priced += 1
+    drift = result.get("schema_drift") or {}
+    return {
+        "events_seen": result.get("events_seen", 0),
+        "events_dropped": result.get("events_dropped", 0),
+        "groups": len(groups),
+        "groups_by_category": per_category,
+        "groups_priced": priced,
+        "savings": result.get("savings") or {},
+        "tasks": len(result.get("tasks") or []),
+        "open_incidents": len(result.get("open_incidents") or []),
+        # Blueprint FILE names only — the whole point is naming which file to
+        # update, and a blueprint name is not villa-specific the way a bucket is.
+        "schema_drift": [
+            {"blueprint": e.get("blueprint"), "events": e.get("events"),
+             "missing": e.get("missing"), "legacy": e.get("legacy")}
+            for e in (drift.get("blueprints") or [])
+        ],
+    }
+
+
 def aggregate(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     """The whole synthesis, in the order the report needs it."""
     items = normalise_all(events)

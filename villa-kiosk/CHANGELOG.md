@@ -1,3 +1,14 @@
+## 2.527.0
+
+### Added — the aggregation can be asked what it did
+
+Every other stage of the report pipeline can be inspected on a preview; the
+layer that decides what the report actually says could only be judged by reading
+the delivered prose and inferring backwards, so an empty section could not be
+told from an aggregation that raised and was swallowed. `_analysis.aggregated`
+now carries the counts, the savings basis mix and which blueprints report in an
+older format — category names and counts only, never buckets or entity ids.
+
 ## 2.526.0
 
 ### Fixed — one P1 alert would have emptied the whole report
