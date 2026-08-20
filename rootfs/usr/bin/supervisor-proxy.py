@@ -124,6 +124,7 @@ if _HERE not in sys.path:
     sys.path.append(_HERE)
 
 from reports import contracts as reports_contracts  # noqa: E402  (needs sys.path above)
+from reports import discovery as reports_discovery  # noqa: E402
 from reports import store as reports_store          # noqa: E402
 
 SUPERVISOR = "supervisor"
@@ -2085,11 +2086,14 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
     Owner-only: it enumerates the property's instrumentation, which is a fair
     description of what the villa does and does not watch.
 
-    A STUB in Phase 0, and it says so in its own payload rather than returning
-    plausible-looking zeroes. An empty capability list is a real answer meaning
-    "nothing is instrumented"; `"ready": false` is what separates that from
-    "not implemented yet", and conflating the two is how a counter comes to
-    read 0 for exactly the case it exists to measure.
+    Runs live discovery against Home Assistant: which classes of analysis are
+    possible here, the statistics and delivery targets behind them, and any
+    configuration that is present but broken.
+
+    ⚠️ NEVER RAISES. `discover()` returns `reachable: false` with the reason
+    rather than throwing, so a Home Assistant restart makes this endpoint
+    report an outage instead of a 500 — the whole point of the diagnostics
+    panel is to be readable exactly when something is wrong.
     """
     if not _authorized(request):
         return _unauthorized()
@@ -2097,15 +2101,23 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
         return _forbidden("Only the owner profile may read reports diagnostics.")
     stored = _read_json_store(reports_store.REPORTS_CONFIG_FILE,
                               reports_store.EMPTY_CONFIG)
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    try:
+        found = await reports_discovery.discover(request.app["session"], now_iso)
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        print(f"[supervisor-proxy] reports discovery failed: {err}", flush=True)
+        found = {"reachable": False, "error": str(err), "capabilities": [],
+                 "capabilities_missing": list(reports_discovery.ALL_CAPABILITIES),
+                 "inventory": {}, "preflight": [], "at": now_iso}
     return web.json_response({
-        "ready": False,
-        "phase": "0",
+        "ready": True,
+        "phase": "1",
         "contract_version": reports_contracts.CONTRACT_VERSION,
         "enabled": bool(reports_store.config_view(stored).get("enabled")),
-        "capabilities": [],
-        "capabilities_missing": [],
+        # No modules exist yet — Phase 3 builds the registry. An empty list
+        # beside `phase: 1` is a fact, not a measurement gap.
         "modules": [],
-        "preflight": [],
+        **found,
     }, headers={"Cache-Control": "no-store"})
 
 

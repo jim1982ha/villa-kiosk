@@ -54,12 +54,17 @@ class FakeRequest:
     whole auth model rests on.
     """
 
-    def __init__(self, role: str, body: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, role: str, body: Optional[Dict[str, Any]] = None,
+                 app: Optional[Dict[str, Any]] = None) -> None:
         self._body = body
         self.cookies = {proxy.SESSION_COOKIE: proxy._make_session_token(role)}
         self.headers: Dict[str, str] = {}
         self.query: Dict[str, str] = {}
         self.remote = "127.0.0.1"
+        # `app["session"]` is where the proxy keeps its process-lifetime
+        # ClientSession. None here: there is no Home Assistant in a test run,
+        # which is the point of the degradation tests below.
+        self.app: Dict[str, Any] = app if app is not None else {"session": None}
 
     async def json(self) -> Any:
         return self._body
@@ -158,13 +163,38 @@ def test_diagnostics_is_owner_only() -> None:
         assert response.status == 403
 
 
-def test_diagnostics_declares_itself_a_stub() -> None:
-    """`ready: false` is what separates "nothing is instrumented" — a real
-    answer — from "not implemented yet". Conflating them is how a counter comes
-    to read 0 for exactly the case it exists to measure."""
+def test_diagnostics_reports_the_phase_it_implements() -> None:
+    """`ready` and `phase` are how a reader tells "nothing is instrumented" —
+    a real answer — from "not built yet". Conflating them is how a counter
+    comes to read 0 for exactly the case it exists to measure."""
     payload = _body(asyncio.run(proxy.reports_diagnostics_handler(FakeRequest("owner"))))
-    assert payload["ready"] is False
+    assert payload["ready"] is True
+    assert payload["phase"] == "1"
     assert payload["contract_version"] == proxy.reports_contracts.CONTRACT_VERSION
+
+
+def test_diagnostics_degrades_when_home_assistant_is_unreachable() -> None:
+    """⚠️ DEGRADE, NEVER FAIL — and this endpoint most of all.
+
+    The diagnostics panel exists to be readable precisely when something is
+    wrong. A 500 here would mean the one screen that could explain an outage
+    is the screen that breaks during one. There is no Home Assistant in a test
+    run, so this is the real unreachable path, not a simulated one.
+    """
+    response = asyncio.run(proxy.reports_diagnostics_handler(FakeRequest("owner")))
+    assert response.status == 200
+    payload = _body(response)
+    assert payload["reachable"] is False
+    assert payload.get("error"), "an unreachable result must say why"
+
+
+def test_unreachable_still_reports_every_capability_as_missing() -> None:
+    """`capabilities_missing` travels into the narration payload so a report
+    can state what it could not see. An empty list here would read as "nothing
+    is missing", which is the opposite of the truth during an outage."""
+    payload = _body(asyncio.run(proxy.reports_diagnostics_handler(FakeRequest("owner"))))
+    assert set(payload["capabilities_missing"]) == set(proxy.reports_discovery.ALL_CAPABILITIES)
+    assert payload["capabilities"] == []
 
 
 def test_history_is_not_writable_over_http() -> None:
