@@ -2140,6 +2140,13 @@ async def reports_run_now_handler(request: web.Request) -> web.Response:
     Takes `audience`, `cadence` and `targets` from the body, falling back to
     stored config, so a test send can go somewhere harmless without editing the
     real configuration first.
+
+    ⚠️ `{"preview": true}` COMPOSES AND SENDS NOTHING, and returns the rendered
+    prose plus every finding in full. That is how an operator reads a report
+    before deciding to switch the schedule on — "enable it and see what
+    arrives" means finding out that a module is noisy on somebody's phone. A
+    preview is not recorded in history either: nothing was delivered, and a
+    delivery record of a thing that was not delivered is worse than no record.
     """
     if not _authorized(request):
         return _unauthorized()
@@ -2175,11 +2182,19 @@ async def reports_run_now_handler(request: web.Request) -> web.Response:
         reports_store.write_json(reports_store.REPORTS_STATE_FILE,
                                  {**state, "timezone": learned})
     now_local = datetime.now(timezone.utc).astimezone(zone)
+    preview = bool(body.get("preview"))
+    modules_cfg = config.get("modules")
     try:
         entry = await reports_pipeline.run_report(
             request.app["session"], audience, cadence,
-            [str(t) for t in targets], now_local)
-        reports_pipeline.append_history(entry)
+            [str(t) for t in targets], now_local,
+            settings=modules_cfg if isinstance(modules_cfg, dict) else {},
+            min_history_days=int(config.get("min_history_days") or 14),
+            module_failures=(state.get("moduleFailures")
+                             if isinstance(state.get("moduleFailures"), dict) else {}),
+            preview=preview)
+        if not preview:
+            reports_pipeline.append_history(entry)
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         print(f"[supervisor-proxy] manual report failed: {err}", flush=True)
         return web.json_response({"error": str(err)}, status=500)

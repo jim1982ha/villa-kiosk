@@ -359,3 +359,63 @@ def test_findings_are_counted_in_readable_english() -> None:
         {"label": "B", "severity": "info", "detail": "y"}]))[1]
     assert "1 finding:" in one and "(s)" not in one
     assert "2 findings:" in two
+
+
+# ── preview ──────────────────────────────────────────────────────────────────
+
+def test_a_preview_composes_everything_and_sends_nothing() -> None:
+    """⚠️ An operator deciding whether to switch reports on needs to READ one
+    first. "Enable it and see what arrives" means finding out that a module is
+    noisy on somebody's phone."""
+    import asyncio
+    from datetime import datetime, timezone
+
+    from reports import pipeline
+
+    session = _FakeSession()
+    entry = asyncio.run(pipeline.run_report(
+        session, "owner", "weekly", ["notify.somewhere"],  # type: ignore[arg-type]
+        datetime(2026, 8, 20, 7, 0, tzinfo=timezone.utc),
+        found={"reachable": True, "preflight": []}, preview=True))
+
+    assert session.calls == [], "a preview must not call a notify service"
+    assert entry["deliveries"] == []
+    assert entry["_title"] and entry["_body"], "a preview must return the prose"
+
+
+def test_a_real_send_still_delivers() -> None:
+    """Guard against the preview flag defaulting the wrong way — which would
+    silently stop every scheduled report."""
+    import asyncio
+    from datetime import datetime, timezone
+
+    from reports import pipeline
+
+    session = _FakeSession()
+    asyncio.run(pipeline.run_report(
+        session, "owner", "weekly", ["notify.somewhere"],  # type: ignore[arg-type]
+        datetime(2026, 8, 20, 7, 0, tzinfo=timezone.utc),
+        found={"reachable": True, "preflight": []}))
+    assert len(session.calls) == 1
+
+
+def test_history_stores_no_prose_and_no_findings(tmp_path: Any) -> None:
+    """⚠️ The ring is capped by ENTRY COUNT. An entry whose size depends on how
+    much a narrator wrote makes that cap meaningless — 200 entries could be a
+    megabyte or fifty."""
+    from reports import pipeline, store
+
+    original = store.REPORTS_HISTORY_FILE
+    store.REPORTS_HISTORY_FILE = str(tmp_path / "h.json")
+    try:
+        pipeline.append_history({
+            "id": "x", "at": "now", "findingCount": 3,
+            "_title": "T", "_body": "B" * 5000, "_findings": [{"a": 1}],
+        })
+        stored = store.read_json(store.REPORTS_HISTORY_FILE, store.EMPTY_HISTORY)
+    finally:
+        store.REPORTS_HISTORY_FILE = original
+
+    entry = stored["entries"][0]
+    assert entry["findingCount"] == 3
+    assert not [k for k in entry if k.startswith("_")], entry

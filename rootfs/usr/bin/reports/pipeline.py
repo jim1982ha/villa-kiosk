@@ -110,6 +110,7 @@ async def run_report(
     settings: Optional[Dict[str, Any]] = None,
     min_history_days: int = 14,
     module_failures: Optional[Dict[str, int]] = None,
+    preview: bool = False,
 ) -> Dict[str, Any]:
     """Produce and deliver one report. Returns the history entry.
 
@@ -159,7 +160,12 @@ async def run_report(
         body = "The report could not be composed. See the add-on log."
 
     # ── deliver ─────────────────────────────────────────────────────────────
-    deliveries = await deliver(session, targets, title, body)
+    # ⚠️ A PREVIEW COMPOSES EVERYTHING AND SENDS NOTHING. An operator deciding
+    # whether to switch reports on needs to read one first, and "enable it and
+    # see what arrives" is a poor way to find out that a module is noisy — the
+    # finding out happens on someone's phone.
+    deliveries = ([] if preview
+                  else await deliver(session, targets, title, body))
 
     # ── record ──────────────────────────────────────────────────────────────
     # The report's own severity is the loudest thing in it — a finding or a
@@ -184,6 +190,14 @@ async def run_report(
         "deliveries": deliveries,
     }
     entry["moduleFailures"] = failures
+    # ⚠️ UNDERSCORE-PREFIXED KEYS ARE NOT PERSISTED — `append_history` strips
+    # them. The prose and the full findings are what a caller wants to READ,
+    # and the history ring is capped by ENTRY COUNT, so an entry whose size
+    # depends on how much a narrator wrote would make that cap meaningless.
+    entry["_title"] = title
+    entry["_body"] = body
+    entry["_findings"] = findings
+    entry["_preview"] = preview
     log(f"report {entry['id']}: {len(findings)} finding(s), "
         f"{sum(1 for d in deliveries if d.get('status') == 'sent')}/"
         f"{len(deliveries)} delivered")
@@ -205,7 +219,7 @@ def append_history(entry: Dict[str, Any]) -> None:
         raw = store.read_json(store.REPORTS_HISTORY_FILE, store.EMPTY_HISTORY)
         document = store.history_view(raw)
         entries = list(document.get("entries") or [])
-        entries.append(entry)
+        entries.append({k: v for k, v in entry.items() if not k.startswith("_")})
         document["entries"] = store.trim_history(entries)
         store.write_json(store.REPORTS_HISTORY_FILE, document)
     except Exception as err:  # noqa: BLE001 - a failed record must not stop delivery
