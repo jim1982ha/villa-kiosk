@@ -1,3 +1,14 @@
+## 2.525.0
+
+### Added — the report the workbook specifies, in eight sections
+
+Headline, critical recap, money, fixed and suggested, preventive, trends,
+monitoring health and coverage, rendered from the period's collected blueprint
+events rather than from the whole buffer. Every figure carries whether it was
+metered, estimated or a trend; an incident with no matching all-clear reads as
+unresolved rather than being given an invented duration; and a property with no
+tariff is told its waste could not be priced instead of being shown nothing.
+
 ## 2.524.0
 
 ### Changed — one severity order, one day-key parser
