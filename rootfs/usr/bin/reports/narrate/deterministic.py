@@ -392,7 +392,7 @@ class DeterministicNarrator:
         emit `raised` and `cleared` with no incident id, so an unmatched raise
         has no honest duration and gets "still unresolved" instead of a number.
         """
-        label = self._text(group, "label") or self._text(group, "bucket")
+        label = self._name(group, alert=True)
         count = self._count(group)
         opened = self._is_open(group)
         minutes = self._number(group, "duration_minutes")
@@ -469,7 +469,7 @@ class DeterministicNarrator:
 
         cost = self._number(group, "total_cost")
         basis = self._text(group, "basis")
-        label = self._text(group, "bucket") or self._text(group, "label")
+        label = self._name(group)
         note = ""
         if basis == "estimated":
             note = " (estimated from an assumed load, not metered)"
@@ -549,7 +549,7 @@ class DeterministicNarrator:
             return []
         lines = ["Maintenance signals:"]
         for group in self._top(groups):
-            label = self._text(group, "bucket") or self._text(group, "label")
+            label = self._name(group)
             # ⚠️ THE MEASUREMENT, NOT JUST THE NAME. A live report printed
             # "- Pump short-cycling" and "- Pump power factor" — two bare
             # labels, saying only that something was flagged, while the events
@@ -580,7 +580,7 @@ class DeterministicNarrator:
 
         lines = ["Trends:"]
         for group in self._top(drifting):
-            label = self._text(group, "bucket") or self._text(group, "label")
+            label = self._name(group)
             # ⚠️ THE NUMBER IF THERE IS ONE. A live report printed
             # "- Night standby: drifting" while the event carried
             # `deviation_pct: 26.9` — the word for the thing instead of the
@@ -617,7 +617,7 @@ class DeterministicNarrator:
         # off, an alert channel that did not answer its weekly test — which is
         # monitoring health by definition.
         for group in self._top(self._groups(context, "audit")):
-            label = self._text(group, "bucket") or self._text(group, "label")
+            label = self._name(group)
             said = self._detail(group) or self._measurement(group)
             lines.append(f"- {label}: {said}" if said else f"- {label}")
 
@@ -778,6 +778,38 @@ class DeterministicNarrator:
         value = context.aggregated.get("savings")
         return value if isinstance(value, dict) else {}
 
+    def _name(self, group: Any, alert: bool = False) -> str:
+        """What to call this group. The ONE answer, with its exception named.
+
+        ⚠️ TWO ORDERINGS EXISTED AND THE REASON LIVED NOWHERE IN THE CODE.
+        Four sections read `bucket or label`; `_incident_line` read
+        `label or bucket`, and that difference is deliberate — for a critical
+        alert `label` is the human alert name the operator wrote ("Water leak")
+        while `report_bucket` only groups its instances, so the recap must
+        prefer it. The reason was recorded in a test docstring and a commit
+        message and in neither of the five sites, which is the shape
+        /dry-audit's "check WHY the copies differ" section is about: a rule
+        that exists twice in prose and nowhere in code.
+
+        A caller now gets the exception by CHOOSING `alert=True`, not by
+        remembering to reverse two operands.
+        """
+        first, second = ("label", "bucket") if alert else ("bucket", "label")
+        return self._text(group, first) or self._text(group, second)
+
+    def _items(self, group: Any) -> List[Any]:
+        """A group's members, whether it is a `Group` object or a plain dict.
+
+        ⚠️ WRITTEN THREE TIMES BEFORE THIS EXISTED — in `_measurement`,
+        `_detail` and `_runtime`. Same tolerance rule as the other accessors
+        here: the live path hands the renderer `aggregate.Group` objects and a
+        stored history entry hands it dicts, and a narrator that raises takes
+        the whole report down.
+        """
+        items = (group.get("items") if isinstance(group, dict)
+                 else getattr(group, "items", None)) or []
+        return list(items) if isinstance(items, (list, tuple)) else []
+
     @staticmethod
     def _text(group: Any, name: str) -> str:
         if isinstance(group, dict):
@@ -808,10 +840,8 @@ class DeterministicNarrator:
         aggregation's minute total is empty for it and the figure is on the
         event.
         """
-        items = (group.get("items") if isinstance(group, dict)
-                 else getattr(group, "items", None)) or []
         total = 0.0
-        for item in items:
+        for item in self._items(group):
             data = (item.get("data") if isinstance(item, dict)
                     else getattr(item, "data", None)) or {}
             value = data.get("runtime_hours") if isinstance(data, dict) else None
@@ -833,9 +863,7 @@ class DeterministicNarrator:
         is added — and a slightly stiff true sentence beats a fluent one about
         the wrong field.
         """
-        items = (group.get("items") if isinstance(group, dict)
-                 else getattr(group, "items", None)) or []
-        for item in items:
+        for item in self._items(group):
             data = (item.get("data") if isinstance(item, dict)
                     else getattr(item, "data", None)) or {}
             if not isinstance(data, dict):
@@ -852,9 +880,7 @@ class DeterministicNarrator:
         return ""
 
     def _detail(self, group: Any) -> str:
-        items = (group.get("items") if isinstance(group, dict)
-                 else getattr(group, "items", None)) or []
-        for item in items:
+        for item in self._items(group):
             text = self._text(item, "detail")
             if text:
                 return text

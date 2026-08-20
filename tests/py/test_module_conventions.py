@@ -217,3 +217,45 @@ def test_aggregates_category_tables_use_real_contract_values() -> None:
     assert set(aggregate.KIND_OF_CATEGORY.values()) <= set(FINDING_KIND)
     assert set(aggregate.DEFAULT_SEVERITY) == set(aggregate.CATEGORY_OF_EVENT.values())
     assert set(aggregate.KIND_OF_CATEGORY) == set(aggregate.CATEGORY_OF_EVENT.values())
+
+
+def test_a_groups_display_name_has_one_derivation() -> None:
+    """`_name(group, alert=...)` owns "what do we call this group".
+
+    ⚠️ FIVE SITES, TWO ORDERINGS, REASON NOWHERE IN THE CODE. Four sections read
+    `bucket or label` and `_incident_line` read `label or bucket`. That
+    difference is deliberate — for a critical alert `label` is the human alert
+    name the operator wrote while `report_bucket` only groups its instances —
+    but it was recorded in a test docstring and a commit message and in none of
+    the five sites. A rule that exists twice in prose and nowhere in code is
+    what /dry-audit's "check WHY the copies differ" section is about; a caller
+    now gets the exception by CHOOSING `alert=True`.
+    """
+    path = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+                        "narrate", "deterministic.py")
+    with open(path, encoding="utf-8") as handle:
+        source = _strip_comments(handle.read())
+    offenders = [
+        f"{number}: {line.strip()}"
+        for number, line in enumerate(source.splitlines(), 1)
+        if re.search(r'_text\((?:group|g), "(?:bucket|label)"\)\s*or\s*'
+                     r'self\._text\((?:group|g), "(?:label|bucket)"\)', line)
+    ]
+    assert not offenders, (
+        "a group's display name is derived inline; call _name():\n  "
+        + "\n  ".join(offenders))
+
+
+def test_a_groups_members_are_read_through_one_accessor() -> None:
+    """`_items(group)` tolerates both shapes the renderer is handed — `Group`
+    objects on the live path, dicts from stored history. It was written three
+    times before it existed, and a narrator that raises takes the report down."""
+    path = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+                        "narrate", "deterministic.py")
+    with open(path, encoding="utf-8") as handle:
+        lines = _strip_comments(handle.read()).splitlines()
+    hits = [f"{n}: {ln.strip()}" for n, ln in enumerate(lines, 1)
+            if 'group.get("items")' in ln]
+    assert len(hits) == 1, (
+        "the tolerant items read belongs only inside _items():\n  "
+        + "\n  ".join(hits))
