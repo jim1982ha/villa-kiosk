@@ -259,6 +259,32 @@ async def rest_get(session: ClientSession, path: str) -> Any:
         raise HassUnavailable(f"GET {path}: {err}") from err
 
 
+async def fetch_timezone(session: ClientSession) -> Optional[str]:
+    """Home Assistant's own timezone, or None if it cannot be asked.
+
+    ⚠️ THE SCHEDULER CANNOT WORK WITHOUT THIS and for one release it silently
+    did without: the config default is `""` with a comment reading "ask Home
+    Assistant", and nothing asked. Everything therefore scheduled in UTC — on a
+    UTC+8 property, a report set for 07:00 would have fired at 15:00 local, and
+    a schedule set for the current hour never became due at all.
+
+    Deliberately its own small call rather than a by-product of `discover()`:
+    the tick has to know the timezone BEFORE it can decide whether anything is
+    due, and discovery only runs once something IS. The caller caches the
+    answer, so this costs one websocket per process rather than one per tick.
+    """
+    try:
+        async with HassClient(session) as hass:
+            config: Any = await hass.command("get_config")
+    except HassUnavailable as err:
+        warn(f"could not read Home Assistant's timezone: {err}")
+        return None
+    if not isinstance(config, dict):
+        return None
+    zone = config.get("time_zone")
+    return zone if isinstance(zone, str) and zone else None
+
+
 async def probe(session: ClientSession) -> Dict[str, Any]:
     """Can we talk to Core at all, and what is it?
 

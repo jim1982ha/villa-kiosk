@@ -194,3 +194,93 @@ def test_monthly_fires_on_the_first_only() -> None:
 def test_a_late_weekly_still_catches_up_within_the_window() -> None:
     monday = datetime(2026, 8, 17, 7, 0, tzinfo=DST_ZONE) + timedelta(hours=3)
     assert len(due([_sched(cadence="weekly")], [], monday)) == 1
+
+
+# ── timezone resolution ──────────────────────────────────────────────────────
+# ⚠️ SHIPPED BROKEN IN 2.505.0 AND CAUGHT BY QA ON REAL HARDWARE. The config
+# default was `""` with a comment reading "ask Home Assistant", and nothing
+# asked — so everything scheduled in UTC. On the UTC+8 reference deployment a
+# schedule set for the CURRENT hour sat eight hours in the future and never
+# became due, which is how the QA plan's timezone test failed: not by firing at
+# the wrong time, but by never firing at all.
+
+def test_an_explicit_setting_wins() -> None:
+    import asyncio
+
+    from reports.pipeline import resolve_zone
+
+    zone, learned = asyncio.run(resolve_zone(
+        None, {"timezone": "Europe/Paris"}, {}))  # type: ignore[arg-type]
+    assert zone == ZoneInfo("Europe/Paris")
+    assert learned is None, "an explicit setting must not be re-cached"
+
+
+def test_a_cached_name_is_used_without_asking() -> None:
+    """The tick must decide what is due BEFORE discovery runs, so the timezone
+    cannot come from discovery. Passing `None` as the session proves no network
+    call happens — it would raise if one were attempted."""
+    import asyncio
+
+    from reports.pipeline import resolve_zone
+
+    zone, learned = asyncio.run(resolve_zone(
+        None, {"timezone": ""}, {"timezone": "Asia/Tokyo"}))  # type: ignore[arg-type]
+    assert zone == ZoneInfo("Asia/Tokyo")
+    assert learned is None
+
+
+def test_a_learned_name_is_returned_for_caching() -> None:
+    import asyncio
+
+    from reports import pipeline
+
+    async def fake(_session: object) -> str:
+        return "Australia/Sydney"
+
+    original = pipeline.fetch_timezone
+    pipeline.fetch_timezone = fake  # type: ignore[assignment]
+    try:
+        zone, learned = asyncio.run(resolve := pipeline.resolve_zone(
+            None, {"timezone": ""}, {}))  # type: ignore[arg-type]
+    finally:
+        pipeline.fetch_timezone = original  # type: ignore[assignment]
+    assert zone == ZoneInfo("Australia/Sydney")
+    assert learned == "Australia/Sydney", "the caller must be told to cache it"
+
+
+def test_utc_is_the_last_resort_only() -> None:
+    import asyncio
+
+    from reports import pipeline
+
+    async def unavailable(_session: object) -> None:
+        return None
+
+    original = pipeline.fetch_timezone
+    pipeline.fetch_timezone = unavailable  # type: ignore[assignment]
+    try:
+        zone, learned = asyncio.run(pipeline.resolve_zone(
+            None, {"timezone": ""}, {}))  # type: ignore[arg-type]
+    finally:
+        pipeline.fetch_timezone = original  # type: ignore[assignment]
+    assert zone is timezone.utc
+    assert learned is None, "a failed lookup must not poison the cache"
+
+
+def test_the_regression_itself_a_current_hour_schedule_is_due_locally() -> None:
+    """⚠️ THE FAILURE, AS A PROPERTY.
+
+    A schedule set for the CURRENT LOCAL hour must be due. Computed against a
+    UTC clock on a UTC+8 property it sits eight hours ahead and never fires —
+    which is precisely what QA observed.
+    """
+    zone = ZoneInfo("Asia/Singapore")
+    now_utc = datetime(2026, 8, 20, 9, 9, tzinfo=timezone.utc)
+    now_local = now_utc.astimezone(zone)
+    assert now_local.hour == 17, "fixture assumption: 09:09Z is 17:09 in +08:00"
+
+    assert len(due([_sched(hour=now_local.hour)], [], now_local)) == 1
+    # And the shape of the bug: the same schedule against the UTC clock.
+    assert due([_sched(hour=now_local.hour)], [], now_utc) == [], (
+        "scheduling against UTC must NOT find a local-hour schedule due — "
+        "if this passes, the fixture no longer reproduces the regression")

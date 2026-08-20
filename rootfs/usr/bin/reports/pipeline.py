@@ -22,12 +22,13 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from aiohttp import ClientSession
 
 from . import discovery, schedule as schedule_mod, store
 from .deliver import deliver
+from .hass import fetch_timezone
 from .log import log, swallow, warn
 from .narrate import DeterministicNarrator, ReportContext
 from .schedule import period_key
@@ -159,6 +160,39 @@ def warn_if_broadcast(targets: Sequence[str]) -> None:
                  "notification device configured in Home Assistant")
 
 
+async def resolve_zone(session: ClientSession, config: Dict[str, Any],
+                       state: Dict[str, Any]) -> Tuple[Any, Optional[str]]:
+    """The villa's wall clock, and the name to cache if it was just learned.
+
+    ⚠️ THE ORDER IS THE WHOLE FIX. An operator's explicit setting wins; then a
+    name cached from a previous pass; then Home Assistant is asked and the
+    answer cached. UTC is the last resort and says so loudly, because on a
+    UTC+8 property a silent fall back to UTC moves every report eight hours —
+    which is not a nuisance, it is a report that never fires at all when the
+    schedule is set for the current hour.
+
+    Returns `(zone, learned)` where `learned` is non-None only when the caller
+    should persist it. Written this way so the fetch has ONE caller and the
+    cache has one writer.
+    """
+    explicit = str(config.get("timezone") or "")
+    if explicit:
+        return schedule_mod.resolve_timezone(explicit), None
+
+    cached = state.get("timezone")
+    if isinstance(cached, str) and cached:
+        return schedule_mod.resolve_timezone(cached), None
+
+    name = await fetch_timezone(session)
+    if name:
+        log(f"villa timezone is {name} (from Home Assistant)")
+        return schedule_mod.resolve_timezone(name), name
+
+    warn("scheduling in UTC — Home Assistant's timezone could not be read and "
+         "none is configured; reports may fire at the wrong local hour")
+    return schedule_mod.resolve_timezone(""), None
+
+
 # ── the tick ─────────────────────────────────────────────────────────────────
 
 async def tick(session: ClientSession, now_utc: datetime) -> int:
@@ -187,7 +221,10 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
         state = store.read_json(store.REPORTS_STATE_FILE, store.EMPTY_STATE)
         sent_keys = state.get("sent") if isinstance(state.get("sent"), list) else []
 
-        zone = schedule_mod.resolve_timezone(str(config.get("timezone") or ""))
+        zone, learned = await resolve_zone(session, config, state)
+        if learned:
+            state = {**state, "timezone": learned}
+            store.write_json(store.REPORTS_STATE_FILE, state)
         now_local = now_utc.astimezone(zone)
 
         ready = schedule_mod.due(schedules, sent_keys, now_local)

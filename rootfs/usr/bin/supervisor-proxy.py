@@ -2165,7 +2165,15 @@ async def reports_run_now_handler(request: web.Request) -> web.Response:
     if cadence not in reports_contracts.CADENCE:
         cadence = "daily"
 
-    zone = reports_schedule.resolve_timezone(str(config.get("timezone") or ""))
+    # Same resolution the scheduler uses, so a manual send is stamped with the
+    # villa's wall clock rather than UTC — and so this endpoint is a faithful
+    # rehearsal of the scheduled path rather than a different one.
+    state = _read_json_store(reports_store.REPORTS_STATE_FILE, reports_store.EMPTY_STATE)
+    zone, learned = await reports_pipeline.resolve_zone(
+        request.app["session"], config, state)
+    if learned:
+        reports_store.write_json(reports_store.REPORTS_STATE_FILE,
+                                 {**state, "timezone": learned})
     now_local = datetime.now(timezone.utc).astimezone(zone)
     try:
         entry = await reports_pipeline.run_report(

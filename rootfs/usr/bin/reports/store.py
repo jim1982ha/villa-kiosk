@@ -85,7 +85,13 @@ CONFIG_DEFAULTS: Final[Dict[str, Any]] = {
     "notify_targets": [],
     "modules": {},
     "narration": {"mode": "deterministic"},
-    "timezone": "",          # "" means "ask Home Assistant" (Phase 2)
+    # ⚠️ EMPTY MEANS "ASK HOME ASSISTANT", AND SOMETHING FINALLY DOES.
+    # `pipeline.resolve_zone` reads this first, then a name cached in the state
+    # file, then Home Assistant itself. For one release this comment described
+    # a behaviour that did not exist and everything scheduled in UTC — on a
+    # UTC+8 property that is not an hour's drift, it is a schedule set for the
+    # current hour never becoming due at all.
+    "timezone": "",
     "min_history_days": 14,
 }
 
