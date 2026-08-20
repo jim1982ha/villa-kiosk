@@ -1,3 +1,14 @@
+## 2.532.0
+
+### Changed — one answer to "what do we call this group"
+
+The renderer derived a group's display name in five places using two different
+orderings. The difference was deliberate — a critical alert shows the name the
+operator wrote for it, everything else shows its reporting group — but that
+reason lived only in a test docstring, so the next section to be added had a
+coin-flip's chance of picking the right one. Both it and the members accessor
+now have a single owner, pinned.
+
 ## 2.531.0
 
 ### Fixed — the headline total quietly left out waste it could not price
