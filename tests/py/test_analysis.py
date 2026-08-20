@@ -587,3 +587,23 @@ def test_a_rejected_candidate_is_recorded_with_its_numbers() -> None:
     assert entry["reason"] == "immaterial"
     assert entry["active_level"] and entry["rise_of_active"] is not None
     assert entry["rise"] > 8.0, "the huge ratio must still be visible"
+
+
+def test_the_rejection_log_always_carries_the_working_level() -> None:
+    """⚠️ An instrument that goes blank in the interesting case.
+
+    `active_level` was computed lazily, so a candidate rejected on the RATIO
+    recorded `null` for it — the one number needed to judge whether the ratio
+    threshold was too deaf for that device. Observed in the field: a
+    whole-house phase meter rejected at 18.8% with no way to see whether its
+    absolute rise mattered.
+    """
+    module = StandbyCreep()
+    # A gentle rise: below the 40% ratio, so rejected there.
+    series = {"sensor.p_energy": _pump_series(0.25, 0.30, 0.6)}
+    asyncio.run(module.run(_context(["sensor.p_energy"], series)))
+    assert module.rejected
+    entry = module.rejected[0]
+    assert entry["reason"] == "below_rise_threshold"
+    assert entry["active_level"] is not None, "the tuning column must never be blank"
+    assert entry["rise_of_active"] is not None

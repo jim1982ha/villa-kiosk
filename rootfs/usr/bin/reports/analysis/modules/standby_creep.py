@@ -262,15 +262,13 @@ class StandbyCreep:
         sigma_threshold = resolve_threshold(
             settings, "sigma", None, DEFAULT_SIGMA)
 
-        if rise < rise_threshold:
-            self._note(rejected, statistic_id, context, "below_rise_threshold",
-                       rise, recent_floor, baseline_floor, None)
-            return None
-
-        # ⚠️ IS THE CHANGE MATERIAL? A ratio alone cannot say. Compare the
-        # ABSOLUTE rise against what this device draws when it is working — the
-        # denominator that makes "8 W on a pump that runs at 800 W" register as
-        # the noise it is, without any wattage appearing in the code.
+        # ⚠️ THE WORKING LEVEL IS COMPUTED BEFORE EITHER TEST, so the
+        # rejection log can never have a hole in the column a threshold would
+        # be tuned from. It was computed lazily at first, which meant a
+        # candidate rejected on the RATIO recorded `active_level: null` — the
+        # one number needed to judge whether the ratio threshold was too deaf
+        # for that device. An instrument that goes blank in the interesting
+        # case is the failure mode this project has a memory file about.
         all_hours = [float(r["change"]) for r in rows
                      if isinstance(r.get("change"), (int, float))
                      and not isinstance(r.get("change"), bool)
@@ -279,6 +277,16 @@ class StandbyCreep:
         materiality = resolve_threshold(
             settings, "min_rise_of_active", None, MIN_RISE_OF_ACTIVE)
         absolute_rise = recent_floor - baseline_floor
+
+        if rise < rise_threshold:
+            self._note(rejected, statistic_id, context, "below_rise_threshold",
+                       rise, recent_floor, baseline_floor, active_level)
+            return None
+
+        # ⚠️ IS THE CHANGE MATERIAL? A ratio alone cannot say. Compare the
+        # ABSOLUTE rise against what this device draws when it is working — the
+        # denominator that makes "8 W on a pump that runs at 800 W" register as
+        # the noise it is, without any wattage appearing in the code.
         if active_level is not None and active_level > 0:
             if absolute_rise < materiality * active_level:
                 self._note(rejected, statistic_id, context, "immaterial",
