@@ -200,6 +200,41 @@ def coverage(since_iso: str) -> Dict[str, Any]:
     }
 
 
+def state() -> Dict[str, Any]:
+    """What the collector has actually seen, for diagnostics.
+
+    ⚠️ AN INSTRUMENT WITH NO SURFACE IS NOT AN INSTRUMENT. `seen_types` and
+    `blueprint_categories` were being recorded from the first release and
+    exposed nowhere, so the one question they exist to answer — is the
+    detection layer reaching the report? — could only be answered by reading
+    the file on the host. The first person to ask it looked in the statistics
+    tally instead and got `undefined`.
+
+    Deliberately counts and names, never event payloads: those carry entity ids
+    and free text, and this is a diagnostics endpoint rather than a data export.
+    """
+    buffer = read_buffer()
+    events = buffer["events"]
+    return {
+        "listening": bool(buffer["online_since"]),
+        "online_since": buffer["online_since"],
+        "last_seen": buffer["last_seen"],
+        "buffered": len(events),
+        "seen_types": buffer["seen_types"],
+        "blueprint_categories": buffer["blueprint_categories"],
+        # ⚠️ A subscribed type with a zero count is the interesting case: either
+        # nothing of that kind has happened, or the blueprints do not emit it at
+        # all. Naming them is what turned a silent, total failure of the
+        # critical tier into a one-line read.
+        "silent_types": sorted(
+            EVENT_TEMPLATE.format(category=c)
+            for c in buffer["blueprint_categories"]
+            if not buffer["seen_types"].get(EVENT_TEMPLATE.format(category=c))
+        ),
+        "newest": events[-1].get("at") if events else "",
+    }
+
+
 class Collector:
     """Holds one subscription open and appends what arrives."""
 

@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from aiohttp import ClientSession
 
-from . import discovery, schedule as schedule_mod, stats as stats_mod, store
+from . import collect, discovery, schedule as schedule_mod, stats as stats_mod, store
 from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis.series import hourly_by_day
 from .analysis import modules as _modules  # noqa: F401  (importing registers them)
@@ -296,7 +296,8 @@ async def run_report(
     entry["_preview"] = preview
     # ⚠️ The instrument for "found nothing" vs "saw nothing".
     entry["_analysis"] = {"ran": ran, "skipped": skipped, "data": data_tally,
-                          "rejected": _rejected_candidates()}
+                          "rejected": _rejected_candidates(),
+                          "collector": collect.state()}
     log(f"report {entry['id']}: {len(findings)} finding(s), "
         f"{sum(1 for d in deliveries if d.get('status') == 'sent')}/"
         f"{len(deliveries)} delivered")

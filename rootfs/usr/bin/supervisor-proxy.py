@@ -2120,6 +2120,10 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
         # No modules exist yet — Phase 3 builds the registry. An empty list
         # beside `phase: 1` is a fact, not a measurement gap.
         "modules": [],
+        # The detection layer's own health: what it has heard, and from which
+        # categories. Without this the only way to tell "nothing happened" from
+        # "nothing is listening" is to read a file on the host.
+        "collector": reports_collect.state(),
         **found,
     }, headers={"Cache-Control": "no-store"})
 

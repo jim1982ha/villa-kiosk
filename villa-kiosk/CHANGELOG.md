@@ -1,3 +1,14 @@
+## 2.520.0
+
+### Added — the collector can now be asked what it has heard
+
+It has been counting which automation categories actually report since the
+first release, and exposing that nowhere — so the one question it exists to
+answer, whether the villa's own automations are reaching the report, could only
+be answered by reading a file on the host. Diagnostics and a report preview now
+carry it, including which subscribed categories have produced nothing at all:
+that is the difference between a quiet week and blueprints that do not emit.
+
 ## 2.519.0
 
 ### Fixed — the add-on duplicated the villa's own automations until one fired

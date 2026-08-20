@@ -423,3 +423,54 @@ def test_flushing_events_does_not_erase_the_blueprint_record() -> None:
     _collect([_event()])
     assert collect.read_buffer()["blueprint_categories"] == ["roi", "critical"]
     assert collect.blueprint_layer_present() is True
+
+
+# ── the diagnostic surface ───────────────────────────────────────────────────
+# ⚠️ AN INSTRUMENT WITH NO SURFACE IS NOT AN INSTRUMENT. `seen_types` was
+# recorded from the first release and exposed nowhere, so the one question it
+# exists to answer — is the detection layer reaching the report? — could only be
+# answered by reading a file on the host. The first person to ask looked in the
+# statistics tally and got `undefined`.
+
+def test_state_reports_what_has_been_heard() -> None:
+    _collect([_event(), _event(), _event("vesta_maintenance_event")])
+    got = collect.state()
+    assert got["listening"] is True
+    assert got["buffered"] == 3
+    assert got["seen_types"]["vesta_roi_event"] == 2
+    assert got["newest"]
+
+
+def test_a_subscribed_but_silent_category_is_named() -> None:
+    """⚠️ THE CASE THAT MATTERS. A category with a zero count is either "nothing
+    of that kind happened" or "these blueprints do not emit at all" — and the
+    second is what hid the entire critical tier. Naming them is what turns a
+    silent total failure into a one-line read."""
+    buffer = collect.read_buffer()
+    store.write_json(store.REPORTS_EVENTS_FILE, {
+        **buffer, "blueprint_categories": ["roi", "critical", "maintenance"],
+        "seen_types": {"vesta_roi_event": 4},
+        "online_since": "2026-01-01T00:00:00+00:00",
+    })
+    got = collect.state()
+    assert got["silent_types"] == ["vesta_critical_event", "vesta_maintenance_event"]
+    assert "vesta_roi_event" not in got["silent_types"]
+
+
+def test_state_carries_no_event_payloads() -> None:
+    """A diagnostics endpoint, not a data export. Event payloads carry entity
+    ids and operator free text."""
+    import json
+
+    _collect([_event(rule_id="ROI-01", report_bucket="Emma's bedroom lamp",
+                     entity_id="light.emmas_bedroom")])
+    rendered = json.dumps(collect.state())
+    assert "light.emmas_bedroom" not in rendered
+    assert "Emma's bedroom lamp" not in rendered
+
+
+def test_state_is_safe_before_anything_has_happened() -> None:
+    got = collect.state()
+    assert got["listening"] is False
+    assert got["buffered"] == 0
+    assert got["silent_types"] == []
