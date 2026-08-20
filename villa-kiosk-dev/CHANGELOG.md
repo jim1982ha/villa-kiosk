@@ -1,3 +1,13 @@
+## 2.500.0
+
+### Added — the seam for VESTA Reports, and the first automated test gate
+
+Scheduled analysis of the villa's own history needs a backend that can query
+Home Assistant with no browser open. This lays its foundation only: a `reports`
+package, four owner-gated endpoints on the existing store factory, and a
+Python↔TypeScript contract mirrored on both sides. Nothing analyses anything
+yet. CI now runs pytest, `mypy --strict` and an offline-rule grep on every push.
+
 ## 2.499.0
 
 ### Fixed — the dev add-on was never published, and CI reported success
