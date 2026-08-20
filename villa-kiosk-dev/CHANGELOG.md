@@ -1,3 +1,15 @@
+## 2.534.0
+
+### Changed — the security policy's own notes described a rule it no longer has
+
+The comment explaining the Content-Security-Policy still listed two Google Fonts
+origins as part of it; they were removed from the page and the header in
+2.504.0 when the fonts became self-hosted, so anyone reading it to decide
+whether to enforce the policy would have gone looking for something absent. The
+one external script now reported in the field is Cloudflare's, injected by the
+tunnel rather than requested by the app, and that is recorded where the decision
+gets made.
+
 ## 2.533.0
 
 ### Added — caretaker jobs still open from earlier weeks
