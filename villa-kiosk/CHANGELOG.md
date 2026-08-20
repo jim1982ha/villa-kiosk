@@ -1,3 +1,13 @@
+## 2.519.0
+
+### Fixed — the add-on duplicated the villa's own automations until one fired
+
+Whether to run the built-in checks was decided by "has an automation reported
+anything recently", which is false on a freshly installed add-on however many
+automations the property has. So it produced its own findings alongside them
+until something went wrong — worst on a well-run villa, where nothing does.
+Installed blueprints now count immediately.
+
 ## 2.518.0
 
 ### Fixed — the collector was deaf to every critical alert

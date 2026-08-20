@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from aiohttp import ClientSession
 
@@ -129,7 +129,7 @@ def _categories_from_blueprints(listing: Any) -> List[str]:
     return sorted(categories)
 
 
-async def discover_event_types(hass: HassClient) -> List[str]:
+async def discover_event_types(hass: HassClient) -> Tuple[List[str], List[str]]:
     """Which `vesta_*` events THIS deployment can produce.
 
     ⚠️ DERIVED, NOT HARDCODED, AND THIS IS A PORTABILITY REQUIREMENT RATHER
@@ -139,18 +139,23 @@ async def discover_event_types(hass: HassClient) -> List[str]:
     events nothing fires, reporting an empty week forever with no error
     anywhere. Reading the installed blueprints makes the subscription a
     function of the deployment.
+
+    ⚠️ RETURNS THE CATEGORIES TOO, and that second value is not decoration. It
+    is what tells the rest of the subsystem that this property HAS a detection
+    layer — see `blueprint_layer_present`. An empty list means the fallback was
+    used, so nothing may be concluded from it.
     """
     try:
         listing: Any = await hass.command("blueprint/list", domain="automation")
     except HassUnavailable as err:
         warn(f"could not list blueprints ({err}); using the fallback event list")
-        return list(FALLBACK_EVENT_TYPES)
+        return list(FALLBACK_EVENT_TYPES), []
 
     categories = _categories_from_blueprints(listing)
     if not categories:
         warn("no VESTA blueprints found; using the fallback event list")
-        return list(FALLBACK_EVENT_TYPES)
-    return [EVENT_TEMPLATE.format(category=c) for c in categories]
+        return list(FALLBACK_EVENT_TYPES), []
+    return ([EVENT_TEMPLATE.format(category=c) for c in categories], categories)
 
 
 def read_buffer() -> Dict[str, Any]:
@@ -163,6 +168,7 @@ def read_buffer() -> Dict[str, Any]:
         "online_since": raw.get("online_since") or "",
         "last_seen": raw.get("last_seen") or "",
         "offline_seconds": raw.get("offline_seconds") or 0,
+        "blueprint_categories": raw.get("blueprint_categories") or [],
     }
 
 
@@ -243,37 +249,56 @@ class Collector:
                 "online_since": buffer["online_since"] or _now(),
                 "last_seen": _now(),
                 "offline_seconds": buffer["offline_seconds"],
+                # ⚠️ CARRIED FORWARD. This method rewrites the whole document,
+                # so a key it forgets is a key it DELETES. Dropping this one
+                # would make the built-in modules start duplicating the
+                # automation layer again on the first flush after connecting —
+                # a bug with a delay fuse, invisible until the first event.
+                "blueprint_categories": buffer["blueprint_categories"],
             })
             self._pending = []
         except Exception as err:  # noqa: BLE001 - never take the loop down
             swallow("could not flush the event buffer", err)
 
-    def _mark_online(self) -> None:
-        """Record that listening has (re)started.
+    def _mark_online(self, categories: Sequence[str]) -> None:
+        """Record that listening has (re)started, and what this property runs.
 
         `online_since` is only set when it is absent, so a reconnection does not
         reset it and claim coverage the collector did not have.
+
+        ⚠️ THE CATEGORIES ARE RECORDED HERE BECAUSE OF A CHICKEN AND EGG. The
+        built-in analysis modules stand down where a detection layer already
+        covers the ground, and that used to be decided by "has an event been
+        seen recently" — which is false on a freshly installed add-on until
+        something happens to fire. On the reference villa that meant the modules
+        duplicated the automation layer for as long as the property stayed quiet,
+        which is exactly backwards: a quiet villa is when duplicate findings are
+        least wanted. Blueprints being INSTALLED is the immediate signal.
         """
         try:
             buffer = read_buffer()
-            if not buffer["online_since"]:
-                store.write_json(store.REPORTS_EVENTS_FILE, {
-                    "events": buffer["events"],
-                    "seen_types": buffer["seen_types"],
-                    "online_since": _now(),
-                    "last_seen": buffer["last_seen"],
-                    "offline_seconds": buffer["offline_seconds"],
-                })
+            known = buffer.get("blueprint_categories") or []
+            store.write_json(store.REPORTS_EVENTS_FILE, {
+                "events": buffer["events"],
+                "seen_types": buffer["seen_types"],
+                "online_since": buffer["online_since"] or _now(),
+                "last_seen": buffer["last_seen"],
+                "offline_seconds": buffer["offline_seconds"],
+                # Never overwritten with an empty list: a pass that could not
+                # reach Core must not erase what a previous one established.
+                "blueprint_categories": list(categories) if categories else known,
+            })
         except Exception as err:  # noqa: BLE001
             swallow("could not mark the collector online", err)
 
     async def run_once(self) -> None:
         """One connection's lifetime. Returns when the socket closes."""
         async with HassClient(self._session) as hass:
+            categories: List[str] = []
             if not self._types:
-                self._types = await discover_event_types(hass)
+                self._types, categories = await discover_event_types(hass)
             await hass.subscribe(self._types)
-            self._mark_online()
+            self._mark_online(categories)
             log(f"collector subscribed to {', '.join(self._types)}")
             async for event in hass.events():
                 self._record(event)
@@ -310,6 +335,13 @@ def blueprint_layer_present(within_days: int = 30) -> bool:
     only analysis there is. Detected rather than configured, so neither
     deployment needs to be told which kind it is.
     """
+    # ⚠️ INSTALLED BEATS FIRED. A property whose blueprints exist but have not
+    # tripped recently still HAS a detection layer, and the built-in modules
+    # would duplicate it. Waiting for an event meant a freshly installed add-on
+    # duplicated the automation layer until something went wrong — worst on a
+    # well-run villa, where nothing does.
+    if read_buffer()["blueprint_categories"]:
+        return True
     cutoff = (datetime.now(timezone.utc) - timedelta(days=within_days)
               ).isoformat(timespec="seconds")
     return bool(events_since(cutoff))

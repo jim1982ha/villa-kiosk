@@ -310,26 +310,32 @@ def test_a_list_shaped_response_is_accepted_too() -> None:
 
 
 def test_no_vesta_blueprints_falls_back_rather_than_going_deaf() -> None:
-    async def run() -> List[str]:
+    async def run() -> Any:
         class Empty:
             async def command(self, *a: Any, **k: Any) -> Any:
                 return {}
         return await collect.discover_event_types(Empty())  # type: ignore[arg-type]
 
-    assert asyncio.run(run()) == list(collect.FALLBACK_EVENT_TYPES)
+    types, categories = asyncio.run(run())
+    assert types == list(collect.FALLBACK_EVENT_TYPES)
+    assert categories == [], (
+        "a fallback must not claim a blueprint layer — that decides whether the "
+        "built-in modules stand down")
 
 
 def test_an_unreachable_core_falls_back_rather_than_going_deaf() -> None:
     """A collector that gave up here would silently never listen again."""
     from reports.hass import HassUnavailable
 
-    async def run() -> List[str]:
+    async def run() -> Any:
         class Broken:
             async def command(self, *a: Any, **k: Any) -> Any:
                 raise HassUnavailable("down")
         return await collect.discover_event_types(Broken())  # type: ignore[arg-type]
 
-    assert asyncio.run(run()) == list(collect.FALLBACK_EVENT_TYPES)
+    types, categories = asyncio.run(run())
+    assert types == list(collect.FALLBACK_EVENT_TYPES)
+    assert categories == [], "an unreachable Core proves nothing about the property"
 
 
 def test_no_automation_instance_name_appears_in_the_collector() -> None:
@@ -351,3 +357,69 @@ def test_no_automation_instance_name_appears_in_the_collector() -> None:
     code = ast.unparse(tree)
     assert "---" not in code, "the collector parses an automation instance name"
     assert "automation." not in code
+
+
+# ── installed beats fired ────────────────────────────────────────────────────
+# ⚠️ THE CHICKEN AND EGG, OBSERVED ON HARDWARE. The built-in modules stand down
+# where a detection layer covers the ground, and that was decided by "has an
+# event been seen recently" — false on a freshly installed add-on until
+# something happens to fire. The reference villa's first collector run logged
+# five subscriptions and then produced five duplicate findings, because nothing
+# had tripped yet. A quiet villa is when duplicate findings are least wanted.
+
+def test_installed_blueprints_are_enough_to_stand_the_modules_down() -> None:
+    buffer = collect.read_buffer()
+    store.write_json(store.REPORTS_EVENTS_FILE,
+                     {**buffer, "blueprint_categories": ["roi", "critical"]})
+    assert collect.blueprint_layer_present() is True, (
+        "installed blueprints must count even before anything fires")
+
+
+def test_a_property_with_no_blueprints_still_runs_the_modules() -> None:
+    buffer = collect.read_buffer()
+    store.write_json(store.REPORTS_EVENTS_FILE, {**buffer, "blueprint_categories": []})
+    assert collect.blueprint_layer_present() is False
+
+
+def test_the_categories_are_recorded_on_subscribe() -> None:
+    fake = _FakeHass([])
+    collector = collect.Collector(None)  # type: ignore[arg-type]
+    import reports.collect as module
+
+    async def fake_discover(hass: Any) -> Any:
+        return (["vesta_roi_event"], ["roi"])
+
+    original_client, original_discover = module.HassClient, module.discover_event_types
+    module.HassClient = lambda session: fake  # type: ignore[assignment,misc]
+    module.discover_event_types = fake_discover  # type: ignore[assignment]
+    try:
+        asyncio.run(collector.run_once())
+    finally:
+        module.HassClient = original_client  # type: ignore[assignment]
+        module.discover_event_types = original_discover  # type: ignore[assignment]
+
+    assert collect.read_buffer()["blueprint_categories"] == ["roi"]
+
+
+def test_an_unreachable_pass_does_not_erase_what_was_established() -> None:
+    """A reconnect that could not reach Core must not wipe the record and make
+    the modules start duplicating again."""
+    buffer = collect.read_buffer()
+    store.write_json(store.REPORTS_EVENTS_FILE,
+                     {**buffer, "blueprint_categories": ["roi"]})
+    collector = collect.Collector(None, ["vesta_roi_event"])  # type: ignore[arg-type]
+    collector._mark_online([])          # the fallback path passes no categories
+    assert collect.read_buffer()["blueprint_categories"] == ["roi"]
+
+
+def test_flushing_events_does_not_erase_the_blueprint_record() -> None:
+    """⚠️ `_flush` rewrites the whole document, so a key it forgets is a key it
+    DELETES. Dropping the categories here would make the built-in modules
+    resume duplicating the automation layer on the first flush after
+    connecting — a bug with a delay fuse, invisible until the first event."""
+    buffer = collect.read_buffer()
+    store.write_json(store.REPORTS_EVENTS_FILE,
+                     {**buffer, "blueprint_categories": ["roi", "critical"]})
+    _collect([_event()])
+    assert collect.read_buffer()["blueprint_categories"] == ["roi", "critical"]
+    assert collect.blueprint_layer_present() is True
