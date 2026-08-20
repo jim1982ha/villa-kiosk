@@ -1,3 +1,13 @@
+## 2.501.0
+
+### Fixed — the reports endpoints were unreachable, and answered 200
+
+`nginx.conf` is an explicit per-endpoint allowlist whose last rule serves the
+SPA, so the four routes added in 2.500.0 fell through to it: every call got
+`index.html` with status 200 and text/html, which surfaces at the caller as a
+JSON parse error pointing anywhere but the cause. A test now derives the route
+list from the proxy and fails if any route has no nginx location.
+
 ## 2.500.0
 
 ### Added — the seam for VESTA Reports, and the first automated test gate
