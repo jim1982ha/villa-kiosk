@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Sequence
 
 from reports.analysis import ModuleContext
 from reports.analysis.base import Finding
-from reports.analysis.modules.level_anomaly import LevelAnomaly
+from reports.analysis.modules.level_anomaly import WEEKDAY_NAME, LevelAnomaly
 from reports.analysis.modules.sensor_health import SensorHealth
 
 NOW = datetime(2026, 8, 20, 7, 0, tzinfo=timezone.utc)
@@ -59,7 +59,7 @@ def _run(module: Any, series: Dict[str, Any], **kw: Any) -> List[Finding]:
 # ── level_anomaly ────────────────────────────────────────────────────────────
 
 def test_a_steady_device_produces_nothing() -> None:
-    assert _run(LevelAnomaly(), {"sensor.a_energy": _flat(28, 0.5)}) == []
+    assert _run(LevelAnomaly(), {"sensor.a_energy": _flat(56, 0.5)}) == []
 
 
 def test_the_weekend_is_not_an_anomaly() -> None:
@@ -72,7 +72,7 @@ def test_the_weekend_is_not_an_anomaly() -> None:
     baseline it is silent, because Saturday is compared to other Saturdays.
     """
     rows: List[Dict[str, Any]] = []
-    for index in range(28):
+    for index in range(56):
         weekday = (START + timedelta(days=index)).weekday()
         rows += _day(index, 2.0 if weekday >= 5 else 0.4)
     assert _run(LevelAnomaly(), {"sensor.a_energy": rows}) == [], (
@@ -80,17 +80,23 @@ def test_the_weekend_is_not_an_anomaly() -> None:
 
 
 def test_a_genuine_spike_on_one_weekday_is_found() -> None:
-    """The same villa, but one recent Wednesday is five times its normal."""
+    """The same villa, but one recent Wednesday is several times its normal.
+
+    Eight weeks, because a four-sample baseline is what produced twelve
+    findings on the first live run.
+    """
     rows: List[Dict[str, Any]] = []
-    for index in range(28):
+    spike_day = 51                       # inside the final week
+    for index in range(56):
         weekday = (START + timedelta(days=index)).weekday()
         base = 2.0 if weekday >= 5 else 0.4
-        if index == 23 and weekday == 2:
+        if index == spike_day:
             base = 2.0
         rows += _day(index, base)
+    expected = WEEKDAY_NAME[(START + timedelta(days=spike_day)).weekday()]
     findings = _run(LevelAnomaly(), {"sensor.a_energy": rows})
-    assert len(findings) == 1
-    assert "Wednesday" in findings[0].detail
+    assert len(findings) == 1, findings
+    assert expected in findings[0].detail
     assert findings[0].kind == "ANOMALY"
 
 
@@ -105,8 +111,8 @@ def test_too_few_samples_of_that_weekday_is_silent() -> None:
 
 def test_a_device_that_used_LESS_is_not_reported() -> None:
     rows: List[Dict[str, Any]] = []
-    for index in range(28):
-        rows += _day(index, 0.1 if index >= 21 else 1.0)
+    for index in range(56):
+        rows += _day(index, 0.1 if index >= 49 else 1.0)
     assert _run(LevelAnomaly(), {"sensor.a_energy": rows}) == []
 
 
@@ -116,16 +122,18 @@ def test_a_perfectly_constant_device_needs_a_real_rise() -> None:
     relative test alone must decide, or the quietest equipment becomes the
     noisiest finding."""
     rows: List[Dict[str, Any]] = []
-    for index in range(28):
-        rows += _day(index, 1.0 * (1.05 if index == 24 else 1.0))
+    for index in range(56):
+        rows += _day(index, 1.0 * (1.05 if index == 52 else 1.0))
     assert _run(LevelAnomaly(), {"sensor.a_energy": rows}) == [], (
         "a 5% difference on a zero-spread device is not an anomaly")
 
 
-def test_level_anomaly_requires_four_weeks() -> None:
+def test_level_anomaly_demands_real_history() -> None:
     """Stated as a property, because the cost of a per-weekday baseline IS the
-    history it needs and working around it would defeat the point."""
-    assert LevelAnomaly().min_days == 28
+    history it needs and working around it would defeat the point. Raised from
+    four weeks to six after four-sample baselines produced twelve findings from
+    eighteen meters on the first live run."""
+    assert LevelAnomaly().min_days >= 42
 
 
 # ── sensor_health ────────────────────────────────────────────────────────────

@@ -1,3 +1,15 @@
+## 2.515.0
+
+### Fixed — the new daily check reported twelve things, including "715,700% more"
+
+Every one was a ratio against a baseline of almost nothing: equipment used on
+some days and not others has no normal day to depart from, so any day it runs
+looks thousands of percent high. A device must now have a stable history for
+that weekday before it can be called anomalous, the change must be material
+against what it draws when working, and the baseline is built from eight weeks
+instead of four. The materiality rule now lives in one shared place, because
+applying it to one module and not the next is what caused this.
+
 ## 2.514.0
 
 ### Added — two more checks: unusual daily use, and meters that have failed

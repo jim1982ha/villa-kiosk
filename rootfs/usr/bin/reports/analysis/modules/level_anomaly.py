@@ -13,10 +13,12 @@ fatigue is the primary product risk, and this is the single most reliable way to
 manufacture it.
 
 The cost is history: comparing a Saturday to other Saturdays needs several
-Saturdays, so this module wants four weeks where `standby_creep` wanted two.
-That is a real constraint and it is stated as `min_days` rather than worked
-around — a baseline built from two Saturdays is not a baseline, and a module
-that pretends otherwise is worse than one that waits.
+Saturdays, so this module reads EIGHT weeks where `standby_creep` reads two,
+and refuses to run on less than six. That is a real constraint, stated as
+`min_days` rather than worked around — a baseline built from three Saturdays is
+not a baseline, and a module that pretends otherwise is worse than one that
+waits. The first live run proved it: on four-sample baselines it produced
+TWELVE findings from eighteen meters, topping out at 715,700%.
 
 ⚠️ NOT A WATTAGE ANYWHERE. The threshold is robust sigmas above that device's
 own same-weekday distribution, so a 3 kW heat pump and a 40 W router are judged
@@ -29,12 +31,17 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from ..base import Finding, ModuleContext, dedup_key, resolve_threshold
 from ..registry import register
+from ..materiality import has_stable_baseline, is_material
 from ..robust import median, robust_sigma
 from ..series import daily_totals, weekday_of
 
-#: Four weeks gives four samples per weekday — the minimum from which a median
-#: and a spread mean anything at all.
-WINDOW_DAYS = 28
+#: ⚠️ EIGHT WEEKS, NOT FOUR. Four weeks gives four samples of each weekday, and
+#: a median of four is fragile: one unusual Friday moves it enough to make the
+#: next ordinary Friday look anomalous. The first live run produced TWELVE
+#: findings from eighteen meters on four-sample baselines. The recorder on the
+#: reference deployment holds 122 days, so asking for eight weeks costs nothing
+#: and roughly doubles the evidence behind every comparison.
+WINDOW_DAYS = 56
 
 #: ⚠️ DIMENSIONLESS. How far above its own same-weekday median a day must sit.
 #: Robust sigmas, so the spread comes from the device's own history rather than
@@ -47,8 +54,10 @@ DEFAULT_SIGMA = 4.0
 #: sigmas". Both tests must pass.
 DEFAULT_RISE_FRACTION = 0.30
 
-#: Samples of the same weekday needed before a comparison is attempted.
-MIN_SAMEDAY_SAMPLES = 3
+#: Samples of the same weekday needed before a comparison is attempted. Four,
+#: because three has no meaningful spread and the median is whichever value
+#: happens to sit in the middle.
+MIN_SAMEDAY_SAMPLES = 4
 
 #: How many recent days to examine. One week, so a weekly report covers exactly
 #: the period it is about.
@@ -77,9 +86,9 @@ class LevelAnomaly:
     name: str = "level_anomaly"
     requires: Sequence[str] = ("statistics", "energy_devices")
     audiences: Sequence[str] = ("owner", "facility")
-    #: Four weeks — see the module docstring on why this is higher than
-    #: standby_creep's and is not negotiable down.
-    min_days: int = 28
+    #: Six weeks minimum, eight read — see the module docstring on why this is
+    #: far higher than standby_creep's and is not negotiable down.
+    min_days: int = 42
 
     rejected: List[Dict[str, Any]]
 
@@ -140,6 +149,14 @@ class LevelAnomaly:
                 # about the equipment.
                 continue
 
+            # ⚠️ IS THERE A NORMAL TO DEPART FROM? A device used on some
+            # Fridays and not others has a Friday median near zero and a spread
+            # the size of its own range; every Friday it runs is then thousands
+            # of percent "above normal" — arithmetically true and meaningless.
+            # This is what produced 715,700% on the first live run.
+            if not has_stable_baseline(samples):
+                continue
+
             centre = median(samples)
             spread = robust_sigma(samples)
             observed = totals[day]
@@ -153,6 +170,12 @@ class LevelAnomaly:
                 context.settings, "rise_fraction", None, DEFAULT_RISE_FRACTION)
 
             if rise < rise_threshold:
+                continue
+
+            # ⚠️ IS IT MATERIAL? The rule `standby_creep` learned the hard way
+            # and this module did not inherit, because it was applied at a call
+            # site rather than to everything it applies to. Shared now.
+            if not is_material(observed - centre, list(totals.values())):
                 continue
             # ⚠️ MAD OF ZERO IS LEGITIMATE — a device that uses exactly the
             # same amount every Tuesday. Any difference is then "infinite
