@@ -103,6 +103,21 @@ class ModuleContext:
     #: Injected by the pipeline: labels for statistic ids, from the registry.
     labels: Dict[str, str] = field(default_factory=dict)
 
+    @property
+    def zone(self) -> Any:
+        """The timezone every day bucket in this pass must be built in.
+
+        ⚠️ ONE ANSWER, NOT THREE. All three modules re-derived this as
+        `getattr(context.now_local, "tzinfo", None)`, and a module that forgets
+        buckets its days in UTC — which is not a rounding error but a different
+        set of days, silently shifting every reading across a boundary. The
+        scheduler already cost a release to exactly that mistake (it ran in UTC
+        because `"timezone": ""` was commented "ask Home Assistant" and nothing
+        asked). A fourth module gets the right zone by READING it, not by
+        remembering to derive it.
+        """
+        return getattr(self.now_local, "tzinfo", None)
+
 
 class AnalysisModule(Protocol):
     """One question asked of the villa's history."""
@@ -162,6 +177,30 @@ def dedup_key(module: str, subject: str) -> str:
     """
     digest = hashlib.sha256(subject.encode("utf-8")).hexdigest()[:16]
     return f"{module}:{digest}"
+
+
+def label_for(statistic_id: str, labels: Dict[str, str]) -> str:
+    """What to call this device in the report.
+
+    Falls back to a humanised form of the id rather than printing the id
+    itself — `sensor.pool_pump_energy` in prose reads as a database row, and
+    the entity id is exactly what must not travel in Phase 6.
+
+    ⚠️ ONE DEFINITION. This lived in `standby_creep` AND in `level_anomaly` as
+    byte-identical copies, while `sensor_health` reached across and imported
+    the underscore-prefixed one out of `level_anomaly` — a private name
+    crossing a module boundary, which is the tell that a helper has no home.
+    Three readers, two definitions, no owner. Found by /dry-audit.
+    """
+    known = labels.get(statistic_id)
+    if known:
+        return known
+    tail = statistic_id.split(".", 1)[-1]
+    for suffix in ("_energy", "_power", "_consumption"):
+        if tail.endswith(suffix):
+            tail = tail[: -len(suffix)]
+            break
+    return tail.replace("_", " ").strip().title() or statistic_id
 
 
 def skip(module: str, reason: str, detail: str = "") -> Dict[str, str]:

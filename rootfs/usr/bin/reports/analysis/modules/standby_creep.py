@@ -27,7 +27,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
-from ..base import Finding, ModuleContext, dedup_key, resolve_threshold
+from ..base import (Finding, ModuleContext, dedup_key, label_for,
+                    resolve_threshold)
 from ..registry import register
 from ..robust import median, percentile, relative_change, robust_sigma
 from ..series import complete_days, hourly_by_day
@@ -97,24 +98,6 @@ def _daily_idle_floors(rows: List[Dict[str, Any]],
     return floors
 
 
-def _label_for(statistic_id: str, labels: Dict[str, str]) -> str:
-    """What to call this device in the report.
-
-    Falls back to a humanised form of the id rather than printing the id
-    itself — `sensor.pool_pump_energy` in prose reads as a database row, and
-    the entity id is exactly what must not travel in Phase 6.
-    """
-    known = labels.get(statistic_id)
-    if known:
-        return known
-    tail = statistic_id.split(".", 1)[-1]
-    for suffix in ("_energy", "_power", "_consumption"):
-        if tail.endswith(suffix):
-            tail = tail[: -len(suffix)]
-            break
-    return tail.replace("_", " ").strip().title() or statistic_id
-
-
 class StandbyCreep:
     """Idle draw that has risen against the device's own baseline."""
 
@@ -171,7 +154,7 @@ class StandbyCreep:
                 rows: List[Dict[str, Any]],
                 context: ModuleContext,
                 rejected: Optional[List[Dict[str, Any]]] = None) -> Optional[Finding]:
-        zone = getattr(context.now_local, "tzinfo", None)
+        zone = context.zone
         floors = _daily_idle_floors(rows, zone)
         expected_days = RECENT_DAYS + BASELINE_DAYS
         if len(floors) < self.min_days:
@@ -251,7 +234,7 @@ class StandbyCreep:
         # the same authority as one drawn from all 28.
         confidence = round(0.5 + 0.5 * completeness, 3)
 
-        label = _label_for(statistic_id, context.labels)
+        label = label_for(statistic_id, context.labels)
         percent = round(rise * 100)
         severity = "warning" if rise >= rise_threshold * 2 else "notice"
 
@@ -290,7 +273,7 @@ class StandbyCreep:
         if rejected is None:
             return
         rejected.append({
-            "label": _label_for(statistic_id, context.labels),
+            "label": label_for(statistic_id, context.labels),
             "reason": reason,
             "rise": round(rise, 4),
             "observed": round(recent, 6),

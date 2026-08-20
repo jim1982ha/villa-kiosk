@@ -20,12 +20,11 @@ from typing import Any, Dict, List, Sequence
 import pytest
 
 from reports.analysis import ModuleContext, gate, run_all
-from reports.analysis.base import Finding, resolve_threshold
+from reports.analysis.base import Finding, label_for, resolve_threshold
 from reports.analysis.modules.standby_creep import (
     DEFAULT_RISE_FRACTION,
     StandbyCreep,
     _daily_idle_floors,
-    _label_for,
 )
 
 NOW = datetime(2026, 8, 20, 7, 0, tzinfo=timezone.utc)
@@ -363,8 +362,8 @@ def test_a_boolean_annotation_is_not_a_threshold() -> None:
 
 
 def test_label_never_prints_an_entity_id() -> None:
-    assert _label_for("sensor.pool_pump_energy", {}) == "Pool Pump"
-    assert _label_for("sensor.x", {"sensor.x": "Chest Freezer"}) == "Chest Freezer"
+    assert label_for("sensor.pool_pump_energy", {}) == "Pool Pump"
+    assert label_for("sensor.x", {"sensor.x": "Chest Freezer"}) == "Chest Freezer"
 
 
 @pytest.mark.parametrize("kind", ["NONSENSE", ""])

@@ -29,7 +29,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
-from ..base import Finding, ModuleContext, dedup_key, resolve_threshold
+from ..base import (Finding, ModuleContext, dedup_key, label_for,
+                    resolve_threshold)
 from ..registry import register
 from ..materiality import has_stable_baseline, is_material
 from ..robust import median, robust_sigma
@@ -64,18 +65,6 @@ MIN_SAMEDAY_SAMPLES = 4
 RECENT_DAYS = 7
 
 
-def _label_for(statistic_id: str, labels: Dict[str, str]) -> str:
-    known = labels.get(statistic_id)
-    if known:
-        return known
-    tail = statistic_id.split(".", 1)[-1]
-    for suffix in ("_energy", "_power", "_consumption"):
-        if tail.endswith(suffix):
-            tail = tail[: -len(suffix)]
-            break
-    return tail.replace("_", " ").strip().title() or statistic_id
-
-
 WEEKDAY_NAME = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
                 "Saturday", "Sunday")
 
@@ -105,7 +94,7 @@ class LevelAnomaly:
 
         ids = [str(i) for i in candidates if isinstance(i, str)]
         series = await context.stats(ids, WINDOW_DAYS)
-        zone = getattr(context.now_local, "tzinfo", None)
+        zone = context.zone
 
         self.rejected = []
         findings: List[Finding] = []
@@ -195,7 +184,7 @@ class LevelAnomaly:
                     ref=f"l{index}",
                     kind="ANOMALY",
                     severity="warning" if rise >= rise_threshold * 2 else "notice",
-                    label=_label_for(statistic_id, context.labels),
+                    label=label_for(statistic_id, context.labels),
                     detail=(f"used about {round(rise * 100)}% more on "
                             f"{WEEKDAY_NAME[weekday]} than it normally does on a "
                             f"{WEEKDAY_NAME[weekday]} ({len(samples)} compared)"),

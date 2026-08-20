@@ -24,10 +24,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
-from ..base import Finding, ModuleContext, dedup_key, resolve_threshold
+from ..base import (Finding, ModuleContext, dedup_key, label_for,
+                    resolve_threshold)
 from ..registry import register
-from ..series import daily_totals, hourly_by_day
-from .level_anomaly import _label_for
+from ..series import daily_totals, hourly_by_day, last_reading_day
 
 WINDOW_DAYS = 28
 
@@ -67,7 +67,7 @@ class SensorHealth:
 
         ids = [str(i) for i in candidates if isinstance(i, str)]
         series = await context.stats(ids, WINDOW_DAYS)
-        zone = getattr(context.now_local, "tzinfo", None)
+        zone = context.zone
 
         # ⚠️ THE REFERENCE IS THE OTHER METERS, NOT THE CLOCK. A pass that runs
         # while Home Assistant has been down for a week would otherwise report
@@ -78,9 +78,9 @@ class SensorHealth:
         for statistic_id in ids:
             rows = series.get(statistic_id)
             if isinstance(rows, list):
-                days = sorted(hourly_by_day(rows, zone))
-                if days and days[-1] > newest:
-                    newest = days[-1]
+                day = last_reading_day(rows, zone)
+                if day is not None and day > newest:
+                    newest = day
         if not newest:
             return []
 
@@ -113,7 +113,7 @@ class SensorHealth:
                 ref=f"h{index}",
                 kind="DATA_QUALITY",
                 severity="warning",
-                label=_label_for(statistic_id, context.labels),
+                label=label_for(statistic_id, context.labels),
                 detail=(f"has reported nothing for {gap} days, while other "
                         f"meters kept reporting — readings for it are missing "
                         f"rather than zero"),
@@ -151,7 +151,7 @@ class SensorHealth:
                 ref=f"h{index}",
                 kind="DATA_QUALITY",
                 severity="notice",
-                label=_label_for(statistic_id, context.labels),
+                label=label_for(statistic_id, context.labels),
                 detail=(f"varied from day to day until recently and has now "
                         f"reported exactly the same total for {stuck_days} days "
                         f"running — usually a frozen meter rather than a load "
