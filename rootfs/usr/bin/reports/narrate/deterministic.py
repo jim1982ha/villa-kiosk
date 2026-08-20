@@ -88,6 +88,24 @@ ALL_SECTIONS = ("critical", "money", "fixed", "preventive", "trends", "health",
 #:
 #: Pinned against `contracts.FINDING_KIND`, so adding a kind fails the suite
 #: rather than losing findings in the field.
+#: ⚠️ KEYS THAT ARE HOUSEKEEPING, NOT MEASUREMENTS. Everything else a blueprint
+#: puts in `data` is a number it measured, and `_measurement` prints those —
+#: which is how a maintenance line stops being a bare label. Excluding by NAME
+#: rather than listing the measurements by name is what keeps this universal: a
+#: blueprint that reports something nobody here anticipated still gets it read
+#: out, and the alternative is a per-blueprint table that goes stale the day
+#: someone adds a mode.
+NON_MEASUREMENT_KEYS = frozenset({
+    "blueprint", "rule_id", "report_bucket", "entities", "entity_id",
+    "timestamp", "task_text", "severity", "label", "phase", "detail",
+    "finding", "basis", "mode", "reason", "routed_as",
+    # Money and duration are rendered by their own sections, in their own words.
+    "kwh", "cost_local", "watts", "wasted_minutes", "runtime_hours",
+    # Structured lists that are not a single readable figure.
+    "gap_descriptions", "details", "disabled_automations",
+    "missing_automations", "expected_area",
+})
+
 SECTION_FOR_KIND = {
     "DATA_QUALITY": "health",      # the instrument, not the equipment
     "FORECAST": "preventive",      # a projection about equipment, with a horizon
@@ -116,6 +134,30 @@ def _plural(count: int, singular: str, plural: str = "") -> str:
     if singular.endswith(("s", "x", "z", "ch", "sh")):
         return f"{count} {singular}es"
     return f"{count} {singular}s"
+
+
+#: Key suffixes that name a UNIT, so the value belongs before them rather than
+#: after. ⚠️ SUFFIX RULES, NOT A PER-BLUEPRINT TABLE. `flagged_after_minutes: 60`
+#: humanised naively reads "flagged after minutes 60", which is what the first
+#: live report printed. A lookup of every field every blueprint might emit goes
+#: stale the day someone adds a mode; a rule about how the field is NAMED keeps
+#: working on fields nobody here has seen.
+_UNIT_SUFFIXES = ("minutes", "hours", "days", "seconds", "weeks", "months")
+
+
+def _phrase(key: str, value: Any) -> str:
+    """One measured field, as a phrase rather than a dump."""
+    words = key.split("_")
+    tail = words[-1]
+    stem = " ".join(words[:-1])
+    if tail == "pct" and stem:
+        return f"{stem} {value}%"
+    if tail == "count" and stem:
+        return _plural(int(value), stem) if isinstance(value, (int, float)) \
+            else f"{stem} {value}"
+    if tail in _UNIT_SUFFIXES and stem:
+        return f"{stem} {value} {tail}"
+    return f"{key.replace('_', ' ')} {value}"
 
 
 def _amount(value: float) -> str:
@@ -220,8 +262,14 @@ class DeterministicNarrator:
         if isinstance(total, (int, float)) and savings.get("groups"):
             mix = savings.get("basis_mix") or {}
             estimated = int(mix.get("estimated", 0))
+            counted = int(savings["groups"])
             qualifier = ""
-            if estimated:
+            if estimated >= counted:
+                # ⚠️ "across 1 finding, 1 of them estimated" — counting a subset
+                # that is the whole set. Read on hardware in the first live
+                # report; the arithmetic was right and the sentence was silly.
+                qualifier = " — estimated from assumed loads rather than metered"
+            elif estimated:
                 qualifier = (f", {estimated} of them estimated rather than "
                              f"metered")
             lines.append(
@@ -339,6 +387,31 @@ class DeterministicNarrator:
         property with no tariff cannot price anything, and printing an empty
         Money section under a heading reads as "nothing was wasted".
         """
+        priced = [g for g in self._groups(context, "roi")
+                  if self._number(g, "total_cost") is not None]
+
+        # ⚠️ THE `energy_cost` CAPABILITY DOES NOT GOVERN THIS SECTION WHEN THE
+        # BLUEPRINTS HAVE PRICED THEIR OWN FINDINGS, AND CONFLATING THE TWO
+        # PRINTED A FLAT CONTRADICTION. A live report read:
+        #
+        #     Avoidable cost identified: 26.00, across 1 finding
+        #     ...
+        #     Avoidable cost:
+        #     - Not calculated — see monitoring health below.
+        #
+        # `energy_cost` means "a tariff is configured ON THE HOME ASSISTANT
+        # ENERGY DASHBOARD" — the source the BUILT-IN MODULES would need. Every
+        # roi blueprint carries its own `tariff_per_kwh` input and ships
+        # `cost_local` already multiplied, so a property with no dashboard
+        # tariff can still be told exactly what it wasted. The admission is for
+        # having nothing priced, not for lacking a capability this section
+        # never used.
+        if priced:
+            lines = ["Avoidable cost, most expensive first:"]
+            for group in self._top(priced):
+                lines.append(self._money_line(group))
+            return lines + self._and_more(priced)
+
         if "energy_cost" in (context.discovery.get("capabilities_missing") or []):
             # ⚠️ THE SECTION STAYS AND THE REASON MOVES. Two rules pull opposite
             # ways here: the admission must exist, or Money's silence reads as
@@ -352,27 +425,21 @@ class DeterministicNarrator:
             return ["Avoidable cost:",
                     "- Not calculated. No electricity tariff is configured, so "
                     "waste can be identified but not priced."]
+        return []
 
-        priced = [g for g in self._groups(context, "roi")
-                  if self._number(g, "total_cost") is not None]
-        if not priced:
-            return []
+    def _money_line(self, group: Any) -> str:
 
-        lines = ["Avoidable cost, most expensive first:"]
-        for group in self._top(priced):
-            cost = self._number(group, "total_cost")
-            basis = self._text(group, "basis")
-            label = self._text(group, "bucket") or self._text(group, "label")
-            note = ""
-            if basis == "estimated":
-                note = " (estimated from an assumed load, not metered)"
-            elif basis == "measured":
-                note = " (metered)"
-            kwh = self._number(group, "total_kwh")
-            energy = f", {kwh:.2f} kWh" if kwh is not None else ""
-            lines.append(
-                f"- {label}: {_amount(float(cost or 0.0))}{energy}{note}")
-        return lines + self._and_more(priced)
+        cost = self._number(group, "total_cost")
+        basis = self._text(group, "basis")
+        label = self._text(group, "bucket") or self._text(group, "label")
+        note = ""
+        if basis == "estimated":
+            note = " (estimated from an assumed load, not metered)"
+        elif basis == "measured":
+            note = " (metered)"
+        kwh = self._number(group, "total_kwh")
+        energy = f", {kwh:.2f} kWh" if kwh is not None else ""
+        return f"- {label}: {_amount(float(cost or 0.0))}{energy}{note}"
 
     # ── 4. fixed and suggested ───────────────────────────────────────────────
 
@@ -426,8 +493,15 @@ class DeterministicNarrator:
         lines = ["Maintenance signals:"]
         for group in self._top(groups):
             label = self._text(group, "bucket") or self._text(group, "label")
-            detail = self._detail(group)
-            lines.append(f"- {label}: {detail}" if detail else f"- {label}")
+            # ⚠️ THE MEASUREMENT, NOT JUST THE NAME. A live report printed
+            # "- Pump short-cycling" and "- Pump power factor" — two bare
+            # labels, saying only that something was flagged, while the events
+            # carried `transition_count`, `max_transitions` and `deviation_pct`.
+            # The maintenance blueprints emit no `detail` field at all; the
+            # numbers ARE the detail, and the section was redundant with the
+            # caretaker list above it until it printed them.
+            said = self._detail(group) or self._measurement(group)
+            lines.append(f"- {label}: {said}" if said else f"- {label}")
         for item in forecast[:MAX_LINES]:
             lines.append(self._finding_line(item))
         return lines + self._and_more(groups)
@@ -450,7 +524,12 @@ class DeterministicNarrator:
         lines = ["Trends:"]
         for group in self._top(drifting):
             label = self._text(group, "bucket") or self._text(group, "label")
-            lines.append(f"- {label}: {self._detail(group) or 'drifting'}")
+            # ⚠️ THE NUMBER IF THERE IS ONE. A live report printed
+            # "- Night standby: drifting" while the event carried
+            # `deviation_pct: 26.9` — the word for the thing instead of the
+            # measurement of it, which is the whole point of a trends section.
+            said = self._detail(group) or self._measurement(group) or "drifting"
+            lines.append(f"- {label}: {said}")
         for item in module_findings[:MAX_LINES]:
             lines.append(self._finding_line(item))
         return lines
@@ -655,6 +734,33 @@ class DeterministicNarrator:
         value = (group.get("occurrences") if isinstance(group, dict)
                  else getattr(group, "occurrences", 1))
         return int(value) if isinstance(value, int) else 1
+
+    def _measurement(self, group: Any) -> str:
+        """The numbers a blueprint measured, in the order it supplied them.
+
+        ⚠️ HUMANISED, NEVER TRANSLATED. `deviation_pct` prints as
+        "deviation pct 26.9" rather than being mapped to a phrase, because a
+        phrase table is per-blueprint knowledge that goes stale the day a mode
+        is added — and a slightly stiff true sentence beats a fluent one about
+        the wrong field.
+        """
+        items = (group.get("items") if isinstance(group, dict)
+                 else getattr(group, "items", None)) or []
+        for item in items:
+            data = (item.get("data") if isinstance(item, dict)
+                    else getattr(item, "data", None)) or {}
+            if not isinstance(data, dict):
+                continue
+            parts: List[str] = []
+            for key, value in data.items():
+                if key in NON_MEASUREMENT_KEYS or value in (None, "", [], {}):
+                    continue
+                if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+                    continue
+                parts.append(_phrase(str(key), value))
+            if parts:
+                return ", ".join(parts[:3])
+        return ""
 
     def _detail(self, group: Any) -> str:
         items = (group.get("items") if isinstance(group, dict)

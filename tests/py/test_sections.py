@@ -94,8 +94,9 @@ def test_an_estimated_figure_is_qualified_in_the_headline() -> None:
     """The tariff is a per-instance blueprint input and some loads are assumed
     rather than metered; a bare total would imply a precision it lacks."""
     body = _render(aggregated=_events(
-        _roi("Gym lights", 500.0, basis="estimated")))
-    assert "estimated rather than metered" in body
+        _roi("Gym lights", 500.0, basis="estimated"),
+        _roi("Pool pump", 400.0, basis="measured", rule="ROI-15")))
+    assert "1 of them estimated rather than metered" in body
 
 
 def test_an_unresolved_alert_is_named_in_the_headline() -> None:
@@ -148,10 +149,13 @@ def test_no_currency_symbol_is_invented() -> None:
 def test_money_admits_it_cannot_price_rather_than_going_silent() -> None:
     """⚠️ AN ABSENT SECTION READS AS "NOTHING WAS WASTED". A property with no
     tariff can identify waste and not price it, and must say so."""
+    # ⚠️ NOT `_roi(cost=0.0)` — a zero the blueprint COMPUTED is a price, and
+    # the group is then priced and ranked. The case this means is nothing
+    # priced at all, which is a period with no roi events in it.
     body = _render(
         discovery={**_ctx().discovery, "capabilities_missing": ["energy_cost"],
                    "capability_absent": {"energy_cost": "No tariff."}},
-        aggregated=_events(_roi("Gym lights", 0.0)))
+        aggregated=_events(_maintenance("Service the pump")))
     assert "Avoidable cost:" in body
     assert "not priced" in body or "Not calculated" in body
 
@@ -331,3 +335,80 @@ def test_plurals_are_english_not_string_concatenation() -> None:
     assert _plural(2, "day") == "2 days", "-ay is not -ies"
     assert _plural(2, "batch") == "2 batches"
     assert _plural(2, "person", "people") == "2 people"
+
+
+# ── read off the first live report, on hardware ─────────────────────────────
+
+def test_a_priced_finding_is_ranked_even_with_no_dashboard_tariff() -> None:
+    """⚠️ THE CONTRADICTION. A live report opened "Avoidable cost identified:
+    26.00, across 1 finding" and then said "Avoidable cost: - Not calculated".
+
+    `energy_cost` means a tariff on the HOME ASSISTANT ENERGY DASHBOARD — the
+    source the BUILT-IN MODULES need. Every roi blueprint carries its own
+    `tariff_per_kwh` and ships `cost_local` already multiplied, so a property
+    with no dashboard tariff can still be told exactly what it wasted."""
+    body = _render(
+        discovery={**_ctx().discovery, "capabilities_missing": ["energy_cost"],
+                   "capability_absent": {"energy_cost": "No tariff."}},
+        aggregated=_events(_roi("Gym lights", 26.0, basis="estimated")))
+    assert "Avoidable cost, most expensive first:" in body
+    assert "Gym lights" in body
+    assert "Not calculated" not in body, "the headline priced it; this denied it"
+
+
+def test_a_maintenance_line_carries_its_measurement_not_just_a_name() -> None:
+    """⚠️ A live report printed "- Pump short-cycling" and "- Pump power
+    factor": two bare labels saying only that something was flagged, while the
+    events carried the numbers. Maintenance blueprints emit no `detail` field —
+    the measurements ARE the detail."""
+    when = "2026-08-20T11:00:00+08:00"
+    cycling = {"type": "vesta_maintenance_event", "fired": when, "at": when,
+               "data": {"blueprint": "maintenance_cycling", "rule_id": "PM-02",
+                        "report_bucket": "Pump short-cycling",
+                        "entities": ["sensor.p"], "task_text": "Check the valve",
+                        "transition_count": 14, "max_transitions": 6,
+                        "timestamp": when}}
+    body = _render(aggregated=_events(cycling))
+    # `_count` suffix pluralises the stem; `max_transitions` has no unit suffix
+    # and stays as written. Both are measurements the label alone did not carry.
+    assert "14 transitions" in body
+    assert "max transitions 6" in body
+
+
+def test_a_measurement_never_repeats_money_or_housekeeping() -> None:
+    """Cost and duration have their own sections and their own words; ids and
+    labels are not measurements."""
+    body = _render(aggregated=_events(_roi("Gym lights", 900.0)))
+    assert "cost local" not in body and "report bucket" not in body
+    assert "rule id" not in body and "blueprint " not in body.lower()
+
+
+def test_an_all_estimated_total_is_not_counted_against_itself() -> None:
+    """"across 1 finding, 1 of them estimated" counts a subset that is the
+    whole set. Right arithmetic, silly sentence."""
+    body = _render(aggregated=_events(_roi("Gym lights", 26.0, basis="estimated")))
+    assert "1 of them estimated" not in body
+    assert "estimated from assumed loads rather than metered" in body
+
+
+def test_a_unit_suffixed_field_reads_as_english() -> None:
+    """⚠️ "flagged after minutes 60" reached a live report. The rule is about
+    how the field is NAMED, so it works on fields nobody here has seen."""
+    from reports.narrate.deterministic import _phrase
+    assert _phrase("flagged_after_minutes", 60) == "flagged after 60 minutes"
+    assert _phrase("silent_hours", 26) == "silent 26 hours"
+    assert _phrase("deviation_pct", 26.9) == "deviation 26.9%"
+    assert _phrase("transition_count", 14) == "14 transitions"
+    assert _phrase("transition_count", 1) == "1 transition"
+    assert _phrase("some_new_field", 3) == "some new field 3"
+
+
+def test_a_trend_prints_its_number_not_the_word_for_it() -> None:
+    when = "2026-08-20T02:00:00+08:00"
+    drift = {"type": "vesta_roi_event", "fired": when, "at": when, "data": {
+        "blueprint": "roi_baseline_deviation", "rule_id": "ROI-18",
+        "report_bucket": "Night standby", "entities": ["sensor.n"],
+        "deviation_pct": 26.9, "basis": "trend", "timestamp": when}}
+    body = _render(aggregated=_events(drift))
+    assert "deviation 26.9%" in body
+    assert "Night standby: drifting" not in body

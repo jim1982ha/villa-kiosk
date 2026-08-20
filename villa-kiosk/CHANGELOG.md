@@ -1,3 +1,14 @@
+## 2.529.0
+
+### Fixed — the report priced a finding in its headline and denied it two lines later
+
+The money section was gated on Home Assistant's Energy dashboard tariff, which
+is what the built-in checks would need — but every waste rule carries its own
+tariff and ships the cost already worked out, so a property with no dashboard
+tariff can still be told exactly what it wasted. Maintenance and trend lines
+also printed a bare label where the alert carried numbers, so "Pump
+short-cycling" now reads with the transitions that triggered it.
+
 ## 2.528.0
 
 ### Fixed — events fell outside their own day on any property not on UTC
