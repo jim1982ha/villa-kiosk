@@ -1,3 +1,15 @@
+## 2.512.0
+
+### Fixed — the first real finding was a true 869% and a rise of eight watts
+
+A house pump's idle draw went from 0.9 W to 9 W: arithmetically a huge
+increase, practically nothing, and exactly the kind of alert that teaches an
+owner to ignore reports. A ratio is scale-free and so cannot say whether a
+change matters. A rise must now also be a material fraction of what the device
+draws when it is actually working — still dimensionless, so a 40 W router and
+a 3 kW pump are judged the same way. A preview also lists what was measured
+and rejected, with the numbers.
+
 ## 2.511.0
 
 ### Fixed — the first analysis module could never find anything on real data
