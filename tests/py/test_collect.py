@@ -589,3 +589,60 @@ def test_state_is_safe_before_anything_has_happened() -> None:
     assert got["connected"] is False
     assert got["buffered"] == 0
     assert got["silent_types"] == []
+
+
+# ── the window is UTC, whatever clock the caller thinks in ──────────────────
+# ⚠️ FOUND IN THE FIRST REAL RENDERED REPORT. `buffered: 8` beside
+# `events_seen: 0`, and prose telling the owner five categories of automation
+# alert had found nothing — true of what the aggregation received, false about
+# the villa. `schedule.period_start` builds the window from LOCAL midnight,
+# correctly; `at` is stamped in UTC; comparing them as raw strings is only
+# chronological when the offsets match.
+
+def test_a_local_midnight_window_finds_a_utc_event_inside_it() -> None:
+    """The exact case, with the reference deployment's own numbers: UTC+8,
+    01:18 local on the 21st, asked for "since local midnight on the 21st"."""
+    buffer = collect.read_buffer()
+    store.write_json(store.REPORTS_EVENTS_FILE, {
+        **buffer,
+        "events": [{"at": "2026-08-20T17:18:59+00:00", "type": "vesta_roi_event",
+                    "fired": "", "data": {}}],
+    })
+    found = collect.events_since("2026-08-21T00:00:00+08:00")
+    assert len(found) == 1, (
+        "an event 1h18 inside the window was excluded because the DATE DIGITS "
+        "differ — string ordering across offsets is not chronological")
+
+
+def test_an_event_genuinely_before_the_window_is_still_excluded() -> None:
+    """The fix must not simply admit everything."""
+    buffer = collect.read_buffer()
+    store.write_json(store.REPORTS_EVENTS_FILE, {
+        **buffer,
+        "events": [{"at": "2026-08-20T15:00:00+00:00", "type": "vesta_roi_event",
+                    "fired": "", "data": {}}],   # 23:00 local on the 20th
+    })
+    assert collect.events_since("2026-08-21T00:00:00+08:00") == []
+
+
+def test_a_negative_offset_works_too() -> None:
+    """UTC+8 is where it was found; the defect is any non-zero offset."""
+    buffer = collect.read_buffer()
+    store.write_json(store.REPORTS_EVENTS_FILE, {
+        **buffer,
+        "events": [{"at": "2026-08-21T06:30:00+00:00", "type": "vesta_roi_event",
+                    "fired": "", "data": {}}],   # 01:30 local at UTC-5
+    })
+    assert len(collect.events_since("2026-08-21T00:00:00-05:00")) == 1
+
+
+def test_coverage_compares_in_utc_as_well() -> None:
+    """Same two kinds of string, same defect — it would have claimed full
+    coverage of a period the collector missed the start of."""
+    buffer = collect.read_buffer()
+    store.write_json(store.REPORTS_EVENTS_FILE, {
+        **buffer, "online_since": "2026-08-20T17:00:00+00:00"})
+    # 01:00 local on the 21st — AFTER local midnight, so coverage is INCOMPLETE.
+    assert collect.coverage("2026-08-21T00:00:00+08:00")["complete"] is False
+    # 09:00 local on the 21st — the collector was already up. Complete.
+    assert collect.coverage("2026-08-21T09:00:00+08:00")["complete"] is True

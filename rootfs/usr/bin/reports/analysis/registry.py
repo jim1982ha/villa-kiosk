@@ -166,8 +166,13 @@ def describe_skips(skipped: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:
     for item in skipped:
         reason = readable.get(item.get("reason", ""), item.get("reason", ""))
         detail = item.get("detail", "")
+        # ⚠️ THE DETAIL WINS WHERE THERE IS ONE. Printing both gave
+        # "not possible on this property — covered by this property's own
+        # automation layer, which sees occupancy and cost context these checks
+        # cannot": the generic reason restated by the specific one, with "this
+        # property" twice in a line the owner reads three times over.
         out.append({"module": item.get("module", "a check"),
-                    "reason": f"{reason} — {detail}" if detail else reason})
+                    "reason": detail or reason})
     return out
 
 

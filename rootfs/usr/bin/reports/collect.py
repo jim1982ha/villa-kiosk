@@ -193,15 +193,52 @@ def read_buffer() -> Dict[str, Any]:
     }
 
 
+def _as_utc_iso(value: str) -> str:
+    """Any ISO-8601 instant, re-expressed in UTC.
+
+    ⚠️ THE ONE LINE THAT MAKES STRING COMPARISON LEGAL. Ordering ISO strings
+    lexicographically is only chronological when both sides carry the SAME
+    offset, and `_now()` stamps every stored event in UTC while a caller
+    naturally builds a window from the villa's LOCAL wall clock.
+
+    A naive value is read as UTC rather than rejected: a report must not fail
+    to be delivered over a timestamp, and every producer in this package is
+    tz-aware, so a naive one can only arrive from stored config an operator
+    typed.
+    """
+    try:
+        moment = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
 def events_since(since_iso: str) -> List[Dict[str, Any]]:
     """Buffered events at or after `since_iso`, oldest first.
 
-    String comparison on ISO-8601 UTC timestamps is a correct chronological
-    ordering, which is why they are stored that way rather than as epochs.
+    ⚠️ `since_iso` IS NORMALISED TO UTC FIRST, AND SKIPPING THAT COST A RELEASE.
+    Events are stored with a UTC `at`; `schedule.period_start` builds the
+    window from the villa's LOCAL midnight, correctly and deliberately. Compared
+    as raw strings the two disagree: on a UTC+8 property
+    `"2026-08-20T17:18:59+00:00" >= "2026-08-21T00:00:00+08:00"` is False,
+    because the date digits differ, while the instant it names is an hour and a
+    quarter INSIDE the window.
+
+    Measured on the reference deployment: a daily report showed
+    `buffered: 8, events_seen: 0` and told the owner five categories of
+    automation alert had found nothing — a sentence that was true of what the
+    aggregation received and false about the villa. Every event fired between
+    local midnight and 08:00 was silently outside its own day.
+
+    The parse happens ONCE per call, not once per event, so the fast path this
+    docstring used to defend is intact.
     """
+    cutoff = _as_utc_iso(since_iso)
     buffer = read_buffer()
     return [e for e in buffer["events"]
-            if isinstance(e, dict) and str(e.get("at", "")) >= since_iso]
+            if isinstance(e, dict) and str(e.get("at", "")) >= cutoff]
 
 
 def coverage(since_iso: str) -> Dict[str, Any]:
@@ -212,7 +249,11 @@ def coverage(since_iso: str) -> Dict[str, Any]:
     """
     buffer = read_buffer()
     online_since = str(buffer.get("online_since") or "")
-    complete = bool(online_since) and online_since <= since_iso
+    # ⚠️ SAME NORMALISATION AS `events_since`, for the same reason — this
+    # compares a UTC `online_since` against a caller's local window and would
+    # otherwise claim full coverage of a period the collector missed the start
+    # of, or deny coverage it had.
+    complete = bool(online_since) and online_since <= _as_utc_iso(since_iso)
     return {
         "complete": complete,
         "online_since": online_since,
