@@ -4,7 +4,10 @@ name: Build & publish add-on images
 # on-device build). Runs on pushes that touch the app/add-on, and on demand.
 on:
   push:
-    branches: [main]
+    # dev builds too, or the branch carrying every new feature produces no
+    # installable image and the owner cannot test it — the add-on installs by
+    # image pull, there is no on-device build. `:latest` stays main-only below.
+    branches: [main, dev]
     paths:
       - "src/**"
       - "public/**"
@@ -44,7 +47,24 @@ jobs:
           version=$(grep -E '^version:' villa-kiosk/config.yaml | head -1 | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')
           echo "version=$version" >> "$GITHUB_OUTPUT"
           owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "image=ghcr.io/${owner}/villa-kiosk-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
+          image="ghcr.io/${owner}/villa-kiosk-${{ matrix.arch }}"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          # ⚠️ `:latest` is pushed ONLY from main, because main is the known-good
+          # release line and `:latest` is what a human reads as "the current
+          # build". A dev push that moved it would quietly retitle unreleased
+          # work as the release. The VERSION tag is always pushed, which is what
+          # Supervisor actually pulls (it resolves image:<config.yaml version>),
+          # so a dev build is installable without touching the released tag —
+          # provided dev has bumped the version, which every commit here does.
+          tags="${image}:${version}"
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            tags="${tags}"$'\n'"${image}:latest"
+          fi
+          {
+            echo "tags<<TAGS_EOF"
+            echo "$tags"
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       # QEMU lets the arm64 runtime stage build on this amd64 runner. The heavy
       # npm/Babylon build stage is pinned to BUILDPLATFORM in the Dockerfile, so
@@ -75,9 +95,7 @@ jobs:
           # byte-for-byte reproducible builds.
           build-args: |
             BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base:latest
-          tags: |
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
-            ${{ steps.meta.outputs.image }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             io.hass.version=${{ steps.meta.outputs.version }}

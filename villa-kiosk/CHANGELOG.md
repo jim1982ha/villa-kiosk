@@ -1,3 +1,12 @@
+## 2.497.0
+
+### Changed — development builds now produce an installable image of their own
+
+Add-on images were only ever built from the release branch, so work on the new
+development branch would have produced nothing to install and no way to test it.
+Both branches build now. The "latest" image still comes only from the release
+branch, so a development build can never present itself as the current release.
+
 ## 2.496.0
 
 ### Fixed — you could walk through the glass balcony railing and fall a storey
