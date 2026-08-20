@@ -193,7 +193,7 @@ def read_buffer() -> Dict[str, Any]:
     }
 
 
-def _as_utc_iso(value: str) -> str:
+def as_utc_iso(value: str) -> str:
     """Any ISO-8601 instant, re-expressed in UTC.
 
     ⚠️ THE ONE LINE THAT MAKES STRING COMPARISON LEGAL. Ordering ISO strings
@@ -205,6 +205,13 @@ def _as_utc_iso(value: str) -> str:
     to be delivered over a timestamp, and every producer in this package is
     tz-aware, so a naive one can only arrive from stored config an operator
     typed.
+
+    ⚠️ PUBLIC BECAUSE IT HAS A SECOND CALLER, AND FINDING THAT CALLER FOUND A
+    BUG. `pipeline` splits events into before/inside the reporting window by
+    comparing `Item.when` against the window start, and `when` is a MIXED-OFFSET
+    field: a blueprint's own `now().isoformat()` where it supplied one, and the
+    collector's UTC stamp where it did not. Comparing those as raw strings is
+    2.528.0 exactly, one field along.
     """
     try:
         moment = datetime.fromisoformat(value)
@@ -235,7 +242,7 @@ def events_since(since_iso: str) -> List[Dict[str, Any]]:
     The parse happens ONCE per call, not once per event, so the fast path this
     docstring used to defend is intact.
     """
-    cutoff = _as_utc_iso(since_iso)
+    cutoff = as_utc_iso(since_iso)
     buffer = read_buffer()
     return [e for e in buffer["events"]
             if isinstance(e, dict) and str(e.get("at", "")) >= cutoff]
@@ -253,7 +260,7 @@ def coverage(since_iso: str) -> Dict[str, Any]:
     # compares a UTC `online_since` against a caller's local window and would
     # otherwise claim full coverage of a period the collector missed the start
     # of, or deny coverage it had.
-    complete = bool(online_since) and online_since <= _as_utc_iso(since_iso)
+    complete = bool(online_since) and online_since <= as_utc_iso(since_iso)
     return {
         "complete": complete,
         "online_since": online_since,

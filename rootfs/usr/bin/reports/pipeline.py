@@ -282,9 +282,21 @@ async def run_report(
         # ⚠️ AND THE COLLECTOR MUST HAVE BEEN UP FOR THE WHOLE WINDOW. "It has
         # not recurred" is a claim about the villa only if something was
         # listening; otherwise it is a claim about the listener. See verify.py.
+        # ⚠️ BOTH SIDES NORMALISED TO UTC, AND SKIPPING THAT IS 2.528.0 AGAIN.
+        # `Item.when` is a MIXED-OFFSET field — a blueprint's own local
+        # `now().isoformat()` where it supplied a timestamp, the collector's UTC
+        # stamp where it did not — and `since` is the villa's LOCAL midnight.
+        # Compared as raw strings, an event four hours into the window reads as
+        # prior, and `verify` would then claim a critical alert "has not
+        # recurred" in the very period it recurred in. The legacy events on the
+        # reference deployment take exactly the fallback path that triggers it.
+        cutoff = collect.as_utc_iso(since)
         everything = aggregate_mod.normalise_all(collect.events_since(""))
-        prior = [i for i in everything if i.when and i.when < since]
-        inside = [i for i in everything if not i.when or i.when >= since]
+        prior: List[Any] = []
+        inside: List[Any] = []
+        for item in everything:
+            moment = collect.as_utc_iso(item.when) if item.when else ""
+            (prior if moment and moment < cutoff else inside).append(item)
         coverage = collect.coverage(since)
         verified = verify_mod.verify(
             prior, inside, done, ledger.read(),

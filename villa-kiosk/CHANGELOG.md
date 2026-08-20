@@ -1,3 +1,13 @@
+## 2.536.0
+
+### Fixed — a follow-up could be claimed for something that happened this week
+
+Deciding whether an alert belongs to this period or an earlier one compared two
+timestamps that are not always in the same timezone, so an alert a few hours
+into the period could read as older than it was. That is how the report would
+have said a fault had not come back during the very week it did. Both sides are
+now converted before they are compared.
+
 ## 2.535.0
 
 ### Added — the report can now say a problem was dealt with

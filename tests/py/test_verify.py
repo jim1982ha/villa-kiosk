@@ -177,3 +177,31 @@ def test_a_verification_gets_its_own_heading() -> None:
     bullet = next(i for i, ln in enumerate(lines) if ln.startswith("- "))
     assert lines[bullet - 1] == "Followed up:", (
         "the verification bullet has no heading above it")
+
+
+def test_the_window_split_normalises_both_sides_to_utc() -> None:
+    """⚠️ 2.528.0 ONE FIELD ALONG, and this one can produce a FALSE
+    verification rather than a missing finding.
+
+    `Item.when` is mixed-offset — a blueprint's own local `now().isoformat()`
+    where it supplied a timestamp, the collector's UTC stamp where it did not
+    (which is what the legacy events on the reference deployment do). The window
+    start is the villa's LOCAL midnight. Compared as raw strings, an event four
+    hours INTO the window reads as prior, and `verify` would then say a critical
+    alert "has not recurred" in the very period it recurred in.
+    """
+    from reports.collect import as_utc_iso
+    since = "2026-08-17T00:00:00+08:00"          # local midnight, UTC+8
+    when = "2026-08-16T20:00:00+00:00"           # 04:00 local on the 17th
+
+    assert when < since, "the raw string comparison is what went wrong"
+    assert not (as_utc_iso(when) < as_utc_iso(since)), (
+        "normalised, this event is INSIDE the window and must not be treated "
+        "as a prior occurrence")
+
+
+def test_a_recurrence_inside_the_window_still_blocks_the_claim() -> None:
+    """The behavioural half of the above: the same rule seen on both sides."""
+    old = _item(when="2026-07-01T10:00:00+08:00")
+    new = _item(when="2026-08-20T10:00:00+08:00")
+    assert verify.verify([old], [new], _done(), _fm()) == []
