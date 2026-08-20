@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from aiohttp import ClientSession
 
 from . import discovery, schedule as schedule_mod, stats as stats_mod, store
-from .analysis import ModuleContext, describe_skips, run_all
+from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis import modules as _modules  # noqa: F401  (importing registers them)
 from .hass import HassClient, HassUnavailable
 from .deliver import deliver
@@ -35,6 +35,22 @@ from .hass import fetch_timezone
 from .log import log, swallow, warn
 from .narrate import DeterministicNarrator, ReportContext
 from .schedule import period_key
+
+
+def _rejected_candidates() -> List[Dict[str, Any]]:
+    """What each module measured and then declined to report.
+
+    ⚠️ A THRESHOLD THAT SUPPRESSES EVERYTHING AND A HEALTHY PROPERTY PRODUCE
+    THE SAME EMPTY REPORT. Tuning one without seeing the other is guesswork,
+    and this subsystem's whole risk is being either too loud or too quiet.
+    Diagnostic only: it is attached to a PREVIEW, never to a delivered report,
+    and never persisted to history.
+    """
+    out: List[Dict[str, Any]] = []
+    for module in registered():
+        for item in getattr(module, "rejected", []) or []:
+            out.append({"module": module.name, **item})
+    return out
 
 
 def _statistics_fetcher(session: ClientSession, now_local: datetime,
@@ -223,7 +239,8 @@ async def run_report(
     entry["_findings"] = findings
     entry["_preview"] = preview
     # ⚠️ The instrument for "found nothing" vs "saw nothing".
-    entry["_analysis"] = {"ran": ran, "skipped": skipped, "data": data_tally}
+    entry["_analysis"] = {"ran": ran, "skipped": skipped, "data": data_tally,
+                          "rejected": _rejected_candidates()}
     log(f"report {entry['id']}: {len(findings)} finding(s), "
         f"{sum(1 for d in deliveries if d.get('status') == 'sent')}/"
         f"{len(deliveries)} delivered")

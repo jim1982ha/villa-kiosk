@@ -58,6 +58,28 @@ DEFAULT_SIGMA = 3.0
 #: device's own MEDIAN consumption, so it is still not a wattage.
 MIN_FLOOR_OF_MEDIAN = 0.01
 
+#: Which hours represent the device WORKING. The 80th percentile of its hourly
+#: consumption — the level it reaches under load, as opposed to the 20th, which
+#: is where it rests.
+ACTIVE_PERCENTILE = 0.80
+
+#: ⚠️ THE MATERIALITY TEST, AND THE REASON IT EXISTS. A pure ratio is scale-free
+#: and therefore blind to whether a change MATTERS: on the reference deployment
+#: the first real finding was a house pump whose idle floor rose from 0.0009 to
+#: 0.009 kWh/h — a true, confident, well-measured 869%, and a rise of eight
+#: watts. Reporting that is precisely the alert fatigue this module is meant to
+#: avoid, and it appeared on the first working run.
+#:
+#: `MIN_FLOOR_OF_MEDIAN` was supposed to prevent it and structurally could not:
+#: it compares the idle floor against the median of OTHER IDLE FLOORS, so the
+#: ratio is always about 1 and the guard never fires. Wrong denominator.
+#:
+#: The right one is the device's own WORKING level. A rise worth a person's
+#: attention is a material fraction of what the equipment draws when it runs —
+#: which stays dimensionless, and so stays correct for a 3 kW heat pump and a
+#: 40 W router alike.
+MIN_RISE_OF_ACTIVE = 0.05
+
 
 def _day_key(start: Any, zone: Any) -> str:
     """The LOCAL calendar day a statistics row belongs to.
@@ -166,6 +188,9 @@ class StandbyCreep:
     audiences: Sequence[str] = ("owner", "facility")
     min_days: int = 14
 
+    #: Filled per run when diagnostics are wanted; read by the preview.
+    rejected: List[Dict[str, Any]]
+
     async def run(self, context: ModuleContext) -> List[Finding]:
         energy = context.inventory.get("energy") or {}
         candidates = energy.get("devices")
@@ -183,11 +208,13 @@ class StandbyCreep:
         series = await context.stats(ids, window)
 
         findings: List[Finding] = []
+        self.rejected = []
         for index, statistic_id in enumerate(ids):
             rows = series.get(statistic_id)
             if not isinstance(rows, list):
                 continue
-            finding = self._assess(statistic_id, index, rows, context)
+            finding = self._assess(statistic_id, index, rows, context,
+                                   self.rejected)
             if finding is not None:
                 findings.append(finding)
 
@@ -198,7 +225,8 @@ class StandbyCreep:
 
     def _assess(self, statistic_id: str, index: int,
                 rows: List[Dict[str, Any]],
-                context: ModuleContext) -> Optional[Finding]:
+                context: ModuleContext,
+                rejected: Optional[List[Dict[str, Any]]] = None) -> Optional[Finding]:
         zone = getattr(context.now_local, "tzinfo", None)
         floors = _daily_idle_floors(rows, zone)
         expected_days = RECENT_DAYS + BASELINE_DAYS
@@ -235,7 +263,27 @@ class StandbyCreep:
             settings, "sigma", None, DEFAULT_SIGMA)
 
         if rise < rise_threshold:
+            self._note(rejected, statistic_id, context, "below_rise_threshold",
+                       rise, recent_floor, baseline_floor, None)
             return None
+
+        # ⚠️ IS THE CHANGE MATERIAL? A ratio alone cannot say. Compare the
+        # ABSOLUTE rise against what this device draws when it is working — the
+        # denominator that makes "8 W on a pump that runs at 800 W" register as
+        # the noise it is, without any wattage appearing in the code.
+        all_hours = [float(r["change"]) for r in rows
+                     if isinstance(r.get("change"), (int, float))
+                     and not isinstance(r.get("change"), bool)
+                     and float(r["change"]) >= 0]
+        active_level = percentile(all_hours, ACTIVE_PERCENTILE)
+        materiality = resolve_threshold(
+            settings, "min_rise_of_active", None, MIN_RISE_OF_ACTIVE)
+        absolute_rise = recent_floor - baseline_floor
+        if active_level is not None and active_level > 0:
+            if absolute_rise < materiality * active_level:
+                self._note(rejected, statistic_id, context, "immaterial",
+                           rise, recent_floor, baseline_floor, active_level)
+                return None
 
         # ⚠️ MAD OF ZERO IS LEGITIMATE and must not become a divide-by-nothing.
         # A perfectly steady device has zero spread; the ratio test alone
@@ -245,6 +293,7 @@ class StandbyCreep:
                 return None
 
         completeness = min(1.0, len(floors) / float(expected_days))
+        _ = absolute_rise
         # Confidence follows completeness rather than being asserted: a
         # conclusion drawn from 14 of 28 days should not present itself with
         # the same authority as one drawn from all 28.
@@ -273,6 +322,31 @@ class StandbyCreep:
             completeness=round(completeness, 3),
             dedup_key=dedup_key(self.name, statistic_id),
         )
+
+    def _note(self, rejected: Optional[List[Dict[str, Any]]], statistic_id: str,
+              context: ModuleContext, reason: str, rise: float,
+              recent: float, baseline: float,
+              active: Optional[float]) -> None:
+        """Record a candidate that was measured and then rejected.
+
+        ⚠️ WITHOUT THIS, TUNING IS GUESSWORK. A threshold that suppresses
+        everything and a property with nothing wrong produce the same empty
+        report, and the only way to tell them apart is to see what was
+        considered and why it was dropped. Diagnostic only — it reaches the
+        preview, never the delivered report.
+        """
+        if rejected is None:
+            return
+        rejected.append({
+            "label": _label_for(statistic_id, context.labels),
+            "reason": reason,
+            "rise": round(rise, 4),
+            "observed": round(recent, 6),
+            "baseline": round(baseline, 6),
+            "active_level": round(active, 6) if active is not None else None,
+            "rise_of_active": (round((recent - baseline) / active, 4)
+                               if active else None),
+        })
 
 
 register(StandbyCreep())

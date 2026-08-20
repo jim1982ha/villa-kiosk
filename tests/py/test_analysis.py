@@ -166,11 +166,21 @@ def test_a_rise_below_the_threshold_is_not_reported() -> None:
 
 def test_an_operator_threshold_overrides_the_default() -> None:
     """⚠️ The precedence rule, end to end: an operator who wants to hear about
-    smaller changes on their property gets to say so."""
-    gentle = [0.10] * 21 + [0.115] * 7
-    assert _run(gentle) == []
-    loud = _run(gentle, settings={"rise_fraction": 0.10})
-    assert len(loud) == 1
+    smaller changes on their property gets to say so.
+
+    The change here is deliberately MATERIAL (a fifth of the device's working
+    level) and merely below the default RATIO. An earlier version of this test
+    used a change that was both small and immaterial, so once materiality was
+    added it tested two things at once and failed for the right reason — a
+    fixture that cannot isolate the thing under test is not a test of it.
+    """
+    def run(**kw: Any) -> List[Finding]:
+        series = {"sensor.p_energy": _pump_series(0.30, 0.36, 0.5)}
+        return asyncio.run(StandbyCreep().run(
+            _context(["sensor.p_energy"], series, **kw)))
+
+    assert run() == [], "a 20% rise is below the 40% default"
+    assert len(run(settings={"rise_fraction": 0.10})) == 1
 
 
 def test_severity_escalates_with_the_size_of_the_change() -> None:
@@ -515,3 +525,65 @@ def test_the_original_expression_would_still_fail_this() -> None:
     assert len(naive_buckets) == 24, (
         "the original slice must still be shown to be wrong; if this ever "
         "collapses to 1, the fixture no longer reproduces the failure")
+
+
+# ── materiality ──────────────────────────────────────────────────────────────
+# ⚠️ THE FIRST REAL FINDING ON THE REFERENCE DEPLOYMENT WAS A FALSE ALARM, and
+# a well-measured one: a house pump whose idle floor rose 0.0009 -> 0.009 kWh/h.
+# A true, confident 869% — and a rise of EIGHT WATTS, on a pump that draws
+# hundreds when it runs. A ratio is scale-free and therefore blind to whether a
+# change matters.
+
+def _pump_series(baseline: float, recent: float, active: float) -> List[Dict[str, Any]]:
+    """A device that idles low and works hard — the shape that broke it."""
+    rows: List[Dict[str, Any]] = []
+    for index, idle in enumerate([baseline] * 21 + [recent] * 7):
+        rows += _hours(f"2026-07-{index + 1:02d}", idle, active)
+    return rows
+
+
+def test_a_huge_ratio_on_a_trivial_absolute_change_is_not_reported() -> None:
+    """The regression, at the exact numbers observed in the field."""
+    series = {"sensor.p_energy": _pump_series(0.0009, 0.009, 0.5)}
+    findings = asyncio.run(StandbyCreep().run(_context(["sensor.p_energy"], series)))
+    assert findings == [], "eight watts on a pump that draws 500 must not alarm"
+
+
+def test_the_same_ratio_IS_reported_when_it_is_material() -> None:
+    """⚠️ The other half. Suppressing the case above must not suppress a real
+    one — the discriminator is the size of the change against the device's own
+    working level, not the ratio, and not the absolute number."""
+    series = {"sensor.p_energy": _pump_series(0.05, 0.50, 0.6)}
+    findings = asyncio.run(StandbyCreep().run(_context(["sensor.p_energy"], series)))
+    assert len(findings) == 1
+
+
+def test_materiality_scales_with_the_device() -> None:
+    """A 40 W router and a 3 kW pump must be judged identically — the same
+    proportions produce the same verdict at any scale."""
+    small = {"sensor.a_energy": _pump_series(0.005, 0.05, 0.06)}
+    large = {"sensor.b_energy": _pump_series(5.0, 50.0, 60.0)}
+    a = asyncio.run(StandbyCreep().run(_context(["sensor.a_energy"], small)))
+    b = asyncio.run(StandbyCreep().run(_context(["sensor.b_energy"], large)))
+    assert len(a) == len(b) == 1
+
+
+def test_an_operator_can_relax_materiality() -> None:
+    series = {"sensor.p_energy": _pump_series(0.0009, 0.009, 0.5)}
+    loud = asyncio.run(StandbyCreep().run(_context(
+        ["sensor.p_energy"], series,
+        settings={"min_rise_of_active": 0.0001})))
+    assert len(loud) == 1, "the threshold must be reachable by an operator"
+
+
+def test_a_rejected_candidate_is_recorded_with_its_numbers() -> None:
+    """⚠️ A threshold that suppresses everything and a healthy property produce
+    the same empty report. Tuning one without seeing the other is guesswork."""
+    module = StandbyCreep()
+    series = {"sensor.p_energy": _pump_series(0.0009, 0.009, 0.5)}
+    asyncio.run(module.run(_context(["sensor.p_energy"], series)))
+    assert module.rejected
+    entry = module.rejected[0]
+    assert entry["reason"] == "immaterial"
+    assert entry["active_level"] and entry["rise_of_active"] is not None
+    assert entry["rise"] > 8.0, "the huge ratio must still be visible"
