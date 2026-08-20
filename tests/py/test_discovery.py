@@ -26,6 +26,7 @@ from reports.discovery import (
     _grid_sources,
     _has_tariff,
 )
+from reports.discovery import missing_statistic_preflight
 from reports.hass import statistic_ids_of
 
 
@@ -140,3 +141,63 @@ def test_metered_without_a_tariff_is_the_case_that_must_be_reported() -> None:
     assert statistic_ids_of(grid, "stat_energy_from"), "grid should be detected"
     assert not _has_tariff(grid), "cost should not be detected"
     assert CAP_ENERGY_GRID in ALL_CAPABILITIES and CAP_ENERGY_COST in ALL_CAPABILITIES
+
+
+# ── missing-statistic preflight ──────────────────────────────────────────────
+# Extracted from discover() specifically so it can be tested without a live
+# Home Assistant: the logic deciding how LOUD a finding is should not need a
+# villa to exercise.
+
+def test_no_finding_when_every_statistic_has_history() -> None:
+    out = missing_statistic_preflight(
+        [("grid", ["sensor.a"]), ("device", ["sensor.b"])], {"sensor.a", "sensor.b"})
+    assert out == []
+
+
+def test_all_missing_is_one_critical_not_many_warnings() -> None:
+    """⚠️ The Phase 1 QA finding, reproduced at its real size.
+
+    22 referenced statistics, none with history. That is ONE fault — a config
+    left behind by a rename — not twenty-two meters going quiet, and reporting
+    it as 22 warnings sends the reader to check 22 meters.
+    """
+    ids = [f"sensor.s{n}" for n in range(22)]
+    out = missing_statistic_preflight([("device", ids)], set())
+    assert len(out) == 1
+    assert out[0]["code"] == "energy_config_stale"
+    assert out[0]["severity"] == "critical"
+    assert "22" in out[0]["detail"]
+
+
+def test_some_missing_is_listed_individually() -> None:
+    """A partially broken config really is several independent faults."""
+    out = missing_statistic_preflight(
+        [("device", ["sensor.a", "sensor.b", "sensor.c"])], {"sensor.a"})
+    assert [o["code"] for o in out] == ["statistic_missing"] * 2
+    assert all(o["severity"] == "warning" for o in out)
+    assert any("sensor.b" in o["detail"] for o in out)
+
+
+def test_a_long_partial_list_is_bounded() -> None:
+    """A reader who needs more than ten names needs the dashboard, not a
+    longer log line — but the remainder must still be COUNTED, never dropped."""
+    ids = [f"sensor.s{n}" for n in range(40)]
+    out = missing_statistic_preflight([("device", ids + ["sensor.ok"])], {"sensor.ok"})
+    named = [o for o in out if o["code"] == "statistic_missing"]
+    summary = [o for o in out if o["code"] == "statistic_missing_more"]
+    assert len(named) == 10
+    assert len(summary) == 1
+    assert "30 further" in summary[0]["detail"]
+
+
+def test_one_healthy_statistic_prevents_the_wholesale_claim() -> None:
+    """The threshold is ALL, not a count — because that is what makes the
+    'your configuration is stale' claim true rather than merely loud."""
+    ids = [f"sensor.s{n}" for n in range(30)]
+    out = missing_statistic_preflight([("device", ids)], {"sensor.s0"})
+    assert all(o["code"] != "energy_config_stale" for o in out)
+
+
+def test_an_empty_dashboard_produces_no_finding() -> None:
+    """Nothing referenced is not the same as everything broken."""
+    assert missing_statistic_preflight([("device", [])], set()) == []

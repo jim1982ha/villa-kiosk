@@ -28,7 +28,7 @@ and silently mis-describe every other install.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from aiohttp import ClientSession
 
@@ -47,6 +47,9 @@ CAP_ENERGY_WATER = "energy_water"
 CAP_LEDGER = "ledger"
 CAP_NOTIFY = "notify"
 CAP_AREAS = "areas"
+
+# How many absent statistics are named individually before the rest are summed.
+MAX_LISTED_STATISTICS = 10
 
 ALL_CAPABILITIES = (
     CAP_STATISTICS, CAP_ENERGY_GRID, CAP_ENERGY_DEVICES, CAP_ENERGY_COST,
@@ -114,6 +117,61 @@ def _has_tariff(grid: Sequence[Dict[str, Any]]) -> bool:
 def _device_stats(prefs: Dict[str, Any]) -> List[Dict[str, Any]]:
     devices = prefs.get("device_consumption")
     return [d for d in devices if isinstance(d, dict)] if isinstance(devices, list) else []
+
+
+def missing_statistic_preflight(
+    groups: Sequence[Tuple[str, Sequence[str]]],
+    known_ids: Set[str],
+) -> List[Dict[str, str]]:
+    """Preflight entries for Energy dashboard statistics with no history.
+
+    ⚠️ ALL MISSING IS A DIFFERENT FINDING FROM SOME MISSING, and emitting the
+    first as N warnings buries that. Found in Phase 1 QA against a real
+    deployment: every one of 22 referenced statistics was absent, which is not
+    twenty-two meters going quiet — it is ONE fault, a configuration left behind
+    when the sensors were renamed. Twenty-two warnings invite the reader to
+    check twenty-two meters; one critical tells them where to actually look.
+
+    The threshold is "all of them", not a count, because that is what makes the
+    claim true: a partially broken config really is several independent faults
+    and deserves to be listed one by one.
+
+    Pure, and separate from `discover()`, so it can be tested without a live
+    Home Assistant — the logic that decides how loud a finding is should not
+    need a villa to exercise.
+    """
+    referenced = [(label, sid) for label, ids in groups for sid in sorted(set(ids))]
+    gone = [(label, sid) for label, sid in referenced if sid not in known_ids]
+    if not gone:
+        return []
+
+    if len(gone) == len(referenced):
+        return [{
+            "severity": "critical",
+            "code": "energy_config_stale",
+            "detail": f"The Energy dashboard references {len(referenced)} "
+                      f"statistics and NONE of them have recorded history. Its "
+                      f"configuration is stale — this is what happens when the "
+                      f"sensors are renamed and the dashboard is not updated to "
+                      f"follow.",
+        }]
+
+    # Listed individually, but bounded: a reader who needs more than ten names
+    # needs the dashboard, not a longer log line.
+    out: List[Dict[str, str]] = [{
+        "severity": "warning",
+        "code": "statistic_missing",
+        "detail": f"The Energy dashboard's {label} statistic '{sid}' has no "
+                  f"recorded history.",
+    } for label, sid in gone[:MAX_LISTED_STATISTICS]]
+    if len(gone) > MAX_LISTED_STATISTICS:
+        out.append({
+            "severity": "warning",
+            "code": "statistic_missing_more",
+            "detail": f"{len(gone) - MAX_LISTED_STATISTICS} further referenced "
+                      f"statistics also have no recorded history.",
+        })
+    return out
 
 
 async def _notify_targets(hass: HassClient) -> List[Dict[str, Any]]:
@@ -241,20 +299,17 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
             # something asks for the numbers. Naming it here is the difference
             # between a report with a silently empty energy section and one that
             # says which meter stopped.
-            for label, ids in (("grid", grid_ids), ("device", device_ids),
-                               ("water", water_ids)):
-                for missing in sorted(set(ids) - known_ids):
-                    preflight.append({
-                        "severity": "warning",
-                        "code": "statistic_missing",
-                        "detail": f"The Energy dashboard's {label} statistic "
-                                  f"'{missing}' has no recorded history.",
-                    })
+            preflight.extend(missing_statistic_preflight(
+                [("grid", grid_ids), ("device", device_ids), ("water", water_ids)],
+                known_ids))
 
             # ⚠️ DOUBLE COUNTING. `included_in_stat` says "this device's usage
-            # is already part of that parent meter". Summing every device
-            # therefore counts the child twice unless the hierarchy is honoured.
-            # Recorded in the inventory so no module has to rediscover it.
+            # is already part of that parent meter", so summing every device
+            # counts the child twice unless the hierarchy is honoured. Recorded
+            # here so no analysis module has to rediscover it. Measured on a
+            # real deployment: 17 of 20 device meters rolled into one parent,
+            # leaving 3 independent — a naive total would have been inflated by
+            # a plausible-looking amount.
             rolled_up = {
                 str(d["stat_consumption"]): str(d["included_in_stat"])
                 for d in devices

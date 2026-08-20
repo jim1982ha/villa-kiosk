@@ -1,3 +1,14 @@
+## 2.504.0
+
+### Changed — findings from Phase 1 QA on real hardware
+
+An Energy dashboard whose statistics have ALL gone missing now reports one
+critical "your configuration is stale" instead of one warning per meter — the
+reference deployment produced 22 warnings for what was a single fault. The CSP
+no longer whitelists Google Fonts, which this app stopped using long ago while
+self-hosting its own, and the Ingress owner-shortcut finally has a regression
+test.
+
 ## 2.503.0
 
 ### Added — Reports Phase 1: the add-on can now say what it is able to analyse
