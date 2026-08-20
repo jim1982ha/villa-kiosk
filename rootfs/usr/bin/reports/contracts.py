@@ -1,0 +1,136 @@
+"""The vocabulary shared by the reports backend and the SPA.
+
+⚠️ THIS FILE HAS A TWIN: `src/reports/reportsTypes.ts`. Every tuple below is a
+union type there, and `tests/py/test_contract_parity.py` FAILS THE BUILD if the
+two disagree — in either direction, including a value added to only one side.
+
+That test is the whole reason this file is a flat list of string tuples rather
+than `enum.Enum`. An Enum is nicer Python and cannot be compared to a
+TypeScript union without reimplementing half of it; the parity check is worth
+more than the ergonomics, because the failure it prevents is silent. A backend
+that emits `"critical"` against a frontend whose union stops at `"warning"`
+does not crash — it renders an unstyled severity, or drops the finding, on a
+tablet nobody is looking at.
+
+⚠️ VALUES ARE PART OF THE STORED DOCUMENT. `reports-history.json` persists
+these strings, so RENAMING one is a data migration, not a refactor: old entries
+keep the old spelling forever. Add new values; do not repurpose existing ones.
+
+CONTRACT_VERSION exists so a future migration can tell which spelling a stored
+document uses. Bump it when a value's MEANING changes, never for an addition.
+
+Imports nothing, by design — see the layering note in `__init__.py`.
+"""
+
+from __future__ import annotations
+
+from typing import Dict, Final, Tuple
+
+CONTRACT_VERSION: Final[int] = 1
+
+# How loud a finding is. Ordered least to most urgent; the order is meaningful
+# (report sections sort by it) so INSERT IN PLACE rather than appending.
+#
+# There is deliberately no "debug" level. Everything here is written to be read
+# by the villa's owner, not by whoever wrote the module.
+SEVERITY: Final[Tuple[str, ...]] = ("info", "notice", "warning", "critical")
+
+# Who a report is written for. These are AUDIENCES, not roles: they choose
+# which modules run and how the prose is pitched, and they intentionally do not
+# map one-to-one onto `auth/permissions.ts` profiles — the owner may perfectly
+# well read the facility brief.
+AUDIENCE: Final[Tuple[str, ...]] = ("owner", "facility")
+
+# What KIND of claim a finding makes. This is the distinction that keeps the
+# report honest, and DATA_QUALITY is the one that earns its place: a sensor
+# that stopped reporting is a measurement fault, not an equipment fault, and
+# reporting "the freezer is warming" when the truth is "the freezer's
+# thermometer went offline" is the fastest way to lose a reader's trust.
+FINDING_KIND: Final[Tuple[str, ...]] = (
+    "OBSERVATION",     # a fact worth stating; no judgement attached
+    "ANOMALY",         # a departure from this equipment's own baseline
+    "DATA_QUALITY",    # the instrument, not the thing being measured
+    "FORECAST",        # a projection, always with its horizon stated
+    "VERIFICATION",    # a previous finding confirmed resolved (Phase 7)
+)
+
+# How often a schedule fires. Not a cron expression: an operator configuring a
+# villa dashboard from an iPad should never meet one, and the catch-up window
+# in Phase 2 is far easier to reason about over a closed set.
+CADENCE: Final[Tuple[str, ...]] = ("daily", "weekly", "monthly")
+
+# The outcome of ONE delivery to ONE target. Per-target by design — a report
+# that reached the owner's phone and failed to reach the facility manager's
+# email is not "failed", and collapsing that to a single status is how you get
+# a resend that spams the person who already read it.
+DELIVERY_STATUS: Final[Tuple[str, ...]] = (
+    "pending",         # queued, not yet attempted
+    "sent",            # the service call returned success
+    "failed",          # attempted, refused; `detail` says why
+    "skipped",         # deliberately not attempted (target disabled/absent)
+)
+
+# Where a report's prose came from. Recorded on every history entry because a
+# reader deserves to know, and because "the summaries changed tone last
+# Tuesday" is otherwise an unanswerable question.
+NARRATION_MODE: Final[Tuple[str, ...]] = (
+    "deterministic",   # the built-in renderer. ALWAYS available, offline
+    "provider",        # an LLM wrote it (Phase 6)
+)
+
+# Why a module did not run. A module is NEVER silently absent — the report says
+# which analyses it could not perform and why, so a thin deployment produces a
+# short honest report rather than one that looks complete.
+SKIP_REASON: Final[Tuple[str, ...]] = (
+    "missing_capability",   # the deployment has no such data source
+    "disabled",             # switched off by the operator
+    "insufficient_history", # not enough days yet to have a baseline
+    "audience_mismatch",    # not part of this audience's brief
+    "timed_out",            # exceeded its budget this run
+    "errored",              # raised; three in a row auto-disables it
+)
+
+# ⚠️ THE PRIVACY BOUNDARY (Phase 6). The allow-list of field names that may
+# leave the villa in an LLM narration payload. ALLOW-LIST BY CONSTRUCTION: the
+# payload builder copies these keys and drops everything else, so a new field
+# added to a Finding is excluded until someone deliberately adds it here, and
+# the reviewer of that line is looking directly at a privacy decision.
+#
+# A deny-list would be the bug: it fails OPEN on every field nobody thought of.
+#
+# NEVER admissible, whatever a future module wants: photographs or any image,
+# credentials, occupant location or presence history, raw event logs, entity
+# IDs, and ledger free text beyond a summary count. Entity IDs are excluded
+# because they routinely carry room and person names
+# (`sensor.emmas_bedroom_window`) — the label is what the reader needs, and an
+# opaque ref is what the model needs to talk about it.
+PAYLOAD_ALLOWED_FIELDS: Final[Tuple[str, ...]] = (
+    "ref",             # opaque per-report handle, e.g. "d3" — NOT an entity_id
+    "kind",            # FINDING_KIND
+    "severity",        # SEVERITY
+    "label",           # human name of the equipment, as the operator wrote it
+    "area",            # room/area name
+    "metric",          # what was measured, e.g. "power"
+    "unit",
+    "observed",        # the number
+    "baseline",        # what it is being compared against
+    "delta",
+    "window_days",
+    "confidence",      # 0..1
+    "completeness",    # 0..1 — how much of the window actually had data
+    "horizon_days",    # FORECAST only
+)
+
+# Every value set above, by name, so the parity test can iterate rather than
+# being edited whenever a set is added — a check that must be updated by hand
+# to cover new cases is a check that silently stops covering them.
+CONTRACT_SETS: Final[Dict[str, Tuple[str, ...]]] = {
+    "SEVERITY": SEVERITY,
+    "AUDIENCE": AUDIENCE,
+    "FINDING_KIND": FINDING_KIND,
+    "CADENCE": CADENCE,
+    "DELIVERY_STATUS": DELIVERY_STATUS,
+    "NARRATION_MODE": NARRATION_MODE,
+    "SKIP_REASON": SKIP_REASON,
+    "PAYLOAD_ALLOWED_FIELDS": PAYLOAD_ALLOWED_FIELDS,
+}

@@ -1,6 +1,17 @@
 .claude
 CLAUDE.md
-tests/
+# Local-only test scaffolding (badge_placement_test.ts, geometry_test.ts,
+# security_test.py) — deliberately not shipped.
+#
+# ⚠️ `tests/*` and NOT `tests/`. Git cannot re-include anything whose PARENT
+# directory is excluded, so `tests/` followed by `!tests/py/` silently keeps
+# ignoring the whole tree — the negation never gets a chance to match. Matching
+# the CHILDREN leaves the directory itself considered, so the negation works.
+tests/*
+# ...except the Python suite, which IS tracked: it holds the payload privacy
+# guarantee, and a guarantee that lives in an ignored directory is not one. CI
+# runs it (.github/workflows/ci.yaml).
+!tests/py/
 node_modules
 dist
 dist-ssr

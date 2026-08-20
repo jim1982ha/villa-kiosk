@@ -101,11 +101,30 @@ import json
 import os
 import re
 import secrets
+import sys
 import tempfile
 import time
 from datetime import datetime, timezone
 
 from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
+
+# ── The reports subsystem ────────────────────────────────────────────────────
+# `reports/` is a package sitting beside this file (Dockerfile: `COPY rootfs /`,
+# so both land in /usr/bin). Running as a script would put that directory on
+# sys.path for free — but this module is ALSO loaded by file path, via
+# importlib.spec_from_file_location, by tests/security_test.py, and there it
+# would not be. State the location rather than depend on how we were started.
+#
+# Appended rather than inserted at 0 on purpose: /usr/bin is a directory full of
+# other people's files, and putting it AHEAD of the standard library would let
+# any future `json.py` or `secrets.py` dropped in there shadow the real one for
+# this whole process. Nothing here needs to win a name race.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.append(_HERE)
+
+from reports import contracts as reports_contracts  # noqa: E402  (needs sys.path above)
+from reports import store as reports_store          # noqa: E402
 
 SUPERVISOR = "supervisor"
 TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
@@ -2016,6 +2035,80 @@ fm_data_get_handler, fm_data_put_handler = _json_store_handlers(
     write_guard=_fm_write_guard, after_write=_fm_after_write)
 
 
+# ── VESTA Reports ────────────────────────────────────────────────────────────
+# Scheduled analysis of the villa's own history, delivered without a browser
+# open. The logic lives in the `reports` package; what belongs HERE is only the
+# HTTP surface, and it is deliberately built from the same factory as every
+# other whole-document JSON store rather than hand-written — the docstring on
+# _json_store_handlers records what copying a handler cost last time.
+#
+# Owner-only writes, as with the device config: a schedule decides who gets
+# messaged and how often, which is not something a guest profile may set for
+# the household.
+def _reports_config_guard(request: web.Request, body, old, new):
+    """Reject a structurally invalid config before it is stored.
+
+    A convenience for the operator, NOT a security boundary — the factory's own
+    role gate is what stops a non-owner writing here (RBAC is server-side; see
+    CLAUDE.md). This exists so a malformed schedule fails at the moment it is
+    saved, with a message naming the field, instead of silently never firing
+    and being debugged weeks later from an add-on log.
+    """
+    problems = reports_store.validate_config(new)
+    if problems:
+        return web.json_response(
+            {"error": "invalid reports configuration", "problems": problems},
+            status=400)
+    return None
+
+
+reports_config_get_handler, reports_config_put_handler = _json_store_handlers(
+    reports_store.REPORTS_CONFIG_FILE, "config", reports_store.EMPTY_CONFIG,
+    reports_store.REPORTS_CONFIG_MAX_BYTES, "reports configuration",
+    write_guard=_reports_config_guard)
+
+# ⚠️ The history store's PUT handler is built and then DELIBERATELY NOT ROUTED.
+# History is written by the scheduler (Phase 2), server-side, and is read-only
+# to every client — an endpoint that let a browser rewrite the record of what
+# was delivered would make that record worthless as an audit of what was
+# delivered. It is discarded here rather than not built so that this decision
+# is visible at the code: the factory returns a pair, and a reader who sees only
+# a GET routed elsewhere would reasonably wonder whether the PUT was forgotten.
+reports_history_get_handler, _reports_history_put_unrouted = _json_store_handlers(
+    reports_store.REPORTS_HISTORY_FILE, "history", reports_store.EMPTY_HISTORY,
+    reports_store.REPORTS_HISTORY_MAX_BYTES, "reports history")
+
+
+async def reports_diagnostics_handler(request: web.Request) -> web.Response:
+    """What this deployment can and cannot analyse.
+
+    Owner-only: it enumerates the property's instrumentation, which is a fair
+    description of what the villa does and does not watch.
+
+    A STUB in Phase 0, and it says so in its own payload rather than returning
+    plausible-looking zeroes. An empty capability list is a real answer meaning
+    "nothing is instrumented"; `"ready": false` is what separates that from
+    "not implemented yet", and conflating the two is how a counter comes to
+    read 0 for exactly the case it exists to measure.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may read reports diagnostics.")
+    stored = _read_json_store(reports_store.REPORTS_CONFIG_FILE,
+                              reports_store.EMPTY_CONFIG)
+    return web.json_response({
+        "ready": False,
+        "phase": "0",
+        "contract_version": reports_contracts.CONTRACT_VERSION,
+        "enabled": bool(reports_store.config_view(stored).get("enabled")),
+        "capabilities": [],
+        "capabilities_missing": [],
+        "modules": [],
+        "preflight": [],
+    }, headers={"Cache-Control": "no-store"})
+
+
 def main() -> None:
     app = web.Application()
 
@@ -2039,6 +2132,10 @@ def main() -> None:
     app.router.add_get("/fm-evidence/{id}", fm_evidence_get_handler)
     app.router.add_post("/telemetry", telemetry_post_handler)
     app.router.add_get("/telemetry", telemetry_get_handler)
+    app.router.add_get("/reports-config", reports_config_get_handler)
+    app.router.add_put("/reports-config", reports_config_put_handler)
+    app.router.add_get("/reports-history", reports_history_get_handler)
+    app.router.add_get("/reports-diagnostics", reports_diagnostics_handler)
     app.router.add_put("/device-config", device_config_put_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
     app.router.add_get("/auth/session", auth_session_handler)

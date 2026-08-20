@@ -1,0 +1,95 @@
+name: CI
+
+# The first automated gate this repository has had beyond `tsc -b`'s strict
+# settings. It exists because the reports subsystem roughly doubles the
+# backend's surface and adds a privacy claim — "these fields, and only these,
+# may leave the villa" — that no type checker can enforce and no reviewer can
+# reliably re-derive from a diff.
+#
+# ⚠️ NOT a build. `build.yaml` publishes images; this only ever says yes or no.
+# Keeping them separate means a red gate never blocks the owner from installing
+# a dev build to look at something on the tablet.
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: reports backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the checkers
+        # aiohttp is the add-on's ONE runtime dependency and is needed to load
+        # the proxy at all, which the endpoint tests do so the RBAC boundary is
+        # exercised through the real handler chain. pytest and mypy are
+        # test-time only and are never shipped.
+        #
+        # The runtime dependency list stays at stdlib + aiohttp: a new one needs
+        # an arm64/musl check, which is why Pydantic was withdrawn from the plan.
+        run: pip install --quiet pytest mypy aiohttp
+
+      - name: Tests
+        run: python -m pytest tests/py -q
+
+      - name: Types
+        # --strict on the reports package only. The proxy itself predates this
+        # gate by a long way and is not annotated; retrofitting it is a
+        # separate piece of work, and holding NEW code to the higher standard
+        # from its first line is what stops that gap widening.
+        run: mypy --strict rootfs/usr/bin/reports
+
+      - name: The proxy still parses
+        # Cheap, and it catches the one class of breakage that would take the
+        # kiosk's own auth path down rather than just the reports feature.
+        run: python -c "import ast; ast.parse(open('rootfs/usr/bin/supervisor-proxy.py').read())"
+
+  offline:
+    name: no internet dependency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No provider hostname reachable from the SPA bundle
+        # CLAUDE.md hard rule #2: the target is an iPad in a villa that may have
+        # no internet at all. LLM narration is an optional enhancement and ALL
+        # of its traffic originates in the proxy — so a provider hostname
+        # appearing under src/ means the browser would try to reach it, which on
+        # the wall is a feature that is simply missing.
+        #
+        # Greps for the shape (a provider-ish api host), not a fixed list, so a
+        # new provider added in Phase 6 cannot slip past a list nobody updated.
+        run: |
+          set -euo pipefail
+          hits=$(grep -rnoE "https?://[a-zA-Z0-9.-]*(openai|anthropic|googleapis|azure|cohere|mistral|groq|openrouter)[a-zA-Z0-9.-]*" src/ || true)
+          if [ -n "$hits" ]; then
+            echo "::error::provider hostname reachable from the SPA bundle:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "clear — no provider hostname under src/"
+
+      - name: No third-party host under src/ at all
+        # The broader form of the same rule, and the one that has actually been
+        # audited by hand until now. Allows the localhost/loopback forms and the
+        # w3.org XML namespace URIs that are identifiers rather than fetches.
+        run: |
+          set -euo pipefail
+          hits=$(grep -rnoE "https?://[a-zA-Z0-9.-]+" src/ \
+                 | grep -viE "localhost|127\.0\.0\.1|w3\.org" || true)
+          if [ -n "$hits" ]; then
+            echo "::error::third-party host referenced under src/:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "clear — no third-party host under src/"
