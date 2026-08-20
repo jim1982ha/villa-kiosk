@@ -74,9 +74,28 @@ def _categories_from_blueprints(listing: Any) -> List[str]:
     a rule was built from is the same file everywhere it is installed, and the
     category is the part of its name before the first underscore.
 
-    Filtered to VESTA-authored blueprints so a property's unrelated blueprints
-    (`control_*`, community imports) do not produce subscriptions to events
-    nothing will ever fire.
+    ⚠️ THE FILTER IS DELIBERATELY LOOSE, AND THE FIRST VERSION HAD THE
+    TRADE-OFF BACKWARDS. It accepted only blueprints whose metadata said
+    `author: VESTA`, which on the reference villa silently dropped ALL SEVEN
+    `critical_*` blueprints — the P1/P2 tier, carrying leaks, an unlocked door
+    and the presence guard. They are the ones the catalog records as "already
+    exist, rename + minor inputs": pre-existing files folded into the naming
+    scheme, which never acquired the author field. The log line read three
+    categories instead of four and nothing else complained.
+
+    The two failure modes are not symmetric:
+
+      a subscription that never fires   costs nothing — Home Assistant simply
+                                        never sends a frame
+      a subscription that is MISSING    loses every finding in that category,
+                                        forever, with no error anywhere
+
+    So local blueprints are included by their file name alone. Third-party ones
+    live in a namespace directory (`homeassistant/`, `sbyx/`, `_archive/`) and
+    are excluded by that, which is a structural signal rather than a metadata
+    field an author may or may not have filled in. `seen_types` then records
+    which subscriptions actually produce anything, so a dead one is visible
+    rather than assumed.
     """
     entries: List[Any] = []
     if isinstance(listing, dict):
@@ -95,8 +114,14 @@ def _categories_from_blueprints(listing: Any) -> List[str]:
         source = metadata if isinstance(metadata, dict) else (meta if isinstance(meta, dict) else {})
         author = str(source.get("author") or "")
         name = str(source.get("name") or "")
-        if author.upper() != "VESTA" and not name.upper().startswith("VESTA"):
+        vesta_authored = author.upper() == "VESTA" or name.upper().startswith("VESTA")
+
+        # A namespaced path is somebody else's blueprint — unless it declares
+        # itself VESTA, in which case a property is free to file them in a
+        # folder of their own.
+        if "/" in path and not vesta_authored:
             continue
+
         leaf = path.rsplit("/", 1)[-1]
         stem = leaf.rsplit(".", 1)[0]
         if "_" in stem:

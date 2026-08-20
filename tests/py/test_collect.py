@@ -255,16 +255,46 @@ def test_a_different_villas_blueprint_set_yields_its_own_events() -> None:
     assert events == ["vesta_comfort_event", "vesta_security_event"]
 
 
-def test_non_vesta_blueprints_are_ignored() -> None:
-    """Subscribing to `vesta_control_event` for a community lighting blueprint
-    would be a subscription to something nothing ever fires."""
+def test_a_blueprint_without_the_vesta_author_field_still_counts() -> None:
+    """⚠️ THE BUG THE LOG LINE CAUGHT ON ITS FIRST REAL READING.
+
+    The reference villa's seven `critical_*` blueprints are pre-existing files
+    folded into the naming scheme, and carry no author metadata. An
+    author-based filter dropped every one of them — the entire P1/P2 tier,
+    leaks and unlocked doors included — and the only symptom was a log line
+    listing three categories instead of four.
+    """
     listing = {
-        "control_humidity_fan.yaml": {"metadata": {"author": None, "name": "Humidity fan"}},
+        "critical_watchdog.yaml": {"metadata": {"author": None, "name": "critical_watchdog"}},
+        "roi_idle_load.yaml": {"metadata": {"author": "VESTA", "name": "VESTA ROI"}},
+    }
+    assert collect._categories_from_blueprints(listing) == ["critical", "roi"]
+
+
+def test_third_party_blueprints_are_excluded_by_their_namespace() -> None:
+    """A structural signal — someone else's blueprints live in a folder —
+    rather than a metadata field an author may not have filled in."""
+    listing = {
         "homeassistant/notify_leaving_zone.yaml": {"metadata": {"author": "Home Assistant", "name": "Notify"}},
         "sbyx/low-battery-detection.yaml": {"metadata": {"author": None, "name": "Low battery"}},
+        "_archive/water_leak_tamper.yaml": {"metadata": {"author": None, "name": "Old leak rule"}},
         "roi_idle_load.yaml": {"metadata": {"author": "VESTA", "name": "VESTA ROI"}},
     }
     assert collect._categories_from_blueprints(listing) == ["roi"]
+
+
+def test_a_dead_subscription_is_preferred_to_a_missing_one() -> None:
+    """⚠️ THE TRADE-OFF, STATED. A local `control_*` blueprint yields a
+    `vesta_control_event` subscription that will never fire — which costs
+    nothing, because Home Assistant simply never sends a frame. A MISSING
+    subscription loses every finding in that category forever, with no error
+    anywhere. The first version optimised the wrong one.
+    """
+    listing = {
+        "control_humidity_fan.yaml": {"metadata": {"author": None, "name": "Humidity fan"}},
+        "critical_watchdog.yaml": {"metadata": {"author": None, "name": "critical_watchdog"}},
+    }
+    assert collect._categories_from_blueprints(listing) == ["control", "critical"]
 
 
 def test_a_nested_blueprint_path_still_resolves_its_category() -> None:
