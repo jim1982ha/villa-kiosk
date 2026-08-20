@@ -39,6 +39,10 @@ class ReportContext:
     findings: List[Dict[str, Any]] = field(default_factory=list)
     #: Modules that did not run, and why. Never silently absent.
     skipped: List[Dict[str, str]] = field(default_factory=list)
+    #: Modules that DID run. ⚠️ Without this, "no checks are configured" and
+    #: "every check ran and found nothing" are the same empty result — and they
+    #: mean opposite things to the person reading the report.
+    ran: List[str] = field(default_factory=list)
 
 
 class Narrator(Protocol):

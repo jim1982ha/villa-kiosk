@@ -84,8 +84,14 @@ def gate(module: AnalysisModule, context: ModuleContext,
 
 async def run_all(context: ModuleContext, failures: Dict[str, int],
                   history_days: int) -> Tuple[List[Finding], List[Dict[str, str]],
-                                              Dict[str, int]]:
-    """Run every registered module. Returns (findings, skipped, failures).
+                                              Dict[str, int], List[str]]:
+    """Run every registered module.
+
+    Returns (findings, skipped, failures, ran). `ran` is the names of modules
+    that actually executed — ⚠️ WITHOUT IT, "no module is configured" and
+    "every module ran and found nothing" are the same empty result, and the
+    report cannot tell an owner which of the two happened. They mean opposite
+    things.
 
     Never raises. `failures` is returned rather than mutated in place so the
     caller decides whether to persist it — a pass that crashed before writing
@@ -93,6 +99,7 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
     """
     findings: List[Finding] = []
     skipped: List[Dict[str, str]] = []
+    ran: List[str] = []
     counts = dict(failures)
 
     for module in registered():
@@ -116,6 +123,7 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
                 module.run(module_context), timeout=MODULE_TIMEOUT_S)
             findings.extend(produced)
             counts[module.name] = 0
+            ran.append(module.name)
         except asyncio.TimeoutError:
             counts[module.name] = counts.get(module.name, 0) + 1
             warn(f"module {module.name} exceeded {MODULE_TIMEOUT_S:.0f}s")
@@ -126,7 +134,7 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
             swallow(f"module {module.name} failed", err)
             skipped.append(skip(module.name, "errored", str(err)[:200]))
 
-    return findings, skipped, counts
+    return findings, skipped, counts, ran
 
 
 def describe_skips(skipped: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:

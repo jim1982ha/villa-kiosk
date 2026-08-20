@@ -253,7 +253,7 @@ def test_a_module_that_throws_becomes_a_skip_not_a_dead_pass() -> None:
     registry._reset_for_tests()
     registry.register(Exploding())  # type: ignore[arg-type]
     try:
-        findings, skipped, counts = asyncio.run(
+        findings, skipped, counts, ran = asyncio.run(
             run_all(_context([], {}), {}, 30))
     finally:
         registry._reset_for_tests()
@@ -263,6 +263,7 @@ def test_a_module_that_throws_becomes_a_skip_not_a_dead_pass() -> None:
     assert findings == []
     assert skipped and skipped[0]["reason"] == "errored"
     assert counts["exploding"] == 1, "a failure must be counted toward disabling"
+    assert ran == [], "a module that threw did not run"
 
 
 def test_a_module_that_hangs_is_timed_out() -> None:
@@ -284,7 +285,7 @@ def test_a_module_that_hangs_is_timed_out() -> None:
     original = registry.MODULE_TIMEOUT_S
     registry.MODULE_TIMEOUT_S = 0.05
     try:
-        _, skipped, counts = asyncio.run(run_all(_context([], {}), {}, 30))
+        _, skipped, counts, ran = asyncio.run(run_all(_context([], {}), {}, 30))
     finally:
         registry.MODULE_TIMEOUT_S = original
         registry._reset_for_tests()
@@ -293,16 +294,18 @@ def test_a_module_that_hangs_is_timed_out() -> None:
 
     assert skipped[0]["reason"] == "timed_out"
     assert counts["hanging"] == 1
+    assert ran == [], "a module that timed out did not run"
 
 
 def test_a_successful_run_clears_the_failure_count() -> None:
     """Otherwise a module that failed twice months ago is one bad week from
     being disabled forever."""
-    findings, skipped, counts = asyncio.run(
+    findings, skipped, counts, ran = asyncio.run(
         run_all(_context(["sensor.x_energy"],
                          {"sensor.x_energy": _series([0.1] * 28)}),
                 {"standby_creep": 2}, 30))
     assert counts["standby_creep"] == 0
+    assert ran == ["standby_creep"], "a module that ran must be reported as such"
 
 
 # ── thresholds ───────────────────────────────────────────────────────────────

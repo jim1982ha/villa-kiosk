@@ -1,3 +1,14 @@
+## 2.510.0
+
+### Fixed — a report claimed no checks were configured while one had just run
+
+The first live run against real meters produced "No automated checks are
+configured yet" on a property where `standby_creep` had run and found nothing.
+There are three kinds of empty report — nothing measurable, nothing configured,
+and checks that ran and found nothing — and all three printed the middle
+sentence. A preview now also reports which modules ran and how much data they
+received, so "found nothing" and "saw nothing" can be told apart.
+
 ## 2.509.0
 
 ### Added — preview a report without sending it

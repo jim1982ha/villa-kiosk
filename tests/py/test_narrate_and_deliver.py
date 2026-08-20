@@ -419,3 +419,50 @@ def test_history_stores_no_prose_and_no_findings(tmp_path: Any) -> None:
     entry = stored["entries"][0]
     assert entry["findingCount"] == 3
     assert not [k for k in entry if k.startswith("_")], entry
+
+
+# ── which kind of empty? ─────────────────────────────────────────────────────
+# ⚠️ FOUND ON THE FIRST LIVE RUN AGAINST REAL METERS. The report said "No
+# automated checks are configured yet" about a property where a check had just
+# run and found nothing. Three different empties, one sentence — the same
+# failure as the blind-spot section asserting a tariff was configured.
+
+def test_a_check_that_ran_and_found_nothing_says_so() -> None:
+    _, body = DeterministicNarrator().render(_ctx(ran=["standby_creep"]))
+    assert "1 check ran and found nothing" in body
+    assert "not configured" not in body and "configured yet" not in body
+
+
+def test_several_checks_that_ran_are_counted_in_english() -> None:
+    _, body = DeterministicNarrator().render(_ctx(ran=["a", "b", "c"]))
+    assert "3 checks ran and found nothing" in body
+
+
+def test_no_modules_at_all_is_a_different_sentence() -> None:
+    _, body = DeterministicNarrator().render(_ctx(ran=[]))
+    assert "No automated checks are configured yet" in body
+
+
+def test_everything_skipped_is_a_third_sentence() -> None:
+    _, body = DeterministicNarrator().render(_ctx(
+        ran=[], skipped=[{"module": "x", "reason": "not enough history yet"}]))
+    assert "see the reasons below" in body
+    assert "configured yet" not in body
+
+
+def test_unreachable_still_wins_over_all_of_them() -> None:
+    _, body = DeterministicNarrator().render(_ctx(
+        ran=["standby_creep"],
+        discovery={"reachable": False, "error": "down", "capabilities": [],
+                   "capabilities_missing": [], "preflight": []}))
+    assert "could not be reached" in body
+
+
+def test_no_empty_sentence_claims_all_is_well() -> None:
+    """Whichever of the three it is, none may read as a conclusion."""
+    for kw in ({"ran": ["a"]}, {"ran": []},
+               {"ran": [], "skipped": [{"module": "x", "reason": "y"}]}):
+        _, body = DeterministicNarrator().render(_ctx(**kw))
+        for forbidden in ("all is well", "everything is fine", "no issues",
+                          "all good", "healthy"):
+            assert forbidden not in body.lower(), (kw, forbidden)

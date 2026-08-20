@@ -37,7 +37,8 @@ from .narrate import DeterministicNarrator, ReportContext
 from .schedule import period_key
 
 
-def _statistics_fetcher(session: ClientSession, now_local: datetime) -> Any:
+def _statistics_fetcher(session: ClientSession, now_local: datetime,
+                        tally: Dict[str, Any]) -> Any:
     """The ONLY way a module gets data.
 
     ⚠️ MODULES DO NOT GET THE SESSION. A module that can open its own
@@ -55,11 +56,22 @@ def _statistics_fetcher(session: ClientSession, now_local: datetime) -> Any:
         start = stats_mod.start_of_day(now_local, days)
         try:
             async with HassClient(session) as hass:
-                return await stats_mod.statistics_during_period(
+                series = await stats_mod.statistics_during_period(
                     hass, list(ids), start, period="hour", types=("change",))
         except HassUnavailable as err:
             warn(f"statistics unavailable for this pass: {err}")
-            return {}
+            tally["error"] = str(err)
+            series = {}
+        # ⚠️ RECORDED, NOT ASSUMED. "The module found nothing" and "the module
+        # received nothing" produce an identical report, and telling them apart
+        # by reading the code is guesswork. A live preview that returns no
+        # findings is uninterpretable without these three numbers.
+        tally["requested"] = tally.get("requested", 0) + len(ids)
+        tally["returned"] = tally.get("returned", 0) + len(series)
+        tally["rows"] = tally.get("rows", 0) + sum(len(v) for v in series.values())
+        tally["days_asked"] = days
+        tally["empty_ids"] = sorted(i for i in ids if not series.get(i))[:5]
+        return series
     return fetch
 
 
@@ -72,31 +84,34 @@ async def analyse(
     settings: Dict[str, Any],
     min_history_days: int,
     failures: Dict[str, int],
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]], Dict[str, int]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]], Dict[str, int],
+           List[str], Dict[str, Any]]:
     """Run every registered module against this pass's data.
 
     Never raises — `run_all` bounds and wraps each module individually, so a
     module that throws produces a skip line rather than an empty report.
     """
+    tally: Dict[str, Any] = {}
     if not found.get("reachable", False):
         # Nothing to analyse, and saying "no checks ran" is honest. Inventing a
         # skip per module would imply each was considered and declined.
-        return [], [], failures
+        return [], [], failures, [], tally
 
     context = ModuleContext(
         audience=audience, cadence=cadence, now_local=now_local,
         capabilities=list(found.get("capabilities") or []),
         inventory=found.get("inventory") or {},
         settings=settings, min_history_days=min_history_days,
-        stats=_statistics_fetcher(session, now_local),
+        stats=_statistics_fetcher(session, now_local, tally),
         labels={},
     )
     # History depth is not yet measured per statistic; the recorder's presence
     # is the proxy for it, and each module applies its own `min_days` to the
     # data it actually receives. Stated here rather than passed as a lie.
     history_days = min_history_days if found.get("capabilities") else 0
-    produced, skipped, counts = await run_all(context, failures, history_days)
-    return [f.as_dict() for f in produced], describe_skips(skipped), counts
+    produced, skipped, counts, ran = await run_all(context, failures, history_days)
+    return ([f.as_dict() for f in produced], describe_skips(skipped), counts,
+            ran, tally)
 
 
 async def run_report(
@@ -141,15 +156,15 @@ async def run_report(
         found = await discovery.discover(session, generated_at)
 
     # ── analyse ─────────────────────────────────────────────────────────────
-    findings, skipped, failures = await analyse(session, found, audience,
-                                                cadence, now_local, settings,
-                                                min_history_days, module_failures)
+    findings, skipped, failures, ran, data_tally = await analyse(
+        session, found, audience, cadence, now_local, settings,
+        min_history_days, module_failures)
 
     # ── narrate ─────────────────────────────────────────────────────────────
     context = ReportContext(
         audience=audience, cadence=cadence, period=period,
         generated_at=generated_at, discovery=found,
-        findings=findings, skipped=skipped,
+        findings=findings, skipped=skipped, ran=ran,
     )
     narrator = DeterministicNarrator()
     try:
@@ -198,6 +213,8 @@ async def run_report(
     entry["_body"] = body
     entry["_findings"] = findings
     entry["_preview"] = preview
+    # ⚠️ The instrument for "found nothing" vs "saw nothing".
+    entry["_analysis"] = {"ran": ran, "skipped": skipped, "data": data_tally}
     log(f"report {entry['id']}: {len(findings)} finding(s), "
         f"{sum(1 for d in deliveries if d.get('status') == 'sent')}/"
         f"{len(deliveries)} delivered")

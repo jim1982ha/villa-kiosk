@@ -114,19 +114,35 @@ class DeterministicNarrator:
         ]
 
     def _nothing_to_report(self, context: ReportContext) -> str:
-        """⚠️ The sentence that keeps an empty report honest.
+        """⚠️ THE SENTENCE THAT KEEPS AN EMPTY REPORT HONEST, and it must say
+        which KIND of empty this is. There are three, and they mean different
+        things:
 
-        Phase 2 has no analysis modules at all, so this is what every report
-        says. It must not read as "everything is fine" — that is a conclusion,
-        and nothing has drawn it yet.
+          nothing could be measured   — Home Assistant was unreachable
+          nothing is configured       — no checks exist to run (Phase 2)
+          checks ran and found nothing — the good outcome
+
+        This returned the SECOND sentence in all three cases for one release,
+        so the first live run against real meters reported "no automated checks
+        are configured yet" about a property where a check had just run and
+        found nothing. Grammatical, plausible, and false — the same failure as
+        the blind-spot section asserting a tariff was configured.
+
+        None of them may read as "everything is fine": that is a conclusion,
+        and only the third has drawn anything at all.
         """
         if not context.discovery.get("reachable", False):
-            return "No checks ran."
-        if not context.skipped and not context.findings:
-            return ("No automated checks are configured yet, so nothing has "
-                    "been assessed. This report confirms the schedule and "
-                    "delivery are working.")
-        return "No checks raised anything this period."
+            return ("No checks ran, because Home Assistant could not be "
+                    "reached.")
+        if context.ran:
+            count = len(context.ran)
+            return (f"{count} check{'' if count == 1 else 's'} ran and found "
+                    f"nothing worth reporting this period.")
+        if context.skipped:
+            return ("No checks ran this period — see the reasons below.")
+        return ("No automated checks are configured yet, so nothing has been "
+                "assessed. This report confirms the schedule and delivery are "
+                "working.")
 
     def _findings(self, findings: List[Dict[str, Any]]) -> List[str]:
         # "1 finding(s)" is machine output. This is read by the villa's owner
