@@ -1,3 +1,14 @@
+## 2.502.0
+
+### Fixed — "no 3D model yet" was a dead end for anyone not signed in as owner
+
+On a fresh install this is the first screen anyone sees, and the person reading
+it is usually the owner who has not signed in as one yet. It said "ask the
+owner" and offered nothing further, so it read as a lock. The HUD's profile
+switcher was always there, but it is a small top-bar icon — behind the overflow
+menu on a phone — on an otherwise empty black screen. A "Switch profile" button
+now sits on the screen itself.
+
 ## 2.501.0
 
 ### Fixed — the reports endpoints were unreachable, and answered 200
