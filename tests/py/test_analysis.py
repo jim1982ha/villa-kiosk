@@ -31,11 +31,36 @@ from reports.analysis.modules.standby_creep import (
 NOW = datetime(2026, 8, 20, 7, 0, tzinfo=timezone.utc)
 
 
+def _epoch_ms(day: str, hour: int) -> int:
+    """⚠️ HOME ASSISTANT'S ACTUAL WIRE FORMAT: epoch MILLISECONDS.
+
+    The fixtures here originally used ISO strings, invented by the author of
+    the code under test — so the tests and the code agreed with each other and
+    both disagreed with Home Assistant. Phase 3's first live run returned zero
+    findings from 11,859 rows with every unit test green. Fixtures now default
+    to the real shape; `_hours_iso` below keeps one test on the legacy form so
+    both remain supported.
+    """
+    naive = datetime.strptime(f"{day} {hour:02d}", "%Y-%m-%d %H")
+    return int(naive.replace(tzinfo=timezone.utc).timestamp() * 1000)
+
+
 def _hours(day: str, idle: float, active: float,
            idle_hours: int = 10) -> List[Dict[str, Any]]:
-    """One day of hourly rows: some idle hours, the rest running."""
-    rows = [{"start": f"{day}T{h:02d}:00:00", "change": idle}
-            for h in range(idle_hours)]
+    """One day of hourly rows, in HA's real format."""
+    rows: List[Dict[str, Any]] = [
+        {"start": _epoch_ms(day, h), "change": idle} for h in range(idle_hours)]
+    rows += [{"start": _epoch_ms(day, h), "change": active}
+             for h in range(idle_hours, 24)]
+    return rows
+
+
+def _hours_iso(day: str, idle: float, active: float,
+               idle_hours: int = 10) -> List[Dict[str, Any]]:
+    """The legacy ISO-string form, still accepted."""
+    rows: List[Dict[str, Any]] = [
+        {"start": f"{day}T{h:02d}:00:00", "change": idle}
+        for h in range(idle_hours)]
     rows += [{"start": f"{day}T{h:02d}:00:00", "change": active}
              for h in range(idle_hours, 24)]
     return rows
@@ -74,7 +99,7 @@ def test_a_day_with_too_few_readings_is_dropped_not_filled() -> None:
     """⚠️ A floor computed from three hours is not a floor. Inventing one is
     how a gap in the recorder becomes a finding about a pump."""
     rows = _series([0.1] * 3)
-    rows += [{"start": "2026-07-09T00:00:00", "change": 5.0}]  # one lone hour
+    rows += [{"start": _epoch_ms("2026-07-09", 0), "change": 5.0}]  # one lone hour
     floors = _daily_idle_floors(rows)
     assert len(floors) == 3, "the one-hour day must not produce a floor"
 
@@ -83,7 +108,7 @@ def test_a_meter_reset_is_skipped_not_counted() -> None:
     """`total_increasing` permits a reset, which arrives as a negative change.
     The hour is unusable; the day may still be fine."""
     rows = _hours("2026-07-01", 0.1, 1.0)
-    rows.append({"start": "2026-07-01T23:00:00", "change": -500.0})
+    rows.append({"start": _epoch_ms("2026-07-01", 23), "change": -500.0})
     floors = _daily_idle_floors(rows)
     assert len(floors) == 1
     assert floors[0] > 0
@@ -407,3 +432,86 @@ def test_every_module_threshold_is_dimensionless() -> None:
     assert 0.0 < sc.IDLE_PERCENTILE < 1.0, "a percentile"
     assert 0.0 < sc.MIN_FLOOR_OF_MEDIAN < 1.0, "a fraction of the device's own median"
     assert 0.0 < sc.DEFAULT_SIGMA < 100.0, "a count of robust sigmas"
+
+
+# ── the wire format ──────────────────────────────────────────────────────────
+# ⚠️ THE BUG THAT COST PHASE 3 ITS FIRST LIVE RUN. HA sends `start` as epoch
+# MILLISECONDS; the code did `str(start)[:10]`, correct for an ISO string and
+# catastrophic for a number — the first ten characters of a millisecond
+# timestamp change every HOUR. Every hour became its own day, every bucket held
+# one row, the half-a-day guard dropped all of them, and 18 meters with 11,859
+# rows produced zero findings at every threshold down to 3%.
+
+def test_epoch_milliseconds_bucket_by_day() -> None:
+    from reports.analysis.modules.standby_creep import _day_key
+
+    same_day = {_day_key(_epoch_ms("2026-07-01", h), timezone.utc)
+                for h in range(24)}
+    assert same_day == {"2026-07-01"}, same_day
+
+
+def test_epoch_seconds_are_understood_too() -> None:
+    """HA changed this format once and may again; a module that only knows the
+    current wire format breaks on upgrade."""
+    from reports.analysis.modules.standby_creep import _day_key
+
+    ms = _epoch_ms("2026-07-01", 12)
+    assert _day_key(ms // 1000, timezone.utc) == _day_key(ms, timezone.utc)
+
+
+def test_iso_strings_are_still_accepted() -> None:
+    from reports.analysis.modules.standby_creep import _day_key
+
+    assert _day_key("2026-07-01T13:00:00", timezone.utc) == "2026-07-01"
+
+
+def test_junk_produces_no_day_rather_than_a_wrong_one() -> None:
+    from reports.analysis.modules.standby_creep import _day_key
+
+    for junk in (None, True, "", "short", float("nan")):
+        assert _day_key(junk, timezone.utc) == "", junk
+
+
+def test_days_are_bucketed_in_LOCAL_time() -> None:
+    """⚠️ "A day" means the villa's day. On a UTC+8 property, UTC bucketing
+    splits every local day across two buckets and puts the small hours —
+    exactly when a device is idle — in the wrong one."""
+    from zoneinfo import ZoneInfo
+
+    from reports.analysis.modules.standby_creep import _day_key
+
+    # 20:00 UTC on the 1st is 04:00 on the 2nd in Singapore.
+    stamp = _epoch_ms("2026-07-01", 20)
+    assert _day_key(stamp, timezone.utc) == "2026-07-01"
+    assert _day_key(stamp, ZoneInfo("Asia/Singapore")) == "2026-07-02"
+
+
+def test_the_module_works_end_to_end_on_the_real_wire_format() -> None:
+    """The regression at full size: the same creep the module is built to find,
+    expressed the way Home Assistant actually sends it."""
+    findings = _run([0.10] * 21 + [0.19] * 7)
+    assert len(findings) == 1, "epoch-ms rows must produce the same finding"
+
+
+def test_the_legacy_iso_format_still_produces_the_same_finding() -> None:
+    rows: List[Dict[str, Any]] = []
+    for index, idle in enumerate([0.10] * 21 + [0.19] * 7):
+        rows += _hours_iso(f"2026-07-{index + 1:02d}", idle, 1.0)
+    findings = asyncio.run(StandbyCreep().run(
+        _context(["sensor.x_energy"], {"sensor.x_energy": rows})))
+    assert len(findings) == 1
+
+
+def test_the_original_expression_would_still_fail_this() -> None:
+    """⚠️ Pin the BUG, not only the fix.
+
+    `str(start)[:10]` is what shipped. Asserting that it still produces 24
+    distinct "days" from one day of hourly rows means the regression cannot be
+    reintroduced by someone simplifying `_day_key` back to a slice — the test
+    above would keep passing on the fixture while the code broke on the wire.
+    """
+    stamps = [_epoch_ms("2026-07-01", h) for h in range(24)]
+    naive_buckets = {str(s)[:10] for s in stamps}
+    assert len(naive_buckets) == 24, (
+        "the original slice must still be shown to be wrong; if this ever "
+        "collapses to 1, the fixture no longer reproduces the failure")

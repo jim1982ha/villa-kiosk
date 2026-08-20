@@ -71,6 +71,15 @@ def _statistics_fetcher(session: ClientSession, now_local: datetime,
         tally["rows"] = tally.get("rows", 0) + sum(len(v) for v in series.values())
         tally["days_asked"] = days
         tally["empty_ids"] = sorted(i for i in ids if not series.get(i))[:5]
+        # ⚠️ THE RAW SHAPE, verbatim. The `start` field's type is the whole
+        # reason Phase 3's first live run found nothing, and a tally of counts
+        # could not have shown it — 11,859 rows arrived and every one was
+        # unusable. Recording one real row makes the next reading confirm the
+        # diagnosis instead of assuming the fix is why anything changed.
+        for rows in series.values():
+            if rows:
+                tally["sample_row"] = rows[0]
+                break
         return series
     return fetch
 

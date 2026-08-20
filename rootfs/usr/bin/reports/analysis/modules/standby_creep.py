@@ -25,6 +25,7 @@ day-to-day variation. A property with a 3 kW heat pump and a property with a
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
 from ..base import Finding, ModuleContext, dedup_key, resolve_threshold
@@ -58,7 +59,51 @@ DEFAULT_SIGMA = 3.0
 MIN_FLOOR_OF_MEDIAN = 0.01
 
 
-def _daily_idle_floors(rows: List[Dict[str, Any]]) -> List[float]:
+def _day_key(start: Any, zone: Any) -> str:
+    """The LOCAL calendar day a statistics row belongs to.
+
+    ⚠️ HOME ASSISTANT SENDS `start` AS EPOCH MILLISECONDS, not an ISO string,
+    and this cost Phase 3 its first live run. The original code did
+    `str(start)[:10]`, which is correct for `"2026-07-01T00:00:00"` and
+    catastrophic for `1755648000000`: the first ten characters of a
+    millisecond timestamp change every hour, so EVERY HOUR became its own day,
+    every bucket held one row, the "at least half a day of readings" guard
+    dropped all of them, and every meter returned no floors at all.
+
+    The failure was silent and total — 18 meters, 11,859 rows, zero findings at
+    every threshold down to 3%. And every unit test passed, because the
+    fixtures were written from the same wrong assumption as the code. That is
+    the real lesson: a fixture invented by the author of the code under test
+    proves only that they are consistent with each other.
+
+    Both forms are accepted, because HA changed this and may again, and a
+    module that only understands the current wire format breaks on upgrade.
+
+    LOCAL, not UTC: "a day" means the villa's day. On a UTC+8 property, UTC
+    bucketing would split every local day across two buckets and put the small
+    hours — exactly when a device is idle — in the wrong one.
+    """
+    if isinstance(start, bool) or start is None:
+        return ""
+    if isinstance(start, (int, float)):
+        seconds = float(start)
+        # Epoch seconds are ~1.7e9 today; milliseconds ~1.7e12. Anything past
+        # 1e11 is milliseconds by a margin of three decades either way.
+        if seconds > 1e11:
+            seconds /= 1000.0
+        try:
+            moment = datetime.fromtimestamp(seconds, tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return ""
+        if zone is not None:
+            moment = moment.astimezone(zone)
+        return moment.strftime("%Y-%m-%d")
+    text = str(start)
+    return text[:10] if len(text) >= 10 else ""
+
+
+def _daily_idle_floors(rows: List[Dict[str, Any]],
+                       zone: Any = None) -> List[float]:
     """One idle floor per day, from that day's hourly `change` values.
 
     Rows are hourly. A day with too few readings to have a floor is DROPPED
@@ -75,7 +120,7 @@ def _daily_idle_floors(rows: List[Dict[str, Any]]) -> List[float]:
             # A negative change means the meter reset (total_increasing allows
             # it). The hour is unusable; the day may still be fine.
             continue
-        day = str(start)[:10] if start is not None else ""
+        day = _day_key(start, zone)
         if not day:
             continue
         by_day.setdefault(day, []).append(float(change))
@@ -154,7 +199,8 @@ class StandbyCreep:
     def _assess(self, statistic_id: str, index: int,
                 rows: List[Dict[str, Any]],
                 context: ModuleContext) -> Optional[Finding]:
-        floors = _daily_idle_floors(rows)
+        zone = getattr(context.now_local, "tzinfo", None)
+        floors = _daily_idle_floors(rows, zone)
         expected_days = RECENT_DAYS + BASELINE_DAYS
         if len(floors) < self.min_days:
             return None
