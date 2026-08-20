@@ -57,6 +57,21 @@ def gate(module: AnalysisModule, context: ModuleContext,
 
     `reason` is a SKIP_REASON value when ok is False.
     """
+    # ⚠️ SUPERSEDED BY A BETTER-INFORMED LAYER. On a property whose own
+    # automations already detect this, running the built-in module duplicates it
+    # — and duplicates it WORSE, because a blueprint sees occupancy, schedules
+    # and tariffs while these modules see only statistics. On the reference
+    # villa that gap produced five false positives in one week.
+    #
+    # Not deleted, because the add-on is redistributable: a fresh install has no
+    # blueprints, and there these modules are the only analysis there is. The
+    # deployment is detected rather than configured.
+    if getattr(module, "superseded_by_blueprints", False):
+        if "blueprint_layer" in context.capabilities:
+            return (False, "missing_capability",
+                    "covered by this property's own automation layer, which "
+                    "sees occupancy and cost context these checks cannot")
+
     missing = [c for c in module.requires if c not in context.capabilities]
     if missing:
         return (False, "missing_capability",

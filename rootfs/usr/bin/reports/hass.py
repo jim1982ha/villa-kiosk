@@ -36,7 +36,7 @@ import os
 import random
 import time
 from types import TracebackType
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Type
 
 from aiohttp import ClientError, ClientSession, WSMsgType
 
@@ -193,8 +193,18 @@ class HassClient:
         elif greeting.get("type") != "auth_ok":
             raise HassUnavailable(f"unexpected greeting: {greeting.get('type')}")
 
-    async def _receive_json(self) -> Dict[str, Any]:
-        msg = await asyncio.wait_for(self._ws.receive(), timeout=COMMAND_TIMEOUT_S)
+    async def _receive_json(
+        self, timeout: Optional[float] = COMMAND_TIMEOUT_S,
+    ) -> Dict[str, Any]:
+        """Next frame. `timeout=None` waits indefinitely.
+
+        ⚠️ INDEFINITE IS CORRECT FOR A SUBSCRIPTION and wrong for a command. A
+        quiet villa can legitimately emit no `vesta_*` event for days, so a
+        60-second cap would tear down a perfectly healthy socket every minute
+        and reconnect forever. A dead peer is detected by `heartbeat=30` on
+        `ws_connect` instead, which is what that parameter is for.
+        """
+        msg = await asyncio.wait_for(self._ws.receive(), timeout=timeout)
         if msg.type != WSMsgType.TEXT:
             raise HassUnavailable(f"socket closed while awaiting a frame ({msg.type})")
         parsed: Any = json.loads(msg.data)
@@ -231,6 +241,38 @@ class HassClient:
                     f"{command_type} failed: "
                     f"{error.get('code', 'unknown')} {error.get('message', '')}".strip())
             return frame.get("result")
+
+    async def subscribe(self, event_types: Sequence[str]) -> None:
+        """Ask Core to stream these event types on this connection.
+
+        ⚠️ NAMED TYPES, NEVER A BARE `subscribe_events`. Subscribing without an
+        `event_type` streams EVERY event Home Assistant emits — including
+        `state_changed`, which on this villa is hundreds per minute across ~484
+        entities. That would put the entire state machine through this add-on's
+        event loop to find a handful of `vesta_*` frames a day.
+        """
+        for event_type in event_types:
+            await self.command("subscribe_events", event_type=event_type)
+
+    async def events(self) -> AsyncIterator[Dict[str, Any]]:
+        """Yield event frames until the socket closes.
+
+        Only `type: "event"` frames are yielded; `result` frames from the
+        subscribe calls are skipped. Ends cleanly when the socket goes away, so
+        the caller reconnects rather than treating it as an error — Home
+        Assistant restarts, and a collector that dies on the first restart is a
+        collector that works for one day.
+        """
+        while self._ws is not None:
+            try:
+                frame = await self._receive_json(timeout=None)
+            except HassUnavailable:
+                return
+            if frame.get("type") != "event":
+                continue
+            event = frame.get("event")
+            if isinstance(event, dict):
+                yield event
 
     async def close(self) -> None:
         if self._ws is not None:

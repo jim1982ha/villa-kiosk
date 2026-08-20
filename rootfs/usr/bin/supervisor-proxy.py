@@ -124,6 +124,7 @@ if _HERE not in sys.path:
     sys.path.append(_HERE)
 
 from reports import contracts as reports_contracts  # noqa: E402  (needs sys.path above)
+from reports import collect as reports_collect      # noqa: E402
 from reports import discovery as reports_discovery  # noqa: E402
 from reports import pipeline as reports_pipeline    # noqa: E402
 from reports import schedule as reports_schedule    # noqa: E402
@@ -2216,15 +2217,22 @@ def main() -> None:
         # note at run_app).
         a["reports_task"] = asyncio.create_task(
             reports_pipeline.run_forever(a["session"]))
+        # ⚠️ The collector is the only thing listening to the villa's own
+        # automation layer. 84 automations fire `vesta_*` events that Home
+        # Assistant discards immediately; without this task those findings are
+        # lost and the weekly report has nothing to report.
+        a["reports_collector"] = asyncio.create_task(
+            reports_collect.run_forever(a["session"]))
 
     async def on_cleanup(a: web.Application) -> None:
-        task = a.get("reports_task")
-        if task is not None:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        for key in ("reports_task", "reports_collector"):
+            task = a.get(key)
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
         await a["session"].close()
 
     app.on_startup.append(on_start)

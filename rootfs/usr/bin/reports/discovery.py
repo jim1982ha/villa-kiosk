@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from aiohttp import ClientSession
 
-from . import ledger
+from . import collect, ledger
 from .hass import HassClient, HassUnavailable, statistic_ids_of
 from .log import log
 from .stats import list_statistic_ids
@@ -47,13 +47,14 @@ CAP_ENERGY_WATER = "energy_water"
 CAP_LEDGER = "ledger"
 CAP_NOTIFY = "notify"
 CAP_AREAS = "areas"
+CAP_BLUEPRINTS = "blueprint_layer"
 
 # How many absent statistics are named individually before the rest are summed.
 MAX_LISTED_STATISTICS = 10
 
 ALL_CAPABILITIES = (
     CAP_STATISTICS, CAP_ENERGY_GRID, CAP_ENERGY_DEVICES, CAP_ENERGY_COST,
-    CAP_ENERGY_WATER, CAP_LEDGER, CAP_NOTIFY, CAP_AREAS,
+    CAP_ENERGY_WATER, CAP_LEDGER, CAP_NOTIFY, CAP_AREAS, CAP_BLUEPRINTS,
 )
 
 # Why each capability matters, in the operator's terms. Shown in the UI beside
@@ -68,6 +69,8 @@ CAPABILITY_MEANING: Dict[str, str] = {
     CAP_LEDGER: "Maintenance and cost records exist, so findings can cite work done.",
     CAP_NOTIFY: "At least one delivery target exists, so a report can be sent.",
     CAP_AREAS: "Devices are assigned to areas, so findings can name a room.",
+    CAP_BLUEPRINTS: "This property has its own automation layer, whose findings "
+                    "carry room, occupancy and cost context.",
 }
 
 # ⚠️ THE SAME FACTS IN THE ABSENT VOICE, AND THE TWO TABLES ARE NOT
@@ -92,6 +95,8 @@ CAPABILITY_ABSENT: Dict[str, str] = {
     CAP_NOTIFY: "No delivery target is configured.",
     CAP_AREAS: "Devices are not assigned to areas, so findings cannot name a "
                "room.",
+    CAP_BLUEPRINTS: "No automation layer is reporting, so analysis falls back to "
+                    "this add-on's own checks.",
 }
 
 
@@ -278,6 +283,12 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
     capabilities: Set[str] = set()
     preflight: List[Dict[str, str]] = []
     inventory: Dict[str, Any] = {}
+
+    # ⚠️ Detected, not configured. A property with a blueprint layer gets its
+    # findings from there; one without falls back to the built-in modules. The
+    # deployment does not have to be told which kind it is.
+    if collect.blueprint_layer_present():
+        capabilities.add(CAP_BLUEPRINTS)
 
     fm = ledger.read()
     fm_summary = ledger.summarise(fm)

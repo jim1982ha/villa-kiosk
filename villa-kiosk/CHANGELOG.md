@@ -1,3 +1,15 @@
+## 2.516.0
+
+### Added — the villa's own automations were reporting into nothing
+
+Every ROI and maintenance automation fires an event saying what it found, and
+Home Assistant discards events immediately. Nothing was listening, so 84
+automations have been producing findings that were lost the moment they were
+made. A collector now holds a subscription open and keeps them, and it records
+how much of each period it was actually listening for — a quiet week and a week
+with no listener must not look the same. The add-on's own checks now stand down
+where the automation layer already covers the ground.
+
 ## 2.515.0
 
 ### Fixed — the new daily check reported twelve things, including "715,700% more"

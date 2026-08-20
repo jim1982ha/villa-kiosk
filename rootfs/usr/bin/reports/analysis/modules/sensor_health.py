@@ -52,6 +52,11 @@ class SensorHealth:
     audiences: Sequence[str] = ("owner", "facility")
     min_days: int = 14
 
+    #: ⚠️ A deployed blueprint does this job with more context. See the gate in
+    #: `registry.gate` — this module runs only where no automation layer is
+    #: reporting, which is every install except the one it was written against.
+    superseded_by_blueprints: bool = True
+
     rejected: List[Dict[str, Any]]
 
     async def run(self, context: ModuleContext) -> List[Finding]:

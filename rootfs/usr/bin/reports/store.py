@@ -7,6 +7,8 @@ Three documents under `/data`, all owned by this subsystem alone:
                         SERVER-WRITTEN — read-only to every client.
   reports-state.json    scheduler bookkeeping (last fire, idempotency keys).
                         Never shown to anyone; not an API.
+  reports-events.json   findings caught live from the blueprint layer's
+                        `vesta_*` events. SERVER-WRITTEN, single writer.
 
 ⚠️ REPORTS WRITE ONLY THESE FILES. Specifically NOT `fm-data.json`, even
 though appending a scheduled report to `FmData.savedDocuments` is the obvious
@@ -46,6 +48,10 @@ DATA_DIR: Final[str] = "/data"
 REPORTS_CONFIG_FILE: Final[str] = f"{DATA_DIR}/reports-config.json"
 REPORTS_HISTORY_FILE: Final[str] = f"{DATA_DIR}/reports-history.json"
 REPORTS_STATE_FILE: Final[str] = f"{DATA_DIR}/reports-state.json"
+#: The findings the blueprint layer emits, caught live by `collect.py`. Its own
+#: file rather than part of the state document because it is append-heavy and
+#: bounded by a different rule — see MAX_EVENTS.
+REPORTS_EVENTS_FILE: Final[str] = f"{DATA_DIR}/reports-events.json"
 
 # Size ceilings, enforced by the proxy's store factory (413 on exceed).
 #
@@ -67,6 +73,7 @@ REPORTS_HISTORY_MAX_ENTRIES: Final[int] = 200
 EMPTY_CONFIG: Final[Dict[str, Any]] = {}
 EMPTY_HISTORY: Final[Dict[str, Any]] = {}
 EMPTY_STATE: Final[Dict[str, Any]] = {}
+EMPTY_EVENTS: Final[Dict[str, Any]] = {}
 
 # Applied at READ time by config_view(); never written to disk.
 #
