@@ -1,3 +1,12 @@
+## 2.499.0
+
+### Fixed — the dev add-on was never published, and CI reported success
+
+`git diff` does not see untracked files, so on the run that CREATES
+`villa-kiosk-dev/` the "has anything changed?" test answered no, skipped the
+commit and exited 0 — a green build on the one run that had to work. The check
+now stages first and asks the index, and prints the file list it publishes.
+
 ## 2.498.0
 
 ### Added — a second add-on so `dev` can be installed beside the working one

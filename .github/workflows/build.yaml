@@ -176,14 +176,22 @@ jobs:
       - name: Commit if changed
         run: |
           set -euo pipefail
-          if git diff --quiet -- villa-kiosk-dev; then
+          # ⚠️ STAGE FIRST, THEN ASK THE INDEX. `git diff` does NOT see untracked
+          # files, so on the run that CREATES villa-kiosk-dev/ it reports "no
+          # change", exits 0 and commits nothing — a green tick on the one run
+          # that had to work. `--all` (scoped to this path) also catches files
+          # DELETED from villa-kiosk/, which a bare `git add <dir>` would leave
+          # staged as present.
+          git add --all villa-kiosk-dev
+          if git diff --cached --quiet -- villa-kiosk-dev; then
             echo "dev manifest already current — nothing to publish"; exit 0
           fi
+          echo "publishing $(git diff --cached --name-only -- villa-kiosk-dev | wc -l) file(s):"
+          git diff --cached --stat -- villa-kiosk-dev
           version=$(grep -E '^version:' villa-kiosk-dev/config.yaml | head -1 \
                     | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add villa-kiosk-dev
           git commit -m "chore(dev-channel): publish VESTA (dev) ${version}"
           # main may have moved (a real release) between checkout and push.
           # Rebase rather than force: this job's commit is additive and touches
