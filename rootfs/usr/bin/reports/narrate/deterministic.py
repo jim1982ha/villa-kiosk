@@ -106,6 +106,23 @@ NON_MEASUREMENT_KEYS = frozenset({
     "missing_automations", "expected_area",
 })
 
+#: ⚠️ AND EVERY AGGREGATE CATEGORY HAS ONE TOO — the same invariant one layer
+#: out, and it was broken in two places at once. `audit` groups were claimed by
+#: NO section, and an roi group that was neither priced nor a trend fell between
+#: `_money`'s filter and `_trends`'s. Because `_found_anything` counts groups,
+#: the "nothing to report" sentence was suppressed as well: a real finding
+#: fired, was caught, persisted, aggregated — and the owner received a report
+#: reading only "Prepared Friday 21 August, 01:50." Blank, and silent about
+#: being blank, which is the worst of the three kinds of empty.
+#:
+#: Found from a live `_analysis` reading `groups: 6` against five rendered.
+SECTION_FOR_CATEGORY = {
+    "critical": "critical",
+    "maintenance": "preventive",
+    "audit": "health",        # the automation layer auditing ITSELF is monitoring health
+    "roi": "money",           # except `basis: trend`, which has no money — see `_trends`
+}
+
 SECTION_FOR_KIND = {
     "DATA_QUALITY": "health",      # the instrument, not the equipment
     "FORECAST": "preventive",      # a projection about equipment, with a horizon
@@ -387,7 +404,13 @@ class DeterministicNarrator:
         property with no tariff cannot price anything, and printing an empty
         Money section under a heading reads as "nothing was wasted".
         """
-        priced = [g for g in self._groups(context, "roi")
+        # ⚠️ EVERY NON-TREND roi GROUP, NOT ONLY THE PRICED ONES. `aggregate.rank`
+        # already puts priced first and unpriced last precisely so this section
+        # can show both; filtering here dropped "the jacuzzi ran 3.5 hours"
+        # entirely because nobody had configured a tariff for it.
+        billable = [g for g in self._groups(context, "roi")
+                    if self._text(g, "basis") != "trend"]
+        priced = [g for g in billable
                   if self._number(g, "total_cost") is not None]
 
         # ⚠️ THE `energy_cost` CAPABILITY DOES NOT GOVERN THIS SECTION WHEN THE
@@ -406,11 +429,13 @@ class DeterministicNarrator:
         # tariff can still be told exactly what it wasted. The admission is for
         # having nothing priced, not for lacking a capability this section
         # never used.
-        if priced:
-            lines = ["Avoidable cost, most expensive first:"]
-            for group in self._top(priced):
+        if billable:
+            head = ("Avoidable cost, most expensive first:" if priced
+                    else "Waste identified, not priced:")
+            lines = [head]
+            for group in self._top(billable):
                 lines.append(self._money_line(group))
-            return lines + self._and_more(priced)
+            return lines + self._and_more(billable)
 
         if "energy_cost" in (context.discovery.get("capabilities_missing") or []):
             # ⚠️ THE SECTION STAYS AND THE REASON MOVES. Two rules pull opposite
@@ -438,8 +463,27 @@ class DeterministicNarrator:
         elif basis == "measured":
             note = " (metered)"
         kwh = self._number(group, "total_kwh")
-        energy = f", {kwh:.2f} kWh" if kwh is not None else ""
-        return f"- {label}: {_amount(float(cost or 0.0))}{energy}{note}"
+        energy = f"{kwh:.2f} kWh" if kwh is not None else ""
+
+        # ⚠️ NO COST IS NOT ZERO COST. A rule can measure waste without anyone
+        # having given it a tariff, and printing "0.00" would report the
+        # opposite of what happened. Say what IS known — the energy, the
+        # duration, the occurrences — and say nothing about money.
+        if cost is None:
+            # ⚠️ THE DURATION IS THE CONTENT HERE. `_measurement` excludes
+            # `wasted_minutes` and `runtime_hours` because money and duration
+            # normally have their own sections — but for an unpriced line THIS
+            # is that section, and it printed "no figure supplied" about an
+            # event carrying `runtime_hours: 3.5`.
+            spent = self._number(group, "total_minutes")
+            duration = self._duration(spent) if spent else self._runtime(group)
+            said = ", ".join(p for p in (energy, duration) if p) \
+                or self._measurement(group) or "no figure supplied"
+            return f"- {label}: {said}, not priced"
+        parts = [_amount(float(cost))]
+        if energy:
+            parts.append(energy)
+        return f"- {label}: {', '.join(parts)}{note}"
 
     # ── 4. fixed and suggested ───────────────────────────────────────────────
 
@@ -554,6 +598,15 @@ class DeterministicNarrator:
         quality = self._findings_for(context, "health")
         for item in quality[:MAX_LINES]:
             lines.append(self._finding_line(item, fallback="not reporting"))
+
+        # ⚠️ THE `audit` CATEGORY LIVES HERE AND USED TO LIVE NOWHERE. These are
+        # the automation layer checking ITSELF — a critical rule found switched
+        # off, an alert channel that did not answer its weekly test — which is
+        # monitoring health by definition.
+        for group in self._top(self._groups(context, "audit")):
+            label = self._text(group, "bucket") or self._text(group, "label")
+            said = self._detail(group) or self._measurement(group)
+            lines.append(f"- {label}: {said}" if said else f"- {label}")
 
         silent = context.collector.get("silent_types") or []
         if silent and context.collector.get("connected"):
@@ -734,6 +787,29 @@ class DeterministicNarrator:
         value = (group.get("occurrences") if isinstance(group, dict)
                  else getattr(group, "occurrences", 1))
         return int(value) if isinstance(value, int) else 1
+
+    def _runtime(self, group: Any) -> str:
+        """`runtime_hours`, the one duration `total_minutes` does not carry.
+
+        `roi_runtime_cap` reports hours run rather than minutes wasted, so the
+        aggregation's minute total is empty for it and the figure is on the
+        event.
+        """
+        items = (group.get("items") if isinstance(group, dict)
+                 else getattr(group, "items", None)) or []
+        total = 0.0
+        for item in items:
+            data = (item.get("data") if isinstance(item, dict)
+                    else getattr(item, "data", None)) or {}
+            value = data.get("runtime_hours") if isinstance(data, dict) else None
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                total += float(value)
+            elif isinstance(value, str):
+                try:
+                    total += float(value)
+                except ValueError:
+                    pass
+        return f"{total:g} hours run" if total else ""
 
     def _measurement(self, group: Any) -> str:
         """The numbers a blueprint measured, in the order it supplied them.

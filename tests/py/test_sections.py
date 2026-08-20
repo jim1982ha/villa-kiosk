@@ -412,3 +412,96 @@ def test_a_trend_prints_its_number_not_the_word_for_it() -> None:
     body = _render(aggregated=_events(drift))
     assert "deviation 26.9%" in body
     assert "Night standby: drifting" not in body
+
+
+# ── every aggregate group has a home ────────────────────────────────────────
+# ⚠️ FOUND FROM A LIVE `_analysis` READING `groups: 6` AGAINST FIVE RENDERED.
+# Two gaps at once: `audit` was claimed by no section, and an roi group that was
+# neither priced nor a trend fell between `_money`'s filter and `_trends`'s.
+# Worse, `_found_anything` counts groups — so the "nothing to report" sentence
+# was suppressed too, and a real finding produced a report reading only
+# "Prepared Friday 21 August, 01:50."
+
+def test_every_aggregate_category_has_a_section() -> None:
+    from reports.aggregate import CATEGORY_OF_EVENT
+    from reports.narrate.deterministic import SECTION_FOR_CATEGORY
+    missing = [c for c in set(CATEGORY_OF_EVENT.values())
+               if c not in SECTION_FOR_CATEGORY]
+    assert not missing, f"no section renders {missing} groups"
+
+
+def test_a_group_of_every_category_actually_appears() -> None:
+    """The table could name a section that does not read it — which is exactly
+    how `audit` came to be listed nowhere."""
+    when = "2026-08-20T11:00:00+08:00"
+    samples = {
+        "roi": {"blueprint": "roi_idle_load", "kwh": 1.4, "cost_local": 90.0,
+                "basis": "measured", "wasted_minutes": 30.0},
+        "maintenance": {"blueprint": "maintenance_condition",
+                        "task_text": "check it", "flagged_after_minutes": 60},
+        "audit": {"blueprint": "audit_config_integrity",
+                  "finding": "2 critical automations found switched off"},
+        # ⚠️ no `label` here: for a critical alert the label IS the human name
+        # and correctly wins over the bucket, so setting one would make this
+        # assert on a field the recap does not print.
+        "critical": {"blueprint": "critical_binary_trip", "severity": "P1",
+                     "phase": "raised"},
+    }
+    for category, extra in samples.items():
+        event = {"type": f"vesta_{category}_event", "fired": when, "at": when,
+                 "data": {"rule_id": "R-1", "report_bucket": f"Marker {category}",
+                          "entities": ["sensor.x"], "timestamp": when, **extra}}
+        body = _render(aggregated=_events(event))
+        assert f"Marker {category}" in body, f"{category} groups never render"
+
+
+def test_an_unpriced_waste_finding_is_stated_not_dropped() -> None:
+    """A rule can measure waste without anyone having given it a tariff."""
+    when = "2026-08-20T11:00:00+08:00"
+    event = {"type": "vesta_roi_event", "fired": when, "at": when, "data": {
+        "blueprint": "roi_runtime_cap", "rule_id": "ROI-16",
+        "report_bucket": "Jacuzzi pump", "entities": ["sensor.j"],
+        "runtime_hours": 3.5, "basis": "measured", "timestamp": when}}
+    body = _render(aggregated=_events(event))
+    assert "Jacuzzi pump" in body
+    assert "not priced" in body
+
+
+def test_an_unpriced_line_never_prints_a_zero() -> None:
+    """⚠️ NO COST IS NOT ZERO COST — printing "0.00" reports the opposite of
+    what happened."""
+    when = "2026-08-20T11:00:00+08:00"
+    event = {"type": "vesta_roi_event", "fired": when, "at": when, "data": {
+        "blueprint": "roi_runtime_cap", "rule_id": "ROI-16",
+        "report_bucket": "Jacuzzi pump", "entities": ["sensor.j"],
+        "runtime_hours": 3.5, "basis": "measured", "timestamp": when}}
+    body = _render(aggregated=_events(event))
+    assert "0.00" not in body
+    assert "Avoidable cost identified" not in body, "nothing was priced"
+
+
+def test_a_report_is_never_only_a_date() -> None:
+    """The floor: whatever arrives, the owner gets either a finding or the
+    sentence saying which kind of nothing this is."""
+    when = "2026-08-20T11:00:00+08:00"
+    for category in ("roi", "maintenance", "audit", "critical"):
+        event = {"type": f"vesta_{category}_event", "fired": when, "at": when,
+                 "data": {"rule_id": "R-1", "report_bucket": "Something",
+                          "entities": ["sensor.x"], "timestamp": when}}
+        body = _render(aggregated=_events(event))
+        assert len(body.splitlines()) > 1, (
+            f"a {category} group rendered a report containing only a date")
+
+
+def test_an_unpriced_line_states_the_duration_it_does_have() -> None:
+    """⚠️ "no figure supplied" about an event carrying `runtime_hours: 3.5`.
+    `_measurement` excludes duration because money and duration normally have
+    their own sections — but for an unpriced line this IS that section."""
+    when = "2026-08-20T11:00:00+08:00"
+    event = {"type": "vesta_roi_event", "fired": when, "at": when, "data": {
+        "blueprint": "roi_runtime_cap", "rule_id": "ROI-16",
+        "report_bucket": "Jacuzzi pump", "entities": ["sensor.j"],
+        "runtime_hours": 3.5, "basis": "measured", "timestamp": when}}
+    body = _render(aggregated=_events(event))
+    assert "3.5 hours run" in body
+    assert "no figure supplied" not in body
