@@ -1,3 +1,14 @@
+## 2.503.0
+
+### Added — Reports Phase 1: the add-on can now say what it is able to analyse
+
+`/reports-diagnostics` runs live discovery instead of returning a stub: which
+classes of analysis this property supports, the statistics and delivery targets
+behind them, and configuration that is present but broken — a meter the Energy
+dashboard references but the recorder never wrote, a missing tariff, two
+delivery targets sharing a name. Still analyses nothing and delivers nothing;
+that is Phase 2.
+
 ## 2.502.0
 
 ### Fixed — "no 3D model yet" was a dead end for anyone not signed in as owner
