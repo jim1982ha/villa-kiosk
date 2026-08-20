@@ -125,6 +125,8 @@ if _HERE not in sys.path:
 
 from reports import contracts as reports_contracts  # noqa: E402  (needs sys.path above)
 from reports import discovery as reports_discovery  # noqa: E402
+from reports import pipeline as reports_pipeline    # noqa: E402
+from reports import schedule as reports_schedule    # noqa: E402
 from reports import store as reports_store          # noqa: E402
 
 SUPERVISOR = "supervisor"
@@ -2121,6 +2123,61 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
     }, headers={"Cache-Control": "no-store"})
 
 
+async def reports_run_now_handler(request: web.Request) -> web.Response:
+    """Compose and deliver one report immediately, ignoring the schedule.
+
+    ⚠️ EXISTS BECAUSE THE ALTERNATIVE IS UNTESTABLE. A scheduled report fires
+    at an hour; verifying delivery by waiting for one is a feedback loop
+    measured in hours, and the thing being verified — does prose reach a phone
+    with no browser open — is exactly what an operator wants to confirm BEFORE
+    switching it on rather than after.
+
+    Owner-only, and it does NOT record an idempotency key: this is a manual
+    send, so the scheduled report for the same period must still go out
+    normally. It does append to history, because a report that reached someone
+    belongs in the record of what reached someone.
+
+    Takes `audience`, `cadence` and `targets` from the body, falling back to
+    stored config, so a test send can go somewhere harmless without editing the
+    real configuration first.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may send a report.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    stored = _read_json_store(reports_store.REPORTS_CONFIG_FILE,
+                              reports_store.EMPTY_CONFIG)
+    config = reports_store.config_view(stored)
+    targets = body.get("targets")
+    if not (isinstance(targets, list) and targets):
+        targets = reports_pipeline.targets_for(config, {})
+    audience = body.get("audience")
+    if audience not in ("owner", "facility"):
+        audience = "owner"
+    cadence = body.get("cadence")
+    if cadence not in reports_contracts.CADENCE:
+        cadence = "daily"
+
+    zone = reports_schedule.resolve_timezone(str(config.get("timezone") or ""))
+    now_local = datetime.now(timezone.utc).astimezone(zone)
+    try:
+        entry = await reports_pipeline.run_report(
+            request.app["session"], audience, cadence,
+            [str(t) for t in targets], now_local)
+        reports_pipeline.append_history(entry)
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        print(f"[supervisor-proxy] manual report failed: {err}", flush=True)
+        return web.json_response({"error": str(err)}, status=500)
+    return web.json_response(entry, headers={"Cache-Control": "no-store"})
+
+
 def main() -> None:
     app = web.Application()
 
@@ -2129,8 +2186,22 @@ def main() -> None:
         os.makedirs(DATA_ROOT, exist_ok=True)
         _session_secret()  # create the signing key on first boot
         await _cleanup_stale_options(a["session"])
+        # ⚠️ The reports scheduler runs for the life of the process. Created as
+        # a task rather than awaited — on_startup must return for the server to
+        # begin serving, and this loop never returns. Cancelled in on_cleanup so
+        # aiohttp's shutdown is not held open by it (see the shutdown_timeout
+        # note at run_app).
+        a["reports_task"] = asyncio.create_task(
+            reports_pipeline.run_forever(a["session"]))
 
     async def on_cleanup(a: web.Application) -> None:
+        task = a.get("reports_task")
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         await a["session"].close()
 
     app.on_startup.append(on_start)
@@ -2148,6 +2219,7 @@ def main() -> None:
     app.router.add_put("/reports-config", reports_config_put_handler)
     app.router.add_get("/reports-history", reports_history_get_handler)
     app.router.add_get("/reports-diagnostics", reports_diagnostics_handler)
+    app.router.add_post("/reports-run-now", reports_run_now_handler)
     app.router.add_put("/device-config", device_config_put_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
     app.router.add_get("/auth/session", auth_session_handler)

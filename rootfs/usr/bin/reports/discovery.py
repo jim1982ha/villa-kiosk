@@ -70,6 +70,30 @@ CAPABILITY_MEANING: Dict[str, str] = {
     CAP_AREAS: "Devices are assigned to areas, so findings can name a room.",
 }
 
+# ⚠️ THE SAME FACTS IN THE ABSENT VOICE, AND THE TWO TABLES ARE NOT
+# INTERCHANGEABLE. `CAPABILITY_MEANING` says what a capability ENABLES, which
+# is right beside one the property HAS. Reusing it under a "not covered by this
+# report" heading prints "A tariff is configured, so consumption can be
+# expressed as money" about a property with no tariff — asserting the exact
+# opposite of the truth, in the section whose entire job is honesty about blind
+# spots. Caught by rendering a sample report and reading it, which is the only
+# thing that catches a sentence that is grammatical, plausible and wrong.
+CAPABILITY_ABSENT: Dict[str, str] = {
+    CAP_STATISTICS: "No long-term history is being recorded, so nothing can be "
+                    "compared over time.",
+    CAP_ENERGY_GRID: "Whole-property consumption is not metered.",
+    CAP_ENERGY_DEVICES: "Individual devices are not metered, so consumption "
+                        "cannot be attributed to equipment.",
+    CAP_ENERGY_COST: "No tariff is configured, so consumption cannot be "
+                     "expressed as money.",
+    CAP_ENERGY_WATER: "Water use is not metered.",
+    CAP_LEDGER: "No maintenance or cost records exist, so findings cannot cite "
+                "work done.",
+    CAP_NOTIFY: "No delivery target is configured.",
+    CAP_AREAS: "Devices are not assigned to areas, so findings cannot name a "
+               "room.",
+}
+
 
 async def _energy_prefs(hass: HassClient) -> Dict[str, Any]:
     """The Energy dashboard configuration, or an empty one.
@@ -352,6 +376,7 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
             "capabilities": sorted(capabilities),
             "capabilities_missing": [c for c in ALL_CAPABILITIES if c not in capabilities],
             "capability_meaning": CAPABILITY_MEANING,
+            "capability_absent": CAPABILITY_ABSENT,
             "inventory": inventory,
             "preflight": [{
                 "severity": "critical", "code": "unreachable",
@@ -364,6 +389,11 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
         preflight.append({
             "severity": "notice",
             "code": "no_tariff",
+            # ⚠️ Names the capability it accounts for. The renderer drops that
+            # capability from the blind-spot list, so an owner is told about a
+            # missing tariff ONCE — under "needs attention", where it is
+            # actionable — rather than twice in slightly different words.
+            "capability": CAP_ENERGY_COST,
             "detail": "No tariff is configured on the Energy dashboard, so "
                       "consumption cannot be expressed as money.",
         })
@@ -385,6 +415,7 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
         "capabilities": sorted(capabilities),
         "capabilities_missing": absent,
         "capability_meaning": CAPABILITY_MEANING,
+        "capability_absent": CAPABILITY_ABSENT,
         "inventory": inventory,
         "preflight": preflight,
         "at": now_iso,

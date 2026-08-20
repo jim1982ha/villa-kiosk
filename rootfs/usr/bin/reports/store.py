@@ -33,6 +33,9 @@ absent; the default is what we FALL BACK to, not what we persist.
 
 from __future__ import annotations
 
+import json
+import os
+import tempfile
 from typing import Any, Dict, Final, List
 
 from .contracts import CADENCE, CONTRACT_VERSION
@@ -186,3 +189,55 @@ def trim_history(entries: List[Any]) -> List[Any]:
     if len(entries) <= REPORTS_HISTORY_MAX_ENTRIES:
         return entries
     return entries[-REPORTS_HISTORY_MAX_ENTRIES:]
+
+
+def read_json(path: str, empty: Dict[str, Any]) -> Any:
+    """Parse a store, degrading to `empty` for absent/corrupt/wrong-typed."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data: Any = json.load(handle)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return empty
+    return data if isinstance(data, type(empty)) else empty
+
+
+def write_json(path: str, payload: Any) -> None:
+    """Atomic overwrite: temp file in the same directory, then os.replace.
+
+    ⚠️ DELIBERATELY NOT `supervisor-proxy.py`'s `atomic_write`, and this is the
+    one place in the subsystem that duplicates a shared rule on purpose.
+    CLAUDE.md says every write under /data goes through that helper; the
+    layering rule in `__init__.py` says nothing here may import the proxy,
+    because a reports bug must never be able to reach the kiosk's own auth
+    path. Both rules are right and they collide here.
+
+    The MECHANISM is what matters and it is reproduced exactly: same directory
+    (so os.replace is atomic rather than a cross-device copy), fsync before
+    replace, temp file removed on failure. A partial or failed write can never
+    leave the live store truncated — a reader sees the whole previous version
+    or the whole new one.
+
+    ⚠️ The convergence path, if this is ever worth doing: the proxy ALREADY
+    imports this package, so the helper could move HERE and the proxy import
+    it — inverting the dependency rather than duplicating the code. Not done
+    now because it would touch every existing atomic_write call site, and
+    those are covered by a security suite this subsystem has no business
+    destabilising.
+    """
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=directory, delete=False)
+    temp_name = handle.name
+    try:
+        with handle:
+            json.dump(payload, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+    except BaseException:
+        try:
+            os.unlink(temp_name)
+        except OSError:
+            pass
+        raise

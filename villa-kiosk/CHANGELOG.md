@@ -1,3 +1,14 @@
+## 2.505.0
+
+### Added — Reports Phase 2: scheduled reports that deliver with no browser open
+
+A 60-second scheduler, a deterministic renderer and notify delivery. Reports
+fire on a wall-clock hour (so "7am" survives a DST change), are idempotent
+across a restart, and catch up for six hours if the tick was missed. Delivery
+is per-target — one refusing target never blocks another — and carries only
+title and message, so any notify platform works. Still opt-in and still
+analyses nothing; that is Phase 3.
+
 ## 2.504.0
 
 ### Changed — findings from Phase 1 QA on real hardware

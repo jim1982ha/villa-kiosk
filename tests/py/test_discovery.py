@@ -26,7 +26,7 @@ from reports.discovery import (
     _grid_sources,
     _has_tariff,
 )
-from reports.discovery import missing_statistic_preflight
+from reports.discovery import CAPABILITY_ABSENT, missing_statistic_preflight
 from reports.hass import statistic_ids_of
 
 
@@ -201,3 +201,19 @@ def test_one_healthy_statistic_prevents_the_wholesale_claim() -> None:
 def test_an_empty_dashboard_produces_no_finding() -> None:
     """Nothing referenced is not the same as everything broken."""
     assert missing_statistic_preflight([("device", [])], set()) == []
+
+
+def test_both_capability_voices_cover_every_capability() -> None:
+    """Two tables, same keys. A capability added to one and not the other
+    prints as a bare slug in whichever section reaches for the missing half —
+    and the ABSENT table is the one a report shows to an owner."""
+    assert set(CAPABILITY_ABSENT) == set(ALL_CAPABILITIES)
+    assert set(CAPABILITY_MEANING) == set(CAPABILITY_ABSENT)
+
+
+def test_the_two_voices_actually_differ() -> None:
+    """Guard against the absent table being filled in by copy-paste — which is
+    exactly how the bug it fixes would come back."""
+    for capability in ALL_CAPABILITIES:
+        assert CAPABILITY_ABSENT[capability] != CAPABILITY_MEANING[capability], (
+            f"{capability} says the same thing in both voices")
