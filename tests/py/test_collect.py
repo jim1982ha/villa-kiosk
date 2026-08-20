@@ -20,11 +20,18 @@ from reports import collect, store
 
 @pytest.fixture(autouse=True)
 def buffer_file(tmp_path: Any) -> Any:
-    """Every test gets its own buffer — never the real /data one."""
+    """Every test gets its own buffer — never the real /data one.
+
+    ⚠️ `_LIVE` IS RESET HERE TOO. It is module-level in-process state, so
+    without this a test that opens a subscription leaves `connected: true`
+    behind and the next test's assertion passes for the previous test's reason.
+    """
     original = store.REPORTS_EVENTS_FILE
     store.REPORTS_EVENTS_FILE = str(tmp_path / "events.json")
+    collect._LIVE.update({"connected_since": "", "drops": 0})
     yield store.REPORTS_EVENTS_FILE
     store.REPORTS_EVENTS_FILE = original
+    collect._LIVE.update({"connected_since": "", "drops": 0})
 
 
 def _event(kind: str = "vesta_roi_event", **data: Any) -> Dict[str, Any]:
@@ -55,6 +62,20 @@ class _FakeHass:
 
 def _collect(events: Sequence[Dict[str, Any]]) -> _FakeHass:
     fake = _FakeHass(events)
+    collector = collect.Collector(None, ["vesta_roi_event"])  # type: ignore[arg-type]
+    import reports.collect as module
+
+    original = module.HassClient
+    module.HassClient = lambda session: fake  # type: ignore[assignment,misc]
+    try:
+        asyncio.run(collector.run_once())
+    finally:
+        module.HassClient = original  # type: ignore[assignment]
+    return fake
+
+
+def _run(fake: _FakeHass) -> _FakeHass:
+    """`_collect` for a caller that built its own fake. Same patch idiom."""
     collector = collect.Collector(None, ["vesta_roi_event"])  # type: ignore[arg-type]
     import reports.collect as module
 
@@ -435,10 +456,104 @@ def test_flushing_events_does_not_erase_the_blueprint_record() -> None:
 def test_state_reports_what_has_been_heard() -> None:
     _collect([_event(), _event(), _event("vesta_maintenance_event")])
     got = collect.state()
-    assert got["listening"] is True
     assert got["buffered"] == 3
     assert got["seen_types"]["vesta_roi_event"] == 2
-    assert got["newest"]
+    assert got["last_event_at"]
+
+
+def test_connected_reflects_the_live_socket_not_the_stored_history() -> None:
+    """⚠️ THE FIELD THAT COULD NEVER SAY NO.
+
+    `listening` was `bool(online_since)` — a PERSISTED value written once and
+    never cleared — so it read true forever after the first subscribe, through
+    every reconnect and restart, and for a socket that died a week ago. Every
+    other field on this surface is interpreted through it: `silent_types` means
+    "these categories are quiet" only if something is actually listening, and
+    means nothing at all if not.
+
+    Buffered events and a set `online_since` must NOT be enough to claim a live
+    connection — that combination is exactly the state a stopped collector
+    leaves behind on disk.
+    """
+    _collect([_event(), _event()])
+    buffer = collect.read_buffer()
+    store.write_json(store.REPORTS_EVENTS_FILE, {
+        **buffer, "online_since": "2026-01-01T00:00:00+00:00"})
+
+    collect._LIVE["connected_since"] = ""
+    assert collect.state()["connected"] is False, (
+        "a stored online_since must not be reported as a live subscription")
+
+    collect._LIVE["connected_since"] = "2026-08-21T10:00:00+00:00"
+    got = collect.state()
+    assert got["connected"] is True
+    assert got["connected_since"] == "2026-08-21T10:00:00+00:00"
+    assert got["online_since"] == "2026-01-01T00:00:00+00:00", (
+        "online_since answers a different question — how much of the period "
+        "this villa has had any listener — and must survive independently")
+
+
+def test_a_finished_run_leaves_nothing_claiming_to_be_connected() -> None:
+    """⚠️ THE CLEAR IS IN A `finally`, AND THAT IS THE WHOLE FIX.
+
+    `run_once` returns when the socket closes and RAISES on the cancellation
+    the add-on's shutdown hook delivers. A clear written after the loop would
+    never run on that second path, leaving `connected: true` behind on a
+    collector that has stopped — reinstating the exact defect this replaced,
+    only harder to see because it would be right most of the time.
+
+    Also asserts it was true DURING the run, or the test would pass just as
+    happily against a field that is never set at all.
+    """
+    seen: List[bool] = []
+
+    class _Observing(_FakeHass):
+        async def events(self) -> AsyncIterator[Dict[str, Any]]:
+            for event in self._events:
+                seen.append(collect.state()["connected"])
+                yield event
+
+    _run(_Observing([_event(), _event()]))
+
+    assert seen == [True, True], "connected must be true while subscribed"
+    assert collect.state()["connected"] is False
+    assert collect.state()["connected_since"] == ""
+
+
+def test_cancellation_at_shutdown_also_clears_connected() -> None:
+    """The path a real add-on restart takes. `run_forever` re-raises
+    CancelledError after flushing, and the socket must not be left claimed."""
+
+    class _Hanging(_FakeHass):
+        async def events(self) -> AsyncIterator[Dict[str, Any]]:
+            yield _event()
+            raise asyncio.CancelledError()
+
+    with pytest.raises(asyncio.CancelledError):
+        _run(_Hanging([]))
+
+    assert collect.state()["connected"] is False
+
+
+def test_drops_separates_a_stable_subscription_from_a_flapping_one() -> None:
+    """`connected` is true at every glance whether the socket has been up for a
+    week or reconnects every minute. The count is what tells them apart."""
+    collect._LIVE["drops"] = 0
+    assert collect.state()["drops"] == 0
+    collect._LIVE["drops"] = 3
+    assert collect.state()["drops"] == 3
+
+
+def test_last_flush_is_not_read_as_the_last_event() -> None:
+    """A flush is forced when the socket CLOSES, so the buffer's write time
+    moves without anything arriving. Two different questions; two fields."""
+    _collect([_event()])
+    buffer = collect.read_buffer()
+    store.write_json(store.REPORTS_EVENTS_FILE, {
+        **buffer, "last_seen": "2026-08-21T23:59:00+00:00"})
+    got = collect.state()
+    assert got["last_flush"] == "2026-08-21T23:59:00+00:00"
+    assert got["last_event_at"] != got["last_flush"]
 
 
 def test_a_subscribed_but_silent_category_is_named() -> None:
@@ -471,6 +586,6 @@ def test_state_carries_no_event_payloads() -> None:
 
 def test_state_is_safe_before_anything_has_happened() -> None:
     got = collect.state()
-    assert got["listening"] is False
+    assert got["connected"] is False
     assert got["buffered"] == 0
     assert got["silent_types"] == []

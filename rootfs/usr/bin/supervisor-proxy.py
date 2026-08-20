@@ -127,6 +127,16 @@ from reports import contracts as reports_contracts  # noqa: E402  (needs sys.pat
 from reports import collect as reports_collect      # noqa: E402
 from reports import discovery as reports_discovery  # noqa: E402
 from reports import pipeline as reports_pipeline    # noqa: E402
+# ⚠️ BOTH LINES ARE LOAD-BEARING, AND THE SECOND IS THE ONE THAT IS EASY TO
+# DROP. A module registers itself at IMPORT TIME, and `analysis/__init__`
+# imports `base` and `registry` but NOT `modules` — so importing the registry
+# alone yields one that is legitimately empty. It happens to be populated today
+# because `pipeline` imports `analysis.modules` for this exact side effect, but
+# depending on that is depending on an unrelated module's import list: drop that
+# line in pipeline and this endpoint silently reports zero modules again, which
+# is the defect being fixed here wearing a different hat.
+from reports.analysis import registry as reports_registry  # noqa: E402
+from reports.analysis import modules as _reports_modules  # noqa: E402,F401
 from reports import schedule as reports_schedule    # noqa: E402
 from reports import store as reports_store          # noqa: E402
 
@@ -2114,12 +2124,29 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
                  "inventory": {}, "preflight": [], "at": now_iso}
     return web.json_response({
         "ready": True,
-        "phase": "1",
         "contract_version": reports_contracts.CONTRACT_VERSION,
         "enabled": bool(reports_store.config_view(stored).get("enabled")),
-        # No modules exist yet — Phase 3 builds the registry. An empty list
-        # beside `phase: 1` is a fact, not a measurement gap.
-        "modules": [],
+        # ⚠️ ASKED OF THE REGISTRY, NEVER HAND-MAINTAINED. This was the literal
+        # `[]`, under a comment reading "No modules exist yet — Phase 3 builds
+        # the registry. An empty list beside `phase: 1` is a fact, not a
+        # measurement gap." Phase 3 shipped three modules and neither the list
+        # nor the sentence defending it was updated, so the endpoint reported
+        # no analysis modules on a deployment running three — a zero that meant
+        # "not measured" while claiming, in writing, that it did not.
+        #
+        # `phase` went with it: a number describing how far along the BUILD is
+        # says nothing about this villa, cannot be derived from anything here,
+        # and had already gone stale by four phases. `contract_version` is the
+        # compatibility question and is the one a client should read.
+        "modules": [
+            {
+                "name": m.name,
+                "requires": list(m.requires),
+                "audiences": list(m.audiences),
+                "min_days": m.min_days,
+            }
+            for m in reports_registry.registered()
+        ],
         # The detection layer's own health: what it has heard, and from which
         # categories. Without this the only way to tell "nothing happened" from
         # "nothing is listening" is to read a file on the host.

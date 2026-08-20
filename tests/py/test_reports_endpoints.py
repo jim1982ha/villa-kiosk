@@ -163,14 +163,28 @@ def test_diagnostics_is_owner_only() -> None:
         assert response.status == 403
 
 
-def test_diagnostics_reports_the_phase_it_implements() -> None:
-    """`ready` and `phase` are how a reader tells "nothing is instrumented" —
-    a real answer — from "not built yet". Conflating them is how a counter
-    comes to read 0 for exactly the case it exists to measure."""
+def test_diagnostics_lists_the_modules_the_registry_actually_holds() -> None:
+    """⚠️ THE FIELD THAT WENT BLIND. `modules` was the literal `[]`, under a
+    comment asserting that an empty list "is a fact, not a measurement gap".
+    Phase 3 then shipped three modules and neither was updated, so the endpoint
+    reported no analysis on a deployment running three — a zero meaning "not
+    measured" while claiming in writing that it did not. `phase` was removed in
+    the same change: a number describing how far along the BUILD is says nothing
+    about this villa and had gone stale by four phases.
+
+    Asserted against `registered()` rather than a count, so adding a module
+    cannot make this fail and cannot leave the endpoint behind either.
+    """
     payload = _body(asyncio.run(proxy.reports_diagnostics_handler(FakeRequest("owner"))))
     assert payload["ready"] is True
-    assert payload["phase"] == "1"
     assert payload["contract_version"] == proxy.reports_contracts.CONTRACT_VERSION
+    assert "phase" not in payload
+
+    expected = {m.name for m in proxy.reports_registry.registered()}
+    assert expected, "the registry is empty — the modules package was not imported"
+    assert {m["name"] for m in payload["modules"]} == expected
+    for entry in payload["modules"]:
+        assert entry["audiences"] and entry["min_days"] >= 0
 
 
 def test_diagnostics_degrades_when_home_assistant_is_unreachable() -> None:

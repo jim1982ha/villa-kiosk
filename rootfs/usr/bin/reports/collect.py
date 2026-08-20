@@ -59,6 +59,27 @@ MAX_EVENTS = 2000
 #: window bounds how much a crash can lose.
 FLUSH_SECONDS = 20.0
 
+#: ⚠️ LIVENESS IS A PROPERTY OF THE PROCESS, NOT OF THE BUFFER — IN MEMORY ON
+#: PURPOSE. `state()` used to answer "is the collector listening?" with
+#: `bool(online_since)`, a PERSISTED field that is written once and never
+#: cleared. It therefore reads `true` forever after the first successful
+#: subscribe: through every reconnect, every add-on restart, and a socket that
+#: died a week ago. The one question the whole diagnostic surface exists to
+#: answer — is the detection layer still reaching the report? — was the one it
+#: could not answer, and `silent_types` is only meaningful if the answer is yes.
+#:
+#: Found on 2026-08-21 by an owner asking what their collector state meant. It
+#: took the add-on's supervisor log over MCP to establish that the subscription
+#: was in fact healthy, which is precisely the work this field is supposed to
+#: save. An instrument that has to be corroborated elsewhere is not one.
+#:
+#: ⚠️ RESETTING ON RESTART IS THE CORRECT BEHAVIOUR, NOT A LIMITATION. A fresh
+#: process has not subscribed yet, and saying so is honest; persisting it is
+#: how the old field came to lie. `online_since` stays persisted because it
+#: answers a genuinely different question — how much of the reporting period
+#: this villa has had ANY listener — which is a coverage claim about history.
+_LIVE: Dict[str, Any] = {"connected_since": "", "drops": 0}
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -216,9 +237,22 @@ def state() -> Dict[str, Any]:
     buffer = read_buffer()
     events = buffer["events"]
     return {
-        "listening": bool(buffer["online_since"]),
+        # ⚠️ THE LIVE SOCKET, NOT THE STORED HISTORY. See `_LIVE` — this was
+        # `bool(online_since)`, which can never be false once set.
+        "connected": bool(_LIVE["connected_since"]),
+        "connected_since": _LIVE["connected_since"],
+        # ⚠️ IN-MEMORY, SO IT RESETS WITH THE PROCESS, and `0` therefore means
+        # "none since this add-on started" rather than "none ever". Paired with
+        # `connected_since` deliberately: read together they separate a stable
+        # subscription from one that is flapping, which `connected` alone
+        # cannot — a socket that drops and reconnects every minute is `true`
+        # every time anyone looks.
+        "drops": _LIVE["drops"],
         "online_since": buffer["online_since"],
-        "last_seen": buffer["last_seen"],
+        # The last time the buffer was WRITTEN. Not the last event: a flush is
+        # also forced when the socket closes, so this moves without anything
+        # arriving. `last_event_at` below is the one to read for that.
+        "last_flush": buffer["last_seen"],
         "buffered": len(events),
         "seen_types": buffer["seen_types"],
         "blueprint_categories": buffer["blueprint_categories"],
@@ -231,7 +265,7 @@ def state() -> Dict[str, Any]:
             for c in buffer["blueprint_categories"]
             if not buffer["seen_types"].get(EVENT_TEMPLATE.format(category=c))
         ),
-        "newest": events[-1].get("at") if events else "",
+        "last_event_at": events[-1].get("at") if events else "",
     }
 
 
@@ -334,10 +368,23 @@ class Collector:
                 self._types, categories = await discover_event_types(hass)
             await hass.subscribe(self._types)
             self._mark_online(categories)
+            # ⚠️ SET AFTER `subscribe`, NEVER BEFORE. An open websocket that has
+            # not been subscribed receives nothing, so marking it connected on
+            # connect would report a listener that is not listening — the same
+            # class of over-claim as the persisted flag this replaced.
+            _LIVE["connected_since"] = _now()
             log(f"collector subscribed to {', '.join(self._types)}")
-            async for event in hass.events():
-                self._record(event)
-                self._flush()
+            try:
+                async for event in hass.events():
+                    self._record(event)
+                    self._flush()
+            finally:
+                # Cleared on ANY exit — a clean close, an error, or the
+                # cancellation raised at shutdown. A `finally` rather than a
+                # line after the loop, because the cancellation path never
+                # reaches that line and would leave `connected: true` behind on
+                # a collector that has stopped.
+                _LIVE["connected_since"] = ""
         self._flush(force=True)
 
     async def run_forever(self, retry_seconds: float = 30.0) -> None:
@@ -349,6 +396,7 @@ class Collector:
         while True:
             try:
                 await self.run_once()
+                _LIVE["drops"] += 1
                 warn("event subscription closed; reconnecting")
             except asyncio.CancelledError:
                 self._flush(force=True)
