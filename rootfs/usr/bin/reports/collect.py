@@ -35,20 +35,18 @@ from . import store
 from .hass import HassClient, HassUnavailable
 from .log import log, swallow, warn
 
-#: The event families the blueprint layer emits. Named explicitly — see
-#: `HassClient.subscribe` on why a bare subscription is not an option.
-#:
-#: ⚠️ THIS LIST IS A GUESS BEYOND THE FIRST ENTRY, and is instrumented rather
-#: than assumed: `vesta_roi_event` is documented in `roi_idle_load.yaml`'s own
-#: description, the rest follow the catalog's four categories. `seen_types` in
-#: the buffer records which ones actually arrive, so a name that is wrong shows
-#: up as permanently absent instead of silently collecting nothing.
-DEFAULT_EVENT_TYPES = (
+#: Fallback only — used when the installed blueprints cannot be read. See
+#: `discover_event_types`, which derives the real list from the deployment.
+FALLBACK_EVENT_TYPES = (
     "vesta_roi_event",
     "vesta_maintenance_event",
     "vesta_critical_event",
     "vesta_audit_event",
 )
+
+#: How a blueprint's file name maps to the event it emits. `roi_idle_load.yaml`
+#: is in the `roi` category and fires `vesta_roi_event`.
+EVENT_TEMPLATE = "vesta_{category}_event"
 
 #: Bounded, like every other store here. A busy villa might produce a few dozen
 #: findings a day; 2000 is months of headroom and a hard stop against a rule
@@ -64,6 +62,70 @@ FLUSH_SECONDS = 20.0
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _categories_from_blueprints(listing: Any) -> List[str]:
+    """Blueprint file names -> the event categories they emit.
+
+    ⚠️ KEYED ON THE BLUEPRINT, NEVER ON THE AUTOMATION. An automation instance
+    is named by whoever filled the form — `roi_idle_load---living_room_ac` on
+    one property, something entirely different on the next — so any code that
+    reads instance names is code that works on exactly one villa. The blueprint
+    a rule was built from is the same file everywhere it is installed, and the
+    category is the part of its name before the first underscore.
+
+    Filtered to VESTA-authored blueprints so a property's unrelated blueprints
+    (`control_*`, community imports) do not produce subscriptions to events
+    nothing will ever fire.
+    """
+    entries: List[Any] = []
+    if isinstance(listing, dict):
+        for path, meta in listing.items():
+            entries.append((str(path), meta))
+    elif isinstance(listing, list):
+        for meta in listing:
+            if isinstance(meta, dict):
+                entries.append((str(meta.get("path") or ""), meta))
+
+    categories: set[str] = set()
+    for path, meta in entries:
+        if not path:
+            continue
+        metadata = meta.get("metadata") if isinstance(meta, dict) else None
+        source = metadata if isinstance(metadata, dict) else (meta if isinstance(meta, dict) else {})
+        author = str(source.get("author") or "")
+        name = str(source.get("name") or "")
+        if author.upper() != "VESTA" and not name.upper().startswith("VESTA"):
+            continue
+        leaf = path.rsplit("/", 1)[-1]
+        stem = leaf.rsplit(".", 1)[0]
+        if "_" in stem:
+            categories.add(stem.split("_", 1)[0].lower())
+    return sorted(categories)
+
+
+async def discover_event_types(hass: HassClient) -> List[str]:
+    """Which `vesta_*` events THIS deployment can produce.
+
+    ⚠️ DERIVED, NOT HARDCODED, AND THIS IS A PORTABILITY REQUIREMENT RATHER
+    THAN A REFINEMENT. The first version subscribed to four names guessed from
+    one villa's catalog. A property with a different blueprint set — a new
+    category, a subset, a rename — would have had a collector listening for
+    events nothing fires, reporting an empty week forever with no error
+    anywhere. Reading the installed blueprints makes the subscription a
+    function of the deployment.
+    """
+    try:
+        listing: Any = await hass.command("blueprint/list", domain="automation")
+    except HassUnavailable as err:
+        warn(f"could not list blueprints ({err}); using the fallback event list")
+        return list(FALLBACK_EVENT_TYPES)
+
+    categories = _categories_from_blueprints(listing)
+    if not categories:
+        warn("no VESTA blueprints found; using the fallback event list")
+        return list(FALLBACK_EVENT_TYPES)
+    return [EVENT_TEMPLATE.format(category=c) for c in categories]
 
 
 def read_buffer() -> Dict[str, Any]:
@@ -111,9 +173,10 @@ class Collector:
     """Holds one subscription open and appends what arrives."""
 
     def __init__(self, session: ClientSession,
-                 event_types: Sequence[str] = DEFAULT_EVENT_TYPES) -> None:
+                 event_types: Optional[Sequence[str]] = None) -> None:
         self._session = session
-        self._types = list(event_types)
+        #: None means "ask the deployment on connect" — see discover_event_types.
+        self._types = list(event_types) if event_types else []
         self._pending: List[Dict[str, Any]] = []
         self._last_flush = 0.0
 
@@ -182,6 +245,8 @@ class Collector:
     async def run_once(self) -> None:
         """One connection's lifetime. Returns when the socket closes."""
         async with HassClient(self._session) as hass:
+            if not self._types:
+                self._types = await discover_event_types(hass)
             await hass.subscribe(self._types)
             self._mark_online()
             log(f"collector subscribed to {', '.join(self._types)}")
@@ -227,5 +292,9 @@ def blueprint_layer_present(within_days: int = 30) -> bool:
 
 async def run_forever(session: ClientSession,
                       event_types: Optional[Sequence[str]] = None) -> None:
-    """Entry point for the proxy's startup hook."""
-    await Collector(session, event_types or DEFAULT_EVENT_TYPES).run_forever()
+    """Entry point for the proxy's startup hook.
+
+    `event_types` is normally None so the deployment decides — an operator
+    override exists for a property whose blueprints use a different convention.
+    """
+    await Collector(session, event_types).run_forever()

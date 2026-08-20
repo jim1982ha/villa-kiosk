@@ -223,3 +223,101 @@ def test_modules_run_when_there_is_no_automation_layer() -> None:
         inventory={}, settings={}, min_history_days=14, stats=None, labels={})
     ok, _, _ = gate(StandbyCreep(), context, {}, 120)
     assert ok, "a property with no blueprints must still get analysis"
+
+
+# ── portability: the subscription must not depend on this villa ──────────────
+# ⚠️ AN AUTOMATION INSTANCE IS NAMED BY WHOEVER FILLED THE FORM. On this villa
+# they read `roi_idle_load---living_room_ac`; on the next property they will read
+# something else entirely. Any code that parses an instance name is code that
+# works on exactly one deployment. The BLUEPRINT is the same file everywhere it
+# is installed, which is why the subscription is derived from that.
+
+def test_categories_come_from_blueprints_not_automations() -> None:
+    listing = {
+        "roi_idle_load.yaml": {"metadata": {"author": "VESTA", "name": "VESTA ROI - Idle load"}},
+        "maintenance_silence.yaml": {"metadata": {"author": "VESTA", "name": "VESTA Maintenance"}},
+        "critical_watchdog.yaml": {"metadata": {"author": "VESTA", "name": "VESTA Critical"}},
+    }
+    assert collect._categories_from_blueprints(listing) == [
+        "critical", "maintenance", "roi"]
+
+
+def test_a_different_villas_blueprint_set_yields_its_own_events() -> None:
+    """The portability property, stated directly: a property with categories
+    this villa does not have must be subscribed to correctly, with no code
+    change and no configuration."""
+    listing = {
+        "security_perimeter.yaml": {"metadata": {"author": "VESTA", "name": "VESTA Security"}},
+        "comfort_setpoint.yaml": {"metadata": {"author": "VESTA", "name": "VESTA Comfort"}},
+    }
+    categories = collect._categories_from_blueprints(listing)
+    events = [collect.EVENT_TEMPLATE.format(category=c) for c in categories]
+    assert events == ["vesta_comfort_event", "vesta_security_event"]
+
+
+def test_non_vesta_blueprints_are_ignored() -> None:
+    """Subscribing to `vesta_control_event` for a community lighting blueprint
+    would be a subscription to something nothing ever fires."""
+    listing = {
+        "control_humidity_fan.yaml": {"metadata": {"author": None, "name": "Humidity fan"}},
+        "homeassistant/notify_leaving_zone.yaml": {"metadata": {"author": "Home Assistant", "name": "Notify"}},
+        "sbyx/low-battery-detection.yaml": {"metadata": {"author": None, "name": "Low battery"}},
+        "roi_idle_load.yaml": {"metadata": {"author": "VESTA", "name": "VESTA ROI"}},
+    }
+    assert collect._categories_from_blueprints(listing) == ["roi"]
+
+
+def test_a_nested_blueprint_path_still_resolves_its_category() -> None:
+    listing = {"vesta/roi_idle_load.yaml": {"metadata": {"author": "VESTA", "name": "VESTA ROI"}}}
+    assert collect._categories_from_blueprints(listing) == ["roi"]
+
+
+def test_a_list_shaped_response_is_accepted_too() -> None:
+    """Home Assistant has changed this response shape before; a collector that
+    understands only today's form breaks on upgrade."""
+    listing = [{"path": "roi_idle_load.yaml", "metadata": {"author": "VESTA", "name": "VESTA ROI"}}]
+    assert collect._categories_from_blueprints(listing) == ["roi"]
+
+
+def test_no_vesta_blueprints_falls_back_rather_than_going_deaf() -> None:
+    async def run() -> List[str]:
+        class Empty:
+            async def command(self, *a: Any, **k: Any) -> Any:
+                return {}
+        return await collect.discover_event_types(Empty())  # type: ignore[arg-type]
+
+    assert asyncio.run(run()) == list(collect.FALLBACK_EVENT_TYPES)
+
+
+def test_an_unreachable_core_falls_back_rather_than_going_deaf() -> None:
+    """A collector that gave up here would silently never listen again."""
+    from reports.hass import HassUnavailable
+
+    async def run() -> List[str]:
+        class Broken:
+            async def command(self, *a: Any, **k: Any) -> Any:
+                raise HassUnavailable("down")
+        return await collect.discover_event_types(Broken())  # type: ignore[arg-type]
+
+    assert asyncio.run(run()) == list(collect.FALLBACK_EVENT_TYPES)
+
+
+def test_no_automation_instance_name_appears_in_the_collector() -> None:
+    """⚠️ THE PORTABILITY RULE, ENFORCED. The `---` convention in this villa's
+    automation names is a local habit, not a contract. A reference to it here —
+    or to any instance name — would tie the add-on to one property."""
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(collect))
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
+                             ast.ClassDef)):
+            body = node.body
+            if (body and isinstance(body[0], ast.Expr)
+                    and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                node.body = body[1:] or [ast.Pass()]
+    code = ast.unparse(tree)
+    assert "---" not in code, "the collector parses an automation instance name"
+    assert "automation." not in code
