@@ -1,3 +1,13 @@
+## 2.506.0
+
+### Fixed — the scheduler ran in UTC, so a report could fire hours late or never
+
+The config default said `""` means "ask Home Assistant" and nothing asked, so
+every schedule was evaluated against UTC. On a UTC+8 property a report set for
+07:00 would have arrived at 15:00 local, and one set for the current hour never
+became due at all. The villa's timezone is now read from Home Assistant and
+cached, with an explicit setting still winning.
+
 ## 2.505.0
 
 ### Added — Reports Phase 2: scheduled reports that deliver with no browser open
