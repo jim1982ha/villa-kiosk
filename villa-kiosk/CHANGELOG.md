@@ -1,3 +1,14 @@
+## 2.533.0
+
+### Added — caretaker jobs still open from earlier weeks
+
+The report knew only what its own listener had heard, so a maintenance task
+raised before it started was invisible even though nobody had done it. It now
+reads the Home Assistant to-do list as well, under its own heading so old work
+is never counted as this week's, and a task that reached the report by both
+routes is stated once. Device identifiers are stripped from the text; the
+list is never written to.
+
 ## 2.532.0
 
 ### Changed — one answer to "what do we call this group"

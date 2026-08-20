@@ -229,7 +229,12 @@ class DeterministicNarrator:
         """
         return bool(self._list(context, "groups")
                     or context.findings
-                    or self._list(context, "tasks"))
+                    or self._list(context, "tasks")
+                    # ⚠️ A STILL-OPEN JOB IS NEWS. A week whose only content is
+                    # a task raised earlier and never done is not an empty week,
+                    # and saying "found nothing" over the top of it would be the
+                    # 2.530.0 defect in a new place.
+                    or context.carried_tasks)
 
     # ── framing ──────────────────────────────────────────────────────────────
 
@@ -514,7 +519,8 @@ class DeterministicNarrator:
         tasks = self._list(context, "tasks")
         # ⚠️ AND THE VERIFICATION FINDINGS ROUTED HERE — see `_preventive`.
         verified = self._findings_for(context, "fixed")
-        if not resolved and not tasks and not verified:
+        if not resolved and not tasks and not verified \
+                and not context.carried_tasks:
             return []
 
         lines: List[str] = []
@@ -533,6 +539,19 @@ class DeterministicNarrator:
                     lines.append(f"- {text}" + (f" ({where})" if where else ""))
             if len(tasks) > MAX_LINES:
                 lines.append(f"- and {len(tasks) - MAX_LINES} more.")
+
+        # ⚠️ A SEPARATE HEADING, NOT MORE BULLETS UNDER THE ONE ABOVE. These
+        # were raised in an EARLIER period and are still open; folding them in
+        # would report old work as this week's, and the count of new tasks is
+        # the thing an owner reads that list for. Already deduplicated by
+        # `ledger.reconcile`, so nothing here was also stated above.
+        if context.carried_tasks:
+            lines.append("Still open from earlier:")
+            for task in context.carried_tasks[:MAX_LINES]:
+                lines.append(f"- {task.get('text', '')}".rstrip())
+            extra = len(context.carried_tasks) - MAX_LINES
+            if extra > 0:
+                lines.append(f"- and {extra} more.")
         return lines
 
     # ── 5. preventive ────────────────────────────────────────────────────────

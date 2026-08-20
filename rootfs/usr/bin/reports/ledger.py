@@ -28,8 +28,10 @@ that; Phase 1 only needs to read the file and describe what is in it.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+import re
+from typing import Any, Dict, List, Optional, Sequence
 
+from .hass import HassClient, HassUnavailable
 from .log import warn
 
 FM_DATA_FILE = "/data/fm-data.json"
@@ -125,3 +127,158 @@ def cost_total(data: Dict[str, Any], since_iso: Optional[str] = None) -> float:
             continue
         total += float(amount)
     return total
+
+
+# ── the caretaker list ───────────────────────────────────────────────────────
+#
+# ⚠️ TWO TASK SYSTEMS EXIST AND NEITHER KNOWS ABOUT THE OTHER. Nine blueprints
+# call `todo.add_item` beside their event; the kiosk's Facility Manager keeps
+# tickets in `fm-data.json`; and `src/fm/` has no `todo` integration at all
+# (verified: zero references). This module reads both and writes neither.
+#
+# ⚠️ AND READING THE LIST IS NOT THE SAME AS READING THE EVENTS. The collector
+# only knows what fired while it was listening; the todo list is STANDING STATE.
+# On the reference deployment the list held a PM-01 task whose event predates
+# the buffer entirely — a genuinely open job the report could not otherwise
+# know about.
+
+#: A blueprint stamps every task it raises with its catalog rule id:
+#:
+#:     item: "[{{ rule_id }}] {{ matched_entities | join(', ') }} - {{ task_text }}"
+#:
+#: ⚠️ THE MARKER IS THE BLUEPRINT'S OWN CONVENTION, NOT A LIST NAME. Which todo
+#: entity the caretaker list IS varies per property — on the reference
+#: deployment the blueprints write to `todo.shopping_list`, HA's default — so
+#: keying on a name would work on exactly one villa. Keying on the prefix is the
+#: same rule as `_categories_from_blueprints`: identify by what the blueprint
+#: writes, never by what an operator named something.
+#:
+#: The bound keeps a genuine shopping item reading "[urgent] milk" from being
+#: claimed as a maintenance task on a technicality, and anything unclaimed is
+#: never read further — see `todo_tasks`.
+TASK_PREFIX = re.compile(r"^\[([^\]]{1,24})\]\s*(.+)$", re.DOTALL)
+
+#: An entity id, for removal. ⚠️ THE LIST ITEMS CARRY THEM — measured on the
+#: reference deployment, e.g. "[PM-04] sensor.house_pump_power_factor,
+#: sensor.pool_pump_power_factor, ... - Check the pump for a failing capacitor".
+#: Entity ids routinely name rooms and people, `PAYLOAD_ALLOWED_FIELDS` has no
+#: field they could occupy, and this text is destined for prose a person reads.
+ENTITY_ID = re.compile(r"\b[a-z_]+\.[a-z0-9_]+\b")
+
+
+async def todo_lists(hass: HassClient) -> List[str]:
+    """Every `todo` entity, so the caretaker list need not be configured.
+
+    Reading them ALL and filtering by `TASK_PREFIX` is what makes this portable:
+    the add-on cannot know which list a property's blueprints were pointed at
+    without reading their automation configs, which are villa-specific.
+    """
+    try:
+        result: Any = await hass.command("get_states")
+    except HassUnavailable as err:
+        warn(f"could not list todo entities ({err}); skipping caretaker tasks")
+        return []
+    if not isinstance(result, list):
+        return []
+    return sorted(
+        str(row.get("entity_id"))
+        for row in result
+        if isinstance(row, dict) and str(row.get("entity_id", "")).startswith("todo.")
+    )
+
+
+def clean_summary(summary: str) -> str:
+    """A task line with its entity ids removed, ready to be read by a person.
+
+    ⚠️ REMOVED, NOT MASKED. There is no placeholder left behind: a report that
+    prints "[redacted] has drifted" invites the reader to ask what was redacted,
+    and Phase 6 would send the sentence either way.
+
+    ⚠️ AND A SENTENCE CAN LOSE ITS SUBJECT. The nine blueprints write two
+    shapes, measured on the reference deployment:
+
+        "[PM-04] sensor.a, sensor.b - Check the pump for a failing capacitor"
+        "[PM-01] sensor.a has drifted -99.9% from baseline. Check the pump for"
+
+    Stripping the first is clean; stripping the second leaves "has drifted
+    -99.9% from baseline." — a dangling verb. Dropping that clause would be
+    tidier and would throw away the MEASUREMENT, which is the most useful thing
+    on the line, so a generic subject is restored instead. It invents nothing:
+    the thing that drifted genuinely was a monitored device, and which one is
+    exactly what must not travel.
+    """
+    without = ENTITY_ID.sub("", summary)
+    # Collapse the punctuation the removal leaves behind — ", , -" and friends.
+    without = re.sub(r"\s*,\s*(?=,|-|$)", "", without)
+    without = re.sub(r"^\s*[-,.]\s*", "", without)
+    text = re.sub(r"\s{2,}", " ", without).strip(" ,-")
+    if text[:1].islower():
+        return f"A monitored device {text}"
+    return text
+
+
+async def todo_tasks(hass: HassClient,
+                     entity_ids: Optional[Sequence[str]] = None
+                     ) -> List[Dict[str, str]]:
+    """Open caretaker tasks a blueprint raised, from every todo list.
+
+    ⚠️ READ ONLY, AND ONLY THE ITEMS THIS SYSTEM WROTE. An unclaimed item is not
+    parsed, not counted and not carried anywhere — the caretaker list on the
+    reference deployment is also the household's shopping list, and a report
+    that enumerated it would be reading somebody's groceries.
+
+    `needs_action` only: a completed task is not outstanding work, and Phase 7
+    is what turns it into a "this was closed" finding.
+    """
+    lists = list(entity_ids) if entity_ids is not None else await todo_lists(hass)
+    out: List[Dict[str, str]] = []
+    for entity_id in lists:
+        try:
+            result: Any = await hass.command(
+                "todo/item/list", entity_id=entity_id)
+        except HassUnavailable as err:
+            warn(f"could not read {entity_id} ({err})")
+            continue
+        items = result.get("items") if isinstance(result, dict) else result
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("status") or "needs_action") != "needs_action":
+                continue
+            match = TASK_PREFIX.match(str(item.get("summary") or "").strip())
+            if not match:
+                continue
+            text = clean_summary(match.group(2))
+            if text:
+                out.append({"rule_id": match.group(1).strip(), "text": text})
+    return out
+
+
+def reconcile(todo: Sequence[Dict[str, str]],
+              reported: Sequence[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """Caretaker tasks NOT already stated from this period's own events.
+
+    ⚠️ THE SAME TASK REACHES THE REPORT BY TWO ROUTES. A blueprint fires its
+    event AND calls `todo.add_item` in the same action, so a task raised inside
+    the reporting window is in both the collector's buffer and the todo list.
+    Printing both was the duplication Phase B exists to remove.
+
+    ⚠️ MATCHED ON `rule_id`, WHICH IS THE ONLY RELIABLE JOIN. The item's text
+    format varies by blueprint — some write "[PM-04] entities - task", others
+    "[PM-01] entity has drifted -99.9%. task" — so a text comparison would
+    match on some rules and not others, which is worse than not matching at
+    all. The bracketed rule id is written identically by every one of the nine.
+
+    ⚠️ A BLANK `rule_id` NEVER MATCHES ANYTHING. It defaults to `""` in every
+    blueprint, so treating blank-equals-blank as a match would collapse every
+    untagged task into one.
+    """
+    seen = {
+        str(row.get("rule_id") or "").strip()
+        for row in reported
+        if isinstance(row, dict) and str(row.get("rule_id") or "").strip()
+    }
+    return [task for task in todo
+            if task.get("rule_id") and task["rule_id"] not in seen]

@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from aiohttp import ClientSession
 
-from . import aggregate as aggregate_mod, collect, discovery, schedule as schedule_mod, stats as stats_mod, store
+from . import aggregate as aggregate_mod, collect, discovery, ledger, schedule as schedule_mod, stats as stats_mod, store
 from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis.series import hourly_by_day, parse_day
 from .contracts import severity_rank
@@ -256,12 +256,29 @@ async def run_report(
         swallow("aggregation failed; reporting without it", err)
         aggregated = {}
 
+    # ── reconcile ───────────────────────────────────────────────────────────
+    # ⚠️ THE SAME TASK ARRIVES BY TWO ROUTES. A blueprint fires its event AND
+    # calls `todo.add_item` in one action, so a job raised inside the window is
+    # in both places. Reading the list is still worth it for what the buffer
+    # CANNOT know: a task raised before the collector existed is still open.
+    #
+    # Its own failure is non-fatal by design — a report that cannot reach the
+    # todo list is thinner, not absent.
+    carried: List[Dict[str, str]] = []
+    try:
+        async with HassClient(session) as hass:
+            todo = await ledger.todo_tasks(hass)
+        carried = ledger.reconcile(todo, aggregated.get("tasks") or [])
+    except Exception as err:  # noqa: BLE001 - a report must still go out
+        swallow("could not read the caretaker list", err)
+
     # ── narrate ─────────────────────────────────────────────────────────────
     context = ReportContext(
         audience=audience, cadence=cadence, period=period,
         generated_at=generated_at, discovery=found,
         findings=findings, skipped=skipped, ran=ran,
         aggregated=aggregated, collector=collect.state(),
+        carried_tasks=carried,
     )
     narrator = DeterministicNarrator()
     try:

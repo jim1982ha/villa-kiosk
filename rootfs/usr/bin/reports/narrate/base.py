@@ -53,6 +53,13 @@ class ReportContext:
     aggregated: Dict[str, Any] = field(default_factory=dict)
     #: `collect.state()` — whether anything was listening, and for how long.
     collector: Dict[str, Any] = field(default_factory=dict)
+    #: Open caretaker tasks from the HA `todo` list that this period's own
+    #: events did NOT already state — `ledger.reconcile`. Entity ids stripped.
+    #:
+    #: ⚠️ STANDING STATE, NOT EVENTS. The collector only knows what fired while
+    #: it was listening; the todo list holds jobs that are still open however
+    #: long ago they were raised.
+    carried_tasks: List[Dict[str, str]] = field(default_factory=list)
 
 
 class Narrator(Protocol):
