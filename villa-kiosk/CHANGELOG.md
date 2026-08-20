@@ -1,3 +1,14 @@
+## 2.526.0
+
+### Fixed — one P1 alert would have emptied the whole report
+
+The critical blueprints declare severity as P1/P2, an escalation tier rather
+than a loudness, and a Finding raises on any severity the report does not know.
+That exception was caught one layer up and turned into an empty aggregation, so
+the first genuine water leak would have produced a report saying there was
+nothing worth reporting. The tiers now map onto the report's own vocabulary, and
+a severity nothing recognises falls back visibly instead of silently.
+
 ## 2.525.0
 
 ### Added — the report the workbook specifies, in eight sections

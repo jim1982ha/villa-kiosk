@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .analysis.base import Finding, dedup_key
-from .contracts import severity_rank
+from .contracts import SEVERITY, severity_rank
 
 #: The event name a category is carried on. `vesta_<category>_event`.
 CATEGORY_OF_EVENT = {
@@ -88,6 +88,30 @@ HOUSE_SCHEMA_FIELDS = ("blueprint", "report_bucket", "entities", "timestamp")
 #: an absence — `entity_id` says "this file was written to the old rule",
 #: whereas a missing `timestamp` might just be an author's omission.
 LEGACY_SPELLINGS = {"entity_id": "entities"}
+
+#: ⚠️ THE BLUEPRINTS' SEVERITY VOCABULARY IS NOT THE REPORT'S, AND ASSUMING IT
+#: WAS WOULD HAVE BLANKED EVERY REPORT THE FIRST TIME A P1 FIRED.
+#:
+#: `critical_*` declares `severity` as a select with options ["P1", "P2"] — an
+#: escalation tier, not a loudness. `Finding.__post_init__` RAISES on a severity
+#: outside `contracts.SEVERITY`, `to_findings` propagates it, and `pipeline`
+#: catches aggregation failures and continues with `aggregated = {}`. So one
+#: genuine P1 water leak would have silently emptied every section built from
+#: blueprint events and produced a report reading "nothing worth reporting".
+#: Failing in the direction of silence, on the single most important event the
+#: villa can produce.
+#:
+#: Found by reading the deployed blueprint's INPUTS over MCP. The schema audit
+#: that preceded this module read the payload's KEYS and never its VALUES —
+#: which is the same assumption 2.511.0 was made of, one field along.
+SEVERITY_ALIASES = {
+    "p1": "critical",   # pages immediately
+    "p2": "warning",    # reported, not escalated
+    "p3": "notice",
+    "warn": "warning",
+    "error": "critical",
+    "err": "critical",
+}
 
 
 @dataclass
@@ -160,6 +184,35 @@ def _as_float(value: Any) -> Optional[float]:
     return None
 
 
+def _severity_of(raw: Any, category: str) -> str:
+    """A blueprint's severity, in the report's vocabulary. NEVER raw.
+
+    ⚠️ THREE OUTCOMES, AND THE THIRD IS THE ONE THAT MATTERS. A value already in
+    `contracts.SEVERITY` passes through; a known alias is translated (see
+    `SEVERITY_ALIASES` for why P1/P2 exist); anything else falls back to the
+    category default rather than reaching `Finding`, which RAISES on an unknown
+    severity and would take the whole aggregation down with it.
+
+    The fallback is deliberately silent HERE and loud in `schema_drift` — a
+    report must still be delivered, and the operator must still be told their
+    blueprint is using a vocabulary this add-on does not recognise.
+    """
+    text = str(raw or "").strip()
+    if not text:
+        return DEFAULT_SEVERITY[category]
+    if text in SEVERITY:
+        return text
+    return SEVERITY_ALIASES.get(text.lower(), DEFAULT_SEVERITY[category])
+
+
+def unrecognised_severity(raw: Any) -> bool:
+    """Is this a severity no rule here understands? For `schema_drift`."""
+    text = str(raw or "").strip()
+    if not text:
+        return False
+    return text not in SEVERITY and text.lower() not in SEVERITY_ALIASES
+
+
 def normalise(event: Dict[str, Any]) -> Optional[Item]:
     """One buffered event -> one `Item`, or None if it is not ours.
 
@@ -194,7 +247,7 @@ def normalise(event: Dict[str, Any]) -> Optional[Item]:
         bucket=bucket,
         # `label` exists only on critical; elsewhere the bucket IS the label.
         label=str(data.get("label") or bucket or "").strip(),
-        severity=str(data.get("severity") or DEFAULT_SEVERITY[category]),
+        severity=_severity_of(data.get("severity"), category),
         # raised/cleared, critical only. None everywhere else — and that is not
         # the same as "cleared", so it must stay None rather than defaulting.
         phase=(str(data["phase"]) if data.get("phase") else None),
@@ -265,6 +318,8 @@ def schema_drift(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
 
         missing = [f for f in HOUSE_SCHEMA_FIELDS if not data.get(f)]
         legacy = [old for old in LEGACY_SPELLINGS if data.get(old)]
+        if unrecognised_severity(data.get("severity")):
+            legacy.append("severity")
         # `audit` carries `finding` rather than `entities`, by design rather
         # than by drift — 3 of its 5 emit sites name no entity at all, because
         # a structural coverage gap is the absence of hardware.
@@ -278,7 +333,9 @@ def schema_drift(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         counts[key] = counts.get(key, 0) + 1
         missing_by.setdefault(key, set()).update(missing)
         legacy_by.setdefault(key, set()).update(
-            f"{old} (use {LEGACY_SPELLINGS[old]})" for old in legacy)
+            f"{old} (use {LEGACY_SPELLINGS[old]})" if old in LEGACY_SPELLINGS
+            else f"{old}={data.get(old)!r} is not a severity this report knows"
+            for old in legacy)
 
     return {
         "blueprints": [

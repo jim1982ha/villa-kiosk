@@ -328,3 +328,62 @@ def test_a_payload_with_no_blueprint_is_keyed_by_its_category() -> None:
     knows the category, so the report can still say where to look."""
     entry = aggregate.schema_drift([_critical(legacy=True)])["blueprints"][0]
     assert entry["blueprint"] == "(critical)"
+
+
+# ── the severity vocabulary ─────────────────────────────────────────────────
+# ⚠️ THE BUG THAT WOULD HAVE BLANKED EVERY REPORT. `critical_*` declares
+# `severity` as a select with options ["P1", "P2"] — an escalation tier, not a
+# loudness. `Finding.__post_init__` RAISES on a severity outside
+# contracts.SEVERITY, `to_findings` propagates, and `pipeline` catches
+# aggregation failures and continues with `aggregated = {}`. One genuine P1
+# water leak would have emptied every section built from blueprint events and
+# produced a report reading "nothing worth reporting".
+#
+# Found by reading the DEPLOYED blueprint's inputs over MCP. The schema audit
+# that preceded aggregate.py read the payload's KEYS and never its VALUES.
+
+def test_a_P1_alert_does_not_take_the_whole_report_down() -> None:
+    findings = aggregate.to_findings(aggregate.group(
+        aggregate.normalise_all([_critical_sev("P1")])))
+    assert findings[0].severity == "critical"
+
+
+def test_the_escalation_tier_maps_onto_the_report_vocabulary() -> None:
+    for tier, expected in (("P1", "critical"), ("P2", "warning"),
+                           ("p1", "critical"), ("critical", "critical"),
+                           ("warning", "warning")):
+        item = aggregate.normalise(_critical_sev(tier))
+        assert item is not None and item.severity == expected, tier
+
+
+def test_an_unknown_severity_falls_back_rather_than_raising() -> None:
+    """A vocabulary nobody here knows must not stop the report — the fallback
+    is the category default, and `Finding` accepts it."""
+    findings = aggregate.to_findings(aggregate.group(
+        aggregate.normalise_all([_critical_sev("BANANA")])))
+    assert findings[0].severity == "critical"
+
+
+def test_an_unknown_severity_is_REPORTED_not_absorbed() -> None:
+    """⚠️ Silent tolerance is how a blueprint drifts and nobody hears. The
+    fallback keeps the report alive; the drift entry says why it was needed."""
+    drift = aggregate.schema_drift([_critical_sev("BANANA")])
+    assert drift["count"] == 1
+    assert any("not a severity" in note
+               for note in drift["blueprints"][0]["legacy"])
+
+
+def test_the_documented_tiers_are_not_reported_as_drift() -> None:
+    """P1/P2 are the blueprints' own documented vocabulary, not a defect — a
+    counter that fires on every correct event is one nobody reads."""
+    assert aggregate.schema_drift([_critical_sev("P1")])["count"] == 0
+    assert aggregate.schema_drift([_critical_sev("P2")])["count"] == 0
+
+
+def _critical_sev(severity: str) -> Dict[str, Any]:
+    when = "2026-08-20T12:00:00+08:00"
+    return {"type": "vesta_critical_event", "fired": when, "at": when, "data": {
+        "blueprint": "critical_binary_trip", "rule_id": "P1-02",
+        "report_bucket": "Water leak", "severity": severity,
+        "label": "Water leak", "phase": "raised",
+        "entities": ["binary_sensor.x"], "timestamp": when}}
