@@ -1,3 +1,13 @@
+## 2.521.0
+
+### Changed — one home for the report modules' shared helpers
+
+`label_for` — what a device is called when the report must not print its entity
+id — existed byte-identically in two analysis modules while a third imported the
+private copy out of one of them, and all three re-derived the timezone their day
+buckets are built in; forgetting that derivation buckets in UTC silently. Both
+now live in `analysis/base.py`, pinned by four source-level tests.
+
 ## 2.520.0
 
 ### Added — the collector can now be asked what it has heard
