@@ -1,3 +1,14 @@
+## 2.523.0
+
+### Added — the report can now say one thing once, per rule and per bucket
+
+`aggregate.py` turns a period's collected blueprint events into deduplicated,
+cost-ranked findings. The event schema was read out of all 30 blueprint files
+rather than their descriptions: only `rule_id` and `report_bucket` are universal,
+and a critical incident emits on both trip and all-clear, so counting every event
+would report each one twice. A blueprint whose payload predates the convention is
+still read, and now also named in monitoring health instead of absorbed silently.
+
 ## 2.522.0
 
 ### Fixed — the collector's diagnostics could not report a dead subscription
