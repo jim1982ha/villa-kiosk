@@ -1,3 +1,14 @@
+## 2.513.0
+
+### Fixed — the diagnostic went blank in the case worth diagnosing
+
+A candidate rejected for being too small a ratio recorded no working level, so
+there was no way to see whether its absolute change mattered — which is the
+only question that decides whether the ratio threshold is too deaf for that
+device. Observed on a whole-house meter rejected at 18.8%. The working level is
+now measured before either test, so the column a threshold would be tuned from
+is never empty.
+
 ## 2.512.0
 
 ### Fixed — the first real finding was a true 869% and a rise of eight watts
