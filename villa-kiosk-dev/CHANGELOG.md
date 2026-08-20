@@ -1,3 +1,14 @@
+## 2.517.0
+
+### Fixed — the collector only listened for one villa's rule categories
+
+Which events to listen for was a list of four names taken from this property's
+catalog. Another villa using the same blueprints with a different set of
+categories would have had a collector subscribed to events nothing fires, and
+reported an empty week forever with no error anywhere. The list is now derived
+from the blueprints actually installed. Automation names are never read — those
+differ between properties; the blueprint a rule was built from does not.
+
 ## 2.516.0
 
 ### Added — the villa's own automations were reporting into nothing
