@@ -68,9 +68,15 @@ def gate(module: AnalysisModule, context: ModuleContext,
     # deployment is detected rather than configured.
     if getattr(module, "superseded_by_blueprints", False):
         if "blueprint_layer" in context.capabilities:
+            # ⚠️ SHORT, BECAUSE IT IS PRINTED IN A NOTIFICATION. This was
+            # "covered by this property's own automation layer, which sees
+            # occupancy and cost context these checks cannot" — ninety-eight
+            # characters, three times over in one brief, in the section a
+            # reader is least likely to reach. WHY the automations are better
+            # belongs on the Checks tab, which has room and already says it;
+            # what a brief needs is which checks did not run and why.
             return (False, "missing_capability",
-                    "covered by this property's own automation layer, which "
-                    "sees occupancy and cost context these checks cannot")
+                    "your own automations already cover this")
 
     missing = [c for c in module.requires if c not in context.capabilities]
     if missing:

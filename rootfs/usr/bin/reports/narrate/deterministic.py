@@ -599,6 +599,13 @@ class DeterministicNarrator:
             lines.append(f"{BULLET}{_plural(len(resolved), 'alert')} resolved "
                          f"without intervention.")
         if tasks:
+            # ⚠️ A SECTION CAN HOLD MORE THAN ONE HEADING, AND `render` ONLY
+            # SEPARATES SECTIONS. So two headings inside this one ran together
+            # with no blank line between them — visible in the first delivered
+            # brief that had both. The separator belongs wherever a heading
+            # follows content, not only at a section boundary.
+            if lines:
+                lines.append("")
             lines.append(heading("fixed", "For the caretaker"))
             for task in tasks[:MAX_LINES]:
                 if isinstance(task, dict):
@@ -710,26 +717,43 @@ class DeterministicNarrator:
 
         silent = context.collector.get("silent_types") or []
         if silent and context.collector.get("connected"):
-            lines.append(
-                f"{BULLET}{_plural(len(silent), 'category')} of automation alert "
-                f"produced nothing this period. That is either a quiet period "
-                f"or rules that do not report; it cannot tell which.")
+            # ⚠️ NAME THEM. "1 category of automation alert produced nothing
+            # this period" told a reader a count and left them unable to act on
+            # it; the category is the whole content of the line. The hedge that
+            # followed — "either a quiet period or rules that do not report; it
+            # cannot tell which" — is honest and cost twenty words to say
+            # "unknown", so it is now four.
+            names = ", ".join(readable_label(str(t).replace("vesta_", "")
+                                             .replace("_event", ""))
+                              for t in silent[:3])
+            lines.append(f"{BULLET}No {names} alerts this period — either "
+                         f"nothing happened, or those rules do not report.")
 
         drift = (context.aggregated.get("schema_drift") or {})
         for entry in (drift.get("blueprints") or [])[:MAX_LINES]:
             if not isinstance(entry, dict):
                 continue
-            name = readable_label(str(entry.get("blueprint") or "an automation"))
+            # ⚠️ CAPITALISED AT THE CALL SITE, NOT IN `readable_label`. A
+            # blueprint FAMILY is a bare lowercase word ("critical") that
+            # `readable_label` correctly returns untouched — it has no
+            # separator to humanise — and it opens a sentence here. Doing it
+            # inside the shared helper would turn a real label like "iPhone 16
+            # Fab" into "IPhone 16 Fab".
+            raw = readable_label(str(entry.get("blueprint") or "an automation"))
+            name = raw[:1].upper() + raw[1:]
             # ⚠️ FIELD NAMES ARE IDENTIFIERS TOO. This printed `entity_id (use
             # entities)` verbatim — the same defect as the rule id, one line
             # over, and the reason the whole sentence came out italic on a
             # platform that reads `_` as emphasis.
             fields = [readable_label(str(f)) for f in
                       (list(entry.get("missing") or []) + list(entry.get("legacy") or []))]
+            # ⚠️ THE ACTION FIRST, THE REASSURANCE SECOND, AND BOTH SHORTER.
+            # "Its findings are still counted; updating it would make them more
+            # precise" is two clauses for one idea, in a section already dense
+            # with them.
             lines.append(
-                f"{BULLET}{name} reports in an older format ({', '.join(fields)}). "
-                f"Its findings are still counted; updating it would make them "
-                f"more precise.")
+                f"{BULLET}{name} uses an older alert format — still counted, "
+                f"less precise. Update it to send: {', '.join(fields)}.")
 
         dropped = context.aggregated.get("events_dropped")
         if isinstance(dropped, int) and dropped > 0:
@@ -742,22 +766,33 @@ class DeterministicNarrator:
         return ([heading("health", "Monitoring health")] + lines) if lines else []
 
     def _skipped_lines(self, context: ReportContext) -> List[str]:
-        out: List[str] = []
-        for item in context.skipped[:MAX_LINES]:
+        """Why checks did not run — GROUPED BY REASON, one line each.
+
+        ⚠️ THIS WAS THREE LINES SAYING THE SAME TWENTY WORDS. A delivered brief
+        carried "… did not run: covered by this property's own automation
+        layer, which sees occupancy and cost context these checks cannot" three
+        times over, one per check — sixty words to say one thing, in the
+        section a reader is least likely to reach. Grouping keeps every fact
+        and costs a third of the space.
+        """
+        by_reason: Dict[str, List[str]] = {}
+        for item in context.skipped:
             if not isinstance(item, dict):
                 continue
-            # ⚠️ THE CHECK'S NAME, NOT ITS IDENTIFIER. The brief read
-            # "level_anomaly did not run" — the same identifier-in-prose defect
-            # the Checks tab had, reaching the owner's phone. `title` is what
-            # the module calls itself; `readable_label` is the fallback for a
-            # module that has not declared one.
             name = str(item.get("title") or "") or readable_label(
                 str(item.get("module") or "a check"))
-            detail = item.get("detail") or item.get("reason", "no reason given")
-            out.append(f"{BULLET}{name} did not run: {detail}")
-        return out
+            reason = str(item.get("detail") or item.get("reason")
+                         or "no reason given")
+            by_reason.setdefault(reason, []).append(name)
 
-    # ── 8. coverage ──────────────────────────────────────────────────────────
+        out: List[str] = []
+        for reason, names in list(by_reason.items())[:MAX_LINES]:
+            if len(names) == 1:
+                out.append(f"{BULLET}{names[0]} did not run: {reason}")
+            else:
+                out.append(f"{BULLET}{_plural(len(names), 'check')} did not "
+                           f"run — {reason}: {', '.join(names)}")
+        return out
 
     def _coverage(self, context: ReportContext) -> List[str]:
         """⚠️ What this property cannot be asked about.

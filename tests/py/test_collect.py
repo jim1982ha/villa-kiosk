@@ -229,7 +229,10 @@ def test_modules_stand_down_when_the_automation_layer_is_present() -> None:
     for module in (StandbyCreep(), LevelAnomaly(), SensorHealth()):
         ok, reason, detail = gate(module, context, {}, 120)
         assert not ok, f"{module.name} ran alongside the automation layer"
-        assert "automation layer" in detail
+        # ⚠️ THE REASON IS SHORTER NOW because it is PRINTED IN A
+        # NOTIFICATION, three times over in one brief. Why the automations are
+        # better belongs on the Checks tab, which has room and already says it.
+        assert "your own automations" in detail
 
 
 def test_modules_run_when_there_is_no_automation_layer() -> None:

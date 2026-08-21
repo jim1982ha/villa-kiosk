@@ -256,7 +256,11 @@ def test_a_drifted_blueprint_is_named_in_monitoring_health() -> None:
                        "entity_id": "binary_sensor.x"}}
     body = _render(aggregated=_events(legacy))
     assert heading("health", "Monitoring health") in body
-    assert "older format" in body
+    # ⚠️ REWORDED TO LEAD WITH THE ACTION. "Its findings are still counted;
+    # updating it would make them more precise" spent two clauses on one idea,
+    # in the densest section of the brief.
+    assert "older alert format" in body
+    assert "Update it to send:" in body
 
 
 def test_an_unreadable_event_is_admitted_not_dropped_quietly() -> None:
@@ -632,3 +636,39 @@ def test_the_title_says_how_urgent_this_one_is() -> None:
     assert title.startswith(SEVERITY_MARK["critical"]), title
     quiet = DeterministicNarrator()._title(_ctx())
     assert quiet.startswith(SEVERITY_MARK["info"]), quiet
+
+
+def test_checks_that_stood_down_for_the_same_reason_share_one_line() -> None:
+    """⚠️ SIXTY WORDS TO SAY ONE THING. A delivered brief carried "… did not
+    run: covered by this property's own automation layer, which sees occupancy
+    and cost context these checks cannot" THREE TIMES, once per check, in the
+    section a reader is least likely to reach. Grouping keeps every fact and
+    costs a third of the space — which matters because this arrives as a phone
+    notification, not a document."""
+    skipped = [{"module": m, "title": t, "reason": "missing_capability",
+                "detail": "your own automations already cover this"}
+               for m, t in (("a", "First check"), ("b", "Second check"),
+                            ("c", "Third check"))]
+    body = _render(skipped=skipped)
+    lines = [ln for ln in body.splitlines() if "did not run" in ln]
+    assert len(lines) == 1, f"one line per reason, got {len(lines)}: {lines}"
+    for name in ("First check", "Second check", "Third check"):
+        assert name in lines[0], f"{name} was dropped by the grouping"
+    assert "3 checks did not run" in lines[0]
+
+
+def test_two_headings_in_one_section_are_separated() -> None:
+    """⚠️ `render` ONLY PUTS A BLANK LINE BETWEEN SECTIONS. "Closed by itself"
+    and "For the caretaker" live in the same one, so they ran together with no
+    gap — visible in the first delivered brief that had both, once headings
+    carried markers and the join became obvious."""
+    body = _render(aggregated=_events(
+        _critical("raised", when="2026-08-20T12:00:00+08:00"),
+        _critical("cleared", when="2026-08-20T12:30:00+08:00"),
+        _maintenance("Check the valve")))
+    lines = body.splitlines()
+    closed = lines.index(heading("fixed", "Closed by itself"))
+    caretaker = lines.index(heading("fixed", "For the caretaker"))
+    assert lines[caretaker - 1] == "", (
+        "a heading that follows content needs a blank line before it")
+    assert closed < caretaker
