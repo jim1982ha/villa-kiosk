@@ -1,3 +1,15 @@
+## 2.576.0
+
+### Fixed — one rule listed twice, and a headline nobody could scan
+
+A rule whose blueprint was updated mid-period emits two payload shapes, and the
+grouping key falls back through blueprint to category — so the newer events and
+the older ones became two groups and the brief listed "Entrance unlocked while
+vacant" twice, resolved after two different durations. They are one line again.
+"Closed by itself" now counts repeats the way the recap does instead of printing
+the name once per occurrence, and the headline's cost and unresolved-alert lines
+are bullets like every other line of fact in the message.
+
 ## 2.575.0
 
 ### Fixed — findings that were true and impossible to act on
