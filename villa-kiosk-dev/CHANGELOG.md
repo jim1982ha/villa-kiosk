@@ -1,23 +1,11 @@
-## 2.549.0
+## 2.550.0
 
-### Added — a Telegram chat can be picked by name, not just the bot as a whole
+### Changed — one line per schedule, and any time of day rather than the hour
 
-Destinations now include individual notification targets, not only services. A
-Telegram bot with two permitted chats appears as those two chats by name, so a
-briefing can go to the group rather than to everything the bot can reach. The
-one entry that could be chosen and then fail — the generic "send_message" that
-needs a target — is no longer offered, because the things it stood for are now
-listed individually.
-
-## 2.548.0
-
-### Changed — each schedule now carries its own recipients, and there is no separate destination list
-
-A briefing is one thing: how often, at what hour, who it is written for, and
-who receives it. The previous layout put recipients in their own section
-further down the page, so answering "who gets this one" meant cross-referencing
-two lists and remembering which was in force. Each schedule is now a card
-holding all four. An existing shared list is copied onto the schedules that
-were using it when the tab is opened, and nothing changes until Save is
-pressed — briefings keep arriving where they were arriving until then.
+The recipients are now a button on the schedule's own line showing who receives
+it, opening a tick list when you want to change it — no separate section, no
+row of its own, no delete button per recipient. The time is a single field
+accepting any hour and minute instead of a dropdown of whole hours. Delivering
+at 07:30 is exactly as accurate as 07:00 was and changes nothing about what the
+briefing measures: the period it covers is a date boundary, not a clock time.
 
