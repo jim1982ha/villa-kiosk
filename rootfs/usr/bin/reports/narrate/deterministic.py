@@ -43,6 +43,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Sequence, Tuple
 
 from ..aggregate import readable_label
+from .style import BULLET, heading, title_mark
 from ..contracts import severity_rank
 from .base import ReportContext
 
@@ -247,9 +248,36 @@ class DeterministicNarrator:
     # ── framing ──────────────────────────────────────────────────────────────
 
     def _title(self, context: ReportContext) -> str:
+        """⚠️ THE TITLE IS OFTEN ALL THAT IS READ — a push notification shows it
+        and about two lines, a chat list shows it alone. So it leads with how
+        urgent this one is, in the same visual language the villa's own
+        automations already use (`🪫 Low Battery Alert`). The words after the
+        marker are unchanged: a title that also changed its wording would break
+        every reader's sense of which message this is."""
         period = PERIOD_WORD.get(context.cadence, "Property")
         audience = AUDIENCE_WORD.get(context.audience, "brief")
-        return f"{period} {audience} — {context.period}"
+        return (f"{title_mark(self._worst(context))} "
+                f"{period} {audience} — {context.period}")
+
+    def _worst(self, context: ReportContext) -> str:
+        """The loudest thing in this brief, for the title's marker.
+
+        ⚠️ THE SAME RANK THE HISTORY ENTRY RECORDS, over the same two sources —
+        this add-on's own findings and the blueprint layer's groups. A title
+        that said "all clear" over a brief opening with a critical alert would
+        be the instrument lying, one surface further out than v2.555.0's.
+        """
+        worst = "info"
+        for item in context.findings or []:
+            if isinstance(item, dict):
+                candidate = str(item.get("severity", "info"))
+                if severity_rank(candidate) > severity_rank(worst):
+                    worst = candidate
+        for group in (context.aggregated.get("groups") or []):
+            candidate = str(getattr(group, "severity", "info"))
+            if severity_rank(candidate) > severity_rank(worst):
+                worst = candidate
+        return worst
 
     def _when(self, iso: str) -> str:
         """A timestamp an owner reads, not one a machine parses.
@@ -402,9 +430,9 @@ class DeterministicNarrator:
         groups = self._groups(context, "critical")
         if not groups:
             return []
-        lines = ["What went wrong:"]
+        lines = [heading("critical", "What went wrong")]
         for group in self._top(groups):
-            lines.append(f"- {self._incident_line(group)}")
+            lines.append(f"{BULLET}{self._incident_line(group)}")
         return lines + self._and_more(groups)
 
     def _incident_line(self, group: Any) -> str:
@@ -465,8 +493,8 @@ class DeterministicNarrator:
         # having nothing priced, not for lacking a capability this section
         # never used.
         if billable:
-            head = ("Avoidable cost, most expensive first:" if priced
-                    else "Waste identified, not priced:")
+            head = (heading("money", "Avoidable cost, most expensive first") if priced
+                    else heading("money", "Waste identified, not priced"))
             # ⚠️ ONE FORMAT FOR THE WHOLE LIST. `_amount` decided per value —
             # two decimals below 100, none above — so a real report printed
             # "799", "156" and "96.00" in the same column. The currency is the
@@ -486,12 +514,13 @@ class DeterministicNarrator:
             # it appears here and again under monitoring health in slightly
             # different words. So when preflight already explains it, this
             # points at that instead of restating it.
+            head = heading("money", "Avoidable cost")
             if self._explained(context, "energy_cost"):
-                return ["Avoidable cost:",
-                        "- Not calculated — see monitoring health below."]
-            return ["Avoidable cost:",
-                    "- Not calculated. No electricity tariff is configured, so "
-                    "waste can be identified but not priced."]
+                return [head, f"{BULLET}Not calculated — see monitoring health "
+                              f"below."]
+            return [head,
+                    f"{BULLET}Not calculated. No electricity tariff is "
+                    f"configured, so waste can be identified but not priced."]
         return []
 
     def _money_line(self, group: Any, whole: bool = False) -> str:
@@ -521,11 +550,11 @@ class DeterministicNarrator:
             duration = self._duration(spent) if spent else self._runtime(group)
             said = ", ".join(p for p in (energy, duration) if p) \
                 or self._measurement(group) or "no figure supplied"
-            return f"- {label}: {said}, not priced"
+            return f"{BULLET}{label}: {said}, not priced"
         parts = [_amount(float(cost), whole)]
         if energy:
             parts.append(energy)
-        return f"- {label}: {', '.join(parts)}{note}"
+        return f"{BULLET}{label}: {', '.join(parts)}{note}"
 
     # ── 4. fixed and suggested ───────────────────────────────────────────────
 
@@ -555,22 +584,29 @@ class DeterministicNarrator:
             # ENDED, which is precisely the line a reader should be able to
             # find. "Followed up" describes the ACTION, which is evidenced;
             # the sentence itself never says more than "has not recurred".
-            lines.append("Followed up:")
+            lines.append(heading("fixed", "Followed up"))
             for item in verified[:MAX_LINES]:
                 lines.append(self._finding_line(item))
         if resolved:
-            lines.append(
-                f"Resolved without intervention: "
-                f"{_plural(len(resolved), 'alert')}.")
+            # ⚠️ A BULLET UNDER A HEADING, NOT A BARE SENTENCE. It used to sit
+            # unmarked directly above "For the caretaker", so once headings
+            # carried markers every other top-level line in the body was either
+            # a marked heading or a bullet and this one was neither — it read as
+            # a heading that had lost its icon. Found by rendering a brief from
+            # real data and looking at it, which is the only thing that finds a
+            # line that is grammatical and misplaced.
+            lines.append(heading("fixed", "Closed by itself"))
+            lines.append(f"{BULLET}{_plural(len(resolved), 'alert')} resolved "
+                         f"without intervention.")
         if tasks:
-            lines.append("Raised for the caretaker:")
+            lines.append(heading("fixed", "For the caretaker"))
             for task in tasks[:MAX_LINES]:
                 if isinstance(task, dict):
                     where = str(task.get("bucket") or "").strip()
                     text = str(task.get("text") or "").strip()
-                    lines.append(f"- {text}" + (f" ({where})" if where else ""))
+                    lines.append(f"{BULLET}{text}" + (f" ({where})" if where else ""))
             if len(tasks) > MAX_LINES:
-                lines.append(f"- and {len(tasks) - MAX_LINES} more.")
+                lines.append(f"{BULLET}and {len(tasks) - MAX_LINES} more.")
 
         # ⚠️ A SEPARATE HEADING, NOT MORE BULLETS UNDER THE ONE ABOVE. These
         # were raised in an EARLIER period and are still open; folding them in
@@ -578,12 +614,12 @@ class DeterministicNarrator:
         # the thing an owner reads that list for. Already deduplicated by
         # `ledger.reconcile`, so nothing here was also stated above.
         if context.carried_tasks:
-            lines.append("Still open from earlier:")
+            lines.append(heading("preventive", "Still open from earlier"))
             for task in context.carried_tasks[:MAX_LINES]:
-                lines.append(f"- {task.get('text', '')}".rstrip())
+                lines.append(f"{BULLET}{task.get('text', '')}".rstrip())
             extra = len(context.carried_tasks) - MAX_LINES
             if extra > 0:
-                lines.append(f"- and {extra} more.")
+                lines.append(f"{BULLET}and {extra} more.")
         return lines
 
     # ── 5. preventive ────────────────────────────────────────────────────────
@@ -598,7 +634,7 @@ class DeterministicNarrator:
         forecast = self._findings_for(context, "preventive")
         if not groups and not forecast:
             return []
-        lines = ["Maintenance signals:"]
+        lines = [heading("preventive", "Maintenance signals")]
         for group in self._top(groups):
             label = self._name(group)
             # ⚠️ THE MEASUREMENT, NOT JUST THE NAME. A live report printed
@@ -609,7 +645,7 @@ class DeterministicNarrator:
             # numbers ARE the detail, and the section was redundant with the
             # caretaker list above it until it printed them.
             said = self._detail(group) or self._measurement(group)
-            lines.append(f"- {label}: {said}" if said else f"- {label}")
+            lines.append(f"{BULLET}{label}: {said}" if said else f"{BULLET}{label}")
         for item in forecast[:MAX_LINES]:
             lines.append(self._finding_line(item))
         return lines + self._and_more(groups)
@@ -629,7 +665,7 @@ class DeterministicNarrator:
         if not drifting and not module_findings:
             return []
 
-        lines = ["Trends:"]
+        lines = [heading("trends", "Trends")]
         for group in self._top(drifting):
             label = self._name(group)
             # ⚠️ THE NUMBER IF THERE IS ONE. A live report printed
@@ -637,7 +673,7 @@ class DeterministicNarrator:
             # `deviation_pct: 26.9` — the word for the thing instead of the
             # measurement of it, which is the whole point of a trends section.
             said = self._detail(group) or self._measurement(group) or "drifting"
-            lines.append(f"- {label}: {said}")
+            lines.append(f"{BULLET}{label}: {said}")
         for item in module_findings[:MAX_LINES]:
             lines.append(self._finding_line(item))
         return lines
@@ -670,12 +706,12 @@ class DeterministicNarrator:
         for group in self._top(self._groups(context, "audit")):
             label = self._name(group)
             said = self._detail(group) or self._measurement(group)
-            lines.append(f"- {label}: {said}" if said else f"- {label}")
+            lines.append(f"{BULLET}{label}: {said}" if said else f"{BULLET}{label}")
 
         silent = context.collector.get("silent_types") or []
         if silent and context.collector.get("connected"):
             lines.append(
-                f"- {_plural(len(silent), 'category')} of automation alert "
+                f"{BULLET}{_plural(len(silent), 'category')} of automation alert "
                 f"produced nothing this period. That is either a quiet period "
                 f"or rules that do not report; it cannot tell which.")
 
@@ -691,19 +727,19 @@ class DeterministicNarrator:
             fields = [readable_label(str(f)) for f in
                       (list(entry.get("missing") or []) + list(entry.get("legacy") or []))]
             lines.append(
-                f"- {name} reports in an older format ({', '.join(fields)}). "
+                f"{BULLET}{name} reports in an older format ({', '.join(fields)}). "
                 f"Its findings are still counted; updating it would make them "
                 f"more precise.")
 
         dropped = context.aggregated.get("events_dropped")
         if isinstance(dropped, int) and dropped > 0:
             lines.append(
-                f"- {_plural(dropped, 'alert')} could not be read and "
+                f"{BULLET}{_plural(dropped, 'alert')} could not be read and "
                 f"{'was' if dropped == 1 else 'were'} left out.")
 
         lines.extend(self._skipped_lines(context))
 
-        return (["Monitoring health:"] + lines) if lines else []
+        return ([heading("health", "Monitoring health")] + lines) if lines else []
 
     def _skipped_lines(self, context: ReportContext) -> List[str]:
         out: List[str] = []
@@ -718,7 +754,7 @@ class DeterministicNarrator:
             name = str(item.get("title") or "") or readable_label(
                 str(item.get("module") or "a check"))
             detail = item.get("detail") or item.get("reason", "no reason given")
-            out.append(f"- {name} did not run: {detail}")
+            out.append(f"{BULLET}{name} did not run: {detail}")
         return out
 
     # ── 8. coverage ──────────────────────────────────────────────────────────
@@ -741,9 +777,9 @@ class DeterministicNarrator:
         watched = context.collector.get("blueprint_categories") or []
         if watched and not context.collector.get("connected"):
             lines.append(
-                "- This property's own automation alerts were not being "
-                "recorded for part of this period, so some findings may be "
-                "missing.")
+                f"{BULLET}This property's own automation alerts were not "
+                "being recorded for part of this period, so some findings may "
+                "be missing.")
 
         missing = context.discovery.get("capabilities_missing") or []
         absent_voice = context.discovery.get("capability_absent") or {}
@@ -754,9 +790,9 @@ class DeterministicNarrator:
             # ⚠️ THE ABSENT VOICE, never `capability_meaning` — that table says
             # what a capability ENABLES and reads as a statement of fact about
             # a property that does not have it.
-            lines.append(f"- {absent_voice.get(capability) or capability}")
+            lines.append(f"{BULLET}{absent_voice.get(capability) or capability}")
 
-        return (["Not covered by this report:"] + lines) if lines else []
+        return ([heading("coverage", "Not covered by this report")] + lines) if lines else []
 
     def _preflight_lines(self, context: ReportContext) -> List[str]:
         items = context.discovery.get("preflight") or []
@@ -773,7 +809,7 @@ class DeterministicNarrator:
         ranked = sorted(
             (i for i in items if isinstance(i, dict)),
             key=lambda i: -severity_rank(str(i.get("severity") or "")))
-        return [f"- {item.get('detail', '')}" for item in ranked]
+        return [f"{BULLET}{item.get('detail', '')}" for item in ranked]
 
     # ── reading the aggregation ──────────────────────────────────────────────
     #
@@ -810,7 +846,7 @@ class DeterministicNarrator:
         area = str(item.get("area") or "")
         where = f" ({area})" if area else ""
         detail = str(item.get("detail") or fallback)
-        return f"- {label}{where}: {detail}".rstrip(": ")
+        return f"{BULLET}{label}{where}: {detail}".rstrip(": ")
 
     def _findings_for(self, context: ReportContext, section: str) -> List[Dict[str, Any]]:
         """Module findings this section owns, by KIND.
@@ -971,4 +1007,4 @@ class DeterministicNarrator:
     @staticmethod
     def _and_more(groups: Sequence[Any]) -> List[str]:
         extra = len(groups) - MAX_LINES
-        return [f"- and {extra} more."] if extra > 0 else []
+        return [f"{BULLET}and {extra} more."] if extra > 0 else []

@@ -45,6 +45,7 @@ from .. import secrets
 from ..contracts import NARRATION_MODE
 from ..log import log, swallow, warn
 from . import payload as payload_mod
+from .style import BULLET, SECTION_MARK
 
 #: One request's ceiling. ⚠️ SHORT ON PURPOSE. A scheduled report is composed
 #: inside a 60-second tick; a provider that takes longer than this has already
@@ -201,18 +202,35 @@ def _prompt(body: Mapping[str, Any]) -> str:
     into a document the owner acts on — and would make the deterministic
     renderer and the narrated version disagree about what happened.
     """
+    marks = " ".join(sorted(set(SECTION_MARK.values())))
     return (
-        "You are writing a short property report for the owner of a villa.\n"
+        "You are writing a short property report for the owner of a villa. It "
+        "arrives as a phone notification.\n"
         "Below is JSON describing findings that automated checks produced this "
         "period.\n\n"
         "Rules:\n"
         "- Use ONLY the facts in the JSON. Do not infer causes, do not "
         "estimate, do not add advice that the data does not support.\n"
-        "- Plain text only. No markdown, no bullets with symbols, no links.\n"
         "- Do not invent equipment, rooms or numbers that are not present.\n"
         "- If `not_covered` is non-empty, state plainly that those things "
         "could not be measured.\n"
-        "- Be brief. A reader on a phone should finish it.\n\n"
+        "- Be brief. A reader on a phone should finish it.\n"
+        # ⚠️ THE SAME SHAPE THE BUILT-IN RENDERER PRODUCES, ASKED FOR
+        # EXPLICITLY. Narration REPLACES the body, so without this, switching
+        # it on would silently lose the structure that makes a brief scannable
+        # on a phone — the owner would have turned on "nicer wording" and got
+        # back a wall of prose. The reason each rule exists is in `style.py`;
+        # what matters here is that both narrators emit the same document.
+        "\n"
+        "Format:\n"
+        "- Open with ONE line naming the single most important thing. A push "
+        "notification shows about two lines and nothing else.\n"
+        f"- Group the rest under short headings, each starting with one of "
+        f"these emoji: {marks}\n"
+        f"- Start every list item with '{BULLET.strip()}'.\n"
+        "- NO markdown: no asterisks, no underscores, no backticks, no '#', "
+        "no links. Emoji are the only formatting. Some destinations parse "
+        "markup and would mangle the rest of the message.\n\n"
         + json.dumps(body, indent=1, sort_keys=True)
     )
 
@@ -361,7 +379,18 @@ def _flatten(text: str) -> str:
         stripped = line.strip()
         for marker in ("### ", "## ", "# ", "**", "__", "`"):
             stripped = stripped.replace(marker, "")
+        # ⚠️ SINGLE UNDERSCORES TOO, AND THAT IS NOT PEDANTRY. `_word_` is
+        # italic in the same dialects `**word**` is bold, and this project has
+        # already had a delivered brief mangled by exactly that character — a
+        # platform parsing by default ate every underscore and italicised whole
+        # paragraphs between them. Stripping `**` and leaving `_` would defend
+        # against the rarer of the two.
+        stripped = stripped.replace("_", "")
+        # ⚠️ NORMALISED TO `BULLET`, NOT TO `- `. The old form turned a
+        # provider's `* item` into `- item`, which is a LIST MARKER in every
+        # markdown dialect — so the flattener's own output could be re-parsed
+        # by the destination. `•` is a character and nothing parses it.
         if stripped.startswith(("* ", "- ")):
-            stripped = "- " + stripped[2:]
+            stripped = BULLET + stripped[2:]
         out.append(stripped)
     return "\n".join(out).strip()

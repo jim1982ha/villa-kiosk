@@ -10,6 +10,14 @@ edge cases.
 
 from __future__ import annotations
 
+# ⚠️ THE HEADINGS COME FROM THE VOCABULARY, NOT FROM A COPY. These
+# asserted rendered strings like "Maintenance signals:" — so adding
+# the emoji markers that make a brief scannable on a phone broke nine
+# tests that were pinning PRESENTATION while claiming to pin structure.
+# `style.py` is the one place a heading is decided; reading it here means
+# the next change to how a brief looks touches one file.
+from reports.narrate.style import BULLET, heading  # noqa: F401
+
 from typing import Any, Dict, List
 
 from reports import aggregate, verify
@@ -174,8 +182,11 @@ def test_a_verification_gets_its_own_heading() -> None:
                    "preflight": []},
         findings=[f.as_dict() for f in found]))[1]
     lines = body.splitlines()
-    bullet = next(i for i, ln in enumerate(lines) if ln.startswith("- "))
-    assert lines[bullet - 1] == "Followed up:", (
+    # ⚠️ `BULLET`, NOT `"- "`. The bullet is `•` now: a leading `- ` is a
+    # list marker in every markdown dialect and becomes a rendered list whose
+    # indentation the sender does not control, on platforms that parse.
+    bullet = next(i for i, ln in enumerate(lines) if ln.startswith(BULLET))
+    assert lines[bullet - 1] == heading("fixed", "Followed up"), (
         "the verification bullet has no heading above it")
 
 

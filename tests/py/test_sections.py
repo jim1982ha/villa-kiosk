@@ -14,6 +14,16 @@ The eight, per the workbook:
 
 from __future__ import annotations
 
+# ⚠️ THE HEADINGS COME FROM THE VOCABULARY, NOT FROM A COPY. These
+# asserted rendered strings like "Maintenance signals:" — so adding
+# the emoji markers that make a brief scannable on a phone broke nine
+# tests that were pinning PRESENTATION while claiming to pin structure.
+# `style.py` is the one place a heading is decided; reading it here means
+# the next change to how a brief looks touches one file.
+from reports.narrate.style import (  # noqa: F401
+    BULLET, SECTION_MARK, heading,
+)
+
 from typing import Any, Dict, List
 
 from reports import aggregate
@@ -156,7 +166,7 @@ def test_money_admits_it_cannot_price_rather_than_going_silent() -> None:
         discovery={**_ctx().discovery, "capabilities_missing": ["energy_cost"],
                    "capability_absent": {"energy_cost": "No tariff."}},
         aggregated=_events(_maintenance("Service the pump")))
-    assert "Avoidable cost:" in body
+    assert heading("money", "Avoidable cost") in body
     assert "not priced" in body or "Not calculated" in body
 
 
@@ -171,7 +181,11 @@ def test_a_self_resolved_alert_is_counted_as_fixed() -> None:
     body = _render(aggregated=_events(
         _critical("raised", when="2026-08-20T12:00:00+08:00"),
         _critical("cleared", when="2026-08-20T12:30:00+08:00")))
-    assert "Resolved without intervention" in body
+    # ⚠️ NOW A BULLET UNDER ITS OWN HEADING. It was a bare sentence sitting
+    # directly above the next heading — readable in a flat document, and a
+    # heading that had lost its icon once every other heading gained one.
+    assert heading("fixed", "Closed by itself") in body
+    assert "resolved without intervention" in body
 
 
 # ── 5. preventive ────────────────────────────────────────────────────────────
@@ -179,7 +193,7 @@ def test_a_self_resolved_alert_is_counted_as_fixed() -> None:
 def test_maintenance_signals_reach_the_facility_brief() -> None:
     body = _render(audience="facility",
                    aggregated=_events(_maintenance("Service the pump")))
-    assert "Maintenance signals:" in body
+    assert heading("preventive", "Maintenance signals") in body
 
 
 def test_only_the_money_ranking_is_audience_specific() -> None:
@@ -189,9 +203,9 @@ def test_only_the_money_ranking_is_audience_specific() -> None:
     data = _events(_roi("Gym lights", 900.0), _maintenance("Service the pump"))
     owner = _render(audience="owner", aggregated=data)
     facility = _render(audience="facility", aggregated=data)
-    assert "Avoidable cost, most expensive first:" in owner
-    assert "Avoidable cost, most expensive first:" not in facility
-    assert "Maintenance signals:" in owner and "Maintenance signals:" in facility
+    assert heading("money", "Avoidable cost, most expensive first") in owner
+    assert heading("money", "Avoidable cost, most expensive first") not in facility
+    assert heading("preventive", "Maintenance signals") in owner and heading("preventive", "Maintenance signals") in facility
 
 
 def test_no_audience_can_lose_a_finding() -> None:
@@ -229,7 +243,7 @@ def test_a_trend_is_stated_and_never_priced() -> None:
         "deviation_pct": 26.9, "basis": "trend", "timestamp": when,
         "detail": "26.9% above baseline"}}
     body = _render(aggregated=_events(drift))
-    assert "Trends:" in body and "Night standby" in body
+    assert heading("trends", "Trends") in body and "Night standby" in body
     assert "Avoidable cost identified" not in body
 
 
@@ -241,7 +255,7 @@ def test_a_drifted_blueprint_is_named_in_monitoring_health() -> None:
                        "severity": "critical", "label": "Leak", "phase": "raised",
                        "entity_id": "binary_sensor.x"}}
     body = _render(aggregated=_events(legacy))
-    assert "Monitoring health:" in body
+    assert heading("health", "Monitoring health") in body
     assert "older format" in body
 
 
@@ -320,8 +334,8 @@ def test_a_report_with_everything_still_reads_top_down() -> None:
         _roi("Gym lights", 900.0), _critical("raised"),
         _maintenance("Service the pump")))
     order = [body.index(h) for h in
-             ("What went wrong:", "Avoidable cost, most expensive first:",
-              "Raised for the caretaker:")]
+             (heading("critical", "What went wrong"), heading("money", "Avoidable cost, most expensive first"),
+              heading("fixed", "For the caretaker"))]
     assert order == sorted(order)
 
 
@@ -351,7 +365,7 @@ def test_a_priced_finding_is_ranked_even_with_no_dashboard_tariff() -> None:
         discovery={**_ctx().discovery, "capabilities_missing": ["energy_cost"],
                    "capability_absent": {"energy_cost": "No tariff."}},
         aggregated=_events(_roi("Gym lights", 26.0, basis="estimated")))
-    assert "Avoidable cost, most expensive first:" in body
+    assert heading("money", "Avoidable cost, most expensive first") in body
     assert "Gym lights" in body
     assert "Not calculated" not in body, "the headline priced it; this denied it"
 
@@ -563,3 +577,58 @@ def test_a_small_only_list_keeps_its_decimals() -> None:
     a list of small figures in a currency that has them still needs them."""
     body = _render(aggregated=_events(_roi("A", 4.5), _roi("B", 9.25, rule="ROI-05")))
     assert "4.50" in body and "9.25" in body
+
+
+# ── how it reads on a phone ─────────────────────────────────────────────────
+
+def test_the_body_carries_no_markup_a_platform_could_parse() -> None:
+    """⚠️ EMOJI ARE THE FORMATTING BUDGET, AND THE REASON IS PAID FOR. A
+    delivered brief was mangled by a platform that parses Markdown by default:
+    it ate every underscore and italicised whole paragraphs between them. The
+    fix was to stop emitting markup-active characters at all, so this pins the
+    absence rather than trusting the wording of each line.
+
+    `-` is included: a leading `- ` is a list marker in every dialect, which is
+    why the bullet is `•`.
+    """
+    body = _render(aggregated=_events(
+        _critical("raised"), _roi("Vacancy waste", 1581.0),
+        _maintenance("Check the valve")))
+    for line in body.splitlines():
+        for markup in ("**", "__", "`", "#", "* "):
+            assert markup not in line, f"{markup!r} in {line!r}"
+        assert not line.startswith("- "), f"markdown list marker: {line!r}"
+    assert "_" not in body, "an underscore reaches a platform that italicises"
+
+
+def test_every_section_is_findable_without_reading_it() -> None:
+    """A brief arrives as a notification and is SCANNED. Each heading carries
+    its own marker, and every other top-level line is a bullet or the opening
+    summary — so there is no line that looks like a heading and is not one."""
+    body = _render(aggregated=_events(
+        _critical("raised"), _roi("Vacancy waste", 1581.0),
+        _maintenance("Check the valve")))
+    # ⚠️ THE HEADLINE IS VARIABLE-LENGTH — two lines or three, depending on
+    # whether anything was priced and whether a critical alert is open — so the
+    # boundary is the first BLANK line, not a count. A fixed skip made this test
+    # fail on its own fixture, which is the assertion being wrong rather than
+    # the renderer.
+    blank = body.splitlines().index("")
+    for line in body.splitlines()[blank:]:
+        if not line:
+            continue
+        marked = any(line.startswith(m) for m in SECTION_MARK.values())
+        assert marked or line.startswith(BULLET), (
+            f"neither a marked heading nor a bullet: {line!r}")
+
+
+def test_the_title_says_how_urgent_this_one_is() -> None:
+    """⚠️ THE TITLE IS OFTEN ALL THAT IS READ — a push notification shows it and
+    about two lines, a chat list shows it alone. And it must not lie: the marker
+    ranks the same two sources the history entry does."""
+    from reports.narrate.style import SEVERITY_MARK
+    ctx = _ctx(aggregated=_events(_critical("raised")))
+    title = DeterministicNarrator()._title(ctx)
+    assert title.startswith(SEVERITY_MARK["critical"]), title
+    quiet = DeterministicNarrator()._title(_ctx())
+    assert quiet.startswith(SEVERITY_MARK["info"]), quiet

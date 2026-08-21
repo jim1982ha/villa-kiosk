@@ -268,9 +268,15 @@ def test_markdown_is_flattened_however_nicely_the_prompt_asked() -> None:
     A model that returns markdown produces literal asterisks and hashes on the
     platforms that do not parse it, and asking politely in a prompt is not a
     guarantee."""
-    out = PR._flatten("## Summary\n**Pump** ran `14` times\n* item one\n")
-    assert "#" not in out and "*" not in out and "`" not in out
-    assert "Summary" in out and "Pump" in out and "- item one" in out
+    out = PR._flatten("## Summary\n**Pump** ran `14` times\n_soon_\n* item one\n")
+    for markup in ("#", "*", "`", "_"):
+        assert markup not in out, f"{markup!r} survived the flatten"
+    assert "Summary" in out and "Pump" in out and "soon" in out
+    # ⚠️ `•`, NOT `- `. The old normalisation turned a provider's `* item` into
+    # `- item` — a LIST MARKER in every markdown dialect — so the flattener's
+    # own output could be re-parsed by the destination it was protecting.
+    from reports.narrate.style import BULLET
+    assert f"{BULLET}item one" in out
 
 
 def test_the_prompt_carries_the_payload_and_no_instructions_to_judge() -> None:

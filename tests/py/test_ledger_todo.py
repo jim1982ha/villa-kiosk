@@ -14,6 +14,10 @@ them is the point of `clean_summary`, not a nicety.
 
 from __future__ import annotations
 
+# ⚠️ THE HEADING COMES FROM THE VOCABULARY — see `style.py`. Asserting the
+# rendered string pinned PRESENTATION while claiming to pin structure.
+from reports.narrate.style import heading
+
 from typing import Any, Dict, List
 
 from reports import ledger
@@ -149,7 +153,7 @@ def test_carried_tasks_reach_the_report_under_their_own_heading() -> None:
                    "preflight": []},
         carried_tasks=[_parse(PM01)])
     body = DeterministicNarrator().render(context)[1]
-    assert "Still open from earlier:" in body
+    assert heading("preventive", "Still open from earlier") in body
     assert "Raised for the caretaker:" not in body
     assert "sensor." not in body
 
