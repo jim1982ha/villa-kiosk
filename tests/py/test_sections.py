@@ -1,4 +1,4 @@
-"""The eight sections of the Report Spec, against real aggregated data.
+"""The report's sections, against real aggregated data.
 
 ⚠️ THE FIXTURES GO THROUGH `aggregate.aggregate()`, NEVER HAND-BUILT GROUPS.
 The renderer reads `Group` objects on the live path and plain dicts from stored
@@ -6,10 +6,18 @@ history, and a test that hands it a shape neither side produces proves nothing
 about either. Building the input from blueprint-shaped events is also what makes
 these tests fail if the aggregation contract moves — which is the point.
 
-The eight, per the workbook:
+⚠️ THE WORKBOOK'S EIGHT ARE NOT THE RENDERER'S EIGHT, AND THIS FILE SAID THEY
+WERE. The workbook specified: headline, critical recap, money, fixed and
+suggested, preventive, trends, monitoring health, coverage. What the renderer
+gates is `ALL_SECTIONS` — and `headline` is not in it (it renders
+unconditionally, above the gate) while `standing` is (2.571.0, the owner's
+request, not the workbook's). Membership changed twice, the total stayed eight,
+and the count is what everyone checked. v2.580.0 corrected this claim in
+`deterministic.py` and left it standing HERE, in the file named for it — the
+rule fixed where it was written rather than everywhere it applies.
 
-  1 headline · 2 critical recap · 3 money · 4 fixed and suggested
-  5 preventive · 6 trends · 7 monitoring health · 8 coverage
+Read `ALL_SECTIONS`, not this paragraph. `test_all_sections_matches_the_builders_that_render_them`
+is the pin.
 """
 
 from __future__ import annotations
@@ -24,6 +32,8 @@ from reports.narrate.style import (  # noqa: F401
     BULLET, SECTION_MARK, heading,
 )
 
+import inspect
+import re
 from typing import Any, Dict, List
 
 from reports import aggregate
@@ -341,7 +351,12 @@ def test_the_body_stays_plain_text() -> None:
 
 
 def test_a_report_with_everything_still_reads_top_down() -> None:
-    """The eight sections keep their order whatever is present."""
+    """Sections keep their order whatever is present.
+
+    ⚠️ THIS SAID "the eight sections" AND CHECKED THREE — and the one it left
+    out was `standing`, which LEADS. See the test below: that ordering was
+    documented as load-bearing and pinned by nothing at all.
+    """
     body = _render(aggregated=_events(
         _roi("Gym lights", 900.0), _critical("raised"),
         _maintenance("Service the pump")))
@@ -680,3 +695,54 @@ def test_two_headings_in_one_section_are_separated() -> None:
     assert lines[caretaker - 1] == "", (
         "a heading that follows content needs a blank line before it")
     assert closed < caretaker
+
+
+def test_all_sections_matches_the_builders_that_render_them() -> None:
+    """⚠️ THE COUNT STAYED EIGHT WHILE THE MEMBERSHIP CHANGED TWICE. The module
+    docstring said "the eight sections are the workbook's"; 2.571.0 added
+    `standing` and `headline` is not a gateable section at all, so seven of the
+    eight are the workbook's and the total never moved. A count cannot detect
+    that — the SET can. Derived from the renderer, so a ninth section is covered
+    on the day it is added rather than the day it is reported.
+    """
+    from reports.narrate import deterministic as det
+    source = inspect.getsource(det.DeterministicNarrator.render)
+    block = re.search(r"builders\s*=\s*\{(.*?)\n        \}", source, re.DOTALL)
+    assert block, "the builders map moved — this test is blind"
+    built = set(re.findall(r'"(\w+)":', block.group(1)))
+    assert built == set(det.ALL_SECTIONS), (
+        f"ALL_SECTIONS and the builders disagree: only in ALL_SECTIONS "
+        f"{sorted(set(det.ALL_SECTIONS) - built)}, only built {sorted(built - set(det.ALL_SECTIONS))}")
+    for audience, sections in det.SECTIONS_FOR.items():
+        unknown = set(sections) - built
+        assert not unknown, f"{audience} asks for sections nobody renders: {unknown}"
+
+
+def test_standing_leads_the_report() -> None:
+    """⚠️ DOCUMENTED AS LOAD-BEARING, PINNED BY NOTHING (found 2026-08-21).
+
+    `SECTIONS_FOR`'s own comment says why: "a reader comparing the notification
+    against the tablet in their other hand should meet the matching list first,
+    not three sections down" — which is the owner's consistency requirement
+    turned into a layout rule. Every other section's position is arbitrary;
+    this one's is the feature. Reordering the tuple would have broken it in
+    silence, and `test_a_report_with_everything_still_reads_top_down` could not
+    have caught it: it checked three sections and `standing` was not among them.
+    """
+    from reports.narrate.deterministic import SECTIONS_FOR
+    for audience, sections in SECTIONS_FOR.items():
+        assert sections[0] == "standing", (
+            f"{audience} does not meet standing state first: {sections[0]!r}")
+
+    rows = [{"kind": "unavailable", "title": "Hall sensor",
+             "detail": "not reporting", "room": "Hall"}]
+    body = DeterministicNarrator().render(_ctx(
+        standing=rows,
+        aggregated=_events(_roi("Gym lights", 900.0), _critical("raised")),
+    ))[1]
+    positions = [body.index(h) for h in (
+        heading("standing", "Right now"),
+        heading("critical", "What went wrong"),
+        heading("money", "Avoidable cost, most expensive first"))]
+    assert positions == sorted(positions), (
+        "standing must be rendered above the period sections, not among them")

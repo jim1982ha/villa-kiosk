@@ -303,24 +303,3 @@ def test_the_two_keys_share_one_hash_expression() -> None:
     # And the observable property the convergence exists to preserve.
     for subject in ("sensor.a", "", "pump-01", "x" * 500):
         assert base.dedup_key("mod", subject) == f"mod:{base.subject_key(subject)}"
-
-
-def test_all_sections_matches_the_builders_that_render_them() -> None:
-    """⚠️ THE COUNT STAYED EIGHT WHILE THE MEMBERSHIP CHANGED TWICE. The module
-    docstring said "the eight sections are the workbook's"; 2.571.0 added
-    `standing` and `headline` is not a gateable section at all, so seven of the
-    eight are the workbook's and the total never moved. A count cannot detect
-    that — the SET can. Derived from the renderer, so a ninth section is covered
-    on the day it is added rather than the day it is reported.
-    """
-    from reports.narrate import deterministic as det
-    source = inspect.getsource(det.DeterministicNarrator.render)
-    block = re.search(r"builders\s*=\s*\{(.*?)\n        \}", source, re.DOTALL)
-    assert block, "the builders map moved — this test is blind"
-    built = set(re.findall(r'"(\w+)":', block.group(1)))
-    assert built == set(det.ALL_SECTIONS), (
-        f"ALL_SECTIONS and the builders disagree: only in ALL_SECTIONS "
-        f"{sorted(set(det.ALL_SECTIONS) - built)}, only built {sorted(built - set(det.ALL_SECTIONS))}")
-    for audience, sections in det.SECTIONS_FOR.items():
-        unknown = set(sections) - built
-        assert not unknown, f"{audience} asks for sections nobody renders: {unknown}"

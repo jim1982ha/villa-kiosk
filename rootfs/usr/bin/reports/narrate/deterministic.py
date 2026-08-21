@@ -33,7 +33,9 @@ added `standing` (the only present-tense section, and the owner's request, not
 the workbook's) while `headline` is not a gateable section at all — it renders
 unconditionally above them. So membership changed twice and the total did not
 move, which is precisely why nobody noticed. `ALL_SECTIONS` is the list and
-`test_dedupe` pins it against the builders; this sentence is not the list.
+`test_sections` pins it against the builders — AND pins that `standing` leads,
+which this comment called load-bearing while nothing checked it. This sentence
+is not the list.
 A SECTION IS SKIPPED ONLY WHEN IT
 HAS NOTHING TO SAY *AND* NOTHING TO ADMIT. Those are different conditions: a
 Money section with no priced findings is omitted, but a Money section on a

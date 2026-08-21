@@ -149,7 +149,7 @@ def test_findings_are_rendered_when_present() -> None:
         {"label": "Pool pump", "severity": "warning", "area": "Plant room",
          "detail": "drawing more than its own baseline"},
     ]))
-    # Phase D routes findings into the eight sections by KIND rather than
+    # Phase D routes findings into sections by KIND rather than
     # listing them under one heading. What must survive is every FIELD: the
     # label, the AREA (the only thing distinguishing two identically named
     # devices) and the detail.
