@@ -1,3 +1,15 @@
+## 2.570.0
+
+### Fixed — one attention button on the top bar, and its badge counts everything
+
+2.569.0 pointed the alert icon at Facility's new Cockpit tab and left the
+Facility icon beside it, so two different glyphs opened the same dialog. Worse,
+they carried different numbers: 5 from the shared attention list (offline
+devices, open faults, overdue maintenance, active alarms) against 1 from a
+second, narrower count re-derived inside the HUD. There is now one button — a
+clipboard into Facility, or a triangle into Cockpit for a profile that has no
+Facility — and one count, the exhaustive one.
+
 ## 2.569.0
 
 ### Changed — Cockpit is a tab of the Facility workspace, not a second modal beside it
