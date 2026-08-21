@@ -42,6 +42,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Sequence, Tuple
 
+from ..aggregate import readable_label
 from ..contracts import severity_rank
 from .base import ReportContext
 
@@ -843,9 +844,16 @@ class DeterministicNarrator:
 
         A caller now gets the exception by CHOOSING `alert=True`, not by
         remembering to reverse two operands.
+
+        ⚠️ AND IT HUMANISES WHAT IT RETURNS. A blueprint may send an
+        IDENTIFIER as its label — one on the reference villa sends
+        `critical_schedule---pool_pump` — and this is the single place every
+        section reads a name from, so it is the only place that fix reaches all
+        of them. `readable_label` leaves anything containing a space exactly as
+        it arrived, so a real label is never rewritten.
         """
         first, second = ("label", "bucket") if alert else ("bucket", "label")
-        return self._text(group, first) or self._text(group, second)
+        return readable_label(self._text(group, first) or self._text(group, second))
 
     def _items(self, group: Any) -> List[Any]:
         """A group's members, whether it is a `Group` object or a plain dict.

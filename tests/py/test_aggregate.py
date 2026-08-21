@@ -452,20 +452,38 @@ def test_a_real_sentence_is_left_alone() -> None:
 
 
 def test_a_rule_id_is_never_printed_raw_into_a_brief() -> None:
-    """⚠️ IT REACHED THE OWNER'S PHONE. A live QA capture read "What went wrong:
-    - critical_schedule---pool_pump — still unresolved". Same defect as the
-    Checks tab's identifiers, one surface further out: a brief must read as
-    prose whatever a rule was named.
+    """⚠️ IT REACHED THE OWNER'S PHONE TWICE — the second time AFTER I shipped
+    a fix and said so.
 
-    Only reached when the blueprint supplied neither a label nor a bucket, so
-    the real fix is on that side — but printing nothing instead would lose the
-    finding entirely."""
-    from reports.aggregate import _readable_id
-    assert _readable_id("critical_schedule---pool_pump") == \
+    v2.555.0 humanised the FALLBACK in `to_findings`, reached only when a
+    blueprint supplies neither label nor bucket. But
+    `critical_schedule---pool_pump` is not a fallback: it is the `label` the
+    automation actually sends, so the renderer read it straight off the group
+    and never touched the changed code. One construction site fixed, a
+    different reader still shipping the defect — /dry-audit's opening sentence.
+
+    So this pins the RENDER path, which is the one the owner sees.
+    """
+    from reports.aggregate import readable_label
+    from reports.narrate.deterministic import DeterministicNarrator
+
+    assert readable_label("critical_schedule---pool_pump") == \
         "Critical schedule — pool pump"
-    assert _readable_id("roi_idle_load") == "Roi idle load"
-    assert _readable_id("") == ""
-    # No underscore, no multi-dash and no lower-case first letter survives.
-    for raw in ("a_b---c_d", "x---y", "z_z"):
-        out = _readable_id(raw)
-        assert "_" not in out and "---" not in out and out[0].isupper(), out
+
+    # The path that actually failed: a group whose LABEL is an identifier.
+    narrator = DeterministicNarrator()
+    group = {"label": "critical_schedule---pool_pump", "bucket": ""}
+    assert narrator._name(group, alert=True) == "Critical schedule — pool pump"
+
+
+def test_humanising_never_damages_a_label_a_person_wrote() -> None:
+    """⚠️ THE REASON IT IS NOT A BLANKET REWRITE. Every string below is a real
+    label from the reference villa's own brief, and a naive `replace("-", " ")`
+    turns "Lights - monitored rooms" into "Lights monitored rooms" — damage
+    done in the name of tidiness. Whitespace is the tell: an identifier has
+    none, a label written by a person does."""
+    from reports.aggregate import readable_label
+    for human in ("Lights - monitored rooms", "Vacancy waste - whole villa",
+                  "Bathroom VMC", "Living room AC",
+                  "Entrance unlocked while vacant", "Event bus smoke test", ""):
+        assert readable_label(human) == human, human

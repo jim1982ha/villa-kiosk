@@ -588,7 +588,7 @@ def to_findings(groups: Sequence[Group]) -> List[Finding]:
             ref=f"g{index}",
             kind=KIND_OF_CATEGORY.get(g.category, "OBSERVATION"),
             severity=g.severity,
-            label=g.label or g.bucket or _readable_id(g.blueprint or g.category),
+            label=readable_label(g.label or g.bucket or g.blueprint or g.category),
             detail=detail,
             metric="energy" if g.total_kwh is not None else "",
             unit="kWh" if g.total_kwh is not None else "",
@@ -599,25 +599,40 @@ def to_findings(groups: Sequence[Group]) -> List[Finding]:
     return out
 
 
-def _readable_id(value: str) -> str:
-    """An identifier, as prose, for when nothing better exists.
+def readable_label(value: str) -> str:
+    """A name for a reader. An identifier becomes prose; prose is left alone.
 
-    ⚠️ THE LAST RESORT PRINTED A RAW ID INTO THE BRIEF. A live QA capture read
-    "What went wrong: - critical_schedule---pool_pump — still unresolved", which
-    is the same defect the Checks tab had: an identifier is not a name, and this
-    one reached the owner's phone rather than a settings screen.
+    ⚠️ THE FIRST FIX FOR THIS WAS ON THE WRONG PATH AND I SHIPPED IT AS DONE.
+    v2.555.0 humanised the FALLBACK in `to_findings` — `g.blueprint or
+    g.category`, reached only when a blueprint supplies neither label nor bucket
+    — and the very next capture still read "What went wrong: -
+    critical_schedule---pool_pump — still unresolved". Because that string is
+    not a fallback: it is the `label` the automation actually sent, so the
+    renderer read it straight out of the group and never touched the code I had
+    changed. One construction site fixed, a different reader shipping the
+    defect: /dry-audit's opening sentence, paid for again.
 
-    ⚠️ IT IS ONLY EVER REACHED WHEN THE BLUEPRINT SUPPLIED NEITHER A LABEL NOR A
-    BUCKET, so the right long-term fix is on that side — but a brief must read
-    as prose whatever a rule was named, and the alternative is printing nothing,
-    which loses the finding entirely.
+    ⚠️ SO IT IS APPLIED WHERE A NAME IS READ, NOT WHERE ONE IS BUILT, and there
+    is ONE of it — `to_findings` and the renderer's `_name` both call this.
 
-    No villa data and no table: it is punctuation, applied to whatever arrives.
+    ⚠️ AND IT MUST NOT TOUCH A HUMAN LABEL. Blanket humanising would turn the
+    same property's real "Lights - monitored rooms" into "Lights monitored
+    rooms" — damage done in the name of tidiness. Whitespace is the tell: an
+    identifier has none, a label written by a person does. So a value with a
+    space is returned exactly as it arrived, and only a spaceless
+    `snake_case`/`kebab---case` token is rewritten.
+
+    No villa data and no table: punctuation, applied to whatever arrives.
     """
-    text = re.sub(r"-{2,}", " \u2014 ", str(value or ""))
+    text = str(value or "").strip()
+    if not text or " " in text:
+        return text
+    if "_" not in text and "--" not in text:
+        return text
+    text = re.sub(r"-{2,}", " \u2014 ", text)
     text = re.sub(r"[_\-]+", " ", text).strip()
     text = re.sub(r"\s+", " ", text)
-    return text[:1].upper() + text[1:] if text else ""
+    return text[:1].upper() + text[1:]
 
 
 def _detail_for(g: Group) -> str:
